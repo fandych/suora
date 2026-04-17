@@ -1,0 +1,695 @@
+﻿import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { useAppStore } from '@/store/appStore'
+import { SidePanel } from '@/components/layout/SidePanel'
+import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons'
+import { useI18n } from '@/hooks/useI18n'
+import type { Skill, RegistrySkillEntry, SkillRegistrySource } from '@/types'
+import { loadAllSkills, createBlankSkill, deleteSkillFromDisk, saveSkillToDisk, serializeSkillToMarkdown, parseSkillMarkdown } from '@/services/skillRegistry'
+import { browseRegistrySkills, searchRegistrySkills, installSkillFromRegistry, uninstallSkill, DEFAULT_REGISTRY_SOURCES } from '@/services/skillMarketplace'
+import { confirm } from '@/services/confirmDialog'
+import { toast } from '@/services/toast'
+import { ResizeHandle } from '@/components/layout/ResizeHandle'
+import { useResizablePanel } from '@/hooks/useResizablePanel'
+import { SkillEditor } from './SkillEditor'
+
+type ViewMode = 'installed' | 'browse' | 'sources'
+
+const SOURCE_LABELS: Record<string, string> = {
+  local: 'Local',
+  project: 'Project',
+  user: 'User',
+  registry: 'Registry',
+}
+
+export function SkillsLayout() {
+  const [panelWidth, setPanelWidth] = useResizablePanel('skills', 280)
+  const { skills, addSkill, updateSkill, removeSkill, workspacePath, marketplace, setMarketplace } = useAppStore()
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [isAdding, setIsAdding] = useState(false)
+  const [viewMode, setViewMode] = useState<ViewMode>('installed')
+  const [registrySkills, setRegistrySkills] = useState<RegistrySkillEntry[]>([])
+  const [registryLoading, setRegistryLoading] = useState(false)
+  const [search, setSearch] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('All')
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const { t } = useI18n()
+  useSkillIconsReady()
+
+  // Registry sources (merged: built-in defaults + user-added)
+  const allSources = useMemo<SkillRegistrySource[]>(() => {
+    const userSources = marketplace?.registrySources ?? []
+    const defaultIds = new Set(DEFAULT_REGISTRY_SOURCES.map((s) => s.id))
+    return [
+      ...DEFAULT_REGISTRY_SOURCES,
+      ...userSources.filter((s) => !defaultIds.has(s.id)),
+    ]
+  }, [marketplace?.registrySources])
+
+  const editingSkill = editingId ? skills.find((s) => s.id === editingId) ?? null : null
+
+  // Load skills from disk on mount
+  useEffect(() => {
+    if (!workspacePath) return
+    loadAllSkills(workspacePath).then((incoming) => {
+      const storeIds = new Set(useAppStore.getState().skills.map((s) => s.id))
+      for (const skill of incoming) {
+        if (!storeIds.has(skill.id)) addSkill(skill)
+      }
+    })
+  }, [workspacePath, addSkill])
+
+  // Fetch registry skills when switching to browse
+  const fetchRegistry = useCallback(async () => {
+    setRegistryLoading(true)
+    try {
+      const installedNames = new Set(skills.map((s) => s.name))
+      const entries = await browseRegistrySkills(allSources, installedNames)
+      setRegistrySkills(entries)
+    } finally {
+      setRegistryLoading(false)
+    }
+  }, [allSources, skills])
+
+  useEffect(() => {
+    if (viewMode === 'browse') fetchRegistry()
+  }, [viewMode, fetchRegistry])
+
+  // Filtered / searched lists
+  const categories = useMemo(() => {
+    const unique = new Set(registrySkills.map((s) => s.category || 'Other'))
+    return ['All', ...Array.from(unique).sort()]
+  }, [registrySkills])
+
+  const filteredRegistry = useMemo(() => {
+    let list = registrySkills
+    if (selectedCategory !== 'All') {
+      list = list.filter((s) => (s.category || 'Other') === selectedCategory)
+    }
+    if (search.trim()) {
+      list = searchRegistrySkills(list, search)
+    }
+    return list.sort((a, b) => b.downloads - a.downloads)
+  }, [registrySkills, selectedCategory, search])
+
+  const filteredInstalled = useMemo(() => {
+    const kw = search.trim().toLowerCase()
+    if (!kw) return skills
+    return skills.filter(
+      (s) =>
+        s.name.toLowerCase().includes(kw) ||
+        s.description.toLowerCase().includes(kw),
+    )
+  }, [skills, search])
+
+  // ─── Handlers ──────────────────────────────────────────────────
+
+  const handleCreateSkill = () => {
+    const newSkill = createBlankSkill('New Skill')
+    addSkill(newSkill)
+    setEditingId(newSkill.id)
+    setIsAdding(true)
+  }
+
+  const handleSave = async (skill: Skill) => {
+    if (editingId) updateSkill(editingId, skill)
+    else addSkill(skill)
+    // Persist to disk for local/project/user skills
+    if (skill.source !== 'registry' && skill.skillRoot) {
+      await saveSkillToDisk(skill.skillRoot, skill)
+    }
+    setEditingId(skill.id)
+    setIsAdding(false)
+  }
+
+  const handleDelete = async (id: string) => {
+    const skill = skills.find((s) => s.id === id)
+    if (!skill) return
+    const ok = await confirm({
+      title: t('skills.deleteTitle', 'Delete skill?'),
+      body: t('skills.deleteBody', `"${skill.name}" will be permanently removed. This cannot be undone.`),
+      danger: true,
+      confirmText: t('common.delete', 'Delete'),
+    })
+    if (!ok) return
+    if (skill.filePath) {
+      await deleteSkillFromDisk(skill.filePath)
+    }
+    removeSkill(id)
+    if (editingId === id) setEditingId(null)
+  }
+
+  const handleToggleEnabled = (id: string) => {
+    const skill = skills.find((s) => s.id === id)
+    if (skill) updateSkill(id, { enabled: !skill.enabled })
+  }
+
+  const handleExportMarkdown = (skill: Skill) => {
+    const md = serializeSkillToMarkdown(skill)
+    const blob = new Blob([md], { type: 'text/markdown' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${skill.name.replace(/\s+/g, '-').toLowerCase()}-SKILL.md`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const handleImportMarkdown = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => {
+      const raw = reader.result as string
+      const parsed = parseSkillMarkdown(raw, file.name, 'local')
+      if (parsed) {
+        addSkill(parsed)
+        setEditingId(parsed.id)
+        setIsAdding(false)
+      } else {
+        toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), t('skills.parseFailedDetail', 'Make sure the file has YAML frontmatter.'))
+      }
+    }
+    reader.readAsText(file)
+    e.target.value = ''
+  }
+
+  const handleInstallFromRegistry = async (entry: RegistrySkillEntry) => {
+    const targetDir = workspacePath
+      ? `${workspacePath}/.suora/skills`
+      : undefined
+    if (!targetDir) {
+      toast.warning(t('skills.workspaceRequired', 'Please set a workspace path first.'))
+      return
+    }
+    try {
+      const installed = await installSkillFromRegistry(entry, targetDir)
+      if (installed) {
+        addSkill(installed)
+        setRegistrySkills((prev) =>
+          prev.map((s) => (s.id === entry.id ? { ...s, installed: true } : s)),
+        )
+      }
+    } catch (err) {
+      toast.error(
+        t('skills.installFailed', 'Failed to install skill'),
+        err instanceof Error ? err.message : 'Unknown error',
+      )
+    }
+  }
+
+  const handleUninstallFromRegistry = async (skillId: string) => {
+    const skill = skills.find((s) => s.id === skillId)
+    if (!skill) return
+    const ok = await confirm({
+      title: t('skills.uninstallTitle', 'Uninstall skill?'),
+      body: t(
+        'skills.uninstallBody',
+        `"${skill.name}" and its files will be removed from this workspace. You can reinstall it later from the registry.`,
+      ),
+      danger: true,
+      confirmText: t('skills.uninstall', 'Uninstall'),
+    })
+    if (!ok) return
+    try {
+      await uninstallSkill(skill)
+      removeSkill(skillId)
+      setRegistrySkills((prev) =>
+        prev.map((s) => (s.name === skill.name ? { ...s, installed: false } : s)),
+      )
+    } catch {
+      removeSkill(skillId)
+    }
+    if (editingId === skillId) setEditingId(null)
+  }
+
+  // ─── Source Management ─────────────────────────────────────────
+
+  const [newSourceUrl, setNewSourceUrl] = useState('')
+  const [newSourceName, setNewSourceName] = useState('')
+
+  const handleAddSource = () => {
+    const url = newSourceUrl.trim()
+    const name = newSourceName.trim() || url
+    if (!url) return
+    const id = `custom-${Date.now()}`
+    const newSource: SkillRegistrySource = {
+      id,
+      name,
+      type: url.includes('github.com') ? 'github' : 'custom',
+      url,
+      enabled: true,
+      description: `Custom source from ${url}`,
+    }
+    const existing = marketplace?.registrySources ?? []
+    setMarketplace({ registrySources: [...existing, newSource] })
+    setNewSourceUrl('')
+    setNewSourceName('')
+  }
+
+  const handleRemoveSource = (sourceId: string) => {
+    const src = allSources.find((s) => s.id === sourceId)
+    if (src?.builtin) return
+    const existing = marketplace?.registrySources ?? []
+    setMarketplace({ registrySources: existing.filter((s) => s.id !== sourceId) })
+  }
+
+  const handleToggleSource = (sourceId: string) => {
+    const src = allSources.find((s) => s.id === sourceId)
+    if (!src) return
+    if (src.builtin) {
+      const existing = marketplace?.registrySources ?? []
+      const override = existing.find((s) => s.id === sourceId)
+      if (override) {
+        setMarketplace({
+          registrySources: existing.map((s) =>
+            s.id === sourceId ? { ...s, enabled: !s.enabled } : s,
+          ),
+        })
+      } else {
+        setMarketplace({
+          registrySources: [...existing, { ...src, enabled: !src.enabled }],
+        })
+      }
+    } else {
+      const existing = marketplace?.registrySources ?? []
+      setMarketplace({
+        registrySources: existing.map((s) =>
+          s.id === sourceId ? { ...s, enabled: !s.enabled } : s,
+        ),
+      })
+    }
+  }
+
+  // ─── Render ────────────────────────────────────────────────────
+
+  return (
+    <>
+      <SidePanel
+        title={t('skills.title', 'Skills')}
+        width={panelWidth}
+        action={
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              title={t('skills.importSkill', 'Import SKILL.md')}
+              className="text-[11px] px-2 py-1 rounded-lg text-text-muted hover:bg-surface-3/60 transition-colors"
+            >
+              <IconifyIcon name="lucide:upload" size={14} color="currentColor" />
+            </button>
+            <button
+              onClick={handleCreateSkill}
+              className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
+            >
+              + {t('skills.create', 'Create')}
+            </button>
+          </div>
+        }
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".md,.markdown"
+          onChange={handleImportMarkdown}
+          className="hidden"
+          aria-label="Import SKILL.md file"
+        />
+
+        {/* Tab toggle */}
+        <div className="grid grid-cols-3 gap-1 p-2">
+          {(['installed', 'browse', 'sources'] as const).map((mode) => (
+            <button
+              key={mode}
+              onClick={() => setViewMode(mode)}
+              className={`text-xs py-1.5 rounded-lg font-medium transition-all flex items-center justify-center gap-1 ${
+                viewMode === mode
+                  ? 'bg-accent/15 text-accent'
+                  : 'bg-surface-3 text-text-muted hover:text-text-secondary'
+              }`}
+            >
+              <IconifyIcon
+                name={mode === 'installed' ? 'lucide:package-check' : mode === 'browse' ? 'lucide:store' : 'lucide:link'}
+                size={11}
+                color="currentColor"
+              />
+              {mode === 'installed'
+                ? t('skills.installed', 'Installed')
+                : mode === 'browse'
+                ? t('skills.browse', 'Browse')
+                : t('skills.sources', 'Sources')}
+              {mode === 'installed' && skills.length > 0 && (
+                <span className="text-[9px] px-1.5 min-w-4.5 py-0.5 rounded-full bg-accent/20 text-accent tabular-nums">
+                  {skills.length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Search (for installed + browse tabs) */}
+        {viewMode !== 'sources' && (
+          <div className="px-2 pb-1">
+            <div className="relative">
+              <IconifyIcon
+                name="lucide:search"
+                size={12}
+                color="currentColor"
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none"
+              />
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder={t('skills.searchSkills', 'Search skills...')}
+                className="w-full pl-7 pr-2.5 py-1.5 rounded-lg bg-surface-2 border border-border text-xs text-text-primary placeholder-text-muted"
+              />
+            </div>
+          </div>
+        )}
+
+        {/* ── Installed Tab ───────────────────────────────────── */}
+        {viewMode === 'installed' && (
+          <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1">
+            {filteredInstalled.length === 0 && (
+              <div className="text-center py-10">
+                <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3 border border-border-subtle">
+                  <IconifyIcon name="lucide:package" size={20} color="currentColor" className="text-text-muted" />
+                </div>
+                <p className="text-xs text-text-muted">
+                  {search.trim()
+                    ? t('skills.noResults', 'No matching skills.')
+                    : t('skills.noInstalled', 'No skills yet. Create or install one.')}
+                </p>
+                <button
+                  onClick={() => setViewMode('browse')}
+                  className="mt-2 text-[11px] text-accent hover:underline"
+                >
+                  {t('skills.browseSkills', 'Browse Skills')} →
+                </button>
+              </div>
+            )}
+            {filteredInstalled.map((skill) => (
+              <div
+                key={skill.id}
+                onClick={() => { setEditingId(skill.id); setIsAdding(false) }}
+                className={`group px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
+                  editingId === skill.id
+                    ? 'bg-accent/10 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.15)]'
+                    : 'text-text-secondary hover:bg-surface-3/60 hover:text-text-primary'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center shrink-0 border border-border/40">
+                      <SkillIcon icon={skill.icon || skill.frontmatter?.icon || getSkillIconName(skill.id)} size={16} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-[12px] font-medium truncate flex items-center gap-1.5">
+                        {skill.name}
+                        {!skill.enabled && (
+                          <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-3 text-text-muted">OFF</span>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-text-muted truncate flex items-center gap-1">
+                        <span className="px-1 py-0 rounded bg-surface-3/80 text-[9px]">
+                          {SOURCE_LABELS[skill.source] || skill.source}
+                        </span>
+                        {skill.category && <span>· {skill.category}</span>}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5 shrink-0 transition-all">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleToggleEnabled(skill.id)
+                      }}
+                      title={skill.enabled ? 'Disable' : 'Enable'}
+                      className={`text-xs px-1 transition-colors ${
+                        skill.enabled
+                          ? 'text-success hover:text-text-muted'
+                          : 'text-text-muted hover:text-success'
+                      }`}
+                    >
+                      <IconifyIcon
+                        name={skill.enabled ? 'lucide:toggle-right' : 'lucide:toggle-left'}
+                        size={14}
+                        color="currentColor"
+                      />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleExportMarkdown(skill) }}
+                      title={t('skills.export', 'Export')}
+                      className="text-text-muted hover:text-accent text-xs px-1 transition-colors"
+                    >
+                      <IconifyIcon name="lucide:download" size={12} color="currentColor" />
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDelete(skill.id) }}
+                      title={t('common.delete', 'Delete')}
+                      className="text-text-muted hover:text-danger text-xs px-1 transition-colors"
+                    >
+                      <IconifyIcon name="lucide:trash-2" size={12} color="currentColor" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Browse Tab (Registry / Marketplace) ─────────── */}
+        {viewMode === 'browse' && (
+          <div className="flex flex-col flex-1 overflow-hidden">
+            {/* Category pills */}
+            <div className="px-2 py-1.5 flex gap-1 overflow-x-auto no-scrollbar shrink-0">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setSelectedCategory(cat)}
+                  className={`text-[10px] px-2 py-1 rounded-full whitespace-nowrap transition-all ${
+                    selectedCategory === cat
+                      ? 'bg-accent text-white'
+                      : 'bg-surface-3 text-text-muted hover:text-text-secondary hover:bg-surface-3/80'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* Count + refresh */}
+            <div className="flex items-center justify-between text-[10px] text-text-muted px-3 pb-1 shrink-0">
+              <span>{filteredRegistry.length} {t('skills.found', 'skills')}</span>
+              <button
+                onClick={fetchRegistry}
+                className="text-accent hover:underline"
+                title="Refresh"
+              >
+                <IconifyIcon name="lucide:refresh-cw" size={10} color="currentColor" />
+              </button>
+            </div>
+
+            {/* Skill cards */}
+            <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-1.5">
+              {registryLoading && (
+                <div className="flex items-center justify-center py-8 gap-2">
+                  <div className="w-4 h-4 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
+                  <span className="text-xs text-text-muted">{t('common.loading', 'Loading...')}</span>
+                </div>
+              )}
+              {!registryLoading && filteredRegistry.length === 0 && (
+                <p className="text-xs text-text-muted text-center py-8">
+                  {search.trim()
+                    ? t('skills.noResults', 'No skills match your search.')
+                    : t('skills.emptyRegistry', 'No skills found in registries.')}
+                </p>
+              )}
+              {filteredRegistry.map((entry) => {
+                const installed = skills.some((s) => s.name === entry.name)
+                return (
+                  <div
+                    key={entry.id}
+                    className="rounded-xl border border-border/60 p-3 bg-surface-0/20 hover:bg-surface-0/50 transition-all group"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-surface-2 flex items-center justify-center shrink-0 border border-border/40">
+                        <SkillIcon icon={entry.icon} size={18} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[12px] font-semibold text-text-primary truncate">{entry.name}</span>
+                          <span className="text-[9px] text-text-muted shrink-0">v{entry.version}</span>
+                        </div>
+                        <div className="text-[10px] text-text-muted mt-0.5 truncate">{entry.author}</div>
+                      </div>
+                      {installed ? (
+                        <button
+                          onClick={() => {
+                            const s = skills.find((sk) => sk.name === entry.name)
+                            if (s) handleUninstallFromRegistry(s.id)
+                          }}
+                          className="text-[10px] px-2 py-1 rounded-lg bg-surface-3 text-text-muted hover:bg-danger/10 hover:text-danger font-medium shrink-0 transition-colors"
+                        >
+                          {t('common.remove', 'Remove')}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleInstallFromRegistry(entry)}
+                          className="text-[10px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 font-semibold shrink-0 transition-colors"
+                        >
+                          {t('common.install', 'Install')}
+                        </button>
+                      )}
+                    </div>
+                    <p className="mt-2 text-[11px] text-text-muted/80 line-clamp-2 leading-relaxed">{entry.description}</p>
+                    <div className="flex items-center gap-3 mt-2">
+                      <div className="flex items-center gap-1">
+                        <IconifyIcon name="lucide:download" size={10} color="currentColor" className="text-text-muted" />
+                        <span className="text-[10px] text-text-muted tabular-nums">{entry.downloads.toLocaleString()}</span>
+                      </div>
+                      {entry.category && (
+                        <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-3 text-text-muted">{entry.category}</span>
+                      )}
+                      {entry.url && (
+                        <a
+                          href={entry.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-[9px] text-accent hover:underline ml-auto"
+                        >
+                          View on skills.sh
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* ── Sources Tab ─────────────────────────────────────── */}
+        {viewMode === 'sources' && (
+          <div className="flex-1 overflow-y-auto px-2 pb-2 space-y-3">
+            <p className="text-[10px] text-text-muted px-1 pt-1">
+              {t('skills.sourcesDesc', 'Manage skill registries. Add GitHub repos or custom URLs as skill sources.')}
+            </p>
+
+            {/* Existing sources */}
+            <div className="space-y-1.5">
+              {allSources.map((source) => (
+                <div
+                  key={source.id}
+                  className="rounded-xl border border-border/60 p-2.5 bg-surface-0/20 flex items-center gap-2.5"
+                >
+                  <div className="w-7 h-7 rounded-lg bg-surface-2 flex items-center justify-center shrink-0 border border-border/40">
+                    <IconifyIcon name={source.icon || 'lucide:globe'} size={14} color="currentColor" className="text-text-muted" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] font-medium text-text-primary truncate flex items-center gap-1.5">
+                      {source.name}
+                      {source.builtin && (
+                        <span className="text-[8px] px-1 py-0 rounded bg-accent/10 text-accent">built-in</span>
+                      )}
+                    </div>
+                    <div className="text-[9px] text-text-muted truncate">{source.url}</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => handleToggleSource(source.id)}
+                      className={`p-0.5 rounded transition-colors ${
+                        source.enabled ? 'text-success' : 'text-text-muted'
+                      }`}
+                      title={source.enabled ? 'Disable' : 'Enable'}
+                    >
+                      <IconifyIcon
+                        name={source.enabled ? 'lucide:toggle-right' : 'lucide:toggle-left'}
+                        size={16}
+                        color="currentColor"
+                      />
+                    </button>
+                    {!source.builtin && (
+                      <button
+                        onClick={() => handleRemoveSource(source.id)}
+                        className="text-text-muted hover:text-danger p-0.5 rounded transition-colors"
+                        title="Remove"
+                      >
+                        <IconifyIcon name="lucide:trash-2" size={12} color="currentColor" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Add new source */}
+            <div className="rounded-xl border border-dashed border-border/80 p-3 space-y-2">
+              <div className="text-[10px] font-medium text-text-muted uppercase tracking-wider">
+                {t('skills.addSource', 'Add Source')}
+              </div>
+              <input
+                value={newSourceName}
+                onChange={(e) => setNewSourceName(e.target.value)}
+                placeholder={t('skills.sourceName', 'Source name (optional)')}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface-2 border border-border text-xs text-text-primary placeholder-text-muted"
+              />
+              <input
+                value={newSourceUrl}
+                onChange={(e) => setNewSourceUrl(e.target.value)}
+                placeholder={t('skills.sourceUrl', 'GitHub repo URL or custom registry URL')}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-surface-2 border border-border text-xs text-text-primary placeholder-text-muted"
+              />
+              <button
+                onClick={handleAddSource}
+                disabled={!newSourceUrl.trim()}
+                className="w-full text-[11px] py-1.5 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 disabled:opacity-40 disabled:cursor-not-allowed font-medium transition-colors"
+              >
+                + {t('skills.addSourceBtn', 'Add Registry Source')}
+              </button>
+            </div>
+          </div>
+        )}
+      </SidePanel>
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={200} maxWidth={480} />
+
+      {/* ── Right pane: Editor or Empty state ────────────────── */}
+      {isAdding || editingId ? (
+        <SkillEditor
+          key={editingId ?? 'new'}
+          skill={editingSkill}
+          onSave={handleSave}
+          onCancel={() => { setIsAdding(false); setEditingId(null) }}
+        />
+      ) : (
+        <div className="flex-1 flex items-center justify-center text-text-muted">
+          <div className="text-center animate-fade-in max-w-xs">
+            <div className="w-16 h-16 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-5 border border-border-subtle">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-accent"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+            </div>
+            <p className="text-sm text-text-secondary font-medium">
+              {t('skills.promptBased', 'Prompt-Based Skills')}
+            </p>
+            <p className="text-xs text-text-muted mt-1.5 leading-relaxed">
+              {t('skills.promptDesc', 'Skills are markdown instructions (SKILL.md) that enhance agent capabilities. No tool specification needed — agents decide which tools to use.')}
+            </p>
+            <div className="flex items-center justify-center gap-3 mt-5">
+              <button
+                onClick={() => setViewMode('browse')}
+                className="text-[11px] px-4 py-2 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 font-medium transition-colors"
+              >
+                {t('skills.browseSkills', 'Browse Skills')}
+              </button>
+              <button
+                onClick={handleCreateSkill}
+                className="text-[11px] px-4 py-2 rounded-xl bg-surface-3 text-text-secondary hover:bg-surface-4 font-medium transition-colors"
+              >
+                {t('skills.createSkill', 'Create Skill')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+

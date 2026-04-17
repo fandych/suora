@@ -1,0 +1,953 @@
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
+import { SidePanel } from '@/components/layout/SidePanel'
+import { ResizeHandle } from '@/components/layout/ResizeHandle'
+import { useResizablePanel } from '@/hooks/useResizablePanel'
+import { useI18n } from '@/hooks/useI18n'
+import { useAppStore } from '@/store/appStore'
+import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { executeAgentPipeline, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
+import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
+import { confirm } from '@/services/confirmDialog'
+import type { AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep } from '@/types'
+import { generateId } from '@/utils/helpers'
+
+const PIPELINE_HEADER_BACKGROUND = 'bg-[radial-gradient(circle_at_top_left,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_55%)]'
+
+function formatDuration(durationMs?: number, t?: (key: string, defaultValue?: string) => string) {
+  if (durationMs === undefined) return t?.('agents.pipelinePendingDuration', 'Waiting...') ?? 'Waiting...'
+  if (durationMs < 1000) return `${durationMs}ms`
+  if (durationMs < 60_000) return `${(durationMs / 1000).toFixed(1)}s`
+  return `${(durationMs / 60_000).toFixed(1)}m`
+}
+
+function buildStepOutputToken(stepIndex: number) {
+  return `{{steps[${stepIndex + 1}].output}}`
+}
+
+function formatTriggerLabel(trigger: AgentPipelineExecution['trigger'], t: (key: string, defaultValue?: string) => string) {
+  if (trigger === 'timer') return t('agents.pipelineTriggeredByTimer', 'Triggered by timer')
+  if (trigger === 'chat') return t('agents.pipelineTriggeredByChat', 'Triggered from chat')
+  return t('agents.pipelineTriggeredManually', 'Triggered manually')
+}
+
+function statusStyles(status: AgentPipelineProgressStep['status'] | AgentPipelineExecution['status']) {
+  switch (status) {
+    case 'running':
+      return 'bg-amber-500/15 text-amber-300 border-amber-500/20'
+    case 'success':
+      return 'bg-emerald-500/15 text-emerald-300 border-emerald-500/20'
+    case 'error':
+      return 'bg-red-500/15 text-red-300 border-red-500/20'
+    case 'pending':
+    default:
+      return 'bg-surface-3 text-text-secondary border-border-subtle'
+  }
+}
+
+function mapExecutionStep(step: AgentPipelineExecutionStep, agentNameMap: Record<string, string>): AgentPipelineProgressStep {
+  return {
+    stepIndex: step.stepIndex,
+    agentId: step.agentId,
+    agentName: agentNameMap[step.agentId],
+    task: step.task,
+    input: step.input,
+    output: step.output,
+    status: step.status,
+    startedAt: step.startedAt,
+    completedAt: step.completedAt,
+    durationMs: step.durationMs,
+    error: step.error,
+  }
+}
+
+function buildPreviewSteps(pipeline: AgentPipelineStep[], agentNameMap: Record<string, string>): AgentPipelineProgressStep[] {
+  return pipeline.map((step, index) => ({
+    stepIndex: index,
+    agentId: step.agentId,
+    agentName: agentNameMap[step.agentId],
+    task: step.task,
+    input: index === 0 ? step.task : '',
+    status: 'pending',
+  }))
+}
+
+function getValidExecutionId(currentId: string | null, executions: AgentPipelineExecution[]): string | null {
+  return currentId && executions.some((execution) => execution.id === currentId)
+    ? currentId
+    : (executions[0]?.id ?? null)
+}
+
+export function PipelineLayout() {
+  const { t } = useI18n()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [panelWidth, setPanelWidth] = useResizablePanel('pipeline', 320)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([])
+  const [running, setRunning] = useState(false)
+  const [liveSteps, setLiveSteps] = useState<AgentPipelineProgressStep[]>([])
+  const [activeExecution, setActiveExecution] = useState<AgentPipelineExecution | null>(null)
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null)
+  const runAbortControllerRef = useRef<AbortController | null>(null)
+  const {
+    workspacePath,
+    agents,
+    agentPipeline: pipeline,
+    setAgentPipeline,
+    clearAgentPipeline,
+    agentPipelineName,
+    setAgentPipelineName,
+    selectedAgentPipelineId,
+    setSelectedAgentPipelineId,
+    agentPipelines,
+    setAgentPipelines,
+    addAgentPipeline,
+    updateAgentPipeline,
+    removeAgentPipeline,
+    addNotification,
+  } = useAppStore()
+  const deferredSearchQuery = useDeferredValue(searchQuery)
+  const requestedPipelineId = searchParams.get('pipelineId')
+  const requestedExecutionId = searchParams.get('executionId')
+  const requestedTimerId = searchParams.get('timerId')
+  const requestedFiredAtRaw = searchParams.get('firedAt')
+  const requestedFiredAt = requestedFiredAtRaw ? Number(requestedFiredAtRaw) : Number.NaN
+
+  const enabledAgents = agents.filter((agent) => agent.enabled !== false)
+  const agentNameMap = useMemo(() => Object.fromEntries(agents.map((agent) => [agent.id, agent.name])), [agents])
+  const selectedSavedPipeline = selectedAgentPipelineId
+    ? agentPipelines.find((item) => item.id === selectedAgentPipelineId) ?? null
+    : null
+
+  useEffect(() => {
+    if (!workspacePath) return
+    loadPipelinesFromDisk(workspacePath).then((savedPipelines) => {
+      setAgentPipelines(savedPipelines)
+    })
+  }, [workspacePath, setAgentPipelines])
+
+  useEffect(() => {
+    if (!requestedPipelineId) return
+    const requestedPipeline = agentPipelines.find((item) => item.id === requestedPipelineId)
+    if (!requestedPipeline) return
+
+    setSelectedAgentPipelineId(requestedPipeline.id)
+    setAgentPipelineName(requestedPipeline.name)
+    setAgentPipeline(requestedPipeline.steps)
+    setLiveSteps([])
+    setActiveExecution(null)
+  }, [requestedPipelineId, agentPipelines, setSelectedAgentPipelineId, setAgentPipelineName, setAgentPipeline])
+
+  useEffect(() => {
+    if (!selectedAgentPipelineId || pipeline.length > 0 || agentPipelineName.trim()) return
+    const selectedPipeline = agentPipelines.find((item) => item.id === selectedAgentPipelineId)
+    if (!selectedPipeline) return
+    setAgentPipeline(selectedPipeline.steps)
+    setAgentPipelineName(selectedPipeline.name)
+  }, [selectedAgentPipelineId, agentPipelines, pipeline.length, agentPipelineName, setAgentPipeline, setAgentPipelineName])
+
+  useEffect(() => {
+    if (!workspacePath || !selectedAgentPipelineId) {
+      setPipelineHistory([])
+      setSelectedExecutionId(null)
+      return
+    }
+
+    loadPipelineExecutionsFromDisk(workspacePath, selectedAgentPipelineId).then((executions) => {
+      setPipelineHistory(executions)
+      setSelectedExecutionId((current) => {
+        if (requestedExecutionId && executions.some((execution) => execution.id === requestedExecutionId)) {
+          return requestedExecutionId
+        }
+
+        if (requestedTimerId) {
+          const timerMatches = executions.filter((execution) => execution.timerId === requestedTimerId)
+          if (timerMatches.length > 0) {
+            const matchedExecution = Number.isFinite(requestedFiredAt)
+              ? timerMatches
+                  .slice()
+                  .sort((left, right) => Math.abs(left.startedAt - requestedFiredAt) - Math.abs(right.startedAt - requestedFiredAt))[0]
+              : timerMatches[0]
+            if (matchedExecution) {
+              return matchedExecution.id
+            }
+          }
+        }
+
+        return getValidExecutionId(current, executions)
+      })
+    })
+  }, [workspacePath, selectedAgentPipelineId, requestedExecutionId, requestedTimerId, requestedFiredAt])
+
+  useEffect(() => {
+    if (!requestedPipelineId && !requestedExecutionId && !requestedTimerId) return
+    if (requestedPipelineId && selectedAgentPipelineId !== requestedPipelineId) return
+    if (requestedExecutionId && pipelineHistory.length > 0 && !pipelineHistory.some((execution) => execution.id === requestedExecutionId)) {
+      setSearchParams({}, { replace: true })
+      return
+    }
+    if (!requestedExecutionId && requestedTimerId && pipelineHistory.length > 0 && !selectedExecutionId) return
+    if (requestedExecutionId && selectedExecutionId !== requestedExecutionId) return
+    setSearchParams({}, { replace: true })
+  }, [requestedPipelineId, requestedExecutionId, requestedTimerId, selectedAgentPipelineId, selectedExecutionId, pipelineHistory, setSearchParams])
+
+  const filteredPipelines = useMemo(() => {
+    const keyword = deferredSearchQuery.trim().toLowerCase()
+    if (!keyword) return agentPipelines
+    return agentPipelines.filter((item) => item.name.toLowerCase().includes(keyword))
+  }, [agentPipelines, deferredSearchQuery])
+
+  const selectedHistoryExecution = useMemo(
+    () => pipelineHistory.find((execution) => execution.id === selectedExecutionId) ?? null,
+    [pipelineHistory, selectedExecutionId],
+  )
+
+  const monitorSteps = useMemo(() => {
+    if (liveSteps.length > 0) return liveSteps
+    if (activeExecution) return activeExecution.steps.map((step) => mapExecutionStep(step, agentNameMap))
+    return []
+  }, [liveSteps, activeExecution, agentNameMap])
+
+  const executionDetail = selectedHistoryExecution ?? (!selectedSavedPipeline ? activeExecution : null)
+  const executionDetailSteps = useMemo(
+    () => executionDetail?.steps.map((step) => mapExecutionStep(step, agentNameMap)) ?? [],
+    [executionDetail, agentNameMap],
+  )
+
+  const currentRunningStep = useMemo(
+    () => monitorSteps.find((step) => step.status === 'running') ?? null,
+    [monitorSteps],
+  )
+
+  const completedMonitorSteps = useMemo(
+    () => monitorSteps.filter((step) => step.status === 'success' || step.status === 'error').length,
+    [monitorSteps],
+  )
+
+  const successfulMonitorSteps = useMemo(
+    () => monitorSteps.filter((step) => step.status === 'success').length,
+    [monitorSteps],
+  )
+
+  const failedMonitorSteps = useMemo(
+    () => monitorSteps.filter((step) => step.status === 'error').length,
+    [monitorSteps],
+  )
+
+  const progressPercent = pipeline.length > 0
+    ? Math.min(100, Math.round((completedMonitorSteps / pipeline.length) * 100))
+    : 0
+
+  const successfulHistoryRuns = useMemo(
+    () => pipelineHistory.filter((execution) => execution.status === 'success').length,
+    [pipelineHistory],
+  )
+
+  const failedHistoryRuns = useMemo(
+    () => pipelineHistory.filter((execution) => execution.status === 'error').length,
+    [pipelineHistory],
+  )
+
+  const resetPipelineEditor = () => {
+    setSelectedAgentPipelineId(null)
+    setAgentPipelineName('')
+    clearAgentPipeline()
+    setPipelineHistory([])
+    setLiveSteps([])
+    setActiveExecution(null)
+    setSelectedExecutionId(null)
+  }
+
+  const loadSavedPipeline = (pipelineId: string) => {
+    const selectedPipeline = agentPipelines.find((item) => item.id === pipelineId)
+    if (!selectedPipeline) return
+    setSelectedAgentPipelineId(selectedPipeline.id)
+    setAgentPipelineName(selectedPipeline.name)
+    setAgentPipeline(selectedPipeline.steps)
+    setLiveSteps([])
+    setActiveExecution(null)
+  }
+
+  const addStep = () => {
+    if (enabledAgents.length === 0) return
+    setAgentPipeline([...pipeline, { agentId: enabledAgents[0].id, task: '' }])
+    setLiveSteps([])
+    setActiveExecution(null)
+  }
+
+  const removeStep = (idx: number) => {
+    setAgentPipeline(pipeline.filter((_, index) => index !== idx))
+    setLiveSteps([])
+    setActiveExecution(null)
+  }
+
+  const updateStep = (idx: number, updates: Partial<{ agentId: string; task: string }>) => {
+    setAgentPipeline(pipeline.map((step, index) => index === idx ? { ...step, ...updates } : step))
+    setLiveSteps([])
+    setActiveExecution(null)
+  }
+
+  const appendStepReference = (idx: number, token: string) => {
+    setAgentPipeline(
+      pipeline.map((step, index) => {
+        if (index !== idx) return step
+        const nextTask = step.task.trim()
+          ? `${step.task.replace(/\s+$/u, '')}\n${token}`
+          : token
+        return { ...step, task: nextTask }
+      }),
+    )
+    setLiveSteps([])
+    setActiveExecution(null)
+  }
+
+  const savePipeline = async () => {
+    if (!workspacePath || pipeline.length === 0) return
+    const trimmedName = agentPipelineName.trim()
+    if (!trimmedName) {
+      addNotification({
+        id: generateId('notif'),
+        type: 'warning',
+        title: 'Pipeline name required',
+        message: 'Name the pipeline before saving it.',
+        timestamp: Date.now(),
+        read: false,
+      })
+      return
+    }
+
+    const now = Date.now()
+    const savedPipeline = selectedSavedPipeline
+    const nextPipeline = {
+      id: savedPipeline?.id ?? generateId('pipeline'),
+      name: trimmedName,
+      steps: pipeline,
+      createdAt: savedPipeline?.createdAt ?? now,
+      updatedAt: now,
+      lastRunAt: savedPipeline?.lastRunAt,
+    }
+
+    const success = await savePipelineToDisk(workspacePath, nextPipeline)
+    if (!success) {
+      addNotification({
+        id: generateId('notif'),
+        type: 'error',
+        title: 'Pipeline save failed',
+        message: 'Could not write the pipeline file to disk.',
+        timestamp: Date.now(),
+        read: false,
+      })
+      return
+    }
+
+    if (savedPipeline) {
+      updateAgentPipeline(savedPipeline.id, nextPipeline)
+    } else {
+      addAgentPipeline(nextPipeline)
+    }
+
+    setSelectedAgentPipelineId(nextPipeline.id)
+    addNotification({
+      id: generateId('notif'),
+      type: 'success',
+      title: 'Pipeline saved',
+      message: `${nextPipeline.name} is now available for timers and history tracking.`,
+      timestamp: Date.now(),
+      read: false,
+    })
+  }
+
+  const deletePipeline = async () => {
+    if (!workspacePath || !selectedSavedPipeline) return
+    const confirmed = await confirm({
+      title: 'Delete pipeline?',
+      body: `"${selectedSavedPipeline.name}" will be permanently removed from disk.`,
+      danger: true,
+      confirmText: 'Delete',
+    })
+    if (!confirmed) return
+
+    const success = await deletePipelineFromDisk(workspacePath, selectedSavedPipeline.id)
+    if (!success) {
+      addNotification({
+        id: generateId('notif'),
+        type: 'error',
+        title: 'Pipeline delete failed',
+        message: 'Could not remove the pipeline file from disk.',
+        timestamp: Date.now(),
+        read: false,
+      })
+      return
+    }
+
+    removeAgentPipeline(selectedSavedPipeline.id)
+    resetPipelineEditor()
+  }
+
+  const runPipeline = async () => {
+    if (pipeline.length === 0 || running) return
+    const previewSteps = buildPreviewSteps(pipeline, agentNameMap)
+    const controller = new AbortController()
+    runAbortControllerRef.current = controller
+    setRunning(true)
+    setSelectedExecutionId(null)
+    setActiveExecution(null)
+    setLiveSteps(previewSteps)
+
+    try {
+      const now = Date.now()
+      const execution = await executeAgentPipeline({
+        id: selectedSavedPipeline?.id ?? generateId('pipeline-draft'),
+        name: agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline',
+        steps: pipeline,
+        createdAt: selectedSavedPipeline?.createdAt ?? now,
+        updatedAt: now,
+        lastRunAt: selectedSavedPipeline?.lastRunAt,
+      }, {
+        trigger: 'manual',
+        persistExecution: Boolean(selectedSavedPipeline && workspacePath),
+        persistLastRun: Boolean(selectedSavedPipeline && workspacePath),
+        abortSignal: controller.signal,
+        onStepUpdate: (progressStep) => {
+          setLiveSteps((previous) => {
+            // Step edits clear liveSteps immediately, so this rebuild only handles
+            // late async updates arriving after a reset or pipeline switch.
+            const next = previous.length === pipeline.length ? [...previous] : buildPreviewSteps(pipeline, agentNameMap)
+            next[progressStep.stepIndex] = {
+              ...next[progressStep.stepIndex],
+              ...progressStep,
+            }
+            return next
+          })
+        },
+      })
+
+      setActiveExecution(execution)
+      setLiveSteps(execution.steps.map((step) => mapExecutionStep(step, agentNameMap)))
+
+      if (selectedSavedPipeline && workspacePath) {
+        const executions = await loadPipelineExecutionsFromDisk(workspacePath, selectedSavedPipeline.id)
+        setPipelineHistory(executions)
+        setSelectedExecutionId(executions[0]?.id ?? null)
+      }
+    } finally {
+      setRunning(false)
+      runAbortControllerRef.current = null
+    }
+  }
+
+  const cancelRunningPipeline = () => {
+    const controller = runAbortControllerRef.current
+    if (controller && !controller.signal.aborted) {
+      controller.abort()
+    }
+  }
+
+  // Guarantee the in-flight pipeline is cancelled if the user navigates away.
+  useEffect(() => {
+    return () => {
+      const controller = runAbortControllerRef.current
+      if (controller && !controller.signal.aborted) controller.abort()
+    }
+  }, [])
+
+  const formatRelativeTime = (timestamp?: number) => {
+    if (!timestamp) return t('agents.pipelineNeverRan', 'Never ran')
+    const diff = Date.now() - timestamp
+    if (diff < 60_000) return t('agents.justNow', 'Just now')
+    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
+    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
+    return `${Math.floor(diff / 86_400_000)}d ago`
+  }
+
+  const latestExecutionReference = useMemo(() => {
+    if (executionDetailSteps.length > 0) return executionDetailSteps
+    if (monitorSteps.length > 0) return monitorSteps
+    return pipelineHistory[0]?.steps.map((step) => mapExecutionStep(step, agentNameMap)) ?? []
+  }, [executionDetailSteps, monitorSteps, pipelineHistory, agentNameMap])
+
+  return (
+    <>
+      <SidePanel
+        title={t('agents.pipeline', 'Pipeline')}
+        width={panelWidth}
+        action={
+          <button
+            type="button"
+            onClick={resetPipelineEditor}
+            className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
+          >
+            + {t('common.new', 'New')}
+          </button>
+        }
+      >
+        <div className="p-3 space-y-3">
+          <div className="relative">
+            <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('agents.searchPipelines', 'Search pipelines...')}
+              className="w-full rounded-xl border border-border bg-surface-2 py-2 pl-9 pr-3 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={resetPipelineEditor}
+              className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${
+                !selectedSavedPipeline
+                  ? 'border-accent/30 bg-accent/10 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]'
+                  : 'border-border-subtle bg-surface-1/70 text-text-secondary hover:border-border hover:bg-surface-2/70'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-3 text-accent">
+                    <IconifyIcon name="ui-edit" size={16} color="currentColor" />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-medium">{agentPipelineName.trim() || t('agents.pipelineDraft', 'Draft pipeline')}</div>
+                    <div className="mt-0.5 text-[11px] text-text-muted">{pipeline.length} {t('agents.pipelineSteps', 'steps')}</div>
+                  </div>
+                </div>
+                {!selectedSavedPipeline && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] text-accent">{t('agents.editing', 'Editing')}</span>}
+              </div>
+            </button>
+
+            {filteredPipelines.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">
+                {searchQuery.trim()
+                  ? t('agents.noMatchingPipelines', 'No matching pipelines.')
+                  : t('agents.noSavedPipelines', 'No saved pipelines yet.')}
+              </div>
+            ) : (
+              filteredPipelines.map((savedPipeline) => (
+                <button
+                  key={savedPipeline.id}
+                  type="button"
+                  onClick={() => loadSavedPipeline(savedPipeline.id)}
+                  className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${
+                    selectedAgentPipelineId === savedPipeline.id
+                      ? 'border-accent/30 bg-accent/10 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]'
+                      : 'border-border-subtle bg-surface-1/70 text-text-secondary hover:border-border hover:bg-surface-2/70'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-medium">{savedPipeline.name}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
+                        <span>{savedPipeline.steps.length} {t('agents.pipelineSteps', 'steps')}</span>
+                        <span className="h-1 w-1 rounded-full bg-border" />
+                        <span>{formatRelativeTime(savedPipeline.lastRunAt)}</span>
+                      </div>
+                    </div>
+                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-accent">
+                      <IconifyIcon name="skill-agent-comm" size={15} color="currentColor" />
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </SidePanel>
+
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={460} />
+
+      <div className="flex min-w-0 flex-1 flex-col bg-surface-1/30">
+        <div className={`border-b border-border-subtle px-6 py-5 ${PIPELINE_HEADER_BACKGROUND}`}>
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-text-muted">
+                <span>{t('agents.pipeline', 'Pipeline')}</span>
+                {selectedSavedPipeline && <span className="rounded-full border border-border-subtle bg-surface-3/80 px-2 py-0.5 text-[10px] normal-case tracking-normal text-text-secondary">{selectedSavedPipeline.id}</span>}
+                <span className={`rounded-full border px-2 py-0.5 text-[10px] normal-case tracking-normal ${statusStyles(running ? 'running' : (activeExecution?.status ?? 'pending'))}`}>
+                  {running ? t('agents.pipelineStatusRunning', 'Running') : t(`agents.pipelineStatus.${activeExecution?.status ?? 'pending'}`, activeExecution?.status ?? 'pending')}
+                </span>
+              </div>
+              <h1 className="mt-3 text-2xl font-semibold text-text-primary">{agentPipelineName.trim() || t('agents.pipelineDraft', 'Draft pipeline')}</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-text-muted">{t('agents.pipelineMonitorHint', 'Track every handoff, inspect upstream context, and review saved runs without leaving the pipeline canvas.')}</p>
+            </div>
+
+            <div className="grid gap-2 sm:grid-cols-2 xl:min-w-130 xl:grid-cols-4">
+              <div className="rounded-2xl border border-border-subtle bg-surface-0/60 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{t('agents.pipelineSteps', 'steps')}</div>
+                <div className="mt-2 text-2xl font-semibold text-text-primary">{pipeline.length}</div>
+              </div>
+              <div className="rounded-2xl border border-border-subtle bg-surface-0/60 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{t('agents.pipelineRunningStep', 'Active step')}</div>
+                <div className="mt-2 text-2xl font-semibold text-text-primary">{currentRunningStep ? currentRunningStep.stepIndex + 1 : '—'}</div>
+              </div>
+              <div className="rounded-2xl border border-border-subtle bg-surface-0/60 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{t('agents.pipelineProgress', 'Progress')}</div>
+                <div className="mt-2 text-2xl font-semibold text-text-primary">{completedMonitorSteps}/{pipeline.length || 0}</div>
+              </div>
+              <div className="rounded-2xl border border-border-subtle bg-surface-0/60 px-4 py-3">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{t('agents.pipelineHistory', 'Execution History')}</div>
+                <div className="mt-2 text-sm font-medium text-text-primary">{selectedSavedPipeline ? `${pipelineHistory.length} ${t('agents.pipelineRuns', 'runs')}` : t('agents.pipelineUnsaved', 'Unsaved')}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button type="button" onClick={resetPipelineEditor} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('common.new', 'New')}</button>
+            <button type="button" onClick={() => clearAgentPipeline()} disabled={pipeline.length === 0 || running} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('common.clearAll', 'Clear All')}</button>
+            <button type="button" onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40">{t('common.saveChanges', 'Save Changes')}</button>
+            <button type="button" onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40">{t('common.delete', 'Delete')}</button>
+            <button
+              type="button"
+              onClick={runPipeline}
+              disabled={pipeline.length === 0 || running || pipeline.some((step) => !step.task.trim())}
+              className="rounded-xl bg-accent px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-40"
+            >
+              {running ? t('agents.runningPipeline', 'Running...') : t('agents.runPipeline', '▶ Run Pipeline')}
+            </button>
+            {running && (
+              <button
+                type="button"
+                onClick={cancelRunningPipeline}
+                className="rounded-xl bg-red-500/15 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/25"
+                title={t('agents.cancelPipelineHint', 'Stop the running pipeline')}
+              >
+                {t('agents.cancelPipeline', '■ Cancel')}
+              </button>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-3xl border border-border-subtle bg-surface-0/55 px-4 py-4">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineExecutionStatus', 'Execution status')}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
+                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusStyles(running ? 'running' : (executionDetail?.status ?? activeExecution?.status ?? 'pending'))}`}>
+                    {running
+                      ? t('agents.pipelineStatusRunning', 'Running')
+                      : t(`agents.pipelineStatus.${executionDetail?.status ?? activeExecution?.status ?? 'pending'}`, executionDetail?.status ?? activeExecution?.status ?? 'pending')}
+                  </span>
+                  <span>{completedMonitorSteps}/{pipeline.length || 0} {t('agents.pipelineStepsCompleted', 'steps completed')} ({progressPercent}%)</span>
+                  <span className="text-text-muted">{successfulMonitorSteps} {t('agents.pipelineSucceeded', 'succeeded')} · {failedMonitorSteps} {t('agents.pipelineFailed', 'failed')}</span>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2 text-[11px] text-text-secondary">
+                <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineHistory', 'History')}: {pipelineHistory.length}</span>
+                <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineSuccess', 'Success')}: {successfulHistoryRuns}</span>
+                <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineErrors', 'Errors')}: {failedHistoryRuns}</span>
+              </div>
+            </div>
+
+            <div className="mt-4 flex gap-1.5">
+              {(pipeline.length > 0 ? pipeline : [{ agentId: 'placeholder', task: '' }]).map((step, index) => {
+                const stepStatus = monitorSteps[index]?.status ?? 'pending'
+                const segmentClass = stepStatus === 'success'
+                  ? 'bg-emerald-400/90'
+                  : stepStatus === 'error'
+                    ? 'bg-red-400/90'
+                    : stepStatus === 'running'
+                      ? 'bg-amber-400/90'
+                      : 'bg-surface-3'
+
+                return (
+                  <div
+                    key={`${step.agentId}-${index}`}
+                    className={`h-2 flex-1 rounded-full transition-colors ${segmentClass}`}
+                  />
+                )
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.9fr)]">
+          <div className="min-h-0 overflow-y-auto px-6 py-6">
+            <div className="space-y-6">
+              <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineBuilder', 'Pipeline builder')}</h2>
+                    <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineBuilderHint', 'Design each handoff and keep the upstream result visible directly on the canvas.')}</p>
+                  </div>
+                  <div className="rounded-full bg-surface-3 px-2.5 py-1 text-[11px] text-text-secondary">{pipeline.length} {t('agents.pipelineSteps', 'steps')}</div>
+                </div>
+
+                <div className="mt-5 space-y-4">
+                  <div>
+                    <label className="mb-2 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineName', 'Pipeline name')}</label>
+                    <input
+                      value={agentPipelineName}
+                      onChange={(e) => setAgentPipelineName(e.target.value)}
+                      placeholder={t('agents.pipelineName', 'Pipeline name')}
+                      className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    {pipeline.map((step, idx) => {
+                      const previewStep = latestExecutionReference[idx]
+                      const previousOutput = idx > 0 ? latestExecutionReference[idx - 1]?.output : ''
+                      const referenceTokens = idx > 0
+                        ? [
+                            {
+                              label: t('agents.pipelineReferencePrevious', 'Previous output'),
+                              token: '{{previous.output}}',
+                            },
+                            ...pipeline.slice(0, idx).map((_, referenceIndex) => ({
+                              label: `${t('agents.pipelineStep', 'Step')} ${referenceIndex + 1} ${t('agents.pipelineOutput', 'output')}`,
+                              token: buildStepOutputToken(referenceIndex),
+                            })),
+                          ]
+                        : []
+                      const usesReferences = step.task.includes('{{') && step.task.includes('}}')
+
+                      return (
+                        <div key={idx} className="rounded-3xl border border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] p-4">
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-accent/12 text-xs font-semibold text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]">{idx + 1}</span>
+                              <div>
+                                <div className="text-xs uppercase tracking-[0.14em] text-text-muted">{t('agents.pipelineStep', 'Step')}</div>
+                                <div className="mt-1 text-sm font-medium text-text-primary">{agentNameMap[step.agentId] ?? t('agents.pipelineUnknownAgent', 'Unknown agent')}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className={`rounded-full border px-2 py-1 text-[10px] font-medium ${statusStyles(previewStep?.status ?? 'pending')}`}>{t(`agents.pipelineStatus.${previewStep?.status ?? 'pending'}`, previewStep?.status ?? 'pending')}</span>
+                              <button type="button" title={t('agents.removeStep', 'Remove step')} onClick={() => removeStep(idx)} className="rounded-lg p-1 text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"><IconifyIcon name="ui-close" size={14} color="currentColor" /></button>
+                            </div>
+                          </div>
+
+                          <div className="space-y-3">
+                            <select
+                              value={step.agentId}
+                              onChange={(e) => updateStep(idx, { agentId: e.target.value })}
+                              aria-label="Pipeline agent"
+                              className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                            >
+                              {enabledAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                            </select>
+                            <textarea
+                              value={step.task}
+                              onChange={(e) => updateStep(idx, { task: e.target.value })}
+                              placeholder={t('agents.taskDesc', 'Task description...')}
+                              rows={3}
+                              className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                            />
+
+                            {idx > 0 && (
+                              <div className="rounded-2xl border border-dashed border-border-subtle bg-surface-2/45 px-3 py-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineReferences', 'Step references')}</div>
+                                    <div className="mt-1 text-xs text-text-muted">{t('agents.pipelineReferencesHint', 'Insert upstream outputs into this task with template tokens before the step runs.')}</div>
+                                  </div>
+                                  {usesReferences && <span className="rounded-full bg-accent/10 px-2 py-1 text-[10px] font-medium text-accent">{t('agents.pipelineTemplateEnabled', 'Template active')}</span>}
+                                </div>
+
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {referenceTokens.map((reference) => (
+                                    <button
+                                      key={`${idx}-${reference.token}`}
+                                      type="button"
+                                      onClick={() => appendStepReference(idx, reference.token)}
+                                      className="rounded-full border border-border-subtle bg-surface-1/80 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:bg-accent/8 hover:text-accent"
+                                    >
+                                      {reference.label}: {reference.token}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {idx > 0 && (
+                            <div className="mt-4 rounded-2xl border border-dashed border-border-subtle bg-surface-2/60 px-3 py-3">
+                              <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelinePreviousResult', 'Previous step result')}</div>
+                              <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap text-sm text-text-secondary">
+                                {previousOutput || t('agents.pipelineAwaitingPreviousResult', 'Run the pipeline to preview what this step receives from upstream.')}
+                              </div>
+                            </div>
+                          )}
+
+                          {previewStep?.output && (
+                            <div className="mt-4 rounded-2xl border border-border-subtle bg-surface-2/40 px-3 py-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineLatestOutput', 'Latest output')}</div>
+                                <div className="text-[11px] text-text-muted">{formatDuration(previewStep.durationMs, t)}</div>
+                              </div>
+                              <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap text-sm text-text-secondary">{previewStep.output}</div>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+
+                    <button type="button" onClick={addStep} className="w-full rounded-2xl border border-dashed border-accent/30 bg-accent/5 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/10">{t('agents.addStep', '+ Add Step')}</button>
+                  </div>
+                </div>
+              </section>
+
+              <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div>
+                    <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineExecutionMonitor', 'Execution monitor')}</h2>
+                    <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineExecutionMonitorHint', 'Watch the current run unfold step by step, including the exact input each agent received.')}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[11px] text-text-secondary">
+                    <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineLiveSteps', 'Visible steps')}: {monitorSteps.length || pipeline.length}</span>
+                    <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineFinalOutput', 'Final output')}: {activeExecution?.finalOutput ? '✓' : '—'}</span>
+                  </div>
+                </div>
+
+                {monitorSteps.length === 0 ? (
+                  <div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-10 text-center text-xs text-text-muted">{t('agents.noPipelineResults', 'Run the pipeline to see step outputs here.')}</div>
+                ) : (
+                  <div className="mt-4 space-y-3">
+                    {monitorSteps.map((step) => (
+                      <div key={`${step.stepIndex}-${step.agentId}-${step.startedAt ?? 'idle'}`} className="rounded-3xl border border-border bg-surface-0/40 p-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-text-primary">{t('agents.pipelineStep', 'Step')} {step.stepIndex + 1}</span>
+                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusStyles(step.status)}`}>{t(`agents.pipelineStatus.${step.status}`, step.status)}</span>
+                            </div>
+                            <div className="mt-2 text-sm text-text-secondary">{step.agentName || agentNameMap[step.agentId] || step.agentId}</div>
+                            <div className="mt-1 text-xs text-text-muted">{formatDuration(step.durationMs, t)}</div>
+                          </div>
+                          {step.startedAt && <div className="text-xs text-text-muted">{new Date(step.startedAt).toLocaleString()}</div>}
+                        </div>
+
+                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                          <div className="rounded-2xl border border-border-subtle bg-surface-2/60 px-3 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineInput', 'Input')}</div>
+                            <div className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm text-text-secondary">{step.input || step.task}</div>
+                          </div>
+                          <div className="rounded-2xl border border-border-subtle bg-surface-2/60 px-3 py-3">
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{step.error ? t('agents.error', 'Error') : t('agents.output', 'Output')}</div>
+                            <div className={`mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm ${step.error ? 'text-red-300' : 'text-text-secondary'}`}>
+                              {step.error || step.output || (step.status === 'running' ? t('agents.pipelineStreaming', 'Receiving output...') : t('agents.pipelineNoOutputYet', 'No output yet.'))}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+
+          <aside className="min-h-0 border-t border-border-subtle xl:border-t-0 xl:border-l">
+            <div className="h-full overflow-y-auto px-6 py-6">
+              <div className="space-y-6">
+                <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineHistory', 'Execution History')}</h2>
+                      <p className="mt-1 text-xs text-text-muted">{selectedSavedPipeline ? t('agents.pipelineHistoryHint', 'Recent executions for the selected saved pipeline.') : t('agents.pipelineHistoryHint', 'Save the pipeline first to keep execution history and let timers reference it.')}</p>
+                    </div>
+                    {selectedSavedPipeline && <span className="rounded-full bg-surface-3 px-2.5 py-1 text-[11px] text-text-secondary">{pipelineHistory.length}</span>}
+                  </div>
+
+                  {!selectedSavedPipeline ? (
+                    <div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('agents.pipelineHistoryHint', 'Save the pipeline first to keep execution history and let timers reference it.')}</div>
+                  ) : pipelineHistory.length === 0 ? (
+                    <div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('agents.noPipelineHistory', 'No pipeline executions recorded yet.')}</div>
+                  ) : (
+                    <div className="mt-4 space-y-3">
+                      {pipelineHistory.slice(0, 20).map((execution) => (
+                        <button
+                          key={execution.id}
+                          type="button"
+                          onClick={() => setSelectedExecutionId(execution.id)}
+                          className={`w-full rounded-[22px] border p-4 text-left transition-all ${selectedExecutionId === execution.id ? 'border-accent/30 bg-accent/8 shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]' : 'border-border bg-surface-0/40 hover:border-border-subtle hover:bg-surface-2/50'}`}
+                        >
+                          <div className="flex items-center justify-between gap-3 text-xs">
+                            <span className={`rounded-full border px-2 py-0.5 font-medium ${statusStyles(execution.status)}`}>{t(`agents.pipelineStatus.${execution.status}`, execution.status)}</span>
+                            <span className="text-text-muted">{new Date(execution.startedAt).toLocaleString()}</span>
+                          </div>
+                          <div className="mt-3 text-[11px] text-text-muted">{formatTriggerLabel(execution.trigger, t)} · {execution.steps.length} {t('agents.pipelineSteps', 'steps')} · {formatDuration(execution.completedAt - execution.startedAt, t)}</div>
+                          {(execution.error || execution.finalOutput) && (
+                            <div className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm text-text-secondary">{execution.error || execution.finalOutput}</div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </section>
+
+                <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineExecutionDetails', 'Execution details')}</h2>
+                      <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineExecutionDetailsHint', 'Inspect the exact handoff between steps, including errors and final output.')}</p>
+                    </div>
+                    {executionDetail && <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles(executionDetail.status)}`}>{t(`agents.pipelineStatus.${executionDetail.status}`, executionDetail.status)}</span>}
+                  </div>
+
+                  {!executionDetail ? (
+                    <div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{selectedSavedPipeline ? t('agents.pipelineSelectRunHint', 'Select a saved run to inspect the full handoff between steps.') : t('agents.pipelineRunDraftHint', 'Run the draft pipeline to review each step handoff here.')}</div>
+                  ) : (
+                    <div className="mt-4 space-y-4">
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineTrigger', 'Trigger')}</div>
+                          <div className="mt-2 text-sm font-medium text-text-primary">{formatTriggerLabel(executionDetail.trigger, t)}</div>
+                        </div>
+                        <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineSucceeded', 'Succeeded')}</div>
+                          <div className="mt-2 text-sm font-medium text-text-primary">{executionDetail.steps.filter((step) => step.status === 'success').length}/{executionDetail.steps.length}</div>
+                        </div>
+                        <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineErrors', 'Errors')}</div>
+                          <div className="mt-2 text-sm font-medium text-text-primary">{executionDetail.steps.filter((step) => step.status === 'error').length}</div>
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineFinalOutput', 'Final output')}</div>
+                            <div className="mt-2 text-sm text-text-secondary whitespace-pre-wrap">{executionDetail.finalOutput || executionDetail.error || t('agents.pipelineNoOutputYet', 'No output yet.')}</div>
+                          </div>
+                          <div className="text-xs text-text-muted">{formatDuration(executionDetail.completedAt - executionDetail.startedAt, t)}</div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {executionDetailSteps.map((step) => (
+                          <div key={`${executionDetail.id}-${step.stepIndex}`} className="rounded-[22px] border border-border bg-surface-0/40 p-4">
+                            <div className="flex items-center justify-between gap-3">
+                              <div>
+                                <div className="text-sm font-semibold text-text-primary">{t('agents.pipelineStep', 'Step')} {step.stepIndex + 1}</div>
+                                <div className="mt-1 text-xs text-text-muted">{step.agentName || step.agentId}</div>
+                              </div>
+                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusStyles(step.status)}`}>{t(`agents.pipelineStatus.${step.status}`, step.status)}</span>
+                            </div>
+                            <div className="mt-3 grid gap-3">
+                              <div className="rounded-2xl border border-border-subtle bg-surface-2/60 px-3 py-3">
+                                <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineInput', 'Input')}</div>
+                                <div className="mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap text-sm text-text-secondary">{step.input}</div>
+                              </div>
+                              <div className="rounded-2xl border border-border-subtle bg-surface-2/60 px-3 py-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{step.error ? t('agents.error', 'Error') : t('agents.output', 'Output')}</div>
+                                  <div className="text-[11px] text-text-muted">{formatDuration(step.durationMs, t)}</div>
+                                </div>
+                                <div className={`mt-2 max-h-32 overflow-y-auto whitespace-pre-wrap text-sm ${step.error ? 'text-red-300' : 'text-text-secondary'}`}>{step.error || step.output || t('agents.pipelineNoOutputYet', 'No output yet.')}</div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </>
+  )
+}

@@ -1,0 +1,193 @@
+// External directory loading for skills and agents
+import type { Skill, Agent, ExternalDirectoryConfig, SkillSource } from '@/types'
+import { parseSkillMarkdown } from '@/services/skillRegistry'
+
+interface DirEntry {
+  name: string
+  isDirectory: boolean
+  path: string
+}
+
+function getSkillSource(dirPath: string): SkillSource {
+  const normalizedPath = dirPath.replace(/\\/g, '/').toLowerCase()
+  if (normalizedPath.includes('/.agents/')) return 'agent-dir'
+  if (normalizedPath.includes('/.claude/')) return 'claude-dir'
+  return 'workspace'
+}
+
+function isElectronError(value: unknown): value is { error: string } {
+  return !!value && typeof value === 'object' && 'error' in value
+}
+
+async function readSkillMarkdown(filePath: string, source: SkillSource): Promise<Skill | null> {
+  try {
+    const content = await window.electron.invoke('fs:readFile', filePath) as string | { error: string }
+    if (typeof content !== 'string') return null
+    return parseSkillMarkdown(content, filePath, source)
+  } catch {
+    return null
+  }
+}
+
+export async function syncExternalDirectoryAccess(
+  directories: ExternalDirectoryConfig[],
+  extraPaths: string[] = [],
+): Promise<void> {
+  const allowedPaths = [
+    ...directories.filter((dir) => dir.enabled).map((dir) => dir.path),
+    ...extraPaths,
+  ]
+  const uniquePaths = Array.from(new Set(allowedPaths.filter((dirPath) => dirPath.trim().length > 0)))
+  await window.electron.invoke('workspace:setExternalDirectories', uniquePaths)
+}
+
+/**
+ * Load skills from an external directory
+ */
+export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]> {
+  const skills: Skill[] = []
+  const source = getSkillSource(dirPath)
+
+  try {
+    const result = await window.electron.invoke('fs:listDir', dirPath) as DirEntry[] | { error: string }
+    if (isElectronError(result)) {
+      console.error(`Failed to read directory ${dirPath}:`, result.error)
+      return skills
+    }
+
+    for (const entry of result) {
+      if (entry.isDirectory) {
+        const nestedSkill = await readSkillMarkdown(`${entry.path}/SKILL.md`, source)
+          ?? await readSkillMarkdown(`${entry.path}/skill.md`, source)
+        if (nestedSkill) {
+          nestedSkill.skillRoot = entry.path
+          skills.push(nestedSkill)
+        }
+        continue
+      }
+
+      if (entry.name.endsWith('.md')) {
+        const skill = await readSkillMarkdown(entry.path, source)
+        if (skill) skills.push(skill)
+        continue
+      }
+
+      if (!entry.name.endsWith('.json')) continue
+
+      try {
+        const content = await window.electron.invoke('fs:readFile', entry.path) as string | { error: string }
+        if (typeof content !== 'string') {
+          console.warn(`Failed to read ${entry.name}:`, (content as { error: string }).error)
+          continue
+        }
+        const skillData = JSON.parse(content)
+
+        // Validate required fields
+        if (!skillData.id || !skillData.name || !skillData.tools) {
+          console.warn(`Invalid skill file ${entry.name}: missing required fields`)
+          continue
+        }
+
+        // Determine source based on directory path
+        const skill: Skill = {
+          ...skillData,
+          type: 'custom',
+          source,
+          enabled: skillData.enabled ?? true,
+        }
+
+        skills.push(skill)
+      } catch (err) {
+        console.warn(`Failed to load skill from ${entry.name}:`, err)
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to read directory ${dirPath}:`, err)
+  }
+
+  return skills
+}
+
+/**
+ * Load agents from an external directory
+ */
+export async function loadAgentsFromDirectory(dirPath: string): Promise<Agent[]> {
+  const agents: Agent[] = []
+
+  try {
+    const result = await window.electron.invoke('fs:listDir', dirPath) as DirEntry[] | { error: string }
+    if (isElectronError(result)) {
+      console.error(`Failed to read directory ${dirPath}:`, result.error)
+      return agents
+    }
+
+    for (const entry of result) {
+      if (entry.isDirectory) continue
+      if (!entry.name.endsWith('.json')) continue
+
+      try {
+        const content = await window.electron.invoke('fs:readFile', entry.path) as string | { error: string }
+        if (typeof content !== 'string') {
+          console.warn(`Failed to read ${entry.name}:`, (content as { error: string }).error)
+          continue
+        }
+        const agentData = JSON.parse(content)
+
+        // Validate required fields
+        if (!agentData.id || !agentData.name || !agentData.systemPrompt) {
+          console.warn(`Invalid agent file ${entry.name}: missing required fields`)
+          continue
+        }
+
+        const agent: Agent = {
+          id: agentData.id,
+          name: agentData.name,
+          avatar: agentData.avatar || 'agent-robot',
+          systemPrompt: agentData.systemPrompt,
+          modelId: agentData.modelId || '',
+          skills: agentData.skills || [],
+          temperature: agentData.temperature ?? 0.7,
+          maxTokens: agentData.maxTokens ?? 4096,
+          enabled: agentData.enabled ?? true,
+          greeting: agentData.greeting,
+          responseStyle: agentData.responseStyle || 'balanced',
+          allowedTools: agentData.allowedTools || [],
+          memories: agentData.memories || [],
+          autoLearn: agentData.autoLearn ?? true,
+        }
+
+        agents.push(agent)
+      } catch (err) {
+        console.warn(`Failed to load agent from ${entry.name}:`, err)
+      }
+    }
+  } catch (err) {
+    console.error(`Failed to read directory ${dirPath}:`, err)
+  }
+
+  return agents
+}
+
+/**
+ * Load all external skills and agents based on external directory configs
+ */
+export async function loadExternalResources(
+  directories: ExternalDirectoryConfig[]
+): Promise<{ skills: Skill[]; agents: Agent[] }> {
+  const skills: Skill[] = []
+  const agents: Agent[] = []
+
+  for (const dir of directories) {
+    if (!dir.enabled) continue
+
+    if (dir.type === 'skills') {
+      const loadedSkills = await loadSkillsFromDirectory(dir.path)
+      skills.push(...loadedSkills)
+    } else if (dir.type === 'agents') {
+      const loadedAgents = await loadAgentsFromDirectory(dir.path)
+      agents.push(...loadedAgents)
+    }
+  }
+
+  return { skills, agents }
+}

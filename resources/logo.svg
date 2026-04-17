@@ -1,0 +1,119 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="3 12 94 76" width="512" height="512">
+  <defs>
+
+    <!--  Crescent gradient: lit from its concave/inner face (nearest the core)  -->
+    <!-- gradientUnits=userSpaceOnUse so coords map directly to the 100100 canvas -->
+    <radialGradient id="cG" cx="62" cy="50" r="55" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#FF6040"/>
+      <stop offset="42%"  stop-color="#E6242B"/>
+      <stop offset="100%" stop-color="#6C0A12"/>
+    </radialGradient>
+
+    <!--  Core radial gradient: white hot center  orange  transparent  -->
+    <radialGradient id="kG" cx="50%" cy="50%" r="50%">
+      <stop offset="0%"   stop-color="#FFFFFF"/>
+      <stop offset="30%"  stop-color="#FFAA88"/>
+      <stop offset="100%" stop-color="#E6242B" stop-opacity="0"/>
+    </radialGradient>
+
+    <!--  Ambient background glow centered near core  -->
+    <radialGradient id="bgG" cx="72%" cy="50%" r="44%">
+      <stop offset="0%"   stop-color="#E6242B" stop-opacity="0.20"/>
+      <stop offset="100%" stop-color="#E6242B" stop-opacity="0"/>
+    </radialGradient>
+
+    <!--  Crescent halo filter  -->
+    <filter id="cF" x="-18%" y="-18%" width="136%" height="136%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="2.2" result="b"/>
+      <feFlood flood-color="#CC1818" flood-opacity="0.62" result="c"/>
+      <feComposite in="c" in2="b" operator="in" result="g"/>
+      <feMerge>
+        <feMergeNode in="g"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!--  Core glow filter: double-layered hot emanation  -->
+    <filter id="kF" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5.0" result="b"/>
+      <feFlood flood-color="#FF4020" flood-opacity="0.88" result="c"/>
+      <feComposite in="c" in2="b" operator="in" result="g"/>
+      <feMerge>
+        <feMergeNode in="g"/>
+        <feMergeNode in="g"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!--  Crescent mask: outer circle MINUS inner offset circle = moon shape  -->
+    <!--   Outer: cx=40 cy=50 r=33   Inner: cx=55 cy=50 r=25                   -->
+    <!--   Intersection tips (calculated): x63.0  y26.3 and 73.7             -->
+    <mask id="cM">
+      <rect width="100" height="100" fill="white"/>
+      <circle cx="55" cy="50" r="25" fill="black"/>
+    </mask>
+
+    <!--  ClipPath = outer circle, used to confine the inner-edge highlight  -->
+    <clipPath id="oCl">
+      <circle cx="40" cy="50" r="33"/>
+    </clipPath>
+
+  </defs>
+
+  <!--  AMBIENT: soft glow cloud emanating from core area  -->
+  <ellipse cx="73" cy="50" rx="38" ry="34" fill="url(#bgG)"/>
+
+  <!--  CRESCENT BODY  -->
+  <!-- Outer filled circle, inner portion removed by mask  crescent shape -->
+  <circle cx="40" cy="50" r="33"
+          fill="url(#cG)"
+          mask="url(#cM)"
+          filter="url(#cF)"/>
+
+  <!-- Outer convex-edge rim: subtle bright stroke along the outer arc -->
+  <circle cx="40" cy="50" r="33.8"
+          fill="none"
+          stroke="#FF7050" stroke-width="1.0" stroke-opacity="0.28"
+          mask="url(#cM)"/>
+
+  <!-- Inner concave-face highlight: inner circle arc clipped to outer circle bounds -->
+  <!-- Creates a warm bright crescent on the face that looks toward the core -->
+  <circle cx="55" cy="50" r="25"
+          fill="none"
+          stroke="#FF8060" stroke-width="2.8" stroke-opacity="0.22"
+          clip-path="url(#oCl)"/>
+
+  <!-- Crescent tip glows (precise intersection coordinates) -->
+  <circle cx="63.0" cy="26.3" r="2.2" fill="#FF7050" opacity="0.72"/>
+  <circle cx="63.0" cy="73.7" r="2.2" fill="#FF7050" opacity="0.72"/>
+
+  <!--  LIGHT RAYS from core (lines drawn under core so core overlaps them)  -->
+  <!-- Primary rightward ray -->
+  <line x1="78" y1="50" x2="95" y2="50"
+        stroke="#E6242B" stroke-width="1.4" stroke-linecap="round" opacity="0.52"/>
+  <!-- Upper-right -->
+  <line x1="78" y1="50" x2="92" y2="33.5"
+        stroke="#E6242B" stroke-width="1.0" stroke-linecap="round" opacity="0.36"/>
+  <!-- Lower-right -->
+  <line x1="78" y1="50" x2="92" y2="66.5"
+        stroke="#E6242B" stroke-width="1.0" stroke-linecap="round" opacity="0.36"/>
+  <!-- Vertical up -->
+  <line x1="78" y1="50" x2="78" y2="28"
+        stroke="#E6242B" stroke-width="0.8" stroke-linecap="round" opacity="0.20"/>
+  <!-- Vertical down -->
+  <line x1="78" y1="50" x2="78" y2="72"
+        stroke="#E6242B" stroke-width="0.8" stroke-linecap="round" opacity="0.20"/>
+
+  <!--  CORE NODE  -->
+  <!-- Concentric halo rings: outermost  faintest -->
+  <circle cx="78" cy="50" r="14"  fill="#E6242B" opacity="0.05"/>
+  <circle cx="78" cy="50" r="9"   fill="#E6242B" opacity="0.10"/>
+  <circle cx="78" cy="50" r="5.5" fill="#E6242B" opacity="0.19"/>
+
+  <!-- Core sphere with radial gradient + glow filter -->
+  <circle cx="78" cy="50" r="4.2" fill="url(#kG)" filter="url(#kF)"/>
+
+  <!-- Core nucleus: pure white hot point -->
+  <circle cx="78" cy="50" r="1.6" fill="#FFFFFF" opacity="0.97"/>
+
+</svg>

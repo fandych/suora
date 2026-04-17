@@ -1,0 +1,134 @@
+import type { StateCreator } from 'zustand'
+import type { MarketplaceSettings, Model, ProviderConfig, ToolSecuritySettings } from '@/types'
+import { updateCachedWorkspacePath } from '@/services/fileStorage'
+import type { AppStore } from '@/store/appStore'
+
+export type ModelConfigSlice = Pick<
+  AppStore,
+  | 'models'
+  | 'selectedModel'
+  | 'setSelectedModel'
+  | 'addModel'
+  | 'updateModel'
+  | 'removeModel'
+  | 'providerConfigs'
+  | 'addProviderConfig'
+  | 'updateProviderConfig'
+  | 'removeProviderConfig'
+  | 'setProviderConfigs'
+  | 'syncModelsFromConfigs'
+  | 'workspacePath'
+  | 'setWorkspacePath'
+  | 'apiKeys'
+  | 'setApiKey'
+  | 'plugins'
+  | 'setPlugin'
+  | 'toolSecurity'
+  | 'setToolSecurity'
+  | 'marketplace'
+  | 'setMarketplace'
+>
+
+export const DEFAULT_TOOL_SECURITY: ToolSecuritySettings = {
+  allowedDirectories: [],
+  blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
+  requireConfirmation: false,
+}
+
+export const DEFAULT_MARKETPLACE: MarketplaceSettings = {
+  source: 'official',
+  privateUrl: '',
+  registrySources: [],
+}
+
+function getElectron() {
+  return (window as unknown as {
+    electron?: { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
+  }).electron
+}
+
+function buildModelsFromProviderConfigs(providerConfigs: ProviderConfig[]): Model[] {
+  const models: Model[] = []
+
+  for (const providerConfig of providerConfigs) {
+    for (const providerModel of providerConfig.models) {
+      if (!providerModel.enabled) continue
+
+      models.push({
+        id: `${providerConfig.id}:${providerModel.modelId}`,
+        name: providerModel.name || providerModel.modelId,
+        provider: providerConfig.id,
+        providerType: providerConfig.providerType,
+        modelId: providerModel.modelId,
+        apiKey: providerConfig.apiKey,
+        baseUrl: providerConfig.baseUrl,
+        isDefault: false,
+        enabled: true,
+      })
+    }
+  }
+
+  if (models.length > 0) {
+    models[0] = { ...models[0], isDefault: true }
+  }
+
+  return models
+}
+
+export const createModelConfigSlice: StateCreator<AppStore, [], [], ModelConfigSlice> = (set) => ({
+  models: [],
+  selectedModel: null,
+  setSelectedModel: (model) => set({ selectedModel: model }),
+  addModel: (model) => set((state) => ({ models: [...state.models, model] })),
+  updateModel: (id, data) => set((state) => ({
+    models: state.models.map((model) => (model.id === id ? { ...model, ...data } : model)),
+  })),
+  removeModel: (id) => set((state) => ({
+    models: state.models.filter((model) => model.id !== id),
+    selectedModel: state.selectedModel?.id === id ? null : state.selectedModel,
+  })),
+  providerConfigs: [],
+  addProviderConfig: (config) => set((state) => ({
+    providerConfigs: [...state.providerConfigs, config],
+  })),
+  updateProviderConfig: (id, config) => set((state) => ({
+    providerConfigs: state.providerConfigs.map((providerConfig) => (
+      providerConfig.id === id ? { ...providerConfig, ...config } : providerConfig
+    )),
+  })),
+  removeProviderConfig: (id) => set((state) => ({
+    providerConfigs: state.providerConfigs.filter((providerConfig) => providerConfig.id !== id),
+  })),
+  setProviderConfigs: (configs) => set({ providerConfigs: configs }),
+  syncModelsFromConfigs: () => set((state) => {
+    const models = buildModelsFromProviderConfigs(state.providerConfigs)
+    const selectedModel = state.selectedModel
+      ? models.find((model) => model.id === state.selectedModel?.id) ?? (models[0] ?? null)
+      : (models[0] ?? null)
+
+    return { models, selectedModel }
+  }),
+  workspacePath: '',
+  setWorkspacePath: (workspacePath) => {
+    set({ workspacePath })
+    updateCachedWorkspacePath(workspacePath)
+    const electron = getElectron()
+    if (electron) electron.invoke('workspace:init', workspacePath).catch(() => {})
+  },
+  apiKeys: {},
+  setApiKey: (provider, key) => set((state) => ({
+    apiKeys: { ...state.apiKeys, [provider]: key },
+  })),
+  plugins: {},
+  setPlugin: (name, config) => set((state) => ({
+    plugins: { ...state.plugins, [name]: config },
+  })),
+  toolSecurity: DEFAULT_TOOL_SECURITY,
+  setToolSecurity: (data) => set((state) => ({
+    toolSecurity: { ...state.toolSecurity, ...data },
+  })),
+  marketplace: DEFAULT_MARKETPLACE,
+  setMarketplace: (data) => set((state) => ({
+    marketplace: { ...state.marketplace, ...data },
+  })),
+})
