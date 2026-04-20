@@ -1,12 +1,12 @@
 import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom'
-import { useEffect, lazy, Suspense } from 'react'
+import { useEffect, useMemo, lazy, Suspense } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { OnboardingWizard } from '@/components/OnboardingWizard'
 import { ConfirmDialogHost } from '@/components/ConfirmDialog'
 import { ToastHost } from '@/components/ToastHost'
+import { useI18n } from '@/hooks/useI18n'
 import { useTheme } from '@/hooks/useTheme'
-import { useAppStore } from '@/store/appStore'
 import { initChannelMessageListener } from '@/services/channelMessageHandler'
 import { preloadPopularCollections } from '@/services/iconService'
 import { initTimerRuntimeListener } from '@/services/timerRuntime'
@@ -26,7 +26,7 @@ function LazyPage({ children, label }: { children: React.ReactNode; label?: stri
   return (
     <Suspense
       fallback={
-        <div className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
+        <div role="status" aria-live="polite" aria-label={label} className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
           <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
           {label && <span className="text-xs text-text-muted/60">{label}</span>}
         </div>
@@ -37,28 +37,29 @@ function LazyPage({ children, label }: { children: React.ReactNode; label?: stri
   )
 }
 
-const router = createHashRouter([
-  {
-    path: '/',
-    element: <AppShell />,
-    children: [
-      { index: true, element: <Navigate to="/chat" replace /> },
-      { path: 'chat', element: <LazyPage label="Loading chat..."><ChatLayout /></LazyPage> },
-      { path: 'pipeline', element: <LazyPage label="Loading pipeline..."><PipelineLayout /></LazyPage> },
-      { path: 'models', element: <LazyPage label="Loading models..."><ModelsLayout /></LazyPage> },
-      { path: 'agents', element: <LazyPage label="Loading agents..."><AgentsLayout /></LazyPage> },
-      { path: 'skills', element: <LazyPage label="Loading skills..."><SkillsLayout /></LazyPage> },
-      { path: 'timer', element: <LazyPage label="Loading timers..."><TimerLayout /></LazyPage> },
-      { path: 'channels', element: <LazyPage label="Loading channels..."><ChannelLayout /></LazyPage> },
-      { path: 'mcp', element: <LazyPage label="Loading integrations..."><IntegrationsLayout /></LazyPage> },
-      { path: 'settings/:section', element: <LazyPage label="Loading settings..."><SettingsLayout /></LazyPage> },
-      { path: 'settings', element: <Navigate to="/settings/general" replace /> },
-    ],
-  },
-])
-
 export default function App() {
+  const { t } = useI18n()
   useTheme()
+
+  const router = useMemo(() => createHashRouter([
+    {
+      path: '/',
+      element: <AppShell />,
+      children: [
+        { index: true, element: <Navigate to="/chat" replace /> },
+        { path: 'chat', element: <LazyPage label={t('app.loadingChat', 'Loading Chat…')}><ChatLayout /></LazyPage> },
+        { path: 'pipeline', element: <LazyPage label={t('app.loadingPipeline', 'Loading Pipeline…')}><PipelineLayout /></LazyPage> },
+        { path: 'models', element: <LazyPage label={t('app.loadingModels', 'Loading Models…')}><ModelsLayout /></LazyPage> },
+        { path: 'agents', element: <LazyPage label={t('app.loadingAgents', 'Loading Agents…')}><AgentsLayout /></LazyPage> },
+        { path: 'skills', element: <LazyPage label={t('app.loadingSkills', 'Loading Skills…')}><SkillsLayout /></LazyPage> },
+        { path: 'timer', element: <LazyPage label={t('app.loadingTimers', 'Loading Timers…')}><TimerLayout /></LazyPage> },
+        { path: 'channels', element: <LazyPage label={t('app.loadingChannels', 'Loading Channels…')}><ChannelLayout /></LazyPage> },
+        { path: 'mcp', element: <LazyPage label={t('app.loadingIntegrations', 'Loading Integrations…')}><IntegrationsLayout /></LazyPage> },
+        { path: 'settings/:section', element: <LazyPage label={t('app.loadingSettings', 'Loading Settings…')}><SettingsLayout /></LazyPage> },
+        { path: 'settings', element: <Navigate to="/settings/general" replace /> },
+      ],
+    },
+  ]), [t])
 
   // Initialize channel message listener on mount
   useEffect(() => {
@@ -71,33 +72,6 @@ export default function App() {
     }
   }, [])
 
-  // Auto-clean old sessions based on history retention setting
-  useEffect(() => {
-    const { historyRetentionDays, sessions } = useAppStore.getState()
-    if (historyRetentionDays <= 0) return
-    const cutoff = Date.now() - historyRetentionDays * 86400000
-    const expiredIds = sessions.filter((s) => s.updatedAt < cutoff).map((s) => s.id)
-    if (expiredIds.length === 0) return
-    // Batch remove to avoid N separate setState calls
-    useAppStore.setState((state) => {
-      const remaining = state.sessions.filter((s) => !expiredIds.includes(s.id))
-      const remainingTabs = state.openSessionTabs.filter((t) => !expiredIds.includes(t))
-      const nextActiveId = state.activeSessionId && expiredIds.includes(state.activeSessionId)
-        ? (remaining[0]?.id ?? null)
-        : state.activeSessionId
-      return {
-        sessions: remaining,
-        openSessionTabs: remainingTabs,
-        activeSessionId: nextActiveId,
-      }
-    })
-    // Surface the auto-cleanup so the user is aware (was silent previously).
-    toast.info(
-      `${expiredIds.length} old conversation(s) archived`,
-      `Sessions older than ${historyRetentionDays} days were removed. Adjust in Settings → Data.`,
-    )
-  }, [])
-
   // Surface secure-storage warnings emitted by secureState.ts when API-key
   // encryption is unavailable/failing — keys are kept in memory only and not
   // written to disk in that case.
@@ -106,15 +80,15 @@ export default function App() {
       const detail = (ev as CustomEvent<{ reason: 'unavailable' | 'encryption-failed' }>).detail
       const reason = detail?.reason ?? 'unavailable'
       toast.warning(
-        'Secure storage unavailable',
+        t('app.secureStorageUnavailable', 'Secure Storage Unavailable'),
         reason === 'encryption-failed'
-          ? 'API key encryption failed. Keys will remain in memory only and must be re-entered after restart.'
-          : 'OS keyring is not available. API keys will be kept in memory only and must be re-entered after restart.',
+          ? t('app.secureStorageEncryptionFailed', 'API key encryption failed. Keys will remain in memory only and must be re-entered after restart.')
+          : t('app.secureStorageUnavailableBody', 'OS keyring is not available. API keys will be kept in memory only and must be re-entered after restart.'),
       )
     }
     window.addEventListener('suora:secure-storage-warning', handler)
     return () => window.removeEventListener('suora:secure-storage-warning', handler)
-  }, [])
+  }, [t])
 
   return (
     <ErrorBoundary>

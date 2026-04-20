@@ -86,6 +86,8 @@ export function stopEventMonitor(): void {
     clearInterval(clipboardPollTimer)
     clipboardPollTimer = null
   }
+  eventHandler = null
+  lastClipboardContent = ''
 }
 
 async function checkClipboard(): Promise<void> {

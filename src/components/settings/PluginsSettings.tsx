@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/hooks/useI18n'
 import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { confirm } from '@/services/confirmDialog'
-import type { PluginInfo } from '@/types'
+import type { PluginConfigField, PluginInfo, PluginManifestV2 } from '@/types'
 import {
   PLUGIN_TEMPLATES,
   PLUGIN_MARKETPLACE_CATALOG,
@@ -19,8 +19,150 @@ import {
   searchMarketplacePlugins,
   installMarketplacePlugin,
 } from '@/services/pluginSystem'
-import type { PluginManifestV2 } from '@/types'
 import type { MarketplacePlugin } from '@/services/pluginSystem'
+import { SettingsSection, SettingsStat, settingsInputClass, settingsTextAreaClass } from './panelUi'
+
+const MARKETPLACE_CATEGORIES: Array<{ value: '' | MarketplacePlugin['category']; label: string }> = [
+  { value: '', label: 'All Categories' },
+  { value: 'communication', label: 'Communication' },
+  { value: 'productivity', label: 'Productivity' },
+  { value: 'developer', label: 'Developer' },
+  { value: 'ai', label: 'AI' },
+  { value: 'utility', label: 'Utility' },
+  { value: 'integration', label: 'Integration' },
+]
+
+const PANEL_CARD_CLASS = 'rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]'
+
+function TabButton({
+  active,
+  icon,
+  label,
+  count,
+  onClick,
+}: {
+  active: boolean
+  icon: string
+  label: string
+  count: number
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold transition-all ${
+        active
+          ? 'border-accent/20 bg-accent/10 text-accent shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.08)]'
+          : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'
+      }`}
+    >
+      <IconifyIcon name={icon} size={15} color="currentColor" />
+      <span>{label}</span>
+      <span className={`rounded-full px-2 py-0.5 text-[10px] ${active ? 'bg-accent/12 text-accent' : 'bg-surface-3 text-text-muted'}`}>{count}</span>
+    </button>
+  )
+}
+
+function MetaPill({
+  children,
+  tone = 'neutral',
+}: {
+  children: React.ReactNode
+  tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger'
+}) {
+  const toneClass =
+    tone === 'accent'
+      ? 'bg-accent/12 text-accent'
+      : tone === 'success'
+        ? 'bg-green-500/12 text-green-400'
+        : tone === 'warning'
+          ? 'bg-amber-500/12 text-amber-400'
+          : tone === 'danger'
+            ? 'bg-red-500/12 text-red-400'
+            : 'bg-surface-3 text-text-muted'
+
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${toneClass}`}>{children}</span>
+}
+
+function RatingStars({ rating }: { rating: number }) {
+  return <span>{'★'.repeat(Math.round(rating))}{'☆'.repeat(5 - Math.round(rating))}</span>
+}
+
+function PluginIcon({ icon }: { icon?: string }) {
+  if (icon && ICON_DATA[icon]) {
+    return <IconifyIcon name={icon} size={20} color="currentColor" />
+  }
+
+  if (icon) {
+    return <span className="text-lg leading-none">{icon}</span>
+  }
+
+  return <IconifyIcon name="ui-plugin" size={20} color="currentColor" />
+}
+
+function ConfigFieldControl({
+  fieldKey,
+  field,
+  value,
+  onChange,
+  t,
+}: {
+  fieldKey: string
+  field: PluginConfigField
+  value: unknown
+  onChange: (value: unknown) => void
+  t: (key: string, fallback: string) => string
+}) {
+  const resolvedValue = value ?? field.default
+
+  return (
+    <div className={PANEL_CARD_CLASS}>
+      <label className="block text-[12px] font-medium text-text-primary">{field.label || fieldKey}</label>
+      {field.description && <p className="mt-1 text-[11px] leading-5 text-text-muted">{field.description}</p>}
+      <div className="mt-3">
+        {field.type === 'string' && (
+          <input
+            value={String(resolvedValue ?? '')}
+            onChange={(event) => onChange(event.target.value)}
+            aria-label={field.label || fieldKey}
+            className={settingsInputClass}
+          />
+        )}
+        {field.type === 'number' && (
+          <input
+            type="number"
+            value={Number(resolvedValue ?? 0)}
+            onChange={(event) => onChange(Number(event.target.value))}
+            aria-label={field.label || fieldKey}
+            className={settingsInputClass}
+          />
+        )}
+        {field.type === 'boolean' && (
+          <button
+            type="button"
+            onClick={() => onChange(!Boolean(resolvedValue))}
+            className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors ${resolvedValue ? 'border-green-500/18 bg-green-500/10 text-green-400 hover:bg-green-500/16' : 'border-border-subtle/55 bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}
+          >
+            {resolvedValue ? t('settings.enabled', 'Enabled') : t('settings.disabled', 'Disabled')}
+          </button>
+        )}
+        {field.type === 'select' && field.options && (
+          <select
+            value={String(resolvedValue ?? '')}
+            onChange={(event) => onChange(event.target.value)}
+            aria-label={field.label || fieldKey}
+            className={settingsInputClass}
+          >
+            {field.options.map((option) => (
+              <option key={String(option.value)} value={String(option.value)}>{option.label}</option>
+            ))}
+          </select>
+        )}
+      </div>
+    </div>
+  )
+}
 
 export function PluginsSettings() {
   const { t } = useI18n()
@@ -42,17 +184,23 @@ export function PluginsSettings() {
   const [marketplaceSearch, setMarketplaceSearch] = useState('')
   const [marketplaceCategory, setMarketplaceCategory] = useState<string>('')
   const [sortBy, setSortBy] = useState<'downloads' | 'rating' | 'name'>('downloads')
+  const deferredMarketplaceSearch = useDeferredValue(marketplaceSearch)
 
   useEffect(() => () => { clearTimeout(configSaveTimerRef.current) }, [])
 
   const filteredMarketplace = useMemo(() => {
-    const results = searchMarketplacePlugins(marketplaceSearch, marketplaceCategory ? (marketplaceCategory as MarketplacePlugin['category']) : undefined)
-    return results.sort((a, b) => {
+    const results = searchMarketplacePlugins(deferredMarketplaceSearch, marketplaceCategory ? (marketplaceCategory as MarketplacePlugin['category']) : undefined)
+    return [...results].sort((a, b) => {
       if (sortBy === 'downloads') return b.downloads - a.downloads
       if (sortBy === 'rating') return b.rating - a.rating
       return a.name.localeCompare(b.name)
     })
-  }, [marketplaceSearch, marketplaceCategory, sortBy])
+  }, [deferredMarketplaceSearch, marketplaceCategory, sortBy])
+
+  const installedPluginIds = useMemo(() => new Set(installedPlugins.map((plugin) => plugin.id)), [installedPlugins])
+  const enabledPluginsCount = useMemo(() => installedPlugins.filter((plugin) => plugin.status === 'enabled').length, [installedPlugins])
+  const updateCount = useMemo(() => installedPlugins.filter((plugin) => plugin.latestVersion && checkPluginUpdate(plugin, plugin.latestVersion)).length, [installedPlugins])
+  const totalToolCount = useMemo(() => Object.values(pluginTools).reduce((sum, tools) => sum + tools.length, 0), [pluginTools])
 
   const handleInstallFromMarketplace = (mp: MarketplacePlugin) => {
     if (installedPlugins.some((p) => p.id === mp.id)) return
@@ -150,112 +298,262 @@ export function PluginsSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex gap-2 mb-4">
-        <button onClick={() => setPluginTab('installed')} className={`px-4 py-2 text-sm font-medium rounded-lg border transition-all inline-flex items-center gap-1.5 ${pluginTab === 'installed' ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-surface-2 border-border text-text-muted'}`}>
-          <IconifyIcon name="ui-package" size={14} color="currentColor" /> {t('settings.installed', 'Installed')} ({installedPlugins.length})
-        </button>
-        <button onClick={() => setPluginTab('marketplace')} className={`px-4 py-2 text-sm font-medium rounded-lg border transition-all inline-flex items-center gap-1.5 ${pluginTab === 'marketplace' ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-surface-2 border-border text-text-muted'}`}>
-          <IconifyIcon name="ui-store" size={14} color="currentColor" /> {t('settings.marketplace', 'Marketplace')} ({PLUGIN_MARKETPLACE_CATALOG.length})
-        </button>
-      </div>
-
-      {pluginTab === 'installed' && (<>
-        <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-          <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.marketplaceSource', 'Skill Marketplace Source')}</h3>
-          <div className="grid grid-cols-2 gap-2 mb-3">
-            <button onClick={() => setMarketplace({ source: 'official' })} className={`px-3 py-2.5 rounded-xl text-sm border transition-all ${marketplace.source === 'official' ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-surface-2 border-border text-text-muted'}`}>{t('settings.officialMarket', 'Official Market')}</button>
-            <button onClick={() => setMarketplace({ source: 'private' })} className={`px-3 py-2.5 rounded-xl text-sm border transition-all ${marketplace.source === 'private' ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-surface-2 border-border text-text-muted'}`}>{t('settings.privateMarket', 'Private Market')}</button>
+      <SettingsSection
+        eyebrow={t('settings.plugins', 'Plugins')}
+        title={t('settings.pluginControlCenter', 'Plugin Control Center')}
+        description={t('settings.pluginControlCenterHint', 'Manage install sources, browse the marketplace, enable runtime extensions, and tune plugin-specific configuration from one structured control surface.')}
+        action={
+          <div className="flex flex-wrap gap-2">
+            <TabButton active={pluginTab === 'installed'} icon="ui-package" label={t('settings.installed', 'Installed')} count={installedPlugins.length} onClick={() => setPluginTab('installed')} />
+            <TabButton active={pluginTab === 'marketplace'} icon="ui-store" label={t('settings.marketplace', 'Marketplace')} count={PLUGIN_MARKETPLACE_CATALOG.length} onClick={() => setPluginTab('marketplace')} />
           </div>
-          {marketplace.source === 'private' && (
-            <div>
-              <label className="block text-xs font-medium text-text-muted uppercase tracking-wider mb-2">{t('settings.privateMarketUrl', 'Private Market URL')}</label>
-              <input value={marketplace.privateUrl} onChange={(e) => setMarketplace({ privateUrl: e.target.value })} placeholder="https://your-company.example.com/skills.json"
-                className="w-full px-3 py-2.5 rounded-xl bg-surface-2 border border-border text-text-primary text-sm" />
-            </div>
-          )}
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SettingsStat label={t('settings.installed', 'Installed')} value={String(installedPlugins.length)} accent />
+          <SettingsStat label={t('settings.enabled', 'Enabled')} value={String(enabledPluginsCount)} />
+          <SettingsStat label={t('settings.tools', 'Tools')} value={String(totalToolCount)} />
+          <SettingsStat label={t('settings.updateAvailable', 'Updates')} value={String(updateCount)} />
         </div>
+      </SettingsSection>
 
-        <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-text-primary">{t('settings.installPlugin', 'Install Plugin')}</h3>
-            <button onClick={() => setShowInstall(!showInstall)} className="px-3 py-1.5 text-xs font-medium bg-accent/15 text-accent border border-accent/30 rounded-lg hover:bg-accent/25 transition-colors">
-              {showInstall ? t('settings.cancel', 'Cancel') : `+ ${t('settings.install', 'Install')}`}
-            </button>
-          </div>
-          {showInstall && (
-            <div className="space-y-3">
-              <div className="flex gap-2 mb-2">
-                <button onClick={() => setInstallTab('template')} className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${installTab === 'template' ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-surface-2 border-border text-text-muted'}`}>{t('settings.fromTemplate', 'From Template')}</button>
-                <button onClick={() => setInstallTab('json')} className={`px-3 py-1.5 text-xs rounded-lg border transition-all ${installTab === 'json' ? 'bg-accent/15 border-accent/30 text-accent' : 'bg-surface-2 border-border text-text-muted'}`}>{t('settings.fromJson', 'From JSON')}</button>
+      {pluginTab === 'installed' && (
+        <>
+          <SettingsSection
+            eyebrow={t('settings.installPlugin', 'Install Plugin')}
+            title={t('settings.sourcesAndInstaller', 'Sources and Installer')}
+            description={t('settings.sourcesAndInstallerHint', 'Choose where plugin definitions come from, then install either from built-in templates or a raw manifest payload.')}
+            action={
+              <button
+                type="button"
+                onClick={() => setShowInstall((value) => !value)}
+                className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover"
+              >
+                {showInstall ? t('settings.hideInstaller', 'Hide Installer') : `+ ${t('settings.install', 'Install')}`}
+              </button>
+            }
+          >
+            <div className="grid gap-4 xl:grid-cols-[0.92fr_1.08fr]">
+              <div className={PANEL_CARD_CLASS}>
+                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.marketplaceSource', 'Marketplace Source')}</div>
+                <h4 className="mt-2 text-[16px] font-semibold text-text-primary">{t('settings.pluginRegistry', 'Plugin Registry')}</h4>
+                <p className="mt-2 text-[12px] leading-6 text-text-secondary/80">{t('settings.pluginRegistryHint', 'Use the official catalog by default, or switch to a private manifest endpoint when running an internal plugin marketplace.')}</p>
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => setMarketplace({ source: 'official' })}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${marketplace.source === 'official' ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}
+                  >
+                    <div className="text-[13px] font-semibold">{t('settings.officialMarket', 'Official Market')}</div>
+                    <div className="mt-1 text-[11px] leading-5 text-current/75">{t('settings.officialMarketHint', 'Use the bundled marketplace catalog that ships with the app.')}</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMarketplace({ source: 'private' })}
+                    className={`rounded-2xl border px-4 py-3 text-left transition-colors ${marketplace.source === 'private' ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}
+                  >
+                    <div className="text-[13px] font-semibold">{t('settings.privateMarket', 'Private Market')}</div>
+                    <div className="mt-1 text-[11px] leading-5 text-current/75">{t('settings.privateMarketHint', 'Point the app at a company-hosted manifest feed or plugin catalog.')}</div>
+                  </button>
+                </div>
+
+                {marketplace.source === 'private' && (
+                  <div className="mt-4">
+                    <label className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.privateMarketUrl', 'Private Market URL')}</label>
+                    <input
+                      value={marketplace.privateUrl}
+                      onChange={(event) => setMarketplace({ privateUrl: event.target.value })}
+                      placeholder="https://your-company.example.com/plugins.json"
+                      className={settingsInputClass}
+                    />
+                  </div>
+                )}
               </div>
-              {installTab === 'template' && (
-                <div className="space-y-2">
-                  {PLUGIN_TEMPLATES.map((tpl, idx) => {
-                    const alreadyInstalled = installedPlugins.some((p) => p.name === tpl.name)
-                    return (
-                      <div key={idx} className="flex items-center justify-between p-3 rounded-lg bg-surface-2 border border-border-subtle">
-                        <div className="flex items-center gap-3">
-                          <span className="text-lg">{tpl.icon && ICON_DATA[tpl.icon] ? <IconifyIcon name={tpl.icon} /> : <IconifyIcon name="ui-plugin" />}</span>
-                          <div>
-                            <span className="text-sm font-medium text-text-primary">{tpl.name}</span>
-                            <p className="text-xs text-text-muted">{tpl.description}</p>
-                            {tpl.permissions && tpl.permissions.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{tpl.permissions.map((p) => <span key={p} className="px-1.5 py-0.5 text-[10px] bg-surface-3 rounded text-text-muted">{p}</span>)}</div>}
-                          </div>
-                        </div>
-                        <button onClick={() => installFromTemplate(tpl)} disabled={alreadyInstalled} className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${alreadyInstalled ? 'bg-surface-3 text-text-muted cursor-not-allowed' : 'bg-accent/15 text-accent hover:bg-accent/25'}`}>
-                          {alreadyInstalled ? t('settings.installed', 'Installed') : t('settings.install', 'Install')}
-                        </button>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              {installTab === 'json' && (
-                <div className="space-y-2">
-                  <textarea value={jsonInput} onChange={(e) => setJsonInput(e.target.value)} placeholder={'{\n  "id": "my-plugin",\n  "name": "My Plugin",\n  "version": "1.0.0",\n  "hooks": ["afterResponse"],\n  "permissions": ["messages:read"]\n}'} className="w-full h-36 px-3 py-2 rounded-xl bg-surface-2 border border-border text-text-primary font-mono text-xs resize-none" />
-                  {jsonError && <p className="text-xs text-red-400">{jsonError}</p>}
-                  <button onClick={installFromJson} className="px-4 py-2 text-xs font-medium bg-accent text-white rounded-lg hover:bg-accent/80 transition-colors">{t('settings.installFromJson', 'Install from JSON')}</button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
 
-        <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-          <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.installedPlugins', 'Installed Plugins')} ({installedPlugins.length})</h3>
-          {installedPlugins.length === 0 ? (
-            <p className="text-xs text-text-muted py-4 text-center">{t('settings.noPlugins', 'No plugins installed yet.')}</p>
-          ) : (
-            <div className="space-y-2">
-              {installedPlugins.map((plugin) => {
-                const hasUpdate = plugin.latestVersion ? checkPluginUpdate(plugin, plugin.latestVersion) : false
-                const registeredTools = pluginTools[plugin.id] || []
-                return (
-                  <div key={plugin.id} className="p-3 rounded-lg bg-surface-2 border border-border-subtle">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <span className="text-lg">{plugin.icon && ICON_DATA[plugin.icon] ? <IconifyIcon name={plugin.icon} /> : <IconifyIcon name="ui-plugin" />}</span>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-text-primary">{plugin.name}</span>
-                            {hasUpdate && <span className="px-1.5 py-0.5 text-[10px] bg-blue-500/15 text-blue-400 rounded">{t('settings.updateAvailable', 'Update Available')}</span>}
+              <div className={PANEL_CARD_CLASS}>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.installer', 'Installer')}</div>
+                    <h4 className="mt-2 text-[16px] font-semibold text-text-primary">{t('settings.installFlow', 'Install Flow')}</h4>
+                    <p className="mt-2 text-[12px] leading-6 text-text-secondary/80">{t('settings.installFlowHint', 'Choose a starter template for common plugin patterns, or paste a manifest when you already have a plugin spec.')}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInstallTab('template')}
+                      className={`rounded-2xl border px-3 py-2 text-[11px] font-semibold transition-colors ${installTab === 'template' ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}
+                    >
+                      {t('settings.fromTemplate', 'From Template')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInstallTab('json')}
+                      className={`rounded-2xl border px-3 py-2 text-[11px] font-semibold transition-colors ${installTab === 'json' ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}
+                    >
+                      {t('settings.fromJson', 'From JSON')}
+                    </button>
+                  </div>
+                </div>
+
+                {!showInstall ? (
+                  <div className="mt-5 rounded-3xl border border-dashed border-border-subtle/60 bg-surface-2/35 px-4 py-10 text-center">
+                    <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/72 text-text-muted/60">
+                      <IconifyIcon name="ui-download" size={18} color="currentColor" />
+                    </div>
+                    <p className="text-[12px] leading-relaxed text-text-muted">{t('settings.openInstallerHint', 'Open the installer to add a built-in template plugin or paste a JSON manifest.')}</p>
+                  </div>
+                ) : installTab === 'template' ? (
+                  <div className="mt-5 grid gap-3">
+                    {PLUGIN_TEMPLATES.map((template, index) => {
+                      const alreadyInstalled = installedPlugins.some((plugin) => plugin.name === template.name)
+                      return (
+                        <div key={`${template.name}-${index}`} className="rounded-3xl border border-border-subtle/55 bg-surface-2/55 p-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex min-w-0 flex-1 items-start gap-3">
+                              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/72 text-accent shadow-sm">
+                                <PluginIcon icon={template.icon} />
+                              </span>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <div className="text-[13px] font-semibold text-text-primary">{template.name}</div>
+                                  {template.permissions && template.permissions.length > 0 && <MetaPill>{template.permissions.length} {t('settings.permissions', 'permissions')}</MetaPill>}
+                                </div>
+                                <p className="mt-1 text-[12px] leading-6 text-text-secondary/80">{template.description}</p>
+                                {template.permissions && template.permissions.length > 0 && (
+                                  <div className="mt-3 flex flex-wrap gap-1.5">
+                                    {template.permissions.map((permission) => (
+                                      <MetaPill key={permission}>{permission}</MetaPill>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void installFromTemplate(template)}
+                              disabled={alreadyInstalled}
+                              className={`rounded-2xl px-4 py-3 text-[11px] font-semibold transition-colors ${alreadyInstalled ? 'bg-surface-3 text-text-muted cursor-not-allowed' : 'bg-accent text-white hover:bg-accent-hover'}`}
+                            >
+                              {alreadyInstalled ? t('settings.installed', 'Installed') : t('settings.install', 'Install')}
+                            </button>
                           </div>
-                          <div className="flex items-center gap-2 text-xs text-text-muted">
-                            <span>v{plugin.version}</span>
-                            {plugin.author && <span>{t('settings.byAuthor', 'by')} {plugin.author}</span>}
-                            {plugin.permissions && plugin.permissions.length > 0 && <span className="text-[10px]">· {plugin.permissions.length} {t('settings.permissions', 'permissions')}</span>}
-                            {registeredTools.length > 0 && <span className="text-[10px] text-accent">· {registeredTools.length} {t('settings.tools', 'tools')}</span>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="mt-5 space-y-3">
+                    <textarea
+                      value={jsonInput}
+                      onChange={(event) => setJsonInput(event.target.value)}
+                      placeholder={'{\n  "id": "my-plugin",\n  "name": "My Plugin",\n  "version": "1.0.0",\n  "hooks": ["afterResponse"],\n  "permissions": ["messages:read"]\n}'}
+                      className={`${settingsTextAreaClass} h-44 font-mono text-xs`}
+                    />
+                    {jsonError && <div className="rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-[12px] leading-6 text-red-400">{jsonError}</div>}
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void installFromJson()}
+                        className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover"
+                      >
+                        {t('settings.installFromJson', 'Install from JSON')}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            eyebrow={t('settings.installedPlugins', 'Installed Plugins')}
+            title={t('settings.pluginInventory', 'Plugin Inventory')}
+            description={t('settings.pluginInventoryHint', 'Inspect runtime status, permissions, registered tools, and update availability for every installed plugin in the workspace.')}
+          >
+            {installedPlugins.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+                <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
+                  <IconifyIcon name="ui-package" size={18} color="currentColor" />
+                </div>
+                <p className="text-[12px] leading-relaxed text-text-muted">{t('settings.noPlugins', 'No plugins installed yet.')}</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {installedPlugins.map((plugin) => {
+                  const hasUpdate = plugin.latestVersion ? checkPluginUpdate(plugin, plugin.latestVersion) : false
+                  const registeredTools = pluginTools[plugin.id] || []
+                  const hasConfig = Boolean(plugin.configSchema && Object.keys(plugin.configSchema).length > 0)
+
+                  return (
+                    <article key={plugin.id} className={PANEL_CARD_CLASS}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/72 text-accent shadow-sm">
+                            <PluginIcon icon={plugin.icon} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-[15px] font-semibold text-text-primary">{plugin.name}</h4>
+                              {hasUpdate && <MetaPill tone="accent">{t('settings.updateAvailable', 'Update Available')}</MetaPill>}
+                              {plugin.error && <MetaPill tone="danger">{t('common.error', 'Error')}</MetaPill>}
+                              <MetaPill tone={plugin.status === 'enabled' ? 'success' : plugin.status === 'disabled' ? 'neutral' : plugin.status === 'error' ? 'danger' : 'warning'}>{plugin.status}</MetaPill>
+                            </div>
+                            <p className="mt-2 text-[12px] leading-6 text-text-secondary/82">{plugin.description}</p>
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              <MetaPill>v{plugin.version}</MetaPill>
+                              {plugin.author && <MetaPill>{t('settings.byAuthor', 'by')} {plugin.author}</MetaPill>}
+                              {registeredTools.length > 0 && <MetaPill tone="accent">{registeredTools.length} {t('settings.tools', 'tools')}</MetaPill>}
+                              {plugin.permissions && plugin.permissions.length > 0 && <MetaPill>{plugin.permissions.length} {t('settings.permissions', 'permissions')}</MetaPill>}
+                            </div>
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {plugin.configSchema && Object.keys(plugin.configSchema).length > 0 && (
-                          <button onClick={() => openConfig(plugin)} className="px-2 py-1 text-xs text-text-muted hover:text-text-primary hover:bg-surface-3 rounded-md transition-colors" title={t('settings.configure', 'Configure')}><IconifyIcon name="ui-gear" size={14} color="currentColor" /></button>
+
+                      {plugin.permissions && plugin.permissions.length > 0 && (
+                        <div className="mt-4">
+                          <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.permissions', 'Permissions')}</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {plugin.permissions.map((permission) => (
+                              <MetaPill key={permission}>{permission}</MetaPill>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {registeredTools.length > 0 && (
+                        <div className="mt-4">
+                          <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.tools', 'Tools')}</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {registeredTools.map((toolName) => (
+                              <MetaPill key={toolName} tone="accent">{toolName}</MetaPill>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {plugin.error && <div className="mt-4 rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-[12px] leading-6 text-red-400">{plugin.error}</div>}
+
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {hasConfig && (
+                          <button
+                            type="button"
+                            onClick={() => openConfig(plugin)}
+                            className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-[11px] font-semibold text-text-secondary transition-colors hover:bg-surface-2"
+                            title={t('settings.configure', 'Configure')}
+                          >
+                            <span className="inline-flex items-center gap-1.5"><IconifyIcon name="ui-gear" size={14} color="currentColor" /> {t('settings.configure', 'Configure')}</span>
+                          </button>
                         )}
-                        <button onClick={() => togglePlugin(plugin)} className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all border ${plugin.status === 'enabled' ? 'bg-green-500/15 text-green-400 border-green-500/20' : 'bg-surface-3 text-text-muted border-border-subtle'}`}>
-                          {plugin.status === 'enabled' ? t('settings.enabled', '● Enabled') : t('settings.disabled', '○ Disabled')}
+                        <button
+                          type="button"
+                          onClick={() => void togglePlugin(plugin)}
+                          className={`rounded-2xl border px-4 py-3 text-[11px] font-semibold transition-colors ${plugin.status === 'enabled' ? 'border-green-500/18 bg-green-500/10 text-green-400 hover:bg-green-500/16' : 'border-border-subtle/55 bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}
+                        >
+                          {plugin.status === 'enabled' ? t('settings.disable', 'Disable') : t('settings.enable', 'Enable')}
                         </button>
                         <button
+                          type="button"
                           onClick={async () => {
                             const ok = await confirm({
                               title: t('settings.uninstallTitle', 'Uninstall plugin?'),
@@ -267,105 +565,199 @@ export function PluginsSettings() {
                               confirmText: t('settings.uninstall', 'Uninstall'),
                             })
                             if (!ok) return
-                            deactivatePlugin(plugin.id)
+                            void deactivatePlugin(plugin.id)
                             removePluginTools(plugin.id)
                             removeInstalledPlugin(plugin.id)
                           }}
-                          className="px-2 py-1 text-xs text-red-400 hover:bg-red-500/10 rounded-md transition-colors"
+                          className="rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-[11px] font-semibold text-red-400 transition-colors hover:bg-red-500/14"
                         >
                           {t('settings.uninstall', 'Uninstall')}
                         </button>
                       </div>
-                    </div>
-                    {plugin.description && <p className="text-xs text-text-muted mt-1 ml-9">{plugin.description}</p>}
-                    {plugin.error && <p className="text-xs text-red-400 mt-1 ml-9">{plugin.error}</p>}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </>)}
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </SettingsSection>
+        </>
+      )}
 
       {pluginTab === 'marketplace' && (
-        <div className="space-y-4">
-          <div className="flex gap-2">
-            <input value={marketplaceSearch} onChange={(e) => setMarketplaceSearch(e.target.value)} placeholder={t('settings.searchPlugins', 'Search plugins...')} className="flex-1 px-3 py-2 rounded-xl bg-surface-2 border border-border text-text-primary text-sm" />
-            <select value={marketplaceCategory} onChange={(e) => setMarketplaceCategory(e.target.value)} title="Category filter" className="px-3 py-2 rounded-xl bg-surface-2 border border-border text-text-primary text-sm">
-              <option value="">{t('settings.allCategories', 'All Categories')}</option>
-              <option value="communication">{t('settings.communication', 'Communication')}</option>
-              <option value="productivity">{t('settings.productivity', 'Productivity')}</option>
-              <option value="developer">{t('settings.developer', 'Developer')}</option>
-              <option value="ai">{t('settings.ai', 'AI')}</option>
-              <option value="utility">{t('settings.utility', 'Utility')}</option>
-              <option value="integration">{t('settings.integration', 'Integration')}</option>
-            </select>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as 'downloads' | 'rating' | 'name')} title="Sort by" className="px-3 py-2 rounded-xl bg-surface-2 border border-border text-text-primary text-sm">
-              <option value="downloads">{t('settings.downloads', 'Downloads')}</option>
-              <option value="rating">{t('settings.rating', 'Rating')}</option>
-              <option value="name">{t('settings.name', 'Name')}</option>
-            </select>
-          </div>
-          <div className="space-y-2">
-            {filteredMarketplace.map((mp) => {
-              const isInstalled = installedPlugins.some((p) => p.id === mp.id)
-              return (
-                <div key={mp.id} className="p-4 rounded-xl bg-surface-2 border border-border-subtle hover:border-border transition-colors">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3">
-                      <span className="text-2xl">{mp.icon}</span>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-semibold text-text-primary">{mp.name}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 bg-surface-3 rounded text-text-muted">{mp.category}</span>
-                        </div>
-                        <p className="text-xs text-text-muted mt-0.5">{mp.description}</p>
-                        <div className="flex items-center gap-3 mt-1.5 text-xs text-text-muted">
-                          <span>v{mp.version}</span><span>by {mp.author}</span>
-                          <span>{'★'.repeat(Math.round(mp.rating))}{'☆'.repeat(5 - Math.round(mp.rating))} {mp.rating.toFixed(1)}</span>
-                          <span className="inline-flex items-center gap-0.5"><IconifyIcon name="ui-download" size={12} color="currentColor" /> {mp.downloads.toLocaleString()}</span>
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-1.5">{mp.tags.map((tag) => <span key={tag} className="px-1.5 py-0.5 text-[10px] bg-surface-3 rounded text-text-muted">{tag}</span>)}</div>
-                        {mp.permissions.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{mp.permissions.map((perm) => <span key={perm} className="px-1.5 py-0.5 text-[10px] bg-amber-500/10 text-amber-400 rounded">{perm}</span>)}</div>}
-                      </div>
-                    </div>
-                    <button onClick={() => handleInstallFromMarketplace(mp)} disabled={isInstalled} className={`px-4 py-2 text-xs font-medium rounded-lg shrink-0 transition-colors inline-flex items-center gap-1.5 ${isInstalled ? 'bg-green-500/10 text-green-400 cursor-default' : 'bg-accent text-white hover:bg-accent/80'}`}>
-                      {isInstalled ? <><IconifyIcon name="ui-check" size={14} color="currentColor" /> {t('settings.installed', 'Installed')}</> : t('settings.install', 'Install')}
-                    </button>
-                  </div>
+        <>
+          <SettingsSection
+            eyebrow={t('settings.marketplace', 'Marketplace')}
+            title={t('settings.discoverPlugins', 'Discover Plugins')}
+            description={t('settings.discoverPluginsHint', 'Filter the bundled plugin marketplace by keyword, category, and ranking to find the next extension worth enabling.')}
+          >
+            <div className="grid gap-3 lg:grid-cols-[1.2fr_0.7fr_0.5fr]">
+              <input
+                value={marketplaceSearch}
+                onChange={(event) => setMarketplaceSearch(event.target.value)}
+                placeholder={t('settings.searchPlugins', 'Search plugins...')}
+                className={settingsInputClass}
+              />
+              <select
+                value={marketplaceCategory}
+                onChange={(event) => setMarketplaceCategory(event.target.value)}
+                title={t('settings.categoryFilter', 'Category filter')}
+                className={settingsInputClass}
+              >
+                {MARKETPLACE_CATEGORIES.map((category) => (
+                  <option key={category.label} value={category.value}>{t(`settings.${category.value || 'allCategories'}`, category.label)}</option>
+                ))}
+              </select>
+              <select
+                value={sortBy}
+                onChange={(event) => setSortBy(event.target.value as 'downloads' | 'rating' | 'name')}
+                title={t('settings.sortBy', 'Sort by')}
+                className={settingsInputClass}
+              >
+                <option value="downloads">{t('settings.downloads', 'Downloads')}</option>
+                <option value="rating">{t('settings.rating', 'Rating')}</option>
+                <option value="name">{t('settings.name', 'Name')}</option>
+              </select>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-text-muted/75">
+              <span>{t('common.results', 'Results')}: {filteredMarketplace.length}</span>
+              <span>{t('settings.installed', 'Installed')}: {installedPlugins.length}</span>
+              <span>{t('settings.marketplace', 'Marketplace')}: {PLUGIN_MARKETPLACE_CATALOG.length}</span>
+            </div>
+          </SettingsSection>
+
+          <SettingsSection
+            eyebrow={t('settings.marketplaceCatalog', 'Marketplace Catalog')}
+            title={t('settings.curatedCatalog', 'Curated Catalog')}
+            description={t('settings.curatedCatalogHint', 'Browse a denser catalog view with ratings, downloads, permissions, and tags surfaced before you install.')}
+          >
+            {filteredMarketplace.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+                <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
+                  <IconifyIcon name="ui-search" size={18} color="currentColor" />
                 </div>
-              )
-            })}
-            {filteredMarketplace.length === 0 && <p className="text-xs text-text-muted py-8 text-center">{t('settings.noPluginsMatch', 'No plugins match your search criteria.')}</p>}
-          </div>
-        </div>
+                <p className="text-[12px] leading-relaxed text-text-muted">{t('settings.noPluginsMatch', 'No plugins match your search criteria.')}</p>
+              </div>
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {filteredMarketplace.map((plugin) => {
+                  const isInstalled = installedPluginIds.has(plugin.id)
+
+                  return (
+                    <article key={plugin.id} className={PANEL_CARD_CLASS}>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="flex min-w-0 flex-1 items-start gap-3">
+                          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/72 text-accent shadow-sm">
+                            <PluginIcon icon={plugin.icon} />
+                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h4 className="text-[15px] font-semibold text-text-primary">{plugin.name}</h4>
+                              <MetaPill>{plugin.category}</MetaPill>
+                              {isInstalled && <MetaPill tone="success">{t('settings.installed', 'Installed')}</MetaPill>}
+                            </div>
+                            <p className="mt-2 text-[12px] leading-6 text-text-secondary/82">{plugin.description}</p>
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              <MetaPill>v{plugin.version}</MetaPill>
+                              <MetaPill>{t('settings.byAuthor', 'by')} {plugin.author}</MetaPill>
+                              <MetaPill tone="accent"><RatingStars rating={plugin.rating} /> {plugin.rating.toFixed(1)}</MetaPill>
+                              <MetaPill>{plugin.downloads.toLocaleString()} {t('settings.downloads', 'downloads')}</MetaPill>
+                            </div>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleInstallFromMarketplace(plugin)}
+                          disabled={isInstalled}
+                          className={`rounded-2xl px-4 py-3 text-[11px] font-semibold transition-colors ${isInstalled ? 'bg-green-500/10 text-green-400 cursor-default' : 'bg-accent text-white hover:bg-accent-hover'}`}
+                        >
+                          {isInstalled ? t('settings.installed', 'Installed') : t('settings.install', 'Install')}
+                        </button>
+                      </div>
+
+                      {plugin.tags.length > 0 && (
+                        <div className="mt-4">
+                          <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.tags', 'Tags')}</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {plugin.tags.map((tag) => (
+                              <MetaPill key={tag}>{tag}</MetaPill>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {plugin.permissions.length > 0 && (
+                        <div className="mt-4">
+                          <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.permissions', 'Permissions')}</div>
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {plugin.permissions.map((permission) => (
+                              <MetaPill key={permission} tone="warning">{permission}</MetaPill>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  )
+                })}
+              </div>
+            )}
+          </SettingsSection>
+        </>
       )}
 
       {configPlugin && configPlugin.configSchema && (
-        <div className="rounded-xl border border-accent/30 p-4 bg-accent/5">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-sm font-semibold text-text-primary">{t('settings.configure', 'Configure')}: {configPlugin.name}</h3>
-            <button onClick={() => setConfigPluginId(null)} title="Close" className="text-xs text-text-muted hover:text-text-primary"><IconifyIcon name="ui-close" size={14} color="currentColor" /></button>
+        <SettingsSection
+          eyebrow={t('settings.configure', 'Configure')}
+          title={`${t('settings.configure', 'Configure')}: ${configPlugin.name}`}
+          description={t('settings.pluginConfigHint', 'These fields come from the plugin manifest config schema. Changes are saved back into the installed plugin record for future sessions.')}
+          action={
+            <button
+              type="button"
+              onClick={() => setConfigPluginId(null)}
+              title={t('common.close', 'Close')}
+              className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/55 bg-surface-0/72 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary"
+            >
+              <IconifyIcon name="ui-close" size={16} color="currentColor" />
+            </button>
+          }
+        >
+          <div className="grid gap-3 sm:grid-cols-3">
+            <SettingsStat label={t('settings.status', 'Status')} value={configPlugin.status} accent={configPlugin.status === 'enabled'} />
+            <SettingsStat label={t('settings.fields', 'Fields')} value={String(Object.keys(configPlugin.configSchema).length)} />
+            <SettingsStat label={t('settings.tools', 'Tools')} value={String((pluginTools[configPlugin.id] || []).length)} />
           </div>
-          <div className="space-y-3">
-            {Object.entries(configPlugin.configSchema).map(([key, field]) => (
-              <div key={key}>
-                <label className="block text-xs font-medium text-text-muted mb-1">{field.label || key}</label>
-                {field.description && <p className="text-[10px] text-text-muted mb-1">{field.description}</p>}
-                {field.type === 'string' && <input value={String(configValues[key] ?? field.default ?? '')} onChange={(e) => setConfigValues({ ...configValues, [key]: e.target.value })} aria-label={field.label || key} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text-primary text-sm" />}
-                {field.type === 'number' && <input type="number" value={Number(configValues[key] ?? field.default ?? 0)} onChange={(e) => setConfigValues({ ...configValues, [key]: Number(e.target.value) })} aria-label={field.label || key} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text-primary text-sm" />}
-                {field.type === 'boolean' && <button onClick={() => setConfigValues({ ...configValues, [key]: !configValues[key] })} className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${configValues[key] ? 'bg-green-500/15 text-green-400 border-green-500/20' : 'bg-surface-3 text-text-muted border-border-subtle'}`}>{configValues[key] ? t('settings.enabled', '● Enabled') : t('settings.disabled', '○ Disabled')}</button>}
-                {field.type === 'select' && field.options && <select value={String(configValues[key] ?? field.default ?? '')} onChange={(e) => setConfigValues({ ...configValues, [key]: e.target.value })} aria-label={field.label || key} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text-primary text-sm">{field.options.map((opt) => <option key={String(opt.value)} value={String(opt.value)}>{opt.label}</option>)}</select>}
-              </div>
+
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            {Object.entries(configPlugin.configSchema).map(([fieldKey, field]) => (
+              <ConfigFieldControl
+                key={fieldKey}
+                fieldKey={fieldKey}
+                field={field}
+                value={configValues[fieldKey]}
+                onChange={(value) => setConfigValues({ ...configValues, [fieldKey]: value })}
+                t={t}
+              />
             ))}
           </div>
-          <div className="flex items-center gap-2 mt-4">
-            <button onClick={saveConfig} disabled={configSaved} className={`px-4 py-2 text-xs font-medium rounded-lg transition-colors inline-flex items-center gap-1.5 ${configSaved ? 'bg-green-500/15 text-green-400 border border-green-500/20' : 'bg-accent text-white hover:bg-accent/80'}`}>
-              {configSaved ? <><IconifyIcon name="ui-check" size={14} color="currentColor" /> {t('settings.savedConfig', 'Saved')}</> : t('settings.saveConfig', 'Save Configuration')}
+
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={saveConfig}
+              disabled={configSaved}
+              className={`rounded-2xl px-4 py-3 text-sm font-semibold transition-colors ${configSaved ? 'border border-green-500/20 bg-green-500/15 text-green-400' : 'bg-accent text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] hover:bg-accent-hover'}`}
+            >
+              {configSaved ? t('settings.savedConfig', 'Saved') : t('settings.saveConfig', 'Save Configuration')}
             </button>
-            <button onClick={() => setConfigPluginId(null)} className="px-4 py-2 text-xs font-medium bg-surface-3 text-text-muted rounded-lg hover:bg-surface-2 transition-colors">{t('settings.cancel', 'Cancel')}</button>
+            <button
+              type="button"
+              onClick={() => setConfigPluginId(null)}
+              className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-2"
+            >
+              {t('settings.cancel', 'Cancel')}
+            </button>
           </div>
-        </div>
+        </SettingsSection>
       )}
     </div>
   )

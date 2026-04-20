@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import {
@@ -12,6 +12,21 @@ import {
   type VoiceSettings,
   DEFAULT_VOICE_SETTINGS,
 } from '@/services/voiceInteraction'
+import {
+  SettingsSection,
+  SettingsStat,
+  SettingsToggleRow,
+  settingsCheckboxClass,
+  settingsFieldCardClass,
+  settingsHintClass,
+  settingsInputClass,
+  settingsLabelClass,
+  settingsPrimaryButtonClass,
+  settingsRangeClass,
+  settingsSelectClass,
+  settingsSecondaryButtonClass,
+  settingsSurfaceCardClass,
+} from './panelUi'
 
 export function VoiceSettings() {
   const { t } = useI18n()
@@ -22,132 +37,225 @@ export function VoiceSettings() {
 
   useEffect(() => {
     setVoiceSettings(loadVoiceSettings())
+
     if (isSpeechSynthesisAvailable()) {
       const loadVoices = () => setVoices(getAvailableVoices())
       loadVoices()
       speechSynthesis.addEventListener('voiceschanged', loadVoices)
       return () => speechSynthesis.removeEventListener('voiceschanged', loadVoices)
     }
+
     return undefined
   }, [])
 
+  const updateSettings = (patch: Partial<VoiceSettings>) => {
+    const updated = { ...voiceSettings, ...patch }
+    setVoiceSettings(updated)
+    saveVoiceSettings(updated)
+  }
+
+  const voiceAvailable = isSpeechSynthesisAvailable()
+  const recognitionAvailable = isSpeechRecognitionAvailable()
+  const selectedVoiceLabel = voiceSettings.voiceName || t('settings.default', 'Default')
+
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.voiceSettings', 'Voice Settings')}</h3>
-        <div className="space-y-4">
-          <label className="flex items-center gap-3 cursor-pointer">
-            <input
-              type="checkbox"
+      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl">
+            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.voiceSettings', 'Voice Settings')}</div>
+            <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{t('settings.voiceWorkbench', 'Speech Workbench')}</h2>
+            <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
+              {t('settings.voiceWorkbenchDesc', 'Tune speech recognition, output voice, cadence, and quick test playback so voice interactions feel intentional instead of bolted on.')}
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
+            <SettingsStat label={t('settings.voice', 'Voice')} value={voiceSettings.enabled ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} accent />
+            <SettingsStat label={t('settings.language', 'Language')} value={voiceSettings.language} />
+            <SettingsStat label={t('settings.voiceName', 'Voice')} value={selectedVoiceLabel} />
+            <SettingsStat label={t('settings.availableVoices', 'Voices')} value={String(voices.length)} />
+          </div>
+        </div>
+      </section>
+
+      <SettingsSection
+        eyebrow={t('settings.voiceSettings', 'Voice Settings')}
+        title={t('settings.captureAndPlayback', 'Capture & Playback')}
+        description={t('settings.captureAndPlaybackDesc', 'Configure the speech language, active synthesized voice, and sending behavior used by chat composition and spoken responses.')}
+      >
+        <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,1fr)]">
+          <div className={`${settingsFieldCardClass} space-y-4`}>
+            <SettingsToggleRow
+              label={t('settings.enableVoice', 'Enable Voice Interaction')}
+              description={t('settings.enableVoiceDesc', 'Turn on speech capture and text-to-speech capabilities across the chat workbench.')}
               checked={voiceSettings.enabled}
-              onChange={(e) => {
-                const updated = { ...voiceSettings, enabled: e.target.checked }
-                setVoiceSettings(updated)
-                saveVoiceSettings(updated)
-              }}
-              className="w-4 h-4 rounded border-border text-accent focus:ring-accent/30 bg-surface-2"
+              onChange={() => updateSettings({ enabled: !voiceSettings.enabled })}
             />
-            <span className="text-sm text-text-secondary">{t('settings.enableVoice', 'Enable Voice Interaction')}</span>
-          </label>
 
-          <div>
-            <label className="block text-xs font-medium text-text-muted uppercase tracking-wider mb-1">{t('settings.language', 'Language')}</label>
-            <select
-              value={voiceSettings.language}
-              onChange={(e) => {
-                const updated = { ...voiceSettings, language: e.target.value }
-                setVoiceSettings(updated)
-                saveVoiceSettings(updated)
-              }}
-              aria-label="Voice language"
-              className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text-primary text-sm"
-            >
-              <option value="en-US">English (US)</option>
-              <option value="en-GB">English (UK)</option>
-              <option value="zh-CN">中文 (简体)</option>
-              <option value="zh-TW">中文 (繁體)</option>
-              <option value="ja-JP">日本語</option>
-              <option value="ko-KR">한국어</option>
-              <option value="es-ES">Español</option>
-              <option value="fr-FR">Français</option>
-              <option value="de-DE">Deutsch</option>
-            </select>
-          </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label className={settingsLabelClass}>{t('settings.language', 'Language')}</label>
+                <select
+                  value={voiceSettings.language}
+                  onChange={(e) => updateSettings({ language: e.target.value })}
+                  aria-label="Voice language"
+                  className={settingsSelectClass}
+                >
+                  <option value="en-US">English (US)</option>
+                  <option value="en-GB">English (UK)</option>
+                  <option value="zh-CN">中文 (简体)</option>
+                  <option value="zh-TW">中文 (繁體)</option>
+                  <option value="ja-JP">日本語</option>
+                  <option value="ko-KR">한국어</option>
+                  <option value="es-ES">Español</option>
+                  <option value="fr-FR">Français</option>
+                  <option value="de-DE">Deutsch</option>
+                </select>
+              </div>
 
-          <div>
-            <label className="block text-xs font-medium text-text-muted uppercase tracking-wider mb-1">
-              {t('settings.speechRate', 'Speech Rate')}: {voiceSettings.rate.toFixed(1)}
-            </label>
-            <input type="range" min="0.5" max="2" step="0.1" value={voiceSettings.rate}
-              onChange={(e) => { const updated = { ...voiceSettings, rate: parseFloat(e.target.value) }; setVoiceSettings(updated); saveVoiceSettings(updated) }}
-              aria-label="Speech rate" className="w-full" />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-text-muted uppercase tracking-wider mb-1">
-              {t('settings.pitch', 'Pitch')}: {voiceSettings.pitch.toFixed(1)}
-            </label>
-            <input type="range" min="0" max="2" step="0.1" value={voiceSettings.pitch}
-              onChange={(e) => { const updated = { ...voiceSettings, pitch: parseFloat(e.target.value) }; setVoiceSettings(updated); saveVoiceSettings(updated) }}
-              aria-label="Voice pitch" className="w-full" />
-          </div>
-
-          {voices.length > 0 && (
-            <div>
-              <label className="block text-xs font-medium text-text-muted uppercase tracking-wider mb-1">{t('settings.voiceName', 'Voice')}</label>
-              <select
-                value={voiceSettings.voiceName || ''}
-                onChange={(e) => { const updated = { ...voiceSettings, voiceName: e.target.value || undefined }; setVoiceSettings(updated); saveVoiceSettings(updated) }}
-                aria-label="Voice name"
-                className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text-primary text-sm"
-              >
-                <option value="">{t('settings.default', 'Default')}</option>
-                {voices.map((v) => <option key={v.name} value={v.name}>{v.name} ({v.lang})</option>)}
-              </select>
+              <div>
+                <label className={settingsLabelClass}>{t('settings.voiceName', 'Voice')}</label>
+                <select
+                  value={voiceSettings.voiceName || ''}
+                  onChange={(e) => updateSettings({ voiceName: e.target.value || undefined })}
+                  aria-label="Voice name"
+                  className={settingsSelectClass}
+                >
+                  <option value="">{t('settings.default', 'Default')}</option>
+                  {voices.map((voice) => (
+                    <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>
+                  ))}
+                </select>
+              </div>
             </div>
-          )}
 
-          <label className="flex items-center gap-3 cursor-pointer">
+            <label className={`${settingsSurfaceCardClass} flex items-center gap-3 cursor-pointer`}>
+              <input
+                type="checkbox"
+                checked={voiceSettings.autoSend}
+                onChange={(e) => updateSettings({ autoSend: e.target.checked })}
+                className={settingsCheckboxClass}
+              />
+              <span className="text-sm text-text-secondary">{t('settings.autoSendSpeech', 'Auto-send after speech recognition')}</span>
+            </label>
+          </div>
+
+          <div className={`${settingsFieldCardClass} space-y-4`}>
+            <div>
+              <label className={settingsLabelClass}>{t('settings.speechRate', 'Speech Rate')} ({voiceSettings.rate.toFixed(1)})</label>
+              <input
+                type="range"
+                min="0.5"
+                max="2"
+                step="0.1"
+                value={voiceSettings.rate}
+                onChange={(e) => updateSettings({ rate: parseFloat(e.target.value) })}
+                aria-label="Speech rate"
+                className={settingsRangeClass}
+              />
+              <div className="mt-2 flex justify-between text-[10px] text-text-muted">
+                <span>{t('settings.slower', 'Slower')}</span>
+                <span>{t('settings.faster', 'Faster')}</span>
+              </div>
+            </div>
+
+            <div>
+              <label className={settingsLabelClass}>{t('settings.pitch', 'Pitch')} ({voiceSettings.pitch.toFixed(1)})</label>
+              <input
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                value={voiceSettings.pitch}
+                onChange={(e) => updateSettings({ pitch: parseFloat(e.target.value) })}
+                aria-label="Voice pitch"
+                className={settingsRangeClass}
+              />
+              <div className="mt-2 flex justify-between text-[10px] text-text-muted">
+                <span>{t('settings.lower', 'Lower')}</span>
+                <span>{t('settings.higher', 'Higher')}</span>
+              </div>
+            </div>
+
+            <p className={settingsHintClass}>{t('settings.voiceFineTuneHint', 'These controls affect synthesized playback only, so you can tune response cadence without changing recognition settings.')}</p>
+          </div>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        eyebrow={t('settings.status', 'Status')}
+        title={t('settings.runtimeReadiness', 'Runtime Readiness')}
+        description={t('settings.runtimeReadinessDesc', 'Check what the current Electron runtime can actually support before assuming speech capture or playback is available.')}
+      >
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className={settingsFieldCardClass}>
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${recognitionAvailable ? 'bg-success' : 'bg-danger'}`} />
+              <span className="text-sm font-medium text-text-primary">{t('settings.speechRecognition', 'Speech Recognition')}</span>
+            </div>
+            <p className="mt-3 text-[12px] leading-relaxed text-text-muted">
+              {recognitionAvailable ? t('settings.sttAvailable', 'Speech Recognition (STT): Available') : t('settings.sttUnavailable', 'Speech Recognition (STT): Not Available')}
+            </p>
+          </div>
+
+          <div className={settingsFieldCardClass}>
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${voiceAvailable ? 'bg-success' : 'bg-danger'}`} />
+              <span className="text-sm font-medium text-text-primary">{t('settings.speechSynthesis', 'Speech Synthesis')}</span>
+            </div>
+            <p className="mt-3 text-[12px] leading-relaxed text-text-muted">
+              {voiceAvailable ? t('settings.ttsAvailable', 'Speech Synthesis (TTS): Available') : t('settings.ttsUnavailable', 'Speech Synthesis (TTS): Not Available')}
+            </p>
+          </div>
+
+          <div className={settingsFieldCardClass}>
+            <div className="text-sm font-medium text-text-primary">{t('settings.availableVoices', 'Available voices')}</div>
+            <p className="mt-3 text-[28px] font-semibold tracking-tight text-text-primary">{voices.length}</p>
+            <p className="mt-1 text-[12px] text-text-muted">{selectedVoiceLabel}</p>
+          </div>
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        eyebrow={t('settings.testSpeech', 'Test Speech')}
+        title={t('settings.speechLab', 'Speech Lab')}
+        description={t('settings.speechLabDesc', 'Run a quick playback test with the exact language, pitch, and rate you configured above before enabling voice in real workflows.')}
+      >
+        <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div>
+            <label className={settingsLabelClass}>{t('settings.testSpeech', 'Test Speech')}</label>
             <input
-              type="checkbox"
-              checked={voiceSettings.autoSend}
-              onChange={(e) => { const updated = { ...voiceSettings, autoSend: e.target.checked }; setVoiceSettings(updated); saveVoiceSettings(updated) }}
-              className="w-4 h-4 rounded border-border text-accent focus:ring-accent/30 bg-surface-2"
+              value={testText}
+              onChange={(e) => setTestText(e.target.value)}
+              placeholder={t('settings.testSpeechPlaceholder', 'Type text to speak…')}
+              className={settingsInputClass}
             />
-            <span className="text-sm text-text-secondary">{t('settings.autoSendSpeech', 'Auto-send after speech recognition')}</span>
-          </label>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.status', 'Status')}</h3>
-        <div className="space-y-2 text-xs">
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${isSpeechRecognitionAvailable() ? 'bg-success' : 'bg-danger'}`} />
-            <span className="text-text-secondary">{isSpeechRecognitionAvailable() ? t('settings.sttAvailable', 'Speech Recognition (STT): Available') : t('settings.sttUnavailable', 'Speech Recognition (STT): Not Available')}</span>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${isSpeechSynthesisAvailable() ? 'bg-success' : 'bg-danger'}`} />
-            <span className="text-text-secondary">{isSpeechSynthesisAvailable() ? t('settings.ttsAvailable', 'Speech Synthesis (TTS): Available') : t('settings.ttsUnavailable', 'Speech Synthesis (TTS): Not Available')}</span>
-          </div>
-          <div className="text-text-muted mt-1">{t('settings.availableVoices', 'Available voices')}: {voices.length}</div>
-        </div>
-      </div>
 
-      <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.testSpeech', 'Test Speech')}</h3>
-        <div className="flex gap-2">
-          <input value={testText} onChange={(e) => setTestText(e.target.value)}
-            placeholder={t('settings.testSpeechPlaceholder', 'Type text to speak…')}
-            className="flex-1 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text-primary text-sm" />
-          <button onClick={() => { if (testText) { setTtsError(''); speak(testText, voiceSettings).catch((err) => { setTtsError(err instanceof Error ? err.message : 'Speech synthesis failed') }) } }}
-            className="px-3 py-2 rounded-lg bg-accent text-white text-sm font-medium inline-flex items-center gap-1.5">
-            <IconifyIcon name="ui-speaker" size={14} color="currentColor" /> {t('settings.speak', 'Speak')}
-          </button>
-          <button onClick={stopSpeaking} className="px-3 py-2 rounded-lg bg-surface-3 text-text-secondary text-sm font-medium">{t('settings.stop', 'Stop')}</button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                if (!testText) return
+                setTtsError('')
+                speak(testText, voiceSettings).catch((err) => {
+                  setTtsError(err instanceof Error ? err.message : 'Speech synthesis failed')
+                })
+              }}
+              className={settingsPrimaryButtonClass}
+            >
+              <IconifyIcon name="ui-speaker" size={14} color="currentColor" />
+              {t('settings.speak', 'Speak')}
+            </button>
+            <button type="button" onClick={stopSpeaking} className={settingsSecondaryButtonClass}>
+              {t('settings.stop', 'Stop')}
+            </button>
+          </div>
+
+          {ttsError && <p className="text-sm text-danger">{ttsError}</p>}
         </div>
-        {ttsError && <p className="text-xs text-danger mt-2">{ttsError}</p>}
-      </div>
+      </SettingsSection>
     </div>
   )
 }

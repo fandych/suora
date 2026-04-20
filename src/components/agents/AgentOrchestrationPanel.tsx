@@ -8,6 +8,14 @@ import { confirm } from '@/services/confirmDialog'
 import { ICON_DATA, AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import type { Agent, AgentMessage, AgentPipelineExecution } from '@/types'
 import { generateId } from '@/utils/helpers'
+import {
+  SettingsStat,
+  settingsDangerButtonClass,
+  settingsInputClass,
+  settingsSecondaryButtonClass,
+  settingsSelectClass,
+  settingsSoftButtonClass,
+} from '@/components/settings/panelUi'
 
 type OrchestrationTab = 'orchestrate' | 'communications' | 'versions' | 'performance'
 
@@ -20,6 +28,13 @@ interface AgentOrchestrationPanelProps {
   allowedTabs?: OrchestrationTab[]
   initialTab?: OrchestrationTab
 }
+
+const orchestrationInputClass = `${settingsInputClass} rounded-xl px-3 py-2 text-xs`
+const orchestrationSelectClass = `${settingsSelectClass} rounded-xl px-3 py-2 text-xs`
+const orchestrationSecondaryButtonClass = `${settingsSecondaryButtonClass} rounded-xl px-3 py-2 text-xs`
+const orchestrationSoftButtonClass = `${settingsSoftButtonClass} rounded-xl px-3 py-2 text-xs`
+const orchestrationDangerButtonClass = `${settingsDangerButtonClass} rounded-xl px-3 py-2 text-xs`
+const orchestrationCardClass = 'rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4'
 
 export function AgentOrchestrationPanel({
   agents,
@@ -273,7 +288,7 @@ export function AgentOrchestrationPanel({
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all inline-flex items-center gap-1.5 ${tab === t.id ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-3'}`}
+            className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-xs font-medium transition-all ${tab === t.id ? 'border-accent/20 bg-accent/10 text-accent' : 'border-transparent text-text-muted hover:border-border-subtle/55 hover:bg-surface-0/60 hover:text-text-secondary'}`}
           >
             {ICON_DATA[t.icon] ? <IconifyIcon name={t.icon} size={14} /> : t.icon} {t.label}
           </button>
@@ -281,9 +296,16 @@ export function AgentOrchestrationPanel({
       </div>}
 
       <div className="flex-1 overflow-y-auto p-4">
+        <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <SettingsStat label={t('agents.enabledAgents', 'Enabled Agents')} value={`${enabledAgents.length}`} accent />
+          <SettingsStat label={t('agents.pipeline', 'Pipeline')} value={`${agentPipelines.length}`} />
+          <SettingsStat label={t('agents.messages', 'Messages')} value={`${msgLog.length}`} />
+          <SettingsStat label={t('agents.analytics', 'Analytics')} value={`${Object.keys(agentPerformance).length}`} />
+        </div>
+
         {/* ── Pipeline Orchestration ── */}
         {tab === 'orchestrate' && (
-          <div className="space-y-3">
+          <div className={`${orchestrationCardClass} space-y-3`}>
             <p className="text-xs text-text-muted">{t('agents.pipelineDesc', 'Chain agents in a pipeline. Each agent receives the previous output.')}</p>
             <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto_auto_auto]">
               <select
@@ -297,22 +319,22 @@ export function AgentOrchestrationPanel({
                   }
                   loadSavedPipeline(value)
                 }}
-                className="w-full px-2 py-1.5 rounded-lg bg-surface-2 border border-border text-xs text-text-primary"
+                className={orchestrationSelectClass}
               >
                 <option value="">{t('agents.pipelineDraft', 'Draft pipeline')}</option>
                 {agentPipelines.map((savedPipeline) => (
                   <option key={savedPipeline.id} value={savedPipeline.id}>{savedPipeline.name}</option>
                 ))}
               </select>
-              <button onClick={resetPipelineEditor} className="text-xs px-3 py-1.5 rounded-lg bg-surface-3 text-text-secondary hover:bg-surface-2 transition-colors">{t('common.new', 'New')}</button>
-              <button onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className="text-xs px-3 py-1.5 rounded-lg bg-accent/15 text-accent hover:bg-accent/25 transition-colors disabled:opacity-40">{t('common.saveChanges', 'Save Changes')}</button>
-              <button onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className="text-xs px-3 py-1.5 rounded-lg bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-40">{t('common.delete', 'Delete')}</button>
+              <button onClick={resetPipelineEditor} className={orchestrationSecondaryButtonClass}>{t('common.new', 'New')}</button>
+              <button onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className={orchestrationSoftButtonClass}>{t('common.saveChanges', 'Save Changes')}</button>
+              <button onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className={orchestrationDangerButtonClass}>{t('common.delete', 'Delete')}</button>
             </div>
             <input
               value={agentPipelineName}
               onChange={(e) => setAgentPipelineName(e.target.value)}
               placeholder={t('agents.pipelineName', 'Pipeline name')}
-              className="w-full px-2 py-1.5 rounded-lg bg-surface-2 border border-border text-xs text-text-primary"
+              className={orchestrationInputClass}
             />
             <p className="text-[10px] text-text-muted">{t('agents.pipelineFileHint', 'Saved pipelines are stored as separate JSON files in the workspace and can be triggered by timers.')}</p>
             {pipeline.map((step, idx) => (
@@ -323,7 +345,7 @@ export function AgentOrchestrationPanel({
                     value={step.agentId}
                     onChange={(e) => updateStep(idx, { agentId: e.target.value })}
                     aria-label="Pipeline agent"
-                    className="w-full px-2 py-1.5 rounded-lg bg-surface-2 border border-border text-xs text-text-primary"
+                    className={orchestrationSelectClass}
                   >
                     {enabledAgents.map((a) => <option key={a.id} value={a.id}>{ICON_DATA[a.avatar || ''] ? '●' : (a.avatar || '●')} {a.name}</option>)}
                   </select>
@@ -331,7 +353,7 @@ export function AgentOrchestrationPanel({
                     value={step.task}
                     onChange={(e) => updateStep(idx, { task: e.target.value })}
                     placeholder={t('agents.taskDesc', 'Task description...')}
-                    className="w-full px-2 py-1.5 rounded-lg bg-surface-2 border border-border text-xs text-text-primary"
+                    className={orchestrationInputClass}
                   />
                 </div>
                 <button title={t('agents.removeStep', 'Remove step')} onClick={() => removeStep(idx)} className="text-xs text-text-muted hover:text-danger pt-2"><IconifyIcon name="ui-close" size={14} color="currentColor" /></button>
@@ -369,12 +391,12 @@ export function AgentOrchestrationPanel({
               )}
             </div>
             <div className="flex gap-2">
-              <button onClick={addStep} className="text-xs px-3 py-1.5 rounded-lg bg-surface-3 text-text-secondary hover:bg-surface-2 transition-colors">{t('agents.addStep', '+ Add Step')}</button>
-              <button onClick={() => clearAgentPipeline()} disabled={pipeline.length === 0 || running} className="text-xs px-3 py-1.5 rounded-lg bg-surface-3 text-text-secondary hover:bg-surface-2 transition-colors disabled:opacity-40">{t('common.clearAll', 'Clear All')}</button>
+              <button onClick={addStep} className={orchestrationSecondaryButtonClass}>{t('agents.addStep', '+ Add Step')}</button>
+              <button onClick={() => clearAgentPipeline()} disabled={pipeline.length === 0 || running} className={orchestrationSecondaryButtonClass}>{t('common.clearAll', 'Clear All')}</button>
               <button
                 onClick={runPipeline}
                 disabled={pipeline.length === 0 || running || pipeline.some((s) => !s.task.trim())}
-                className="text-xs px-3 py-1.5 rounded-lg bg-accent/15 text-accent hover:bg-accent/25 transition-colors disabled:opacity-40"
+                className={orchestrationSoftButtonClass}
               >
                 {running ? t('agents.runningPipeline', 'Running...') : t('agents.runPipeline', '▶ Run Pipeline')}
               </button>
@@ -384,7 +406,7 @@ export function AgentOrchestrationPanel({
 
         {/* ── Agent Communications Log ── */}
         {tab === 'communications' && (
-          <div className="space-y-2">
+          <div className={`${orchestrationCardClass} space-y-2`}>
             <p className="text-xs text-text-muted mb-3">{t('agents.agentMessagesHelp', 'Real-time log of agent-to-agent delegation messages.')}</p>
             {msgLog.length === 0 ? (
               <p className="text-xs text-text-muted text-center py-8">{t('agents.noAgentMessages', 'No agent-to-agent messages yet.')}<br/>Messages appear when agents delegate to each other.</p>
@@ -419,7 +441,7 @@ export function AgentOrchestrationPanel({
 
         {/* ── Agent Versions ── */}
         {tab === 'versions' && (
-          <div className="space-y-2">
+          <div className={`${orchestrationCardClass} space-y-2`}>
             <p className="text-xs text-text-muted mb-3">{t('agents.versionsHelp', 'Snapshot history of agent configurations. Versions are created when agents are saved.')}</p>
             {agentVersions.length === 0 ? (
               <p className="text-xs text-text-muted text-center py-8">{t('agents.noVersions', 'No versions recorded yet.')}</p>
@@ -447,10 +469,10 @@ export function AgentOrchestrationPanel({
 
         {/* ── Performance Analytics ── */}
         {tab === 'performance' && (
-          <div className="space-y-3">
+          <div className={`${orchestrationCardClass} space-y-3`}>
             <div className="flex items-center justify-between">
               <p className="text-xs text-text-muted">{t('agents.analyticsHelp', 'Agent response times, token usage, and error rates.')}</p>
-              <button onClick={() => clearAgentPerformance()} className="text-[10px] px-2 py-1 rounded-lg bg-surface-3 text-text-muted hover:text-text-primary">{t('common.clearAll', 'Clear All')}</button>
+              <button onClick={() => clearAgentPerformance()} className={orchestrationSecondaryButtonClass}>{t('common.clearAll', 'Clear All')}</button>
             </div>
             {Object.keys(agentPerformance).length === 0 ? (
               <p className="text-xs text-text-muted text-center py-8">{t('agents.noPerformanceData', 'No performance data recorded yet.')}</p>

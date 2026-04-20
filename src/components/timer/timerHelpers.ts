@@ -1,4 +1,5 @@
 import { CronExpressionParser } from 'cron-parser'
+import { getLocale, t } from '@/services/i18n'
 
 // ─── IPC helpers ────────────────────────────────────────────────────
 
@@ -34,11 +35,13 @@ export function formatRelative(ts?: number): string {
   if (!ts) return '—'
   const now = Date.now()
   const diff = ts - now
-  if (diff < 0) return 'overdue'
-  if (diff < 60_000) return 'less than a minute'
-  if (diff < 3_600_000) return `${Math.round(diff / 60_000)}m`
-  if (diff < 86_400_000) return `${Math.round(diff / 3_600_000)}h`
-  return `${Math.round(diff / 86_400_000)}d`
+  if (diff < 0) return t('timer.overdue', 'overdue')
+  if (diff < 60_000) return t('timer.lessThanMinute', 'less than a minute')
+
+  const formatter = new Intl.RelativeTimeFormat(getLocale(), { numeric: 'auto' })
+  if (diff < 3_600_000) return formatter.format(Math.round(diff / 60_000), 'minute')
+  if (diff < 86_400_000) return formatter.format(Math.round(diff / 3_600_000), 'hour')
+  return formatter.format(Math.round(diff / 86_400_000), 'day')
 }
 
 export function formatDateTime(ts?: number): string {

@@ -40,6 +40,19 @@ const settingsIcon = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 )
 
+function formatRelativeTime(ts: number, locale = 'en') {
+  const diffSeconds = Math.round((ts - Date.now()) / 1000)
+  const absSeconds = Math.abs(diffSeconds)
+  const relativeFormatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+
+  if (absSeconds < 45) return relativeFormatter.format(0, 'second')
+  if (absSeconds < 3600) return relativeFormatter.format(Math.round(diffSeconds / 60), 'minute')
+  if (absSeconds < 86400) return relativeFormatter.format(Math.round(diffSeconds / 3600), 'hour')
+  if (absSeconds < 604800) return relativeFormatter.format(Math.round(diffSeconds / 86400), 'day')
+
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(ts)
+}
+
 export function NavBar() {
   const location = useLocation()
   const navigate = useNavigate()
@@ -51,10 +64,10 @@ export function NavBar() {
       <button
         type="button"
         onClick={() => navigate('/chat')}
-        aria-label="SUORA · 朔枢 — go to Chat"
+        aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`}
         className="w-13 h-13 rounded-[18px] bg-linear-to-br from-accent/20 to-accent/5 flex items-center justify-center mb-8 hover:scale-105 hover:shadow-[0_0_20px_rgba(var(--t-accent-rgb),0.25)] transition-all duration-300 overflow-hidden border border-accent/15"
       >
-        <img src={logoSvg} alt="SUORA" className="w-10 h-10" />
+        <img src={logoSvg} alt="SUORA" width={40} height={40} className="w-10 h-10" />
       </button>
 
       {/* Nav Items */}
@@ -82,7 +95,7 @@ export function NavBar() {
               )}
               <span className="flex scale-110">{item.icon}</span>
               {/* Tooltip */}
-              <div className="absolute left-full ml-3 px-3.5 py-2 rounded-[10px] bg-surface-3/95 backdrop-blur-sm text-text-primary text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-150 whitespace-nowrap z-50 shadow-xl border border-border-subtle/80 translate-x-1 group-hover:translate-x-0">
+              <div className="absolute left-full ml-3 px-3.5 py-2 rounded-[10px] bg-surface-3/95 backdrop-blur-sm text-text-primary text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-150 whitespace-nowrap z-50 shadow-xl border border-border-subtle/80 translate-x-1 group-hover:translate-x-0 group-focus-within:translate-x-0">
                 {label}
               </div>
             </button>
@@ -111,7 +124,7 @@ export function NavBar() {
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </span>
-        <div className="absolute left-full ml-3 px-3.5 py-2 rounded-[10px] bg-surface-3/95 backdrop-blur-sm text-text-primary text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-150 whitespace-nowrap z-50 shadow-xl border border-border-subtle/80 translate-x-1 group-hover:translate-x-0 flex items-center gap-2">
+        <div className="absolute left-full ml-3 px-3.5 py-2 rounded-[10px] bg-surface-3/95 backdrop-blur-sm text-text-primary text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-150 whitespace-nowrap z-50 shadow-xl border border-border-subtle/80 translate-x-1 group-hover:translate-x-0 group-focus-within:translate-x-0 flex items-center gap-2">
           <span>{t('nav.commandPalette', 'Command palette')}</span>
           <kbd className="text-[10px] px-1.5 py-0.5 bg-surface-2 border border-border-subtle/70 rounded">
             {CMD_SHORTCUT_LABEL}
@@ -133,7 +146,7 @@ export function NavBar() {
         }`}
       >
         <span className="flex scale-110">{settingsIcon}</span>
-        <div className="absolute left-full ml-3 px-3.5 py-2 rounded-[10px] bg-surface-3/95 backdrop-blur-sm text-text-primary text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-all duration-150 whitespace-nowrap z-50 shadow-xl border border-border-subtle/80 translate-x-1 group-hover:translate-x-0">
+        <div className="absolute left-full ml-3 px-3.5 py-2 rounded-[10px] bg-surface-3/95 backdrop-blur-sm text-text-primary text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-all duration-150 whitespace-nowrap z-50 shadow-xl border border-border-subtle/80 translate-x-1 group-hover:translate-x-0 group-focus-within:translate-x-0">
           {t('nav.settings', 'Settings')}
         </div>
       </button>
@@ -144,12 +157,16 @@ export function NavBar() {
 // ─── Notification Bell ─────────────────────────────────────────────
 
 function NotificationBell() {
+  const { t, locale } = useI18n()
   const { notifications, markNotificationRead, markAllNotificationsRead, clearNotifications, setActiveModule } = useAppStore()
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const panelRef = useRef<HTMLDivElement>(null)
 
   const unreadCount = notifications.filter((n) => !n.read).length
+  const notificationsLabel = unreadCount > 0
+    ? `${t('nav.notifications', 'Notifications')} (${unreadCount})`
+    : t('nav.notifications', 'Notifications')
 
   useEffect(() => {
     if (!open) return
@@ -169,14 +186,6 @@ function NotificationBell() {
     }
   }
 
-  const timeAgo = (ts: number) => {
-    const diff = Date.now() - ts
-    if (diff < 60_000) return 'just now'
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-    return `${Math.floor(diff / 86_400_000)}d ago`
-  }
-
   const typeIcon = (type: string) => {
     switch (type) {
       case 'success': return <IconifyIcon name="ui-check-circle" size={16} color="currentColor" />
@@ -191,7 +200,8 @@ function NotificationBell() {
       <button
         type="button"
         onClick={() => setOpen(!open)}
-        title="Notifications"
+        title={notificationsLabel}
+        aria-label={notificationsLabel}
         className={`group relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
           open ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'
         }`}
@@ -202,25 +212,25 @@ function NotificationBell() {
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
-        <div className="absolute left-full ml-3 px-3 py-1.5 rounded-[10px] bg-surface-3 text-text-primary text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-lg border border-border-subtle">
-          Notifications{unreadCount > 0 ? ` (${unreadCount})` : ''}
+        <div className="absolute left-full ml-3 px-3 py-1.5 rounded-[10px] bg-surface-3 text-text-primary text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-lg border border-border-subtle">
+          {notificationsLabel}
         </div>
       </button>
 
       {open && (
-        <div className="absolute left-full ml-3 bottom-0 w-90 max-h-120 bg-surface-2 border border-border-subtle rounded-2xl shadow-2xl z-50 flex flex-col animate-fade-in">
+        <div role="dialog" aria-label={t('nav.notifications', 'Notifications')} className="absolute left-full ml-3 bottom-0 w-90 max-h-120 bg-surface-2 border border-border-subtle rounded-2xl shadow-2xl z-50 flex flex-col animate-fade-in">
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-            <span className="text-[15px] font-semibold text-text-primary">Notifications</span>
+            <span className="text-[15px] font-semibold text-text-primary">{t('nav.notifications', 'Notifications')}</span>
             <div className="flex items-center gap-1">
               {unreadCount > 0 && (
                 <button type="button" onClick={markAllNotificationsRead} className="text-[11px] text-text-muted hover:text-accent px-2 py-1 rounded-lg">
-                  Mark all read
+                  {t('nav.markAllRead', 'Mark all read')}
                 </button>
               )}
               {notifications.length > 0 && (
                 <button type="button" onClick={clearNotifications} className="text-[11px] text-text-muted hover:text-danger px-2 py-1 rounded-lg">
-                  Clear
+                  {t('common.clear', 'Clear')}
                 </button>
               )}
             </div>
@@ -229,13 +239,14 @@ function NotificationBell() {
           {/* List */}
           <div className="flex-1 overflow-y-auto">
             {notifications.length === 0 ? (
-              <div className="flex items-center justify-center py-10 text-[13px] text-text-muted">No notifications</div>
+              <div className="flex items-center justify-center py-10 text-[13px] text-text-muted">{t('nav.noNotifications', 'No notifications')}</div>
             ) : (
               notifications.slice(0, 50).map((n) => (
-                <div
+                <button
+                  type="button"
                   key={n.id}
                   onClick={() => handleAction(n)}
-                  className={`flex items-start gap-3 px-4 py-3 border-b border-border-subtle/50 cursor-pointer transition-colors hover:bg-surface-3/50 ${
+                  className={`w-full text-left flex items-start gap-3 px-4 py-3 border-b border-border-subtle/50 transition-colors hover:bg-surface-3/50 ${
                     !n.read ? 'bg-accent/3' : ''
                   }`}
                 >
@@ -243,13 +254,13 @@ function NotificationBell() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <span className={`text-[13px] font-medium truncate ${!n.read ? 'text-text-primary' : 'text-text-secondary'}`}>{n.title}</span>
-                      <span className="text-[11px] text-text-muted shrink-0">{timeAgo(n.timestamp)}</span>
+                      <span className="text-[11px] text-text-muted shrink-0">{formatRelativeTime(n.timestamp, locale)}</span>
                     </div>
                     {n.message && <p className="text-[12px] text-text-muted mt-1 line-clamp-2 leading-relaxed">{n.message}</p>}
                     {n.action?.label && <span className="text-[11px] text-accent mt-1.5 inline-block">{n.action.label} →</span>}
                     {!n.read && <span className="inline-block w-1.5 h-1.5 rounded-full bg-accent ml-1.5 -translate-y-px" />}
                   </div>
-                </div>
+                </button>
               ))
             )}
           </div>
@@ -272,20 +283,22 @@ function subscribeOnline(cb: () => void) {
 function getOnlineSnapshot() { return navigator.onLine }
 
 function OfflineIndicator() {
+  const { t } = useI18n()
   const isOnline = useSyncExternalStore(subscribeOnline, getOnlineSnapshot)
 
   if (isOnline) return null
 
+  const offlineLabel = t('nav.offline', 'Offline')
+  const offlineDescription = t('nav.offlineDescription', 'No internet connection')
+
   return (
-    <div className="group relative w-12 h-12 flex items-center justify-center mb-1" title="Offline — No internet connection">
+    <div className="w-12 flex flex-col items-center justify-center gap-1 mb-1" role="status" aria-label={`${offlineLabel} — ${offlineDescription}`}>
       <div className="w-9 h-9 rounded-xl bg-yellow-500/15 border border-yellow-500/30 flex items-center justify-center animate-pulse">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-yellow-500">
           <line x1="1" y1="1" x2="23" y2="23"/><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55"/><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39"/><path d="M10.71 5.05A16 16 0 0 1 22.56 9"/><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><line x1="12" y1="20" x2="12.01" y2="20"/>
         </svg>
       </div>
-      <div className="absolute left-full ml-3 px-3 py-1.5 rounded-[10px] bg-yellow-500/90 text-white text-[12px] font-medium opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-lg">
-        Offline — No internet connection
-      </div>
+      <span className="text-[9px] uppercase tracking-[0.14em] text-yellow-500/70 font-semibold text-center leading-none">{offlineLabel}</span>
     </div>
   )
 }

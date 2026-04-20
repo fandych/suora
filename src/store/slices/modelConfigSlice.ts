@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { MarketplaceSettings, Model, ProviderConfig, ToolSecuritySettings } from '@/types'
 import { updateCachedWorkspacePath } from '@/services/fileStorage'
+import { saveSessionToDisk } from '@/services/sessionFiles'
 import type { AppStore } from '@/store/appStore'
 
 export type ModelConfigSlice = Pick<
@@ -75,7 +76,7 @@ function buildModelsFromProviderConfigs(providerConfigs: ProviderConfig[]): Mode
   return models
 }
 
-export const createModelConfigSlice: StateCreator<AppStore, [], [], ModelConfigSlice> = (set) => ({
+export const createModelConfigSlice: StateCreator<AppStore, [], [], ModelConfigSlice> = (set, get) => ({
   models: [],
   selectedModel: null,
   setSelectedModel: (model) => set({ selectedModel: model }),
@@ -100,14 +101,34 @@ export const createModelConfigSlice: StateCreator<AppStore, [], [], ModelConfigS
     providerConfigs: state.providerConfigs.filter((providerConfig) => providerConfig.id !== id),
   })),
   setProviderConfigs: (configs) => set({ providerConfigs: configs }),
-  syncModelsFromConfigs: () => set((state) => {
-    const models = buildModelsFromProviderConfigs(state.providerConfigs)
-    const selectedModel = state.selectedModel
-      ? models.find((model) => model.id === state.selectedModel?.id) ?? (models[0] ?? null)
-      : (models[0] ?? null)
+  syncModelsFromConfigs: () => {
+    const newModels = buildModelsFromProviderConfigs(get().providerConfigs)
+    const modelIds = new Set(newModels.map((m) => m.id))
+    const staleSessionIds = new Set(
+      get().sessions.filter((s) => s.modelId && !modelIds.has(s.modelId)).map((s) => s.id)
+    )
+    set((state) => {
+      const selectedModel = state.selectedModel
+        ? newModels.find((model) => model.id === state.selectedModel?.id) ?? (newModels[0] ?? null)
+        : (newModels[0] ?? null)
 
-    return { models, selectedModel }
-  }),
+      return {
+        models: newModels,
+        selectedModel,
+        sessions: staleSessionIds.size > 0
+          ? state.sessions.map((s) => staleSessionIds.has(s.id) ? { ...s, modelId: undefined } : s)
+          : state.sessions,
+      }
+    })
+    if (staleSessionIds.size > 0) {
+      const { sessions, workspacePath } = get()
+      if (workspacePath) {
+        for (const s of sessions) {
+          if (staleSessionIds.has(s.id)) saveSessionToDisk(workspacePath, s)
+        }
+      }
+    }
+  },
   workspacePath: '',
   setWorkspacePath: (workspacePath) => {
     set({ workspacePath })

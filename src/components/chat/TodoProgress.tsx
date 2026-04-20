@@ -60,49 +60,42 @@ export function TodoProgress() {
   const statusColor = (s: string) => s === 'done' ? 'text-success' : s === 'in-progress' ? 'text-accent' : 'text-text-muted'
 
   return (
-    <div className="mx-auto w-full max-w-3xl mb-4 animate-fade-in">
-      <div className="rounded-xl border border-border/60 bg-surface-1/60 backdrop-blur-sm overflow-hidden shadow-sm">
-        {/* Summary bar */}
+    <div className="mx-auto mb-4 w-full max-w-352 animate-fade-in">
+      <div className="overflow-hidden rounded-[28px] border border-border-subtle/55 bg-surface-0/52 shadow-[0_18px_46px_rgba(15,23,42,0.08)] backdrop-blur-xl">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-surface-2/40 transition-colors"
+          className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2/42"
         >
-          <div className="w-6 h-6 rounded-lg bg-accent/10 flex items-center justify-center shrink-0">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[16px] border border-accent/18 bg-accent/10 text-accent">
             <IconifyIcon name="ui-clipboard" size={14} color="currentColor" className="text-accent" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-[12px] font-semibold text-text-primary">
-                Todo Progress
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-text-muted/52">
+                Execution checklist
               </span>
-              <span className="text-[11px] text-text-muted">
+              <span className="text-[12px] font-semibold text-text-primary">
                 {done}/{total} completed
               </span>
               {inProgress > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent font-medium">
+                <span className="rounded-full border border-accent/18 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
                   {inProgress} in progress
                 </span>
               )}
               {pending > 0 && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-3/80 text-text-muted font-medium">
+                <span className="rounded-full border border-border-subtle/55 bg-surface-2/65 px-2 py-0.5 text-[10px] font-medium text-text-muted">
                   {pending} pending
                 </span>
               )}
             </div>
-            {/* Progress bar */}
-            <div className="w-full h-1.5 rounded-full bg-surface-3/80 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500 ease-out"
-                style={{
-                  width: `${percent}%`,
-                  background: percent === 100
-                    ? 'var(--t-success)'
-                    : 'linear-gradient(90deg, var(--t-accent), var(--t-accent-secondary))',
-                }}
-              />
-            </div>
+            <progress
+              value={percent}
+              max={100}
+              className={`todo-progress-meter ${percent === 100 ? 'is-complete' : ''}`}
+              aria-label={`Todo progress ${percent}%`}
+            />
           </div>
-          <span className="text-[12px] font-bold text-accent tabular-nums">{percent}%</span>
+          <span className="text-[13px] font-bold tabular-nums text-accent">{percent}%</span>
           <svg
             width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
@@ -112,17 +105,16 @@ export function TodoProgress() {
           </svg>
         </button>
 
-        {/* Expanded todo list */}
         {expanded && (
-          <div className="border-t border-border/40 px-4 py-2 space-y-1 max-h-[240px] overflow-y-auto animate-fade-in">
+          <div className="max-h-72 space-y-2 overflow-y-auto border-t border-border-subtle/45 bg-surface-2/28 px-4 py-3 animate-fade-in">
             {todos.map((todo) => (
               <div
                 key={todo.id}
-                className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-[12px] transition-colors ${
+                className={`flex items-center gap-3 rounded-[18px] border px-3 py-2.5 text-[12px] transition-colors ${
                   todo.status === 'done' ? 'opacity-50' : ''
                 }`}
               >
-                <span className={`shrink-0 ${statusColor(todo.status)}`}>
+                <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/72 ${statusColor(todo.status)}`}>
                   <IconifyIcon name={statusIcon(todo.status)} size={14} color="currentColor" />
                 </span>
                 <span className={`flex-1 truncate ${
@@ -130,7 +122,7 @@ export function TodoProgress() {
                 }`}>
                   {todo.title}
                 </span>
-                <span className="text-[10px] shrink-0">{priorityIcon(todo.priority)}</span>
+                <span className="shrink-0 text-[10px]">{priorityIcon(todo.priority)}</span>
                 <span className={`text-[10px] px-1.5 py-0.5 rounded-md font-medium ${
                   todo.status === 'done' ? 'bg-success/10 text-success' :
                   todo.status === 'in-progress' ? 'bg-accent/10 text-accent' :

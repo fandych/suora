@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo, useDeferredValue } from 'react'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
@@ -12,13 +12,15 @@ import { TimerDetail } from './TimerDetail'
 import { loadPipelinesFromDisk } from '@/services/pipelineFiles'
 
 export function TimerLayout() {
-  const [panelWidth, setPanelWidth] = useResizablePanel('timer', 280)
+  const [panelWidth, setPanelWidth] = useResizablePanel('timer', 320)
   const [timers, setTimers] = useState<ScheduledTask[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
   const { workspacePath, setAgentPipelines } = useAppStore()
   const { t } = useI18n()
+  const deferredSearchQuery = useDeferredValue(searchQuery)
 
   const loadTimers = useCallback(async () => {
     try {
@@ -48,6 +50,24 @@ export function TimerLayout() {
   }, [workspacePath, setAgentPipelines])
 
   const selectedTimer = timers.find((t) => t.id === selectedId) ?? null
+
+  useEffect(() => {
+    if (creating || editing || selectedId || timers.length === 0) return
+    setSelectedId(timers[0].id)
+  }, [timers, selectedId, creating, editing])
+
+  const filteredTimers = useMemo(() => {
+    const query = deferredSearchQuery.trim().toLowerCase()
+    if (!query) return timers
+    return timers.filter((timer) => {
+      const haystacks = [timer.name, timer.prompt || '', timer.pipelineId || '', timer.agentId || '']
+      return haystacks.some((value) => value.toLowerCase().includes(query))
+    })
+  }, [timers, deferredSearchQuery])
+
+  const enabledCount = useMemo(() => timers.filter((timer) => timer.enabled).length, [timers])
+  const upcomingCount = useMemo(() => timers.filter((timer) => timer.nextRun && timer.nextRun > Date.now()).length, [timers])
+  const pipelineCount = useMemo(() => timers.filter((timer) => timer.action === 'pipeline').length, [timers])
 
   async function handleCreate(data: TimerFormData) {
     const result = (await electronInvoke('timer:create', {
@@ -97,51 +117,124 @@ export function TimerLayout() {
 
   // ─── Render ────────────────────────────────────────────────────────
 
-  const sortedTimers = [...timers].sort((a, b) => b.createdAt - a.createdAt)
+  const sortedTimers = [...filteredTimers].sort((a, b) => b.createdAt - a.createdAt)
 
   return (
     <>
       <SidePanel title={t('timer.title', 'Timers')} width={panelWidth} action={
         <button
-          className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
+          className="text-[11px] px-3 py-1.5 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-semibold"
           onClick={() => { setCreating(true); setEditing(false); setSelectedId(null) }}
         >
           {t('timer.new', '+ New')}
         </button>
       }>
-        {sortedTimers.length === 0 ? (
-          <div className="p-4 text-xs text-text-muted text-center py-8">
-            {t('timer.noTimers', 'No timers yet. Create one to get started.')}
+        <div className="px-3 pb-3 pt-1 space-y-3">
+          <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('timer.scheduler', 'Scheduler')}</div>
+                <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('timer.scheduledWork', 'Scheduled Work')}</div>
+                <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('timer.schedulerHint', 'Queue reminders, prompt runs, and pipelines without digging through raw settings.')}</p>
+              </div>
+              <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
+                <div className="text-xl font-semibold text-text-primary tabular-nums">{timers.length}</div>
+              </div>
+            </div>
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.enabled', 'Enabled')}</div>
+                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledCount}</div>
+              </div>
+              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('timer.upcoming', 'Upcoming')}</div>
+                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{upcomingCount}</div>
+              </div>
+              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.pipeline', 'Pipeline')}</div>
+                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{pipelineCount}</div>
+              </div>
+            </div>
           </div>
-        ) : (
-          <div className="flex flex-col">
-            {sortedTimers.map((timer) => (
-              <button
-                key={timer.id}
-                onClick={() => { setSelectedId(timer.id); setCreating(false); setEditing(false) }}
-                className={`w-full text-left px-4 py-3 border-b border-border-subtle transition-colors ${
-                  selectedId === timer.id ? 'bg-accent/8' : 'hover:bg-surface-2/50'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-text-primary truncate">{timer.name}</span>
-                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${timer.enabled ? 'bg-green-400' : 'bg-text-muted/30'}`} />
-                </div>
-                <div className="text-[10px] text-text-muted mt-0.5 flex items-center gap-1">
-                  {timer.type === 'once' ? <IconifyIcon name="ui-timer-once" size={10} /> : <IconifyIcon name="ui-repeat" size={10} />} {timer.nextRun ? `Next: ${formatRelative(timer.nextRun)}` : 'Not scheduled'}
-                </div>
-              </button>
-            ))}
+
+          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+            <div className="relative">
+              <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('timer.searchTimers', 'Search timers...')}
+                className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-3 text-[12px] text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+              <span>{sortedTimers.length} {t('common.results', 'results')}</span>
+              {searchQuery && <span>{timers.length} {t('common.total', 'total')}</span>}
+            </div>
           </div>
-        )}
+
+          {sortedTimers.length === 0 ? (
+            <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
+                <IconifyIcon name="ui-timer-once" size={18} color="currentColor" />
+              </div>
+              <p className="text-[12px] leading-relaxed text-text-muted">
+                {searchQuery
+                  ? t('timer.noMatchingTimers', 'No matching timers.')
+                  : t('timer.noTimers', 'No timers yet. Create one to get started.')}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {sortedTimers.map((timer) => (
+                <button
+                  key={timer.id}
+                  onClick={() => { setSelectedId(timer.id); setCreating(false); setEditing(false) }}
+                  className={`w-full rounded-[22px] border px-3.5 py-3.5 text-left transition-all duration-200 ${
+                    selectedId === timer.id
+                      ? 'border-accent/20 bg-accent/10 shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
+                      : 'border-transparent bg-surface-1/20 hover:bg-surface-3/55 hover:border-border-subtle/60'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 shadow-sm text-accent">
+                        <IconifyIcon name={timer.type === 'once' ? 'ui-timer-once' : 'ui-repeat'} size={18} color="currentColor" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="truncate text-[13px] font-semibold text-text-primary">{timer.name}</span>
+                          <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${timer.enabled ? 'bg-green-500/15 text-green-400' : 'bg-surface-3 text-text-muted'}`}>
+                            {timer.enabled ? t('timer.enabled', 'Enabled') : t('timer.disabled', 'Disabled')}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary/80 line-clamp-2">
+                          {timer.action === 'pipeline'
+                            ? t('timer.pipelineScheduledRun', 'Saved pipeline execution on schedule')
+                            : timer.prompt || t('timer.emptyPrompt', 'No prompt content')}
+                        </p>
+                        <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
+                          <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{timer.action === 'pipeline' ? t('agents.pipeline', 'Pipeline') : timer.action === 'prompt' ? t('timer.agentPrompt', 'Agent Prompt') : t('timer.notify', 'Notify')}</span>
+                          <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{timer.nextRun ? `${t('timer.nextRun', 'Next Run')}: ${formatRelative(timer.nextRun)}` : t('timer.notScheduled', 'Not scheduled')}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${timer.enabled ? 'bg-green-400' : 'bg-text-muted/30'}`} />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={200} maxWidth={480} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
 
       <div className="flex-1 flex flex-col overflow-y-auto">
         {creating ? (
-          <TimerForm onSave={handleCreate} onCancel={() => setCreating(false)} />
+          <TimerForm key="new" onSave={handleCreate} onCancel={() => setCreating(false)} />
         ) : editing && selectedTimer ? (
-          <TimerForm initial={selectedTimer} onSave={handleUpdate} onCancel={() => setEditing(false)} />
+          <TimerForm key={selectedTimer.id} initial={selectedTimer} onSave={handleUpdate} onCancel={() => setEditing(false)} />
         ) : selectedTimer ? (
           <TimerDetail
             timer={selectedTimer}
@@ -150,16 +243,45 @@ export function TimerLayout() {
             onToggle={handleToggle}
           />
         ) : (
-          <div className="flex-1 flex items-center justify-center text-text-muted">
-            <div className="text-center animate-fade-in">
-              <div className="w-16 h-16 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-5 border border-border-subtle">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-accent"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          <div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
+            <div className="mx-auto flex h-full w-full max-w-4xl items-start justify-center pt-6">
+              <div className="w-full rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/94 via-surface-1/88 to-surface-2/72 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.16)] animate-fade-in xl:p-10">
+                <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="max-w-2xl">
+                    <div className="flex h-18 w-18 items-center justify-center rounded-[26px] border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
+                      <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    </div>
+                    <p className="mt-5 font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.scheduler', 'Scheduler')}</p>
+                    <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text-primary">{t('timer.timersAndReminders', 'Timers & Reminders')}</h2>
+                    <p className="mt-3 max-w-xl text-[14px] leading-7 text-text-secondary/82">{t('timer.createHint', 'Create timers via the + New button or ask your AI assistant.')}</p>
+                    <p className="mt-4 max-w-xl text-[12px] leading-6 text-text-muted">{t('timer.trySaying', 'Try saying:')} “{t('timer.exampleTimer', 'Set a timer for 10 minutes to remind me to take a break')}”</p>
+                    <button
+                      className="mt-6 rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
+                      onClick={() => { setCreating(true); setEditing(false); setSelectedId(null) }}
+                    >
+                      {t('timer.new', '+ New')}
+                    </button>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-3 xl:w-[24rem] xl:grid-cols-1">
+                    <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
+                      <div className="mt-2 text-2xl font-semibold text-text-primary tabular-nums">{timers.length}</div>
+                      <div className="mt-1 text-[12px] text-text-muted">{t('timer.scheduledItems', 'scheduled items')}</div>
+                    </div>
+                    <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.enabled', 'Enabled')}</div>
+                      <div className="mt-2 text-2xl font-semibold text-text-primary tabular-nums">{enabledCount}</div>
+                      <div className="mt-1 text-[12px] text-text-muted">{t('timer.currentlyActive', 'currently active')}</div>
+                    </div>
+                    <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
+                      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('agents.pipeline', 'Pipeline')}</div>
+                      <div className="mt-2 text-2xl font-semibold text-text-primary tabular-nums">{pipelineCount}</div>
+                      <div className="mt-1 text-[12px] text-text-muted">{t('timer.pipelineSchedules', 'pipeline schedules')}</div>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <p className="text-sm text-text-secondary font-medium">{t('timer.timersAndReminders', 'Timers & Reminders')}</p>
-              <p className="text-xs text-text-muted mt-1">{t('timer.createHint', 'Create timers via the + New button or ask your AI assistant.')}</p>
-              <p className="text-[10px] text-text-muted mt-3 max-w-xs mx-auto">
-                {t('timer.trySaying', 'Try saying:')} &ldquo;{t('timer.exampleTimer', 'Set a timer for 10 minutes to remind me to take a break')}&rdquo;
-              </p>
             </div>
           </div>
         )}

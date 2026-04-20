@@ -247,7 +247,10 @@ export function rebuildIndexFromStore(): VectorIndex {
 
 /**
  * Load all memory entries (session + global) from the persisted store.
+ * Capped at MAX_INDEX_ENTRIES to prevent unbounded memory growth.
  */
+const MAX_INDEX_ENTRIES = 10_000
+
 function loadAllMemoriesFromStore(): MemoryEntry[] {
   try {
     const raw = readCached('suora-store')
@@ -268,18 +271,23 @@ function loadAllMemoriesFromStore(): MemoryEntry[] {
       for (const agent of parsed.state.agents) {
         if (agent.memories) {
           for (const m of agent.memories) {
-            if (!seen.has(m.id)) {
+            if (entries.length >= MAX_INDEX_ENTRIES) break
+            if (!m.content || !seen.has(m.id)) {
+              if (!m.content) continue  // skip entries with empty content
               seen.add(m.id)
               entries.push({ id: m.id, content: m.content })
             }
           }
         }
+        if (entries.length >= MAX_INDEX_ENTRIES) break
       }
     }
 
     // Collect global memories
-    if (parsed.state?.globalMemories) {
+    if (parsed.state?.globalMemories && entries.length < MAX_INDEX_ENTRIES) {
       for (const m of parsed.state.globalMemories) {
+        if (entries.length >= MAX_INDEX_ENTRIES) break
+        if (!m.content) continue
         if (!seen.has(m.id)) {
           seen.add(m.id)
           entries.push({ id: m.id, content: m.content })

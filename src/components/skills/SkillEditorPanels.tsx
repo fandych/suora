@@ -10,6 +10,16 @@ import { builtinToolDefs, BUILTIN_TOOL_DESCRIPTIONS } from '@/services/tools'
 import { compileCustomCode, type CompileResult } from '@/services/customSkillRuntime'
 import { auditCustomCode, signSkill, verifySkillSignature, getAuditLog, type SecurityFinding, type AuditLogEntry } from '@/services/skillSecurity'
 import { confirm } from '@/services/confirmDialog'
+import {
+  settingsInputClass,
+  settingsLabelClass,
+  settingsMonoInputClass,
+  settingsPrimaryButtonClass,
+  settingsSecondaryButtonClass,
+  settingsSelectClass,
+  settingsSoftButtonClass,
+  settingsTextAreaClass,
+} from '@/components/settings/panelUi'
 
 // ─── Constants ────────────────────────────────────────────────────
 
@@ -32,6 +42,13 @@ defineCustomTool({
     }
   }
 })`
+const panelSelectClass = settingsSelectClass
+const panelMonoInputClass = settingsMonoInputClass
+const panelTextAreaClass = settingsTextAreaClass
+const panelCompactInputClass = `${settingsInputClass} rounded-xl px-3 py-2 text-xs`
+const panelCompactSelectClass = `${settingsSelectClass} rounded-xl px-3 py-2 text-xs`
+const panelCompactButtonClass = `${settingsSoftButtonClass} rounded-xl px-3 py-2 text-xs`
+const panelCompactSecondaryButtonClass = `${settingsSecondaryButtonClass} rounded-xl px-3 py-2 text-xs`
 
 // ─── Markdown editor with Edit / Preview tabs ─────────────────────
 
@@ -80,7 +97,7 @@ export function MarkdownEditor({
           className="w-full px-3 py-2.5 bg-transparent text-text-primary placeholder-text-muted focus:outline-none resize-y text-sm font-mono disabled:opacity-50"
         />
       ) : (
-        <div className="px-3 py-2.5 min-h-[80px] text-sm prose prose-sm max-w-none text-text-primary overflow-auto">
+        <div className="px-3 py-2.5 min-h-20 text-sm prose prose-sm max-w-none text-text-primary overflow-auto">
           {value.trim() ? (
             <Markdown remarkPlugins={[remarkGfm]}>{value}</Markdown>
           ) : (
@@ -177,12 +194,12 @@ export function SkillTestPanel({ skill }: { skill: Skill }) {
       ) : (
         <>
           <div>
-            <label className="block text-xs font-medium text-text-muted uppercase tracking-wider mb-2">{t('skills.selectTool', 'Select Tool')}</label>
+            <label className={settingsLabelClass}>{t('skills.selectTool', 'Select Tool')}</label>
             <select
               value={selectedTool}
               onChange={(e) => { setSelectedTool(e.target.value); setOutput(null); setError(null) }}
               aria-label="Select tool"
-              className="w-full px-3 py-2.5 rounded-xl bg-surface-2 border border-border text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
+              className={panelSelectClass}
             >
               {toolNames.map((name) => (
                 <option key={name} value={name}>{name}</option>
@@ -194,13 +211,13 @@ export function SkillTestPanel({ skill }: { skill: Skill }) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-text-muted uppercase tracking-wider mb-2">{t('skills.inputJson', 'Input (JSON)')}</label>
+            <label className={settingsLabelClass}>{t('skills.inputJson', 'Input (JSON)')}</label>
             <textarea
               value={inputJson}
               onChange={(e) => setInputJson(e.target.value)}
               rows={5}
               spellCheck={false}
-              className="w-full px-3 py-2.5 rounded-xl bg-surface-2 border border-border text-text-primary font-mono text-sm focus:outline-none focus:ring-2 focus:ring-accent/30 resize-y"
+              className={`${panelMonoInputClass} min-h-0 resize-y`}
               placeholder='{ "key": "value" }'
             />
           </div>
@@ -209,7 +226,7 @@ export function SkillTestPanel({ skill }: { skill: Skill }) {
             type="button"
             onClick={handleRun}
             disabled={running || !selectedTool}
-            className="px-5 py-2.5 rounded-xl bg-accent text-white text-sm font-semibold hover:bg-accent-hover transition-all disabled:opacity-50"
+            className={settingsPrimaryButtonClass}
           >
             {running ? t('skills.running', '⏳ Running...') : t('skills.runTest', '▶ Run Test')}
           </button>
@@ -289,7 +306,7 @@ export function SkillLogPanel({ skill }: { skill: Skill }) {
           No {filter === 'all' ? '' : filter + ' '}{t('skills.noLogs', 'log entries found for this skill\'s tools.')}
         </div>
       ) : (
-        <div className="space-y-1.5 max-h-[400px] overflow-y-auto">
+        <div className="space-y-1.5 max-h-100 overflow-y-auto">
           {displayed.map((entry) => (
             <div
               key={entry.id}
@@ -471,7 +488,7 @@ export function CustomCodeEditor({ value, onChange, disabled }: {
         rows={18}
         disabled={disabled}
         spellCheck={false}
-        className="w-full px-4 py-3 rounded-xl bg-surface-2 border border-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/50 resize-y text-sm font-mono leading-relaxed disabled:opacity-50 whitespace-pre tab-size-2"
+        className={`${panelMonoInputClass} min-h-0 resize-y whitespace-pre tab-size-2 leading-relaxed`}
       />
 
       <div className="flex items-center gap-3">
@@ -479,7 +496,7 @@ export function CustomCodeEditor({ value, onChange, disabled }: {
           type="button"
           onClick={handleTest}
           disabled={disabled || !value?.trim()}
-          className="px-4 py-2 rounded-xl bg-surface-3 text-text-secondary text-xs font-semibold hover:bg-surface-4 transition-colors disabled:opacity-40"
+          className={settingsSecondaryButtonClass}
         >
           ▶ {t('skills.testCompile', 'Test Compile')}
         </button>
@@ -537,7 +554,7 @@ export function SkillDependenciesEditor({ dependencies, onChange, disabled = fal
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <label className="block text-xs font-medium text-text-muted uppercase tracking-wider">{t('skills.dependencies', 'Dependencies')}</label>
+        <label className={settingsLabelClass}>{t('skills.dependencies', 'Dependencies')}</label>
         {!disabled && (
           <button type="button" onClick={() => setAdding(!adding)} className="text-xs text-accent hover:text-accent-hover">
             {adding ? t('common.cancel', 'Cancel') : t('common.add', '+ Add')}
@@ -577,7 +594,7 @@ export function SkillDependenciesEditor({ dependencies, onChange, disabled = fal
             value={newDepId}
             onChange={(e) => setNewDepId(e.target.value)}
             aria-label="Select dependency skill"
-            className="flex-1 px-2 py-1.5 rounded-lg bg-surface-3 border border-border text-text-primary text-xs"
+            className={`flex-1 ${panelCompactSelectClass}`}
           >
             <option value="">{t('skills.selectSkill', 'Select skill...')}</option>
             {availableSkills.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -587,9 +604,9 @@ export function SkillDependenciesEditor({ dependencies, onChange, disabled = fal
             value={newMinVer}
             onChange={(e) => setNewMinVer(e.target.value)}
             placeholder="Min ver"
-            className="w-20 px-2 py-1.5 rounded-lg bg-surface-3 border border-border text-text-primary text-xs"
+            className={`w-24 ${panelCompactInputClass}`}
           />
-          <button type="button" onClick={addDep} className="px-2 py-1.5 text-xs bg-accent text-white rounded-lg">Add</button>
+          <button type="button" onClick={addDep} className={panelCompactButtonClass}>Add</button>
         </div>
       )}
     </div>
@@ -634,9 +651,9 @@ export function SkillVersionsPanel({ skill, updateForm }: { skill: Skill; update
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder={t('skills.versionLabel', 'Version label (optional)')}
-            className="flex-1 px-3 py-2 rounded-lg bg-surface-2 border border-border text-text-primary text-sm"
+            className={`${settingsInputClass} flex-1`}
           />
-          <button type="button" onClick={saveVersion} className="px-4 py-2 text-xs font-medium bg-accent text-white rounded-lg hover:bg-accent/80 transition-colors">
+          <button type="button" onClick={saveVersion} className={settingsPrimaryButtonClass}>
             {t('skills.saveSnapshotBtn', 'Save Snapshot')}
           </button>
         </div>
@@ -684,7 +701,7 @@ export function SkillVersionsPanel({ skill, updateForm }: { skill: Skill; update
                 <button
                   type="button"
                   onClick={() => restoreVersion(ver)}
-                  className="px-3 py-1.5 text-xs font-medium bg-surface-3 text-text-secondary hover:text-text-primary rounded-lg transition-colors"
+                  className={panelCompactSecondaryButtonClass}
                 >
                   {t('common.restore', 'Restore')}
                 </button>
@@ -702,7 +719,7 @@ export function SkillVersionsPanel({ skill, updateForm }: { skill: Skill; update
           onChange={(e) => updateForm({ changelog: e.target.value })}
           placeholder={t('skills.changelogPlaceholder', 'Document changes between versions...')}
           rows={4}
-          className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border text-text-primary text-sm resize-none"
+          className={`${panelTextAreaClass} min-h-0 resize-none`}
         />
       </div>
     </div>

@@ -20,13 +20,13 @@ export function SidePanel({ title, children, action, width }: SidePanelProps) {
     <aside
       ref={panelRef}
       aria-label={title}
-      className="h-full w-[340px] bg-surface-1/40 backdrop-blur-xl border-r border-border-subtle/50 flex flex-col shrink-0"
+      className="h-full min-h-0 w-85 bg-surface-1/40 backdrop-blur-xl border-r border-border-subtle/50 flex flex-col shrink-0"
     >
       <div className="h-16 px-6 flex items-center justify-between border-b border-border-subtle/50 shrink-0">
         <h2 className="font-display text-[12px] font-semibold text-text-muted tracking-[0.16em] uppercase">{title}</h2>
         {action}
       </div>
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {children}
       </div>
     </aside>

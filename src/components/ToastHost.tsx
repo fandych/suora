@@ -1,5 +1,6 @@
 // Toast host — renders all active toasts in a fixed stack at the top-right.
 
+import { useState, useCallback } from 'react'
 import { useToastStore, type ToastKind } from '@/services/toast'
 
 const KIND_STYLES: Record<ToastKind, string> = {
@@ -26,6 +27,19 @@ const KIND_ICON_CLS: Record<ToastKind, string> = {
 export function ToastHost() {
   const toasts = useToastStore((s) => s.toasts)
   const dismiss = useToastStore((s) => s.dismiss)
+  const [dismissing, setDismissing] = useState<Set<number>>(new Set())
+
+  const handleDismiss = useCallback((id: number) => {
+    setDismissing((prev) => new Set(prev).add(id))
+    setTimeout(() => {
+      dismiss(id)
+      setDismissing((prev) => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+    }, 200) // match CSS transition duration
+  }, [dismiss])
 
   if (toasts.length === 0) return null
 
@@ -33,26 +47,26 @@ export function ToastHost() {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="fixed top-4 right-4 z-[180] flex flex-col gap-2 max-w-sm pointer-events-none"
+      className="fixed top-4 right-4 toast-host-layer flex flex-col gap-2 max-w-sm pointer-events-none"
     >
       {toasts.map((t) => (
         <div
           key={t.id}
           role="status"
-          className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-[14px] border shadow-lg backdrop-blur-xl animate-fade-in-scale ${KIND_STYLES[t.kind]}`}
+          className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-[14px] border shadow-lg backdrop-blur-xl transition-all duration-200 ${dismissing.has(t.id) ? 'opacity-0 translate-x-4' : 'animate-fade-in-scale'} ${KIND_STYLES[t.kind]}`}
         >
           <span className={`text-[14px] font-bold mt-0.5 ${KIND_ICON_CLS[t.kind]}`}>
             {KIND_ICON[t.kind]}
           </span>
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-medium break-words">{t.message}</div>
+            <div className="text-[13px] font-medium content-wrap-anywhere">{t.message}</div>
             {t.detail && (
-              <div className="mt-1 text-[11.5px] text-text-muted break-words">{t.detail}</div>
+              <div className="mt-1 text-[11.5px] text-text-muted content-wrap-anywhere">{t.detail}</div>
             )}
           </div>
           <button
             type="button"
-            onClick={() => dismiss(t.id)}
+            onClick={() => handleDismiss(t.id)}
             className="text-text-muted/70 hover:text-text-primary text-[12px] transition-colors leading-none -mr-1 -mt-1 p-1"
             aria-label="Dismiss"
           >

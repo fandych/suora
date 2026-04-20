@@ -339,7 +339,11 @@ export async function activatePlugin(plugin: PluginInfo, pluginModule?: PluginMo
 export async function deactivatePlugin(pluginId: string): Promise<void> {
   const loaded = loadedPlugins.get(pluginId)
   if (loaded?.module.deactivate) {
-    await loaded.module.deactivate()
+    try {
+      await loaded.module.deactivate()
+    } catch {
+      // Deactivate hook failed — proceed with cleanup anyway
+    }
   }
 
   disablePlugin(pluginId)

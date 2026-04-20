@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useAppStore, loadExternalSkillsAndAgents, saveSettingsToWorkspace } from '@/store/appStore'
 import { useI18n } from '@/hooks/useI18n'
+import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
 
 export function ExternalDirsSettings() {
   const { t } = useI18n()
@@ -8,113 +10,163 @@ export function ExternalDirsSettings() {
   const [extDirPath, setExtDirPath] = useState('')
   const [extDirType, setExtDirType] = useState<'agents' | 'skills'>('skills')
 
+  const presetDirectories = [
+    { path: '~/.agents/skills', type: 'skills' as const },
+    { path: '~/.claude/skills', type: 'skills' as const },
+    { path: '~/.agents/agents', type: 'agents' as const },
+    { path: '~/.claude/agents', type: 'agents' as const },
+  ]
+
+  const enabledCount = useMemo(() => externalDirectories.filter((dir) => dir.enabled).length, [externalDirectories])
+  const skillsDirsCount = useMemo(() => externalDirectories.filter((dir) => dir.type === 'skills').length, [externalDirectories])
+  const agentsDirsCount = useMemo(() => externalDirectories.filter((dir) => dir.type === 'agents').length, [externalDirectories])
+
+  const addDirectory = async (path: string, type: 'agents' | 'skills') => {
+    if (!path.trim()) return
+    addExternalDirectory({ path, enabled: true, type })
+    await saveSettingsToWorkspace()
+    await loadExternalSkillsAndAgents()
+  }
+
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-        <p className="text-sm text-text-muted mb-4">
-          {t('settings.extDirsDesc', 'Configure external directories to load additional skills and agents from')} <code className="px-1.5 py-0.5 rounded bg-surface-2 text-accent">~/.agents/skills</code> and <code className="px-1.5 py-0.5 rounded bg-surface-2 text-accent">~/.claude/skills</code> directories.
-        </p>
-      </div>
+      <SettingsSection
+        eyebrow={t('settings.externalDirectories', 'External Directories')}
+        title={t('settings.directoryBridge', 'Directory Bridge')}
+        description={t('settings.extDirsDesc', 'Configure external directories so Suora can load additional skills and agents from shared local folders such as ~/.agents and ~/.claude.')}
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <SettingsStat label={t('common.total', 'Total')} value={String(externalDirectories.length)} accent />
+          <SettingsStat label={t('settings.enabled', 'Enabled')} value={String(enabledCount)} />
+          <SettingsStat label={t('settings.sources', 'Sources')} value={`${skillsDirsCount}/${agentsDirsCount}`} />
+        </div>
+      </SettingsSection>
 
-      <div className="rounded-xl border border-border p-4 bg-surface-1/30">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.addExtDir', 'Add External Directory')}</h3>
-        <div className="flex gap-3">
+      <SettingsSection
+        eyebrow={t('settings.addExtDir', 'Add External Directory')}
+        title={t('settings.attachDirectory', 'Attach Directory')}
+        description={t('settings.attachDirectoryHint', 'Point the workspace to another directory of prompts or agent definitions. Changes are reloaded immediately after saving.')}
+        action={
+          <button
+            type="button"
+            onClick={async () => {
+              if (!extDirPath.trim()) return
+              await addDirectory(extDirPath, extDirType)
+              setExtDirPath('')
+            }}
+            className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover"
+          >
+            {t('settings.add', 'Add')}
+          </button>
+        }
+      >
+        <div className="grid gap-4 md:grid-cols-[1fr_auto]">
           <input
             type="text"
             value={extDirPath}
-            onChange={(e) => setExtDirPath(e.target.value)}
+            onChange={(event) => setExtDirPath(event.target.value)}
             placeholder="e.g., ~/.agents/skills"
-            aria-label="External directory path"
-            className="flex-1 px-3 py-2 rounded-xl bg-surface-2 border border-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
+            aria-label={t('settings.externalDirectoryPath', 'External directory path')}
+            className={settingsInputClass}
           />
           <select
             value={extDirType}
-            onChange={(e) => setExtDirType(e.target.value as 'agents' | 'skills')}
-            aria-label="Directory type"
-            className="px-3 py-2 rounded-xl bg-surface-2 border border-border text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/30"
+            onChange={(event) => setExtDirType(event.target.value as 'agents' | 'skills')}
+            aria-label={t('settings.directoryType', 'Directory type')}
+            className={settingsInputClass}
           >
             <option value="skills">{t('skills.title', 'Skills')}</option>
             <option value="agents">{t('agents.title', 'Agents')}</option>
           </select>
-          <button
-            onClick={async () => {
-              if (!extDirPath.trim()) return
-              addExternalDirectory({ path: extDirPath, enabled: true, type: extDirType })
-              await saveSettingsToWorkspace()
-              await loadExternalSkillsAndAgents()
-              setExtDirPath('')
-            }}
-            className="px-4 py-2 rounded-xl bg-accent/15 text-accent text-sm font-medium hover:bg-accent/25 transition-colors border border-accent/30"
-          >
-            {t('settings.add', 'Add')}
-          </button>
         </div>
-      </div>
+      </SettingsSection>
 
-      <div className="space-y-2">
-        <h3 className="text-xs font-medium text-text-muted uppercase tracking-wider">{t('settings.configuredDirs', 'Configured Directories')}</h3>
+      <SettingsSection
+        eyebrow={t('settings.configuredDirs', 'Configured Directories')}
+        title={t('settings.activeSources', 'Active Sources')}
+        description={t('settings.activeSourcesHint', 'Toggle directories on or off without deleting them, or remove them entirely if the workspace should stop indexing that source.')}
+      >
         {externalDirectories.length === 0 ? (
-          <div className="rounded-xl border border-border p-4 bg-surface-1/20 text-center text-sm text-text-muted">
-            {t('settings.noExtDirs', 'No external directories configured.')}
+          <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
+              <IconifyIcon name="ui-package" size={18} color="currentColor" />
+            </div>
+            <p className="text-[12px] leading-relaxed text-text-muted">{t('settings.noExtDirs', 'No external directories configured.')}</p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {externalDirectories.map((dir) => (
-              <div key={dir.path} className="rounded-xl border border-border p-3 bg-surface-1/30 flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  checked={dir.enabled}
-                  onChange={async (e) => {
-                    updateExternalDirectory(dir.path, { enabled: e.target.checked })
-                    await saveSettingsToWorkspace()
-                    await loadExternalSkillsAndAgents()
-                  }}
-                  aria-label={`Enable directory ${dir.path}`}
-                  className="w-4 h-4 rounded border-border bg-surface-2 text-accent focus:ring-2 focus:ring-accent/30"
-                />
-                <code className="flex-1 text-sm text-text-primary bg-surface-2 px-2 py-1 rounded">{dir.path}</code>
-                <span className="px-2 py-1 rounded-lg text-xs font-medium bg-accent/15 text-accent border border-accent/30">{dir.type}</span>
-                <button
-                  onClick={async () => {
-                    removeExternalDirectory(dir.path)
-                    await saveSettingsToWorkspace()
-                    await loadExternalSkillsAndAgents()
-                  }}
-                  className="px-3 py-1 rounded-lg text-xs font-medium text-error hover:bg-error/10 transition-colors"
-                >
-                  {t('settings.remove', 'Remove')}
-                </button>
+              <div key={dir.path} className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <code className="rounded-xl bg-surface-2/80 px-3 py-1.5 text-[12px] text-text-primary">{dir.path}</code>
+                      <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[10px] font-medium text-accent">{dir.type}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${dir.enabled ? 'bg-green-500/12 text-green-400' : 'bg-surface-3 text-text-muted'}`}>{dir.enabled ? t('settings.enabled', 'Enabled') : t('settings.disabled', 'Disabled')}</span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        updateExternalDirectory(dir.path, { enabled: !dir.enabled })
+                        await saveSettingsToWorkspace()
+                        await loadExternalSkillsAndAgents()
+                      }}
+                      className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors ${dir.enabled ? 'border-green-500/18 bg-green-500/10 text-green-400 hover:bg-green-500/16' : 'border-border-subtle/55 bg-surface-2/70 text-text-muted hover:bg-surface-3'}`}
+                    >
+                      {dir.enabled ? t('settings.disable', 'Disable') : t('settings.enable', 'Enable')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        removeExternalDirectory(dir.path)
+                        await saveSettingsToWorkspace()
+                        await loadExternalSkillsAndAgents()
+                      }}
+                      className="rounded-xl border border-red-500/18 bg-red-500/8 px-3 py-2 text-[11px] font-semibold text-red-400 transition-colors hover:bg-red-500/14"
+                    >
+                      {t('settings.remove', 'Remove')}
+                    </button>
+                  </div>
+                </div>
               </div>
             ))}
           </div>
         )}
-      </div>
+      </SettingsSection>
 
-      <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.quickAddPreset', 'Quick Add Preset Directories')}</h3>
-        <div className="grid grid-cols-2 gap-2">
-          {[
-            { path: '~/.agents/skills', type: 'skills' as const },
-            { path: '~/.claude/skills', type: 'skills' as const },
-            { path: '~/.agents/agents', type: 'agents' as const },
-            { path: '~/.claude/agents', type: 'agents' as const },
-          ].map(({ path, type }) => (
-            <button
-              key={path}
-              onClick={async () => {
-                if (!externalDirectories.some((d) => d.path === path)) {
-                  addExternalDirectory({ path, enabled: true, type })
-                  await saveSettingsToWorkspace()
-                  await loadExternalSkillsAndAgents()
-                }
-              }}
-              className="px-3 py-2 rounded-xl bg-surface-2 hover:bg-surface-3 text-text-primary text-sm border border-border transition-colors"
-            >
-              {path}
-            </button>
-          ))}
+      <SettingsSection
+        eyebrow={t('settings.quickAddPreset', 'Quick Add Preset Directories')}
+        title={t('settings.presetSources', 'Preset Sources')}
+        description={t('settings.presetSourcesHint', 'These common paths cover the typical global skill and agent directories used by Claude-style local tooling.')}
+      >
+        <div className="grid gap-3 md:grid-cols-2">
+          {presetDirectories.map(({ path, type }) => {
+            const exists = externalDirectories.some((dir) => dir.path === path)
+            return (
+              <button
+                key={path}
+                type="button"
+                onClick={async () => {
+                  if (exists) return
+                  await addDirectory(path, type)
+                }}
+                disabled={exists}
+                className={`rounded-3xl border px-4 py-4 text-left transition-colors ${exists ? 'border-green-500/18 bg-green-500/8 text-green-400' : 'border-border-subtle/55 bg-surface-0/45 text-text-primary hover:bg-surface-2/60'}`}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="text-[13px] font-semibold">{path}</div>
+                    <div className="mt-1 text-[11px] text-text-muted/80">{type}</div>
+                  </div>
+                  {exists ? <IconifyIcon name="ui-check" size={14} color="currentColor" /> : <IconifyIcon name="ui-download" size={14} color="currentColor" />}
+                </div>
+              </button>
+            )
+          })}
         </div>
-      </div>
+      </SettingsSection>
     </div>
   )
 }

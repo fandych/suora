@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import {
@@ -7,6 +7,7 @@ import {
   getIndexStats,
   searchSimilar,
 } from '@/services/vectorMemory'
+import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
 
 export function KnowledgeSettings() {
   const { t } = useI18n()
@@ -28,87 +29,114 @@ export function KnowledgeSettings() {
     refreshKbStats()
   }, [refreshKbStats])
 
+  const runSearch = () => {
+    let index = getIndex()
+    if (index.size === 0) index = rebuildIndexFromStore()
+    setKbResults(searchSimilar(index, kbQuery, 10))
+  }
+
+  const topScore = useMemo(() => kbResults[0]?.score ?? 0, [kbResults])
+
   return (
     <div className="space-y-6">
-      <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.vectorMemoryIndex', 'Vector Memory Index')}</h3>
-        <div className="grid grid-cols-3 gap-4 mb-4">
-          <div className="text-center">
-            <div className="text-2xl font-bold text-accent">{kbStats.totalMemories}</div>
-            <div className="text-xs text-text-muted mt-1">{t('settings.totalMemories', 'Total Memories')}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-accent">{kbStats.indexSize}</div>
-            <div className="text-xs text-text-muted mt-1">{t('settings.indexedEntries', 'Indexed Entries')}</div>
-          </div>
-          <div className="text-center">
-            <div className="text-2xl font-bold text-accent">{kbStats.vocabularySize}</div>
-            <div className="text-xs text-text-muted mt-1">{t('settings.vocabularySize', 'Vocabulary Size')}</div>
-          </div>
-        </div>
-        <button
-          onClick={() => {
-            setKbRebuilding(true)
-            requestAnimationFrame(() => {
-              try {
-                rebuildIndexFromStore()
-                refreshKbStats()
-              } finally {
-                setKbRebuilding(false)
-              }
-            })
-          }}
-          disabled={kbRebuilding}
-          className="px-4 py-2 rounded-xl bg-accent/15 text-accent text-sm font-medium hover:bg-accent/25 transition-colors border border-accent/30 disabled:opacity-50 inline-flex items-center gap-1.5"
-        >
-          {kbRebuilding ? t('settings.rebuilding', 'Rebuilding…') : <><IconifyIcon name="ui-refresh" size={14} color="currentColor" /> {t('settings.rebuildIndex', 'Rebuild Index')}</>}
-        </button>
-        <p className="mt-2 text-xs text-text-muted">
-          {t('settings.rebuildIndexDesc', 'The index is automatically maintained when memories are added or removed. Use rebuild to recalculate all TF-IDF weights from scratch.')}
-        </p>
-      </div>
-
-      <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">{t('settings.testSemanticSearch', 'Test Semantic Search')}</h3>
-        <div className="flex gap-2 mb-3">
-          <input
-            value={kbQuery}
-            onChange={(e) => setKbQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-                let index = getIndex()
-                if (index.size === 0) index = rebuildIndexFromStore()
-                setKbResults(searchSimilar(index, kbQuery, 10))
-              }
-            }}
-            placeholder={t('settings.searchPlaceholder', 'Enter a query to test semantic search…')}
-            className="flex-1 px-3 py-2.5 rounded-xl bg-surface-2 border border-border text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/30"
-          />
+      <SettingsSection
+        eyebrow={t('settings.vectorMemoryIndex', 'Vector Memory Index')}
+        title={t('settings.semanticMemoryLab', 'Semantic Memory Lab')}
+        description={t('settings.rebuildIndexDesc', 'The index is automatically maintained when memories are added or removed. Use rebuild when you want to recompute the full TF-IDF corpus from scratch.')}
+        action={
           <button
+            type="button"
             onClick={() => {
-              let index = getIndex()
-              if (index.size === 0) index = rebuildIndexFromStore()
-              setKbResults(searchSimilar(index, kbQuery, 10))
+              setKbRebuilding(true)
+              requestAnimationFrame(() => {
+                try {
+                  rebuildIndexFromStore()
+                  refreshKbStats()
+                } finally {
+                  setKbRebuilding(false)
+                }
+              })
             }}
-            className="px-4 py-2.5 rounded-xl bg-accent text-white text-sm font-medium hover:bg-accent/90 transition-colors"
+            disabled={kbRebuilding}
+            className="rounded-2xl border border-accent/18 bg-accent/10 px-4 py-3 text-sm font-semibold text-accent transition-colors hover:bg-accent/18 disabled:opacity-50"
+          >
+            <span className="inline-flex items-center gap-1.5">{kbRebuilding ? t('settings.rebuilding', 'Rebuilding…') : <><IconifyIcon name="ui-refresh" size={14} color="currentColor" /> {t('settings.rebuildIndex', 'Rebuild Index')}</>}</span>
+          </button>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <SettingsStat label={t('settings.totalMemories', 'Total Memories')} value={String(kbStats.totalMemories)} accent />
+          <SettingsStat label={t('settings.indexedEntries', 'Indexed Entries')} value={String(kbStats.indexSize)} />
+          <SettingsStat label={t('settings.vocabularySize', 'Vocabulary Size')} value={String(kbStats.vocabularySize)} />
+        </div>
+      </SettingsSection>
+
+      <SettingsSection
+        eyebrow={t('settings.testSemanticSearch', 'Test Semantic Search')}
+        title={t('settings.queryWorkbench', 'Query Workbench')}
+        description={t('settings.queryWorkbenchHint', 'Probe the in-browser semantic index with a sample query to see what memories would be recalled first.')}
+        action={
+          <button
+            type="button"
+            onClick={runSearch}
+            className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover"
           >
             {t('settings.search', 'Search')}
           </button>
+        }
+      >
+        <div className="flex gap-3">
+          <input
+            value={kbQuery}
+            onChange={(event) => setKbQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+                runSearch()
+              }
+            }}
+            placeholder={t('settings.searchPlaceholder', 'Enter a query to test semantic search…')}
+            className={settingsInputClass}
+          />
         </div>
-        {kbResults.length > 0 && (
-          <div className="space-y-2">
-            {kbResults.map((r) => (
-              <div key={r.id} className="flex items-start gap-3 text-xs bg-surface-2 rounded-lg px-3 py-2">
-                <span className="shrink-0 px-1.5 py-0.5 rounded bg-accent/15 text-accent font-mono">{r.score.toFixed(3)}</span>
-                <span className="text-text-secondary break-all">{r.content}</span>
-              </div>
-            ))}
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 px-4 py-3">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.resultCount', 'Result Count')}</div>
+            <div className="mt-2 text-lg font-semibold text-text-primary">{kbResults.length}</div>
           </div>
-        )}
-        {kbQuery && kbResults.length === 0 && (
-          <p className="text-xs text-text-muted">{t('settings.noResults', 'No results. Try rebuilding the index or adding some memories first.')}</p>
-        )}
-      </div>
+          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 px-4 py-3">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.topScore', 'Top Score')}</div>
+            <div className="mt-2 text-lg font-semibold text-text-primary">{topScore.toFixed(3)}</div>
+          </div>
+        </div>
+
+        <div className="mt-5 space-y-3">
+          {kbResults.length > 0 ? (
+            kbResults.map((result) => (
+              <div key={result.id} className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1 text-[12px] leading-6 text-text-secondary wrap-break-word">{result.content}</div>
+                  <span className="shrink-0 rounded-full bg-accent/12 px-2.5 py-1 text-[10px] font-medium text-accent">{result.score.toFixed(3)}</span>
+                </div>
+              </div>
+            ))
+          ) : kbQuery ? (
+            <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
+                <IconifyIcon name="ui-search" size={18} color="currentColor" />
+              </div>
+              <p className="text-[12px] leading-relaxed text-text-muted">{t('settings.noResults', 'No results. Try rebuilding the index or adding some memories first.')}</p>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+              <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
+                <IconifyIcon name="ui-search" size={18} color="currentColor" />
+              </div>
+              <p className="text-[12px] leading-relaxed text-text-muted">{t('settings.searchReady', 'Enter a query to inspect how semantic recall will rank stored memories.')}</p>
+            </div>
+          )}
+        </div>
+      </SettingsSection>
     </div>
   )
 }

@@ -91,7 +91,16 @@ export function startListening(settings: VoiceSettings, callbacks: STTCallbacks)
   }
 
   recognition.onerror = (event: any) => {
-    callbacks.onError(event.error || 'Unknown speech recognition error')
+    const friendlyMessages: Record<string, string> = {
+      'network': 'Network connection failed — check your internet',
+      'no-speech': 'No speech detected — please try again',
+      'audio-capture': 'Microphone not available — check permissions',
+      'not-allowed': 'Microphone access denied — enable it in system settings',
+      'aborted': 'Speech recognition was cancelled',
+      'service-not-allowed': 'Speech service not available in this environment',
+    }
+    const code = event.error || 'unknown'
+    callbacks.onError(friendlyMessages[code] || `Speech recognition error: ${code}`)
   }
 
   recognition.onend = () => {
@@ -139,7 +148,9 @@ export function getAvailableVoices(lang?: string): SpeechSynthesisVoice[] {
  * Returns a promise that resolves when speaking is done.
  */
 export function speak(text: string, settings: VoiceSettings): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+  const TTS_TIMEOUT_MS = 30_000
+
+  const speechPromise = new Promise<void>((resolve, reject) => {
     if (!isSpeechSynthesisAvailable()) {
       reject(new Error('Speech synthesis not available'))
       return
@@ -154,10 +165,17 @@ export function speak(text: string, settings: VoiceSettings): Promise<void> {
     utterance.pitch = settings.pitch
     utterance.volume = settings.volume
 
-    // Try to use preferred voice
+    // Try to use preferred voice, with language-based fallback
     if (settings.voiceName) {
       const voice = speechSynthesis.getVoices().find((v) => v.name === settings.voiceName)
-      if (voice) utterance.voice = voice
+      if (voice) {
+        utterance.voice = voice
+      } else {
+        // Fallback: match by language prefix
+        const langPrefix = settings.language.split('-')[0]
+        const fallback = speechSynthesis.getVoices().find((v) => v.lang.startsWith(langPrefix))
+        if (fallback) utterance.voice = fallback
+      }
     }
 
     utterance.onend = () => resolve()
@@ -165,6 +183,15 @@ export function speak(text: string, settings: VoiceSettings): Promise<void> {
 
     speechSynthesis.speak(utterance)
   })
+
+  const timeoutPromise = new Promise<void>((_, reject) => {
+    setTimeout(() => {
+      speechSynthesis.cancel()
+      reject(new Error('Speech synthesis timed out after 30 seconds'))
+    }, TTS_TIMEOUT_MS)
+  })
+
+  return Promise.race([speechPromise, timeoutPromise])
 }
 
 /**

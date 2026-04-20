@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { Outlet } from 'react-router-dom'
 import { NavBar } from './NavBar'
 import { CommandPalette } from '@/components/CommandPalette'
+import { useI18n } from '@/hooks/useI18n'
 import { useAppStore } from '@/store/appStore'
 import { initWorkspacePath, loadSessionsFromWorkspace, loadSettingsFromWorkspace, loadExternalSkillsAndAgents } from '@/store/appStore'
 import { restoreChannelRuntime } from '@/services/channelMessageHandler'
@@ -9,6 +10,7 @@ import { getResolvedPluginEntryPoint, restoreInstalledPluginRuntime } from '@/se
 
 export function AppShell() {
   const channels = useAppStore((state) => state.channels)
+  const { t } = useI18n()
 
   // Initialize workspace path and load persisted sessions on mount
   useEffect(() => {
@@ -73,13 +75,13 @@ export function AppShell() {
   }, [channels])
 
   return (
-    <div role="application" aria-label="SUORA · 朔枢" className="w-screen h-screen flex bg-surface-0 text-text-primary overflow-hidden relative noise-overlay">
+    <div className="w-screen h-screen flex bg-surface-0 text-text-primary overflow-hidden relative noise-overlay">
       {/* Skip to main content — visible only on focus for keyboard users */}
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-9999 focus:px-4 focus:py-2 focus:bg-accent focus:text-white focus:rounded-lg focus:text-sm focus:font-medium"
       >
-        Skip to main content
+        {t('common.skipToContent', 'Skip to main content')}
       </a>
       {/* Ambient background glow — refined diffused lux */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
@@ -88,7 +90,7 @@ export function AppShell() {
         <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-175 h-87.5 rounded-full bg-accent/1 blur-[200px]" />
       </div>
       <NavBar />
-      <main id="main-content" className="flex-1 flex overflow-hidden relative z-1">
+      <main id="main-content" className="relative z-1 flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <Outlet />
       </main>
       <CommandPalette />

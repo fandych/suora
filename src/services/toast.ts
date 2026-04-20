@@ -20,20 +20,39 @@ interface ToastStore {
 }
 
 let _nextId = 1
+const MAX_TOASTS = 5
+const activeTimers = new Map<number, ReturnType<typeof setTimeout>>()
 
 export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
   push: (t) => {
     const id = _nextId++
-    set((state) => ({ toasts: [...state.toasts, { ...t, id }] }))
+    set((state) => {
+      let updated = [...state.toasts, { ...t, id }]
+      // Evict oldest toasts beyond the limit
+      while (updated.length > MAX_TOASTS) {
+        const evicted = updated.shift()
+        if (evicted) {
+          const timer = activeTimers.get(evicted.id)
+          if (timer) { clearTimeout(timer); activeTimers.delete(evicted.id) }
+        }
+      }
+      return { toasts: updated }
+    })
     if (t.durationMs > 0) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        activeTimers.delete(id)
         set((state) => ({ toasts: state.toasts.filter((x) => x.id !== id) }))
       }, t.durationMs)
+      activeTimers.set(id, timer)
     }
     return id
   },
-  dismiss: (id) => set((state) => ({ toasts: state.toasts.filter((x) => x.id !== id) })),
+  dismiss: (id) => {
+    const timer = activeTimers.get(id)
+    if (timer) { clearTimeout(timer); activeTimers.delete(id) }
+    set((state) => ({ toasts: state.toasts.filter((x) => x.id !== id) }))
+  },
 }))
 
 function push(kind: ToastKind, message: string, detail?: string, durationMs = 4500) {

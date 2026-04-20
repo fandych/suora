@@ -1,5 +1,7 @@
 // File-based agent persistence: {workspacePath}/agents/{agentId}.json
 import type { Agent } from '@/types'
+import { coerceAgent } from '@/utils/validators'
+import { logger } from '@/services/logger'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -33,10 +35,19 @@ export async function loadAgentsFromDisk(workspacePath: string): Promise<Agent[]
       try {
         const raw = await electron.invoke('fs:readFile', entry.path)
         if (typeof raw === 'string') {
-          agents.push(JSON.parse(raw) as Agent)
+          const parsed = JSON.parse(raw)
+          const agent = coerceAgent(parsed)
+          if (agent) {
+            agents.push(agent)
+          } else {
+            logger.warn('[agentFiles] Invalid agent shape — skipping', { path: entry.path })
+          }
         }
-      } catch {
-        // skip corrupt files
+      } catch (err) {
+        logger.warn('[agentFiles] Failed to load agent file — skipping', {
+          path: entry.path,
+          error: err instanceof Error ? err.message : String(err),
+        })
       }
     }
     return agents

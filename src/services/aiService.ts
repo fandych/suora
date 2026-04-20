@@ -110,7 +110,8 @@ function getProviderTypeName(providerType: string): string {
 
 function truncateStreamPayload(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value
-  return `${value.slice(0, maxLength)}... [truncated ${value.length - maxLength} chars]`
+  const truncatedChars = value.length - maxLength
+  return `${value.slice(0, maxLength)}\n[Note: Output truncated — ${truncatedChars} characters omitted from original ${value.length} characters]`
 }
 
 function safeSerializeStreamPayload(value: unknown, maxLength = MAX_STREAM_EVENT_PAYLOAD_LENGTH): string {

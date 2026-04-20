@@ -1,7 +1,19 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { useAppStore } from '@/store/appStore'
 import { getElectron } from './shared'
+import {
+  SettingsSection,
+  SettingsStat,
+  SettingsToggleRow,
+  settingsDangerButtonClass,
+  settingsFieldCardClass,
+  settingsPrimaryButtonClass,
+  settingsSecondaryButtonClass,
+  settingsSurfaceCardClass,
+} from './panelUi'
 
 interface PerfMetrics {
   memory: { heapUsed: number; heapTotal: number; rss: number; external: number }
@@ -10,17 +22,16 @@ interface PerfMetrics {
   versions: Record<string, string>
 }
 
-function SectionHeader({ icon, title }: { icon: string; title: string }) {
-  return (
-    <div className="flex items-center gap-2 pb-2 border-b border-border/50">
-      <IconifyIcon name={icon} size={16} color="currentColor" />
-      <h3 className="text-sm font-semibold text-text-primary">{title}</h3>
-    </div>
-  )
+function getUsageMeterTone(pct: number): string {
+  if (pct > 80) return 'is-danger'
+  if (pct > 60) return 'is-warning'
+  return 'is-success'
 }
 
 export function SystemSettings() {
   const { t } = useI18n()
+  const navigate = useNavigate()
+  const setOnboarding = useAppStore((state) => state.setOnboarding)
   const [metrics, setMetrics] = useState<PerfMetrics | null>(null)
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
@@ -34,7 +45,9 @@ export function SystemSettings() {
     try {
       const result = await electron.invoke('perf:getMetrics') as PerfMetrics
       setMetrics(result)
-    } catch { /* ignore */ }
+    } catch {
+      // ignore
+    }
     setLoading(false)
   }, [electron])
 
@@ -43,17 +56,21 @@ export function SystemSettings() {
     try {
       const result = await electron.invoke('crash:getLogs') as Array<{ file: string; timestamp: string; error: string }>
       setCrashLogs(result || [])
-    } catch { /* ignore */ }
+    } catch {
+      // ignore
+    }
   }, [electron])
 
   useEffect(() => {
-    fetchMetrics()
-    fetchCrashLogs()
+    void fetchMetrics()
+    void fetchCrashLogs()
   }, [fetchMetrics, fetchCrashLogs])
 
   useEffect(() => {
     if (!autoRefresh) return
-    const interval = setInterval(fetchMetrics, 3000)
+    const interval = setInterval(() => {
+      void fetchMetrics()
+    }, 3000)
     return () => clearInterval(interval)
   }, [autoRefresh, fetchMetrics])
 
@@ -64,136 +81,202 @@ export function SystemSettings() {
   }
 
   const formatUptime = (seconds: number) => {
-    const h = Math.floor(seconds / 3600)
-    const m = Math.floor((seconds % 3600) / 60)
-    const s = Math.floor(seconds % 60)
-    return h > 0 ? `${h}h ${m}m ${s}s` : m > 0 ? `${m}m ${s}s` : `${s}s`
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const remainingSeconds = Math.floor(seconds % 60)
+    return hours > 0 ? `${hours}h ${minutes}m ${remainingSeconds}s` : minutes > 0 ? `${minutes}m ${remainingSeconds}s` : `${remainingSeconds}s`
   }
 
+  const rssValue = metrics ? formatBytes(metrics.memory.rss) : '—'
+  const uptimeValue = metrics ? formatUptime(metrics.uptime) : '—'
+
   return (
-    <div className="space-y-8">
-      {/* ─── About ─── */}
-      <section className="space-y-3">
-        <SectionHeader icon="settings-about" title={t('settings.about', 'About')} />
-        <div className="rounded-xl border border-border p-4 bg-surface-0/30 flex items-center gap-4">
-          <div className="w-12 h-12 rounded-xl bg-accent/15 flex items-center justify-center shrink-0">
-            <IconifyIcon name="ui-sparkles" size={24} color="var(--t-accent)" />
+    <div className="space-y-6">
+      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+          <div className="max-w-3xl">
+            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.system', 'System')}</div>
+            <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{t('settings.systemWorkbench', 'Runtime & Diagnostics')}</h2>
+            <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
+              {t('settings.systemWorkbenchDesc', 'Inspect the desktop runtime, replay onboarding, monitor resource usage, and clean up crash traces from the current machine.')}
+            </p>
           </div>
-          <div>
-            <p className="text-sm font-semibold text-text-primary">Suora <span className="text-text-muted font-normal">v0.1.0</span></p>
-            <p className="text-xs text-text-muted mt-0.5">Electron + React + Vite + AI SDK</p>
-            <p className="text-xs text-text-muted">{t('settings.aboutDesc', 'Multi-model AI desktop application with agents, skills, and plugins.')}</p>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
+            <SettingsStat label={t('settings.runtime', 'Runtime')} value={electron ? 'Electron' : 'Browser'} accent />
+            <SettingsStat label={t('settings.rss', 'RSS')} value={rssValue} />
+            <SettingsStat label={t('settings.uptime', 'Uptime')} value={uptimeValue} />
+            <SettingsStat label={t('settings.crashLogs', 'Crash Logs')} value={String(crashLogs.length)} />
           </div>
         </div>
       </section>
 
-      {/* ─── Performance ─── */}
-      {electron ? (
-        <section className="space-y-4">
-          <SectionHeader icon="settings-performance" title={t('settings.performance', 'Performance')} />
-          <div className="flex items-center gap-2">
-            <button onClick={fetchMetrics} disabled={loading}
-              className="px-3 py-1.5 text-xs font-medium bg-accent text-white rounded-lg hover:bg-accent/80 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5" aria-label="Refresh">
-              {loading ? <><IconifyIcon name="ui-loading" size={12} color="currentColor" /> {t('settings.loading', 'Loading...')}</> : <><IconifyIcon name="ui-refresh" size={12} color="currentColor" /> {t('settings.refresh', 'Refresh')}</>}
-            </button>
-            <button onClick={() => setAutoRefresh(!autoRefresh)}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${autoRefresh ? 'bg-green-500/15 text-green-400 border-green-500/20' : 'bg-surface-3 text-text-muted border-border'}`} aria-label="Toggle auto-refresh">
-              {autoRefresh ? t('settings.autoRefreshOn', '● Auto (3s)') : t('settings.autoRefreshOff', '○ Auto OFF')}
-            </button>
+      <SettingsSection
+        eyebrow={t('settings.about', 'About')}
+        title={t('settings.productIdentity', 'Product Identity')}
+        description={t('settings.productIdentityDesc', 'Quick reference for the current desktop shell, version surface, and the stack the renderer is running on.')}
+      >
+        <div className={`${settingsFieldCardClass} flex flex-col gap-4 sm:flex-row sm:items-center`}>
+          <div className="flex h-14 w-14 items-center justify-center rounded-[22px] border border-accent/18 bg-accent/10 text-accent shadow-[0_12px_32px_rgba(var(--t-accent-rgb),0.14)]">
+            <IconifyIcon name="ui-sparkles" size={28} color="currentColor" />
           </div>
+          <div>
+            <p className="text-sm font-semibold text-text-primary">Suora <span className="font-normal text-text-muted">v0.1.0</span></p>
+            <p className="mt-1 text-[12px] text-text-muted">Electron + React + Vite + AI SDK</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('settings.aboutDesc', 'Multi-model AI desktop application with agents, skills, and plugins.')}</p>
+          </div>
+        </div>
+      </SettingsSection>
 
-          {metrics && (<>
-            <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-              <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">{t('settings.memoryUsage', 'Memory')}</h4>
-              <div className="grid grid-cols-4 gap-2">
-                {([
-                  { label: 'Heap Used', value: metrics.memory.heapUsed, pct: Math.round((metrics.memory.heapUsed / metrics.memory.heapTotal) * 100) },
-                  { label: 'Heap Total', value: metrics.memory.heapTotal, pct: null },
-                  { label: 'RSS', value: metrics.memory.rss, pct: null },
-                  { label: 'External', value: metrics.memory.external, pct: null },
-                ] as const).map(({ label, value, pct }) => (
-                  <div key={label} className="rounded-lg bg-surface-1 p-2.5">
-                    <p className="text-[10px] uppercase tracking-wider text-text-muted">{label}</p>
-                    <p className="text-sm font-mono font-semibold text-text-primary mt-0.5">{formatBytes(value)}</p>
-                    {pct !== null && (
-                      <div className="mt-1.5">
-                        <div className="w-full h-1 bg-surface-3 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full transition-all ${pct > 80 ? 'bg-red-400' : pct > 60 ? 'bg-yellow-400' : 'bg-green-400'}`}
-                            style={{ width: `${pct}%` }} role="progressbar" aria-label={`${pct}%`} />
-                        </div>
-                        <p className="text-[10px] text-text-muted mt-0.5">{pct}%</p>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+      <SettingsSection
+        eyebrow={t('settings.setup', 'Setup')}
+        title={t('settings.replayOnboarding', 'Replay Onboarding')}
+        description={t('settings.replayOnboardingDesc', 'Jump back into the guided first-run flow to reconfigure basics, provider setup, and recommended workbench entry points.')}
+      >
+        <div className={`${settingsFieldCardClass} flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between`}>
+          <div>
+            <p className="text-sm font-semibold text-text-primary">{t('settings.onboardingTitle', 'Onboarding Walkthrough')}</p>
+            <p className="mt-1 text-[12px] leading-relaxed text-text-muted">{t('settings.onboardingDesc', 'Replay the first-run setup guide and jump back into the recommended starting flow.')}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setOnboarding({ completed: false, skipped: false, currentStep: 0 })
+              navigate('/chat')
+            }}
+            className={settingsPrimaryButtonClass}
+          >
+            {t('settings.rerunOnboarding', 'Re-run Walkthrough')}
+          </button>
+        </div>
+      </SettingsSection>
 
-            <div className="grid grid-cols-3 gap-2">
-              <div className="rounded-lg bg-surface-1 border border-border p-3">
-                <p className="text-[10px] uppercase tracking-wider text-text-muted">CPU User</p>
-                <p className="text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.user / 1000).toFixed(1)}ms</p>
-              </div>
-              <div className="rounded-lg bg-surface-1 border border-border p-3">
-                <p className="text-[10px] uppercase tracking-wider text-text-muted">CPU System</p>
-                <p className="text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.system / 1000).toFixed(1)}ms</p>
-              </div>
-              <div className="rounded-lg bg-surface-1 border border-border p-3">
-                <p className="text-[10px] uppercase tracking-wider text-text-muted">{t('settings.uptime', 'Uptime')}</p>
-                <p className="text-sm font-mono font-semibold text-text-primary">{formatUptime(metrics.uptime)}</p>
-              </div>
-            </div>
-
-            {metrics.versions && (
-              <div className="rounded-xl border border-border p-4 bg-surface-0/30">
-                <h4 className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-2">{t('settings.runtimeVersions', 'Runtime Versions')}</h4>
-                <div className="grid grid-cols-3 gap-1.5">
-                  {Object.entries(metrics.versions).map(([name, version]) => (
-                    <div key={name} className="flex items-center justify-between rounded-lg bg-surface-1 px-3 py-1.5">
-                      <span className="text-[11px] text-text-muted">{name}</span>
-                      <span className="text-[11px] font-mono text-text-primary">{version}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </>)}
-        </section>
-      ) : (
-        <section className="space-y-3">
-          <SectionHeader icon="settings-performance" title={t('settings.performance', 'Performance')} />
-          <p className="text-xs text-text-muted">{t('settings.perfNotAvailable', 'Performance monitoring is only available in the Electron desktop app.')}</p>
-        </section>
-      )}
-
-      {/* ─── Crash Logs ─── */}
-      {electron && (
-        <section className="space-y-3">
-          <div className="flex items-center justify-between">
-            <SectionHeader icon="ui-crash" title={t('settings.crashLogs', 'Crash Logs')} />
-            {crashLogs.length > 0 && (
-              <button onClick={async () => { await electron.invoke('crash:clearLogs'); setCrashLogs([]) }}
-                className="px-3 py-1 text-[10px] font-medium bg-danger/10 text-danger rounded-lg hover:bg-danger/20 transition-colors">
-                {t('settings.clearAll', 'Clear')}
+      <SettingsSection
+        eyebrow={t('settings.performance', 'Performance')}
+        title={t('settings.liveRuntimeMetrics', 'Live Runtime Metrics')}
+        description={t('settings.liveRuntimeMetricsDesc', 'Sample memory, CPU, and runtime version data from the Electron main process when the desktop shell is available.')}
+      >
+        {!electron ? (
+          <div className="rounded-3xl border border-dashed border-border-subtle/55 bg-surface-2/40 px-4 py-8 text-center text-[12px] text-text-muted">
+            {t('settings.perfNotAvailable', 'Performance monitoring is only available in the Electron desktop app.')}
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap gap-3">
+              <button type="button" onClick={() => void fetchMetrics()} disabled={loading} className={settingsPrimaryButtonClass}>
+                <IconifyIcon name={loading ? 'ui-loading' : 'ui-refresh'} size={14} color="currentColor" />
+                {loading ? t('settings.loading', 'Loading...') : t('settings.refresh', 'Refresh')}
               </button>
+              <button type="button" onClick={() => setAutoRefresh(!autoRefresh)} className={settingsSecondaryButtonClass}>
+                {autoRefresh ? t('settings.autoRefreshOn', 'Auto refresh on (3s)') : t('settings.autoRefreshOff', 'Auto refresh off')}
+              </button>
+            </div>
+
+            <SettingsToggleRow
+              label={t('settings.autoRefresh', 'Auto refresh metrics')}
+              description={t('settings.autoRefreshMetricsDesc', 'Continuously refresh memory and CPU counters every three seconds while this page is open.')}
+              checked={autoRefresh}
+              onChange={() => setAutoRefresh(!autoRefresh)}
+            />
+
+            {metrics && (
+              <div className="space-y-4">
+                <div className={settingsFieldCardClass}>
+                  <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.memoryUsage', 'Memory')}</div>
+                  <div className="grid gap-3 lg:grid-cols-4">
+                    {([
+                      { label: 'Heap Used', value: metrics.memory.heapUsed, pct: Math.round((metrics.memory.heapUsed / metrics.memory.heapTotal) * 100) },
+                      { label: 'Heap Total', value: metrics.memory.heapTotal, pct: null },
+                      { label: 'RSS', value: metrics.memory.rss, pct: null },
+                      { label: 'External', value: metrics.memory.external, pct: null },
+                    ] as const).map(({ label, value, pct }) => (
+                      <div key={label} className={settingsSurfaceCardClass}>
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</p>
+                        <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{formatBytes(value)}</p>
+                        {pct !== null && (
+                          <div className="mt-3">
+                            <progress value={pct} max={100} className={`memory-usage-meter ${getUsageMeterTone(pct)}`} aria-label={`${label} usage ${pct}%`} />
+                            <p className="mt-1 text-[10px] text-text-muted">{pct}%</p>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className={settingsFieldCardClass}>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">CPU User</p>
+                    <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.user / 1000).toFixed(1)}ms</p>
+                  </div>
+                  <div className={settingsFieldCardClass}>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">CPU System</p>
+                    <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.system / 1000).toFixed(1)}ms</p>
+                  </div>
+                  <div className={settingsFieldCardClass}>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.uptime', 'Uptime')}</p>
+                    <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{formatUptime(metrics.uptime)}</p>
+                  </div>
+                </div>
+
+                {metrics.versions && (
+                  <div className={settingsFieldCardClass}>
+                    <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.runtimeVersions', 'Runtime Versions')}</div>
+                    <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+                      {Object.entries(metrics.versions).map(([name, version]) => (
+                        <div key={name} className={`${settingsSurfaceCardClass} flex items-center justify-between gap-3`}>
+                          <span className="text-[11px] text-text-muted">{name}</span>
+                          <span className="text-[11px] font-mono text-text-primary">{version}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </div>
+        )}
+      </SettingsSection>
+
+      {electron && (
+        <SettingsSection
+          eyebrow={t('settings.crashLogs', 'Crash Logs')}
+          title={t('settings.failureArchive', 'Failure Archive')}
+          description={t('settings.failureArchiveDesc', 'Review recent desktop crashes, inspect the recorded error payload, and clear the archive once the issue is understood.')}
+          action={crashLogs.length > 0 ? (
+            <button
+              type="button"
+              onClick={async () => {
+                await electron.invoke('crash:clearLogs')
+                setCrashLogs([])
+              }}
+              className={settingsDangerButtonClass}
+            >
+              {t('settings.clearAll', 'Clear')}
+            </button>
+          ) : undefined}
+        >
           {crashLogs.length === 0 ? (
-            <p className="text-xs text-text-muted"><IconifyIcon name="ui-check-circle" size={12} color="currentColor" /> {t('settings.noCrashLogs', 'No crash logs found.')}</p>
+            <div className="rounded-3xl border border-dashed border-border-subtle/55 bg-surface-2/40 px-4 py-8 text-center text-[12px] text-text-muted">
+              <span className="inline-flex items-center gap-2 text-text-secondary">
+                <IconifyIcon name="ui-check-circle" size={14} color="currentColor" />
+                {t('settings.noCrashLogs', 'No crash logs found.')}
+              </span>
+            </div>
           ) : (
-            <div className="space-y-1.5 max-h-48 overflow-y-auto">
-              {crashLogs.map((log, i) => (
-                <div key={i} className="rounded-lg bg-red-500/5 border border-red-500/10 p-2.5">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-text-muted font-mono">{log.file}</span>
-                    <span className="text-[10px] text-text-muted">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}</span>
+            <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+              {crashLogs.map((log, index) => (
+                <div key={index} className="rounded-3xl border border-red-500/12 bg-red-500/5 p-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <span className="font-mono text-[11px] text-text-muted">{log.file}</span>
+                    <span className="text-[11px] text-text-muted">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}</span>
                   </div>
-                  <p className="text-xs text-red-400 mt-1 font-mono break-all">{log.error || 'Unknown error'}</p>
+                  <p className="mt-3 wrap-break-word font-mono text-[12px] leading-6 text-red-400">{log.error || 'Unknown error'}</p>
                 </div>
               ))}
             </div>
           )}
-        </section>
+        </SettingsSection>
       )}
     </div>
   )

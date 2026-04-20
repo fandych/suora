@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { generateId } from '@/utils/helpers'
@@ -6,17 +6,68 @@ import type { Session } from '@/types'
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { confirm } from '@/services/confirmDialog'
+import { toast } from '@/services/toast'
+
+function formatSessionRelativeTime(ts: number, locale = 'en'): string {
+  const diffSeconds = Math.round((ts - Date.now()) / 1000)
+  const absSeconds = Math.abs(diffSeconds)
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+
+  if (absSeconds < 45) return formatter.format(0, 'second')
+  if (absSeconds < 3600) return formatter.format(Math.round(diffSeconds / 60), 'minute')
+  if (absSeconds < 86400) return formatter.format(Math.round(diffSeconds / 3600), 'hour')
+  if (absSeconds < 604800) return formatter.format(Math.round(diffSeconds / 86400), 'day')
+
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(ts)
+}
+
+function getSessionPreview(session: Session, t: (key: string, fallback: string) => string): string {
+  const lastMessage = session.messages[session.messages.length - 1]
+  if (!lastMessage) return t('sessions.noPreview', 'No messages yet')
+
+  const content = lastMessage.content.replace(/\s+/g, ' ').trim()
+  if (content) return content
+
+  if ((lastMessage.attachments?.length ?? 0) > 0) {
+    return t('sessions.attachmentPreview', 'Attachment-only message')
+  }
+
+  return t('sessions.emptyPreview', 'Empty message')
+}
+
+function groupSessionsByDate(sessions: Session[], t: (key: string, fallback: string) => string) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
+
+  const groups: Array<{ label: string; items: Session[] }> = []
+  const todayItems = sessions.filter((session) => session.updatedAt >= today.getTime())
+  const yesterdayItems = sessions.filter((session) => session.updatedAt >= yesterday.getTime() && session.updatedAt < today.getTime())
+  const olderItems = sessions.filter((session) => session.updatedAt < yesterday.getTime())
+
+  if (todayItems.length > 0) groups.push({ label: t('sessions.today', 'Today'), items: todayItems })
+  if (yesterdayItems.length > 0) groups.push({ label: t('sessions.yesterday', 'Yesterday'), items: yesterdayItems })
+  if (olderItems.length > 0) groups.push({ label: t('sessions.earlier', 'Earlier'), items: olderItems })
+
+  return groups
+}
 
 export function SessionList({ width }: { width?: number }) {
-  const { sessions, activeSessionId, addSession, openSessionTab, removeSession, updateSession, models, agents, selectedModel, selectedAgent } = useAppStore()
-  const { t } = useI18n()
+  const { sessions, activeSessionId, addSession, openSessionTab, openSessionTabs, removeSession, updateSession, models, agents, selectedModel, selectedAgent } = useAppStore()
+  const { t, locale } = useI18n()
   const [searchQuery, setSearchQuery] = useState('')
+  const deferredSearchQuery = useDeferredValue(searchQuery)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editTitle, setEditTitle] = useState('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
 
   const handleNewSession = () => {
+    if (!selectedModel) {
+      toast.warning('No model configured', 'Please add a model provider in Models settings first.')
+      return
+    }
     const session: Session = {
       id: generateId('session'),
       title: t('chat.newChat', 'New Chat'),
@@ -29,33 +80,35 @@ export function SessionList({ width }: { width?: number }) {
     addSession(session)
   }
 
-  // Filter sessions by search query
-  const filteredSessions = searchQuery.trim()
-    ? sessions.filter((s) => {
-        const q = searchQuery.toLowerCase()
-        return s.title.toLowerCase().includes(q) ||
-          s.messages.some((m) => m.content.toLowerCase().includes(q))
-      })
-    : sessions
+  const totalMessages = useMemo(
+    () => sessions.reduce((sum, session) => sum + session.messages.length, 0),
+    [sessions],
+  )
 
-  // Group sessions by date
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
+  const filteredSessions = useMemo(() => {
+    const query = deferredSearchQuery.trim().toLowerCase()
+    if (!query) return sessions
 
-  const groups: { label: string; items: Session[] }[] = []
-  const todayItems = filteredSessions.filter((s) => s.updatedAt >= today.getTime())
-  const yesterdayItems = filteredSessions.filter((s) => s.updatedAt >= yesterday.getTime() && s.updatedAt < today.getTime())
-  const olderItems = filteredSessions.filter((s) => s.updatedAt < yesterday.getTime())
+    return sessions.filter((session) =>
+      session.title.toLowerCase().includes(query) ||
+      session.messages.some((message) => message.content.toLowerCase().includes(query)),
+    )
+  }, [sessions, deferredSearchQuery])
 
-  if (todayItems.length) groups.push({ label: t('sessions.today', 'Today'), items: todayItems })
-  if (yesterdayItems.length) groups.push({ label: t('sessions.yesterday', 'Yesterday'), items: yesterdayItems })
-  if (olderItems.length) groups.push({ label: t('sessions.earlier', 'Earlier'), items: olderItems })
+  const orderedSessions = useMemo(
+    () => [...filteredSessions].sort((a, b) => b.updatedAt - a.updatedAt),
+    [filteredSessions],
+  )
 
-  // Handle rename
+  const groups = useMemo(
+    () => groupSessionsByDate(orderedSessions, t),
+    [orderedSessions, t],
+  )
+
+  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null
+
   const startRename = (sessionId: string) => {
-    const session = sessions.find((s) => s.id === sessionId)
+    const session = sessions.find((item) => item.id === sessionId)
     if (!session) return
     setEditingId(sessionId)
     setEditTitle(session.title)
@@ -70,13 +123,15 @@ export function SessionList({ width }: { width?: number }) {
     setEditingId(null)
   }
 
-  // Handle context menu
   const handleContextMenu = (e: React.MouseEvent, sessionId: string) => {
     e.preventDefault()
-    setContextMenu({ x: e.clientX, y: e.clientY, sessionId })
+    const MENU_WIDTH = 160
+    const MENU_HEIGHT = 176
+    const x = Math.min(e.clientX, window.innerWidth - MENU_WIDTH - 8)
+    const y = Math.min(e.clientY, window.innerHeight - MENU_HEIGHT - 8)
+    setContextMenu({ x, y, sessionId })
   }
 
-  // Close context menu on outside click
   useEffect(() => {
     if (!contextMenu) return
     const handleClick = () => setContextMenu(null)
@@ -105,109 +160,213 @@ export function SessionList({ width }: { width?: number }) {
         </button>
       }
     >
-      {/* Search box */}
-      <div className="px-4 pt-4 pb-2">
-        <div className="relative">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/40">
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <input
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={t('sessions.search', 'Search sessions...')}
-            className="w-full pl-10 pr-4 py-3 text-[14px] bg-surface-2/40 border border-border-subtle/40 rounded-[14px] text-text-primary placeholder-text-muted/40 focus:outline-none focus:ring-1 focus:ring-accent/25 focus:border-accent/20 transition-all"
-          />
-          {searchQuery && (
-            <button type="button" title="Clear search" onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"><IconifyIcon name="ui-close" size={16} color="currentColor" /></button>
+      <div className="px-3 pb-4 pt-1 space-y-3">
+        <div className="rounded-[28px] border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.07)]">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">
+                {t('sessions.workspace', 'Workspace')}
+              </div>
+              <div className="mt-1 text-[18px] font-semibold text-text-primary">
+                {t('sessions.controlDeck', 'Conversation Deck')}
+              </div>
+              <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/78">
+                {t('sessions.deckHint', 'Switch context fast, scan message history, and keep active threads close at hand.')}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
+              <div className="text-xl font-semibold text-text-primary tabular-nums">{sessions.length}</div>
+            </div>
+          </div>
+
+          <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.open', 'Open')}</div>
+              <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{openSessionTabs.length}</div>
+            </div>
+            <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('sessions.messages', 'Messages')}</div>
+              <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{totalMessages}</div>
+            </div>
+            <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('sessions.active', 'Active')}</div>
+              <div className="mt-1 truncate text-[15px] font-semibold text-text-primary">{activeSession?.title ?? '—'}</div>
+            </div>
+          </div>
+
+          {activeSession && (
+            <div className="mt-4 rounded-[22px] border border-border-subtle/45 bg-surface-0/58 p-3.5 shadow-sm">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('sessions.liveConversation', 'Live conversation')}</div>
+              <div className="mt-2 truncate text-[13px] font-semibold text-text-primary">{activeSession.title}</div>
+              <div className="mt-2 flex items-center gap-2 text-[11px] text-text-muted">
+                <span>{formatSessionRelativeTime(activeSession.updatedAt, locale)}</span>
+                <span className="h-1 w-1 rounded-full bg-text-muted/30" />
+                <span>{activeSession.messages.length} {t('sessions.msgs', 'msgs')}</span>
+              </div>
+            </div>
           )}
         </div>
-      </div>
 
-      <div className="p-3">
+        <div className="rounded-[24px] border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+          <div className="relative">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/40">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t('sessions.search', 'Search sessions...')}
+              className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-10 text-[13px] text-text-primary placeholder-text-muted/45 focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                title={t('sessions.clearSearch', 'Clear search')}
+                aria-label={t('sessions.clearSearch', 'Clear search')}
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-secondary"
+              >
+                <IconifyIcon name="ui-close" size={16} color="currentColor" />
+              </button>
+            )}
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+            <span>{filteredSessions.length} {t('common.results', 'results')}</span>
+            {searchQuery && <span>{sessions.length} {t('common.total', 'total')}</span>}
+          </div>
+        </div>
+
         {filteredSessions.length === 0 && (
-          <div className="px-4 py-16 text-center">
-            <div className="w-14 h-14 rounded-[18px] bg-surface-3/30 flex items-center justify-center mx-auto mb-4 border border-border-subtle/30">
+          <div className="rounded-[26px] border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-14 text-center">
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[18px] border border-border-subtle/30 bg-surface-3/30">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-muted/40"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
-            <p className="text-[14px] text-text-muted/70 leading-relaxed">{searchQuery ? t('sessions.noMatching', 'No matching sessions') : t('sessions.noConversations', 'No conversations yet')}</p>
-            {!searchQuery && <p className="text-[11px] text-text-muted/40 mt-2">{t('sessions.clickNewToStart', 'Click + New to start')}</p>}
+            <p className="text-[13px] text-text-muted/75 leading-relaxed">{searchQuery ? t('sessions.noMatching', 'No matching sessions') : t('sessions.noConversations', 'No conversations yet')}</p>
+            {!searchQuery && <p className="mt-2 text-[11px] text-text-muted/45">{t('sessions.clickNewToStart', 'Click + New to start')}</p>}
           </div>
         )}
+
         {groups.map((group) => (
-          <div key={group.label} className="mb-4">
-            <div className="font-display text-[10px] font-semibold text-text-muted/40 uppercase tracking-[0.18em] px-4 mb-2">{group.label}</div>
+          <section key={group.label} className="space-y-2">
+            <div className="flex items-center justify-between px-1">
+              <div className="font-display text-[10px] font-semibold text-text-muted/40 uppercase tracking-[0.18em]">{group.label}</div>
+              <div className="text-[10px] text-text-muted/40">{group.items.length}</div>
+            </div>
+
             {group.items.map((session) => {
-              const { agent } = getSessionMeta(session)
+              const { agent, model } = getSessionMeta(session)
               const isActive = activeSessionId === session.id
               const msgCount = session.messages.length
               const isEditing = editingId === session.id
+              const isOpen = openSessionTabs.includes(session.id)
+              const preview = getSessionPreview(session, t)
+
               return (
                 <div
                   key={session.id}
-                  onClick={() => { if (!isEditing) openSessionTab(session.id) }}
                   onContextMenu={(e) => handleContextMenu(e, session.id)}
-                  onDoubleClick={() => startRename(session.id)}
-                  className={`group flex items-center justify-between px-4 py-3.5 rounded-[14px] cursor-pointer transition-all duration-200 mb-1 ${
+                  className={`group rounded-[24px] border transition-all duration-200 ${
                     isActive
-                      ? 'bg-accent/8 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]'
-                      : 'text-text-secondary hover:bg-surface-3/30 hover:text-text-primary'
+                      ? 'border-accent/20 bg-accent/10 text-text-primary shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
+                      : 'border-transparent bg-surface-1/18 text-text-secondary hover:border-border-subtle/60 hover:bg-surface-3/55 hover:text-text-primary'
                   }`}
                 >
-                  <div className="min-w-0 flex-1">
-                    {isEditing ? (
+                  {isEditing ? (
+                    <div className="min-w-0 flex-1 p-3.5">
                       <input
                         ref={editInputRef}
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
                         onBlur={commitRename}
                         onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitRename(); if (e.key === 'Escape') setEditingId(null) }}
-                        aria-label="Session title"
-                        className="text-[14px] font-medium w-full bg-surface-0/80 border border-accent/30 rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-accent/30 text-text-primary"
+                        aria-label={t('sessions.titleField', 'Session title')}
+                        className="w-full rounded-2xl border border-accent/30 bg-surface-0/80 px-3.5 py-3 text-[13px] font-medium text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                         onClick={(e) => e.stopPropagation()}
                       />
-                    ) : (
-                      <div className="text-[14px] truncate font-medium leading-snug">{session.title}</div>
-                    )}
-                    <div className="flex items-center gap-2.5 mt-1">
-                      {agent && <span className="text-[11px] text-text-muted/60 truncate inline-flex items-center gap-1.5"><AgentAvatar avatar={agent.avatar} size={13} /> {agent.name}</span>}
-                      {msgCount > 0 && <span className="text-[10px] text-text-muted/30 font-medium">{msgCount} {t('sessions.msgs', 'msgs')}</span>}
                     </div>
-                  </div>
-                  <button
-                    type="button"
-                    title={t('sessions.removeSession', 'Delete session')}
-                    onClick={async (e) => {
-                      e.stopPropagation()
-                      const ok = await confirm({
-                        title: t('sessions.deleteTitle', 'Delete conversation?'),
-                        body: t(
-                          'sessions.deleteBody',
-                          `"${session.title}" and its ${session.messages.length} messages will be permanently deleted.`,
-                        ),
-                        danger: true,
-                        confirmText: t('common.delete', 'Delete'),
-                      })
-                      if (ok) removeSession(session.id)
-                    }}
-                    className="opacity-0 group-hover:opacity-100 text-text-muted hover:text-danger p-1.5 rounded-lg hover:bg-danger/10 transition-all duration-150 shrink-0"
-                  >
-                    <IconifyIcon name="ui-close" size={16} color="currentColor" />
-                  </button>
+                  ) : (
+                    <div className="flex items-start gap-2 p-3.5">
+                      <button
+                        type="button"
+                        onClick={() => openSessionTab(session.id)}
+                        onDoubleClick={() => startRename(session.id)}
+                        aria-current={isActive ? 'page' : undefined}
+                        className="min-w-0 flex flex-1 items-start gap-3 text-left focus:outline-none"
+                      >
+                        <div className={`mt-0.5 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border shadow-sm ${
+                          isActive
+                            ? 'border-accent/22 bg-accent/12 text-accent'
+                            : 'border-border-subtle/45 bg-surface-0/78 text-text-muted'
+                        }`}>
+                          {agent ? <AgentAvatar avatar={agent.avatar} size={18} /> : <IconifyIcon name="ui-sparkles" size={16} color="currentColor" />}
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <div className="truncate text-[13px] font-semibold text-text-primary">{session.title}</div>
+                            {isOpen && (
+                              <span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-[9px] font-semibold text-accent">
+                                {t('sessions.live', 'Live')}
+                              </span>
+                            )}
+                          </div>
+
+                          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/78">{preview}</p>
+
+                          <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
+                            {agent && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-surface-0/70 px-2 py-0.5">
+                                <AgentAvatar avatar={agent.avatar} size={12} />
+                                <span className="truncate max-w-24">{agent.name}</span>
+                              </span>
+                            )}
+                            {model && <span className="rounded-full bg-surface-0/70 px-2 py-0.5 truncate max-w-28">{model.name}</span>}
+                            <span className="rounded-full bg-surface-0/70 px-2 py-0.5">{msgCount} {t('sessions.msgs', 'msgs')}</span>
+                          </div>
+                        </div>
+                      </button>
+
+                      <div className="flex shrink-0 flex-col items-end gap-2 pl-1.5">
+                        <span className="text-[10px] text-text-muted/52">{formatSessionRelativeTime(session.updatedAt, locale)}</span>
+                        <button
+                          type="button"
+                          title={t('sessions.removeSession', 'Delete session')}
+                          aria-label={`${t('sessions.removeSession', 'Delete session')}: ${session.title}`}
+                          onClick={async (e) => {
+                            e.stopPropagation()
+                            const ok = await confirm({
+                              title: t('sessions.deleteTitle', 'Delete conversation?'),
+                              body: t(
+                                'sessions.deleteBody',
+                                `"${session.title}" and its ${session.messages.length} messages will be permanently deleted.`,
+                              ),
+                              danger: true,
+                              confirmText: t('common.delete', 'Delete'),
+                            })
+                            if (ok) removeSession(session.id)
+                          }}
+                          className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/68 text-text-muted/70 transition-colors hover:bg-danger/10 hover:text-danger"
+                        >
+                          <IconifyIcon name="ui-close" size={15} color="currentColor" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )
             })}
-          </div>
+          </section>
         ))}
       </div>
 
-      {/* Context Menu */}
       {contextMenu && (
         <div
-          className="fixed z-50 bg-surface-2/95 backdrop-blur-xl border border-border/60 rounded-[14px] shadow-2xl py-1.5 min-w-44 animate-fade-in-scale"
+          className="fixed z-50 min-w-44 rounded-[16px] border border-border/60 bg-surface-2/95 py-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale"
           {...{ style: { left: contextMenu.x, top: contextMenu.y } }}
           onClick={(e) => e.stopPropagation()}
         >
-          <button type="button" onClick={() => startRename(contextMenu.sessionId)} className="w-full text-left px-4 py-2.5 text-[13px] text-text-secondary hover:bg-surface-3/50 hover:text-text-primary transition-colors flex items-center gap-2.5">
+          <button type="button" onClick={() => startRename(contextMenu.sessionId)} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary">
             <IconifyIcon name="ui-edit" size={15} color="currentColor" /> {t('common.rename', 'Rename')}
           </button>
           <button
@@ -220,12 +379,14 @@ export function SessionList({ width }: { width?: number }) {
                 const a = document.createElement('a')
                 a.href = url
                 a.download = `session-${session.title.replace(/\s+/g, '-')}.json`
+                document.body.appendChild(a)
                 a.click()
+                document.body.removeChild(a)
                 URL.revokeObjectURL(url)
               }
               setContextMenu(null)
             }}
-            className="w-full text-left px-4 py-2.5 text-[13px] text-text-secondary hover:bg-surface-3/50 hover:text-text-primary transition-colors flex items-center gap-2.5"
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary"
           >
             <IconifyIcon name="ui-export" size={15} color="currentColor" /> {t('common.export', 'Export')}
           </button>
@@ -248,7 +409,7 @@ export function SessionList({ width }: { width?: number }) {
               })
               if (ok) removeSession(contextMenu.sessionId)
             }}
-            className="w-full text-left px-4 py-2.5 text-[13px] text-danger hover:bg-danger/10 transition-colors flex items-center gap-2.5"
+            className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-danger transition-colors hover:bg-danger/10"
           >
             <IconifyIcon name="ui-trash" size={15} color="currentColor" /> {t('common.delete', 'Delete')}
           </button>

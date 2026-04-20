@@ -14,19 +14,24 @@ export function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function formatRelativeTime(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) return 'just now'
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+function formatRelativeTime(ts: number, locale = 'en'): string {
+  const diffSeconds = Math.round((ts - Date.now()) / 1000)
+  const absSeconds = Math.abs(diffSeconds)
+  const relativeFormatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+
+  if (absSeconds < 45) return relativeFormatter.format(0, 'second')
+  if (absSeconds < 3600) return relativeFormatter.format(Math.round(diffSeconds / 60), 'minute')
+  if (absSeconds < 86400) return relativeFormatter.format(Math.round(diffSeconds / 3600), 'hour')
+  if (absSeconds < 604800) return relativeFormatter.format(Math.round(diffSeconds / 86400), 'day')
+
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(ts)
 }
 
 const STATUS_CONFIG = {
-  pending:   { icon: '○', label: 'Pending',  color: 'text-text-muted', bg: 'bg-surface-3',    border: 'border-border' },
-  running:   { icon: '◌', label: 'Running',  color: 'text-accent',     bg: 'bg-accent/10',    border: 'border-accent/20' },
-  completed: { icon: 'ui-check', label: 'Success',  color: 'text-success',    bg: 'bg-success/10',   border: 'border-success/20' },
-  error:     { icon: 'ui-cross', label: 'Failed',   color: 'text-danger',     bg: 'bg-danger/10',    border: 'border-danger/20' },
+  pending:   { icon: '○', label: 'Pending', color: 'text-text-muted', bg: 'bg-surface-2/65', border: 'border-border-subtle/55' },
+  running:   { icon: '◌', label: 'Running', color: 'text-accent', bg: 'bg-accent/10', border: 'border-accent/18' },
+  completed: { icon: 'ui-check', label: 'Success', color: 'text-success', bg: 'bg-success/10', border: 'border-success/18' },
+  error:     { icon: 'ui-cross', label: 'Failed', color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger/18' },
 } as const
 
 function formatDuration(ms: number): string {
@@ -69,10 +74,10 @@ function categorizeError(output: string): { kind: 'permission' | 'timeout' | 'va
 }
 
 const RESULT_TYPE_BADGE = {
-  json:  { label: 'JSON', cls: 'bg-purple-500/10 text-purple-400' },
-  error: { label: 'ERR',  cls: 'bg-danger/10 text-danger' },
-  path:  { label: 'PATH', cls: 'bg-amber-500/10 text-amber-400' },
-  text:  { label: 'TEXT', cls: 'bg-surface-3 text-text-muted' },
+  json:  { label: 'JSON', cls: 'border border-sky-500/18 bg-sky-500/10 text-sky-400' },
+  error: { label: 'ERR', cls: 'border border-danger/18 bg-danger/10 text-danger' },
+  path:  { label: 'PATH', cls: 'border border-amber-500/18 bg-amber-500/10 text-amber-400' },
+  text:  { label: 'TEXT', cls: 'border border-border-subtle/55 bg-surface-2/75 text-text-muted' },
 } as const
 
 /** Max chars shown in UI for tool results (Claude Code uses 50 000 with disk persistence) */
@@ -102,90 +107,110 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
     return () => clearInterval(id)
   }, [call.status, call.startedAt, call.completedAt])
 
+  const collapsedSummary = (() => {
+    if (call.output && call.status === 'completed') return resultPreview(call.output)
+    if (!call.output && call.status === 'completed') return 'Completed with no explicit output'
+    if (call.status === 'pending') return 'Waiting for execution'
+    if (call.input && call.status !== 'completed') {
+      return Object.entries(call.input)
+        .map(([key, value]) => `${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)
+        .join(', ')
+        .slice(0, 96)
+    }
+    return ''
+  })()
+
   return (
-    <div className={`rounded-xl border ${cfg.border} ${cfg.bg} text-[12px] transition-all duration-200 overflow-hidden`}>
-      <button type="button" onClick={() => setOpen(!open)} className="w-full flex items-center gap-2.5 px-4 py-3 hover:brightness-95 transition-all rounded-xl">
-        <span className={`${cfg.color} text-[12px] shrink-0 leading-none ${call.status === 'running' ? 'animate-spin' : ''}`}>
-          {cfg.icon in ICON_DATA ? <IconifyIcon name={cfg.icon} size={13} color="currentColor" /> : cfg.icon}
-        </span>
-        {stepLabel && <span className="text-[9px] text-text-muted/50 font-mono shrink-0">{stepLabel}</span>}
-        <span className="font-semibold text-text-secondary truncate text-[11.5px]">{call.toolName}</span>
-        {!open && call.output && call.status === 'completed' && (
-          <span className="text-text-muted/40 truncate text-[10px] flex-1 text-left font-[JetBrains_Mono,monospace]">
-            ⎿ {resultPreview(call.output)}
-          </span>
-        )}
-        {!open && !call.output && call.input && (
-          <span className="text-text-muted/50 truncate text-[10px] flex-1 text-left font-[JetBrains_Mono,monospace]">
-            {Object.entries(call.input).map(([k, v]) => `${k}=${typeof v === 'string' ? v : JSON.stringify(v)}`).join(', ').slice(0, 80)}
-          </span>
-        )}
-        <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-          {typeBadge && !open && (
-            <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${typeBadge.cls}`}>{typeBadge.label}</span>
-          )}
-          {errorInfo && !open && (
-            <span className="text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md bg-danger/10 text-danger">{errorInfo.label}</span>
-          )}
-          <span className={`${cfg.color} text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md flex items-center gap-1`}>
-            {cfg.label}
-            {elapsed > 0 && <span className="opacity-50 normal-case font-medium">({formatDuration(elapsed)})</span>}
+    <div className={`overflow-hidden rounded-[22px] border ${cfg.border} ${cfg.bg} text-[12px] shadow-sm transition-all duration-200`}>
+      <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-black/5">
+        <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${cfg.border} ${cfg.bg} ${cfg.color}`}>
+          <span className={`text-[12px] leading-none ${call.status === 'running' ? 'animate-spin' : ''}`}>
+            {cfg.icon in ICON_DATA ? <IconifyIcon name={cfg.icon} size={13} color="currentColor" /> : cfg.icon}
           </span>
         </div>
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-text-muted/40 shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            {stepLabel && <span className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-2 py-0.5 font-mono text-[9px] text-text-muted/62">{stepLabel}</span>}
+            <span className="truncate text-[12.5px] font-semibold text-text-primary">{call.toolName}</span>
+            {typeBadge && !open && <span className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] ${typeBadge.cls}`}>{typeBadge.label}</span>}
+            {errorInfo && !open && <span className="rounded-full border border-danger/18 bg-danger/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-danger">{errorInfo.label}</span>}
+          </div>
+          {collapsedSummary && (
+            <div className="mt-1 truncate text-[11px] leading-5 text-text-muted/76 font-[JetBrains_Mono,monospace]">
+              {collapsedSummary}
+            </div>
+          )}
+        </div>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
+          <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${cfg.border} ${cfg.bg} ${cfg.color}`}>
+            {cfg.label}
+          </span>
+          {elapsed > 0 && <span className="text-[10px] text-text-muted/58">{formatDuration(elapsed)}</span>}
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-text-muted/40 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+        </div>
       </button>
+
       {open && (
-        <div className="px-4 pb-3 space-y-2 animate-fade-in">
-          <div className="font-display text-[10px] text-text-muted/50 font-semibold uppercase tracking-wider mt-0.5">Arguments</div>
-          <pre className="text-[11px] text-text-muted overflow-x-auto font-[JetBrains_Mono,monospace] bg-surface-0/30 rounded-lg px-3 py-2.5 max-h-40 overflow-y-auto border border-border-subtle/20">{JSON.stringify(call.input, null, 2)}</pre>
-          {truncatedOutput && (<>
-            <div className="flex items-center gap-2">
-              <div className="font-display text-[10px] text-text-muted/50 font-semibold uppercase tracking-wider">Result</div>
-              {typeBadge && <span className={`text-[8px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-md ${typeBadge.cls}`}>{typeBadge.label}</span>}
-              {call.output && call.output.length > MAX_RESULT_DISPLAY && (
-                <span className="text-[9px] text-text-muted/40">({(call.output.length / 1024).toFixed(1)} KB total)</span>
-              )}
-              {call.output && (
-                <div className="ml-auto flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      void navigator.clipboard.writeText(call.output ?? '')
-                    }}
-                    title="Copy full output to clipboard"
-                    className="text-[9px] px-1.5 py-0.5 rounded-md bg-surface-3/60 text-text-muted hover:bg-accent/10 hover:text-accent transition-colors"
-                  >
-                    Copy
-                  </button>
-                  {call.output.length > MAX_RESULT_DISPLAY && (
+        <div className="border-t border-border-subtle/45 bg-surface-0/34 px-4 pb-4 pt-3 space-y-3 animate-fade-in">
+          <div>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">Arguments</div>
+            <pre className="max-h-40 overflow-auto rounded-2xl border border-border-subtle/45 bg-surface-0/68 px-3 py-2.5 text-[11px] text-text-muted font-[JetBrains_Mono,monospace]">{JSON.stringify(call.input, null, 2)}</pre>
+          </div>
+
+          {truncatedOutput && (
+            <div>
+              <div className="mb-2 flex items-center gap-2">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">Result</div>
+                {typeBadge && <span className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] ${typeBadge.cls}`}>{typeBadge.label}</span>}
+                {call.output && call.output.length > MAX_RESULT_DISPLAY && (
+                  <span className="text-[10px] text-text-muted/45">{(call.output.length / 1024).toFixed(1)} KB</span>
+                )}
+                {call.output && (
+                  <div className="ml-auto flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        try {
-                          const blob = new Blob([call.output ?? ''], { type: 'text/plain;charset=utf-8' })
-                          const url = URL.createObjectURL(blob)
-                          const a = document.createElement('a')
-                          a.href = url
-                          a.download = `${call.toolName || 'tool-output'}-${call.id.slice(0, 8)}.txt`
-                          document.body.appendChild(a)
-                          a.click()
-                          document.body.removeChild(a)
-                          setTimeout(() => URL.revokeObjectURL(url), 1_000)
-                        } catch { /* download may fail in some contexts */ }
+                        void navigator.clipboard.writeText(call.output ?? '')
                       }}
-                      title="Download full output as .txt"
-                      className="text-[9px] px-1.5 py-0.5 rounded-md bg-surface-3/60 text-text-muted hover:bg-accent/10 hover:text-accent transition-colors"
+                      title="Copy full output to clipboard"
+                      className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-2.5 py-1 text-[10px] font-medium text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
                     >
-                      Download
+                      Copy
                     </button>
-                  )}
-                </div>
-              )}
+                    {call.output.length > MAX_RESULT_DISPLAY && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          try {
+                            const blob = new Blob([call.output ?? ''], { type: 'text/plain;charset=utf-8' })
+                            const url = URL.createObjectURL(blob)
+                            const a = document.createElement('a')
+                            a.href = url
+                            a.download = `${call.toolName || 'tool-output'}-${call.id.slice(0, 8)}.txt`
+                            document.body.appendChild(a)
+                            a.click()
+                            document.body.removeChild(a)
+                            setTimeout(() => URL.revokeObjectURL(url), 1_000)
+                          } catch {
+                            // Download may fail in restricted environments.
+                          }
+                        }}
+                        title="Download full output as .txt"
+                        className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-2.5 py-1 text-[10px] font-medium text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
+                      >
+                        Download
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+              <pre className={`max-h-56 overflow-auto whitespace-pre-wrap rounded-2xl border border-border-subtle/45 bg-surface-0/68 px-3 py-2.5 text-[11px] font-[JetBrains_Mono,monospace] ${call.status === 'error' ? 'text-danger' : 'text-success/82'}`}>{truncatedOutput}</pre>
             </div>
-            <pre className={`text-[11px] ${call.status === 'error' ? 'text-danger' : 'text-success/80'} overflow-x-auto whitespace-pre-wrap font-[JetBrains_Mono,monospace] bg-surface-0/30 rounded-lg px-3 py-2.5 max-h-48 overflow-y-auto border border-border-subtle/20`}>{truncatedOutput}</pre>
-          </>)}
+          )}
         </div>
       )}
     </div>
@@ -303,18 +328,27 @@ function ErrorBubble({ message, onRetry }: { message: Message; onRetry?: () => v
   const [showDetail, setShowDetail] = useState(false)
 
   return (
-    <div className="flex justify-start mb-5 animate-fade-in">
-      <div className="w-9 h-9 rounded-xl bg-danger/8 flex items-center justify-center text-danger text-[11px] mr-3 mt-0.5 shrink-0 font-semibold border border-danger/8">!</div>
-      <div className="max-w-[84%] rounded-[20px] rounded-bl-sm border border-danger/15 bg-danger/4 px-5 py-4">
-        <div className="flex items-center gap-2 mb-1.5"><span className="text-[14px] font-semibold text-danger">{error.title}</span></div>
-        <p className="text-[14px] text-text-secondary leading-relaxed">{error.detail}</p>
-        <p className="text-[12px] text-text-muted mt-2"><IconifyIcon name="ui-lightbulb" size={13} color="currentColor" className="inline-block" /> {error.hint}</p>
-        <div className="flex items-center gap-2 mt-3 pt-2.5 border-t border-danger/8">
-          {onRetry && <button type="button" onClick={onRetry} className="text-[12px] px-3.5 py-2 rounded-xl bg-accent/10 text-accent hover:bg-accent/18 transition-colors font-medium">↻ {t('chat.retry', 'Retry')}</button>}
-          <CopyButton text={message.content} className="text-[11px] px-3 py-2 rounded-xl text-text-muted hover:bg-surface-3/40 transition-colors" />
-          <button type="button" onClick={() => setShowDetail((v) => !v)} className="text-[11px] px-3 py-2 rounded-xl text-text-muted hover:bg-surface-3/40 transition-colors">{showDetail ? t('chat.hideDetail', 'Hide detail') : t('chat.showDetail', 'Show detail')}</button>
+    <div className="mb-6 flex justify-start animate-fade-in">
+      <div className="w-full max-w-4xl rounded-[28px] border border-danger/18 bg-danger/6 p-5 shadow-[0_18px_48px_rgba(220,38,38,0.08)]">
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-danger/18 bg-danger/12 text-danger shadow-sm">!</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[15px] font-semibold text-danger">{error.title}</span>
+              <span className="rounded-full border border-danger/18 bg-danger/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-danger">{t('chat.requestFailed', 'Request failed')}</span>
+            </div>
+            <p className="mt-2 text-[14px] leading-7 text-text-secondary">{error.detail}</p>
+            <p className="mt-3 text-[12px] leading-6 text-text-muted"><IconifyIcon name="ui-lightbulb" size={13} color="currentColor" className="inline-block" /> {error.hint}</p>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-danger/10 pt-4">
+              {onRetry && <button type="button" onClick={onRetry} className="rounded-full border border-accent/18 bg-accent/10 px-3.5 py-2 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/16">↻ {t('chat.retry', 'Retry')}</button>}
+              <CopyButton text={message.content} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-2 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent" />
+              <button type="button" onClick={() => setShowDetail((value) => !value)} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-2 text-[11px] text-text-muted transition-colors hover:border-border hover:bg-surface-3/45 hover:text-text-secondary">{showDetail ? t('chat.hideDetail', 'Hide detail') : t('chat.showDetail', 'Show detail')}</button>
+            </div>
+
+            {showDetail && <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded-[18px] border border-border-subtle/40 bg-surface-0/55 p-3 text-[10px] text-text-muted font-[JetBrains_Mono,monospace]">{message.content}</pre>}
+          </div>
         </div>
-        {showDetail && <pre className="mt-2 text-[10px] text-text-muted bg-surface-0/40 rounded-xl p-3 overflow-x-auto whitespace-pre-wrap font-[JetBrains_Mono,monospace] border border-border-subtle/30">{message.content}</pre>}
       </div>
     </div>
   )
@@ -323,14 +357,23 @@ function ErrorBubble({ message, onRetry }: { message: Message; onRetry?: () => v
 // ─── Thinking Indicator ────────────────────────────────────────────
 
 function ThinkingIndicator() {
+  const { t } = useI18n()
+
   return (
-    <div className="flex items-center gap-2 text-text-muted text-[12px] py-2">
-      <span className="flex gap-1">
-        <span className="w-1.5 h-1.5 rounded-full bg-accent/70 animate-bounce" />
-        <span className="w-1.5 h-1.5 rounded-full bg-accent/70 animate-bounce [animation-delay:150ms]" />
-        <span className="w-1.5 h-1.5 rounded-full bg-accent/70 animate-bounce [animation-delay:300ms]" />
-      </span>
-      <span className="text-text-secondary">Thinking…</span>
+    <div className="space-y-4 py-1">
+      <div className="inline-flex items-center gap-2 rounded-full border border-accent/18 bg-accent/8 px-3 py-1.5 text-[11px] text-text-secondary">
+        <span className="flex gap-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-bounce" />
+          <span className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-bounce [animation-delay:150ms]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-bounce [animation-delay:300ms]" />
+        </span>
+        <span>{t('chat.thinking', 'Thinking…')}</span>
+      </div>
+      <div className="space-y-2.5 animate-pulse">
+        <div className="h-3 w-[86%] rounded-full bg-surface-3/55" />
+        <div className="h-3 w-[68%] rounded-full bg-surface-3/45" />
+        <div className="h-3 w-[46%] rounded-full bg-surface-3/35" />
+      </div>
     </div>
   )
 }
@@ -338,6 +381,7 @@ function ThinkingIndicator() {
 // ─── Image Lightbox ────────────────────────────────────────────────
 
 function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
+  const { t } = useI18n()
   const closeRef = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
@@ -347,10 +391,28 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
   }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in" onClick={onClose} role="dialog" aria-label={`Image preview: ${alt}`}>
-      <button type="button" ref={closeRef} onClick={onClose} className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-white/50" title="Close" aria-label="Close preview"><IconifyIcon name="ui-close" size={14} color="currentColor" /></button>
-      <img src={src} alt={alt} className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" onClick={(e) => e.stopPropagation()} />
-      <span className="absolute bottom-4 left-1/2 -translate-x-1/2 text-white/70 text-xs bg-black/50 px-3 py-1 rounded-full">{alt}</span>
+    <div
+      className="fixed inset-0 z-100 flex items-center justify-center bg-black/70 backdrop-blur-sm animate-fade-in"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+      tabIndex={-1}
+      aria-label={`${t('chat.imagePreview', 'Image preview')}: ${alt}`}
+    >
+      <button
+        type="button"
+        ref={closeRef}
+        onClick={onClose}
+        className="absolute top-4 right-4 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg transition-colors focus:outline-none focus:ring-2 focus:ring-white/50"
+        title={t('chat.closePreview', 'Close preview')}
+        aria-label={t('chat.closePreview', 'Close preview')}
+      >
+        <IconifyIcon name="ui-close" size={14} color="currentColor" />
+      </button>
+      <figure className="flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
+        <img src={src} alt={alt} className="max-w-[90vw] max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+        <figcaption className="text-white/70 text-xs bg-black/50 px-3 py-1 rounded-full">{alt}</figcaption>
+      </figure>
     </div>
   )
 }
@@ -360,13 +422,13 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
 function AudioPlayer({ data, mimeType, name }: { data: string; mimeType: string; name: string }) {
   const src = `data:${mimeType};base64,${data}`
   return (
-    <div className="flex items-center gap-2.5 bg-surface-2/60 rounded-[14px] px-3.5 py-2.5 border border-border-subtle/60 max-w-80">
-      <div className="w-10 h-10 rounded-xl bg-accent/15 flex items-center justify-center shrink-0">
+    <div className="flex max-w-md items-center gap-3 rounded-[22px] border border-border-subtle/55 bg-surface-0/72 px-3.5 py-3 shadow-sm">
+      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-accent/18 bg-accent/10 text-accent">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="text-[12px] text-text-secondary truncate font-medium">{name}</div>
-        <audio controls src={src} className="w-full min-w-0 h-8 mt-1" preload="metadata" />
+        <div className="truncate text-[12px] font-semibold text-text-primary">{name}</div>
+        <audio controls src={src} className="mt-1 h-8 w-full min-w-0" preload="metadata" />
       </div>
     </div>
   )
@@ -380,20 +442,20 @@ function FileCard({ attachment }: { attachment: MessageAttachment }) {
   const preview = attachment.data.length > 500 ? attachment.data.slice(0, 500) + '\n…' : attachment.data
 
   return (
-    <div className="rounded-[14px] border border-border-subtle/70 bg-surface-2/40 max-w-90 overflow-hidden">
-      <button type="button" onClick={() => setExpanded((v) => !v)} className="w-full flex items-center gap-3 px-3.5 py-3 hover:bg-surface-3/40 transition-colors text-left">
-        <div className="w-10 h-10 rounded-xl bg-accent/10 flex items-center justify-center shrink-0">
+    <div className="max-w-[24rem] overflow-hidden rounded-[22px] border border-border-subtle/55 bg-surface-0/72 shadow-sm">
+      <button type="button" onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left transition-colors hover:bg-surface-2/55">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-accent/18 bg-accent/10 text-accent">
           <span className="text-[12px] text-accent font-bold uppercase">{ext || <IconifyIcon name="ui-file" size={12} color="currentColor" />}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-[13px] text-text-primary font-medium truncate">{attachment.name}</div>
+          <div className="truncate text-[13px] font-semibold text-text-primary">{attachment.name}</div>
           <div className="text-[11px] text-text-muted">{formatFileSize(attachment.size)}</div>
         </div>
         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-text-muted/60 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
       </button>
       {expanded && (
-        <div className="border-t border-border-subtle/60 px-3 py-2">
-          <pre className="text-[11px] text-text-secondary font-[JetBrains_Mono,monospace] whitespace-pre-wrap max-h-48 overflow-y-auto leading-relaxed">{preview}</pre>
+        <div className="border-t border-border-subtle/50 bg-surface-2/50 px-3 py-2.5">
+          <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap rounded-[14px] bg-surface-0/48 px-3 py-2 text-[11px] leading-relaxed text-text-secondary font-[JetBrains_Mono,monospace]">{preview}</pre>
         </div>
       )}
     </div>
@@ -403,6 +465,7 @@ function FileCard({ attachment }: { attachment: MessageAttachment }) {
 // ─── Message Bubble ────────────────────────────────────────────────
 
 export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeedback }: { message: Message; onRetry?: () => void; onDelete?: () => void; onRegenerate?: () => void; onFeedback?: (feedback: 'positive' | 'negative' | undefined) => void }) {
+  const { t, locale } = useI18n()
   const isUser = message.role === 'user'
   const bubbleStyle = useAppStore((s) => s.bubbleStyle)
   const [lightboxSrc, setLightboxSrc] = useState<{ src: string; alt: string } | null>(null)
@@ -415,31 +478,31 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
   const audioAttachments = message.attachments?.filter((a) => a.type === 'audio') ?? []
 
   const userBubbleCls = {
-    default: 'user-bubble-gradient text-white rounded-[18px] rounded-br-sm whitespace-pre-wrap',
-    minimal: 'bg-transparent text-text-primary rounded-[18px] rounded-br-sm border border-accent/15 whitespace-pre-wrap',
-    bordered: 'bg-surface-1 text-text-primary rounded-[18px] rounded-br-sm border-2 border-accent/30 whitespace-pre-wrap',
-    glassmorphism: 'bg-accent/12 backdrop-blur-md text-text-primary rounded-[18px] rounded-br-sm border border-accent/15 shadow-lg whitespace-pre-wrap',
+    default: 'border border-accent/18 bg-linear-to-br from-accent to-accent-hover text-white shadow-[0_18px_40px_rgba(var(--t-accent-rgb),0.2)]',
+    minimal: 'border border-accent/14 bg-accent/6 text-text-primary',
+    bordered: 'border-2 border-accent/24 bg-surface-0/82 text-text-primary',
+    glassmorphism: 'border border-accent/18 bg-white/10 text-text-primary backdrop-blur-xl shadow-lg',
   }[bubbleStyle]
 
   const aiBubbleCls = {
-    default: 'bg-surface-2/40 text-text-primary rounded-[18px] rounded-bl-sm border border-border-subtle/50',
-    minimal: 'bg-transparent text-text-primary rounded-[18px] rounded-bl-sm',
-    bordered: 'bg-surface-1 text-text-primary rounded-[18px] rounded-bl-sm border-2 border-border-subtle',
-    glassmorphism: 'bg-surface-2/25 backdrop-blur-md text-text-primary rounded-[18px] rounded-bl-sm border border-border-subtle/40 shadow-lg',
+    default: 'border border-border-subtle/55 bg-surface-0/78 text-text-primary shadow-[0_16px_38px_rgba(15,23,42,0.08)]',
+    minimal: 'border border-transparent bg-transparent text-text-primary',
+    bordered: 'border-2 border-border-subtle/60 bg-surface-0/76 text-text-primary',
+    glassmorphism: 'border border-border-subtle/45 bg-surface-0/58 text-text-primary backdrop-blur-xl shadow-lg',
   }[bubbleStyle]
 
   const renderAttachments = () => {
     const hasAttachments = imageAttachments.length || fileAttachments.length || audioAttachments.length
     if (!hasAttachments) return null
     return (
-      <div className="mt-2 flex flex-col gap-2">
+      <div className="mt-4 flex flex-col gap-3">
         {imageAttachments.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {imageAttachments.map((att) => (
-              <img key={att.id} src={`data:${att.mimeType};base64,${att.data}`} alt={att.name}
-                className="max-w-50 max-h-50 rounded-lg border border-white/20 object-contain cursor-pointer hover:brightness-90 transition-all"
+              <img key={att.id} src={`data:${att.mimeType};base64,${att.data}`} alt={att.name} width={200} height={200}
+                className="max-h-56 max-w-56 cursor-pointer rounded-[20px] border border-border-subtle/55 object-contain shadow-sm transition-all hover:brightness-95"
                 onClick={() => setLightboxSrc({ src: `data:${att.mimeType};base64,${att.data}`, alt: att.name })}
-                title={`${att.name} (${formatFileSize(att.size)}) — Click to preview`} />
+                title={`${att.name} (${formatFileSize(att.size)}) — ${t('chat.openPreview', 'Open preview')}`} />
             ))}
           </div>
         )}
@@ -452,60 +515,109 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
   const contentParts = message.contentParts ?? []
   const toolCalls = message.toolCalls ?? []
 
+  const assistantBody = contentParts.length > 0
+    ? (() => {
+      const toolParts = contentParts.filter((part) => part.type === 'tool-call')
+      const totalSteps = toolParts.length
+      let stepIndex = 0
+
+      return contentParts.map((part, index) => {
+        if (part.type === 'text') {
+          return <div key={index} className="markdown-body"><MarkdownContent content={part.text} /></div>
+        }
+
+        const call = toolCalls.find((toolCall) => toolCall.id === part.toolCallId)
+        if (!call) return null
+        const label = totalSteps > 1 ? `${++stepIndex}/${totalSteps}` : undefined
+
+        return (
+          <div key={index} className="my-3">
+            <ToolCallRow call={call} stepLabel={label} />
+          </div>
+        )
+      })
+    })()
+    : (
+      <>
+        {message.content && <div className="markdown-body"><MarkdownContent content={message.content} /></div>}
+        {toolCalls.length > 0 && (
+          <div className="mt-4 space-y-2 border-t border-border-subtle/45 pt-4">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.toolCalls', 'Tool Calls')}</div>
+            {toolCalls.map((call, index) => (
+              <ToolCallRow
+                key={call.id}
+                call={call}
+                stepLabel={toolCalls.length > 1 ? `${index + 1}/${toolCalls.length}` : undefined}
+              />
+            ))}
+          </div>
+        )}
+      </>
+    )
+
   return (
     <>
       {lightboxSrc && <ImageLightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={() => setLightboxSrc(null)} />}
-      <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-6 animate-fade-in group`}>
+      <div className={`group mb-6 flex items-start gap-3 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
         {!isUser && (
-          <div className="w-9 h-9 rounded-xl bg-linear-to-br from-accent/15 to-accent/5 flex items-center justify-center text-accent text-[11px] mr-3 mt-0.5 shrink-0 font-semibold border border-accent/8">AI</div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-border-subtle/45 bg-surface-0/72 text-accent shadow-sm">AI</div>
         )}
-        <div className="max-w-[84%] flex flex-col">
-          <div className={`px-5.5 py-4 text-[15px] leading-[1.8] ${isUser ? userBubbleCls : aiBubbleCls}`}>
-            {!isUser && (
-              <div className="flex items-center gap-3 mb-2.5 pb-2 border-b border-border-subtle/30 min-w-52">
-                <span className="font-display text-[10px] text-accent/60 font-semibold tracking-wider uppercase truncate">{message.modelUsed ?? 'Assistant'}</span>
-                <span className="text-[10px] text-text-muted/40 shrink-0 ml-auto">{formatRelativeTime(message.timestamp)}</span>
+        <div className="max-w-[88%] min-w-0 sm:max-w-[82%]">
+          <div className={`relative overflow-hidden rounded-[28px] ${isUser ? userBubbleCls : aiBubbleCls}`}>
+            <div className={`pointer-events-none absolute inset-0 ${isUser ? 'bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_55%)]' : 'bg-[radial-gradient(circle_at_top,rgba(var(--t-accent-rgb),0.08),transparent_70%)]'}`} />
+            <div className="relative z-10 px-5 py-4 sm:px-6">
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${isUser ? 'border-white/16 bg-white/10 text-white/82' : 'border-border-subtle/50 bg-surface-2/70 text-text-muted/72'}`}>
+                  {isUser ? t('chat.you', 'You') : message.modelUsed ?? t('chat.assistant', 'Assistant')}
+                </span>
+                <span className={`text-[10px] ${isUser ? 'text-white/62' : 'text-text-muted/42'}`}>{formatRelativeTime(message.timestamp, locale)}</span>
               </div>
-            )}
-            {showThinking ? <ThinkingIndicator /> : isUser ? (<>{message.content}{renderAttachments()}</>) : contentParts.length > 0 ? (<>
-              {(() => { const toolParts = contentParts.filter(p => p.type === 'tool-call'); const totalSteps = toolParts.length; let stepIdx = 0; return contentParts.map((part, idx) => {
-                if (part.type === 'text') return <div key={idx} className="markdown-body"><MarkdownContent content={part.text} /></div>
-                const call = toolCalls.find((t) => t.id === part.toolCallId)
-                if (!call) return null
-                const label = totalSteps > 1 ? `${++stepIdx}/${totalSteps}` : undefined
-                return <div key={idx} className="my-2 space-y-1.5"><ToolCallRow call={call} stepLabel={label} /></div>
-              })})()}
-            </>) : (<>
-              {message.content && <div className="markdown-body"><MarkdownContent content={message.content} /></div>}
-              {toolCalls.length > 0 && (
-                <div className="mt-4 space-y-2 border-t border-border-subtle/40 pt-3">
-                  <div className="font-display text-[10px] text-text-muted/60 font-semibold uppercase tracking-wider mb-1">Tool Calls</div>
-                  {toolCalls.map((call, i) => <ToolCallRow key={call.id} call={call} stepLabel={toolCalls.length > 1 ? `${i + 1}/${toolCalls.length}` : undefined} />)}
+
+              {showThinking ? (
+                <ThinkingIndicator />
+              ) : isUser ? (
+                <div className="space-y-3 text-[15px] leading-7">
+                  {message.content && <div className="whitespace-pre-wrap">{message.content}</div>}
+                  {renderAttachments()}
+                </div>
+              ) : (
+                <div className="space-y-3 text-[15px] leading-7">
+                  {assistantBody}
+                  {renderAttachments()}
                 </div>
               )}
-            </>)}
-            {!isUser && message.isStreaming && message.content && <span className="inline-block w-1.25 h-3.5 ml-1 bg-accent rounded-sm animate-pulse-soft align-middle" />}
-            {!isUser && !message.isStreaming && message.tokenUsage && (
-              <div className="mt-3 pt-2.5 border-t border-border-subtle/30">
-                <span className="text-[10px] text-text-muted/40 font-medium">Tokens: {message.tokenUsage.promptTokens} in / {message.tokenUsage.completionTokens} out / {message.tokenUsage.totalTokens} total</span>
-              </div>
-            )}
+
+              {!isUser && message.isStreaming && message.content && <span className="mt-1 inline-block h-3.5 w-1.5 rounded-sm bg-accent align-middle animate-pulse-soft" />}
+
+              {!isUser && !message.isStreaming && message.tokenUsage && (
+                <div className="mt-4 border-t border-border-subtle/45 pt-3">
+                  <span className="text-[10px] font-medium text-text-muted/42">{t('chat.tokens', 'Tokens')}: {message.tokenUsage.promptTokens} in / {message.tokenUsage.completionTokens} out / {message.tokenUsage.totalTokens} total</span>
+                </div>
+              )}
+            </div>
           </div>
-          <div className={`flex items-center mt-1 gap-1 px-1 text-[11px] h-8 ${isUser ? 'justify-end' : 'justify-start'}`}>
-            {isUser && <span className="text-text-muted/30 text-[10px]">{formatRelativeTime(message.timestamp)}</span>}
-            {!isUser && message.content && !message.isStreaming && (<>
-              <CopyButton text={message.content} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-              {onRegenerate && <button type="button" onClick={onRegenerate} title="Regenerate" className="text-[11px] px-2 py-1 rounded-md text-text-muted/60 hover:text-accent hover:bg-accent/8 opacity-0 group-hover:opacity-100 transition-all">↻</button>}
-              {isSpeechSynthesisAvailable() && <button type="button" onClick={() => speak(message.content, loadVoiceSettings()).catch(() => {})} title="Read aloud" className="text-[11px] px-2 py-1 rounded-md text-text-muted/60 hover:text-text-secondary hover:bg-surface-3/40 opacity-0 group-hover:opacity-100 transition-all"><IconifyIcon name="ui-speaker" size={15} color="currentColor" /></button>}
-            </>)}
-            {!isUser && !message.isStreaming && onFeedback && (<>
-              <button type="button" onClick={() => onFeedback(message.feedback === 'positive' ? undefined : 'positive')} title="Good response" className={`text-[11px] px-2 py-1 rounded-md transition-all ${message.feedback === 'positive' ? 'text-success opacity-100' : 'text-text-muted/60 hover:text-success hover:bg-success/8 opacity-0 group-hover:opacity-100'}`}><IconifyIcon name="ui-thumbs-up" size={15} color="currentColor" /></button>
-              <button type="button" onClick={() => onFeedback(message.feedback === 'negative' ? undefined : 'negative')} title="Bad response" className={`text-[11px] px-2 py-1 rounded-md transition-all ${message.feedback === 'negative' ? 'text-danger opacity-100' : 'text-text-muted/60 hover:text-danger hover:bg-danger/8 opacity-0 group-hover:opacity-100'}`}><IconifyIcon name="ui-thumbs-down" size={15} color="currentColor" /></button>
-            </>)}
-            {onDelete && !message.isStreaming && <button type="button" onClick={onDelete} title="Delete message" className="text-[11px] px-2 py-1 rounded-md text-text-muted/60 hover:text-danger hover:bg-danger/8 opacity-0 group-hover:opacity-100 transition-all"><IconifyIcon name="ui-trash" size={15} color="currentColor" /></button>}
+
+          <div className={`mt-2 flex h-8 flex-wrap items-center gap-1.5 px-1 text-[11px] ${isUser ? 'justify-end' : 'justify-start'}`}>
+            {!isUser && message.content && !message.isStreaming && (
+              <>
+                <CopyButton text={message.content} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent" />
+                {onRegenerate && <button type="button" onClick={onRegenerate} title={t('chat.regenerate', 'Regenerate')} aria-label={t('chat.regenerate', 'Regenerate')} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent">↻</button>}
+                {isSpeechSynthesisAvailable() && <button type="button" onClick={() => speak(message.content, loadVoiceSettings()).catch(() => {})} title={t('chat.readAloud', 'Read aloud')} aria-label={t('chat.readAloud', 'Read aloud')} className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-colors hover:border-border hover:bg-surface-2/70 hover:text-text-secondary"><IconifyIcon name="ui-speaker" size={15} color="currentColor" /></button>}
+              </>
+            )}
+
+            {!isUser && !message.isStreaming && onFeedback && (
+              <>
+                <button type="button" onClick={() => onFeedback(message.feedback === 'positive' ? undefined : 'positive')} title={t('chat.goodResponse', 'Good response')} aria-label={t('chat.goodResponse', 'Good response')} className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${message.feedback === 'positive' ? 'border-success/18 bg-success/10 text-success' : 'border-border-subtle/50 bg-surface-0/55 text-text-muted hover:border-success/18 hover:bg-success/10 hover:text-success'}`}><IconifyIcon name="ui-thumbs-up" size={15} color="currentColor" /></button>
+                <button type="button" onClick={() => onFeedback(message.feedback === 'negative' ? undefined : 'negative')} title={t('chat.badResponse', 'Bad response')} aria-label={t('chat.badResponse', 'Bad response')} className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${message.feedback === 'negative' ? 'border-danger/18 bg-danger/10 text-danger' : 'border-border-subtle/50 bg-surface-0/55 text-text-muted hover:border-danger/18 hover:bg-danger/10 hover:text-danger'}`}><IconifyIcon name="ui-thumbs-down" size={15} color="currentColor" /></button>
+              </>
+            )}
+
+            {onDelete && !message.isStreaming && <button type="button" onClick={onDelete} title={t('chat.deleteMessage', 'Delete message')} aria-label={t('chat.deleteMessage', 'Delete message')} className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-colors hover:border-danger/18 hover:bg-danger/10 hover:text-danger"><IconifyIcon name="ui-trash" size={15} color="currentColor" /></button>}
           </div>
         </div>
-        {isUser && <div className="w-9 h-9 rounded-xl bg-accent/12 flex items-center justify-center text-[11px] ml-3 mt-0.5 shrink-0 font-semibold text-accent/70 border border-accent/8">You</div>}
+
+        {isUser && <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-accent/16 bg-accent/10 text-[11px] font-semibold text-accent/76 shadow-sm">{t('chat.you', 'You')}</div>}
       </div>
     </>
   )

@@ -281,5 +281,40 @@ describe('appStore', () => {
         'External Skill',
       ])
     })
+
+    it('should preserve the latest selected agent while startup refresh is still loading', async () => {
+      let resolveAgents: ((value: Awaited<ReturnType<typeof loadAgentsFromDisk>>) => void) | null = null
+      const pendingAgents = new Promise<Awaited<ReturnType<typeof loadAgentsFromDisk>>>((resolve) => {
+        resolveAgents = resolve
+      })
+
+      const defaultAgent = {
+        id: 'default-assistant', name: 'Assistant', systemPrompt: 'Default prompt',
+        modelId: '', skills: [], enabled: true, memories: [], autoLearn: true,
+      }
+      const localAgent = {
+        id: 'agent-local', name: 'Local Agent', systemPrompt: 'Local prompt',
+        modelId: 'test:model', skills: [], enabled: true, memories: [], autoLearn: false,
+      }
+
+      vi.mocked(loadAgentsFromDisk).mockImplementationOnce(() => pendingAgents)
+      vi.mocked(loadAllSkills).mockResolvedValueOnce([] as never)
+      vi.mocked(loadExternalResources).mockResolvedValueOnce({ skills: [], agents: [] })
+
+      useAppStore.setState({
+        workspacePath: 'C:/workspace',
+        externalDirectories: [],
+        agents: [defaultAgent, localAgent],
+        selectedAgent: defaultAgent,
+      })
+
+      const refreshPromise = loadExternalSkillsAndAgents()
+
+      useAppStore.getState().setSelectedAgent(localAgent)
+      resolveAgents?.([localAgent])
+      await refreshPromise
+
+      expect(useAppStore.getState().selectedAgent?.id).toBe('agent-local')
+    })
   })
 })

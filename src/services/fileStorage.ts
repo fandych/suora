@@ -57,6 +57,9 @@ const EXCLUDED_KEYS = new Set([
 const lastWritten = new Map<string, string>()
 let pendingSplitStoreValue: string | null = null
 let activeSplitStoreFlush: Promise<void> | null = null
+let splitStoreDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+const SPLIT_STORE_DEBOUNCE_MS = 250
 
 /**
  * Throttle user-visible toast notifications about write failures so that a
@@ -65,6 +68,26 @@ let activeSplitStoreFlush: Promise<void> | null = null
  */
 const writeFailureToastCooldown = new Map<string, number>()
 const WRITE_FAILURE_TOAST_COOLDOWN_MS = 30_000
+
+/**
+ * Deferred warnings that could not be shown immediately (e.g. during early
+ * initialisation before the toast host is mounted).  Flushed once from
+ * fileStateStorage.getItem after the first successful load.
+ */
+const deferredWarnings: Array<{ title: string; detail: string }> = []
+let deferredFlushed = false
+
+function flushDeferredWarnings(): void {
+  if (deferredFlushed) return
+  deferredFlushed = true
+  // Give the UI a moment to mount the ToastHost component.
+  setTimeout(() => {
+    for (const { title, detail } of deferredWarnings) {
+      try { toast.warning(title, detail) } catch { /* still unavailable */ }
+    }
+    deferredWarnings.length = 0
+  }, 2000)
+}
 
 function notifyWriteFailure(filePath: string, error: unknown): void {
   const now = Date.now()
@@ -79,35 +102,31 @@ function notifyWriteFailure(filePath: string, error: unknown): void {
   )
 }
 
-function writeIfChanged(electron: ElectronBridge, filePath: string, json: string): void {
+async function writeIfChanged(electron: ElectronBridge, filePath: string, json: string): Promise<void> {
   if (lastWritten.get(filePath) === json) return
-  lastWritten.set(filePath, json)
 
-  // Fire-and-forget, but surface errors via a rate-limited toast + logging
-  // so that the user is informed when data is NOT being persisted.
-  void (async () => {
-    let lastError: unknown = null
-    const backoffMs = [0, 500, 2_000]
-    for (const delay of backoffMs) {
-      if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
-      try {
-        const result = await electron.invoke('fs:writeFile', filePath, json)
-        // Some handlers return `{ error }` on failure rather than throwing.
-        if (result && typeof result === 'object' && 'error' in result && (result as { error?: unknown }).error) {
-          lastError = (result as { error: unknown }).error
-          continue
-        }
-        return
-      } catch (err) {
-        lastError = err
+  let lastError: unknown = null
+  const backoffMs = [0, 500, 2_000]
+  for (const delay of backoffMs) {
+    if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
+    try {
+      const result = await electron.invoke('fs:writeFile', filePath, json)
+      // Some handlers return `{ error }` on failure rather than throwing.
+      if (result && typeof result === 'object' && 'error' in result && (result as { error?: unknown }).error) {
+        lastError = (result as { error: unknown }).error
+        continue
       }
+      lastWritten.set(filePath, json)
+      return
+    } catch (err) {
+      lastError = err
     }
-    if (lastError !== null) {
-      // eslint-disable-next-line no-console
-      console.error('[fileStorage] write failed after retries', { filePath, error: lastError })
-      notifyWriteFailure(filePath, lastError)
-    }
-  })()
+  }
+
+  if (lastError !== null) {
+    console.error('[fileStorage] write failed after retries', { filePath, error: lastError })
+    notifyWriteFailure(filePath, lastError)
+  }
 }
 
 // ─── Resolve workspace path ─────────────────────────────────────────
@@ -172,14 +191,14 @@ async function persistSplitStore(fullValue: string, electron: ElectronBridge): P
       if (key in state) models[key] = state[key]
     }
     const secureModels = await prepareModelsDataForSave(electron, models)
-    writeIfChanged(electron, `${ws}/models.json`, JSON.stringify(secureModels, null, 2))
+    const modelsWrite = writeIfChanged(electron, `${ws}/models.json`, JSON.stringify(secureModels, null, 2))
 
     // channels/config.json
     const channels: Record<string, unknown> = {}
     for (const key of CHANNELS_KEYS) {
       if (key in state) channels[key] = state[key]
     }
-    writeIfChanged(electron, `${ws}/channels/config.json`, JSON.stringify(channels, null, 2))
+    const channelsWrite = writeIfChanged(electron, `${ws}/channels/config.json`, JSON.stringify(channels, null, 2))
 
     // settings.json — everything not in models, channels, or excluded
     const settings: Record<string, unknown> = {}
@@ -188,11 +207,42 @@ async function persistSplitStore(fullValue: string, electron: ElectronBridge): P
       settings[key] = value
     }
     settings._storeVersion = parsed.version ?? 0
-    writeIfChanged(electron, `${ws}/settings.json`, JSON.stringify(settings, null, 2))
+    const settingsWrite = writeIfChanged(electron, `${ws}/settings.json`, JSON.stringify(settings, null, 2))
+
+    await Promise.all([modelsWrite, channelsWrite, settingsWrite])
   } catch (err) {
     logger.error('[fileStorage] persistSplitStore failed — state kept in memory only', {
       error: err instanceof Error ? err.message : String(err),
     })
+  }
+}
+
+function scheduleSplitStoreSave(fullValue: string, electron: ElectronBridge): void {
+  pendingSplitStoreValue = fullValue
+  if (splitStoreDebounceTimer) clearTimeout(splitStoreDebounceTimer)
+
+  splitStoreDebounceTimer = setTimeout(() => {
+    splitStoreDebounceTimer = null
+    if (pendingSplitStoreValue !== null) {
+      splitAndSave(pendingSplitStoreValue, electron)
+    }
+  }, SPLIT_STORE_DEBOUNCE_MS)
+}
+
+export async function flushPendingSplitStoreWrites(): Promise<void> {
+  const electron = getElectron()
+  if (!electron) return
+
+  if (splitStoreDebounceTimer) {
+    clearTimeout(splitStoreDebounceTimer)
+    splitStoreDebounceTimer = null
+    if (pendingSplitStoreValue !== null) {
+      splitAndSave(pendingSplitStoreValue, electron)
+    }
+  }
+
+  if (activeSplitStoreFlush) {
+    await activeSplitStoreFlush
   }
 }
 
@@ -226,7 +276,13 @@ async function backupCorruptFile(electron: ElectronBridge, filePath: string, raw
         'Corrupted state file detected',
         `${filePath.split(/[\\/]/).slice(-2).join('/')} could not be parsed. A backup has been saved to .corrupt-*.bak.`,
       )
-    } catch { /* toast may be unavailable early */ }
+    } catch {
+      // Toast host not mounted yet — queue for later display.
+      deferredWarnings.push({
+        title: 'Corrupted state file detected',
+        detail: `${filePath.split(/[\\/]/).slice(-2).join('/')} could not be parsed. A backup has been saved to .corrupt-*.bak.`,
+      })
+    }
   } catch (backupErr) {
     logger.error('[fileStorage] Failed to back up corrupted file', { filePath, error: backupErr })
   }
@@ -344,6 +400,7 @@ export const fileStateStorage = {
       const wsData = await loadFromWorkspace(electron)
       if (wsData) {
         cache.set(name, wsData)
+        flushDeferredWarnings()
         return wsData
       }
 
@@ -395,7 +452,7 @@ export const fileStateStorage = {
     const electron = getElectron()
     if (!electron) return
     if (name === SPLIT_STORE_NAME) {
-      splitAndSave(value, electron)
+      scheduleSplitStoreSave(value, electron)
     }
   },
 

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/hooks/useI18n'
 import { SidePanel } from '@/components/layout/SidePanel'
@@ -13,8 +13,142 @@ import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
+import { settingsInputClass } from '@/components/settings/panelUi'
 
 const DEFAULT_AGENT_ID = 'default-assistant'
+
+type MarketplaceAgentSeed = {
+  id: string
+  avatar: string
+  skills: string[]
+  temperature: number
+  rating: number
+  downloads: number
+  fallbackName: string
+  fallbackDescription: string
+  fallbackCategory: string
+  fallbackSystemPrompt: string
+}
+
+type MarketplaceAgentTemplate = MarketplaceAgentSeed & {
+  name: string
+  description: string
+  category: string
+  systemPrompt: string
+}
+
+const MARKETPLACE_AGENT_SEEDS: MarketplaceAgentSeed[] = [
+  {
+    id: 'fullStackDeveloper',
+    avatar: 'agent-developer',
+    skills: ['builtin-filesystem', 'builtin-shell', 'builtin-git', 'builtin-code-analysis', 'builtin-web'],
+    temperature: 0.5,
+    rating: 4.8,
+    downloads: 1520,
+    fallbackName: 'Full-Stack Developer',
+    fallbackDescription: 'Expert in frontend and backend development, databases, and deployment',
+    fallbackCategory: 'Development',
+    fallbackSystemPrompt: 'You are a full-stack developer expert in React, Node.js, Python, databases, APIs, and deployment. Help users build complete applications from frontend to backend.',
+  },
+  {
+    id: 'apiDesigner',
+    avatar: 'agent-api',
+    skills: ['builtin-filesystem', 'builtin-shell', 'builtin-code-analysis', 'builtin-web'],
+    temperature: 0.4,
+    rating: 4.6,
+    downloads: 890,
+    fallbackName: 'API Designer',
+    fallbackDescription: 'Design RESTful and GraphQL APIs with best practices',
+    fallbackCategory: 'Development',
+    fallbackSystemPrompt: 'You are an API design expert. Help users design, document, and implement RESTful and GraphQL APIs following industry best practices.',
+  },
+  {
+    id: 'contentStrategist',
+    avatar: 'agent-content',
+    skills: ['builtin-web', 'builtin-filesystem', 'builtin-utilities', 'builtin-memory'],
+    temperature: 0.7,
+    rating: 4.5,
+    downloads: 670,
+    fallbackName: 'Content Strategist',
+    fallbackDescription: 'Create content plans, SEO strategies, and editorial calendars',
+    fallbackCategory: 'Marketing',
+    fallbackSystemPrompt: 'You are a content strategist expert in SEO, content marketing, editorial planning, and audience engagement. Help users plan and create effective content strategies.',
+  },
+  {
+    id: 'databaseArchitect',
+    avatar: 'agent-database',
+    skills: ['builtin-filesystem', 'builtin-shell', 'builtin-code-analysis', 'builtin-memory'],
+    temperature: 0.4,
+    rating: 4.7,
+    downloads: 1050,
+    fallbackName: 'Database Architect',
+    fallbackDescription: 'Design efficient database schemas and optimize queries',
+    fallbackCategory: 'Development',
+    fallbackSystemPrompt: 'You are a database architect specializing in schema design, query optimization, indexing strategies, and data modeling for SQL and NoSQL databases.',
+  },
+  {
+    id: 'uiUxDesigner',
+    avatar: 'agent-designer',
+    skills: ['builtin-web', 'builtin-filesystem', 'builtin-browser', 'builtin-utilities'],
+    temperature: 0.7,
+    rating: 4.4,
+    downloads: 780,
+    fallbackName: 'UI/UX Designer',
+    fallbackDescription: 'Design user interfaces and improve user experience',
+    fallbackCategory: 'Design',
+    fallbackSystemPrompt: 'You are a UI/UX design expert. Help users create beautiful, accessible, and user-friendly interfaces following modern design principles.',
+  },
+  {
+    id: 'devopsExpert',
+    avatar: 'agent-devops',
+    skills: ['builtin-shell', 'builtin-filesystem', 'builtin-git', 'builtin-utilities', 'builtin-event-automation'],
+    temperature: 0.4,
+    rating: 4.6,
+    downloads: 920,
+    fallbackName: 'DevOps CI/CD Expert',
+    fallbackDescription: 'Set up CI/CD pipelines, containers, and infrastructure as code',
+    fallbackCategory: 'Infrastructure',
+    fallbackSystemPrompt: 'You are a DevOps expert specializing in CI/CD pipelines, Docker, Kubernetes, Terraform, and infrastructure automation.',
+  },
+  {
+    id: 'technicalWriter',
+    avatar: 'agent-writer',
+    skills: ['builtin-filesystem', 'builtin-web', 'builtin-utilities', 'builtin-memory'],
+    temperature: 0.6,
+    rating: 4.5,
+    downloads: 630,
+    fallbackName: 'Technical Writer',
+    fallbackDescription: 'Write documentation, READMEs, and technical guides',
+    fallbackCategory: 'Writing',
+    fallbackSystemPrompt: 'You are a technical writing expert. Help users create clear, structured, and comprehensive documentation, API docs, README files, and technical guides.',
+  },
+  {
+    id: 'mathTutor',
+    avatar: 'agent-math',
+    skills: ['builtin-utilities', 'builtin-memory', 'builtin-web'],
+    temperature: 0.5,
+    rating: 4.7,
+    downloads: 1200,
+    fallbackName: 'Math Tutor',
+    fallbackDescription: 'Explain math concepts and solve problems step by step',
+    fallbackCategory: 'Education',
+    fallbackSystemPrompt: 'You are an expert math tutor. Explain mathematical concepts clearly with step-by-step solutions. Cover algebra, calculus, statistics, linear algebra, and more.',
+  },
+]
+
+function getAgentDisplayName(agent: Agent, t: (key: string, fallback?: string) => string) {
+  return agent.id === DEFAULT_AGENT_ID
+    ? t('chat.assistant', agent.name || 'Assistant')
+    : agent.name
+}
+
+function getAgentPreviewText(agent: Agent, t: (key: string, fallback?: string) => string) {
+  if (agent.id === DEFAULT_AGENT_ID) {
+    return t('agents.defaultAssistantSummary', 'General-purpose tasks, Q&A, and everyday help.')
+  }
+
+  return `${agent.systemPrompt.slice(0, 40)}…`
+}
 
 // ─── Agent List (sidebar sub-component) ────────────────────────────
 
@@ -44,92 +178,137 @@ function AgentList({
   const { t } = useI18n()
   const filteredAgents = searchQuery.trim()
     ? agents.filter((a) =>
-        a.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        getAgentDisplayName(a, t).toLowerCase().includes(searchQuery.toLowerCase()) ||
         a.systemPrompt.toLowerCase().includes(searchQuery.toLowerCase())
       )
     : agents
 
   return (
-    <div className="p-2 space-y-1">
+    <div className="px-3 pb-3 space-y-2.5">
       {/* Search */}
       {agents.length > 3 && (
-        <div className="px-1 pb-2">
-          <input
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder={t('agents.search', 'Search agents...')}
-            className="w-full px-2.5 py-1.5 rounded-lg bg-surface-2 border border-border text-xs text-text-secondary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
-          />
+        <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+          <div className="relative">
+            <IconifyIcon
+              name="ui-search"
+              size={14}
+              color="currentColor"
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none"
+            />
+            <input
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              placeholder={t('agents.search', 'Search agents...')}
+              className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-3 text-[12px] text-text-secondary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+          </div>
+          <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+            <span>{filteredAgents.length} {t('common.results', 'results')}</span>
+            {searchQuery && <span>{agents.length} {t('common.total', 'total')}</span>}
+          </div>
         </div>
       )}
 
       {filteredAgents.length === 0 && (
-        <p className="text-xs text-text-muted px-2 py-8 text-center">
-          {searchQuery ? t('agents.noMatching', 'No matching agents.') : t('agents.noAgents', 'No agents. Click + New to create one.')}
-        </p>
+        <div className="rounded-[22px] border border-dashed border-border-subtle/60 bg-surface-0/30 px-4 py-10 text-center">
+          <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
+            <IconifyIcon name="ui-search" size={18} color="currentColor" />
+          </div>
+          <p className="text-[12px] text-text-muted px-2">
+            {searchQuery ? t('agents.noMatching', 'No matching agents.') : t('agents.noAgents', 'No agents. Click + New to create one.')}
+          </p>
+        </div>
       )}
       {filteredAgents.map((agent) => {
+        const isActive = editingId === agent.id
         const isDefault = agent.id === DEFAULT_AGENT_ID
         const isBuiltin = agent.id.startsWith('builtin-') || agent.id === 'default-assistant'
         const sourceBadge = isBuiltin ? 'builtin' : null
+        const displayName = getAgentDisplayName(agent, t)
+        const previewText = getAgentPreviewText(agent, t)
         return (
           <div
             key={agent.id}
+            tabIndex={0}
             onClick={() => onSelect(agent)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onSelect(agent)
+              }
+            }}
             onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, agent) }}
-            className={`group px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-200 ${
-              editingId === agent.id
-                ? 'bg-accent/10 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.15)]'
-                : 'text-text-secondary hover:bg-surface-3/60 hover:text-text-primary'
-            }`}
+            className={`group rounded-[22px] border px-3.5 py-3.5 cursor-pointer transition-all duration-200 ${
+              isActive
+                ? 'border-accent/20 bg-accent/10 text-text-primary shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
+                : isDefault
+                ? 'border-border-subtle/55 bg-linear-to-br from-surface-1/80 to-surface-2/55 text-text-secondary hover:border-accent/16 hover:text-text-primary'
+                : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60 hover:text-text-primary'
+            } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30`}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 min-w-0">
-                {agent.color && (
-                  <svg viewBox="0 0 10 10" className="w-2.5 h-2.5 shrink-0" aria-hidden="true">
-                    <circle cx="5" cy="5" r="5" fill={agent.color} />
-                  </svg>
-                )}
-                <span className="shrink-0"><AgentAvatar avatar={agent.avatar} size={20} /></span>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[13px] font-medium truncate">{agent.name}</span>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 gap-3">
+                <div className="relative mt-0.5 shrink-0">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 shadow-sm">
+                    <AgentAvatar avatar={agent.avatar} size={22} />
+                  </div>
+                  {agent.color && (
+                    <svg viewBox="0 0 10 10" className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-surface-0 p-px" aria-hidden="true">
+                      <circle cx="5" cy="5" r="4" fill={agent.color} />
+                    </svg>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[13px] font-semibold truncate text-text-primary">{displayName}</span>
                     {!agent.enabled && (
-                      <span className="text-[9px] uppercase tracking-wider text-text-muted bg-surface-3 px-1.5 py-0.5 rounded-md shrink-0">{t('common.off', 'off')}</span>
+                      <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-text-muted shrink-0">{t('common.off', 'off')}</span>
                     )}
                     {sourceBadge && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-accent/10 text-accent border border-accent/20 shrink-0">{t('agents.builtin', 'builtin')}</span>
+                      <span className="rounded-full border border-accent/20 bg-accent/10 px-1.5 py-0.5 text-[9px] text-accent shrink-0">{t('agents.builtin', 'builtin')}</span>
+                    )}
+                    {isDefault && (
+                      <span className="rounded-full border border-border-subtle/50 bg-surface-0/80 px-1.5 py-0.5 text-[9px] text-text-muted shrink-0">{t('agents.default', 'default')}</span>
                     )}
                   </div>
-                  <div className="text-[10px] text-text-muted truncate">{agent.systemPrompt.slice(0, 40)}...</div>
-                  <div className="flex items-center gap-2 mt-0.5">
-                    {agent.autoLearn && <span className="text-[10px] text-success">{t('agents.autoLearn', 'Auto-learn')}</span>}
-                    {!!agent.memories?.length && <span className="text-[10px] text-text-muted">{agent.memories.length} {t('agents.memoriesCount', 'memories')}</span>}
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-text-secondary/80 line-clamp-2">{previewText}</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                    <span className="rounded-full bg-surface-3/85 px-2 py-0.5 text-[10px] text-text-muted">{agent.skills.length} {t('agents.skills', 'skills')}</span>
+                    {!!agent.memories?.length && <span className="rounded-full bg-surface-3/85 px-2 py-0.5 text-[10px] text-text-muted">{agent.memories.length} {t('agents.memoriesCount', 'memories')}</span>}
+                    {agent.autoLearn && <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] text-success">{t('agents.autoLearn', 'Auto-learn')}</span>}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-all">
+              <div className={`flex items-center gap-1 shrink-0 transition-opacity ${
+                isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+              }`}>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onStartChat(agent) }}
+                  aria-label={t('agents.startChat', 'Start chat with this agent')}
                   title={t('agents.startChat', 'Start chat with this agent')}
-                  className="text-text-muted hover:text-accent text-xs px-1 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/65 text-text-muted transition-colors hover:text-accent hover:bg-accent/8"
+                  tabIndex={isActive ? 0 : -1}
                 >
                   <IconifyIcon name="ui-chat" size={14} color="currentColor" />
                 </button>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onDuplicate(agent) }}
+                  aria-label={t('agents.duplicateAgent', 'Duplicate agent')}
                   title={t('agents.duplicateAgent', 'Duplicate agent')}
-                  className="text-text-muted hover:text-accent text-xs px-1 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/65 text-text-muted transition-colors hover:text-accent hover:bg-accent/8"
+                  tabIndex={isActive ? 0 : -1}
                 >
                   ⧉
                 </button>
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onExport(agent) }}
+                  aria-label={t('agents.exportJson', 'Export agent as JSON')}
                   title={t('agents.exportJson', 'Export agent as JSON')}
-                  className="text-text-muted hover:text-accent text-xs px-1 transition-colors"
+                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/65 text-text-muted transition-colors hover:text-accent hover:bg-accent/8"
+                  tabIndex={isActive ? 0 : -1}
                 >
                   ↓
                 </button>
@@ -137,8 +316,10 @@ function AgentList({
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); onDelete(agent.id) }}
+                    aria-label={t('agents.deleteAgent', 'Delete agent')}
                     title={t('agents.deleteAgent', 'Delete agent')}
-                    className="text-text-muted hover:text-danger text-xs px-1 transition-colors"
+                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/65 text-text-muted transition-colors hover:text-danger hover:bg-danger/8"
+                    tabIndex={isActive ? 0 : -1}
                   >
                     <IconifyIcon name="ui-close" size={14} color="currentColor" />
                   </button>
@@ -156,7 +337,7 @@ function AgentList({
 
 export function AgentsLayout() {
   const { t } = useI18n()
-  const [panelWidth, setPanelWidth] = useResizablePanel('agents', 280)
+  const [panelWidth, setPanelWidth] = useResizablePanel('agents', 320)
   const { agents, addAgent, updateAgent, removeAgent, setSelectedAgent, addSession, setActiveSession, setActiveModule, workspacePath, addAgentVersion } = useAppStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
@@ -182,6 +363,15 @@ export function AgentsLayout() {
   }, [ctxMenu])
 
   const editingAgent = editingId ? agents.find((a) => a.id === editingId) ?? null : null
+  const marketplaceAgents = useMemo<MarketplaceAgentTemplate[]>(() => (
+    MARKETPLACE_AGENT_SEEDS.map((seed) => ({
+      ...seed,
+      name: t(`agents.marketplace.${seed.id}.name`, seed.fallbackName),
+      description: t(`agents.marketplace.${seed.id}.description`, seed.fallbackDescription),
+      category: t(`agents.marketplace.${seed.id}.category`, seed.fallbackCategory),
+      systemPrompt: t(`agents.marketplace.${seed.id}.systemPrompt`, seed.fallbackSystemPrompt),
+    }))
+  ), [t])
 
   // Load agents from disk on mount when workspace is configured
   useEffect(() => {
@@ -237,7 +427,7 @@ export function AgentsLayout() {
     const clone: Agent = {
       ...agent,
       id: generateId('agent'),
-      name: `${agent.name} (Copy)`,
+      name: `${agent.name} (${t('common.copy', 'Copy')})`,
       memories: [], // start fresh
     }
     addAgent(clone)
@@ -293,7 +483,7 @@ export function AgentsLayout() {
     setSelectedAgent(agent)
     const session: Session = {
       id: generateId('session'),
-      title: 'New Chat',
+      title: t('chat.newChat', 'New Chat'),
       createdAt: Date.now(),
       updatedAt: Date.now(),
       agentId: agent.id,
@@ -305,106 +495,18 @@ export function AgentsLayout() {
     setActiveModule('chat')
   }
 
-  // ─── Agent Marketplace Catalog ─────────────────────────────
-  const MARKETPLACE_AGENTS: Array<{
-    name: string; avatar: string; description: string; category: string
-    systemPrompt: string; skills: string[]; temperature: number; rating: number; downloads: number
-  }> = [
-    {
-      name: 'Full-Stack Developer',
-      avatar: 'agent-developer',
-      description: 'Expert in frontend and backend development, databases, and deployment',
-      category: 'Development',
-      systemPrompt: 'You are a full-stack developer expert in React, Node.js, Python, databases, APIs, and deployment. Help users build complete applications from frontend to backend.',
-      skills: ['builtin-filesystem', 'builtin-shell', 'builtin-git', 'builtin-code-analysis', 'builtin-web'],
-      temperature: 0.5,
-      rating: 4.8,
-      downloads: 1520,
-    },
-    {
-      name: 'API Designer',
-      avatar: 'agent-api',
-      description: 'Design RESTful and GraphQL APIs with best practices',
-      category: 'Development',
-      systemPrompt: 'You are an API design expert. Help users design, document, and implement RESTful and GraphQL APIs following industry best practices.',
-      skills: ['builtin-filesystem', 'builtin-shell', 'builtin-code-analysis', 'builtin-web'],
-      temperature: 0.4,
-      rating: 4.6,
-      downloads: 890,
-    },
-    {
-      name: 'Content Strategist',
-      avatar: 'agent-content',
-      description: 'Create content plans, SEO strategies, and editorial calendars',
-      category: 'Marketing',
-      systemPrompt: 'You are a content strategist expert in SEO, content marketing, editorial planning, and audience engagement. Help users plan and create effective content strategies.',
-      skills: ['builtin-web', 'builtin-filesystem', 'builtin-utilities', 'builtin-memory'],
-      temperature: 0.7,
-      rating: 4.5,
-      downloads: 670,
-    },
-    {
-      name: 'Database Architect',
-      avatar: 'agent-database',
-      description: 'Design efficient database schemas and optimize queries',
-      category: 'Development',
-      systemPrompt: 'You are a database architect specializing in schema design, query optimization, indexing strategies, and data modeling for SQL and NoSQL databases.',
-      skills: ['builtin-filesystem', 'builtin-shell', 'builtin-code-analysis', 'builtin-memory'],
-      temperature: 0.4,
-      rating: 4.7,
-      downloads: 1050,
-    },
-    {
-      name: 'UI/UX Designer',
-      avatar: 'agent-designer',
-      description: 'Design user interfaces and improve user experience',
-      category: 'Design',
-      systemPrompt: 'You are a UI/UX design expert. Help users create beautiful, accessible, and user-friendly interfaces following modern design principles.',
-      skills: ['builtin-web', 'builtin-filesystem', 'builtin-browser', 'builtin-utilities'],
-      temperature: 0.7,
-      rating: 4.4,
-      downloads: 780,
-    },
-    {
-      name: 'DevOps CI/CD Expert',
-      avatar: 'agent-devops',
-      description: 'Set up CI/CD pipelines, containers, and infrastructure as code',
-      category: 'Infrastructure',
-      systemPrompt: 'You are a DevOps expert specializing in CI/CD pipelines, Docker, Kubernetes, Terraform, and infrastructure automation.',
-      skills: ['builtin-shell', 'builtin-filesystem', 'builtin-git', 'builtin-utilities', 'builtin-event-automation'],
-      temperature: 0.4,
-      rating: 4.6,
-      downloads: 920,
-    },
-    {
-      name: 'Technical Writer',
-      avatar: 'agent-writer',
-      description: 'Write documentation, READMEs, and technical guides',
-      category: 'Writing',
-      systemPrompt: 'You are a technical writing expert. Help users create clear, structured, and comprehensive documentation, API docs, README files, and technical guides.',
-      skills: ['builtin-filesystem', 'builtin-web', 'builtin-utilities', 'builtin-memory'],
-      temperature: 0.6,
-      rating: 4.5,
-      downloads: 630,
-    },
-    {
-      name: 'Math Tutor',
-      avatar: 'agent-math',
-      description: 'Explain math concepts and solve problems step by step',
-      category: 'Education',
-      systemPrompt: 'You are an expert math tutor. Explain mathematical concepts clearly with step-by-step solutions. Cover algebra, calculus, statistics, linear algebra, and more.',
-      skills: ['builtin-utilities', 'builtin-memory', 'builtin-web'],
-      temperature: 0.5,
-      rating: 4.7,
-      downloads: 1200,
-    },
-  ]
-
-  const filteredMarketAgents = MARKETPLACE_AGENTS.filter((a) =>
+  const filteredMarketAgents = marketplaceAgents.filter((a) =>
     !marketSearch || a.name.toLowerCase().includes(marketSearch.toLowerCase()) || a.category.toLowerCase().includes(marketSearch.toLowerCase())
   )
+  const enabledAgentCount = agents.filter((agent) => agent.enabled).length
+  const autoLearnAgentCount = agents.filter((agent) => agent.autoLearn).length
+  const customAgentCount = agents.filter((agent) => agent.id !== DEFAULT_AGENT_ID && !agent.id.startsWith('builtin-')).length
+  const installedMarketplaceCount = marketplaceAgents.filter((tpl) =>
+    agents.some((agent) => agent.avatar === tpl.avatar && tpl.skills.every((skillId) => agent.skills.includes(skillId))),
+  ).length
 
-  const installMarketAgent = (tpl: typeof MARKETPLACE_AGENTS[number]) => {
+  const installMarketAgent = (tpl: MarketplaceAgentTemplate) => {
+    const greetingTemplate = t('agents.marketplace.greeting', "Hi! I'm {name}. {description}")
     const agent: Agent = {
       id: generateId('agent'),
       name: tpl.name,
@@ -415,7 +517,7 @@ export function AgentsLayout() {
       temperature: tpl.temperature,
       maxTokens: 8192,
       enabled: true,
-      greeting: `Hi! I'm ${tpl.name}. ${tpl.description}`,
+      greeting: greetingTemplate.replace('{name}', tpl.name).replace('{description}', tpl.description),
       responseStyle: 'balanced',
       allowedTools: [],
       memories: [],
@@ -455,20 +557,22 @@ export function AgentsLayout() {
               onClick={() => { setIsAdding(true); setEditingId(null) }}
               className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
             >
-              + New
+              + {t('common.new', 'New')}
             </button>
           </div>
         }
       >
-        <input type="file" ref={fileInputRef} accept=".json" onChange={handleImport} className="hidden" aria-label="Import agent JSON" />
+        <input type="file" ref={fileInputRef} accept=".json" onChange={handleImport} className="hidden" aria-label={t('agents.importAgent', 'Import agent from JSON')} />
 
         {/* Side panel tabs */}
-        <div className="flex items-center gap-1 px-2 pb-2">
+        <div className="grid grid-cols-2 gap-1.5 px-3 pb-3 pt-1">
           <button
             type="button"
             onClick={() => setSideTab('local')}
-            className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition-all ${
-              sideTab === 'local' ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'
+            className={`text-xs py-2 rounded-xl font-semibold transition-all ${
+              sideTab === 'local'
+                ? 'bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.14)]'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'
             }`}
           >
             {t('agents.local', 'Local')} ({agents.length})
@@ -476,12 +580,82 @@ export function AgentsLayout() {
           <button
             type="button"
             onClick={() => setSideTab('marketplace')}
-            className={`flex-1 text-xs py-1.5 rounded-lg font-medium transition-all inline-flex items-center justify-center gap-1.5 ${
-              sideTab === 'marketplace' ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'
+            className={`text-xs py-2 rounded-xl font-semibold transition-all inline-flex items-center justify-center gap-1.5 ${
+              sideTab === 'marketplace'
+                ? 'bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.14)]'
+                : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'
             }`}
           >
             <IconifyIcon name="ui-cart" size={14} color="currentColor" /> {t('agents.market', 'Market')}
           </button>
+        </div>
+
+        <div className="px-3 pb-3">
+          {sideTab === 'local' ? (
+            <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">
+                    {t('agents.studio', 'Studio')}
+                  </div>
+                  <div className="mt-1 text-[18px] font-semibold text-text-primary">
+                    {t('agents.roster', 'Agent Roster')}
+                  </div>
+                  <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">
+                    {t('agents.rosterHint', 'Curate specialists, test their prompts, and keep the active lineup easy to scan.')}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
+                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
+                  <div className="text-xl font-semibold text-text-primary tabular-nums">{agents.length}</div>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-3 gap-2">
+                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.enabled', 'Enabled')}</div>
+                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledAgentCount}</div>
+                </div>
+                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.autoLearn', 'Auto-learn')}</div>
+                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{autoLearnAgentCount}</div>
+                </div>
+                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.custom', 'Custom')}</div>
+                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{customAgentCount}</div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-3xl border border-border-subtle/55 bg-linear-to-br from-surface-2/95 via-surface-1/85 to-surface-1/65 p-4 shadow-[0_14px_40px_rgba(15,23,42,0.12)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">
+                    {t('agents.curated', 'Curated')}
+                  </div>
+                  <div className="mt-1 text-[18px] font-semibold text-text-primary">
+                    {t('agents.marketCollection', 'Starter Collection')}
+                  </div>
+                  <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">
+                    {t('agents.marketCollectionHint', 'Install ready-made specialists and use them as a starting point for your own workflows.')}
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-border-subtle/50 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
+                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.installed', 'Installed')}</div>
+                  <div className="text-xl font-semibold text-text-primary tabular-nums">{installedMarketplaceCount}</div>
+                </div>
+              </div>
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.catalog', 'Catalog')}</div>
+                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{marketplaceAgents.length}</div>
+                </div>
+                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.search', 'Search')}</div>
+                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{filteredMarketAgents.length}</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {sideTab === 'local' && (
@@ -500,42 +674,56 @@ export function AgentsLayout() {
         )}
 
         {sideTab === 'marketplace' && (
-          <div className="px-2 space-y-2">
-            <input
-              type="text"
-              value={marketSearch}
-              onChange={(e) => setMarketSearch(e.target.value)}
-              placeholder={t('agents.search', 'Search agents...')}
-              className="w-full px-3 py-2 rounded-xl bg-surface-2 border border-border text-text-primary text-xs placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/30"
-            />
+          <div className="px-3 pb-3 space-y-3">
+            <div className="relative">
+              <IconifyIcon
+                name="ui-search"
+                size={14}
+                color="currentColor"
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none"
+              />
+              <input
+                type="text"
+                value={marketSearch}
+                onChange={(e) => setMarketSearch(e.target.value)}
+                placeholder={t('agents.search', 'Search agents...')}
+                className={`${settingsInputClass} py-2.5 pl-10 pr-3 text-[12px]`}
+              />
+            </div>
             {filteredMarketAgents.map((tpl, idx) => {
-              const alreadyInstalled = agents.some((a) => a.name === tpl.name)
+              const alreadyInstalled = agents.some((a) => a.avatar === tpl.avatar && tpl.skills.every((skillId) => a.skills.includes(skillId)))
               return (
-                <div key={idx} className="p-3 rounded-xl bg-surface-1/80 border border-border-subtle hover:border-border transition-all">
-                  <div className="flex items-start gap-2">
-                    <AgentAvatar avatar={tpl.avatar} size={20} />
+                <div key={idx} className="rounded-[22px] border border-border-subtle/60 bg-linear-to-br from-surface-1/92 to-surface-2/58 p-3.5 transition-all duration-200 hover:border-accent/18 hover:shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.05)]">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/70 shadow-sm">
+                      <AgentAvatar avatar={tpl.avatar} size={22} />
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-medium text-text-primary">{tpl.name}</span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-3 text-text-muted">{tpl.category}</span>
+                        <span className="text-[13px] font-semibold text-text-primary">{tpl.name}</span>
+                        <span className="rounded-full bg-surface-3/85 px-2 py-0.5 text-[10px] text-text-muted">{tpl.category}</span>
                       </div>
-                      <p className="text-xs text-text-muted mt-0.5 line-clamp-2">{tpl.description}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-2 text-[10px] text-text-muted">
-                          <span>⭐ {tpl.rating}</span>
-                          <span>↓ {tpl.downloads}</span>
+                      <p className="mt-1.5 text-[12px] leading-relaxed text-text-secondary/82 line-clamp-2">{tpl.description}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-text-muted">
+                        <span className="rounded-full bg-surface-3/75 px-2 py-0.5">⭐ {tpl.rating}</span>
+                        <span className="rounded-full bg-surface-3/75 px-2 py-0.5">↓ {tpl.downloads}</span>
+                        <span className="rounded-full bg-surface-3/75 px-2 py-0.5">{tpl.skills.length} {t('agents.skills', 'skills')}</span>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between gap-3">
+                        <div className="text-[10px] text-text-muted/65 line-clamp-1">
+                          {tpl.systemPrompt}
                         </div>
                         <button
                           type="button"
                           onClick={() => installMarketAgent(tpl)}
                           disabled={alreadyInstalled}
-                          className={`px-2.5 py-1 text-[11px] font-medium rounded-lg transition-colors ${
+                          className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-colors shrink-0 ${
                             alreadyInstalled
                               ? 'bg-surface-3 text-text-muted cursor-not-allowed'
                               : 'bg-accent/15 text-accent hover:bg-accent/25'
                           }`}
                         >
-                          {alreadyInstalled ? 'Installed' : 'Install'}
+                          {alreadyInstalled ? t('common.installed', 'Installed') : t('common.install', 'Install')}
                         </button>
                       </div>
                     </div>
@@ -563,7 +751,7 @@ export function AgentsLayout() {
               ⧉ {t('common.duplicate', 'Duplicate')}
             </button>
             <button type="button" className="w-full text-left px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors flex items-center gap-1.5" onClick={() => { handleExport(ctxMenu.agent); setCtxMenu(null) }}>
-              ↓ {t('agents.exportJson', 'Export JSON')}
+              ↓ {t('common.export', 'Export')}
             </button>
             {ctxMenu.agent.id !== DEFAULT_AGENT_ID && (
               <>
@@ -576,7 +764,7 @@ export function AgentsLayout() {
           </div>
         )}
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={200} maxWidth={480} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
 
       {showHub ? (
         <AgentOrchestrationPanel
@@ -606,13 +794,60 @@ export function AgentsLayout() {
           )}
         </>
       ) : (
-        <div className="flex-1 flex items-center justify-center text-text-muted">
-          <div className="text-center animate-fade-in">
-            <div className="w-16 h-16 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-5 border border-border-subtle">
-              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="text-accent"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14H8a4 4 0 0 0-4 4v2h16v-2a4 4 0 0 0-4-4z"/></svg>
+        <div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
+          <div className="mx-auto flex h-full w-full max-w-5xl items-center justify-center">
+            <div className="w-full rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/94 via-surface-1/88 to-surface-2/72 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.16)] animate-fade-in xl:p-10">
+              <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
+                <div className="max-w-2xl">
+                  <div className="flex h-18 w-18 items-center justify-center rounded-[26px] border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
+                    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14H8a4 4 0 0 0-4 4v2h16v-2a4 4 0 0 0-4-4z"/></svg>
+                  </div>
+                  <p className="mt-5 font-display text-[11px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">
+                    {t('agents.studioWorkspace', 'Agent Workspace')}
+                  </p>
+                  <h2 className="mt-2 text-3xl font-semibold tracking-tight text-text-primary">
+                    {t('agents.selectToEdit', 'Select an agent to edit')}
+                  </h2>
+                  <p className="mt-3 max-w-xl text-[14px] leading-7 text-text-secondary/82">
+                    {t('agents.emptyStateDetail', 'Build specialists with distinct prompts, curated skills, and guardrails. Pick an existing agent to refine it, or create a new one as a reusable starting point.')}
+                  </p>
+                  <div className="mt-6 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={() => { setIsAdding(true); setEditingId(null) }}
+                      className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
+                    >
+                      + {t('common.new', 'New')} {t('agents.title', 'Agents')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowHub(true)}
+                      className="rounded-2xl border border-border-subtle/60 bg-surface-0/60 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-all hover:border-accent/20 hover:text-text-primary"
+                    >
+                      {t('agents.agentHub', 'Agent Hub')}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3 xl:w-[24rem] xl:grid-cols-1">
+                  <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
+                    <div className="mt-2 text-2xl font-semibold text-text-primary tabular-nums">{agents.length}</div>
+                    <div className="mt-1 text-[12px] text-text-muted">{t('agents.availableSpecialists', 'available specialists')}</div>
+                  </div>
+                  <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.enabled', 'Enabled')}</div>
+                    <div className="mt-2 text-2xl font-semibold text-text-primary tabular-nums">{enabledAgentCount}</div>
+                    <div className="mt-1 text-[12px] text-text-muted">{t('agents.readyForUse', 'ready for use')}</div>
+                  </div>
+                  <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('agents.market', 'Market')}</div>
+                    <div className="mt-2 text-2xl font-semibold text-text-primary tabular-nums">{marketplaceAgents.length}</div>
+                    <div className="mt-1 text-[12px] text-text-muted">{t('agents.starterTemplates', 'starter templates')}</div>
+                  </div>
+                </div>
+              </div>
             </div>
-            <p className="text-sm text-text-secondary font-medium">{t('agents.selectToEdit', 'Select an agent to edit')}</p>
-            <p className="text-xs text-text-muted mt-1">{t('agents.orCreateNew', 'or create a new one')}</p>
           </div>
         </div>
       )}

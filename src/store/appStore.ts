@@ -4,11 +4,12 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, ToolSecuritySettings, MarketplaceSettings, ThemeMode, FontSize, CodeFont, BubbleStyle, ProviderConfig, WorkspaceSettings, ExternalDirectoryConfig, ChannelConfig, AppNotification, ModelUsageStats, ChannelHistoryMessage, ChannelAccessToken, ChannelHealthStatus, ChannelUser, PluginInfo, AgentVersion, AgentPerformanceStats, AgentPipeline, AgentPipelineStep, AppLocale, ProxySettings, OnboardingState, SkillVersion, EmailConfig, EnvVariable, MCPServerConfig, MCPServerStatus } from '@/types'
 import { setLiveStoreAccessor } from '@/services/tools'
 import { loadWorkspaceSettings, saveWorkspaceSettings } from '@/services/workspaceSettings'
-import { loadSessionsFromDisk } from '@/services/sessionFiles'
+import { loadSessionsFromDisk, deleteSessionFromDisk, saveSessionToDisk } from '@/services/sessionFiles'
 import { loadExternalResources, syncExternalDirectoryAccess } from '@/services/externalDirectories'
 import { loadAgentsFromDisk } from '@/services/agentFiles'
 import { loadAllSkills } from '@/services/skillRegistry'
-import { fileStateStorage } from '@/services/fileStorage'
+import { setI18nLocale, t } from '@/services/i18n'
+import { fileStateStorage, flushPendingSplitStoreWrites } from '@/services/fileStorage'
 import { createSessionSlice } from '@/store/slices/sessionSlice'
 import { createModelConfigSlice } from '@/store/slices/modelConfigSlice'
 import { createUIPreferencesSlice } from '@/store/slices/uiPreferencesSlice'
@@ -20,7 +21,10 @@ function normalizeAgentMaxTurns(maxTurns: number | undefined): number | undefine
 
 function normalizeAgent(agent: Agent): Agent {
   const maxTurns = normalizeAgentMaxTurns(agent.maxTurns)
-  return maxTurns === undefined ? agent : { ...agent, maxTurns }
+  const normalizedAgent = agent.enabled === undefined
+    ? { ...agent, enabled: true }
+    : agent
+  return maxTurns === undefined ? normalizedAgent : { ...normalizedAgent, maxTurns }
 }
 
 function normalizeAgentPatch(agent: Partial<Agent>): Partial<Agent> {
@@ -30,32 +34,65 @@ function normalizeAgentPatch(agent: Partial<Agent>): Partial<Agent> {
 
 // ─── Default general-purpose agent ─────────────────────────────────
 
-const DEFAULT_AGENT: Agent = {
-  id: 'default-assistant',
-  name: 'Assistant',
-  avatar: 'agent-robot',
-  color: '#6366F1',
-  whenToUse: 'General-purpose tasks, Q&A, and any task not better suited for a specialized agent',
-  systemPrompt:
-    'You are a helpful, friendly, and knowledgeable AI assistant with access to all available tools and skills. ' +
-    'You can help with a wide range of tasks including answering questions, writing, coding, analysis, file operations, ' +
-    'sending emails, web searches, running shell commands, managing timers, git operations, and much more. ' +
-    'Proactively use the most appropriate tool for each task. When a task can benefit from a tool, use it without hesitation. ' +
-    'Be clear and concise in your responses. When you are unsure, say so honestly. ' +
-    'If the user speaks in Chinese, reply in Chinese; otherwise match the user\'s language.',
-  modelId: '',  // will use whatever model the user selects globally
-  skills: [],
-  temperature: 0.7,
-  maxTokens: 4096,
-  maxTurns: 30,
-  enabled: true,
-  greeting: 'Hi! I\'m your Suora. How can I help you today?',
-  responseStyle: 'balanced',
-  allowedTools: [],
-  disallowedTools: [],
-  memories: [],
-  autoLearn: true,
+const LEGACY_DEFAULT_AGENT_NAME = ['Assistant', '助手']
+const LEGACY_DEFAULT_AGENT_WHEN_TO_USE = [
+  'General-purpose tasks, Q&A, and any task not better suited for a specialized agent',
+  '适合通用任务、问答和任何不更适合专门智能体的任务',
+]
+const LEGACY_DEFAULT_AGENT_GREETING = [
+  'Hi! I\'m your Suora. How can I help you today?',
+  '你好，我是你的 Suora。今天想让我帮你处理什么？',
+]
+const LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT = [
+  'You are a helpful, friendly, and knowledgeable AI assistant with access to all available tools and skills. You can help with a wide range of tasks including answering questions, writing, coding, analysis, file operations, sending emails, web searches, running shell commands, managing timers, git operations, and much more. Proactively use the most appropriate tool for each task. When a task can benefit from a tool, use it without hesitation. Be clear and concise in your responses. When you are unsure, say so honestly. If the user speaks in Chinese, reply in Chinese; otherwise match the user\'s language.',
+  '你是一个友好、可靠且知识丰富的 AI 助手，可以使用所有可用的工具和技能。你能够协助回答问题、写作、编程、分析、文件操作、发送邮件、网页搜索、执行命令、管理定时任务、进行 Git 操作等各种任务。请主动选择最合适的工具；当任务适合借助工具完成时，不要犹豫。回复时保持清晰和简洁；如果你不确定，请诚实说明。如果用户使用中文，就用中文回复，否则匹配用户的语言。',
+]
+
+function buildDefaultAgent(): Agent {
+  return {
+    id: 'default-assistant',
+    name: t('chat.assistant', 'Assistant'),
+    avatar: 'agent-robot',
+    color: '#6366F1',
+    whenToUse: t('agents.defaultAssistantWhenToUse', 'General-purpose tasks, Q&A, and any task not better suited for a specialized agent'),
+    systemPrompt: t(
+      'agents.defaultAssistantSystemPrompt',
+      'You are a helpful, friendly, and knowledgeable AI assistant with access to all available tools and skills. You can help with a wide range of tasks including answering questions, writing, coding, analysis, file operations, sending emails, web searches, running shell commands, managing timers, git operations, and much more. Proactively use the most appropriate tool for each task. When a task can benefit from a tool, use it without hesitation. Be clear and concise in your responses. When you are unsure, say so honestly. If the user speaks in Chinese, reply in Chinese; otherwise match the user\'s language.',
+    ),
+    modelId: '',
+    skills: [],
+    temperature: 0.7,
+    maxTokens: 4096,
+    maxTurns: 30,
+    enabled: true,
+    greeting: t('chat.defaultAssistantGreeting', 'Hi! I\'m your Suora. How can I help you today?'),
+    responseStyle: 'balanced',
+    allowedTools: [],
+    disallowedTools: [],
+    memories: [],
+    autoLearn: true,
+  }
 }
+
+function shouldRefreshBuiltinField(value: string | undefined, legacyValues: string[]) {
+  return !value || legacyValues.includes(value)
+}
+
+function localizeBuiltinAgent(agent: Agent): Agent {
+  if (agent.id !== 'default-assistant') return agent
+
+  const localized = buildDefaultAgent()
+  return {
+    ...localized,
+    ...agent,
+    name: shouldRefreshBuiltinField(agent.name, LEGACY_DEFAULT_AGENT_NAME) ? localized.name : agent.name,
+    whenToUse: shouldRefreshBuiltinField(agent.whenToUse, LEGACY_DEFAULT_AGENT_WHEN_TO_USE) ? localized.whenToUse : agent.whenToUse,
+    systemPrompt: shouldRefreshBuiltinField(agent.systemPrompt, LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT) ? localized.systemPrompt : agent.systemPrompt,
+    greeting: shouldRefreshBuiltinField(agent.greeting, LEGACY_DEFAULT_AGENT_GREETING) ? localized.greeting : agent.greeting,
+  }
+}
+
+const DEFAULT_AGENT: Agent = buildDefaultAgent()
 
 // ─── All builtin agents ────────────────────────────────────────────
 
@@ -282,10 +319,24 @@ export const useAppStore = create<AppStore>()(
             : state.selectedAgent,
         }
       }),
-      removeAgent: (id) => set((state) => ({
-        agents: state.agents.filter((a) => a.id !== id),
-        selectedAgent: state.selectedAgent?.id === id ? null : state.selectedAgent,
-      })),
+      removeAgent: (id) => {
+        const affectedIds = new Set(get().sessions.filter((s) => s.agentId === id).map((s) => s.id))
+        set((state) => ({
+          agents: state.agents.filter((a) => a.id !== id),
+          selectedAgent: state.selectedAgent?.id === id ? null : state.selectedAgent,
+          sessions: state.sessions.map((s) =>
+            s.agentId === id ? { ...s, agentId: undefined } : s
+          ),
+        }))
+        if (affectedIds.size > 0) {
+          const { sessions, workspacePath } = get()
+          if (workspacePath) {
+            for (const s of sessions) {
+              if (affectedIds.has(s.id)) saveSessionToDisk(workspacePath, s)
+            }
+          }
+        }
+      },
       setSelectedAgent: (agent) => set({ selectedAgent: agent ? normalizeAgent(agent) : null }),
       addAgentMemory: (agentId, memory) => set((state) => ({
         agents: state.agents.map((a) =>
@@ -537,7 +588,16 @@ export const useAppStore = create<AppStore>()(
 
       // i18n
       locale: 'en' as AppLocale,
-      setLocale: (locale) => set({ locale }),
+      setLocale: (locale) => {
+        setI18nLocale(locale)
+        set((state) => {
+          const agents = state.agents.map((agent) => localizeBuiltinAgent(normalizeAgent(agent)))
+          const selectedAgent = state.selectedAgent
+            ? agents.find((agent) => agent.id === state.selectedAgent?.id) ?? localizeBuiltinAgent(normalizeAgent(state.selectedAgent))
+            : null
+          return { locale, agents, selectedAgent }
+        })
+      },
 
       // Proxy Settings
       proxySettings: { enabled: false, type: 'http', host: '', port: 0 } as ProxySettings,
@@ -716,16 +776,18 @@ export const useAppStore = create<AppStore>()(
       },
       merge: (persisted, current) => {
         const merged = { ...(current as object), ...(persisted as object) } as AppStore
+        setI18nLocale(merged.locale ?? current.locale)
         // Filter out legacy builtin skills from persisted state
         merged.skills = merged.skills.filter((s) => s.type !== 'builtin')
-        merged.agents = merged.agents.map(normalizeAgent)
+        merged.agents = merged.agents.map((agent) => localizeBuiltinAgent(normalizeAgent(agent)))
+        const localizedDefaultAgent = buildDefaultAgent()
 
         // Ensure default agent always present
-        if (!merged.agents.some((a) => a.id === DEFAULT_AGENT.id)) {
-          merged.agents = [DEFAULT_AGENT, ...merged.agents]
+        if (!merged.agents.some((a) => a.id === localizedDefaultAgent.id)) {
+          merged.agents = [localizedDefaultAgent, ...merged.agents]
           // Auto-select if nothing selected
           if (!merged.selectedAgent) {
-            merged.selectedAgent = DEFAULT_AGENT
+            merged.selectedAgent = localizedDefaultAgent
           }
         }
 
@@ -816,7 +878,7 @@ export async function initWorkspacePath(): Promise<string> {
 }
 
 export async function loadSessionsFromWorkspace(): Promise<void> {
-  const { workspacePath } = useAppStore.getState()
+  const { workspacePath, historyRetentionDays } = useAppStore.getState()
   if (!workspacePath) return
   const diskSessions = await loadSessionsFromDisk(workspacePath)
   if (diskSessions.length > 0) {
@@ -836,6 +898,28 @@ export async function loadSessionsFromWorkspace(): Promise<void> {
         return { ...msg, toolCalls: migratedCalls }
       }),
     })) as typeof diskSessions
+
+    // Auto-clean expired sessions based on history retention setting
+    if (historyRetentionDays > 0) {
+      const cutoff = Date.now() - historyRetentionDays * 86400000
+      const expired: string[] = []
+      const kept = migrated.filter((s) => {
+        if (s.updatedAt < cutoff) { expired.push(s.id); return false }
+        return true
+      })
+      if (expired.length > 0) {
+        for (const id of expired) deleteSessionFromDisk(workspacePath, id)
+        useAppStore.setState((state) => ({
+          sessions: kept,
+          openSessionTabs: state.openSessionTabs.filter((t) => !expired.includes(t)),
+          activeSessionId: state.activeSessionId && expired.includes(state.activeSessionId)
+            ? (kept[0]?.id ?? null)
+            : state.activeSessionId,
+        }))
+        return
+      }
+    }
+
     useAppStore.setState({ sessions: migrated })
   }
 }
@@ -854,11 +938,13 @@ export async function loadSettingsFromWorkspace(): Promise<void> {
 export async function saveSettingsToWorkspace(): Promise<boolean> {
   const state = useAppStore.getState()
   if (!state.workspacePath) return false
-  const settings: WorkspaceSettings = {
-    providers: state.providerConfigs,
-    externalDirectories: state.externalDirectories,
+
+  try {
+    await flushPendingSplitStoreWrites()
+    return true
+  } catch {
+    return false
   }
-  return saveWorkspaceSettings(state.workspacePath, settings)
 }
 
 /**
@@ -881,24 +967,29 @@ export async function loadExternalSkillsAndAgents(): Promise<void> {
     skillMap.set(skill.name.toLowerCase(), skill)
   }
 
-  const builtinAgents = state.agents.filter((a) => a.id.startsWith('builtin-') || a.id === 'default-assistant').map(normalizeAgent)
-  const agentMap = new Map<string, Agent>()
-  for (const agent of builtinAgents) {
-    agentMap.set(agent.id, agent)
-  }
-  for (const agent of [...diskAgents, ...externalAgents]) {
-    if (agent.id === DEFAULT_AGENT.id || agent.id.startsWith('builtin-')) continue
-    agentMap.set(agent.id, normalizeAgent(agent))
-  }
+  useAppStore.setState((current) => {
+    const builtinAgents = current.agents
+      .filter((agent) => agent.id.startsWith('builtin-') || agent.id === DEFAULT_AGENT.id)
+      .map(normalizeAgent)
 
-  const allAgents = Array.from(agentMap.values())
-  const selectedAgentId = state.selectedAgent?.id
+    const agentMap = new Map<string, Agent>()
+    for (const agent of builtinAgents) {
+      agentMap.set(agent.id, agent)
+    }
+    for (const agent of [...diskAgents, ...externalAgents]) {
+      if (agent.id === DEFAULT_AGENT.id || agent.id.startsWith('builtin-')) continue
+      agentMap.set(agent.id, normalizeAgent(agent))
+    }
 
-  useAppStore.setState({
-    skills: Array.from(skillMap.values()),
-    agents: allAgents,
-    selectedAgent: selectedAgentId
-      ? allAgents.find((agent) => agent.id === selectedAgentId) ?? null
-      : state.selectedAgent,
+    const allAgents = Array.from(agentMap.values())
+    const selectedAgentId = current.selectedAgent?.id
+
+    return {
+      skills: Array.from(skillMap.values()),
+      agents: allAgents,
+      selectedAgent: selectedAgentId
+        ? allAgents.find((agent) => agent.id === selectedAgentId) ?? current.selectedAgent
+        : current.selectedAgent,
+    }
   })
 }

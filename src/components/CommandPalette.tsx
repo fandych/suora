@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons'
+import { useI18n } from '@/hooks/useI18n'
 import { generateId } from '@/utils/helpers'
 import type { Session } from '@/types'
 
@@ -20,6 +21,7 @@ export function openCommandPalette() {
 }
 
 export function CommandPalette() {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -66,13 +68,13 @@ export function CommandPalette() {
       {
         id: 'action-new-chat',
         type: 'action',
-        title: 'New Chat',
-        subtitle: 'Start a new conversation',
+        title: t('chat.newChat', 'New Chat'),
+        subtitle: t('chat.startNew', 'Start a new conversation'),
         icon: 'action-chat',
         action: () => {
           const session: Session = {
             id: generateId('session'),
-            title: 'New Chat',
+            title: t('chat.newChat', 'New Chat'),
             createdAt: Date.now(),
             updatedAt: Date.now(),
             agentId: selectedAgent?.id,
@@ -84,14 +86,14 @@ export function CommandPalette() {
           setOpen(false)
         },
       },
-      { id: 'action-pipeline', type: 'action', title: 'Pipeline', subtitle: 'Build and run agent pipelines', icon: 'skill-agent-comm', action: () => { navigate('/pipeline'); setOpen(false) } },
-      { id: 'action-settings', type: 'action', title: 'Settings', subtitle: 'Open settings page', icon: 'action-settings', action: () => { navigate('/settings'); setOpen(false) } },
-      { id: 'action-models', type: 'action', title: 'Models', subtitle: 'Manage AI models', icon: 'action-models', action: () => { navigate('/models'); setOpen(false) } },
-      { id: 'action-mcp', type: 'action', title: 'MCP Servers', subtitle: 'Configure MCP servers', icon: 'ui-plugin', action: () => { navigate('/mcp'); setOpen(false) } },
-      { id: 'action-agents', type: 'action', title: 'Agents', subtitle: 'View all agents', icon: 'agent-robot', action: () => { navigate('/agents'); setOpen(false) } },
-      { id: 'action-skills', type: 'action', title: 'Skills', subtitle: 'Manage skills', icon: 'action-skills', action: () => { navigate('/skills'); setOpen(false) } },
-      { id: 'action-timer', type: 'action', title: 'Timer', subtitle: 'Scheduled tasks', icon: 'action-timer', action: () => { navigate('/timer'); setOpen(false) } },
-      { id: 'action-channels', type: 'action', title: 'Channels', subtitle: 'Platform integrations', icon: 'action-channels', action: () => { navigate('/channels'); setOpen(false) } },
+      { id: 'action-pipeline', type: 'action', title: t('nav.pipeline', 'Pipeline'), subtitle: t('commandPalette.pipelineSubtitle', 'Build and run agent pipelines'), icon: 'skill-agent-comm', action: () => { navigate('/pipeline'); setOpen(false) } },
+      { id: 'action-settings', type: 'action', title: t('nav.settings', 'Settings'), subtitle: t('commandPalette.settingsSubtitle', 'Open settings page'), icon: 'action-settings', action: () => { navigate('/settings'); setOpen(false) } },
+      { id: 'action-models', type: 'action', title: t('nav.models', 'Models'), subtitle: t('commandPalette.modelsSubtitle', 'Manage AI models'), icon: 'action-models', action: () => { navigate('/models'); setOpen(false) } },
+      { id: 'action-mcp', type: 'action', title: t('nav.mcp', 'MCP Servers'), subtitle: t('commandPalette.mcpSubtitle', 'Configure MCP servers'), icon: 'ui-plugin', action: () => { navigate('/mcp'); setOpen(false) } },
+      { id: 'action-agents', type: 'action', title: t('nav.agents', 'Agents'), subtitle: t('commandPalette.agentsSubtitle', 'View all agents'), icon: 'agent-robot', action: () => { navigate('/agents'); setOpen(false) } },
+      { id: 'action-skills', type: 'action', title: t('nav.skills', 'Skills'), subtitle: t('commandPalette.skillsSubtitle', 'Manage skills'), icon: 'action-skills', action: () => { navigate('/skills'); setOpen(false) } },
+      { id: 'action-timer', type: 'action', title: t('nav.timer', 'Timer'), subtitle: t('commandPalette.timerSubtitle', 'Scheduled tasks'), icon: 'action-timer', action: () => { navigate('/timer'); setOpen(false) } },
+      { id: 'action-channels', type: 'action', title: t('nav.channels', 'Channels'), subtitle: t('commandPalette.channelsSubtitle', 'Platform integrations'), icon: 'action-channels', action: () => { navigate('/channels'); setOpen(false) } },
     )
 
     // Sessions
@@ -100,7 +102,7 @@ export function CommandPalette() {
         id: `session-${session.id}`,
         type: 'session',
         title: session.title,
-        subtitle: `${session.messages.length} messages`,
+        subtitle: `${session.messages.length} ${t('commandPalette.messages', 'messages')}`,
         icon: 'action-chat',
         action: () => { setActiveSession(session.id); navigate('/chat'); setOpen(false) },
       })
@@ -112,7 +114,7 @@ export function CommandPalette() {
         id: `agent-${agent.id}`,
         type: 'agent',
         title: agent.name,
-        subtitle: agent.systemPrompt.slice(0, 60) + '…',
+        subtitle: agent.systemPrompt.length > 60 ? agent.systemPrompt.slice(0, 60) + '…' : agent.systemPrompt,
         icon: agent.avatar || 'agent-robot',
         action: () => { setSelectedAgent(agent); navigate('/agents'); setOpen(false) },
       })
@@ -124,7 +126,7 @@ export function CommandPalette() {
         id: `skill-${skill.id}`,
         type: 'skill',
         title: skill.name,
-        subtitle: skill.description?.slice(0, 60),
+        subtitle: skill.description && skill.description.length > 60 ? skill.description.slice(0, 60) + '…' : skill.description,
         icon: 'action-skills',
         action: () => { navigate('/skills'); setOpen(false) },
       })
@@ -144,7 +146,7 @@ export function CommandPalette() {
     }
 
     return results
-  }, [sessions, agents, skills, models, providerConfigs, navigate, setActiveSession, setSelectedAgent, addSession, selectedAgent, selectedModel])
+  }, [sessions, agents, skills, models, providerConfigs, navigate, setActiveSession, setSelectedAgent, addSession, selectedAgent, selectedModel, t])
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items.filter((i) => i.type === 'action')
@@ -180,18 +182,19 @@ export function CommandPalette() {
 
   // Scroll selected item into view
   useEffect(() => {
-    const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined
+    const selectedItem = filtered[selectedIndex]
+    const el = selectedItem ? document.getElementById(`cp-item-${selectedItem.id}`) : null
     el?.scrollIntoView({ block: 'nearest' })
-  }, [selectedIndex])
+  }, [filtered, selectedIndex])
 
   if (!open) return null
 
   const typeLabel: Record<string, string> = {
-    action: 'Actions',
-    session: 'Sessions',
-    agent: 'Agents',
-    skill: 'Skills',
-    model: 'Models',
+    action: t('commandPalette.actions', 'Actions'),
+    session: t('sessions.title', 'Sessions'),
+    agent: t('nav.agents', 'Agents'),
+    skill: t('nav.skills', 'Skills'),
+    model: t('nav.models', 'Models'),
   }
 
   // Group items by type
@@ -208,7 +211,7 @@ export function CommandPalette() {
   return (
     <div
       role="dialog"
-      aria-label="Command palette"
+      aria-label={t('nav.commandPalette', 'Command palette')}
       aria-modal="true"
       className="fixed inset-0 z-100 flex items-start justify-center pt-[15vh] bg-black/50 backdrop-blur-sm animate-fade-in"
       onClick={() => setOpen(false)}
@@ -218,7 +221,7 @@ export function CommandPalette() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle focus-within:bg-surface-1/50 focus-within:shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.18)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted shrink-0">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -227,15 +230,16 @@ export function CommandPalette() {
             ref={inputRef}
             type="text"
             role="combobox"
-            aria-label="Search commands"
+            aria-label={t('commandPalette.search', 'Search commands')}
             aria-expanded="true"
             aria-controls="command-palette-list"
+            aria-describedby="command-palette-hint"
             aria-activedescendant={filtered[selectedIndex] ? `cp-item-${filtered[selectedIndex].id}` : undefined}
-            placeholder="Search sessions, agents, skills, models…"
+            placeholder={t('commandPalette.searchPlaceholder', 'Search sessions, agents, skills, models…')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"
+            className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
           />
           <kbd className="text-[10px] text-text-muted px-1.5 py-0.5 bg-surface-2 border border-border-subtle rounded">
             ESC
@@ -243,10 +247,10 @@ export function CommandPalette() {
         </div>
 
         {/* Results */}
-        <div ref={listRef} id="command-palette-list" role="listbox" aria-label="Search results" className="max-h-80 overflow-y-auto py-2">
+        <div ref={listRef} id="command-palette-list" role="listbox" aria-label={t('commandPalette.results', 'Search results')} className="max-h-80 overflow-y-auto py-2">
           {filtered.length === 0 && (
             <div className="px-4 py-8 text-center text-sm text-text-muted">
-              No results found
+              {t('commandPalette.noResults', 'No results found')}
             </div>
           )}
           {grouped.map((group) => (
@@ -283,10 +287,10 @@ export function CommandPalette() {
         </div>
 
         {/* Footer */}
-        <div className="px-4 py-2 border-t border-border-subtle flex items-center gap-4 text-[10px] text-text-muted">
-          <span>↑↓ Navigate</span>
-          <span>↵ Open</span>
-          <span>ESC Close</span>
+        <div id="command-palette-hint" className="px-4 py-2 border-t border-border-subtle flex items-center gap-4 text-[10px] text-text-muted">
+          <span>{t('commandPalette.navigateHint', '↑↓ Navigate')}</span>
+          <span>{t('commandPalette.openHint', '↵ Open')}</span>
+          <span>{t('commandPalette.closeHint', 'ESC Close')}</span>
         </div>
       </div>
     </div>

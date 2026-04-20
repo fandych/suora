@@ -1,28 +1,116 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { useI18n } from '@/hooks/useI18n'
 import { ChannelPlatformIcon } from './ChannelIcons'
 import { ChannelMessageBubble } from './ChannelComponents'
+
+function PanelShell({
+  eyebrow,
+  title,
+  description,
+  action,
+  children,
+}: {
+  eyebrow: string
+  title: string
+  description?: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)]">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{eyebrow}</div>
+          <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{title}</h3>
+          {description && <p className="mt-2 max-w-3xl text-[13px] leading-6 text-text-secondary/80">{description}</p>}
+        </div>
+        {action}
+      </div>
+      <div className="mt-5">{children}</div>
+    </section>
+  )
+}
+
+function PanelStat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return (
+    <div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
+      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
+      <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    </div>
+  )
+}
+
+function EmptyPanelState({ icon, title, description }: { icon: string; title: string; description: string }) {
+  return (
+    <div className="flex h-full min-h-56 flex-col items-center justify-center rounded-4xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 text-center">
+      <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-3xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
+        <IconifyIcon name={icon} size={18} color="currentColor" />
+      </div>
+      <h4 className="text-[15px] font-semibold text-text-primary">{title}</h4>
+      <p className="mt-2 max-w-md text-[12px] leading-6 text-text-muted">{description}</p>
+    </div>
+  )
+}
+
+function StatusPill({ children, tone = 'neutral' }: { children: ReactNode; tone?: 'neutral' | 'accent' | 'success' | 'warning' | 'danger' }) {
+  const toneClass = tone === 'accent'
+    ? 'bg-accent/12 text-accent'
+    : tone === 'success'
+      ? 'bg-green-500/12 text-green-400'
+      : tone === 'warning'
+        ? 'bg-amber-500/12 text-amber-400'
+        : tone === 'danger'
+          ? 'bg-red-500/12 text-red-400'
+          : 'bg-surface-3 text-text-muted'
+
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${toneClass}`}>{children}</span>
+}
+
+function formatRelativeTime(value?: number) {
+  if (!value) return 'No activity yet'
+  const diff = Date.now() - value
+  if (diff < 60_000) return 'just now'
+  if (diff < 3_600_000) return `${Math.max(1, Math.floor(diff / 60_000))}m ago`
+  if (diff < 86_400_000) return `${Math.max(1, Math.floor(diff / 3_600_000))}h ago`
+  if (diff < 604_800_000) return `${Math.max(1, Math.floor(diff / 86_400_000))}d ago`
+  return new Date(value).toLocaleDateString()
+}
 
 // ─── Channel Message History Panel ─────────────────────────────────
 
 export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
+  const { t } = useI18n()
   const { channelMessages, channels, channelUsers, clearChannelMessages } = useAppStore()
   const [filter, setFilter] = useState<'all' | 'incoming' | 'outgoing'>('all')
   const [userFilter, setUserFilter] = useState<string>('all') // 'all' or a senderId
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Get unique senders for this channel
-  const channelSenders = channelId
-    ? Object.values(channelUsers).filter((u) => u.channelId === channelId)
-    : []
+  const channelSenders = useMemo(
+    () => channelId ? Object.values(channelUsers).filter((user) => user.channelId === channelId) : [],
+    [channelId, channelUsers],
+  )
 
-  const filtered = channelMessages
-    .filter((m) => (!channelId || m.channelId === channelId))
-    .filter((m) => filter === 'all' || m.direction === filter)
-    .filter((m) => userFilter === 'all' || m.senderId === userFilter)
+  const filtered = useMemo(
+    () => channelMessages
+      .filter((message) => (!channelId || message.channelId === channelId))
+      .filter((message) => filter === 'all' || message.direction === filter)
+      .filter((message) => userFilter === 'all' || message.senderId === userFilter),
+    [channelId, channelMessages, filter, userFilter],
+  )
 
-  const getChannel = (id: string) => channels.find((c) => c.id === id)
+  const totalMessages = useMemo(
+    () => channelMessages.filter((message) => !channelId || message.channelId === channelId).length,
+    [channelId, channelMessages],
+  )
+
+  const selectedChannel = useMemo(
+    () => channelId ? channels.find((channel) => channel.id === channelId) : undefined,
+    [channelId, channels],
+  )
+
+  const getChannel = useCallback((id: string) => channels.find((channel) => channel.id === id), [channels])
 
   // Auto-scroll to bottom when new messages arrive (not on filter changes)
   const prevMsgCountRef = useRef(channelMessages.length)
@@ -34,58 +122,78 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
   }, [channelMessages.length])
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-        <div className="flex gap-1.5 items-center flex-wrap">
-          {(['all', 'incoming', 'outgoing'] as const).map((f) => (
-            <button key={f} onClick={() => setFilter(f)}
-              className={`px-3 py-1 rounded-md text-xs font-medium transition-colors ${filter === f ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-2'}`}>
-              {f === 'all' ? 'All' : f === 'incoming' ? '↓ In' : '↑ Out'}
+    <div className="flex h-full min-h-0 flex-col gap-5 p-5">
+      <PanelShell
+        eyebrow={t('channels.messages', 'Messages')}
+        title={selectedChannel ? selectedChannel.name : t('channels.messageStream', 'Message Stream')}
+        description={t('channels.messageStreamHint', 'Review inbound and outbound traffic for this channel, then narrow the stream by direction or by a specific sender.')}
+        action={
+          <button
+            type="button"
+            onClick={() => clearChannelMessages(channelId)}
+            className="rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/14"
+          >
+            {t('common.clear', 'Clear')}
+          </button>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <PanelStat label={t('channels.messages', 'Messages')} value={String(totalMessages)} accent />
+          <PanelStat label={t('channels.filtered', 'Filtered')} value={String(filtered.length)} />
+          <PanelStat label={t('channels.users', 'Users')} value={String(channelSenders.length)} />
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-2">
+          {(['all', 'incoming', 'outgoing'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setFilter(value)}
+              className={`rounded-2xl border px-4 py-2.5 text-[11px] font-semibold transition-colors ${filter === value ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}
+            >
+              {value === 'all' ? t('channels.filterAll', 'All') : value === 'incoming' ? t('channels.filterIncoming', 'Incoming') : t('channels.filterOutgoing', 'Outgoing')}
             </button>
           ))}
           {channelSenders.length > 1 && (
             <>
-              <span className="text-border mx-0.5">│</span>
-              <label className="sr-only" htmlFor="channel-user-filter">Filter by user</label>
+              <label className="sr-only" htmlFor="channel-user-filter">{t('channels.filterByUser', 'Filter by user')}</label>
               <select
                 id="channel-user-filter"
                 value={userFilter}
                 onChange={(e) => setUserFilter(e.target.value)}
-                aria-label="Filter by user"
-                className="px-2 py-1 bg-surface-2 border border-border-subtle rounded-md text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/20 max-w-[140px]"
+                aria-label={t('channels.filterByUser', 'Filter by user')}
+                className="max-w-44 rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2.5 text-[11px] text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
               >
-                <option value="all">All users</option>
-                {channelSenders.map((u) => (
-                  <option key={u.senderId} value={u.senderId}>
-                    {u.senderName} ({u.messageCount})
+                <option value="all">{t('channels.allUsers', 'All users')}</option>
+                {channelSenders.map((user) => (
+                  <option key={user.senderId} value={user.senderId}>
+                    {user.senderName} ({user.messageCount})
                   </option>
                 ))}
               </select>
             </>
           )}
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] text-text-muted">{filtered.length} messages</span>
-          <button onClick={() => clearChannelMessages(channelId)}
-            className="text-xs text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-md transition-colors">
-            Clear
-          </button>
-        </div>
-      </div>
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-4">
+      </PanelShell>
+
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto rounded-4xl border border-border-subtle/55 bg-surface-0/35 px-6 py-5 shadow-[0_12px_28px_rgba(15,23,42,0.05)]">
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-text-muted">
-            <span className="text-3xl mb-3"><IconifyIcon name="action-chat" size={32} /></span>
-            <p className="text-xs">No messages yet</p>
-            <p className="text-[10px] mt-1 text-text-muted/60">Messages from connected channels will appear here</p>
-          </div>
-        ) : filtered.map((msg) => (
-          <ChannelMessageBubble
-            key={msg.id}
-            msg={msg}
-            showChannel={!channelId ? (getChannel(msg.channelId)?.name || msg.channelId) : undefined}
+          <EmptyPanelState
+            icon="action-chat"
+            title={t('channels.noMessagesYet', 'No messages yet')}
+            description={t('channels.messagesAppearHere', 'Messages from connected channels will appear here.')}
           />
-        ))}
+        ) : (
+          <div className="space-y-3">
+            {filtered.map((msg) => (
+              <ChannelMessageBubble
+                key={msg.id}
+                msg={msg}
+                showChannel={!channelId ? (getChannel(msg.channelId)?.name || msg.channelId) : undefined}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -94,9 +202,13 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
 // ─── Channel Health Monitor Panel ──────────────────────────────────
 
 export function ChannelHealthMonitor({ singleChannelId }: { singleChannelId?: string }) {
+  const { t } = useI18n()
   const { channels, channelHealth, setChannelHealth } = useAppStore()
   const [checking, setChecking] = useState(false)
-  const targetChannels = singleChannelId ? channels.filter((c) => c.id === singleChannelId) : channels
+  const targetChannels = useMemo(
+    () => singleChannelId ? channels.filter((channel) => channel.id === singleChannelId) : channels,
+    [channels, singleChannelId],
+  )
 
   const checkHealth = useCallback(async () => {
     setChecking(true)
@@ -128,47 +240,92 @@ export function ChannelHealthMonitor({ singleChannelId }: { singleChannelId?: st
     setChecking(false)
   }, [targetChannels, channelHealth, setChannelHealth])
 
+  const healthyCount = useMemo(
+    () => targetChannels.filter((channel) => channelHealth[channel.id]?.isHealthy).length,
+    [channelHealth, targetChannels],
+  )
+  const unhealthyCount = useMemo(
+    () => targetChannels.filter((channel) => channelHealth[channel.id] && !channelHealth[channel.id]?.isHealthy).length,
+    [channelHealth, targetChannels],
+  )
+  const uncheckedCount = targetChannels.length - healthyCount - unhealthyCount
+
   return (
-    <div className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-text-primary">Channel Health Status</h3>
-        <button onClick={checkHealth} disabled={checking}
-          className="px-3 py-1.5 bg-accent/10 text-accent rounded-lg text-xs font-medium hover:bg-accent/20 transition-colors disabled:opacity-50 inline-flex items-center gap-1.5">
-          {checking ? 'Checking...' : <><IconifyIcon name="ui-search" size={14} color="currentColor" /> Check All</>}
-        </button>
-      </div>
-      <div className="space-y-3">
+    <div className="flex h-full min-h-0 flex-col gap-5 p-5">
+      <PanelShell
+        eyebrow={t('channels.health', 'Health')}
+        title={t('channels.healthStatus', 'Channel Health Status')}
+        description={t('channels.deliveryHealthHint', 'Run active probes and compare latency, failure count, and last-check time for every configured channel in scope.')}
+        action={
+          <button
+            type="button"
+            onClick={() => void checkHealth()}
+            disabled={checking}
+            className="rounded-2xl border border-accent/18 bg-accent/10 px-4 py-3 text-sm font-semibold text-accent transition-colors hover:bg-accent/18 disabled:opacity-50"
+          >
+            <span className="inline-flex items-center gap-1.5">{checking ? t('channels.checking', 'Checking…') : <><IconifyIcon name="ui-search" size={14} color="currentColor" /> {t('channels.checkAll', 'Check All')}</>}</span>
+          </button>
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <PanelStat label={t('channels.healthy', 'Healthy')} value={String(healthyCount)} accent />
+          <PanelStat label={t('channels.unhealthy', 'Unhealthy')} value={String(unhealthyCount)} />
+          <PanelStat label={t('channels.notChecked', 'Not checked')} value={String(uncheckedCount)} />
+        </div>
+      </PanelShell>
+
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         {targetChannels.length === 0 ? (
-          <p className="text-xs text-text-muted text-center">No channels configured</p>
-        ) : targetChannels.map((ch) => {
-          const health = channelHealth[ch.id]
-          return (
-            <div key={ch.id} className="p-4 rounded-lg bg-surface-1 border border-border-subtle flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className={`w-3 h-3 rounded-full ${
-                  !health ? 'bg-gray-500' :
-                  health.isHealthy ? 'bg-green-400' : 'bg-red-400'
-                }`} />
-                <div>
-                  <span className="text-sm font-medium text-text-primary">{ch.name}</span>
-                  <span className="text-xs text-text-muted ml-2">{ch.platform}</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-text-muted">
-                {health ? (
-                  <>
-                    <span>{health.isHealthy ? <span className="inline-flex items-center gap-1"><IconifyIcon name="ui-check" size={12} color="currentColor" /> Healthy</span> : <span className="inline-flex items-center gap-1"><IconifyIcon name="ui-cross" size={12} color="currentColor" /> Unhealthy</span>}</span>
-                    {health.latencyMs !== undefined && <span>{health.latencyMs}ms</span>}
-                    {health.errorCount > 0 && <span className="text-red-400">{health.errorCount} errors</span>}
-                    <span>{new Date(health.lastCheckAt).toLocaleTimeString()}</span>
-                  </>
-                ) : (
-                  <span>Not checked</span>
-                )}
-              </div>
-            </div>
-          )
-        })}
+          <EmptyPanelState
+            icon="ui-warning"
+            title={t('channels.noChannelsConfigured', 'No channels configured')}
+            description={t('channels.noChannelsConfiguredHint', 'Create a channel first so the health monitor has something to probe.')}
+          />
+        ) : (
+          <div className="grid gap-3 xl:grid-cols-2">
+            {targetChannels.map((channel) => {
+              const health = channelHealth[channel.id]
+              const tone = !health ? 'neutral' : health.isHealthy ? 'success' : 'danger'
+              return (
+                <article key={channel.id} className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/70 text-accent shadow-sm">
+                        <ChannelPlatformIcon platform={channel.platform} size={18} customIcon={channel.customPlatformIcon} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-[14px] font-semibold text-text-primary">{channel.name}</h4>
+                          <StatusPill tone={tone}>{health ? (health.isHealthy ? t('channels.healthy', 'Healthy') : t('channels.unhealthy', 'Unhealthy')) : t('channels.notChecked', 'Not checked')}</StatusPill>
+                        </div>
+                        <p className="mt-1 text-[11px] text-text-muted/75">{channel.platform}</p>
+                      </div>
+                    </div>
+                    {health?.latencyMs !== undefined && <span className="text-[11px] font-medium text-text-secondary">{health.latencyMs}ms</span>}
+                  </div>
+
+                  <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2 text-[11px] text-text-secondary">
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-text-muted/45">{t('channels.lastChecked', 'Last Checked')}</div>
+                      <div className="mt-1 text-text-primary">{health?.lastCheckAt ? new Date(health.lastCheckAt).toLocaleString() : t('channels.notChecked', 'Not checked')}</div>
+                    </div>
+                    <div className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2 text-[11px] text-text-secondary">
+                      <div className="text-[10px] uppercase tracking-[0.12em] text-text-muted/45">{t('channels.errors', 'Errors')}</div>
+                      <div className="mt-1 text-text-primary">{health?.errorCount ?? 0}</div>
+                    </div>
+                  </div>
+
+                  {health?.lastError && (
+                    <div className="mt-4 rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-[12px] leading-6 text-red-400 wrap-break-word">
+                      <div className="font-semibold text-red-400">{t('channels.lastError', 'Last error')}</div>
+                      <p className="mt-2">{health.lastError}</p>
+                    </div>
+                  )}
+                </article>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )
@@ -177,11 +334,26 @@ export function ChannelHealthMonitor({ singleChannelId }: { singleChannelId?: st
 // ─── Channel Debug / Mock Mode ─────────────────────────────────────
 
 export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: string }) {
+  const { t } = useI18n()
   const { channels } = useAppStore()
   const [selectedChannelId, setSelectedChannelId] = useState(defaultChannelId || channels[0]?.id || '')
   const [mockMessage, setMockMessage] = useState('')
   const [debugLog, setDebugLog] = useState<Array<{ time: string; text: string }>>([])
   const [sending, setSending] = useState(false)
+
+  useEffect(() => {
+    setSelectedChannelId(defaultChannelId || channels[0]?.id || '')
+  }, [channels, defaultChannelId])
+
+  const selectedChannel = useMemo(
+    () => channels.find((channel) => channel.id === selectedChannelId),
+    [channels, selectedChannelId],
+  )
+
+  const errorCount = useMemo(
+    () => debugLog.filter((entry) => entry.text.startsWith('Error') || entry.text.includes('failed')).length,
+    [debugLog],
+  )
 
   const sendMock = async () => {
     if (!selectedChannelId || !mockMessage.trim()) return
@@ -203,39 +375,75 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
   }
 
   return (
-    <div className="p-6 flex flex-col h-full">
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-text-primary mb-3">Debug / Mock Mode</h3>
-        <p className="text-xs text-text-muted mb-4">Send simulated messages without connecting to real platforms.</p>
-        <div className="flex gap-2 mb-3">
-          <select value={selectedChannelId} onChange={(e) => setSelectedChannelId(e.target.value)}
-            aria-label="Select channel"
-            className="flex-1 px-3 py-2 bg-surface-2 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20">
-            {channels.map((ch) => <option key={ch.id} value={ch.id}>{ch.name} ({ch.platform})</option>)}
-          </select>
+    <div className="flex h-full min-h-0 flex-col gap-5 p-5">
+      <PanelShell
+        eyebrow={t('channels.debug', 'Debug')}
+        title={t('channels.debugMockMode', 'Debug / Mock Mode')}
+        description={t('channels.debugMockModeHint', 'Send simulated inbound events without connecting to a real platform, then inspect the exact local debug log produced by the handler.')}
+        action={debugLog.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => setDebugLog([])}
+            className="rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/14"
+          >
+            {t('common.clear', 'Clear')}
+          </button>
+        ) : undefined}
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <PanelStat label={t('channels.channel', 'Channel')} value={selectedChannel?.name || t('common.none', 'None')} accent />
+          <PanelStat label={t('settings.entries', 'Entries')} value={String(debugLog.length)} />
+          <PanelStat label={t('settings.errors', 'Errors')} value={String(errorCount)} />
         </div>
-        <div className="flex gap-2">
-          <input value={mockMessage} onChange={(e) => setMockMessage(e.target.value)}
-            placeholder="Type a mock message..."
-            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); sendMock() } }}
-            className="flex-1 px-3 py-2 bg-surface-2 border border-border-subtle rounded-lg text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20" />
-          <button onClick={sendMock} disabled={sending || !mockMessage.trim()}
-            className="px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/90 transition-colors disabled:opacity-50">
-            Send
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-[0.75fr_1.25fr_auto]">
+          <select
+            value={selectedChannelId}
+            onChange={(e) => setSelectedChannelId(e.target.value)}
+            aria-label={t('channels.selectChannel', 'Select channel')}
+            className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+          >
+            {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name} ({channel.platform})</option>)}
+          </select>
+          <input
+            value={mockMessage}
+            onChange={(e) => setMockMessage(e.target.value)}
+            placeholder={t('channels.mockMessagePlaceholder', 'Type a mock message...')}
+            onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) { e.preventDefault(); void sendMock() } }}
+            className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"
+          />
+          <button
+            type="button"
+            onClick={() => void sendMock()}
+            disabled={sending || !mockMessage.trim() || !selectedChannelId}
+            className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50"
+          >
+            {sending ? t('common.sending', 'Sending…') : t('common.send', 'Send')}
           </button>
         </div>
-      </div>
-      <div className="flex-1 overflow-y-auto p-3 bg-surface-1 rounded-lg border border-border-subtle font-mono text-xs space-y-1">
+      </PanelShell>
+
+      <div className="min-h-0 flex-1 overflow-y-auto rounded-4xl border border-border-subtle/55 bg-surface-0/35 p-4 shadow-[0_12px_28px_rgba(15,23,42,0.05)]">
         {debugLog.length === 0 ? (
-          <p className="text-text-muted text-center mt-4">Debug log will appear here</p>
-        ) : debugLog.map((entry, i) => (
-          <div key={i} className="flex gap-2">
-            <span className="text-text-muted shrink-0">[{entry.time}]</span>
-            <span className={entry.text.startsWith('Error') ? 'text-red-400' : entry.text.startsWith('Mock message processed') ? 'text-green-400' : 'text-text-secondary'}>
-              {entry.text}
-            </span>
+          <EmptyPanelState
+            icon="ui-search"
+            title={t('channels.debugLogEmpty', 'Debug log will appear here')}
+            description={t('channels.debugLogEmptyHint', 'Send a mock message to the selected channel and the local execution trace will start filling this panel.')}
+          />
+        ) : (
+          <div className="space-y-2 font-mono text-xs">
+            {debugLog.map((entry, index) => (
+              <div key={`${entry.time}-${index}`} className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-4 py-3">
+                <div className="flex gap-3">
+                  <span className="shrink-0 text-text-muted">[{entry.time}]</span>
+                  <span className={entry.text.startsWith('Error') ? 'text-red-400' : entry.text.startsWith('Mock message processed') ? 'text-green-400' : 'text-text-secondary'}>
+                    {entry.text}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   )
@@ -244,76 +452,106 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
 // ─── Channel Users Panel (multi-user tracking) ────────────────────
 
 export function ChannelUsersPanel({ channelId }: { channelId: string }) {
+  const { t } = useI18n()
   const { channelUsers, clearChannelUsers } = useAppStore()
 
-  const users = Object.values(channelUsers)
-    .filter((u) => u.channelId === channelId)
-    .sort((a, b) => b.lastActiveAt - a.lastActiveAt)
+  const users = useMemo(
+    () => Object.values(channelUsers)
+      .filter((user) => user.channelId === channelId)
+      .sort((left, right) => right.lastActiveAt - left.lastActiveAt),
+    [channelId, channelUsers],
+  )
 
-  const formatRelativeTime = (ts: number) => {
-    const diff = Date.now() - ts
-    if (diff < 60000) return 'just now'
-    if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`
-    return `${Math.floor(diff / 86400000)}d ago`
-  }
+  const activeTodayCount = useMemo(
+    () => users.filter((user) => Date.now() - user.lastActiveAt < 86_400_000).length,
+    [users],
+  )
+
+  const totalMessages = useMemo(
+    () => users.reduce((sum, user) => sum + user.messageCount, 0),
+    [users],
+  )
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-text-primary">
-            <IconifyIcon name="ui-users" size={14} color="currentColor" /> {users.length} user{users.length !== 1 ? 's' : ''}
-          </span>
-        </div>
-        {users.length > 0 && (
-          <button onClick={() => clearChannelUsers(channelId)}
-            className="text-xs text-red-400 hover:bg-red-500/10 px-2 py-1 rounded-md transition-colors">
-            Clear Users
+    <div className="flex h-full min-h-0 flex-col gap-5 p-5">
+      <PanelShell
+        eyebrow={t('channels.users', 'Users')}
+        title={t('channels.channelUsers', 'Channel Users')}
+        description={t('channels.channelUsersHint', 'Track who is active on this channel, how much they have messaged, and what recent conversational context is still attached to them.')}
+        action={users.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => clearChannelUsers(channelId)}
+            className="rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/14"
+          >
+            {t('channels.clearUsers', 'Clear Users')}
           </button>
-        )}
-      </div>
-      <div className="flex-1 overflow-y-auto">
+        ) : undefined}
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <PanelStat label={t('channels.users', 'Users')} value={String(users.length)} accent />
+          <PanelStat label={t('channels.activeToday', 'Active Today')} value={String(activeTodayCount)} />
+          <PanelStat label={t('channels.messages', 'Messages')} value={String(totalMessages)} />
+        </div>
+      </PanelShell>
+
+      <div className="min-h-0 flex-1 overflow-y-auto pr-1">
         {users.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-text-muted">
-            <span className="text-3xl mb-3"><IconifyIcon name="ui-user" size={32} color="currentColor" /></span>
-            <p className="text-xs">No users yet</p>
-            <p className="text-[10px] mt-1 text-text-muted/60">Users will appear here when they send messages</p>
-          </div>
-        ) : users.map((user) => (
-          <div key={user.id} className="px-4 py-3 border-b border-border-subtle/50 hover:bg-surface-1/50 transition-colors">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-accent/20 to-accent/5 flex items-center justify-center shrink-0 border border-accent/10 shadow-sm">
-                  <ChannelPlatformIcon platform={user.platform} size={16} />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-[13px] font-medium text-text-primary truncate">{user.senderName}</div>
-                  <div className="text-[10px] text-text-muted truncate">{user.senderId}</div>
-                </div>
-              </div>
-              <div className="text-right shrink-0 ml-3">
-                <div className="text-[10px] font-medium text-accent">{user.messageCount} msg{user.messageCount !== 1 ? 's' : ''}</div>
-                <div className="text-[10px] text-text-muted">{formatRelativeTime(user.lastActiveAt)}</div>
-              </div>
-            </div>
-            {user.conversationHistory.length > 0 && (
-              <div className="ml-10.5 mt-1.5">
-                <div className="text-[10px] text-text-muted/60 mb-1">Recent context ({user.conversationHistory.length} messages)</div>
-                <div className="space-y-0.5">
-                  {user.conversationHistory.slice(-3).map((h, i) => (
-                    <div key={i} className="flex items-start gap-1.5 text-[10px]">
-                      <span className={`shrink-0 font-medium ${h.role === 'user' ? 'text-accent/70' : 'text-green-400/70'}`}>
-                        {h.role === 'user' ? '→' : '←'}
-                      </span>
-                      <span className="text-text-muted/80 line-clamp-1 break-all">{h.content}</span>
+          <EmptyPanelState
+            icon="ui-user"
+            title={t('channels.noUsersYet', 'No users yet')}
+            description={t('channels.noUsersYetHint', 'Users will appear here once messages arrive and the channel has enough activity to build conversation context.')}
+          />
+        ) : (
+          <div className="grid gap-3 xl:grid-cols-2">
+            {users.map((user) => (
+              <article key={user.id} className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-start gap-3">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-accent/10 bg-linear-to-br from-accent/20 to-accent/5 shadow-sm">
+                      <ChannelPlatformIcon platform={user.platform} size={18} />
                     </div>
-                  ))}
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] font-semibold text-text-primary truncate">{user.senderName}</div>
+                      <div className="mt-1 text-[11px] text-text-muted/75 truncate">{user.senderId}</div>
+                    </div>
+                  </div>
+                  <div className="text-right text-[11px] text-text-secondary">
+                    <div className="font-semibold text-accent">{user.messageCount} {t('channels.messages', 'messages')}</div>
+                    <div className="mt-1 text-text-muted/75">{formatRelativeTime(user.lastActiveAt)}</div>
+                  </div>
                 </div>
-              </div>
-            )}
+
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2 text-[11px] text-text-secondary">
+                    <div className="text-[10px] uppercase tracking-[0.12em] text-text-muted/45">{t('channels.firstSeen', 'First Seen')}</div>
+                    <div className="mt-1 text-text-primary">{new Date(user.firstSeenAt).toLocaleString()}</div>
+                  </div>
+                  <div className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2 text-[11px] text-text-secondary">
+                    <div className="text-[10px] uppercase tracking-[0.12em] text-text-muted/45">{t('channels.lastActive', 'Last Active')}</div>
+                    <div className="mt-1 text-text-primary">{new Date(user.lastActiveAt).toLocaleString()}</div>
+                  </div>
+                </div>
+
+                {user.conversationHistory.length > 0 && (
+                  <div className="mt-4 rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-4 py-3">
+                    <div className="text-[10px] uppercase tracking-[0.12em] text-text-muted/45">{t('channels.recentContext', 'Recent Context')}</div>
+                    <div className="mt-3 space-y-2">
+                      {user.conversationHistory.slice(-3).map((entry, index) => (
+                        <div key={`${entry.timestamp}-${index}`} className="flex items-start gap-2 text-[11px]">
+                          <span className={`mt-0.5 shrink-0 font-medium ${entry.role === 'user' ? 'text-accent/80' : 'text-green-400/80'}`}>
+                            {entry.role === 'user' ? '→' : '←'}
+                          </span>
+                          <span className="text-text-secondary wrap-break-word">{entry.content}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </article>
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </div>
   )

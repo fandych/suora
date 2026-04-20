@@ -50,7 +50,7 @@ export function ConfirmDialogHost() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="suora-confirm-title"
-      className="fixed inset-0 z-[200] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
+      className="fixed inset-0 z-200 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
       onClick={() => resolveTop(false)}
     >
       <div

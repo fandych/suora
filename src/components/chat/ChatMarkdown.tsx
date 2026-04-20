@@ -1,9 +1,11 @@
 import { useState, type ComponentPropsWithoutRef } from 'react'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { useI18n } from '@/hooks/useI18n'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 export function CopyButton({ text, className = '' }: { text: string; className?: string }) {
+  const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   const copy = () => {
     navigator.clipboard.writeText(text).then(() => {
@@ -12,8 +14,14 @@ export function CopyButton({ text, className = '' }: { text: string; className?:
     })
   }
   return (
-    <button onClick={copy} title="Copy" className={`text-[11px] px-1.5 py-0.5 rounded-md transition-colors inline-flex items-center gap-1 ${copied ? 'text-success' : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'} ${className}`}>
-      {copied ? <><IconifyIcon name="ui-check" size={14} color="currentColor" /> Copied</> : <><IconifyIcon name="ui-copy" size={14} color="currentColor" /> Copy</>}
+    <button
+      type="button"
+      onClick={copy}
+      title={copied ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}
+      aria-label={copied ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}
+      className={`text-[11px] px-1.5 py-0.5 rounded-md transition-colors inline-flex items-center gap-1 ${copied ? 'text-success' : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'} ${className}`}
+    >
+      {copied ? <><IconifyIcon name="ui-check" size={14} color="currentColor" /> {t('common.copied', 'Copied')}</> : <><IconifyIcon name="ui-copy" size={14} color="currentColor" /> {t('common.copy', 'Copy')}</>}
     </button>
   )
 }

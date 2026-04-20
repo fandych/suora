@@ -559,6 +559,19 @@ export function useAIChat() {
         })
       }
 
+      // Stream inactivity timeout: abort if no events received for 5 minutes
+      const STREAM_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000
+      let inactivityTimer: ReturnType<typeof setTimeout> | null = null
+      const resetInactivityTimer = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer)
+        inactivityTimer = setTimeout(() => {
+          logger.warn('[Chat:Timeout] No stream events for 5 minutes — aborting')
+          setError('Response timed out — no data received for 5 minutes. Please retry.')
+          abortController.abort()
+        }, STREAM_INACTIVITY_TIMEOUT_MS)
+      }
+      resetInactivityTimer()
+
       for await (const event of streamResponseWithTools(modelIdentifier, modelMessages, {
         systemPrompt,
         tools: filteredTools,
@@ -568,6 +581,7 @@ export function useAIChat() {
         baseUrl: model.baseUrl,
       })) {
         if (abortController.signal.aborted) break
+        resetInactivityTimer()
 
         switch (event.type) {
           case 'text-delta':
@@ -683,6 +697,9 @@ export function useAIChat() {
         }
       }
 
+      // Clear inactivity timeout now that the stream has ended
+      if (inactivityTimer) clearTimeout(inactivityTimer)
+
       // Skip post-stream processing if cancelled — cancelStream() already handled cleanup
       if (abortController.signal.aborted) {
         // no-op: cancelStream() handled cleanup
@@ -712,25 +729,33 @@ export function useAIChat() {
     } catch (err) {
       hasError = true
       if (abortController.signal.aborted) {
-        const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
-        if (latest) {
-          const base = latest.messages.slice(0, -1)
-          const last = latest.messages[latest.messages.length - 1]
-          if (last?.isStreaming) {
-            useAppStore.getState().updateSession(activeSession.id, {
-              messages: [...base, { ...last, isStreaming: false }],
-            })
+        try {
+          const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
+          if (latest) {
+            const base = latest.messages.slice(0, -1)
+            const last = latest.messages[latest.messages.length - 1]
+            if (last?.isStreaming) {
+              useAppStore.getState().updateSession(activeSession.id, {
+                messages: [...base, { ...last, isStreaming: false }],
+              })
+            }
           }
+        } catch (cleanupErr) {
+          logger.warn('[Chat:Cancel] Cleanup after abort failed', { error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr) })
         }
       } else {
         const errorContent = err instanceof Error ? err.message : 'An unknown error occurred'
         setError(errorContent)
-        const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
-        if (latest) {
-          const base = latest.messages.slice(0, -1)
-          useAppStore.getState().updateSession(activeSession.id, {
-            messages: [...base, { ...assistantMsg, content: errorContent, isStreaming: false, isError: true }],
-          })
+        try {
+          const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
+          if (latest) {
+            const base = latest.messages.slice(0, -1)
+            useAppStore.getState().updateSession(activeSession.id, {
+              messages: [...base, { ...assistantMsg, content: errorContent, isStreaming: false, isError: true }],
+            })
+          }
+        } catch (cleanupErr) {
+          logger.warn('[Chat:Error] Store cleanup failed', { error: cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr) })
         }
       }
     } finally {

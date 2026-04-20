@@ -79,9 +79,9 @@ function getValidExecutionId(currentId: string | null, executions: AgentPipeline
 }
 
 export function PipelineLayout() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [searchParams, setSearchParams] = useSearchParams()
-  const [panelWidth, setPanelWidth] = useResizablePanel('pipeline', 320)
+  const [panelWidth, setPanelWidth] = useResizablePanel('pipeline', 340)
   const [searchQuery, setSearchQuery] = useState('')
   const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([])
   const [running, setRunning] = useState(false)
@@ -114,7 +114,15 @@ export function PipelineLayout() {
   const requestedFiredAt = requestedFiredAtRaw ? Number(requestedFiredAtRaw) : Number.NaN
 
   const enabledAgents = agents.filter((agent) => agent.enabled !== false)
-  const agentNameMap = useMemo(() => Object.fromEntries(agents.map((agent) => [agent.id, agent.name])), [agents])
+  const agentNameMap = useMemo(
+    () => Object.fromEntries(agents.map((agent) => [
+      agent.id,
+      agent.id === 'default-assistant'
+        ? t('chat.assistant', agent.name || 'Assistant')
+        : agent.name,
+    ])),
+    [agents, t],
+  )
   const selectedSavedPipeline = selectedAgentPipelineId
     ? agentPipelines.find((item) => item.id === selectedAgentPipelineId) ?? null
     : null
@@ -248,6 +256,10 @@ export function PipelineLayout() {
     [pipelineHistory],
   )
 
+  const successRate = pipelineHistory.length > 0
+    ? Math.round((successfulHistoryRuns / pipelineHistory.length) * 100)
+    : 0
+
   const resetPipelineEditor = () => {
     setSelectedAgentPipelineId(null)
     setAgentPipelineName('')
@@ -308,8 +320,8 @@ export function PipelineLayout() {
       addNotification({
         id: generateId('notif'),
         type: 'warning',
-        title: 'Pipeline name required',
-        message: 'Name the pipeline before saving it.',
+        title: t('agents.pipelineNameRequiredTitle', 'Pipeline name required'),
+        message: t('agents.pipelineNameRequiredBody', 'Name the pipeline before saving it.'),
         timestamp: Date.now(),
         read: false,
       })
@@ -332,8 +344,8 @@ export function PipelineLayout() {
       addNotification({
         id: generateId('notif'),
         type: 'error',
-        title: 'Pipeline save failed',
-        message: 'Could not write the pipeline file to disk.',
+        title: t('agents.pipelineSaveFailedTitle', 'Pipeline save failed'),
+        message: t('agents.pipelineSaveFailedBody', 'Could not write the pipeline file to disk.'),
         timestamp: Date.now(),
         read: false,
       })
@@ -350,8 +362,8 @@ export function PipelineLayout() {
     addNotification({
       id: generateId('notif'),
       type: 'success',
-      title: 'Pipeline saved',
-      message: `${nextPipeline.name} is now available for timers and history tracking.`,
+      title: t('agents.pipelineSavedTitle', 'Pipeline saved'),
+      message: t('agents.pipelineSavedBody', `${nextPipeline.name} is now available for timers and history tracking.`).replace('{name}', nextPipeline.name),
       timestamp: Date.now(),
       read: false,
     })
@@ -360,10 +372,10 @@ export function PipelineLayout() {
   const deletePipeline = async () => {
     if (!workspacePath || !selectedSavedPipeline) return
     const confirmed = await confirm({
-      title: 'Delete pipeline?',
-      body: `"${selectedSavedPipeline.name}" will be permanently removed from disk.`,
+      title: t('agents.pipelineDeleteTitle', 'Delete pipeline?'),
+      body: t('agents.pipelineDeleteBody', `"${selectedSavedPipeline.name}" will be permanently removed from disk.`).replace('{name}', selectedSavedPipeline.name),
       danger: true,
-      confirmText: 'Delete',
+      confirmText: t('common.delete', 'Delete'),
     })
     if (!confirmed) return
 
@@ -372,8 +384,8 @@ export function PipelineLayout() {
       addNotification({
         id: generateId('notif'),
         type: 'error',
-        title: 'Pipeline delete failed',
-        message: 'Could not remove the pipeline file from disk.',
+        title: t('agents.pipelineDeleteFailedTitle', 'Pipeline delete failed'),
+        message: t('agents.pipelineDeleteFailedBody', 'Could not remove the pipeline file from disk.'),
         timestamp: Date.now(),
         read: false,
       })
@@ -455,9 +467,10 @@ export function PipelineLayout() {
     if (!timestamp) return t('agents.pipelineNeverRan', 'Never ran')
     const diff = Date.now() - timestamp
     if (diff < 60_000) return t('agents.justNow', 'Just now')
-    if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`
-    if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`
-    return `${Math.floor(diff / 86_400_000)}d ago`
+    const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+    if (diff < 3_600_000) return formatter.format(-Math.floor(diff / 60_000), 'minute')
+    if (diff < 86_400_000) return formatter.format(-Math.floor(diff / 3_600_000), 'hour')
+    return formatter.format(-Math.floor(diff / 86_400_000), 'day')
   }
 
   const latestExecutionReference = useMemo(() => {
@@ -475,41 +488,80 @@ export function PipelineLayout() {
           <button
             type="button"
             onClick={resetPipelineEditor}
-            className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
+            className="rounded-xl bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20"
           >
             + {t('common.new', 'New')}
           </button>
         }
       >
         <div className="p-3 space-y-3">
-          <div className="relative">
-            <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-            <input
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('agents.searchPipelines', 'Search pipelines...')}
-              className="w-full rounded-xl border border-border bg-surface-2 py-2 pl-9 pr-3 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"
-            />
+          <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('agents.pipeline', 'Pipeline')}</div>
+                <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('agents.pipelineWorkbench', 'Execution Workbench')}</div>
+                <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('agents.pipelineWorkbenchHint', 'Design handoffs, inspect history, and keep a draft run ready without leaving the builder.')}</p>
+              </div>
+              <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
+                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
+                <div className="text-xl font-semibold text-text-primary tabular-nums">{agentPipelines.length}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.pipelineDraft', 'Draft')}</div>
+                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{pipeline.length}</div>
+              </div>
+              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.pipelineHistory', 'History')}</div>
+                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{pipelineHistory.length}</div>
+              </div>
+              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.pipelineSuccess', 'Success')}</div>
+                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{pipelineHistory.length > 0 ? `${successRate}%` : '—'}</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+            <div className="relative">
+              <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={t('agents.searchPipelines', 'Search pipelines...')}
+                className="w-full rounded-2xl border border-border bg-surface-2 py-2.5 pl-9 pr-3 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"
+              />
+            </div>
+            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+              <span>{filteredPipelines.length} {t('common.results', 'results')}</span>
+              {searchQuery.trim() && <span>{agentPipelines.length} {t('common.total', 'total')}</span>}
+            </div>
           </div>
 
           <div className="space-y-2">
             <button
               type="button"
               onClick={resetPipelineEditor}
-              className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${
+              className={`w-full rounded-3xl border px-3.5 py-3.5 text-left transition-all ${
                 !selectedSavedPipeline
                   ? 'border-accent/30 bg-accent/10 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]'
                   : 'border-border-subtle bg-surface-1/70 text-text-secondary hover:border-border hover:bg-surface-2/70'
               }`}
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-surface-3 text-accent">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <span className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-3 text-accent">
                     <IconifyIcon name="ui-edit" size={16} color="currentColor" />
                   </span>
                   <div className="min-w-0">
                     <div className="truncate text-[13px] font-medium">{agentPipelineName.trim() || t('agents.pipelineDraft', 'Draft pipeline')}</div>
-                    <div className="mt-0.5 text-[11px] text-text-muted">{pipeline.length} {t('agents.pipelineSteps', 'steps')}</div>
+                    <div className="mt-1 text-[11px] text-text-muted">{pipeline.length} {t('agents.pipelineSteps', 'steps')} · {running ? t('agents.pipelineStatusRunning', 'Running') : t('common.ready', 'Ready')}</div>
+                    <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-text-muted">
+                      <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{selectedSavedPipeline ? t('agents.loaded', 'Loaded') : t('agents.editing', 'Editing')}</span>
+                      <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{completedMonitorSteps}/{pipeline.length || 0} {t('agents.pipelineProgress', 'progress')}</span>
+                    </div>
                   </div>
                 </div>
                 {!selectedSavedPipeline && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] text-accent">{t('agents.editing', 'Editing')}</span>}
@@ -517,7 +569,7 @@ export function PipelineLayout() {
             </button>
 
             {filteredPipelines.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">
+              <div className="rounded-3xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">
                 {searchQuery.trim()
                   ? t('agents.noMatchingPipelines', 'No matching pipelines.')
                   : t('agents.noSavedPipelines', 'No saved pipelines yet.')}
@@ -528,22 +580,28 @@ export function PipelineLayout() {
                   key={savedPipeline.id}
                   type="button"
                   onClick={() => loadSavedPipeline(savedPipeline.id)}
-                  className={`w-full rounded-2xl border px-3 py-3 text-left transition-all ${
+                  className={`w-full rounded-3xl border px-3.5 py-3.5 text-left transition-all ${
                     selectedAgentPipelineId === savedPipeline.id
                       ? 'border-accent/30 bg-accent/10 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]'
                       : 'border-border-subtle bg-surface-1/70 text-text-secondary hover:border-border hover:bg-surface-2/70'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="truncate text-[13px] font-medium">{savedPipeline.name}</div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <div className="truncate text-[13px] font-medium">{savedPipeline.name}</div>
+                        {selectedAgentPipelineId === savedPipeline.id && <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[9px] text-accent">{t('agents.open', 'Open')}</span>}
+                      </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
                         <span>{savedPipeline.steps.length} {t('agents.pipelineSteps', 'steps')}</span>
                         <span className="h-1 w-1 rounded-full bg-border" />
                         <span>{formatRelativeTime(savedPipeline.lastRunAt)}</span>
                       </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-text-muted">
+                        <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{savedPipeline.lastRunAt ? t('agents.pipelineRecentRun', 'Recent run') : t('agents.pipelineUnsaved', 'Awaiting first run')}</span>
+                      </div>
                     </div>
-                    <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-surface-3 text-accent">
+                    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-3 text-accent">
                       <IconifyIcon name="skill-agent-comm" size={15} color="currentColor" />
                     </span>
                   </div>
@@ -554,7 +612,7 @@ export function PipelineLayout() {
         </div>
       </SidePanel>
 
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={460} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={260} maxWidth={520} />
 
       <div className="flex min-w-0 flex-1 flex-col bg-surface-1/30">
         <div className={`border-b border-border-subtle px-6 py-5 ${PIPELINE_HEADER_BACKGROUND}`}>
@@ -721,10 +779,10 @@ export function PipelineLayout() {
                             <select
                               value={step.agentId}
                               onChange={(e) => updateStep(idx, { agentId: e.target.value })}
-                              aria-label="Pipeline agent"
+                              aria-label={t('agents.pipelineAgent', 'Pipeline agent')}
                               className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                             >
-                              {enabledAgents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name}</option>)}
+                              {enabledAgents.map((agent) => <option key={agent.id} value={agent.id}>{agentNameMap[agent.id] ?? agent.name}</option>)}
                             </select>
                             <textarea
                               value={step.task}
