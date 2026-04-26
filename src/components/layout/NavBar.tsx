@@ -59,19 +59,19 @@ export function NavBar() {
   const { t } = useI18n()
 
   return (
-    <nav aria-label="Main navigation" className="w-20 h-full bg-surface-1/60 backdrop-blur-xl flex flex-col items-center py-5 border-r border-border-subtle/60 shrink-0 relative z-20">
+    <nav aria-label="Main navigation" className="w-20 h-full bg-surface-1 flex flex-col items-center py-5 border-r border-border-subtle shrink-0 relative z-20">
       {/* Logo */}
       <button
         type="button"
         onClick={() => navigate('/chat')}
         aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`}
-        className="w-13 h-13 rounded-[18px] bg-linear-to-br from-accent/20 to-accent/5 flex items-center justify-center mb-8 hover:scale-105 hover:shadow-[0_0_20px_rgba(var(--t-accent-rgb),0.25)] transition-all duration-300 overflow-hidden border border-accent/15"
+        className="w-13 h-13 rounded-xl bg-surface-2 flex items-center justify-center mb-8 transition-colors duration-200 overflow-hidden border border-border-subtle hover:border-accent/35"
       >
         <img src={logoSvg} alt="SUORA" width={40} height={40} className="w-10 h-10" />
       </button>
 
       {/* Nav Items */}
-      <div role="list" aria-label="Navigation items" className="flex-1 flex flex-col gap-2.5">
+      <div aria-label="Navigation items" className="flex-1 flex flex-col gap-2.5">
         {navItems.map((item) => {
           const isActive = location.pathname.startsWith(item.path)
           const label = t(item.i18nKey, item.fallbackLabel)
@@ -79,19 +79,18 @@ export function NavBar() {
             <button
               type="button"
               key={item.path}
-              role="listitem"
               onClick={() => navigate(item.path)}
               aria-label={label}
               aria-current={isActive ? 'page' : undefined}
               title={label}
-              className={`group relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+              className={`group relative w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${
                 isActive
                   ? 'nav-item-active text-accent'
                   : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/40'
               }`}
             >
               {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-0.5 w-[2.5px] h-5 rounded-r-full bg-accent shadow-[0_0_6px_rgba(var(--t-accent-rgb),0.4)]" />
+                <div className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-0.5 w-[2.5px] h-5 rounded-r-full bg-accent" />
               )}
               <span className="flex scale-110">{item.icon}</span>
               {/* Tooltip */}
@@ -116,7 +115,7 @@ export function NavBar() {
         aria-label={`${t('nav.commandPalette', 'Command palette')} (${CMD_SHORTCUT_LABEL})`}
         aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}
         title={`${t('nav.commandPalette', 'Command palette')} · ${CMD_SHORTCUT_LABEL}`}
-        className="group relative w-12 h-12 rounded-2xl flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-surface-3/40 transition-all duration-200 mb-1"
+        className="group relative w-12 h-12 rounded-xl flex items-center justify-center text-text-muted hover:text-text-secondary hover:bg-surface-3/40 transition-all duration-200 mb-1"
       >
         <span className="flex scale-110">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -139,7 +138,7 @@ export function NavBar() {
         aria-label={t('nav.settings', 'Settings')}
         aria-current={location.pathname.startsWith('/settings') ? 'page' : undefined}
         title={t('nav.settings', 'Settings')}
-        className={`group relative w-12 h-12 rounded-2xl flex items-center justify-center transition-all duration-200 ${
+        className={`group relative w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-200 ${
           location.pathname.startsWith('/settings')
             ? 'nav-item-active text-accent'
             : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/40'

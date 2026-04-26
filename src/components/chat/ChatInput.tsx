@@ -100,14 +100,16 @@ function ComposerActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-2xl border px-3 py-2.5 text-[12px] font-medium transition-all ${
+      title={label}
+      aria-label={label}
+      className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-2.5 text-[12px] font-medium transition-all ${
         active
           ? 'border-danger/18 bg-danger/10 text-danger'
           : 'border-border-subtle/55 bg-surface-0/65 text-text-secondary hover:border-accent/18 hover:bg-accent/10 hover:text-accent'
       } disabled:opacity-30`}
     >
       <span className="text-[13px]">{icon}</span>
-      <span className="hidden sm:inline">{label}</span>
+      <span className="hidden lg:inline">{label}</span>
     </button>
   )
 }
@@ -314,28 +316,24 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
   return (
     <div className="mx-auto w-full max-w-384">
       <div
-        className={`relative overflow-hidden rounded-4xl border bg-surface-1/58 shadow-[0_20px_60px_rgba(15,23,42,0.14)] backdrop-blur-xl ${
+        className={`relative overflow-hidden rounded-3xl border bg-surface-1/78 shadow-[0_14px_36px_rgba(15,23,42,0.12)] backdrop-blur-xl ${
           isDragging ? 'border-accent/45 bg-accent/5' : 'border-border-subtle/55'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_top,rgba(var(--t-accent-rgb),0.16),transparent_72%)]" />
-        </div>
-
         {isDragging && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-accent/10 backdrop-blur-sm">
             <span className="rounded-full border border-accent/25 bg-surface-0/80 px-4 py-2 text-[13px] font-semibold text-accent shadow-sm">{t('chat.dropFilesHere', 'Drop files here')}</span>
           </div>
         )}
 
-        <div className="relative z-10 p-4 sm:p-5">
+        <div className="relative z-10 p-3.5 sm:p-4">
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,audio/webm,audio/ogg,audio/mp3,audio/mpeg,audio/wav,audio/mp4,.txt,.md,.json,.csv,.xml,.yaml,.yml,.toml,.js,.ts,.jsx,.tsx,.py,.java,.go,.rs,.rb,.html,.css,.scss,.sql,.sh,.bat,.ps1,.log,.c,.cpp,.h,.swift,.kt,.dart,.lua,.r" multiple className="hidden" onChange={handleFileSelect} aria-label="Attach file" />
 
           {attachments.length > 0 && (
-            <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {attachments.map((attachment) => (
                 <AttachmentTile
                   key={attachment.id}
@@ -348,7 +346,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
           )}
 
           {isRecording && (
-            <div className="mb-4 flex items-center gap-3 rounded-3xl border border-danger/18 bg-danger/10 px-4 py-3 text-danger shadow-sm">
+            <div className="mb-3 flex items-center gap-3 rounded-2xl border border-danger/18 bg-danger/10 px-4 py-3 text-danger shadow-sm">
               <span className="relative flex h-2.5 w-2.5 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-75" />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-danger" />
@@ -359,7 +357,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
             </div>
           )}
 
-          <div className="rounded-[28px] border border-border-subtle/55 bg-surface-0/62 p-4 shadow-sm">
+          <div className="rounded-2xl border border-border-subtle/55 bg-surface-0/70 p-3.5 shadow-sm">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">
                 <span>{t('chat.composer', 'Composer')}</span>
@@ -373,7 +371,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
               </div>
             </div>
 
-            <div className="mt-3">
+            <div className="mt-2">
               <TextArea
                 ghost
                 ref={textareaRef}
@@ -391,7 +389,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
                       : t('chat.messagePlaceholder', 'Send a message… (Shift+Enter for new line, paste/drag files)')}
                 rows={1}
                 disabled={disabled}
-                className="w-full min-h-19.5 max-h-44 text-[15px] leading-7"
+                className="w-full min-h-14 max-h-40 text-[15px] leading-7"
               />
 
               {interimText && (
@@ -401,7 +399,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
               )}
             </div>
 
-            <div className="mt-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex flex-wrap gap-2">
                 <ComposerActionButton
                   label={t('chat.attachFile', 'Attach file (image, audio, code, text)')}
@@ -466,12 +464,12 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
 
               <div className="flex items-center justify-end gap-2">
                 {isStreaming ? (
-                  <button type="button" onClick={onStop} title={t('chat.stopGenerating', 'Stop generating')} aria-label={t('chat.stopGenerating', 'Stop generating')} className="inline-flex h-12 items-center gap-2 rounded-[18px] bg-danger/90 px-4 text-[13px] font-semibold text-white shadow-[0_12px_30px_rgba(220,38,38,0.22)] transition-colors hover:bg-danger">
+                  <button type="button" onClick={onStop} title={t('chat.stopGenerating', 'Stop generating')} aria-label={t('chat.stopGenerating', 'Stop generating')} className="inline-flex h-11 items-center gap-2 rounded-xl bg-danger/90 px-4 text-[13px] font-semibold text-white shadow-[0_12px_30px_rgba(220,38,38,0.18)] transition-colors hover:bg-danger">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
                     <span>{t('chat.stopGenerating', 'Stop generating')}</span>
                   </button>
                 ) : (
-                  <button type="button" onClick={handleSubmit} disabled={disabled || (!input.trim() && !attachments.length)} title={t('chat.send', 'Send')} aria-label={t('chat.send', 'Send')} className="inline-flex h-12 items-center gap-2 rounded-[18px] bg-accent px-5 text-[13px] font-semibold text-white shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.24)] transition-all hover:bg-accent-hover disabled:opacity-25 disabled:shadow-none">
+                  <button type="button" onClick={handleSubmit} disabled={disabled || (!input.trim() && !attachments.length)} title={t('chat.send', 'Send')} aria-label={t('chat.send', 'Send')} className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-5 text-[13px] font-semibold text-white shadow-[0_12px_28px_rgba(var(--t-accent-rgb),0.2)] transition-all hover:bg-accent-hover disabled:opacity-25 disabled:shadow-none">
                     <span>{t('chat.send', 'Send')}</span>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                   </button>

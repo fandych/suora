@@ -15,7 +15,9 @@
 
 import {
   prepareModelsDataForSave,
+  prepareSensitiveDataForSave,
   restoreModelsDataAfterLoad,
+  restoreSensitiveDataAfterLoad,
   type ElectronBridge,
 } from '@/services/secureState'
 import { toast } from '@/services/toast'
@@ -198,7 +200,8 @@ async function persistSplitStore(fullValue: string, electron: ElectronBridge): P
     for (const key of CHANNELS_KEYS) {
       if (key in state) channels[key] = state[key]
     }
-    const channelsWrite = writeIfChanged(electron, `${ws}/channels/config.json`, JSON.stringify(channels, null, 2))
+    const secureChannels = await prepareSensitiveDataForSave(electron, channels)
+    const channelsWrite = writeIfChanged(electron, `${ws}/channels/config.json`, JSON.stringify(secureChannels, null, 2))
 
     // settings.json — everything not in models, channels, or excluded
     const settings: Record<string, unknown> = {}
@@ -207,7 +210,8 @@ async function persistSplitStore(fullValue: string, electron: ElectronBridge): P
       settings[key] = value
     }
     settings._storeVersion = parsed.version ?? 0
-    const settingsWrite = writeIfChanged(electron, `${ws}/settings.json`, JSON.stringify(settings, null, 2))
+    const secureSettings = await prepareSensitiveDataForSave(electron, settings)
+    const settingsWrite = writeIfChanged(electron, `${ws}/settings.json`, JSON.stringify(secureSettings, null, 2))
 
     await Promise.all([modelsWrite, channelsWrite, settingsWrite])
   } catch (err) {
@@ -339,7 +343,10 @@ async function loadFromWorkspace(electron: ElectronBridge): Promise<string | nul
       version = (parsed._storeVersion as number) || 0
       delete parsed._storeVersion
     }
-    Object.assign(merged, parsed)
+    const restoredParsed = fp.endsWith('models.json')
+      ? parsed
+      : await restoreSensitiveDataAfterLoad(electron, parsed)
+    Object.assign(merged, restoredParsed)
   }
 
   if (!found) return null
@@ -458,6 +465,25 @@ export const fileStateStorage = {
 
   removeItem: (name: string): void => {
     cache.delete(name)
+    const electron = getElectron()
+    if (!electron) return
+    if (name === SPLIT_STORE_NAME) {
+      const ws = _resolvedWorkspacePath
+      if (splitStoreDebounceTimer) {
+        clearTimeout(splitStoreDebounceTimer)
+        splitStoreDebounceTimer = null
+      }
+      pendingSplitStoreValue = null
+      if (ws) {
+        void Promise.all([
+          electron.invoke('fs:deleteFile', `${ws}/models.json`).catch(() => {}),
+          electron.invoke('fs:deleteFile', `${ws}/settings.json`).catch(() => {}),
+          electron.invoke('fs:deleteFile', `${ws}/channels/config.json`).catch(() => {}),
+        ])
+      }
+      return
+    }
+    electron.invoke('store:remove', name).catch(() => {})
   },
 }
 

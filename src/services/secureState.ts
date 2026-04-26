@@ -10,7 +10,15 @@ interface SecureModelsSecrets {
   apiKeys: Record<string, string>
 }
 
+interface SecurePathSecrets {
+  version: number
+  values: Record<string, string>
+}
+
 const SECURE_MODELS_VERSION = 1
+const SECURE_PATH_SECRETS_VERSION = 1
+const SENSITIVE_KEY_PATTERN = /(?:api[-_]?key|password|passphrase|token|secret|access[-_]?token|refresh[-_]?token|client[-_]?secret|app[-_]?secret|bot[-_]?token|webhook[-_]?secret|signing[-_]?secret|auth[-_]?token)$/i
+const ENCRYPTION_METADATA_KEYS = new Set(['encryptedSecrets', 'encryptionVersion', '_encryptedSecrets', '_encryptionVersion'])
 
 function isStringRecord(value: unknown): value is Record<string, string> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -86,6 +94,40 @@ async function decryptSecrets(
       version: typeof parsed.version === 'number' ? parsed.version : SECURE_MODELS_VERSION,
       providerApiKeys: isStringRecord(parsed.providerApiKeys) ? parsed.providerApiKeys : {},
       apiKeys: isStringRecord(parsed.apiKeys) ? parsed.apiKeys : {},
+    }
+  } catch {
+    return null
+  }
+}
+
+async function encryptPathSecrets(
+  electron: ElectronBridge,
+  secrets: SecurePathSecrets,
+): Promise<string | null> {
+  const result = (await electron.invoke(
+    'safe-storage:encrypt',
+    JSON.stringify(secrets),
+  )) as { data?: string; error?: string }
+
+  return typeof result.data === 'string' && !result.error ? result.data : null
+}
+
+async function decryptPathSecrets(
+  electron: ElectronBridge,
+  encryptedSecrets: string,
+): Promise<SecurePathSecrets | null> {
+  const result = (await electron.invoke('safe-storage:decrypt', encryptedSecrets)) as {
+    data?: string
+    error?: string
+  }
+
+  if (typeof result.data !== 'string' || result.error) return null
+
+  try {
+    const parsed = JSON.parse(result.data) as Partial<SecurePathSecrets>
+    return {
+      version: typeof parsed.version === 'number' ? parsed.version : SECURE_PATH_SECRETS_VERSION,
+      values: isStringRecord(parsed.values) ? parsed.values : {},
     }
   } catch {
     return null
@@ -174,6 +216,107 @@ export async function prepareModelsDataForSave(
   nextParsed.encryptedSecrets = encryptedSecrets
   nextParsed.encryptionVersion = SECURE_MODELS_VERSION
   return nextParsed
+}
+
+function shouldProtectValue(key: string, value: unknown, parent: Record<string, unknown> | null): value is string {
+  if (typeof value !== 'string' || value.length === 0) return false
+  if (ENCRYPTION_METADATA_KEYS.has(key)) return false
+  if (SENSITIVE_KEY_PATTERN.test(key)) return true
+  return key === 'value' && parent?.secret === true
+}
+
+function stripSensitiveValues(
+  value: unknown,
+  path: string,
+  secrets: Record<string, string>,
+): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => stripSensitiveValues(entry, `${path}/${index}`, secrets))
+  }
+
+  if (!value || typeof value !== 'object') return value
+
+  const source = value as Record<string, unknown>
+  const copy: Record<string, unknown> = {}
+  for (const [key, entry] of Object.entries(source)) {
+    const entryPath = `${path}/${key}`
+    if (shouldProtectValue(key, entry, source)) {
+      secrets[entryPath] = entry
+      copy[key] = ''
+      continue
+    }
+    copy[key] = stripSensitiveValues(entry, entryPath, secrets)
+  }
+  return copy
+}
+
+function restoreSensitiveValues(value: unknown, path: string, secrets: Record<string, string>): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry, index) => restoreSensitiveValues(entry, `${path}/${index}`, secrets))
+  }
+
+  if (!value || typeof value !== 'object') return value
+
+  const copy: Record<string, unknown> = { ...(value as Record<string, unknown>) }
+  for (const key of Object.keys(copy)) {
+    const entryPath = `${path}/${key}`
+    if (Object.prototype.hasOwnProperty.call(secrets, entryPath)) {
+      copy[key] = secrets[entryPath]
+    } else {
+      copy[key] = restoreSensitiveValues(copy[key], entryPath, secrets)
+    }
+  }
+  return copy
+}
+
+export async function prepareSensitiveDataForSave(
+  electron: ElectronBridge,
+  parsed: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  const secrets: Record<string, string> = {}
+  const stripped = stripSensitiveValues(parsed, '', secrets) as Record<string, unknown>
+  delete stripped._encryptedSecrets
+  delete stripped._encryptionVersion
+
+  if (Object.keys(secrets).length === 0) return stripped
+
+  if (!(await isSecureStorageAvailable(electron))) {
+    emitSecureStorageWarning('unavailable')
+    return stripped
+  }
+
+  const encryptedSecrets = await encryptPathSecrets(electron, {
+    version: SECURE_PATH_SECRETS_VERSION,
+    values: secrets,
+  })
+
+  if (!encryptedSecrets) {
+    emitSecureStorageWarning('encryption-failed')
+    return stripped
+  }
+
+  stripped._encryptedSecrets = encryptedSecrets
+  stripped._encryptionVersion = SECURE_PATH_SECRETS_VERSION
+  return stripped
+}
+
+export async function restoreSensitiveDataAfterLoad(
+  electron: ElectronBridge,
+  parsed: Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  if (typeof parsed._encryptedSecrets !== 'string' || parsed._encryptedSecrets.length === 0) {
+    const copy = { ...parsed }
+    delete copy._encryptedSecrets
+    delete copy._encryptionVersion
+    return copy
+  }
+
+  const decrypted = await decryptPathSecrets(electron, parsed._encryptedSecrets)
+  const copy = { ...parsed }
+  delete copy._encryptedSecrets
+  delete copy._encryptionVersion
+  if (!decrypted) return copy
+  return restoreSensitiveValues(copy, '', decrypted.values) as Record<string, unknown>
 }
 
 export async function restoreModelsDataAfterLoad(

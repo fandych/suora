@@ -5,6 +5,16 @@ import type { ChannelConfig, ChannelMessage, ChannelHistoryMessage, ChannelUser,
 import type { ModelMessage } from 'ai'
 import { logger } from './logger'
 
+type ElectronBridge = {
+  invoke?: (channel: string, ...args: unknown[]) => Promise<unknown>
+  on?: (channel: string, listener: (...args: unknown[]) => void) => void
+  off?: (channel: string, listener: (...args: unknown[]) => void) => void
+}
+
+function getElectronBridge(): ElectronBridge | undefined {
+  return (window as unknown as { electron?: ElectronBridge }).electron
+}
+
 // Maximum number of conversation history entries per user
 const MAX_USER_CONVERSATION_HISTORY = 20
 
@@ -477,7 +487,10 @@ export async function sendChannelReply(
   content: string
 ): Promise<boolean> {
   try {
-    const result = await window.electron.invoke(
+    const electron = getElectronBridge()
+    if (!electron?.invoke) return false
+
+    const result = await electron.invoke(
       'channel:sendMessage',
       channel.id,
       chatId,
@@ -505,6 +518,9 @@ export async function sendChannelReply(
  * Returns a cleanup function to remove the listener.
  */
 export function initChannelMessageListener(): () => void {
+  const electron = getElectronBridge()
+  if (!electron?.on || !electron?.off) return () => {}
+
   // Listen for incoming channel messages from main process
   const handler = async (_event: unknown, data: unknown) => {
     const { channel, message } = data as {
@@ -576,12 +592,12 @@ export function initChannelMessageListener(): () => void {
     }
   }
 
-  window.electron.on('channel:message', handler)
+  electron.on('channel:message', handler)
   logger.info('Channel message listener initialized')
 
   // Return cleanup function
   return () => {
-    window.electron.off('channel:message', handler)
+    electron.off?.('channel:message', handler)
     logger.info('Channel message listener removed')
   }
 }
@@ -591,9 +607,12 @@ export function initChannelMessageListener(): () => void {
  */
 export async function registerChannels(channels: ChannelConfig[]): Promise<void> {
   try {
+    const electron = getElectronBridge()
+    if (!electron?.invoke) return
+
     const enabledChannels = channels.filter((c) => c.enabled)
 
-    await window.electron.invoke('channel:register', enabledChannels)
+    await electron.invoke('channel:register', enabledChannels)
 
     logger.info('Channels registered', { count: enabledChannels.length })
   } catch (error) {
@@ -627,7 +646,10 @@ export async function restoreChannelRuntime(channels: ChannelConfig[]): Promise<
  */
 export async function startChannelServer(): Promise<boolean> {
   try {
-    const result = await window.electron.invoke('channel:start') as {
+    const electron = getElectronBridge()
+    if (!electron?.invoke) return false
+
+    const result = await electron.invoke('channel:start') as {
       success?: boolean
       error?: string
     }
@@ -650,7 +672,10 @@ export async function startChannelServer(): Promise<boolean> {
  */
 export async function stopChannelServer(): Promise<boolean> {
   try {
-    const result = await window.electron.invoke('channel:stop') as {
+    const electron = getElectronBridge()
+    if (!electron?.invoke) return false
+
+    const result = await electron.invoke('channel:stop') as {
       success?: boolean
       error?: string
     }
@@ -673,7 +698,10 @@ export async function stopChannelServer(): Promise<boolean> {
  */
 export async function getChannelServerStatus(): Promise<boolean> {
   try {
-    const result = await window.electron.invoke('channel:status') as {
+    const electron = getElectronBridge()
+    if (!electron?.invoke) return false
+
+    const result = await electron.invoke('channel:status') as {
       running: boolean
     }
 
@@ -689,7 +717,10 @@ export async function getChannelServerStatus(): Promise<boolean> {
  */
 export async function getChannelWebhookUrl(channel: ChannelConfig): Promise<string | null> {
   try {
-    const result = await window.electron.invoke('channel:getWebhookUrl', channel) as {
+    const electron = getElectronBridge()
+    if (!electron?.invoke) return null
+
+    const result = await electron.invoke('channel:getWebhookUrl', channel) as {
       success?: boolean
       url?: string
       error?: string

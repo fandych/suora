@@ -161,7 +161,7 @@ export function SessionList({ width }: { width?: number }) {
       }
     >
       <div className="px-3 pb-4 pt-1 space-y-3">
-        <div className="rounded-[28px] border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.07)]">
+        <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/72 p-4 shadow-sm">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">
@@ -174,29 +174,29 @@ export function SessionList({ width }: { width?: number }) {
                 {t('sessions.deckHint', 'Switch context fast, scan message history, and keep active threads close at hand.')}
               </p>
             </div>
-            <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
+            <div className="rounded-xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
               <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
               <div className="text-xl font-semibold text-text-primary tabular-nums">{sessions.length}</div>
             </div>
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+            <div className="rounded-xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.open', 'Open')}</div>
               <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{openSessionTabs.length}</div>
             </div>
-            <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+            <div className="rounded-xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('sessions.messages', 'Messages')}</div>
               <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{totalMessages}</div>
             </div>
-            <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
+            <div className="rounded-xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
               <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('sessions.active', 'Active')}</div>
               <div className="mt-1 truncate text-[15px] font-semibold text-text-primary">{activeSession?.title ?? '—'}</div>
             </div>
           </div>
 
           {activeSession && (
-            <div className="mt-4 rounded-[22px] border border-border-subtle/45 bg-surface-0/58 p-3.5 shadow-sm">
+            <div className="mt-4 rounded-2xl border border-border-subtle/45 bg-surface-0/58 p-3.5 shadow-sm">
               <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('sessions.liveConversation', 'Live conversation')}</div>
               <div className="mt-2 truncate text-[13px] font-semibold text-text-primary">{activeSession.title}</div>
               <div className="mt-2 flex items-center gap-2 text-[11px] text-text-muted">
@@ -208,7 +208,7 @@ export function SessionList({ width }: { width?: number }) {
           )}
         </div>
 
-        <div className="rounded-[24px] border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+        <div className="rounded-2xl border border-border-subtle/55 bg-surface-0/48 p-3 shadow-sm">
           <div className="relative">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/40">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -266,7 +266,7 @@ export function SessionList({ width }: { width?: number }) {
                 <div
                   key={session.id}
                   onContextMenu={(e) => handleContextMenu(e, session.id)}
-                  className={`group rounded-[24px] border transition-all duration-200 ${
+                  className={`group rounded-2xl border transition-all duration-200 ${
                     isActive
                       ? 'border-accent/20 bg-accent/10 text-text-primary shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
                       : 'border-transparent bg-surface-1/18 text-text-secondary hover:border-border-subtle/60 hover:bg-surface-3/55 hover:text-text-primary'
@@ -362,7 +362,7 @@ export function SessionList({ width }: { width?: number }) {
 
       {contextMenu && (
         <div
-          className="fixed z-50 min-w-44 rounded-[16px] border border-border/60 bg-surface-2/95 py-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale"
+          className="fixed z-50 min-w-44 rounded-2xl border border-border/60 bg-surface-2/95 py-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale"
           {...{ style: { left: contextMenu.x, top: contextMenu.y } }}
           onClick={(e) => e.stopPropagation()}
         >

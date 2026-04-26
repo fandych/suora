@@ -312,6 +312,9 @@ function getProvider(provider: string, apiKey?: string, baseUrl?: string) {
   if (providerInstances[searchKey]) {
     return providerInstances[searchKey]
   }
+  if (apiKey !== undefined || baseUrl !== undefined) {
+    return null
+  }
   for (const [key, instance] of Object.entries(providerInstances)) {
     if (key.startsWith(provider + ':')) return instance
   }

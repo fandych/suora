@@ -20,6 +20,7 @@ import {
 } from '@/services/vectorMemory'
 import { readCached, writeCached } from '@/services/fileStorage'
 import { delegateToAgent } from '@/services/agentCommunication'
+import { confirm } from '@/services/confirmDialog'
 
 const OFFICIAL_MARKETPLACE_URL = 'https://raw.githubusercontent.com/suora-market/skills/main/skills.json'
 
@@ -171,7 +172,7 @@ function getPersistedSecuritySettings() {
       return {
         allowedDirectories: [] as string[],
         blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
-        requireConfirmation: false,
+        requireConfirmation: true,
       }
     }
     const parsed = JSON.parse(raw) as { state?: { toolSecurity?: { allowedDirectories?: string[]; blockedCommands?: string[]; requireConfirmation?: boolean } } }
@@ -179,13 +180,13 @@ function getPersistedSecuritySettings() {
     return {
       allowedDirectories: sec?.allowedDirectories || [],
       blockedCommands: sec?.blockedCommands || ['rm -rf', 'del /f /q', 'format', 'shutdown'],
-      requireConfirmation: sec?.requireConfirmation ?? false,
+      requireConfirmation: sec?.requireConfirmation ?? true,
     }
   } catch {
     return {
       allowedDirectories: [] as string[],
       blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
-      requireConfirmation: false,
+      requireConfirmation: true,
     }
   }
 }
@@ -272,10 +273,13 @@ function ensureCommandAllowed(command: string): string | null {
   return null
 }
 
+function isHighRiskAction(action: string): boolean {
+  return /^(write_file|edit_file|delete_file|create_directory|move_file|copy_file|shell|browser_evaluate|browser_fill_form|browser_click|browser_screenshot|clipboard_read|clipboard_write|git_commit|email_|env_set|timer_create|timer_update|timer_delete)/.test(action)
+}
+
 async function confirmIfNeeded(action: string): Promise<boolean> {
   const sec = getPersistedSecuritySettings()
-  if (!sec.requireConfirmation) return true
-  const { confirm } = await import('@/services/confirmDialog')
+  if (!sec.requireConfirmation && !isHighRiskAction(action)) return true
   const [title, ...rest] = action.split('\n')
   return confirm({
     title: `Tool confirmation: ${title}`,
@@ -633,14 +637,14 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   browser_evaluate: tool({
-    description: 'Execute JavaScript code on a web page and return the result. Navigates to the URL first, then runs the script.',
+    description: 'Run a safe, predefined read-only browser evaluation on a web page and return the result. Use browser_extract_text or browser_extract_links for general page reading.',
     inputSchema: z.object({
       url: z.string().url().describe('The URL to navigate to before executing the script'),
-      script: z.string().describe('JavaScript code to execute in the page context'),
+      expression: z.enum(['title', 'location', 'text', 'links', 'headings']).describe('Safe read-only expression to evaluate'),
     }),
-    execute: async ({ url, script }) => {
-      if (!(await confirmIfNeeded(`browser_evaluate\n${url}\n${script.slice(0, PREVIEW_LENGTH)}`))) return 'Cancelled by user confirmation policy.'
-      const result = (await electronInvoke('browser:evaluate', url, script)) as {
+    execute: async ({ url, expression }) => {
+      if (!(await confirmIfNeeded(`browser_evaluate\n${url}\n${expression}`))) return 'Cancelled by user confirmation policy.'
+      const result = (await electronInvoke('browser:evaluate', url, expression)) as {
         result?: string
         error?: string
       }

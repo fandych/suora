@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { ElectronBridge } from './secureState'
-import { prepareModelsDataForSave, restoreModelsDataAfterLoad } from './secureState'
+import {
+  prepareModelsDataForSave,
+  prepareSensitiveDataForSave,
+  restoreModelsDataAfterLoad,
+  restoreSensitiveDataAfterLoad,
+} from './secureState'
 
 describe('secureState', () => {
   it('encrypts provider and model secrets before writing and restores them on read', async () => {
@@ -116,5 +121,42 @@ describe('secureState', () => {
     window.removeEventListener('suora:secure-storage-warning', listener)
     // Guard against leaking our test listener if the suite grows.
     void originalAddEventListener
+  })
+
+  it('encrypts generic sensitive settings and restores them on load', async () => {
+    const invoke = vi.fn(async (channel: string, ...args: unknown[]) => {
+      const [value] = args as [string?]
+      if (channel === 'safe-storage:isAvailable') return true
+      if (channel === 'safe-storage:encrypt') {
+        return { data: Buffer.from(value ?? '', 'utf-8').toString('base64') }
+      }
+      if (channel === 'safe-storage:decrypt') {
+        return { data: Buffer.from(value ?? '', 'base64').toString('utf-8') }
+      }
+      return undefined
+    })
+
+    const electron = { invoke } satisfies ElectronBridge
+    const rawSettings = {
+      emailConfig: {
+        smtpHost: 'smtp.example.com',
+        username: 'user@example.com',
+        password: 'smtp-password',
+      },
+      envVariables: [
+        { key: 'DB_PASSWORD', value: 'secret-db-pass', secret: true },
+        { key: 'APP_MODE', value: 'development', secret: false },
+      ],
+    }
+
+    const encryptedSettings = await prepareSensitiveDataForSave(electron, rawSettings)
+
+    expect((encryptedSettings.emailConfig as { password: string }).password).toBe('')
+    expect((encryptedSettings.envVariables as Array<{ value: string }>)[0].value).toBe('')
+    expect((encryptedSettings.envVariables as Array<{ value: string }>)[1].value).toBe('development')
+    expect(encryptedSettings._encryptedSecrets).toEqual(expect.any(String))
+
+    const restoredSettings = await restoreSensitiveDataAfterLoad(electron, encryptedSettings)
+    expect(restoredSettings).toMatchObject(rawSettings)
   })
 })

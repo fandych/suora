@@ -186,6 +186,14 @@ function updateSessionMessage(sessionId: string, messageId: string, updates: Par
 
 // ─── Convert app Message[] to AI SDK v6 ModelMessage[] ───────────
 
+const MAX_TEXT_ATTACHMENT_CHARS = 24_000
+const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024
+
+function clampTextAttachment(name: string, data: string): string {
+  if (data.length <= MAX_TEXT_ATTACHMENT_CHARS) return `[File: ${name}]\n${data}`
+  return `[File: ${name}]\n${data.slice(0, MAX_TEXT_ATTACHMENT_CHARS)}\n\n[Attachment truncated: ${data.length - MAX_TEXT_ATTACHMENT_CHARS} characters omitted]`
+}
+
 function toModelMessages(messages: Message[]): ModelMessage[] {
   const result: ModelMessage[] = []
 
@@ -196,9 +204,13 @@ function toModelMessages(messages: Message[]): ModelMessage[] {
         if (m.content) parts.push({ type: 'text', text: m.content })
         for (const att of m.attachments) {
           if (att.type === 'image') {
+            if (att.size > MAX_IMAGE_ATTACHMENT_BYTES) {
+              parts.push({ type: 'text', text: `[Image attachment skipped: ${att.name} exceeds 5MB]` })
+              continue
+            }
             parts.push({ type: 'image', image: att.data, mediaType: att.mimeType })
           } else if (att.type === 'file') {
-            parts.push({ type: 'text', text: `[File: ${att.name}]\n${att.data}` })
+            parts.push({ type: 'text', text: clampTextAttachment(att.name, att.data) })
           } else if (att.type === 'audio') {
             const duration = att.duration ? ` (${att.duration}s)` : ''
             parts.push({ type: 'text', text: `[Audio attachment: ${att.name}${duration}]` })

@@ -56,7 +56,7 @@ function HeaderStat({
   accent?: boolean
 }) {
   return (
-    <div className={`rounded-[22px] border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/45 bg-surface-0/60'}`}>
+    <div className={`rounded-2xl border px-3.5 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/45 bg-surface-0/60'}`}>
       <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
       <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
     </div>
@@ -81,13 +81,13 @@ function PromptActionCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="group rounded-[26px] border border-border-subtle/55 bg-surface-0/48 p-4 text-left shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition-all duration-200 hover:border-accent/18 hover:bg-surface-0/68 hover:shadow-[0_16px_36px_rgba(var(--t-accent-rgb),0.08)] disabled:opacity-45"
+      className="group rounded-2xl border border-border-subtle/55 bg-surface-0/58 p-4 text-left shadow-sm transition-all duration-200 hover:border-accent/24 hover:bg-surface-0/82 disabled:opacity-45"
     >
-      <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm transition-colors group-hover:border-accent/20 group-hover:bg-accent/10">
+      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm transition-colors group-hover:border-accent/20 group-hover:bg-accent/10">
         <IconifyIcon name={icon} size={18} color="currentColor" />
       </div>
-      <div className="mt-4 text-[15px] font-semibold text-text-primary">{title}</div>
-      <p className="mt-2 text-[12px] leading-6 text-text-secondary/78">{detail}</p>
+      <div className="mt-3 text-[14px] font-semibold text-text-primary">{title}</div>
+      <p className="mt-1.5 text-[12px] leading-5 text-text-secondary/78">{detail}</p>
     </button>
   )
 }
@@ -126,10 +126,10 @@ function ModelDropdown({
           type="button"
           aria-label="Select model"
           onClick={() => setOpen(!open)}
-          className="flex w-full min-w-60 items-center justify-between gap-3 rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-3.5 text-left shadow-sm transition-all hover:border-accent/18 hover:bg-surface-0/82 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/20"
+          className="flex w-full min-w-56 items-center justify-between gap-3 rounded-2xl border border-border-subtle/55 bg-surface-0/70 px-3.5 py-3 text-left shadow-sm transition-all hover:border-accent/18 hover:bg-surface-0/90 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/20"
         >
           <div className="min-w-0 flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="4" y="4" width="16" height="16" rx="3" />
                 <rect x="9" y="9" width="6" height="6" rx="1.5" />
@@ -145,7 +145,7 @@ function ModelDropdown({
         </button>
 
         {open && (
-          <div className="absolute left-0 top-full z-50 mt-3 w-76 max-h-96 overflow-y-auto rounded-[22px] border border-border-subtle/70 bg-surface-2/95 p-2 shadow-2xl backdrop-blur-xl animate-fade-in-scale">
+          <div className="absolute left-0 top-full z-50 mt-2 w-76 max-h-96 overflow-y-auto rounded-2xl border border-border-subtle/70 bg-surface-2/95 p-2 shadow-2xl backdrop-blur-xl animate-fade-in-scale">
             <button
               type="button"
               onClick={() => { onChange(''); setOpen(false) }}
@@ -217,8 +217,8 @@ function ChatTabBar() {
   }
 
   return (
-    <div className="px-6 pt-5 xl:px-8">
-      <div className="flex items-center gap-2 overflow-x-auto rounded-3xl border border-border-subtle/55 bg-surface-1/55 p-2 shadow-[0_12px_30px_rgba(15,23,42,0.12)] backdrop-blur-xl">
+    <div className="px-5 pt-4 xl:px-6">
+      <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-border-subtle/55 bg-surface-1/72 p-1.5 shadow-sm backdrop-blur-xl">
         <span className="pl-2 pr-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">
           {t('chat.tabs', 'Tabs')}
         </span>
@@ -232,7 +232,7 @@ function ChatTabBar() {
           return (
             <div
               key={tabId}
-              className={`group flex max-w-60 shrink-0 items-center rounded-[18px] border transition-all duration-200 ${
+              className={`group flex max-w-60 shrink-0 items-center rounded-xl border transition-all duration-200 ${
                 isActive
                   ? 'border-accent/22 bg-accent/10 text-text-primary shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.08)]'
                   : 'border-transparent bg-transparent text-text-muted hover:border-border-subtle/55 hover:bg-surface-0/48 hover:text-text-secondary'
@@ -242,7 +242,7 @@ function ChatTabBar() {
                 type="button"
                 onClick={() => openSessionTab(tabId)}
                 aria-current={isActive ? 'page' : undefined}
-                className="min-w-0 flex flex-1 items-center gap-2 px-4 py-2.5 text-left focus:outline-none"
+                className="min-w-0 flex flex-1 items-center gap-2 px-3 py-2 text-left focus:outline-none"
               >
                 {agent && <span className="text-[10px]"><AgentAvatar avatar={agent.avatar} size={14} /></span>}
                 <span className="truncate text-[12.5px] font-medium">{session.title}</span>
@@ -255,7 +255,7 @@ function ChatTabBar() {
                   e.stopPropagation()
                   closeSessionTab(tabId)
                 }}
-                className="mr-2 flex h-7 w-7 items-center justify-center rounded-xl text-text-muted/60 transition-colors hover:bg-danger/10 hover:text-danger"
+                className="mr-1.5 flex h-7 w-7 items-center justify-center rounded-lg text-text-muted/60 transition-colors hover:bg-danger/10 hover:text-danger"
               >
                 <IconifyIcon name="ui-close" size={15} color="currentColor" />
               </button>
@@ -268,7 +268,7 @@ function ChatTabBar() {
           onClick={handleNewTab}
           title={t('chat.newTab', 'New chat tab')}
           aria-label={t('chat.newTab', 'New chat tab')}
-          className="ml-auto flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-all hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
+          className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-all hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
         >
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
@@ -308,10 +308,10 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
           type="button"
           aria-label={t('chat.selectAgent', 'Select agent')}
           onClick={() => setOpen(!open)}
-          className="flex w-full min-w-60 items-center justify-between gap-3 rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-3.5 text-left shadow-sm transition-all hover:border-accent/18 hover:bg-surface-0/82 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/20"
+          className="flex w-full min-w-56 items-center justify-between gap-3 rounded-2xl border border-border-subtle/55 bg-surface-0/70 px-3.5 py-3 text-left shadow-sm transition-all hover:border-accent/18 hover:bg-surface-0/90 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/20"
         >
           <div className="min-w-0 flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm">
               {current && <AgentAvatar avatar={current.avatar} size={18} />}
             </div>
             <div className="min-w-0">
@@ -323,7 +323,7 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
         </button>
 
         {open && (
-          <div className="absolute left-0 top-full z-50 mt-3 w-76 max-h-96 overflow-y-auto rounded-[22px] border border-border-subtle/70 bg-surface-2/95 p-2 shadow-2xl backdrop-blur-xl animate-fade-in-scale">
+          <div className="absolute left-0 top-full z-50 mt-2 w-76 max-h-96 overflow-y-auto rounded-2xl border border-border-subtle/70 bg-surface-2/95 p-2 shadow-2xl backdrop-blur-xl animate-fade-in-scale">
             {enabledAgents.map((a) => (
               <button
                 type="button"
@@ -512,13 +512,13 @@ export function ChatMain() {
   if (!activeSession) {
     return (
       <div className="flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
-        <div className="px-6 pt-6 xl:px-8">
-          <div className="rounded-[34px] border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
+        <div className="px-5 pt-5 xl:px-6">
+          <div className="rounded-3xl border border-border-subtle/55 bg-surface-1/76 p-5 shadow-sm xl:p-6">
+            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">
                 <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.workbench', 'Chat workbench')}</div>
-                <h1 className="mt-2 text-[32px] font-semibold tracking-tight text-text-primary">{t('chat.desktopAssistant', 'Suora')}</h1>
-                <p className="mt-3 max-w-2xl text-[15px] leading-7 text-text-secondary/82">{t('chat.selectOrCreate', 'Select or create a conversation to begin')}</p>
+                <h1 className="mt-2 text-[28px] font-semibold text-text-primary">{t('chat.desktopAssistant', 'Suora')}</h1>
+                <p className="mt-2 max-w-2xl text-[14px] leading-6 text-text-secondary/82">{t('chat.selectOrCreate', 'Select or create a conversation to begin')}</p>
                 <div className="mt-5 flex flex-wrap gap-2">
                   <SurfaceBadge tone="accent">{t('chat.pipelineCommandHint', 'Try /pipeline list, or say "run Morning Run pipeline"')}</SurfaceBadge>
                   <SurfaceBadge>{t('chat.multimodalWorkspace', 'Attachments, voice input, and agent routing in one place')}</SurfaceBadge>
@@ -550,20 +550,20 @@ export function ChatMain() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-4 pt-6 xl:px-8">
-          <div className="mx-auto grid max-w-384 gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(20rem,0.82fr)]">
-            <section className="chat-stage-panel relative overflow-hidden rounded-[34px] border border-border-subtle/55 bg-surface-0/42 shadow-[0_24px_70px_rgba(15,23,42,0.14)]">
-              <div className="relative z-10 p-6 xl:p-8">
-                <div className="flex h-22 w-22 items-center justify-center rounded-[28px] border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_18px_46px_rgba(var(--t-accent-rgb),0.16)]">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-5 xl:px-6">
+          <div className="mx-auto grid max-w-384 gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.72fr)]">
+            <section className="chat-stage-panel relative overflow-hidden rounded-3xl border border-border-subtle/55 bg-surface-1/58 shadow-sm">
+              <div className="relative z-10 p-5 xl:p-7">
+                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-accent/12 bg-accent/10 text-accent shadow-sm">
                   <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 </div>
-                <div className="mt-8 max-w-2xl">
+                <div className="mt-6 max-w-2xl">
                   <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.startHere', 'Start here')}</div>
-                  <h2 className="mt-2 text-[34px] font-semibold tracking-tight text-text-primary">{t('chat.mainPrompt', 'Pick a thread, or launch a fresh one from the composer below.')}</h2>
-                  <p className="mt-3 text-[14px] leading-7 text-text-secondary/82">{t('chat.welcomeBody', 'The chat page now behaves like a workspace instead of a blank prompt. Choose an agent, lock in a model, then jump in with one of these higher-signal starting points.')}</p>
+                  <h2 className="mt-2 text-[28px] font-semibold text-text-primary">{t('chat.mainPrompt', 'Pick a thread, or launch a fresh one from the composer below.')}</h2>
+                  <p className="mt-3 text-[14px] leading-6 text-text-secondary/82">{t('chat.welcomeBody', 'The chat page now behaves like a workspace instead of a blank prompt. Choose an agent, lock in a model, then jump in with one of these higher-signal starting points.')}</p>
                 </div>
 
-                <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   {starterPrompts.map((prompt) => (
                     <PromptActionCard
                       key={prompt.label}
@@ -578,7 +578,7 @@ export function ChatMain() {
             </section>
 
             <aside className="space-y-4">
-              <div className="rounded-[28px] border border-border-subtle/55 bg-surface-0/48 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.09)]">
+              <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/58 p-4 shadow-sm">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.activeSetup', 'Active setup')}</div>
                 <div className="mt-4 flex items-center gap-3">
                   <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-border-subtle/45 bg-surface-2/80 shadow-sm">
@@ -601,7 +601,7 @@ export function ChatMain() {
                 </div>
               </div>
 
-              <div className="rounded-[28px] border border-border-subtle/55 bg-surface-0/48 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.09)]">
+              <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/58 p-4 shadow-sm">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.readyCheck', 'Ready check')}</div>
                 <div className="mt-3 text-[14px] font-semibold text-text-primary">{selectedModel ? t('chat.modelArmed', 'Model armed') : t('chat.modelMissing', 'Model required')}</div>
                 <p className="mt-2 text-[12px] leading-6 text-text-muted/78">
@@ -622,7 +622,7 @@ export function ChatMain() {
           </div>
         </div>
 
-        <div className="px-6 pb-6 xl:px-8">
+        <div className="px-5 pb-5 xl:px-6">
           <ChatInput
             onSend={createSessionAndSend}
             disabled={false}
@@ -645,14 +645,14 @@ export function ChatMain() {
         aria-live="polite"
         className="min-h-0 flex-1 overflow-y-auto"
       >
-        <div className="px-6 pt-6 xl:px-8">
-          <div className="mx-auto max-w-384 rounded-[34px] border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-3xl">
+        <div className="sticky top-0 z-20 border-b border-border-subtle/45 bg-surface-0/88 px-5 py-3 backdrop-blur-xl xl:px-6">
+          <div className="mx-auto max-w-384 rounded-2xl border border-border-subtle/55 bg-surface-1/76 p-4 shadow-sm">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div className="min-w-0 max-w-3xl">
                 <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.liveSession', 'Live session')}</div>
-                <h1 className="mt-2 text-[32px] font-semibold tracking-tight text-text-primary">{activeSession.title}</h1>
-                <p className="mt-3 max-w-2xl text-[15px] leading-7 text-text-secondary/82">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
-                <div className="mt-5 flex flex-wrap gap-2">
+                <h1 className="mt-1 truncate text-[22px] font-semibold text-text-primary">{activeSession.title}</h1>
+                <p className="mt-1.5 line-clamp-2 max-w-2xl text-[13px] leading-5 text-text-secondary/82">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
                   {displayAgentName && <SurfaceBadge tone="accent">{displayAgentName}</SurfaceBadge>}
                   <SurfaceBadge>{sessionModel?.name ?? t('chat.selectModel', '-- Select Model --')}</SurfaceBadge>
                   <SurfaceBadge>{messages.length} {t('sessions.msgs', 'msgs')}</SurfaceBadge>
@@ -678,7 +678,7 @@ export function ChatMain() {
                     onClick={clearMessages}
                     disabled={isStreaming}
                     title={t('chat.clearConversation', 'Clear conversation')}
-                    className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-3xl border border-border-subtle/55 bg-surface-0/58 px-4 py-3.5 text-[13px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-35"
+                    className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-2xl border border-border-subtle/55 bg-surface-0/58 px-4 py-3 text-[13px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-35"
                   >
                     <IconifyIcon name="ui-trash" size={15} color="currentColor" />
                     {t('common.clear', 'Clear')}
@@ -702,18 +702,18 @@ export function ChatMain() {
           <div className="mx-auto max-w-384">
             {messages.length === 0 ? (
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                <section className="chat-stage-panel relative overflow-hidden rounded-[34px] border border-border-subtle/55 bg-surface-0/42 shadow-[0_24px_70px_rgba(15,23,42,0.14)]">
-                  <div className="relative z-10 p-6 xl:p-8">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-3xl border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_18px_46px_rgba(var(--t-accent-rgb),0.16)]">
+                <section className="chat-stage-panel relative overflow-hidden rounded-3xl border border-border-subtle/55 bg-surface-1/58 shadow-sm">
+                  <div className="relative z-10 p-5 xl:p-7">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-accent/12 bg-accent/10 text-accent shadow-sm">
                       <AgentAvatar avatar={sessionAgent?.avatar ?? 'ui-sparkles'} size={32} />
                     </div>
                     <div className="mt-7 max-w-2xl">
                       <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.readyWhenYouAre', 'Ready when you are')}</div>
-                      <h2 className="mt-2 text-[34px] font-semibold tracking-tight text-text-primary">{displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')}</h2>
-                      <p className="mt-3 text-[15px] leading-7 text-text-secondary/82">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
+                      <h2 className="mt-2 text-[28px] font-semibold text-text-primary">{displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')}</h2>
+                      <p className="mt-3 text-[14px] leading-6 text-text-secondary/82">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
                     </div>
 
-                    <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
                       {starterPrompts.map((suggestion) => (
                         <PromptActionCard
                           key={suggestion.label}
@@ -730,7 +730,7 @@ export function ChatMain() {
 
                 <aside className="hidden xl:block">
                   <div className="sticky top-4 space-y-4">
-                    <div className="rounded-[28px] border border-border-subtle/55 bg-surface-0/48 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.09)]">
+                    <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/58 p-4 shadow-sm">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.context', 'Context')}</div>
                       <div className="mt-4 flex items-center gap-3">
                         <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-border-subtle/45 bg-surface-2/80 shadow-sm">
@@ -751,7 +751,7 @@ export function ChatMain() {
                       )}
                     </div>
 
-                    <div className="rounded-[28px] border border-border-subtle/55 bg-surface-0/48 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.09)]">
+                    <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/58 p-4 shadow-sm">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.hints', 'Hints')}</div>
                       <div className="mt-3 space-y-2 text-[12px] leading-6 text-text-secondary/82">
                         <div className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2.5">{t('chat.pipelineCommandHint', 'Try /pipeline list, or say "run Morning Run pipeline"')}</div>
@@ -762,11 +762,11 @@ export function ChatMain() {
                 </aside>
               </div>
             ) : (
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                <section className="chat-stage-panel relative overflow-hidden rounded-[34px] border border-border-subtle/55 bg-surface-0/42 shadow-[0_24px_70px_rgba(15,23,42,0.14)]">
-                  <div className="relative z-10 p-4 sm:p-6 xl:p-8">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_17rem]">
+                <section className="chat-transcript relative overflow-hidden rounded-3xl border border-border-subtle/55 shadow-sm">
+                  <div className="relative z-10 p-4 sm:p-5 xl:p-6">
                     <TodoProgress />
-                    <div className="space-y-1">
+                    <div className="space-y-0.5">
                       {messages.map((msg) => (
                         <MessageBubble
                           key={msg.id}
@@ -791,7 +791,7 @@ export function ChatMain() {
 
                 <aside className="hidden xl:block">
                   <div className="sticky top-4 space-y-4">
-                    <div className="rounded-[28px] border border-border-subtle/55 bg-surface-0/48 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.09)]">
+                    <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/58 p-4 shadow-sm">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.sessionStatus', 'Session status')}</div>
                       <div className="mt-4 space-y-3 text-[12px]">
                         <div className="flex items-center justify-between rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2.5">
@@ -813,7 +813,7 @@ export function ChatMain() {
                       </div>
                     </div>
 
-                    <div className="rounded-[28px] border border-border-subtle/55 bg-surface-0/48 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.09)]">
+                    <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/58 p-4 shadow-sm">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.runtime', 'Runtime')}</div>
                       <div className="mt-3 space-y-2 text-[12px] leading-6 text-text-secondary/82">
                         <div className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2.5">{isStreaming ? t('chat.thinking', 'Thinking…') : t('chat.aiDisclaimer', 'AI can make mistakes. Please verify important information.')}</div>
@@ -830,7 +830,7 @@ export function ChatMain() {
 
       <StreamingStatus isStreaming={isStreaming} messages={messages} />
 
-      <div className="px-6 pb-6 xl:px-8">
+      <div className="px-5 pb-5 xl:px-6">
         <ChatInput
           onSend={handleSend}
           disabled={isStreaming}

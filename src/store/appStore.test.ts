@@ -283,7 +283,7 @@ describe('appStore', () => {
     })
 
     it('should preserve the latest selected agent while startup refresh is still loading', async () => {
-      let resolveAgents: ((value: Awaited<ReturnType<typeof loadAgentsFromDisk>>) => void) | null = null
+      let resolveAgents!: (value: Awaited<ReturnType<typeof loadAgentsFromDisk>>) => void
       const pendingAgents = new Promise<Awaited<ReturnType<typeof loadAgentsFromDisk>>>((resolve) => {
         resolveAgents = resolve
       })
@@ -311,7 +311,7 @@ describe('appStore', () => {
       const refreshPromise = loadExternalSkillsAndAgents()
 
       useAppStore.getState().setSelectedAgent(localAgent)
-      resolveAgents?.([localAgent])
+      resolveAgents([localAgent])
       await refreshPromise
 
       expect(useAppStore.getState().selectedAgent?.id).toBe('agent-local')

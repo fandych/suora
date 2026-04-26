@@ -33,7 +33,7 @@ export type ModelConfigSlice = Pick<
 export const DEFAULT_TOOL_SECURITY: ToolSecuritySettings = {
   allowedDirectories: [],
   blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
-  requireConfirmation: false,
+  requireConfirmation: true,
 }
 
 export const DEFAULT_MARKETPLACE: MarketplaceSettings = {

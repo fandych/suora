@@ -478,14 +478,14 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
   const audioAttachments = message.attachments?.filter((a) => a.type === 'audio') ?? []
 
   const userBubbleCls = {
-    default: 'border border-accent/18 bg-linear-to-br from-accent to-accent-hover text-white shadow-[0_18px_40px_rgba(var(--t-accent-rgb),0.2)]',
+    default: 'border border-accent/24 bg-accent/12 text-text-primary shadow-sm',
     minimal: 'border border-accent/14 bg-accent/6 text-text-primary',
     bordered: 'border-2 border-accent/24 bg-surface-0/82 text-text-primary',
     glassmorphism: 'border border-accent/18 bg-white/10 text-text-primary backdrop-blur-xl shadow-lg',
   }[bubbleStyle]
 
   const aiBubbleCls = {
-    default: 'border border-border-subtle/55 bg-surface-0/78 text-text-primary shadow-[0_16px_38px_rgba(15,23,42,0.08)]',
+    default: 'border border-border-subtle/55 bg-surface-1/74 text-text-primary shadow-sm',
     minimal: 'border border-transparent bg-transparent text-text-primary',
     bordered: 'border-2 border-border-subtle/60 bg-surface-0/76 text-text-primary',
     glassmorphism: 'border border-border-subtle/45 bg-surface-0/58 text-text-primary backdrop-blur-xl shadow-lg',
@@ -558,30 +558,29 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
   return (
     <>
       {lightboxSrc && <ImageLightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={() => setLightboxSrc(null)} />}
-      <div className={`group mb-6 flex items-start gap-3 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div className={`group mb-5 flex items-start gap-3 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
         {!isUser && (
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-border-subtle/45 bg-surface-0/72 text-accent shadow-sm">AI</div>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle/45 bg-surface-0/72 text-accent shadow-sm"><IconifyIcon name="ui-sparkles" size={15} color="currentColor" /></div>
         )}
-        <div className="max-w-[88%] min-w-0 sm:max-w-[82%]">
-          <div className={`relative overflow-hidden rounded-[28px] ${isUser ? userBubbleCls : aiBubbleCls}`}>
-            <div className={`pointer-events-none absolute inset-0 ${isUser ? 'bg-[radial-gradient(circle_at_top_right,rgba(255,255,255,0.18),transparent_55%)]' : 'bg-[radial-gradient(circle_at_top,rgba(var(--t-accent-rgb),0.08),transparent_70%)]'}`} />
-            <div className="relative z-10 px-5 py-4 sm:px-6">
-              <div className="mb-3 flex flex-wrap items-center gap-2">
-                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${isUser ? 'border-white/16 bg-white/10 text-white/82' : 'border-border-subtle/50 bg-surface-2/70 text-text-muted/72'}`}>
+        <div className="max-w-[90%] min-w-0 sm:max-w-[84%]">
+          <div className={`relative overflow-hidden rounded-2xl ${isUser ? userBubbleCls : aiBubbleCls}`}>
+            <div className="relative z-10 px-4 py-3.5 sm:px-5">
+              <div className="mb-2.5 flex flex-wrap items-center gap-2">
+                <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${isUser ? 'border-accent/18 bg-accent/10 text-accent' : 'border-border-subtle/50 bg-surface-2/70 text-text-muted/72'}`}>
                   {isUser ? t('chat.you', 'You') : message.modelUsed ?? t('chat.assistant', 'Assistant')}
                 </span>
-                <span className={`text-[10px] ${isUser ? 'text-white/62' : 'text-text-muted/42'}`}>{formatRelativeTime(message.timestamp, locale)}</span>
+                <span className="text-[10px] text-text-muted/48">{formatRelativeTime(message.timestamp, locale)}</span>
               </div>
 
               {showThinking ? (
                 <ThinkingIndicator />
               ) : isUser ? (
-                <div className="space-y-3 text-[15px] leading-7">
+                <div className="space-y-3 text-[14.5px] leading-7">
                   {message.content && <div className="whitespace-pre-wrap">{message.content}</div>}
                   {renderAttachments()}
                 </div>
               ) : (
-                <div className="space-y-3 text-[15px] leading-7">
+                <div className="space-y-3 text-[14.5px] leading-7">
                   {assistantBody}
                   {renderAttachments()}
                 </div>
@@ -597,7 +596,7 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
             </div>
           </div>
 
-          <div className={`mt-2 flex h-8 flex-wrap items-center gap-1.5 px-1 text-[11px] ${isUser ? 'justify-end' : 'justify-start'}`}>
+          <div className={`mt-2 flex min-h-8 flex-wrap items-center gap-1.5 px-1 text-[11px] opacity-80 transition-opacity group-hover:opacity-100 ${isUser ? 'justify-end' : 'justify-start'}`}>
             {!isUser && message.content && !message.isStreaming && (
               <>
                 <CopyButton text={message.content} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent" />
@@ -617,7 +616,7 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
           </div>
         </div>
 
-        {isUser && <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-accent/16 bg-accent/10 text-[11px] font-semibold text-accent/76 shadow-sm">{t('chat.you', 'You')}</div>}
+        {isUser && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/16 bg-accent/10 text-accent/76 shadow-sm"><IconifyIcon name="ui-user" size={15} color="currentColor" /></div>}
       </div>
     </>
   )

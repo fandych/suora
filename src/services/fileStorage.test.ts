@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { fileStateStorage } from './fileStorage'
+import { fileStateStorage, flushPendingSplitStoreWrites } from './fileStorage'
 
 describe('fileStateStorage', () => {
   async function flushAsyncWork(): Promise<void> {
@@ -71,6 +71,7 @@ describe('fileStateStorage', () => {
       },
     }))
 
+    await flushPendingSplitStoreWrites()
     await flushAsyncWork()
 
     const settingsWrite = vi.mocked(window.electron.invoke).mock.calls.find(

@@ -1,4 +1,5 @@
 ﻿import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons'
@@ -15,14 +16,18 @@ import { settingsInputClass, settingsSoftButtonClass } from '@/components/settin
 
 type ViewMode = 'installed' | 'browse' | 'sources'
 
+const SKILL_VIEW_MODES = new Set<ViewMode>(['installed', 'browse', 'sources'])
+
 const ALL_CATEGORY = 'All'
 
 export function SkillsLayout() {
   const [panelWidth, setPanelWidth] = useResizablePanel('skills', 320)
+  const navigate = useNavigate()
+  const { view } = useParams<{ view: string }>()
   const { skills, addSkill, updateSkill, removeSkill, workspacePath, marketplace, setMarketplace } = useAppStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('installed')
+  const viewMode: ViewMode = view && SKILL_VIEW_MODES.has(view as ViewMode) ? view as ViewMode : 'installed'
   const [registrySkills, setRegistrySkills] = useState<RegistrySkillEntry[]>([])
   const [registryLoading, setRegistryLoading] = useState(false)
   const [search, setSearch] = useState('')
@@ -30,6 +35,12 @@ export function SkillsLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { t } = useI18n()
   useSkillIconsReady()
+
+  useEffect(() => {
+    if (!view || SKILL_VIEW_MODES.has(view as ViewMode)) return
+    navigate('/skills/installed', { replace: true })
+  }, [navigate, view])
+
   const defaultRegistrySources = useMemo(() => getDefaultRegistrySources(), [t])
   const sourceLabels = useMemo<Record<string, string>>(() => ({
     local: t('skills.local', 'Local'),
@@ -325,7 +336,7 @@ export function SkillsLayout() {
           {(['installed', 'browse', 'sources'] as const).map((mode) => (
             <button
               key={mode}
-              onClick={() => setViewMode(mode)}
+              onClick={() => navigate(`/skills/${mode}`)}
               className={`text-xs py-2 rounded-xl font-semibold transition-all flex items-center justify-center gap-1.5 ${
                 viewMode === mode
                   ? 'bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.14)]'
@@ -461,7 +472,7 @@ export function SkillsLayout() {
                     : t('skills.noInstalled', 'No skills yet. Create or install one.')}
                 </p>
                 <button
-                  onClick={() => setViewMode('browse')}
+                  onClick={() => navigate('/skills/browse')}
                   className="mt-2 text-[11px] text-accent hover:underline"
                 >
                   {t('skills.browseSkills', 'Browse Skills')} →
@@ -779,7 +790,7 @@ export function SkillsLayout() {
                   <p className="mt-3 max-w-xl text-[14px] leading-7 text-text-secondary/82">{t('skills.promptDesc', 'Skills are markdown instructions (SKILL.md) that enhance agent capabilities. No tool specification needed — agents decide which tools to use.')}</p>
                   <div className="mt-6 flex flex-wrap gap-3">
                     <button
-                      onClick={() => setViewMode('browse')}
+                      onClick={() => navigate('/skills/browse')}
                       className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
                     >
                       {t('skills.browseSkills', 'Browse Skills')}

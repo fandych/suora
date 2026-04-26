@@ -8,6 +8,7 @@ import http, { type IncomingMessage } from 'http'
 import { execFile } from 'child_process'
 import crypto from 'crypto'
 import https from 'https'
+import net from 'net'
 import { CronExpressionParser } from 'cron-parser'
 import { atomicWriteFile, canonicalizePathSync, isWithinRoot, readTextFileRange, readTextFileWithLimit, resolveUserPath } from './fsUtils.js'
 import { initLogger, getLogger, closeLogger, type LogLevel } from './logger.js'
@@ -19,6 +20,47 @@ const __dirname = path.dirname(__filename)
 const isDev = !app.isPackaged
 
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/fandych/suora/releases/latest'
+
+function isPrivateIPv4(hostname: string): boolean {
+  const parts = hostname.split('.').map((part) => Number(part))
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false
+  const [a, b] = parts
+  return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+}
+
+function isBlockedNetworkHost(hostname: string): boolean {
+  const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '')
+  if (normalized === 'localhost' || normalized.endsWith('.localhost')) return true
+  if (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') return true
+  if (normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:')) return true
+  return net.isIP(normalized) === 4 && isPrivateIPv4(normalized)
+}
+
+function validatePublicHttpUrl(rawUrl: string, allowedHosts?: ReadonlySet<string>): URL {
+  const parsed = new URL(rawUrl)
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error('Only http and https URLs are allowed')
+  }
+  if (allowedHosts && !allowedHosts.has(parsed.hostname.toLowerCase())) {
+    throw new Error(`Host not allowed: ${parsed.hostname}`)
+  }
+  if (isBlockedNetworkHost(parsed.hostname)) {
+    throw new Error(`Blocked private or local network host: ${parsed.hostname}`)
+  }
+  return parsed
+}
+
+function compareSemverLike(a: string, b: string): number {
+  const parse = (value: string) => value.replace(/^v/i, '').split(/[.-]/).map((part) => Number.parseInt(part, 10)).map((part) => Number.isFinite(part) ? part : 0)
+  const left = parse(a)
+  const right = parse(b)
+  const len = Math.max(left.length, right.length)
+  for (let i = 0; i < len; i++) {
+    const diff = (left[i] ?? 0) - (right[i] ?? 0)
+    if (diff !== 0) return diff > 0 ? 1 : -1
+  }
+  return 0
+}
 
 let mainWindow: BrowserWindow | null = null
 let tray: Tray | null = null
@@ -80,6 +122,7 @@ async function createWindow() {
       preload: preloadPath,
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
     },
   })
 
@@ -364,6 +407,10 @@ ipcMain.handle('fs:deleteDir', async (_event, dirPath: string) => {
   try {
     const pathErr = enforceFsPathInWorkspace(dirPath)
     if (pathErr) return { error: pathErr }
+    const target = canonicalizePathSync(resolveUserPath(dirPath, app.getPath('home')))
+    if (target === currentWorkspaceCanonicalPath || currentExternalDirectoryCanonicalPaths.includes(target)) {
+      return { error: 'Refusing to delete a workspace or external directory root' }
+    }
     await fs.rm(dirPath, { recursive: true, force: true })
     return { success: true }
   } catch (err: unknown) {
@@ -770,8 +817,12 @@ ipcMain.handle('fs:editFile', async (_event, filePath: string, oldText: string, 
     const pathErr = enforceFsPathInWorkspace(filePath)
     if (pathErr) return { error: pathErr }
     const content = await readTextFileWithLimit(filePath)
-    if (!content.includes(oldText)) {
+    const firstMatch = content.indexOf(oldText)
+    if (firstMatch === -1) {
       return { error: `Old text not found in ${filePath}` }
+    }
+    if (content.indexOf(oldText, firstMatch + oldText.length) !== -1) {
+      return { error: `Old text is not unique in ${filePath}; provide a more specific snippet` }
     }
     const updated = content.replace(oldText, newText)
     await atomicWriteFile(filePath, updated)
@@ -1171,6 +1222,12 @@ type HttpGetFn = (url: string, options: Record<string, unknown>, callback: (res:
 function fetchUrl(url: string, redirectsLeft = 5): Promise<string> {
   return new Promise((resolve, reject) => {
     if (redirectsLeft <= 0) return reject(new Error('Too many redirects'))
+    try {
+      validatePublicHttpUrl(url)
+    } catch (err) {
+      reject(err)
+      return
+    }
     const mod = url.startsWith('https:') ? https : http
     const req = (mod.get as unknown as HttpGetFn)(
       url,
@@ -1208,10 +1265,7 @@ function fetchUrl(url: string, redirectsLeft = 5): Promise<string> {
 
 ipcMain.handle('web:fetch', async (_event, url: string) => {
   try {
-    const parsed = new URL(url)
-    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-      return { error: 'Only http and https URLs are allowed' }
-    }
+    validatePublicHttpUrl(url)
     const raw = await fetchUrl(url)
     const text = stripHtml(raw)
     return { content: text.slice(0, 8000), url, truncated: text.length > 8000 }
@@ -1224,6 +1278,14 @@ ipcMain.handle('web:fetch', async (_event, url: string) => {
 
 let automationWindow: BrowserWindow | null = null
 const BROWSER_TIMEOUT = 15_000
+
+const SAFE_BROWSER_EVALUATIONS: Record<string, string> = {
+  title: 'document.title',
+  location: 'location.href',
+  text: "document.body ? document.body.innerText.slice(0, 16000) : ''",
+  links: `Array.from(document.querySelectorAll('a[href]')).map(a => ({ text: a.textContent.trim().slice(0, 200), href: a.href })).filter(l => l.href.startsWith('http')).slice(0, 200)`,
+  headings: `Array.from(document.querySelectorAll('h1,h2,h3')).map(h => ({ level: h.tagName.toLowerCase(), text: h.textContent.trim().slice(0, 300) })).filter(h => h.text).slice(0, 100)`,
+}
 
 function getAutomationWindow(): BrowserWindow {
   if (automationWindow && !automationWindow.isDestroyed()) {
@@ -1289,8 +1351,13 @@ ipcMain.handle('browser:screenshot', async (_event, url?: string) => {
   }
 })
 
-ipcMain.handle('browser:evaluate', async (_event, url: string, script: string) => {
+ipcMain.handle('browser:evaluate', async (_event, url: string, expression: string) => {
   try {
+    validatePublicHttpUrl(url)
+    const script = SAFE_BROWSER_EVALUATIONS[expression]
+    if (!script) {
+      return { error: `Unsupported browser evaluation: ${expression}. Allowed: ${Object.keys(SAFE_BROWSER_EVALUATIONS).join(', ')}` }
+    }
     await navigateAutomationWindow(url)
     const win = getAutomationWindow()
     const result = await Promise.race([
@@ -2037,7 +2104,7 @@ async function checkForUpdates(feedUrl?: string): Promise<UpdateInfo | null> {
   if (updateCheckInProgress) return null
   updateCheckInProgress = true
   try {
-    const url = feedUrl || GITHUB_RELEASES_URL
+    const url = validatePublicHttpUrl(feedUrl || GITHUB_RELEASES_URL, new Set(['api.github.com'])).toString()
     logger.info('Checking for updates', { url })
     
     return await new Promise<UpdateInfo | null>((resolve) => {
@@ -2050,7 +2117,7 @@ async function checkForUpdates(feedUrl?: string): Promise<UpdateInfo | null> {
             const json = JSON.parse(data)
             const latestVersion = (json.tag_name || json.version || '').replace(/^v/, '')
             const currentVersion = app.getVersion()
-            if (latestVersion && latestVersion !== currentVersion) {
+            if (latestVersion && compareSemverLike(latestVersion, currentVersion) > 0) {
               resolve({
                 version: latestVersion,
                 releaseDate: json.published_at || new Date().toISOString(),
@@ -2115,16 +2182,15 @@ ipcMain.handle('email:send', async (
         user: config.username,
         pass: config.password,
       },
-      // Electron environment: allow self-signed certificates and set timeouts
       tls: {
-        rejectUnauthorized: false,
+        rejectUnauthorized: true,
         minVersion: 'TLSv1.2',
       },
       connectionTimeout: 10000,
       greetingTimeout: 10000,
       socketTimeout: 15000,
-      logger: true,
-      debug: true,
+      logger: false,
+      debug: false,
     })
 
     const mailOptions: Record<string, unknown> = {
@@ -2168,7 +2234,7 @@ ipcMain.handle('email:test', async (
         pass: config.password,
       },
       tls: {
-        rejectUnauthorized: false,
+        rejectUnauthorized: true,
         minVersion: 'TLSv1.2',
       },
       connectionTimeout: 10000,

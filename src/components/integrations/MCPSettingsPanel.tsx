@@ -590,10 +590,11 @@ export function MCPSettingsPanel() {
               </div>
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
+            <div className="mt-4 grid grid-cols-4 gap-2">
               <SummaryStat label={t('mcp.servers', 'Servers')} value={String(mcpServers.length)} accent />
               <SummaryStat label={t('common.enabled', 'Enabled')} value={String(enabledServerCount)} />
               <SummaryStat label={t('mcp.connected', 'Connected')} value={String(connectedServerCount)} />
+              <SummaryStat label={t('mcp.tools', 'Tools')} value={String(discoveredToolCount)} />
             </div>
           </div>
 

@@ -75,7 +75,7 @@ export function AppShell() {
   }, [channels])
 
   return (
-    <div className="w-screen h-screen flex bg-surface-0 text-text-primary overflow-hidden relative noise-overlay">
+    <div className="w-screen h-screen flex bg-surface-0 text-text-primary overflow-hidden relative">
       {/* Skip to main content — visible only on focus for keyboard users */}
       <a
         href="#main-content"
@@ -83,12 +83,6 @@ export function AppShell() {
       >
         {t('common.skipToContent', 'Skip to main content')}
       </a>
-      {/* Ambient background glow — refined diffused lux */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-62.5 -left-37.5 w-150 h-150 rounded-full bg-accent/3 blur-[180px] animate-float-slow" />
-        <div className="absolute -bottom-50 -right-30 w-125 h-125 rounded-full bg-accent-secondary/2.5 blur-[160px] animate-float-slow [animation-delay:-7s]" />
-        <div className="absolute top-1/3 left-1/2 -translate-x-1/2 w-175 h-87.5 rounded-full bg-accent/1 blur-[200px]" />
-      </div>
       <NavBar />
       <main id="main-content" className="relative z-1 flex min-h-0 min-w-0 flex-1 overflow-hidden">
         <Outlet />

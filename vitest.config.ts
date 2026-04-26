@@ -20,12 +20,11 @@ export default defineConfig({
         'src/main.tsx',
         'src/vite-env.d.ts',
       ],
-      // TODO: Gradually increase thresholds as test coverage improves
       thresholds: {
-        lines: 8,
-        functions: 5,
-        branches: 5,
-        statements: 8,
+        lines: 19,
+        functions: 13,
+        branches: 13,
+        statements: 17,
       },
     },
   },

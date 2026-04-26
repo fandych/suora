@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useDeferredValue } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useAppStore, loadSettingsFromWorkspace, saveSettingsToWorkspace } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
@@ -12,21 +13,32 @@ import { ModelComparisonPanel } from './ModelComparisonPanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
 
+type ModelsViewMode = 'providers' | 'models' | 'compare'
+
+const MODEL_VIEW_MODES = new Set<ModelsViewMode>(['providers', 'models', 'compare'])
+
 function generateId(): string {
   return `provider-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
 }
 
 export function ModelsLayout() {
   const { t } = useI18n()
+  const navigate = useNavigate()
+  const { view } = useParams<{ view: string }>()
   const [panelWidth, setPanelWidth] = useResizablePanel('models', 320)
   const { providerConfigs, addProviderConfig, removeProviderConfig, updateProviderConfig, syncModelsFromConfigs, models, workspacePath } = useAppStore()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
-  const [viewMode, setViewMode] = useState<'providers' | 'models' | 'compare'>('providers')
   const [connectionStatus, setConnectionStatus] = useState<Record<string, 'connected' | 'disconnected' | 'checking'>>({})
   const [editingModelKey, setEditingModelKey] = useState<string | null>(null) // "providerId:modelId"
   const [searchQuery, setSearchQuery] = useState('')
   const deferredSearchQuery = useDeferredValue(searchQuery)
+  const viewMode: ModelsViewMode = view && MODEL_VIEW_MODES.has(view as ModelsViewMode) ? view as ModelsViewMode : 'providers'
+
+  useEffect(() => {
+    if (!view || MODEL_VIEW_MODES.has(view as ModelsViewMode)) return
+    navigate('/models/providers', { replace: true })
+  }, [navigate, view])
 
   // Load settings from workspace on mount
   useEffect(() => {
@@ -199,7 +211,7 @@ export function ModelsLayout() {
                 <button
                   key={mode.value}
                   type="button"
-                  onClick={() => setViewMode(mode.value)}
+                  onClick={() => navigate(`/models/${mode.value}`)}
                   className={`flex-1 rounded-xl px-3 py-2 text-[11px] font-semibold transition-colors ${viewMode === mode.value ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-3/60'}`}
                 >
                   <span className="inline-flex items-center gap-1.5"><IconifyIcon name={mode.icon} size={14} color="currentColor" /> {mode.label}</span>
@@ -362,7 +374,7 @@ export function ModelsLayout() {
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
 
       {viewMode === 'compare' ? (
-        <ModelComparisonPanel onClose={() => setViewMode('providers')} />
+        <ModelComparisonPanel onClose={() => navigate('/models/providers')} />
       ) : viewMode === 'providers' && selectedId ? (
         <ProviderEditor key={selectedId} providerId={selectedId} onSaved={handleProviderSaved} />
       ) : viewMode === 'models' ? (

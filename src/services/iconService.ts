@@ -26,12 +26,22 @@ let collectionsCache: IconCollectionMeta[] | null = null
 /** Cached icon names per collection prefix */
 const iconNamesCache = new Map<string, string[]>()
 
+type IconElectronBridge = {
+  invoke?: (channel: string, ...args: unknown[]) => Promise<unknown>
+}
+
+function getElectronBridge(): IconElectronBridge | undefined {
+  return (window as unknown as { electron?: IconElectronBridge }).electron
+}
+
 // ─── Public API ────────────────────────────────────────────────────
 
 /** List all available icon collections (metadata only) */
 export async function listIconCollections(): Promise<IconCollectionMeta[]> {
   if (collectionsCache) return collectionsCache
-  const result = await window.electron.invoke('iconify:listCollections') as IconCollectionMeta[]
+  const electron = getElectronBridge()
+  if (!electron?.invoke) return []
+  const result = await electron.invoke('iconify:listCollections') as IconCollectionMeta[]
   collectionsCache = result
   return result
 }
@@ -39,7 +49,9 @@ export async function listIconCollections(): Promise<IconCollectionMeta[]> {
 /** Load a specific icon collection so its icons can be rendered offline */
 export async function loadIconCollection(prefix: string): Promise<void> {
   if (loadedCollections.has(prefix)) return
-  const data = await window.electron.invoke('iconify:loadCollection', prefix) as IconifyJSON | null
+  const electron = getElectronBridge()
+  if (!electron?.invoke) return
+  const data = await electron.invoke('iconify:loadCollection', prefix) as IconifyJSON | null
   if (data) {
     addCollection(data)
     loadedCollections.add(prefix)
@@ -54,7 +66,9 @@ export async function getIconNames(prefix: string): Promise<string[]> {
   const cachedNames = iconNamesCache.get(prefix)
   if (cachedNames !== undefined) return cachedNames
   // Need to load collection first
-  const data = await window.electron.invoke('iconify:getIconNames', prefix) as string[]
+  const electron = getElectronBridge()
+  if (!electron?.invoke) return []
+  const data = await electron.invoke('iconify:getIconNames', prefix) as string[]
   iconNamesCache.set(prefix, data)
   return data
 }

@@ -220,7 +220,12 @@ export async function discoverSkillsFromGitHub(
   // Use GitHub API to list skills directory contents
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/skills`
   try {
-    const result = (await electron.invoke('web:fetchJson', apiUrl)) as
+    const fetchResult = (await electron.invoke('web:fetch', apiUrl)) as { content?: string; error?: string }
+    if (fetchResult.error || typeof fetchResult.content !== 'string') {
+      logger.warn(`[marketplace] GitHub API fetch failed for ${apiUrl}: ${fetchResult.error ?? 'empty response'}`)
+      return []
+    }
+    const result = JSON.parse(fetchResult.content) as
       | { name: string; type: string; path: string; html_url?: string }[]
       | { message?: string; error?: string }
 
