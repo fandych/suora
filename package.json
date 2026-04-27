@@ -82,7 +82,6 @@
   },
   "overrides": {
     "@xmldom/xmldom": "^0.9.10",
-    "brace-expansion": "^2.0.3",
     "lodash": "^4.18.1"
   },
   "build": {
