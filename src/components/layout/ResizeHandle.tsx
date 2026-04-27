@@ -16,8 +16,8 @@ interface ResizeHandleProps {
 export function ResizeHandle({
   width,
   onResize,
-  minWidth = 200,
-  maxWidth = 500,
+  minWidth = 224,
+  maxWidth = 360,
   side = 'left',
 }: ResizeHandleProps) {
   const [isDragging, setIsDragging] = useState(false)
@@ -38,11 +38,13 @@ export function ResizeHandle({
     if (!isDragging) return
 
     const handleMouseMove = (e: MouseEvent) => {
+      const safeMinWidth = Math.max(224, minWidth)
+      const safeMaxWidth = Math.min(360, Math.max(safeMinWidth, maxWidth))
       const delta = side === 'left'
         ? e.clientX - startXRef.current
         : startXRef.current - e.clientX
       const newWidth = Math.round(
-        Math.min(maxWidth, Math.max(minWidth, startWidthRef.current + delta)),
+        Math.min(safeMaxWidth, Math.max(safeMinWidth, startWidthRef.current + delta)),
       )
       onResize(newWidth)
     }
@@ -69,7 +71,7 @@ export function ResizeHandle({
     <div
       onMouseDown={handleMouseDown}
       className={`
-        w-1 shrink-0 cursor-col-resize relative group
+        w-1 shrink-0 cursor-col-resize relative group my-1 rounded-full
         ${isDragging ? 'bg-accent/40' : 'bg-transparent hover:bg-accent/20'}
         transition-colors duration-150
       `}

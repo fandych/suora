@@ -44,7 +44,7 @@ function SummaryStat({ label, value, accent = false }: { label: string; value: s
 
 export function SettingsLayout() {
   const { t } = useI18n()
-  const [panelWidth, setPanelWidth] = useResizablePanel('settings', 320)
+  const [panelWidth, setPanelWidth] = useResizablePanel('settings', 280)
   const { section } = useParams<{ section: string }>()
   const navigate = useNavigate()
   const { workspacePath } = useAppStore()
@@ -107,7 +107,7 @@ export function SettingsLayout() {
           )}
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
       <div className="flex-1 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
         <div className="mx-auto max-w-7xl space-y-6">

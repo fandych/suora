@@ -168,4 +168,17 @@ describe('workspaceSettings', () => {
       }, null, 2),
     )
   })
+
+  it('returns false when a workspace write fails', async () => {
+    invoke.mockImplementation(async (channel: string, filePath: string) => {
+      if (channel === 'system:ensureDirectory') return { success: true }
+      if (channel === 'fs:readFile') return { error: 'ENOENT' }
+      if (channel === 'safe-storage:isAvailable') return true
+      if (channel === 'safe-storage:encrypt') return { data: Buffer.from(String(filePath ?? ''), 'utf-8').toString('base64') }
+      if (channel === 'fs:writeFile') return { error: 'disk full' }
+      return undefined
+    })
+
+    await expect(saveWorkspaceSettings('C:/workspace', { providers: providerConfigs })).resolves.toBe(false)
+  })
 })

@@ -787,6 +787,10 @@ export interface AgentPerformanceStats {
 export interface AgentPipelineStep {
   agentId: string
   task: string
+  name?: string
+  enabled?: boolean
+  continueOnError?: boolean
+  retryCount?: number
 }
 
 export type AgentPipelineTrigger = 'manual' | 'timer' | 'chat'
@@ -805,13 +809,15 @@ export interface AgentPipelineExecutionStep {
   id: string
   stepIndex: number
   agentId: string
+  name?: string
   task: string
   input: string
   output?: string
-  status: 'success' | 'error'
+  status: 'success' | 'error' | 'skipped'
   startedAt: number
   completedAt: number
   durationMs: number
+  attempts?: number
   error?: string
 }
 

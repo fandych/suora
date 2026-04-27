@@ -337,7 +337,7 @@ function AgentList({
 
 export function AgentsLayout() {
   const { t } = useI18n()
-  const [panelWidth, setPanelWidth] = useResizablePanel('agents', 320)
+  const [panelWidth, setPanelWidth] = useResizablePanel('agents', 280)
   const { agents, addAgent, updateAgent, removeAgent, setSelectedAgent, addSession, setActiveSession, setActiveModule, workspacePath, addAgentVersion } = useAppStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
@@ -764,7 +764,7 @@ export function AgentsLayout() {
           </div>
         )}
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
       {showHub ? (
         <AgentOrchestrationPanel

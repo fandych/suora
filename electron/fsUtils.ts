@@ -57,8 +57,12 @@ export function canonicalizePathSync(targetPath: string): string {
 }
 
 export function isWithinRoot(candidatePath: string, rootPath: string): boolean {
-  const normalizedCandidate = path.resolve(candidatePath)
-  const normalizedRoot = path.resolve(rootPath)
+  const normalizeForPlatform = (value: string) => {
+    const resolved = path.resolve(value)
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved
+  }
+  const normalizedCandidate = normalizeForPlatform(candidatePath)
+  const normalizedRoot = normalizeForPlatform(rootPath)
   const relativePath = path.relative(normalizedRoot, normalizedCandidate)
 
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
@@ -73,13 +77,8 @@ export async function atomicWriteFile(filePath: string, content: string): Promis
   try {
     await fs.rename(tempPath, filePath)
   } catch (error) {
-    if (!isErrnoException(error) || !['EBUSY', 'EPERM', 'EEXIST'].includes(error.code ?? '')) {
-      await fs.unlink(tempPath).catch(() => {})
-      throw error
-    }
-
-    await fs.writeFile(filePath, content, 'utf-8')
     await fs.unlink(tempPath).catch(() => {})
+    throw error
   }
 }
 
@@ -96,6 +95,7 @@ export async function readTextFileRange(
   filePath: string,
   startLine = 1,
   endLine = Number.POSITIVE_INFINITY,
+  maxOutputChars = MAX_IPC_TEXT_FILE_BYTES,
 ): Promise<string> {
   const safeStartLine = Math.max(1, startLine)
   const safeEndLine = Number.isFinite(endLine) ? Math.max(safeStartLine, endLine) : Number.POSITIVE_INFINITY
@@ -106,6 +106,7 @@ export async function readTextFileRange(
   })
 
   const selectedLines: string[] = []
+  let selectedSize = 0
   let lineNumber = 0
 
   try {
@@ -120,7 +121,12 @@ export async function readTextFileRange(
         break
       }
 
-      selectedLines.push(`${lineNumber}. ${line}`)
+      const formattedLine = `${lineNumber}. ${line}`
+      selectedSize += formattedLine.length + 1
+      if (selectedSize > maxOutputChars) {
+        throw new Error(`Selected range is too large to return at once (${selectedSize} chars). Narrow the range.`)
+      }
+      selectedLines.push(formattedLine)
     }
   } finally {
     lineReader.close()

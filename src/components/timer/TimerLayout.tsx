@@ -12,7 +12,7 @@ import { TimerDetail } from './TimerDetail'
 import { loadPipelinesFromDisk } from '@/services/pipelineFiles'
 
 export function TimerLayout() {
-  const [panelWidth, setPanelWidth] = useResizablePanel('timer', 320)
+  const [panelWidth, setPanelWidth] = useResizablePanel('timer', 280)
   const [timers, setTimers] = useState<ScheduledTask[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [editing, setEditing] = useState(false)
@@ -228,7 +228,7 @@ export function TimerLayout() {
           )}
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
       <div className="flex-1 flex flex-col overflow-y-auto">
         {creating ? (

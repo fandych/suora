@@ -65,6 +65,20 @@ describe('pipelineFiles', () => {
     )
   })
 
+  it('sanitizes pipeline ids before writing files', async () => {
+    vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
+
+    const pipeline = { ...samplePipeline, id: '../pipeline-1' }
+    const success = await savePipelineToDisk('C:/workspace', pipeline)
+
+    expect(success).toBe(true)
+    expect(window.electron.invoke).toHaveBeenCalledWith(
+      'fs:writeFile',
+      'C:/workspace/pipelines/pipeline-1.json',
+      JSON.stringify(pipeline, null, 2),
+    )
+  })
+
   it('stores execution history in pipelines/history.json', async () => {
     vi.mocked(window.electron.invoke).mockImplementation(async (channel: string, ...args: unknown[]) => {
       const [filePath] = args as [string?]

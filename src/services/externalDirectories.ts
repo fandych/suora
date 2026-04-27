@@ -8,6 +8,12 @@ interface DirEntry {
   path: string
 }
 
+type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
+
+function getElectron(): ElectronBridge | undefined {
+  return (window as unknown as { electron?: ElectronBridge }).electron
+}
+
 function getSkillSource(dirPath: string): SkillSource {
   const normalizedPath = dirPath.replace(/\\/g, '/').toLowerCase()
   if (normalizedPath.includes('/.agents/')) return 'agent-dir'
@@ -20,8 +26,11 @@ function isElectronError(value: unknown): value is { error: string } {
 }
 
 async function readSkillMarkdown(filePath: string, source: SkillSource): Promise<Skill | null> {
+  const electron = getElectron()
+  if (!electron) return null
+
   try {
-    const content = await window.electron.invoke('fs:readFile', filePath) as string | { error: string }
+    const content = await electron.invoke('fs:readFile', filePath) as string | { error: string }
     if (typeof content !== 'string') return null
     return parseSkillMarkdown(content, filePath, source)
   } catch {
@@ -33,12 +42,15 @@ export async function syncExternalDirectoryAccess(
   directories: ExternalDirectoryConfig[],
   extraPaths: string[] = [],
 ): Promise<void> {
+  const electron = getElectron()
+  if (!electron) return
+
   const allowedPaths = [
     ...directories.filter((dir) => dir.enabled).map((dir) => dir.path),
     ...extraPaths,
   ]
   const uniquePaths = Array.from(new Set(allowedPaths.filter((dirPath) => dirPath.trim().length > 0)))
-  await window.electron.invoke('workspace:setExternalDirectories', uniquePaths)
+  await electron.invoke('workspace:setExternalDirectories', uniquePaths)
 }
 
 /**
@@ -47,9 +59,11 @@ export async function syncExternalDirectoryAccess(
 export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]> {
   const skills: Skill[] = []
   const source = getSkillSource(dirPath)
+  const electron = getElectron()
+  if (!electron) return skills
 
   try {
-    const result = await window.electron.invoke('fs:listDir', dirPath) as DirEntry[] | { error: string }
+    const result = await electron.invoke('fs:listDir', dirPath) as DirEntry[] | { error: string }
     if (isElectronError(result)) {
       console.error(`Failed to read directory ${dirPath}:`, result.error)
       return skills
@@ -75,7 +89,7 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]>
       if (!entry.name.endsWith('.json')) continue
 
       try {
-        const content = await window.electron.invoke('fs:readFile', entry.path) as string | { error: string }
+        const content = await electron.invoke('fs:readFile', entry.path) as string | { error: string }
         if (typeof content !== 'string') {
           console.warn(`Failed to read ${entry.name}:`, (content as { error: string }).error)
           continue
@@ -113,9 +127,11 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]>
  */
 export async function loadAgentsFromDirectory(dirPath: string): Promise<Agent[]> {
   const agents: Agent[] = []
+  const electron = getElectron()
+  if (!electron) return agents
 
   try {
-    const result = await window.electron.invoke('fs:listDir', dirPath) as DirEntry[] | { error: string }
+    const result = await electron.invoke('fs:listDir', dirPath) as DirEntry[] | { error: string }
     if (isElectronError(result)) {
       console.error(`Failed to read directory ${dirPath}:`, result.error)
       return agents
@@ -126,7 +142,7 @@ export async function loadAgentsFromDirectory(dirPath: string): Promise<Agent[]>
       if (!entry.name.endsWith('.json')) continue
 
       try {
-        const content = await window.electron.invoke('fs:readFile', entry.path) as string | { error: string }
+        const content = await electron.invoke('fs:readFile', entry.path) as string | { error: string }
         if (typeof content !== 'string') {
           console.warn(`Failed to read ${entry.name}:`, (content as { error: string }).error)
           continue

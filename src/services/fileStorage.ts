@@ -60,6 +60,7 @@ const lastWritten = new Map<string, string>()
 let pendingSplitStoreValue: string | null = null
 let activeSplitStoreFlush: Promise<void> | null = null
 let splitStoreDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let lastSplitStoreError: unknown = null
 
 const SPLIT_STORE_DEBOUNCE_MS = 250
 
@@ -128,6 +129,7 @@ async function writeIfChanged(electron: ElectronBridge, filePath: string, json: 
   if (lastError !== null) {
     console.error('[fileStorage] write failed after retries', { filePath, error: lastError })
     notifyWriteFailure(filePath, lastError)
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
 }
 
@@ -178,6 +180,7 @@ function splitAndSave(fullValue: string, electron: ElectronBridge): void {
 
 async function persistSplitStore(fullValue: string, electron: ElectronBridge): Promise<void> {
   try {
+    lastSplitStoreError = null
     const parsed = JSON.parse(fullValue) as { state?: Record<string, unknown>; version?: number }
     const state = parsed.state
     if (!state) return
@@ -215,6 +218,7 @@ async function persistSplitStore(fullValue: string, electron: ElectronBridge): P
 
     await Promise.all([modelsWrite, channelsWrite, settingsWrite])
   } catch (err) {
+    lastSplitStoreError = err
     logger.error('[fileStorage] persistSplitStore failed — state kept in memory only', {
       error: err instanceof Error ? err.message : String(err),
     })
@@ -247,6 +251,12 @@ export async function flushPendingSplitStoreWrites(): Promise<void> {
 
   if (activeSplitStoreFlush) {
     await activeSplitStoreFlush
+  }
+
+  if (lastSplitStoreError) {
+    const error = lastSplitStoreError
+    lastSplitStoreError = null
+    throw error instanceof Error ? error : new Error(String(error))
   }
 }
 
@@ -475,6 +485,9 @@ export const fileStateStorage = {
       }
       pendingSplitStoreValue = null
       if (ws) {
+        lastWritten.delete(`${ws}/models.json`)
+        lastWritten.delete(`${ws}/settings.json`)
+        lastWritten.delete(`${ws}/channels/config.json`)
         void Promise.all([
           electron.invoke('fs:deleteFile', `${ws}/models.json`).catch(() => {}),
           electron.invoke('fs:deleteFile', `${ws}/settings.json`).catch(() => {}),

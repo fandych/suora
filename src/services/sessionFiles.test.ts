@@ -15,4 +15,13 @@ describe('sessionFiles', () => {
     expect(window.electron.invoke).toHaveBeenCalledTimes(1)
     expect(window.electron.invoke).toHaveBeenCalledWith('fs:deleteDir', '/workspace/sessions/session-1')
   })
+
+  it('sanitizes session ids before building disk paths', async () => {
+    vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
+
+    const result = await deleteSessionFromDisk('/workspace', '../session-1')
+
+    expect(result).toBe(true)
+    expect(window.electron.invoke).toHaveBeenCalledWith('fs:deleteDir', '/workspace/sessions/session-1')
+  })
 })

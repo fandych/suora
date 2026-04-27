@@ -18,6 +18,7 @@
 
 import type { Skill, SkillSource, SkillFrontmatter, SkillExecutionContext } from '@/types'
 import { logger } from '@/services/logger'
+import { safePathSegment } from '@/utils/pathSegments'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -572,8 +573,10 @@ export async function saveSkillToDisk(
 
   try {
     // Create directory
-    const skillDir = `${dirPath}/${skill.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`
-    await electron.invoke('system:ensureDirectory', skillDir)
+    const slug = safePathSegment(skill.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'), 'skill')
+    const skillDir = `${dirPath}/${slug}`
+    const ensureResult = await electron.invoke('system:ensureDirectory', skillDir) as { error?: string }
+    if (ensureResult?.error) return false
 
     // Build SKILL.md content
     const md = serializeSkillToMarkdown(skill)
@@ -582,9 +585,9 @@ export async function saveSkillToDisk(
       'fs:writeFile',
       `${skillDir}/SKILL.md`,
       md,
-    )) as { success?: boolean }
+    )) as { success?: boolean; error?: string }
 
-    return result?.success ?? false
+    return result?.success === true && !result.error
   } catch (err) {
     logger.error('[skillRegistry] Failed to save skill', {
       error: err instanceof Error ? err.message : String(err),
@@ -605,7 +608,8 @@ export async function deleteSkillFromDisk(filePath: string): Promise<boolean> {
     const isInSubdir = filePath.endsWith('/SKILL.md') || filePath.endsWith('\\SKILL.md')
     const pathToDelete = isInSubdir ? filePath.replace(/[/\\]SKILL\.md$/, '') : filePath
 
-    const result = (await electron.invoke('fs:deleteFile', pathToDelete)) as { success?: boolean }
+    const channel = isInSubdir ? 'fs:deleteDir' : 'fs:deleteFile'
+    const result = (await electron.invoke(channel, pathToDelete)) as { success?: boolean }
     return result?.success ?? false
   } catch {
     return false

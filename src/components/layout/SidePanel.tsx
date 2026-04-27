@@ -1,5 +1,12 @@
 import { useEffect, useRef, type ReactNode } from 'react'
 
+const MIN_PANEL_WIDTH = 224
+const MAX_PANEL_WIDTH = 360
+
+function clampPanelWidth(width?: number): number {
+  return Math.min(MAX_PANEL_WIDTH, Math.max(MIN_PANEL_WIDTH, Math.round(width ?? 280)))
+}
+
 interface SidePanelProps {
   title: string
   children: ReactNode
@@ -13,17 +20,17 @@ export function SidePanel({ title, children, action, width }: SidePanelProps) {
 
   useEffect(() => {
     if (!panelRef.current) return
-    panelRef.current.style.width = `${width ?? 340}px`
+    panelRef.current.style.width = `${clampPanelWidth(width)}px`
   }, [width])
 
   return (
     <aside
       ref={panelRef}
       aria-label={title}
-      className="h-full min-h-0 w-85 bg-surface-1/40 backdrop-blur-xl border-r border-border-subtle/50 flex flex-col shrink-0"
+      className="h-full min-h-0 w-70 shrink-0 overflow-hidden rounded-lg border border-border-subtle bg-surface-1 flex flex-col"
     >
-      <div className="h-16 px-6 flex items-center justify-between border-b border-border-subtle/50 shrink-0">
-        <h2 className="font-display text-[12px] font-semibold text-text-muted tracking-[0.16em] uppercase">{title}</h2>
+      <div className="h-11 px-3 flex items-center justify-between border-b border-border-subtle shrink-0">
+        <h2 className="truncate text-sm font-semibold text-text-secondary">{title}</h2>
         {action}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">

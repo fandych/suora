@@ -2,7 +2,10 @@ import { useState, type ComponentPropsWithoutRef } from 'react'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import Markdown from 'react-markdown'
+import rehypeKatex from 'rehype-katex'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import 'katex/dist/katex.min.css'
 
 export function CopyButton({ text, className = '' }: { text: string; className?: string }) {
   const { t } = useI18n()
@@ -65,7 +68,7 @@ const MD_COMPONENTS = {
 
 export function MarkdownContent({ content }: { content: string }) {
   return (
-    <Markdown remarkPlugins={[remarkGfm]} components={MD_COMPONENTS as Record<string, React.ComponentType<unknown>>}>
+    <Markdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]} components={MD_COMPONENTS as Record<string, React.ComponentType<unknown>>}>
       {content}
     </Markdown>
   )

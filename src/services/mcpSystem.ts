@@ -27,7 +27,13 @@ export function validateMcpServerConfig(server: MCPServerConfig): string[] {
       errors.push(`${server.transport} transport requires a URL`)
     } else {
       try {
-        new URL(server.url)
+        const parsed = new URL(server.url)
+        if ((server.transport === 'http' || server.transport === 'sse') && parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+          errors.push(`${server.transport} transport requires an http or https URL`)
+        }
+        if (server.transport === 'ws' && parsed.protocol !== 'ws:' && parsed.protocol !== 'wss:') {
+          errors.push('ws transport requires a ws or wss URL')
+        }
       } catch {
         errors.push('URL is invalid')
       }
@@ -50,15 +56,43 @@ export async function testMcpServerConnection(
     return { ok: true, tools: ['tools:list', 'resources:list', 'prompts:list'] }
   }
 
+  if (server.transport === 'ws') {
+    return new Promise((resolve) => {
+      let settled = false
+      const socket = new WebSocket(server.url as string)
+      const timeout = setTimeout(() => {
+        if (settled) return
+        settled = true
+        socket.close()
+        resolve({ ok: false, error: 'Connection timed out after 5s' })
+      }, 5000)
+
+      socket.addEventListener('open', () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        socket.close()
+        resolve({ ok: true, tools: ['tools:list'] })
+      }, { once: true })
+
+      socket.addEventListener('error', () => {
+        if (settled) return
+        settled = true
+        clearTimeout(timeout)
+        socket.close()
+        resolve({ ok: false, error: 'WebSocket connection failed' })
+      }, { once: true })
+    })
+  }
+
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 5000)
   try {
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 5000)
     const response = await fetch(server.url as string, {
       method: 'GET',
       headers: server.headers,
       signal: controller.signal,
     })
-    clearTimeout(timeout)
 
     if (!response.ok) {
       return {
@@ -73,6 +107,8 @@ export async function testMcpServerConnection(
       ok: false,
       error: error instanceof Error ? error.message : 'Connection failed',
     }
+  } finally {
+    clearTimeout(timeout)
   }
 }
 

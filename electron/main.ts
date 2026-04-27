@@ -13,6 +13,7 @@ import { CronExpressionParser } from 'cron-parser'
 import { atomicWriteFile, canonicalizePathSync, isWithinRoot, readTextFileRange, readTextFileWithLimit, resolveUserPath } from './fsUtils.js'
 import { initLogger, getLogger, closeLogger, type LogLevel } from './logger.js'
 import { getChannelService, type ChannelWebhookEvent } from './channelService.js'
+import { openSuoraDatabase, type JsonTableName, type SuoraDatabase } from './database.js'
 import type { ChannelConfig } from '../src/types/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -99,10 +100,52 @@ let currentWorkspacePath: string = loadInitialWorkspacePath()
 let currentWorkspaceCanonicalPath: string = canonicalizePathSync(currentWorkspacePath)
 let currentExternalDirectoryPaths: string[] = []
 let currentExternalDirectoryCanonicalPaths: string[] = []
+let suoraDatabase: SuoraDatabase | null = null
+let suoraDatabaseWorkspacePath: string | null = null
+
+const DB_JSON_TABLES = new Set<JsonTableName>([
+  'provider_configs',
+  'models',
+  'agents',
+  'skills',
+  'channels',
+  'channel_messages',
+  'mcp_servers',
+  'timers',
+  'pipelines',
+  'pipeline_executions',
+  'memories',
+])
 
 function refreshAllowedFsRoots(): void {
   currentWorkspaceCanonicalPath = canonicalizePathSync(currentWorkspacePath)
   currentExternalDirectoryCanonicalPaths = currentExternalDirectoryPaths.map((entry) => canonicalizePathSync(entry))
+}
+
+function isJsonTableName(table: unknown): table is JsonTableName {
+  return typeof table === 'string' && DB_JSON_TABLES.has(table as JsonTableName)
+}
+
+function validateDatabaseKey(key: unknown, label: string): string | null {
+  if (typeof key !== 'string' || !key.trim()) return `${label} is required`
+  if (key.length > 256) return `${label} is too long`
+  return null
+}
+
+async function closeSuoraDatabase(): Promise<void> {
+  if (!suoraDatabase) return
+  const databaseToClose = suoraDatabase
+  suoraDatabase = null
+  suoraDatabaseWorkspacePath = null
+  await databaseToClose.close()
+}
+
+async function getSuoraDatabase(): Promise<SuoraDatabase> {
+  if (suoraDatabase && suoraDatabaseWorkspacePath === currentWorkspacePath) return suoraDatabase
+  await closeSuoraDatabase()
+  suoraDatabase = await openSuoraDatabase(currentWorkspacePath)
+  suoraDatabaseWorkspacePath = currentWorkspacePath
+  return suoraDatabase
 }
 
 async function createWindow() {
@@ -178,8 +221,15 @@ ipcMain.handle('workspace:init', async (_event, workspacePath: string) => {
       return { error: 'Workspace path is required' }
     }
     const resolved = resolveUserPath(workspacePath, app.getPath('home'))
+    await fs.mkdir(resolved, { recursive: true })
+    const stat = await fs.stat(resolved)
+    if (!stat.isDirectory()) {
+      return { error: 'Workspace path must be a directory' }
+    }
+    const workspaceChanged = currentWorkspacePath !== resolved
     currentWorkspacePath = resolved
     refreshAllowedFsRoots()
+    if (workspaceChanged) await closeSuoraDatabase()
     // Persist the last-used workspace path so the app knows where to look on next launch
     const bootConfigPath = getBootConfigPath()
     await atomicWriteFile(bootConfigPath, JSON.stringify({ workspacePath: resolved }))
@@ -269,8 +319,11 @@ ipcMain.handle('store:save', async (_event, name: string, value: string) => {
   try {
     const filePath = storeFilePath(name)
     await atomicWriteFile(filePath, value)
+    return { success: true }
   } catch (err: unknown) {
-    logger.error('store:save failed', { name, error: err instanceof Error ? err.message : String(err) })
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('store:save failed', { name, error: message })
+    return { error: message }
   }
 })
 
@@ -278,11 +331,83 @@ ipcMain.handle('store:remove', async (_event, name: string) => {
   try {
     const filePath = storeFilePath(name)
     await fs.unlink(filePath)
+    return { success: true }
   } catch (err: unknown) {
     if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return // already gone
+      return { success: true }
     }
-    logger.warn('store:remove failed', { name, error: err instanceof Error ? err.message : String(err) })
+    const message = err instanceof Error ? err.message : String(err)
+    logger.warn('store:remove failed', { name, error: message })
+    return { error: message }
+  }
+})
+
+// ─── IPC Handlers: SQLite Store ────────────────────────────────────
+
+ipcMain.handle('db:getSnapshot', async () => {
+  try {
+    const database = await getSuoraDatabase()
+    return { success: true, path: database.path, data: database.getSnapshot() }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('db:getSnapshot failed', { error: message })
+    return { error: message }
+  }
+})
+
+ipcMain.handle('db:saveStateSlice', async (_event, key: unknown, value: unknown) => {
+  try {
+    const keyError = validateDatabaseKey(key, 'State slice key')
+    if (keyError) return { error: keyError }
+    const database = await getSuoraDatabase()
+    await database.saveStateSlice(key as string, value)
+    return { success: true }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('db:saveStateSlice failed', { error: message })
+    return { error: message }
+  }
+})
+
+ipcMain.handle('db:listEntities', async (_event, table: unknown) => {
+  try {
+    if (!isJsonTableName(table)) return { error: 'Unsupported database table' }
+    const database = await getSuoraDatabase()
+    return { success: true, data: database.listJsonTable(table) }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('db:listEntities failed', { error: message })
+    return { error: message }
+  }
+})
+
+ipcMain.handle('db:saveEntity', async (_event, table: unknown, id: unknown, value: unknown) => {
+  try {
+    if (!isJsonTableName(table)) return { error: 'Unsupported database table' }
+    const idError = validateDatabaseKey(id, 'Entity id')
+    if (idError) return { error: idError }
+    const database = await getSuoraDatabase()
+    await database.saveJsonEntity(table, id as string, value)
+    return { success: true }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('db:saveEntity failed', { error: message })
+    return { error: message }
+  }
+})
+
+ipcMain.handle('db:deleteEntity', async (_event, table: unknown, id: unknown) => {
+  try {
+    if (!isJsonTableName(table)) return { error: 'Unsupported database table' }
+    const idError = validateDatabaseKey(id, 'Entity id')
+    if (idError) return { error: idError }
+    const database = await getSuoraDatabase()
+    await database.deleteJsonEntity(table, id as string)
+    return { success: true }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('db:deleteEntity failed', { error: message })
+    return { error: message }
   }
 })
 
@@ -290,6 +415,8 @@ ipcMain.handle('store:remove', async (_event, name: string) => {
 
 ipcMain.handle('safe-storage:encrypt', (_event, plaintext: string) => {
   try {
+    if (typeof plaintext !== 'string') return { error: 'Plaintext must be a string' }
+    if (Buffer.byteLength(plaintext, 'utf-8') > 1024 * 1024) return { error: 'Plaintext is too large to encrypt' }
     if (!safeStorage.isEncryptionAvailable()) {
       return { error: 'Encryption not available on this system' }
     }
@@ -302,6 +429,8 @@ ipcMain.handle('safe-storage:encrypt', (_event, plaintext: string) => {
 
 ipcMain.handle('safe-storage:decrypt', (_event, encryptedBase64: string) => {
   try {
+    if (typeof encryptedBase64 !== 'string') return { error: 'Encrypted payload must be a string' }
+    if (Buffer.byteLength(encryptedBase64, 'utf-8') > 2 * 1024 * 1024) return { error: 'Encrypted payload is too large to decrypt' }
     if (!safeStorage.isEncryptionAvailable()) {
       return { error: 'Encryption not available on this system' }
     }
@@ -2425,6 +2554,7 @@ app.whenReady().then(() => {
 app.on('window-all-closed', async () => {
   stopTimerEngine()
   globalShortcut.unregisterAll()
+  await closeSuoraDatabase()
   // Close file watchers
   for (const [, watcher] of activeWatchers) {
     watcher.close()

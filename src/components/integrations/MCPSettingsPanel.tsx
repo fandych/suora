@@ -90,7 +90,7 @@ const textareaCls = 'w-full px-4 py-3 rounded-3xl bg-surface-2/80 border border-
 
 export function MCPSettingsPanel() {
   const { t } = useI18n()
-  const [panelWidth, setPanelWidth] = useResizablePanel('mcp', 320)
+  const [panelWidth, setPanelWidth] = useResizablePanel('mcp', 280)
   const {
     mcpServers,
     addMcpServer,
@@ -663,7 +663,7 @@ export function MCPSettingsPanel() {
         </div>
       </SidePanel>
 
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
       <div className="flex-1 min-w-0 overflow-y-auto bg-surface-1/30 px-5 py-6 xl:px-8 xl:py-8">
         {!form && !selected ? (

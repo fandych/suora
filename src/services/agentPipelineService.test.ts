@@ -97,6 +97,78 @@ describe('agentPipelineService', () => {
     expect(execution.steps[1].input).not.toContain('Previous step output:')
   })
 
+  it('retries a failed step before marking it successful', async () => {
+    const retryPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft the report', retryCount: 1 },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'error', error: 'temporary outage' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'draft-ready' }
+      })
+
+    const execution = await executeAgentPipeline(retryPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].attempts).toBe(2)
+    expect(execution.steps[0].output).toBe('draft-ready')
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(2)
+  })
+
+  it('skips disabled steps without breaking downstream handoff context', async () => {
+    const disabledStepPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft the report' },
+        { agentId: 'agent-2', task: 'Review the report', enabled: false },
+        { agentId: 'agent-2', task: 'Summarize the latest usable result' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'draft-ready' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'summary-ready' }
+      })
+
+    const execution = await executeAgentPipeline(disabledStepPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[1].status).toBe('skipped')
+    expect(execution.steps[2].input).toContain('draft-ready')
+    expect(execution.finalOutput).toBe('summary-ready')
+  })
+
+  it('stops and marks remaining steps skipped when continue on error is disabled', async () => {
+    const stopOnErrorPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft the report', continueOnError: false },
+        { agentId: 'agent-2', task: 'Review the report' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'error', error: 'draft failed' }
+    })
+
+    const execution = await executeAgentPipeline(stopOnErrorPipeline)
+
+    expect(execution.status).toBe('error')
+    expect(execution.steps).toHaveLength(2)
+    expect(execution.steps[0].status).toBe('error')
+    expect(execution.steps[1].status).toBe('skipped')
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+  })
+
   it('creates an error execution when a pipeline cannot be resolved by id', async () => {
     vi.mocked(loadPipelinesFromDisk).mockResolvedValueOnce([])
     useAppStore.setState({ agentPipelines: [] })

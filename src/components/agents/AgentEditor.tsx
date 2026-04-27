@@ -5,6 +5,9 @@ import { generateId } from '@/utils/helpers'
 import { BUILTIN_TOOL_DESCRIPTIONS } from '@/services/tools'
 import { AGENT_ICON_NAMES, AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { IconPicker } from '@/components/icons/IconPicker'
+import { AgentFlowDiagram } from '@/components/agents/AgentFlowDiagram'
+import { SystemPromptMarkdownEditor } from '@/components/agents/SystemPromptMarkdownEditor'
+import { buildAgentMermaidSource } from '@/services/agentMermaid'
 import type { Agent } from '@/types'
 import { confirm } from '@/services/confirmDialog'
 import {
@@ -22,7 +25,6 @@ const AVATARS: string[] = [...AGENT_ICON_NAMES]
 const editorInputClass = `${settingsInputClass} bg-surface-2/75`
 const editorSelectClass = `${settingsSelectClass} bg-surface-2/75`
 const editorMonoInputClass = `${settingsMonoInputClass} bg-surface-2/75`
-const editorTextAreaClass = `${settingsTextAreaClass} rounded-3xl bg-surface-2/72 px-4 py-4 leading-7`
 const editorCompactControlClass = `${settingsInputClass} px-3 py-2.5 text-[12px] text-text-secondary`
 const editorCompactTextAreaClass = `${settingsTextAreaClass} min-h-0 rounded-2xl bg-surface-0/75 px-3 py-2.5 text-text-secondary`
 
@@ -81,12 +83,14 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
   onTest?: (agent: Agent) => void
 }) {
   const { t } = useI18n()
-  const { models, skills, providerConfigs, removeAgentMemory, clearAgentMemories, updateAgent } = useAppStore()
+  const { models, skills, providerConfigs, removeAgentMemory, clearAgentMemories, updateAgent, addNotification } = useAppStore()
   const [memoryFilter, setMemoryFilter] = useState<'all' | 'insight' | 'preference' | 'correction' | 'knowledge'>('all')
   const [memoryQuery, setMemoryQuery] = useState('')
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
   const [showIconPicker, setShowIconPicker] = useState(false)
+  const [diagramView, setDiagramView] = useState<'preview' | 'mermaid'>('preview')
+  const [copiedAgentMermaid, setCopiedAgentMermaid] = useState(false)
 
   const getSkillCopy = (skillId: string, skillName: string, skillDescription?: string) => {
     const translationKey = getBuiltinSkillTranslationKey(`${skillId} ${skillName}`)
@@ -188,11 +192,35 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
   const selectedModelLabel = selectedModel
     ? `${selectedProviderName} / ${selectedModel.name}`
     : t('agents.selectModel', '-- Select Model --')
+  const selectedSkillNames = selectedSkills.map((skill) => getSkillCopy(skill.id, skill.name, skill.description).name)
+  const agentFlowOptions = {
+    modelLabel: selectedModelLabel,
+    skillNames: selectedSkillNames,
+    availableToolNames: availableTools,
+  }
+  const agentMermaidSource = buildAgentMermaidSource(form, agentFlowOptions)
   const heroTitle = form.name.trim() || t('agents.untitled', 'Untitled Agent')
   const heroDescription = form.whenToUse?.trim()
     || form.greeting?.trim()
     || t('agents.heroFallback', 'Design the agent voice, choose the right skills, and set guardrails before sending it into active use.')
   const promptLength = form.systemPrompt.trim().length
+
+  const copyAgentMermaidSource = async () => {
+    try {
+      await navigator.clipboard.writeText(agentMermaidSource)
+      setCopiedAgentMermaid(true)
+      window.setTimeout(() => setCopiedAgentMermaid(false), 1600)
+    } catch {
+      addNotification({
+        id: generateId('notif'),
+        type: 'error',
+        title: t('agents.agentMermaidCopyFailedTitle', 'Could not copy agent diagram'),
+        message: t('agents.agentMermaidCopyFailedBody', 'The Mermaid source could not be copied to the clipboard.'),
+        timestamp: Date.now(),
+        read: false,
+      })
+    }
+  }
 
   return (
     <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
@@ -417,14 +445,13 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
             <EditorSection
               eyebrow={t('agents.instructions', 'Instructions')}
               title={t('agents.systemPrompt', 'System Prompt')}
-              description={t('agents.systemPromptHint', 'Write the operating instructions that define how this agent reasons, speaks, and applies tools.')}
+              description={t('agents.systemPromptHint', 'Write Markdown operating instructions that define how this agent reasons, speaks, and applies tools.')}
             >
-              <textarea
+              <SystemPromptMarkdownEditor
                 value={form.systemPrompt}
-                onChange={(e) => updateForm({ systemPrompt: e.target.value })}
-                placeholder={t('agents.systemPromptPlaceholder', 'You are a helpful assistant that...')}
+                onChange={(systemPrompt) => updateForm({ systemPrompt })}
+                placeholder={t('agents.systemPromptPlaceholder', '## Role\nYou are a helpful assistant.\n\n## Rules\n- Be clear and specific.\n- Use tools when they help.')}
                 rows={10}
-                className={`${editorTextAreaClass} resize-none`}
               />
             </EditorSection>
 
@@ -536,6 +563,47 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
           </div>
 
           <div className="space-y-6 2xl:sticky 2xl:top-6 self-start">
+            <EditorSection
+              eyebrow={t('agents.workflow', 'Workflow')}
+              title={t('agents.agentFlowDiagram', 'Agent Flow Diagram')}
+              description={t('agents.agentFlowDiagramHint', 'Inspect how input, memory, prompt, skills, tools, model, and output connect for this agent.')}
+            >
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <div className="inline-flex rounded-2xl border border-border-subtle bg-surface-0/70 p-1 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setDiagramView('preview')}
+                    className={`rounded-xl px-3 py-1.5 transition-colors ${diagramView === 'preview' ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-secondary'}`}
+                  >
+                    {t('agents.pipelineDiagramPreview', 'Preview')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDiagramView('mermaid')}
+                    className={`rounded-xl px-3 py-1.5 transition-colors ${diagramView === 'mermaid' ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-secondary'}`}
+                  >
+                    {t('agents.pipelineDiagramSource', 'Mermaid')}
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void copyAgentMermaidSource()}
+                  className="inline-flex items-center gap-1.5 rounded-2xl border border-border-subtle bg-surface-0/70 px-3 py-2 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/20 hover:text-accent"
+                >
+                  <IconifyIcon name={copiedAgentMermaid ? 'ui-check' : 'ui-copy'} size={13} color="currentColor" />
+                  {copiedAgentMermaid ? t('common.copied', 'Copied') : t('agents.copyMermaid', 'Copy Mermaid')}
+                </button>
+              </div>
+
+              {diagramView === 'preview' ? (
+                <AgentFlowDiagram agent={form} options={agentFlowOptions} />
+              ) : (
+                <pre className="max-h-110 overflow-auto rounded-2xl border border-border-subtle bg-surface-0/70 p-4 text-[11px] leading-5 text-text-secondary">
+                  <code>{agentMermaidSource}</code>
+                </pre>
+              )}
+            </EditorSection>
+
             <EditorSection
               eyebrow={t('agents.runtime', 'Runtime')}
               title={t('agents.controlRoom', 'Control Room')}

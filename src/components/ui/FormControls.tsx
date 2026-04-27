@@ -22,16 +22,16 @@ import {
 export type ControlSize = 'sm' | 'md'
 
 const SIZE_BASE: Record<ControlSize, string> = {
-  md: 'rounded-2xl px-3.5 py-3 text-sm',
-  sm: 'rounded-xl px-3.5 py-2.5 text-[12.5px] font-medium',
+  md: 'rounded-md px-3 py-2.5 text-sm',
+  sm: 'rounded-md px-2.5 py-2 text-[12.5px] font-medium',
 }
 
 const SHARED =
-  'border bg-surface-2/80 text-text-primary placeholder-text-muted/55 transition-colors ' +
-  'focus:border-accent/30 focus:outline-none focus:ring-2 focus:ring-accent/20 ' +
-  'hover:border-border/80 disabled:cursor-not-allowed disabled:opacity-50'
+  'border bg-surface-1 text-text-primary placeholder-text-muted/55 transition-colors ' +
+  'focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/25 ' +
+  'hover:border-border disabled:cursor-not-allowed disabled:opacity-50'
 
-const SHARED_SM_TONE = 'bg-surface-2/50 text-text-secondary'
+const SHARED_SM_TONE = 'bg-surface-1 text-text-secondary'
 
 function controlClass(size: ControlSize, invalid: boolean | undefined, extra: string | undefined) {
   const tone = size === 'sm' ? SHARED_SM_TONE : ''

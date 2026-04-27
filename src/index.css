@@ -215,6 +215,142 @@ code, pre, .font-mono, kbd, samp {
   font-family: var(--font-code);
 }
 
+.markdown-body .katex {
+  color: var(--t-text-primary);
+  font-size: 1.02em;
+}
+
+.markdown-body .katex-display {
+  margin: 0.75rem 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.35rem 0;
+}
+
+.markdown-body .katex-display > .katex {
+  white-space: nowrap;
+}
+
+/* ── Compact desktop workbench density ── */
+.workbench-density {
+  --workbench-card-radius: 0.375rem;
+  --workbench-panel-bg: color-mix(in srgb, var(--t-surface-1) 92%, var(--t-surface-0));
+}
+
+.workbench-density [class*="rounded-4xl"],
+.workbench-density [class*="rounded-3xl"],
+.workbench-density [class*="rounded-[28px]"],
+.workbench-density [class*="rounded-[26px]"],
+.workbench-density [class*="rounded-[22px]"],
+.workbench-density [class*="rounded-[20px]"],
+.workbench-density [class*="rounded-[18px]"] {
+  border-radius: var(--workbench-card-radius) !important;
+}
+
+.workbench-density [class*="shadow-"] {
+  box-shadow: none !important;
+}
+
+.workbench-density [class*="bg-linear-to-br"],
+.workbench-density [class*="bg-[radial-gradient"],
+.workbench-density .chat-stage-panel {
+  background-image: none !important;
+  background-color: var(--workbench-panel-bg) !important;
+}
+
+.workbench-density section {
+  padding: 0.75rem !important;
+}
+
+.workbench-density h1,
+.workbench-density h2,
+.workbench-density h3 {
+  letter-spacing: 0 !important;
+}
+
+.workbench-density .text-3xl,
+.workbench-density .text-2xl,
+.workbench-density [class*="text-[30px]"],
+.workbench-density [class*="text-[28px]"] {
+  font-size: 1.125rem !important;
+  line-height: 1.45 !important;
+}
+
+.workbench-density [class*="text-[20px]"],
+.workbench-density [class*="text-[18px]"] {
+  font-size: 0.9375rem !important;
+  line-height: 1.4 !important;
+}
+
+.workbench-density .h-18,
+.workbench-density [class*="h-18"],
+.workbench-density [class*="h-16"],
+.workbench-density [class*="h-14"] {
+  height: 2.5rem !important;
+}
+
+.workbench-density .w-18,
+.workbench-density [class*="w-18"],
+.workbench-density [class*="w-16"],
+.workbench-density [class*="w-14"] {
+  width: 2.5rem !important;
+}
+
+.workbench-density .p-8,
+.workbench-density .p-7,
+.workbench-density .p-6,
+.workbench-density .p-5 {
+  padding: 0.75rem !important;
+}
+
+.workbench-density .py-8,
+.workbench-density .py-6,
+.workbench-density .py-5 {
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+
+.workbench-density .px-10,
+.workbench-density .px-8,
+.workbench-density .px-6,
+.workbench-density .px-5 {
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+}
+
+.workbench-density .gap-8,
+.workbench-density .gap-7,
+.workbench-density .gap-6,
+.workbench-density .gap-5 {
+  gap: 0.75rem !important;
+}
+
+.workbench-density .space-y-8 > :not([hidden]) ~ :not([hidden]),
+.workbench-density .space-y-7 > :not([hidden]) ~ :not([hidden]),
+.workbench-density .space-y-6 > :not([hidden]) ~ :not([hidden]),
+.workbench-density .space-y-5 > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0 !important;
+  margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))) !important;
+  margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)) !important;
+}
+
+.workbench-density [class*="max-w-352"],
+.workbench-density [class*="max-w-384"],
+.workbench-density [class*="max-w-432"],
+.workbench-density [class*="max-w-448"],
+.workbench-density [class*="max-w-7xl"],
+.workbench-density [class*="max-w-6xl"],
+.workbench-density [class*="max-w-5xl"],
+.workbench-density [class*="max-w-4xl"] {
+  max-width: none !important;
+  width: 100% !important;
+}
+
+.workbench-density [class*="sticky top-0"] {
+  position: static !important;
+}
+
 /* ── Quiet UI polish ── */
 
 /* Subtle gradient shimmer for active surfaces */

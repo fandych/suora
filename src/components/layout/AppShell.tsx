@@ -84,7 +84,7 @@ export function AppShell() {
         {t('common.skipToContent', 'Skip to main content')}
       </a>
       <NavBar />
-      <main id="main-content" className="relative z-1 flex min-h-0 min-w-0 flex-1 overflow-hidden">
+      <main id="main-content" className="workbench-density relative z-1 flex min-h-0 min-w-0 flex-1 overflow-hidden bg-surface-0">
         <Outlet />
       </main>
       <CommandPalette />

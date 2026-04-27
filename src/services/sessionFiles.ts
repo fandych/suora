@@ -4,6 +4,7 @@
 
 import type { Session, AgentMemoryEntry } from '@/types'
 import { logger } from '@/services/logger'
+import { safePathSegment } from '@/utils/pathSegments'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -23,7 +24,7 @@ function sessionsRoot(workspacePath: string): string {
 }
 
 function sessionDir(workspacePath: string, sessionId: string): string {
-  return `${sessionsRoot(workspacePath)}/${sessionId}`
+  return `${sessionsRoot(workspacePath)}/${safePathSegment(sessionId, 'session')}`
 }
 
 function conversationPath(workspacePath: string, sessionId: string): string {
@@ -94,7 +95,8 @@ export async function saveSessionToDisk(workspacePath: string, session: Session)
 
   try {
     const dir = sessionDir(workspacePath, session.id)
-    await electron.invoke('system:ensureDirectory', dir)
+    const ensureResult = await electron.invoke('system:ensureDirectory', dir) as { error?: string }
+    if (ensureResult?.error) return false
     const json = JSON.stringify(session, null, 2)
     const result = (await electron.invoke(
       'fs:writeFile',
@@ -160,7 +162,8 @@ export async function saveSessionMemories(workspacePath: string, sessionId: stri
 
   try {
     const dir = sessionDir(workspacePath, sessionId)
-    await electron.invoke('system:ensureDirectory', dir)
+    const ensureResult = await electron.invoke('system:ensureDirectory', dir) as { error?: string }
+    if (ensureResult?.error) return false
     const json = JSON.stringify(memories, null, 2)
     const result = (await electron.invoke(
       'fs:writeFile',

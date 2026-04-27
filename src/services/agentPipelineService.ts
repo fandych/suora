@@ -10,6 +10,7 @@ const PIPELINE_REFERENCE_PATTERN = /\{\{\s*([^}]+?)\s*\}\}/g
 const STEP_REFERENCE_PATTERN = /^(?:steps\[(\d+)\]|step(\d+))\.(output|input|task|status|error)$/i
 
 type PipelineStepRuntimeValue = Pick<AgentPipelineExecutionStep, 'stepIndex' | 'agentId' | 'task' | 'input' | 'output' | 'status' | 'error'>
+const MAX_STEP_RETRIES = 3
 
 export interface ExecuteAgentPipelineOptions {
   trigger?: AgentPipelineExecution['trigger']
@@ -30,14 +31,30 @@ export interface AgentPipelineProgressStep {
   stepIndex: number
   agentId: string
   agentName?: string
+  name?: string
   task: string
   input: string
   output?: string
-  status: 'pending' | 'running' | 'success' | 'error'
+  status: 'pending' | 'running' | 'success' | 'error' | 'skipped'
   startedAt?: number
   completedAt?: number
   durationMs?: number
+  attempts?: number
   error?: string
+}
+
+function normalizeRetryCount(retryCount?: number): number {
+  if (!Number.isFinite(retryCount)) return 0
+  return Math.max(0, Math.min(Math.trunc(retryCount ?? 0), MAX_STEP_RETRIES))
+}
+
+function findLatestProducedStep(previousSteps: PipelineStepRuntimeValue[]): PipelineStepRuntimeValue | undefined {
+  for (let index = previousSteps.length - 1; index >= 0; index -= 1) {
+    const step = previousSteps[index]
+    if (step.status !== 'skipped' && (step.output || step.error)) return step
+  }
+
+  return undefined
 }
 
 function resolvePipelineReference(
@@ -103,7 +120,8 @@ function buildStepInput(
   previousSteps: PipelineStepRuntimeValue[],
 ): string {
   const { resolvedTask, usedReferences } = resolvePipelineTemplate(step.task, previousSteps)
-  const previousOutput = previousSteps[previousSteps.length - 1]?.output ?? previousSteps[previousSteps.length - 1]?.error
+  const latestProducedStep = findLatestProducedStep(previousSteps)
+  const previousOutput = latestProducedStep?.output ?? latestProducedStep?.error
 
   return previousOutput && !usedReferences
     ? `Previous step output:\n${previousOutput}\n\nCurrent step task:\n${resolvedTask}`
@@ -216,7 +234,69 @@ export async function executeAgentPipeline(
   let didFail = false
   let executionError: string | undefined
 
+  const skipRemainingSteps = (fromIndex: number, reason: string) => {
+    const skippedAt = Date.now()
+    for (let skippedIndex = fromIndex; skippedIndex < pipeline.steps.length; skippedIndex += 1) {
+      const skippedStep = pipeline.steps[skippedIndex]
+      executionSteps.push({
+        id: generateId('pipe-step'),
+        stepIndex: skippedIndex,
+        agentId: skippedStep.agentId,
+        ...(skippedStep.name?.trim() ? { name: skippedStep.name.trim() } : {}),
+        task: skippedStep.task,
+        input: '',
+        status: 'skipped',
+        startedAt: skippedAt,
+        completedAt: skippedAt,
+        durationMs: 0,
+        error: reason,
+      })
+      options.onStepUpdate?.({
+        stepIndex: skippedIndex,
+        agentId: skippedStep.agentId,
+        name: skippedStep.name,
+        task: skippedStep.task,
+        input: '',
+        status: 'skipped',
+        startedAt: skippedAt,
+        completedAt: skippedAt,
+        durationMs: 0,
+        error: reason,
+      })
+    }
+  }
+
   for (const [index, step] of pipeline.steps.entries()) {
+    if (step.enabled === false) {
+      const skippedAt = Date.now()
+      executionSteps.push({
+        id: generateId('pipe-step'),
+        stepIndex: index,
+        agentId: step.agentId,
+        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
+        task: step.task,
+        input: '',
+        status: 'skipped',
+        startedAt: skippedAt,
+        completedAt: skippedAt,
+        durationMs: 0,
+        error: 'Step disabled',
+      })
+      options.onStepUpdate?.({
+        stepIndex: index,
+        agentId: step.agentId,
+        name: step.name,
+        task: step.task,
+        input: '',
+        status: 'skipped',
+        startedAt: skippedAt,
+        completedAt: skippedAt,
+        durationMs: 0,
+        error: 'Step disabled',
+      })
+      continue
+    }
+
     // Respect cancellation between steps.
     if (options.abortSignal?.aborted) {
       const completedAt = Date.now()
@@ -224,6 +304,7 @@ export async function executeAgentPipeline(
         id: generateId('pipe-step'),
         stepIndex: index,
         agentId: step.agentId,
+        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
         task: step.task,
         input: buildStepInput(step, executionSteps),
         status: 'error',
@@ -246,17 +327,36 @@ export async function executeAgentPipeline(
         id: generateId('pipe-step'),
         stepIndex: index,
         agentId: step.agentId,
+        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
         task: step.task,
         input,
         status: 'error',
         startedAt: stepStart,
         completedAt,
         durationMs: completedAt - stepStart,
+        attempts: 1,
+        error: 'Agent not found',
+      })
+      options.onStepUpdate?.({
+        stepIndex: index,
+        agentId: step.agentId,
+        name: step.name,
+        task: step.task,
+        input,
+        status: 'error',
+        startedAt: stepStart,
+        completedAt,
+        durationMs: completedAt - stepStart,
+        attempts: 1,
         error: 'Agent not found',
       })
       previousOutput = 'Agent not found'
       didFail = true
       executionError = executionError ?? 'Agent not found'
+      if (step.continueOnError === false) {
+        skipRemainingSteps(index + 1, 'Skipped after previous step failed')
+        break
+      }
       continue
     }
 
@@ -265,10 +365,12 @@ export async function executeAgentPipeline(
       stepIndex: index,
       agentId: step.agentId,
       agentName: agent.name,
+      name: step.name,
       task: step.task,
       input,
       status: 'running',
       startedAt: stepStart,
+      attempts: 1,
     }
     options.onStepUpdate?.(progressBase)
 
@@ -278,12 +380,14 @@ export async function executeAgentPipeline(
         id: generateId('pipe-step'),
         stepIndex: index,
         agentId: step.agentId,
+        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
         task: step.task,
         input,
         status: 'error',
         startedAt: stepStart,
         completedAt,
         durationMs: completedAt - stepStart,
+        attempts: 1,
         error: 'No model available',
       })
       options.onStepUpdate?.({
@@ -291,11 +395,16 @@ export async function executeAgentPipeline(
         status: 'error',
         completedAt,
         durationMs: completedAt - stepStart,
+        attempts: 1,
         error: 'No model available',
       })
       previousOutput = 'No model available'
       didFail = true
       executionError = executionError ?? 'No model available'
+      if (step.continueOnError === false) {
+        skipRemainingSteps(index + 1, 'Skipped after previous step failed')
+        break
+      }
       continue
     }
 
@@ -314,37 +423,69 @@ export async function executeAgentPipeline(
     const { systemPrompt, tools } = await executionContext
     const modelIdentifier = `${model.provider}:${model.modelId}`
     const messages: ModelMessage[] = [{ role: 'user' as const, content: input }]
+    const maxAttempts = normalizeRetryCount(step.retryCount) + 1
+    let attempts = 0
 
     try {
       let output = ''
+      let lastError: string | undefined
       const shouldStream = requiresStreaming(tools as Record<string, unknown>, Boolean(options.onStepUpdate))
 
-      if (shouldStream) {
-        let streamError: string | undefined
-        for await (const event of streamResponseWithTools(modelIdentifier, messages, {
-          systemPrompt,
-          tools,
-          maxSteps: Math.max(2, Math.min(agent.maxTurns ?? 5, 30)),
-          apiKey: model.apiKey,
-          baseUrl: model.baseUrl,
-          ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
-        })) {
-          if (event.type === 'text-delta') {
-            output += event.text
-            options.onStepUpdate?.({
-              ...progressBase,
-              output,
-            })
-          } else if (event.type === 'error') {
-            streamError = event.error
-          }
-        }
+      while (attempts < maxAttempts) {
+        attempts += 1
+        output = ''
+        options.onStepUpdate?.({
+          ...progressBase,
+          attempts,
+          output: undefined,
+          error: attempts > 1 ? lastError : undefined,
+        })
 
-        if (streamError) {
-          throw new Error(streamError)
+        try {
+          if (shouldStream) {
+            let streamError: string | undefined
+            for await (const event of streamResponseWithTools(modelIdentifier, messages, {
+              systemPrompt,
+              tools,
+              maxSteps: Math.max(2, Math.min(agent.maxTurns ?? 5, 30)),
+              apiKey: model.apiKey,
+              baseUrl: model.baseUrl,
+              ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
+            })) {
+              if (event.type === 'text-delta') {
+                output += event.text
+                options.onStepUpdate?.({
+                  ...progressBase,
+                  output,
+                  attempts,
+                })
+              } else if (event.type === 'error') {
+                streamError = event.error
+              }
+            }
+
+            if (streamError) {
+              throw new Error(streamError)
+            }
+          } else {
+            output = await generateResponse(modelIdentifier, messages, systemPrompt, model.apiKey, model.baseUrl)
+          }
+
+          lastError = undefined
+          break
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          lastError = message
+          if (options.abortSignal?.aborted || attempts >= maxAttempts) {
+            throw error
+          }
+          options.onStepUpdate?.({
+            ...progressBase,
+            status: 'running',
+            attempts,
+            error: message,
+          })
         }
-      } else {
-        output = await generateResponse(modelIdentifier, messages, systemPrompt, model.apiKey, model.baseUrl)
       }
 
       const completedAt = Date.now()
@@ -352,6 +493,7 @@ export async function executeAgentPipeline(
         id: generateId('pipe-step'),
         stepIndex: index,
         agentId: step.agentId,
+        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
         task: step.task,
         input,
         output,
@@ -359,6 +501,7 @@ export async function executeAgentPipeline(
         startedAt: stepStart,
         completedAt,
         durationMs: completedAt - stepStart,
+        attempts,
       })
       options.onStepUpdate?.({
         ...progressBase,
@@ -366,6 +509,7 @@ export async function executeAgentPipeline(
         status: 'success',
         completedAt,
         durationMs: completedAt - stepStart,
+        attempts,
       })
       previousOutput = output
     } catch (error) {
@@ -375,12 +519,14 @@ export async function executeAgentPipeline(
         id: generateId('pipe-step'),
         stepIndex: index,
         agentId: step.agentId,
+        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
         task: step.task,
         input,
         status: 'error',
         startedAt: stepStart,
         completedAt,
         durationMs: completedAt - stepStart,
+        attempts: Math.max(1, attempts),
         error: message,
       })
       options.onStepUpdate?.({
@@ -388,11 +534,16 @@ export async function executeAgentPipeline(
         status: 'error',
         completedAt,
         durationMs: completedAt - stepStart,
+        attempts: Math.max(1, attempts),
         error: message,
       })
       previousOutput = message
       didFail = true
       executionError = executionError ?? message
+      if (step.continueOnError === false) {
+        skipRemainingSteps(index + 1, 'Skipped after previous step failed')
+        break
+      }
     }
   }
 

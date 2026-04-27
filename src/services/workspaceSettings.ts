@@ -30,6 +30,15 @@ function stripLegacyProviderKeys(parsed: Record<string, unknown>): Record<string
   return next
 }
 
+function isIpcError(value: unknown): value is { error: string } {
+  return !!value && typeof value === 'object' && 'error' in value && typeof (value as { error?: unknown }).error === 'string'
+}
+
+async function writeJsonFile(electron: ElectronBridge, filePath: string, value: unknown): Promise<boolean> {
+  const result = await electron.invoke('fs:writeFile', filePath, JSON.stringify(value, null, 2))
+  return !isIpcError(result)
+}
+
 async function loadLegacyProviderConfigs(electron: ElectronBridge): Promise<ProviderConfig[]> {
   try {
     const raw = await electron.invoke('store:load', 'providers')
@@ -100,11 +109,11 @@ export async function loadWorkspaceSettings(workspacePath: string): Promise<Work
       ...modelsData,
       providerConfigs: result.providers,
     })
-    await electron.invoke('fs:writeFile', modelsPath, JSON.stringify(nextModelsData, null, 2)).catch(() => {})
+    await writeJsonFile(electron, modelsPath, nextModelsData).catch(() => false)
 
     if (shouldRewriteSettingsData) {
       const cleanedSettingsData = stripLegacyProviderKeys(settingsData)
-      await electron.invoke('fs:writeFile', settingsPath, JSON.stringify(cleanedSettingsData, null, 2)).catch(() => {})
+      await writeJsonFile(electron, settingsPath, cleanedSettingsData).catch(() => false)
     }
   }
 
@@ -119,7 +128,8 @@ export async function saveWorkspaceSettings(
   if (!electron || !workspacePath) return false
 
   try {
-    await electron.invoke('system:ensureDirectory', workspacePath)
+    const ensureResult = await electron.invoke('system:ensureDirectory', workspacePath)
+    if (isIpcError(ensureResult)) return false
     const modelsPath = `${workspacePath}/models.json`
     const settingsPath = `${workspacePath}/settings.json`
 
@@ -138,7 +148,7 @@ export async function saveWorkspaceSettings(
       ...modelsData,
       providerConfigs: settings.providers,
     })
-    await electron.invoke('fs:writeFile', modelsPath, JSON.stringify(nextModelsData, null, 2))
+    if (!(await writeJsonFile(electron, modelsPath, nextModelsData))) return false
 
     // Save externalDirectories into settings.json (merge with existing)
     if (settings.externalDirectories) {
@@ -151,7 +161,7 @@ export async function saveWorkspaceSettings(
         ...stripLegacyProviderKeys(settingsData),
         externalDirectories: settings.externalDirectories,
       }
-      await electron.invoke('fs:writeFile', settingsPath, JSON.stringify(nextSettingsData, null, 2))
+      if (!(await writeJsonFile(electron, settingsPath, nextSettingsData))) return false
     }
 
     return true

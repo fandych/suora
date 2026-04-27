@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest'
-import { parseSkillMarkdown, serializeSkillToMarkdown } from './skillRegistry'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { deleteSkillFromDisk, parseSkillMarkdown, saveSkillToDisk, serializeSkillToMarkdown } from './skillRegistry'
 
 describe('skillRegistry', () => {
+  beforeEach(() => {
+    vi.mocked(window.electron.invoke).mockReset()
+  })
+
   it('parses block scalars and dash lists from skill frontmatter', () => {
     const raw = `---
 name: review-skill
@@ -56,5 +60,23 @@ Plan carefully.
     const reparsed = parseSkillMarkdown(serialized, '/skills/planning/SKILL.md', 'project')
     expect(reparsed?.whenToUse).toBe('First line.\nSecond line.')
     expect(reparsed?.allowedTools).toEqual(['read_file', 'grep_search'])
+  })
+
+  it('uses a fallback slug when saving skills with punctuation-only names', async () => {
+    vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
+
+    const skill = parseSkillMarkdown('---\nname: !!!\ndescription: test\n---\n\nbody', '/skills/new/SKILL.md', 'local')
+    if (!skill) throw new Error('Expected parsed skill')
+
+    await expect(saveSkillToDisk('/workspace/skills', skill)).resolves.toBe(true)
+    expect(window.electron.invoke).toHaveBeenCalledWith('system:ensureDirectory', '/workspace/skills/skill')
+    expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', '/workspace/skills/skill/SKILL.md', expect.any(String))
+  })
+
+  it('deletes directory-backed skills with fs:deleteDir', async () => {
+    vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
+
+    await expect(deleteSkillFromDisk('/workspace/skills/review/SKILL.md')).resolves.toBe(true)
+    expect(window.electron.invoke).toHaveBeenCalledWith('fs:deleteDir', '/workspace/skills/review')
   })
 })

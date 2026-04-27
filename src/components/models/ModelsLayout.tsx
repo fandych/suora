@@ -25,7 +25,7 @@ export function ModelsLayout() {
   const { t } = useI18n()
   const navigate = useNavigate()
   const { view } = useParams<{ view: string }>()
-  const [panelWidth, setPanelWidth] = useResizablePanel('models', 320)
+  const [panelWidth, setPanelWidth] = useResizablePanel('models', 280)
   const { providerConfigs, addProviderConfig, removeProviderConfig, updateProviderConfig, syncModelsFromConfigs, models, workspacePath } = useAppStore()
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -371,7 +371,7 @@ export function ModelsLayout() {
           </div>
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
       {viewMode === 'compare' ? (
         <ModelComparisonPanel onClose={() => navigate('/models/providers')} />

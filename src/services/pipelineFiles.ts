@@ -1,4 +1,5 @@
 import type { AgentPipeline, AgentPipelineExecution } from '@/types'
+import { safePathSegment } from '@/utils/pathSegments'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -11,7 +12,7 @@ function pipelinesDir(workspacePath: string): string {
 }
 
 function pipelineFilePath(workspacePath: string, pipelineId: string): string {
-  return `${pipelinesDir(workspacePath)}/${pipelineId}.json`
+  return `${pipelinesDir(workspacePath)}/${safePathSegment(pipelineId, 'pipeline')}.json`
 }
 
 function pipelineHistoryFilePath(workspacePath: string): string {
@@ -53,7 +54,8 @@ export async function savePipelineToDisk(workspacePath: string, pipeline: AgentP
   if (!electron || !workspacePath) return false
 
   try {
-    await electron.invoke('system:ensureDirectory', pipelinesDir(workspacePath))
+    const ensureResult = await electron.invoke('system:ensureDirectory', pipelinesDir(workspacePath)) as { error?: string }
+    if (ensureResult?.error) return false
     const result = (await electron.invoke(
       'fs:writeFile',
       pipelineFilePath(workspacePath, pipeline.id),
@@ -101,7 +103,8 @@ export async function appendPipelineExecutionToDisk(workspacePath: string, execu
   if (!electron || !workspacePath) return false
 
   try {
-    await electron.invoke('system:ensureDirectory', pipelinesDir(workspacePath))
+    const ensureResult = await electron.invoke('system:ensureDirectory', pipelinesDir(workspacePath)) as { error?: string }
+    if (ensureResult?.error) return false
     const executions = await loadPipelineExecutionsFromDisk(workspacePath)
     const nextExecutions = [...executions, execution].slice(-500)
     const result = (await electron.invoke(

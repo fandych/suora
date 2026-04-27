@@ -21,6 +21,7 @@ import {
 import { readCached, writeCached } from '@/services/fileStorage'
 import { delegateToAgent } from '@/services/agentCommunication'
 import { confirm } from '@/services/confirmDialog'
+import { safePathSegment } from '@/utils/pathSegments'
 
 const OFFICIAL_MARKETPLACE_URL = 'https://raw.githubusercontent.com/suora-market/skills/main/skills.json'
 
@@ -333,7 +334,7 @@ function getSessionTodosPath(): { path: string; error?: string } {
   const { workspacePath, activeSessionId } = getPersistedStoreState()
   if (!workspacePath) return { path: '', error: 'Workspace path not set' }
   if (!activeSessionId) return { path: '', error: 'No active session — please open or create a chat session first' }
-  return { path: `${workspacePath}/sessions/${activeSessionId}/todos.json` }
+  return { path: `${workspacePath}/sessions/${safePathSegment(activeSessionId, 'session')}/todos.json` }
 }
 
 async function readTodos(filePath: string): Promise<TodoItem[]> {

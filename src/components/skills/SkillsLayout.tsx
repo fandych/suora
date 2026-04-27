@@ -21,7 +21,7 @@ const SKILL_VIEW_MODES = new Set<ViewMode>(['installed', 'browse', 'sources'])
 const ALL_CATEGORY = 'All'
 
 export function SkillsLayout() {
-  const [panelWidth, setPanelWidth] = useResizablePanel('skills', 320)
+  const [panelWidth, setPanelWidth] = useResizablePanel('skills', 280)
   const navigate = useNavigate()
   const { view } = useParams<{ view: string }>()
   const { skills, addSkill, updateSkill, removeSkill, workspacePath, marketplace, setMarketplace } = useAppStore()
@@ -766,7 +766,7 @@ export function SkillsLayout() {
           </div>
         )}
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
       {/* ── Right pane: Editor or Empty state ────────────────── */}
       {isAdding || editingId ? (

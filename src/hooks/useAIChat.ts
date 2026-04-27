@@ -221,6 +221,8 @@ function toModelMessages(messages: Message[]): ModelMessage[] {
         result.push({ role: 'user', content: m.content } satisfies UserModelMessage)
       }
     } else if (m.role === 'assistant') {
+      if (m.isError) continue
+
       const completedToolCalls = (m.toolCalls ?? []).filter(
         (t) => t.status === 'completed' && t.output != null
       )
@@ -521,6 +523,7 @@ export function useAIChat() {
     const perfStart = performance.now()
     let tokenUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
     let hasError = false
+    let inactivityTimer: ReturnType<typeof setTimeout> | null = null
     try {
       const modelIdentifier = `${model.provider}:${model.modelId}`
 
@@ -566,6 +569,7 @@ export function useAIChat() {
             toolCalls: currentToolCalls.length ? currentToolCalls : undefined,
             contentParts: contentParts.length ? contentParts : undefined,
             tokenUsage,
+            isError: hasError || undefined,
             isStreaming: !isFinal,
           }],
         })
@@ -573,7 +577,6 @@ export function useAIChat() {
 
       // Stream inactivity timeout: abort if no events received for 5 minutes
       const STREAM_INACTIVITY_TIMEOUT_MS = 5 * 60 * 1000
-      let inactivityTimer: ReturnType<typeof setTimeout> | null = null
       const resetInactivityTimer = () => {
         if (inactivityTimer) clearTimeout(inactivityTimer)
         inactivityTimer = setTimeout(() => {
@@ -688,6 +691,7 @@ export function useAIChat() {
           }
 
           case 'error':
+            hasError = true
             logger.error(`[Chat:Error]`, { error: sanitizeToolError(event.error) })
             fullContent += `\n\n[Tool Error] ${sanitizeToolError(event.error)}`
             break
@@ -773,6 +777,10 @@ export function useAIChat() {
     } finally {
       streamingRef.current = false
       abortRef.current = null
+      if (inactivityTimer) {
+        clearTimeout(inactivityTimer)
+        inactivityTimer = null
+      }
       setIsLoading(false)
       // Record model usage statistics (always, even on cancel/error)
       if (tokenUsage) {
