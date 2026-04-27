@@ -1,8 +1,10 @@
-import type { Agent, AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, Model, Skill } from '@/types'
+import type { Agent, AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, Model, PipelineRecoveryAction, Skill } from '@/types'
 import type { ModelMessage } from 'ai'
 import { generateResponse, initializeProvider, streamResponseWithTools } from '@/services/aiService'
 import { appendPipelineExecutionToDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
 import { buildSystemPrompt, getSkillSystemPrompts, getToolsForAgent, mergeSkillsWithBuiltins } from '@/services/tools'
+import { sanitizeSensitiveText } from '@/services/sanitization'
+import { buildPipelineRecoveryActions, validateAgentPipeline } from '@/services/pipelineValidation'
 import { useAppStore } from '@/store/appStore'
 import { generateId } from '@/utils/helpers'
 
@@ -11,6 +13,11 @@ const STEP_REFERENCE_PATTERN = /^(?:steps\[(\d+)\]|step(\d+))\.(output|input|tas
 
 type PipelineStepRuntimeValue = Pick<AgentPipelineExecutionStep, 'stepIndex' | 'agentId' | 'task' | 'input' | 'output' | 'status' | 'error'>
 const MAX_STEP_RETRIES = 3
+const MAX_PIPELINE_REFERENCE_CHARS = 24_000
+const MAX_PIPELINE_HANDOFF_CHARS = 32_000
+const MAX_PIPELINE_INPUT_CHARS = 80_000
+const PIPELINE_ERROR_MAX_CHARS = 1_000
+const DEFAULT_STEP_TIMEOUT_MS = 5 * 60 * 1000
 
 export interface ExecuteAgentPipelineOptions {
   trigger?: AgentPipelineExecution['trigger']
@@ -41,6 +48,7 @@ export interface AgentPipelineProgressStep {
   durationMs?: number
   attempts?: number
   error?: string
+  recoveryActions?: PipelineRecoveryAction[]
 }
 
 function normalizeRetryCount(retryCount?: number): number {
@@ -55,6 +63,15 @@ function findLatestProducedStep(previousSteps: PipelineStepRuntimeValue[]): Pipe
   }
 
   return undefined
+}
+
+function clampPipelineText(label: string, value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value
+  return `${value.slice(0, maxLength).trimEnd()}\n\n[${label} truncated: ${value.length - maxLength} characters omitted]`
+}
+
+function sanitizePipelineError(raw: unknown): string {
+  return sanitizeSensitiveText(raw, { maxLength: PIPELINE_ERROR_MAX_CHARS })
 }
 
 function resolvePipelineReference(
@@ -95,7 +112,9 @@ function resolvePipelineReference(
 
   const field = stepMatch[3] as 'output' | 'input' | 'task' | 'status' | 'error'
   const value = referencedStep[field]
-  return value == null ? undefined : String(value)
+  return value == null
+    ? undefined
+    : clampPipelineText(rawIndex === 1 ? 'Referenced step value' : `Step ${rawIndex} ${field}`, String(value), MAX_PIPELINE_REFERENCE_CHARS)
 }
 
 function resolvePipelineTemplate(
@@ -123,9 +142,39 @@ function buildStepInput(
   const latestProducedStep = findLatestProducedStep(previousSteps)
   const previousOutput = latestProducedStep?.output ?? latestProducedStep?.error
 
-  return previousOutput && !usedReferences
-    ? `Previous step output:\n${previousOutput}\n\nCurrent step task:\n${resolvedTask}`
+  const input = previousOutput && !usedReferences
+    ? `Previous step output:\n${clampPipelineText('Previous step output', previousOutput, MAX_PIPELINE_HANDOFF_CHARS)}\n\nCurrent step task:\n${resolvedTask}`
     : resolvedTask
+
+  return clampPipelineText('Pipeline step input', input, step.maxInputChars ?? MAX_PIPELINE_INPUT_CHARS)
+}
+
+function clampStepOutput(step: AgentPipeline['steps'][number], output: string): { output: string; warnings?: string[] } {
+  const maxOutputChars = step.maxOutputChars ?? MAX_PIPELINE_HANDOFF_CHARS
+  if (output.length <= maxOutputChars) return { output }
+  return {
+    output: clampPipelineText('Pipeline step output', output, maxOutputChars),
+    warnings: [`Step output truncated from ${output.length.toLocaleString()} to ${maxOutputChars.toLocaleString()} characters.`],
+  }
+}
+
+function createStepAbortSignal(parentSignal: AbortSignal | undefined, timeoutMs: number): { signal: AbortSignal; cleanup: () => void; timedOut: () => boolean } {
+  const controller = new AbortController()
+  let didTimeOut = false
+  const timeout = window.setTimeout(() => {
+    didTimeOut = true
+    controller.abort()
+  }, timeoutMs)
+  const abortFromParent = () => controller.abort()
+  parentSignal?.addEventListener('abort', abortFromParent, { once: true })
+  return {
+    signal: controller.signal,
+    cleanup: () => {
+      window.clearTimeout(timeout)
+      parentSignal?.removeEventListener('abort', abortFromParent)
+    },
+    timedOut: () => didTimeOut,
+  }
 }
 
 function requiresStreaming(tools: Record<string, unknown>, hasStepUpdates: boolean): boolean {
@@ -218,15 +267,42 @@ export async function findPipelineByReference(reference: string): Promise<AgentP
   const exactNameMatch = pipelines.find((pipeline) => pipeline.name.toLowerCase() === lowerReference)
   if (exactNameMatch) return exactNameMatch
 
-  return pipelines.find((pipeline) => pipeline.name.toLowerCase().includes(lowerReference)) ?? null
+  const partialMatches = pipelines.filter((pipeline) => pipeline.name.toLowerCase().includes(lowerReference))
+  return partialMatches.length === 1 ? partialMatches[0] : null
+}
+
+export type PipelineReferenceResolution =
+  | { status: 'found'; pipeline: AgentPipeline }
+  | { status: 'ambiguous'; reference: string; matches: AgentPipeline[] }
+  | { status: 'missing'; reference: string }
+
+export async function resolvePipelineByReference(reference: string): Promise<PipelineReferenceResolution> {
+  const normalizedReference = reference.trim().replace(/^['"]|['"]$/g, '')
+  if (!normalizedReference) return { status: 'missing', reference }
+
+  const pipelines = await loadAvailablePipelines()
+  if (pipelines.length === 0) return { status: 'missing', reference: normalizedReference }
+
+  const exactIdMatch = pipelines.find((pipeline) => pipeline.id === normalizedReference)
+  if (exactIdMatch) return { status: 'found', pipeline: exactIdMatch }
+
+  const lowerReference = normalizedReference.toLowerCase()
+  const exactNameMatch = pipelines.find((pipeline) => pipeline.name.toLowerCase() === lowerReference)
+  if (exactNameMatch) return { status: 'found', pipeline: exactNameMatch }
+
+  const partialMatches = pipelines.filter((pipeline) => pipeline.name.toLowerCase().includes(lowerReference))
+  if (partialMatches.length === 1) return { status: 'found', pipeline: partialMatches[0] }
+  if (partialMatches.length > 1) return { status: 'ambiguous', reference: normalizedReference, matches: partialMatches }
+  return { status: 'missing', reference: normalizedReference }
 }
 
 export async function executeAgentPipeline(
   pipeline: AgentPipeline,
   options: ExecuteAgentPipelineOptions = {},
 ): Promise<AgentPipelineExecution> {
-  const state = useAppStore.getState()
+  const runtimeStateAtStart = useAppStore.getState()
   const executionStart = Date.now()
+  const runId = generateId('run')
   const executionSteps: AgentPipelineExecutionStep[] = []
   const executionContextCache = new Map<string, ReturnType<typeof buildPipelineExecutionContext>>()
   const initializedProviders = new Set<string>()
@@ -234,12 +310,85 @@ export async function executeAgentPipeline(
   let didFail = false
   let executionError: string | undefined
 
+  const validation = validateAgentPipeline(pipeline, runtimeStateAtStart.agents, runtimeStateAtStart.models)
+  if (!validation.valid) {
+    const completedAt = Date.now()
+    const steps = pipeline.steps.map((step, index): AgentPipelineExecutionStep => {
+      const stepErrors = validation.errors.filter((issue) => issue.stepIndex === index)
+      const error = stepErrors.length > 0
+        ? stepErrors.map((issue) => issue.message).join('\n')
+        : 'Skipped because pipeline validation failed'
+      return {
+        id: generateId('pipe-step'),
+        runId,
+        stepIndex: index,
+        agentId: step.agentId,
+        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
+        task: step.task,
+        input: '',
+        status: stepErrors.length > 0 ? 'error' : 'skipped',
+        startedAt: completedAt,
+        completedAt,
+        durationMs: 0,
+        attempts: 0,
+        error,
+        recoveryActions: stepErrors.flatMap((issue) => issue.recoveryActions ?? [{ id: 'edit-pipeline', label: 'Edit pipeline', stepIndex: index }]),
+      }
+    })
+    const error = validation.errors.map((issue) => issue.message).join('\n') || 'Pipeline validation failed'
+    const execution: AgentPipelineExecution = {
+      id: generateId('pipe-exec'),
+      runId,
+      pipelineId: pipeline.id,
+      pipelineName: pipeline.name,
+      trigger: options.trigger ?? 'manual',
+      ...(options.timerId ? { timerId: options.timerId } : {}),
+      startedAt: executionStart,
+      completedAt,
+      status: 'error',
+      steps,
+      error,
+      runtime: {
+        runId,
+        agentIds: pipeline.steps.map((step) => step.agentId),
+        modelIds: runtimeStateAtStart.models.map((model) => model.id),
+        startedAt: executionStart,
+        trigger: options.trigger ?? 'manual',
+        validationWarnings: validation.warnings.map((issue) => issue.message),
+      },
+      recoveryActions: [{ id: 'edit-pipeline', label: 'Edit pipeline' }],
+    }
+
+    for (const step of steps) {
+      options.onStepUpdate?.({
+        stepIndex: step.stepIndex,
+        agentId: step.agentId,
+        name: step.name,
+        task: step.task,
+        input: step.input,
+        status: step.status,
+        startedAt: step.startedAt,
+        completedAt: step.completedAt,
+        durationMs: step.durationMs,
+        attempts: step.attempts,
+        error: step.error,
+      })
+    }
+
+    const { workspacePath } = useAppStore.getState()
+    if (options.persistExecution !== false && workspacePath) {
+      await appendPipelineExecutionToDisk(workspacePath, execution)
+    }
+    return execution
+  }
+
   const skipRemainingSteps = (fromIndex: number, reason: string) => {
     const skippedAt = Date.now()
     for (let skippedIndex = fromIndex; skippedIndex < pipeline.steps.length; skippedIndex += 1) {
       const skippedStep = pipeline.steps[skippedIndex]
       executionSteps.push({
         id: generateId('pipe-step'),
+        runId,
         stepIndex: skippedIndex,
         agentId: skippedStep.agentId,
         ...(skippedStep.name?.trim() ? { name: skippedStep.name.trim() } : {}),
@@ -271,6 +420,7 @@ export async function executeAgentPipeline(
       const skippedAt = Date.now()
       executionSteps.push({
         id: generateId('pipe-step'),
+        runId,
         stepIndex: index,
         agentId: step.agentId,
         ...(step.name?.trim() ? { name: step.name.trim() } : {}),
@@ -302,6 +452,7 @@ export async function executeAgentPipeline(
       const completedAt = Date.now()
       executionSteps.push({
         id: generateId('pipe-step'),
+        runId,
         stepIndex: index,
         agentId: step.agentId,
         ...(step.name?.trim() ? { name: step.name.trim() } : {}),
@@ -318,13 +469,60 @@ export async function executeAgentPipeline(
       continue
     }
 
-    const stepStart = Date.now()
-    const input = buildStepInput(step, executionSteps)
-    const agent = state.agents.find((item) => item.id === step.agentId)
-    if (!agent) {
+    if (!step.task.trim()) {
       const completedAt = Date.now()
+      const message = 'Step task is empty'
+      const recoveryActions = buildPipelineRecoveryActions(index, step.agentId)
       executionSteps.push({
         id: generateId('pipe-step'),
+        runId,
+        stepIndex: index,
+        agentId: step.agentId,
+        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
+        task: step.task,
+        input: '',
+        status: 'error',
+        startedAt: completedAt,
+        completedAt,
+        durationMs: 0,
+        attempts: 0,
+        error: message,
+        recoveryActions,
+      })
+      options.onStepUpdate?.({
+        stepIndex: index,
+        agentId: step.agentId,
+        name: step.name,
+        task: step.task,
+        input: '',
+        status: 'error',
+        startedAt: completedAt,
+        completedAt,
+        durationMs: 0,
+        attempts: 0,
+        error: message,
+        recoveryActions,
+      })
+      previousOutput = message
+      didFail = true
+      executionError = executionError ?? message
+      if (step.continueOnError === false) {
+        skipRemainingSteps(index + 1, 'Skipped after previous step failed')
+        break
+      }
+      continue
+    }
+
+    const stepStart = Date.now()
+    const input = buildStepInput(step, executionSteps)
+    const runtimeState = useAppStore.getState()
+    const agent = runtimeState.agents.find((item) => item.id === step.agentId)
+    if (!agent) {
+      const completedAt = Date.now()
+      const recoveryActions = buildPipelineRecoveryActions(index, step.agentId)
+      executionSteps.push({
+        id: generateId('pipe-step'),
+        runId,
         stepIndex: index,
         agentId: step.agentId,
         ...(step.name?.trim() ? { name: step.name.trim() } : {}),
@@ -336,6 +534,7 @@ export async function executeAgentPipeline(
         durationMs: completedAt - stepStart,
         attempts: 1,
         error: 'Agent not found',
+        recoveryActions,
       })
       options.onStepUpdate?.({
         stepIndex: index,
@@ -349,6 +548,7 @@ export async function executeAgentPipeline(
         durationMs: completedAt - stepStart,
         attempts: 1,
         error: 'Agent not found',
+        recoveryActions,
       })
       previousOutput = 'Agent not found'
       didFail = true
@@ -360,7 +560,7 @@ export async function executeAgentPipeline(
       continue
     }
 
-    const model = resolvePipelineModel(agent, state.models)
+    const model = resolvePipelineModel(agent, runtimeState.models)
     const progressBase: AgentPipelineProgressStep = {
       stepIndex: index,
       agentId: step.agentId,
@@ -376,8 +576,10 @@ export async function executeAgentPipeline(
 
     if (!model) {
       const completedAt = Date.now()
+      const recoveryActions = buildPipelineRecoveryActions(index, step.agentId)
       executionSteps.push({
         id: generateId('pipe-step'),
+        runId,
         stepIndex: index,
         agentId: step.agentId,
         ...(step.name?.trim() ? { name: step.name.trim() } : {}),
@@ -389,6 +591,7 @@ export async function executeAgentPipeline(
         durationMs: completedAt - stepStart,
         attempts: 1,
         error: 'No model available',
+        recoveryActions,
       })
       options.onStepUpdate?.({
         ...progressBase,
@@ -397,6 +600,7 @@ export async function executeAgentPipeline(
         durationMs: completedAt - stepStart,
         attempts: 1,
         error: 'No model available',
+        recoveryActions,
       })
       previousOutput = 'No model available'
       didFail = true
@@ -430,6 +634,7 @@ export async function executeAgentPipeline(
       let output = ''
       let lastError: string | undefined
       const shouldStream = requiresStreaming(tools as Record<string, unknown>, Boolean(options.onStepUpdate))
+      const stepTimeoutMs = step.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS
 
       while (attempts < maxAttempts) {
         attempts += 1
@@ -441,6 +646,7 @@ export async function executeAgentPipeline(
           error: attempts > 1 ? lastError : undefined,
         })
 
+        const stepAbort = createStepAbortSignal(options.abortSignal, stepTimeoutMs)
         try {
           if (shouldStream) {
             let streamError: string | undefined
@@ -450,8 +656,9 @@ export async function executeAgentPipeline(
               maxSteps: Math.max(2, Math.min(agent.maxTurns ?? 5, 30)),
               apiKey: model.apiKey,
               baseUrl: model.baseUrl,
-              ...(options.abortSignal ? { abortSignal: options.abortSignal } : {}),
+              abortSignal: stepAbort.signal,
             })) {
+              if (stepAbort.timedOut()) throw new Error(`Step timed out after ${stepTimeoutMs}ms`)
               if (event.type === 'text-delta') {
                 output += event.text
                 options.onStepUpdate?.({
@@ -460,7 +667,7 @@ export async function executeAgentPipeline(
                   attempts,
                 })
               } else if (event.type === 'error') {
-                streamError = event.error
+                streamError = sanitizePipelineError(event.error)
               }
             }
 
@@ -474,7 +681,7 @@ export async function executeAgentPipeline(
           lastError = undefined
           break
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
+          const message = sanitizePipelineError(error)
           lastError = message
           if (options.abortSignal?.aborted || attempts >= maxAttempts) {
             throw error
@@ -485,38 +692,46 @@ export async function executeAgentPipeline(
             attempts,
             error: message,
           })
+        } finally {
+          stepAbort.cleanup()
         }
       }
 
       const completedAt = Date.now()
+      const outputResult = clampStepOutput(step, output)
       executionSteps.push({
         id: generateId('pipe-step'),
+        runId,
         stepIndex: index,
         agentId: step.agentId,
         ...(step.name?.trim() ? { name: step.name.trim() } : {}),
         task: step.task,
         input,
-        output,
+        output: outputResult.output,
         status: 'success',
         startedAt: stepStart,
         completedAt,
         durationMs: completedAt - stepStart,
         attempts,
+        outputType: step.outputType ?? 'text',
+        warnings: outputResult.warnings,
       })
       options.onStepUpdate?.({
         ...progressBase,
-        output,
+        output: outputResult.output,
         status: 'success',
         completedAt,
         durationMs: completedAt - stepStart,
         attempts,
       })
-      previousOutput = output
+      previousOutput = outputResult.output
     } catch (error) {
       const completedAt = Date.now()
-      const message = error instanceof Error ? error.message : String(error)
+      const message = sanitizePipelineError(error)
+      const recoveryActions = buildPipelineRecoveryActions(index, step.agentId, model.id)
       executionSteps.push({
         id: generateId('pipe-step'),
+        runId,
         stepIndex: index,
         agentId: step.agentId,
         ...(step.name?.trim() ? { name: step.name.trim() } : {}),
@@ -528,6 +743,7 @@ export async function executeAgentPipeline(
         durationMs: completedAt - stepStart,
         attempts: Math.max(1, attempts),
         error: message,
+        recoveryActions,
       })
       options.onStepUpdate?.({
         ...progressBase,
@@ -536,6 +752,7 @@ export async function executeAgentPipeline(
         durationMs: completedAt - stepStart,
         attempts: Math.max(1, attempts),
         error: message,
+        recoveryActions,
       })
       previousOutput = message
       didFail = true
@@ -550,6 +767,7 @@ export async function executeAgentPipeline(
   const completedAt = Date.now()
   const execution: AgentPipelineExecution = {
     id: generateId('pipe-exec'),
+    runId,
     pipelineId: pipeline.id,
     pipelineName: pipeline.name,
     trigger: options.trigger ?? 'manual',
@@ -560,10 +778,20 @@ export async function executeAgentPipeline(
     steps: executionSteps,
     finalOutput: previousOutput || undefined,
     ...(executionError ? { error: executionError } : {}),
+    runtime: {
+      runId,
+      agentIds: pipeline.steps.map((step) => step.agentId),
+      modelIds: useAppStore.getState().models.map((model) => model.id),
+      startedAt: executionStart,
+      trigger: options.trigger ?? 'manual',
+      validationWarnings: validation.warnings.map((issue) => issue.message),
+    },
+    ...(didFail ? { recoveryActions: [{ id: 'edit-pipeline', label: 'Edit pipeline' }] } : {}),
   }
 
-  if (options.persistExecution !== false && state.workspacePath) {
-    await appendPipelineExecutionToDisk(state.workspacePath, execution)
+  const { workspacePath } = useAppStore.getState()
+  if (options.persistExecution !== false && workspacePath) {
+    await appendPipelineExecutionToDisk(workspacePath, execution)
   }
 
   if (options.persistLastRun !== false) {
@@ -577,7 +805,6 @@ export async function executePipelineById(
   pipelineId: string,
   options: ExecuteAgentPipelineOptions = {},
 ): Promise<AgentPipelineExecution> {
-  const state = useAppStore.getState()
   const pipelines = await loadAvailablePipelines()
   const pipeline = pipelines.find((item) => item.id === pipelineId)
 
@@ -595,8 +822,9 @@ export async function executePipelineById(
       error: 'Pipeline not found',
     }
 
-    if (options.persistExecution !== false && state.workspacePath) {
-      await appendPipelineExecutionToDisk(state.workspacePath, failedExecution)
+    const { workspacePath } = useAppStore.getState()
+    if (options.persistExecution !== false && workspacePath) {
+      await appendPipelineExecutionToDisk(workspacePath, failedExecution)
     }
 
     return failedExecution
@@ -609,12 +837,17 @@ export async function executePipelineByReference(
   reference: string,
   options: ExecuteAgentPipelineOptions = {},
 ): Promise<AgentPipelineExecution> {
-  const state = useAppStore.getState()
-  const pipeline = await findPipelineByReference(reference)
+  const resolution = await resolvePipelineByReference(reference)
 
-  if (!pipeline) {
+  if (resolution.status !== 'found') {
+    const runId = generateId('run')
+    const isAmbiguous = resolution.status === 'ambiguous'
+    const error = isAmbiguous
+      ? `Pipeline reference is ambiguous: ${resolution.matches.map((pipeline) => pipeline.name).join(', ')}`
+      : 'Pipeline not found'
     const failedExecution: AgentPipelineExecution = {
       id: generateId('pipe-exec'),
+      runId,
       pipelineId: reference,
       pipelineName: reference.trim() || 'Unknown Pipeline',
       trigger: options.trigger ?? 'manual',
@@ -623,15 +856,17 @@ export async function executePipelineByReference(
       completedAt: Date.now(),
       status: 'error',
       steps: [],
-      error: 'Pipeline not found',
+      error,
+      recoveryActions: [{ id: 'edit-pipeline', label: isAmbiguous ? 'Choose an exact pipeline name' : 'Open pipeline list' }],
     }
 
-    if (options.persistExecution !== false && state.workspacePath) {
-      await appendPipelineExecutionToDisk(state.workspacePath, failedExecution)
+    const { workspacePath } = useAppStore.getState()
+    if (options.persistExecution !== false && workspacePath) {
+      await appendPipelineExecutionToDisk(workspacePath, failedExecution)
     }
 
     return failedExecution
   }
 
-  return executeAgentPipeline(pipeline, options)
+  return executeAgentPipeline(resolution.pipeline, options)
 }

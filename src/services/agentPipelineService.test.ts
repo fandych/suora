@@ -169,6 +169,91 @@ describe('agentPipelineService', () => {
     expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
   })
 
+  it('fails blank enabled steps without calling the model', async () => {
+    const invalidPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: '   ' },
+        { agentId: 'agent-2', task: 'Review the report' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: 'review-ready' }
+    })
+
+    const execution = await executeAgentPipeline(invalidPipeline)
+
+    expect(execution.status).toBe('error')
+    expect(execution.steps[0].status).toBe('error')
+    expect(execution.steps[0].error).toBe('Step 1 has an empty task.')
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+  })
+
+  it('returns dry-run validation failures before calling the model', async () => {
+    const invalidPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [{ agentId: 'missing-agent', task: 'Draft the report' }],
+    }
+
+    const execution = await executeAgentPipeline(invalidPipeline)
+
+    expect(execution.status).toBe('error')
+    expect(execution.error).toContain('Step 1 references a missing agent')
+    expect(execution.runId).toBeTruthy()
+    expect(execution.runtime?.runId).toBe(execution.runId)
+    expect(execution.steps[0].recoveryActions?.[0].label).toBe('Choose another agent')
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+  })
+
+  it('truncates step output when a max output budget is configured', async () => {
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: 'abcdef' }
+    })
+
+    const execution = await executeAgentPipeline({
+      ...savedPipeline,
+      steps: [{ agentId: 'agent-1', task: 'Draft the report', maxOutputChars: 3 }],
+    })
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].output).toContain('[Pipeline step output truncated: 3 characters omitted]')
+    expect(execution.steps[0].warnings?.[0]).toContain('Step output truncated')
+    expect(execution.steps[0].outputType).toBe('text')
+  })
+
+  it('marks every remaining step cancelled when aborted before execution', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    const execution = await executeAgentPipeline(savedPipeline, { abortSignal: controller.signal })
+
+    expect(execution.status).toBe('error')
+    expect(execution.error).toBe('Cancelled by user')
+    expect(execution.steps).toHaveLength(2)
+    expect(execution.steps.every((step) => step.status === 'error' && step.error === 'Cancelled by user')).toBe(true)
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+  })
+
+  it('redacts secrets and local paths from recorded pipeline errors', async () => {
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield {
+        type: 'error',
+        error: 'failed with sk-abcdefghijklmnopqrstuvwxyz123456 at C:\\Users\\Fandy\\secret\\trace.log',
+      }
+    })
+
+    const execution = await executeAgentPipeline({
+      ...savedPipeline,
+      steps: [{ agentId: 'agent-1', task: 'Draft the report', continueOnError: false }],
+    })
+
+    expect(execution.status).toBe('error')
+    expect(execution.steps[0].error).toContain('sk-***REDACTED***')
+    expect(execution.steps[0].error).toContain('<...>/trace.log')
+    expect(execution.steps[0].error).not.toContain('Fandy')
+  })
+
   it('creates an error execution when a pipeline cannot be resolved by id', async () => {
     vi.mocked(loadPipelinesFromDisk).mockResolvedValueOnce([])
     useAppStore.setState({ agentPipelines: [] })
@@ -227,5 +312,21 @@ describe('agentPipelineService', () => {
     expect(execution.trigger).toBe('chat')
     expect(execution.pipelineId).toBe('pipeline-1')
     expect(execution.pipelineName).toBe('Morning Run')
+  })
+
+  it('reports ambiguous partial pipeline references without executing a model call', async () => {
+    useAppStore.setState({
+      agentPipelines: [
+        savedPipeline,
+        { ...savedPipeline, id: 'pipeline-2', name: 'Morning Report' },
+      ],
+    })
+
+    const execution = await executePipelineByReference('Morning', { trigger: 'chat' })
+
+    expect(execution.status).toBe('error')
+    expect(execution.error).toContain('Pipeline reference is ambiguous')
+    expect(execution.recoveryActions?.[0].label).toBe('Choose an exact pipeline name')
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
   })
 })

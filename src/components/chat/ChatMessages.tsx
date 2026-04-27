@@ -89,12 +89,13 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
   const [open, setOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const cfg = STATUS_CONFIG[call.status]
-  const resultType = call.output ? detectResultType(call.output) : null
+  const displayOutput = call.outputEnvelope?.dataPreview ?? call.output
+  const resultType = displayOutput ? detectResultType(displayOutput) : null
   const typeBadge = resultType ? RESULT_TYPE_BADGE[resultType] : null
-  const errorInfo = call.status === 'error' && call.output ? categorizeError(call.output) : null
-  const truncatedOutput = call.output && call.output.length > MAX_RESULT_DISPLAY
-    ? call.output.slice(0, MAX_RESULT_DISPLAY) + `\n\n... [${(call.output.length - MAX_RESULT_DISPLAY).toLocaleString()} characters truncated]`
-    : call.output
+  const errorInfo = call.status === 'error' && displayOutput ? categorizeError(displayOutput) : null
+  const truncatedOutput = displayOutput && displayOutput.length > MAX_RESULT_DISPLAY
+    ? displayOutput.slice(0, MAX_RESULT_DISPLAY) + `\n\n... [${(displayOutput.length - MAX_RESULT_DISPLAY).toLocaleString()} characters truncated]`
+    : displayOutput
 
   useEffect(() => {
     if (call.status !== 'running') {
@@ -108,6 +109,7 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
   }, [call.status, call.startedAt, call.completedAt])
 
   const collapsedSummary = (() => {
+    if (call.outputEnvelope?.summary) return call.outputEnvelope.summary
     if (call.output && call.status === 'completed') return resultPreview(call.output)
     if (!call.output && call.status === 'completed') return 'Completed with no explicit output'
     if (call.status === 'pending') return 'Waiting for execution'
@@ -164,8 +166,9 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
               <div className="mb-2 flex items-center gap-2">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">Result</div>
                 {typeBadge && <span className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] ${typeBadge.cls}`}>{typeBadge.label}</span>}
-                {call.output && call.output.length > MAX_RESULT_DISPLAY && (
-                  <span className="text-[10px] text-text-muted/45">{(call.output.length / 1024).toFixed(1)} KB</span>
+                {call.outputEnvelope?.storedExternally && <span className="rounded-full border border-amber-500/18 bg-amber-500/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-amber-400">REF</span>}
+                {call.outputEnvelope?.outputChars !== undefined && (
+                  <span className="text-[10px] text-text-muted/45">{call.outputEnvelope.outputChars.toLocaleString()} chars</span>
                 )}
                 {call.output && (
                   <div className="ml-auto flex items-center gap-1.5">
@@ -208,6 +211,16 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
                   </div>
                 )}
               </div>
+              {call.outputEnvelope?.dataRef && (
+                <div className="mb-2 rounded-2xl border border-border-subtle/45 bg-surface-2/60 px-3 py-2 text-[11px] text-text-muted">
+                  Full output: {call.outputEnvelope.dataRef}
+                </div>
+              )}
+              {call.outputEnvelope?.warnings?.length ? (
+                <div className="mb-2 rounded-2xl border border-warning/20 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+                  {call.outputEnvelope.warnings.join(' ')}
+                </div>
+              ) : null}
               <pre className={`max-h-56 overflow-auto whitespace-pre-wrap rounded-2xl border border-border-subtle/45 bg-surface-0/68 px-3 py-2.5 text-[11px] font-[JetBrains_Mono,monospace] ${call.status === 'error' ? 'text-danger' : 'text-success/82'}`}>{truncatedOutput}</pre>
             </div>
           )}
@@ -591,6 +604,14 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
               {!isUser && !message.isStreaming && message.tokenUsage && (
                 <div className="mt-4 border-t border-border-subtle/45 pt-3">
                   <span className="text-[10px] font-medium text-text-muted/42">{t('chat.tokens', 'Tokens')}: {message.tokenUsage.promptTokens} in / {message.tokenUsage.completionTokens} out / {message.tokenUsage.totalTokens} total</span>
+                </div>
+              )}
+              {!isUser && !message.isStreaming && message.runtime && (
+                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border-subtle/45 pt-3 text-[10px] text-text-muted/50">
+                  <span className="rounded-full bg-surface-2/70 px-2 py-0.5">run {message.runtime.runId}</span>
+                  {message.runtime.agentName && <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{message.runtime.agentName}</span>}
+                  {message.runtime.toolNames?.length ? <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{message.runtime.toolNames.length} tools</span> : null}
+                  {message.contextSummary && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-300">context pruned</span>}
                 </div>
               )}
             </div>

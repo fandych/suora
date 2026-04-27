@@ -8,6 +8,7 @@ import { useI18n } from '@/hooks/useI18n'
 import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { executeAgentPipeline, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
+import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
 import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
 import { confirm } from '@/services/confirmDialog'
@@ -108,6 +109,7 @@ export function PipelineLayout() {
   const {
     workspacePath,
     agents,
+    models,
     agentPipeline: pipeline,
     setAgentPipeline,
     clearAgentPipeline,
@@ -291,6 +293,11 @@ export function PipelineLayout() {
     [pipelineHistory],
   )
 
+  const pipelineValidation = useMemo(
+    () => validateAgentPipeline({ name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline }, agents, models),
+    [agentPipelineName, pipeline, agents, models],
+  )
+
   const successRate = pipelineHistory.length > 0
     ? Math.round((successfulHistoryRuns / pipelineHistory.length) * 100)
     : 0
@@ -375,6 +382,17 @@ export function PipelineLayout() {
 
   const savePipeline = async () => {
     if (!workspacePath || pipeline.length === 0) return
+    if (!pipelineValidation.valid) {
+      addNotification({
+        id: generateId('notif'),
+        type: 'warning',
+        title: t('agents.pipelineDryRunFailedTitle', 'Pipeline validation failed'),
+        message: pipelineValidation.errors[0]?.message ?? t('agents.pipelineDryRunFailedBody', 'Fix validation errors before saving.'),
+        timestamp: Date.now(),
+        read: false,
+      })
+      return
+    }
     const trimmedName = agentPipelineName.trim()
     if (!trimmedName) {
       addNotification({
@@ -459,7 +477,7 @@ export function PipelineLayout() {
   }
 
   const runPipeline = async () => {
-    if (enabledPipelineSteps.length === 0 || invalidEnabledSteps > 0 || running) return
+    if (enabledPipelineSteps.length === 0 || invalidEnabledSteps > 0 || !pipelineValidation.valid || running) return
     const previewSteps = buildPreviewSteps(pipeline, agentNameMap)
     const controller = new AbortController()
     runAbortControllerRef.current = controller
@@ -750,7 +768,7 @@ export function PipelineLayout() {
             <button
               type="button"
               onClick={runPipeline}
-              disabled={enabledPipelineSteps.length === 0 || invalidEnabledSteps > 0 || running}
+              disabled={enabledPipelineSteps.length === 0 || invalidEnabledSteps > 0 || !pipelineValidation.valid || running}
               className="rounded-xl bg-accent px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-40"
             >
               {running ? t('agents.runningPipeline', 'Running...') : t('agents.runPipeline', '▶ Run Pipeline')}
@@ -811,6 +829,19 @@ export function PipelineLayout() {
               })}
             </div>
           </div>
+
+          {pipelineValidation.issues.length > 0 && (
+            <div className="mt-3 rounded-3xl border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-xs text-amber-200">
+              <div className="font-semibold">{t('agents.pipelineDryRun', 'Dry-run validation')}</div>
+              <div className="mt-2 space-y-1">
+                {pipelineValidation.issues.slice(0, 5).map((issue) => (
+                  <div key={`${issue.code}-${issue.stepIndex ?? 'pipeline'}-${issue.message}`}>
+                    {issue.severity.toUpperCase()}: {issue.message}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.9fr)]">
@@ -940,6 +971,42 @@ export function PipelineLayout() {
                               </label>
                             </div>
 
+                            <div className="grid gap-2 sm:grid-cols-3">
+                              <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                <span>{t('agents.pipelineStepTimeout', 'Timeout ms')}</span>
+                                <input
+                                  type="number"
+                                  min={1000}
+                                  value={step.timeoutMs ?? ''}
+                                  onChange={(event) => updateStep(idx, { timeoutMs: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
+                                  placeholder="300000"
+                                  className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                />
+                              </label>
+                              <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                <span>{t('agents.pipelineMaxInput', 'Max input')}</span>
+                                <input
+                                  type="number"
+                                  min={1000}
+                                  value={step.maxInputChars ?? ''}
+                                  onChange={(event) => updateStep(idx, { maxInputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
+                                  placeholder="80000"
+                                  className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                />
+                              </label>
+                              <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                <span>{t('agents.pipelineMaxOutput', 'Max output')}</span>
+                                <input
+                                  type="number"
+                                  min={1000}
+                                  value={step.maxOutputChars ?? ''}
+                                  onChange={(event) => updateStep(idx, { maxOutputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
+                                  placeholder="32000"
+                                  className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                />
+                              </label>
+                            </div>
+
                             {idx > 0 && (
                               <div className="rounded-2xl border border-dashed border-border-subtle bg-surface-2/45 px-3 py-3">
                                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -1033,6 +1100,15 @@ export function PipelineLayout() {
                             <div className={`mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm ${step.error && step.status !== 'skipped' ? 'text-red-300' : 'text-text-secondary'}`}>
                               {step.error || step.output || (step.status === 'running' ? t('agents.pipelineStreaming', 'Receiving output...') : t('agents.pipelineNoOutputYet', 'No output yet.'))}
                             </div>
+                            {step.recoveryActions?.length ? (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {step.recoveryActions.map((action) => (
+                                  <span key={`${action.id}-${action.stepIndex ?? step.stepIndex}`} className="rounded-full border border-warning/20 bg-warning/10 px-2.5 py-1 text-[10px] font-medium text-warning">
+                                    {action.label}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       </div>

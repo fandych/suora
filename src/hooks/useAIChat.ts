@@ -7,56 +7,22 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { streamResponseWithTools, initializeProvider, validateModelConfig } from '@/services/aiService'
-import { executePipelineByReference, listSavedPipelines, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
+import { executeAgentPipeline, listSavedPipelines, resolvePipelineByReference, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
+import { loadPipelineExecutionsFromDisk } from '@/services/pipelineFiles'
 import { detectNaturalPipelineChatCommand, looksLikePipelineChatCommand, parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt } from '@/services/tools'
 import { logger } from '@/services/logger'
+import { sanitizeToolError } from '@/services/sanitization'
+import { toModelMessages as buildModelMessages, buildContextSummary } from '@/services/chatContext'
+import { createToolOutputEnvelope } from '@/services/runtimeOutput'
+import { validateAgentPipeline } from '@/services/pipelineValidation'
+import { selectBestAgentForTask } from '@/services/agentSelection'
+import { confirm } from '@/services/confirmDialog'
 import { useAppStore } from '@/store/appStore'
 import { generateId } from '@/utils/helpers'
-import type {
-  ModelMessage,
-  UserModelMessage,
-  AssistantModelMessage,
-  ToolModelMessage,
-  TextPart,
-  ToolCallPart,
-  ToolResultPart,
-  ImagePart,
-} from 'ai'
 import type { Message, ToolCall, MessageAttachment, ContentPart } from '@/types'
 
 const STREAM_FLUSH_INTERVAL = 50 // ms between store updates during text streaming
-
-// ─── Error / input sanitization ────────────────────────────────────
-// Tool errors can contain absolute file paths, API keys leaked via stack
-// traces, or very long stack dumps. Before persisting them into the session
-// (where they will also be re-sent to the model on the next turn), we redact
-// the most common secret shapes and clamp the length.
-
-const MAX_TOOL_ERROR_LENGTH = 600
-
-function sanitizeToolError(raw: unknown): string {
-  const text = typeof raw === 'string' ? raw : raw instanceof Error ? raw.message : String(raw ?? '')
-  if (!text) return ''
-
-  let cleaned = text
-    // Redact obvious API key patterns.
-    .replace(/sk-[A-Za-z0-9_-]{20,}/g, 'sk-***REDACTED***')
-    .replace(/\bxai-[A-Za-z0-9_-]{20,}/g, 'xai-***REDACTED***')
-    .replace(/\b(Bearer\s+)[A-Za-z0-9._-]{20,}/gi, '$1***REDACTED***')
-    .replace(/\b(api[_-]?key["']?\s*[:=]\s*["']?)[A-Za-z0-9_\-./=+]{12,}/gi, '$1***REDACTED***')
-    .replace(/\b(authorization["']?\s*[:=]\s*["']?)[A-Za-z0-9._\-=+]{12,}/gi, '$1***REDACTED***')
-    // Strip Windows + POSIX absolute paths, keeping only the file basename.
-    .replace(/([A-Za-z]:\\[^\s'"]+|\/(?:home|Users|var|etc|root|tmp|opt)\/[^\s'"]+)/g, (match) => {
-      const parts = match.split(/[\\/]/)
-      return `<…>/${parts[parts.length - 1] || match}`
-    })
-
-  if (cleaned.length > MAX_TOOL_ERROR_LENGTH) {
-    cleaned = cleaned.slice(0, MAX_TOOL_ERROR_LENGTH) + ` …[+${cleaned.length - MAX_TOOL_ERROR_LENGTH} chars]`
-  }
-  return cleaned
-}
 
 type PipelineChatLanguage = 'en' | 'zh'
 
@@ -103,6 +69,53 @@ function formatPipelineCatalogMessage(
         '',
         'Run one with /pipeline <name-or-id>, or say "run pipeline Morning Run".',
       ].join('\n')
+}
+
+function formatPipelineHelpMessage(language: PipelineChatLanguage): string {
+  return language === 'zh'
+    ? [
+        'Pipeline 命令',
+        '',
+        '- /pipeline list：列出已保存流水线',
+        '- /pipeline run <名称或ID> key=value：预览并运行流水线',
+        '- /pipeline status：查看当前或最近流水线状态',
+        '- /pipeline history <名称或ID>：查看最近执行记录',
+        '- /pipeline cancel：取消正在运行的流水线',
+      ].join('\n')
+    : [
+        'Pipeline commands',
+        '',
+        '- /pipeline list: list saved pipelines',
+        '- /pipeline run <name-or-id> key=value: preview and run a pipeline',
+        '- /pipeline status: show the current or latest pipeline status',
+        '- /pipeline history <name-or-id>: show recent execution records',
+        '- /pipeline cancel: cancel the running pipeline',
+      ].join('\n')
+}
+
+function formatPipelineHistoryMessage(
+  executions: Array<{ pipelineName: string; status: string; startedAt: number; completedAt: number; error?: string; finalOutput?: string }>,
+  language: PipelineChatLanguage,
+): string {
+  if (executions.length === 0) return language === 'zh' ? '还没有流水线执行记录。' : 'No pipeline execution history yet.'
+  const title = language === 'zh' ? '最近流水线执行记录' : 'Recent pipeline runs'
+  return [
+    title,
+    '',
+    ...executions.slice(0, 8).map((execution, index) => {
+      const duration = execution.completedAt - execution.startedAt
+      const detail = execution.error || execution.finalOutput || ''
+      return `${index + 1}. ${execution.pipelineName} · ${execution.status} · ${duration}ms${detail ? `\n   ${trimPipelinePreview(detail, 180)}` : ''}`
+    }),
+  ].join('\n')
+}
+
+function hashText(value: string): string {
+  let hash = 0
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
+  }
+  return Math.abs(hash).toString(16)
 }
 
 function formatPipelineExecutionMessage(
@@ -184,91 +197,6 @@ function updateSessionMessage(sessionId: string, messageId: string, updates: Par
   })
 }
 
-// ─── Convert app Message[] to AI SDK v6 ModelMessage[] ───────────
-
-const MAX_TEXT_ATTACHMENT_CHARS = 24_000
-const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024
-
-function clampTextAttachment(name: string, data: string): string {
-  if (data.length <= MAX_TEXT_ATTACHMENT_CHARS) return `[File: ${name}]\n${data}`
-  return `[File: ${name}]\n${data.slice(0, MAX_TEXT_ATTACHMENT_CHARS)}\n\n[Attachment truncated: ${data.length - MAX_TEXT_ATTACHMENT_CHARS} characters omitted]`
-}
-
-function toModelMessages(messages: Message[]): ModelMessage[] {
-  const result: ModelMessage[] = []
-
-  for (const m of messages) {
-    if (m.role === 'user') {
-      if (m.attachments?.length) {
-        const parts: Array<TextPart | ImagePart> = []
-        if (m.content) parts.push({ type: 'text', text: m.content })
-        for (const att of m.attachments) {
-          if (att.type === 'image') {
-            if (att.size > MAX_IMAGE_ATTACHMENT_BYTES) {
-              parts.push({ type: 'text', text: `[Image attachment skipped: ${att.name} exceeds 5MB]` })
-              continue
-            }
-            parts.push({ type: 'image', image: att.data, mediaType: att.mimeType })
-          } else if (att.type === 'file') {
-            parts.push({ type: 'text', text: clampTextAttachment(att.name, att.data) })
-          } else if (att.type === 'audio') {
-            const duration = att.duration ? ` (${att.duration}s)` : ''
-            parts.push({ type: 'text', text: `[Audio attachment: ${att.name}${duration}]` })
-          }
-        }
-        result.push({ role: 'user', content: parts } satisfies UserModelMessage)
-      } else {
-        result.push({ role: 'user', content: m.content } satisfies UserModelMessage)
-      }
-    } else if (m.role === 'assistant') {
-      if (m.isError) continue
-
-      const completedToolCalls = (m.toolCalls ?? []).filter(
-        (t) => t.status === 'completed' && t.output != null
-      )
-
-      if (completedToolCalls.length > 0) {
-        // Assistant message with tool calls → multipart content
-        const parts: Array<TextPart | ToolCallPart> = []
-        if (m.content) parts.push({ type: 'text', text: m.content })
-        for (const tc of completedToolCalls) {
-          parts.push({
-            type: 'tool-call',
-            toolCallId: tc.id,
-            toolName: tc.toolName,
-            input: tc.input,
-          } satisfies ToolCallPart)
-        }
-        result.push({ role: 'assistant', content: parts } satisfies AssistantModelMessage)
-
-        // Followed by tool message with results
-        const toolResults: ToolResultPart[] = completedToolCalls.map((tc) => {
-          let output: ToolResultPart['output']
-          const tcOutput = tc.output || ''
-          try {
-            const parsed = JSON.parse(tcOutput)
-            output = { type: 'json', value: parsed }
-          } catch {
-            output = { type: 'text', value: tcOutput }
-          }
-          return {
-            type: 'tool-result',
-            toolCallId: tc.id,
-            toolName: tc.toolName,
-            output,
-          } satisfies ToolResultPart
-        })
-        result.push({ role: 'tool', content: toolResults } satisfies ToolModelMessage)
-      } else {
-        result.push({ role: 'assistant', content: m.content } satisfies AssistantModelMessage)
-      }
-    }
-    // Skip 'tool' role messages — they don't exist as standalone in our model
-  }
-
-  return result
-}
-
 // ─── Hook ─────────────────────────────────────────────────────────
 
 export function useAIChat() {
@@ -306,12 +234,21 @@ export function useAIChat() {
         ...lastMsg,
         toolCalls: updatedToolCalls,
         isStreaming: false,
+        cancellation: {
+          cancelledAt: Date.now(),
+          cancelReason: 'Cancelled by user',
+          partialContentLength: lastMsg.content.length,
+        },
       }],
     })
   }, [])
 
   const sendMessage = useCallback(async (userMessage: string, attachments?: MessageAttachment[]) => {
-    if (streamingRef.current) return
+    const earlyPipelineCommand = parseSlashPipelineChatCommand(userMessage)
+    if (streamingRef.current) {
+      if (earlyPipelineCommand?.type === 'cancel') cancelStream()
+      return
+    }
 
     const store = useAppStore.getState()
     const activeSession = store.sessions.find((s) => s.id === store.activeSessionId)
@@ -351,12 +288,15 @@ export function useAIChat() {
       setIsLoading(true)
       setError(null)
 
+      const abortController = new AbortController()
+      abortRef.current = abortController
+
       const assistantMsg: Message = {
         id: generateId('msg'),
         role: 'assistant',
-        content: pipelineCommand.type === 'list'
-          ? 'Loading saved pipelines...'
-          : `Starting pipeline ${pipelineCommand.reference}...`,
+        content: pipelineCommand.type === 'run'
+          ? `Preparing pipeline ${pipelineCommand.reference}...`
+          : 'Processing pipeline command...',
         timestamp: Date.now(),
         isStreaming: true,
       }
@@ -373,14 +313,114 @@ export function useAIChat() {
             content: formatPipelineCatalogMessage(pipelines, pipelineChatLanguage),
             isStreaming: false,
           })
+        } else if (pipelineCommand.type === 'help') {
+          updateSessionMessage(activeSession.id, assistantMsg.id, {
+            content: formatPipelineHelpMessage(pipelineChatLanguage),
+            isStreaming: false,
+          })
+        } else if (pipelineCommand.type === 'cancel') {
+          updateSessionMessage(activeSession.id, assistantMsg.id, {
+            content: pipelineChatLanguage === 'zh' ? '当前没有正在运行的流水线。' : 'No pipeline is currently running.',
+            isStreaming: false,
+          })
+        } else if (pipelineCommand.type === 'status') {
+          const executions = store.workspacePath ? await loadPipelineExecutionsFromDisk(store.workspacePath) : []
+          updateSessionMessage(activeSession.id, assistantMsg.id, {
+            content: formatPipelineHistoryMessage(executions.slice(0, 1), pipelineChatLanguage),
+            isStreaming: false,
+          })
+        } else if (pipelineCommand.type === 'history') {
+          let pipelineId: string | undefined
+          if (pipelineCommand.reference) {
+            const resolution = await resolvePipelineByReference(pipelineCommand.reference)
+            if (resolution.status === 'found') pipelineId = resolution.pipeline.id
+          }
+          const executions = store.workspacePath ? await loadPipelineExecutionsFromDisk(store.workspacePath, pipelineId) : []
+          updateSessionMessage(activeSession.id, assistantMsg.id, {
+            content: formatPipelineHistoryMessage(executions, pipelineChatLanguage),
+            isStreaming: false,
+          })
         } else {
+          const resolution = await resolvePipelineByReference(pipelineCommand.reference)
+          if (resolution.status !== 'found') {
+            const content = resolution.status === 'ambiguous'
+              ? (pipelineChatLanguage === 'zh'
+                ? `流水线名称不明确，请使用完整名称或 ID：${resolution.matches.map((pipeline) => pipeline.name).join('、')}`
+                : `Pipeline reference is ambiguous. Use the full name or ID: ${resolution.matches.map((pipeline) => pipeline.name).join(', ')}`)
+              : (pipelineChatLanguage === 'zh' ? '找不到这条流水线。使用 /pipeline list 查看可用项。' : 'Pipeline not found. Use /pipeline list to see available pipelines.')
+            updateSessionMessage(activeSession.id, assistantMsg.id, { content, isStreaming: false, isError: true })
+            return
+          }
+
+          const pipelineToRun = pipelineCommand.args
+            ? {
+                ...resolution.pipeline,
+                steps: resolution.pipeline.steps.map((step, index) => index === 0
+                  ? { ...step, task: `Pipeline arguments:\n${Object.entries(pipelineCommand.args ?? {}).map(([key, value]) => `- ${key}: ${value}`).join('\n')}\n\n${step.task}` }
+                  : step),
+              }
+            : resolution.pipeline
+          const validation = validateAgentPipeline(pipelineToRun, useAppStore.getState().agents, useAppStore.getState().models)
+          const highRiskAgents = pipelineToRun.steps
+            .map((step) => useAppStore.getState().agents.find((agent) => agent.id === step.agentId))
+            .filter((agent) => agent?.permissionMode === 'bypassPermissions')
+            .map((agent) => agent?.name)
+            .filter(Boolean)
+          const previewLines = pipelineChatLanguage === 'zh'
+            ? [
+                `流水线：${resolution.pipeline.name}`,
+                `步骤数：${pipelineToRun.steps.filter((step) => step.enabled !== false).length}/${pipelineToRun.steps.length}`,
+                `输入摘要：${trimPipelinePreview(userMessage, 280)}`,
+                `命名参数：${pipelineCommand.args ? Object.entries(pipelineCommand.args).map(([key, value]) => `${key}=${value}`).join(', ') : '无'}`,
+                `高风险 Agent：${highRiskAgents.length ? highRiskAgents.join('、') : '无'}`,
+                validation.issues.length ? `预检：${validation.issues.map((issue) => issue.message).join('；')}` : '预检：通过',
+              ]
+            : [
+                `Pipeline: ${resolution.pipeline.name}`,
+                `Steps: ${pipelineToRun.steps.filter((step) => step.enabled !== false).length}/${pipelineToRun.steps.length}`,
+                `Input: ${trimPipelinePreview(userMessage, 280)}`,
+                `Named args: ${pipelineCommand.args ? Object.entries(pipelineCommand.args).map(([key, value]) => `${key}=${value}`).join(', ') : 'none'}`,
+                `High-risk agents: ${highRiskAgents.length ? highRiskAgents.join(', ') : 'none'}`,
+                validation.issues.length ? `Dry-run: ${validation.issues.map((issue) => issue.message).join('; ')}` : 'Dry-run: passed',
+              ]
+
+          if (!validation.valid) {
+            updateSessionMessage(activeSession.id, assistantMsg.id, {
+              content: previewLines.join('\n'),
+              isStreaming: false,
+              isError: true,
+            })
+            return
+          }
+
+          updateSessionMessage(activeSession.id, assistantMsg.id, {
+            content: previewLines.join('\n'),
+            isStreaming: true,
+          })
+
+          const confirmed = await confirm({
+            title: pipelineChatLanguage === 'zh' ? '运行这条流水线？' : 'Run this pipeline?',
+            body: previewLines.join('\n'),
+            confirmText: pipelineChatLanguage === 'zh' ? '运行' : 'Run',
+            cancelText: pipelineChatLanguage === 'zh' ? '取消' : 'Cancel',
+            danger: highRiskAgents.length > 0,
+          })
+          if (!confirmed) {
+            updateSessionMessage(activeSession.id, assistantMsg.id, {
+              content: pipelineChatLanguage === 'zh' ? '已取消运行流水线。' : 'Pipeline run cancelled before execution.',
+              isStreaming: false,
+            })
+            return
+          }
+
           const liveSteps: AgentPipelineProgressStep[] = []
           let lastProgressFlush = 0
 
-          const execution = await executePipelineByReference(pipelineCommand.reference, {
+          const execution = await executeAgentPipeline(pipelineToRun, {
             trigger: 'chat',
             persistExecution: true,
             persistLastRun: true,
+            abortSignal: abortController.signal,
             onStepUpdate: (step) => {
               liveSteps[step.stepIndex] = {
                 ...liveSteps[step.stepIndex],
@@ -392,7 +432,7 @@ export function useAIChat() {
                 lastProgressFlush = now
                 updateSessionMessage(activeSession.id, assistantMsg.id, {
                   content: formatPipelineExecutionMessage(
-                    pipelineCommand.reference,
+                    resolution.pipeline.name,
                     liveSteps.filter(Boolean),
                     'running',
                     pipelineChatLanguage,
@@ -462,9 +502,12 @@ export function useAIChat() {
 
     const { models, agents, skills, selectedModel, selectedAgent } = store
     const defaultAgent = agents.find((a) => a.id === 'default-assistant')
+    const recommendedAgent = !activeSession.agentId && !selectedAgent
+      ? selectBestAgentForTask(userMessage, agents, skills, store.agentPerformance)
+      : null
     const sessionAgent = activeSession.agentId
       ? agents.find((a) => a.id === activeSession.agentId)
-      : (selectedAgent ?? defaultAgent)
+      : (recommendedAgent && recommendedAgent.score >= 20 ? recommendedAgent.agent : (selectedAgent ?? defaultAgent))
     const model = activeSession.modelId
       ? models.find((m) => m.id === activeSession.modelId)
       : sessionAgent?.modelId
@@ -506,6 +549,7 @@ export function useAIChat() {
       return
     }
 
+    const runId = generateId('run')
     const assistantMsg: Message = {
       id: generateId('msg'),
       role: 'assistant',
@@ -513,6 +557,16 @@ export function useAIChat() {
       timestamp: Date.now(),
       modelUsed: model.name,
       isStreaming: true,
+      agentId: sessionAgent?.id,
+      runtime: {
+        runId,
+        sessionId: activeSession.id,
+        agentId: sessionAgent?.id,
+        agentName: sessionAgent?.name,
+        modelId: model.id,
+        modelName: model.name,
+        startedAt: Date.now(),
+      },
     }
 
     store.updateSession(activeSession.id, {
@@ -528,7 +582,9 @@ export function useAIChat() {
       const modelIdentifier = `${model.provider}:${model.modelId}`
 
       // Convert app messages to AI SDK v6 ModelMessage[]
-      const modelMessages = toModelMessages([...prevMessages, userMsg])
+      const contextMessages = [...prevMessages, userMsg]
+      const modelMessages = buildModelMessages(contextMessages)
+      const contextSummary = buildContextSummary(contextMessages)
 
       logger.info(`[Chat:Start] prevMessages=${prevMessages.length} → modelMessages=${modelMessages.length}`)
 
@@ -553,6 +609,19 @@ export function useAIChat() {
         toolNames: Object.keys(filteredTools),
         permissionMode: sessionAgent?.permissionMode,
       })
+      const runtimeSnapshot = {
+        ...assistantMsg.runtime,
+        runId,
+        sessionId: activeSession.id,
+        messageId: assistantMsg.id,
+        agentId: sessionAgent?.id,
+        agentName: sessionAgent?.name,
+        modelId: model.id,
+        modelName: model.name,
+        toolNames: Object.keys(filteredTools),
+        systemPromptHash: hashText(systemPrompt ?? ''),
+        startedAt: assistantMsg.runtime?.startedAt ?? Date.now(),
+      }
 
       let fullContent = ''
       let currentToolCalls: ToolCall[] = []
@@ -569,6 +638,8 @@ export function useAIChat() {
             toolCalls: currentToolCalls.length ? currentToolCalls : undefined,
             contentParts: contentParts.length ? contentParts : undefined,
             tokenUsage,
+            runtime: runtimeSnapshot,
+            contextSummary,
             isError: hasError || undefined,
             isStreaming: !isFinal,
           }],
@@ -611,7 +682,7 @@ export function useAIChat() {
               }
               // Throttle UI updates for text-delta to avoid state-overwrite races
               const now = Date.now()
-              if (now - lastFlush > 100) {
+              if (now - lastFlush > STREAM_FLUSH_INTERVAL) {
                 flushToStore(false)
                 lastFlush = now
               }
@@ -654,9 +725,19 @@ export function useAIChat() {
             const persistedOutput = outputLen > PERSISTED_TOOL_OUTPUT_MAX
               ? event.output.slice(0, PERSISTED_TOOL_OUTPUT_MAX) + `\n\n... [${(outputLen - PERSISTED_TOOL_OUTPUT_MAX).toLocaleString()} characters truncated — total ${outputLen.toLocaleString()} chars]`
               : event.output
+            const completedAt = Date.now()
+            const durationMs = matchingCall?.startedAt ? completedAt - matchingCall.startedAt : undefined
+            const envelope = await createToolOutputEnvelope({
+              status: 'completed',
+              output: event.output,
+              durationMs,
+              workspacePath: store.workspacePath,
+              runId,
+              toolCallId: event.toolCallId,
+            })
             currentToolCalls = currentToolCalls.map((t) =>
               t.id === event.toolCallId
-                ? { ...t, status: 'completed', output: persistedOutput, completedAt: Date.now() }
+                ? { ...t, status: 'completed', output: persistedOutput, outputEnvelope: envelope, completedAt, durationMs }
                 : t
             )
             flushToStore(false)
@@ -677,7 +758,18 @@ export function useAIChat() {
             })
             currentToolCalls = currentToolCalls.map((t) =>
               t.id === event.toolCallId
-                ? { ...t, status: 'error', output: sanitizedError, completedAt: Date.now() }
+                ? {
+                    ...t,
+                    status: 'error',
+                    output: sanitizedError,
+                    outputEnvelope: {
+                      status: 'error',
+                      summary: sanitizedError,
+                      durationMs: t.startedAt ? Date.now() - t.startedAt : undefined,
+                      outputChars: sanitizedError.length,
+                    },
+                    completedAt: Date.now(),
+                  }
                 : t
             )
             flushToStore(false)
@@ -767,7 +859,19 @@ export function useAIChat() {
           if (latest) {
             const base = latest.messages.slice(0, -1)
             useAppStore.getState().updateSession(activeSession.id, {
-              messages: [...base, { ...assistantMsg, content: errorContent, isStreaming: false, isError: true }],
+              messages: [...base, {
+                ...assistantMsg,
+                content: errorContent,
+                isStreaming: false,
+                isError: true,
+                errorInfo: {
+                  category: 'provider',
+                  retryable: true,
+                  hint: 'Retry the message, switch model, or check provider settings.',
+                  rawSanitized: sanitizeToolError(errorContent),
+                  source: model.providerType,
+                },
+              }],
             })
           }
         } catch (cleanupErr) {
@@ -799,7 +903,7 @@ export function useAIChat() {
         useAppStore.getState().recordAgentPerformance(sessionAgent.id, elapsed, tokenUsage?.totalTokens ?? 0, hasError)
       }
     }
-  }, [])
+  }, [cancelStream])
 
   const retryLastError = useCallback(() => {
     if (streamingRef.current) return
@@ -811,15 +915,20 @@ export function useAIChat() {
     if (!lastMsg?.isError) return
 
     let userText = ''
+    let userAttachments: MessageAttachment[] | undefined
     for (let i = session.messages.length - 2; i >= 0; i--) {
-      if (session.messages[i].role === 'user') { userText = session.messages[i].content; break }
+      if (session.messages[i].role === 'user') {
+        userText = session.messages[i].content
+        userAttachments = session.messages[i].attachments
+        break
+      }
     }
-    if (!userText) return
+    if (!userText && !userAttachments?.length) return
 
     const cleaned = session.messages.slice(0, -2)
     store.updateSession(session.id, { messages: cleaned })
 
-    sendMessage(userText)
+    sendMessage(userText, userAttachments)
   }, [sendMessage])
 
   const deleteMessage = useCallback((messageId: string) => {

@@ -8,6 +8,7 @@ import { IconPicker } from '@/components/icons/IconPicker'
 import { AgentFlowDiagram } from '@/components/agents/AgentFlowDiagram'
 import { SystemPromptMarkdownEditor } from '@/components/agents/SystemPromptMarkdownEditor'
 import { buildAgentMermaidSource } from '@/services/agentMermaid'
+import { getAgentCapabilityProfile, validateAgentConfiguration } from '@/services/agentDiagnostics'
 import type { Agent } from '@/types'
 import { confirm } from '@/services/confirmDialog'
 import {
@@ -147,6 +148,11 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
       setValidationError(t('agents.agentNameRequired', 'Agent name is required.'))
       return
     }
+    const blockingDiagnostic = validateAgentConfiguration(form, models, skills).find((diagnostic) => diagnostic.severity === 'error')
+    if (blockingDiagnostic) {
+      setValidationError(blockingDiagnostic.message)
+      return
+    }
     setValidationError('')
     onSave(form)
     setDirty(false)
@@ -193,6 +199,8 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
     ? `${selectedProviderName} / ${selectedModel.name}`
     : t('agents.selectModel', '-- Select Model --')
   const selectedSkillNames = selectedSkills.map((skill) => getSkillCopy(skill.id, skill.name, skill.description).name)
+  const agentDiagnostics = validateAgentConfiguration(form, models, skills)
+  const capabilityProfile = getAgentCapabilityProfile(form, models, skills)
   const agentFlowOptions = {
     modelLabel: selectedModelLabel,
     skillNames: selectedSkillNames,
@@ -563,6 +571,40 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
           </div>
 
           <div className="space-y-6 2xl:sticky 2xl:top-6 self-start">
+            <EditorSection
+              eyebrow={t('agents.diagnostics', 'Diagnostics')}
+              title={t('agents.capabilityProfile', 'Capability Profile')}
+              description={t('agents.capabilityProfileHint', 'Validate model, skills, prompt size, tool guardrails, and permission posture before this agent runs.')}
+            >
+              <div className="grid gap-2 sm:grid-cols-2">
+                <SummaryStat label={t('agents.tools', 'Tools')} value={String(capabilityProfile.toolCount)} hint={t('agents.toolsHint', 'Effective tool surface')} />
+                <SummaryStat label={t('agents.skills', 'Skills')} value={`${capabilityProfile.enabledSkillCount}/${form.skills.length}`} hint={t('agents.skillsHint', 'Enabled assigned skills')} />
+                <SummaryStat label={t('agents.prompt', 'Prompt')} value={capabilityProfile.promptChars.toLocaleString()} hint={t('agents.promptChars', 'Prompt + memory chars')} />
+                <SummaryStat label={t('agents.model', 'Model')} value={capabilityProfile.modelLabel} hint={t('agents.modelBinding', 'Runtime binding')} />
+              </div>
+
+              {agentDiagnostics.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  {agentDiagnostics.map((diagnostic) => {
+                    const tone = diagnostic.severity === 'error'
+                      ? 'border-danger/20 bg-danger/10 text-danger'
+                      : diagnostic.severity === 'warning'
+                        ? 'border-warning/20 bg-warning/10 text-warning'
+                        : 'border-border-subtle bg-surface-2/70 text-text-secondary'
+                    return (
+                      <div key={`${diagnostic.code}-${diagnostic.message}`} className={`rounded-2xl border px-3 py-2 text-xs ${tone}`}>
+                        <span className="font-semibold uppercase">{diagnostic.severity}</span> · {diagnostic.message}
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-2xl border border-success/20 bg-success/10 px-3 py-2 text-xs text-success">
+                  {t('agents.noDiagnostics', 'No configuration issues detected.')}
+                </div>
+              )}
+            </EditorSection>
+
             <EditorSection
               eyebrow={t('agents.workflow', 'Workflow')}
               title={t('agents.agentFlowDiagram', 'Agent Flow Diagram')}

@@ -51,11 +51,23 @@ export interface Model {
 
 export type ToolCallStatus = 'pending' | 'running' | 'completed' | 'error'
 
+export interface ToolOutputEnvelope {
+  status: ToolCallStatus
+  summary: string
+  dataRef?: string
+  dataPreview?: string
+  warnings?: string[]
+  durationMs?: number
+  outputChars?: number
+  storedExternally?: boolean
+}
+
 export interface ToolCall {
   id: string
   toolName: string
   input: Record<string, unknown>
   output?: string
+  outputEnvelope?: ToolOutputEnvelope
   status: ToolCallStatus
   startedAt: number
   completedAt?: number
@@ -106,6 +118,33 @@ export interface MessageAttachment {
   duration?: number    // audio duration in seconds
 }
 
+export interface RuntimeSnapshot {
+  runId: string
+  sessionId?: string
+  messageId?: string
+  agentId?: string
+  agentName?: string
+  modelId?: string
+  modelName?: string
+  toolNames?: string[]
+  systemPromptHash?: string
+  startedAt: number
+}
+
+export interface MessageErrorInfo {
+  category: 'provider' | 'tool' | 'pipeline' | 'validation' | 'cancelled' | 'unknown'
+  retryable: boolean
+  hint?: string
+  rawSanitized: string
+  source?: string
+}
+
+export interface CancellationMetadata {
+  cancelledAt: number
+  cancelReason: string
+  partialContentLength: number
+}
+
 export interface Message {
   id: string
   role: 'user' | 'assistant' | 'tool'
@@ -120,6 +159,10 @@ export interface Message {
   attachments?: MessageAttachment[]  // image attachments for vision models
   tokenUsage?: { promptTokens: number; completionTokens: number; totalTokens: number }
   feedback?: 'positive' | 'negative'
+  runtime?: RuntimeSnapshot
+  errorInfo?: MessageErrorInfo
+  cancellation?: CancellationMetadata
+  contextSummary?: string
 }
 
 export interface Session {
@@ -791,6 +834,10 @@ export interface AgentPipelineStep {
   enabled?: boolean
   continueOnError?: boolean
   retryCount?: number
+  timeoutMs?: number
+  maxInputChars?: number
+  maxOutputChars?: number
+  outputType?: 'text' | 'json' | 'file' | 'table'
 }
 
 export type AgentPipelineTrigger = 'manual' | 'timer' | 'chat'
@@ -807,6 +854,7 @@ export interface AgentPipeline {
 
 export interface AgentPipelineExecutionStep {
   id: string
+  runId?: string
   stepIndex: number
   agentId: string
   name?: string
@@ -819,10 +867,32 @@ export interface AgentPipelineExecutionStep {
   durationMs: number
   attempts?: number
   error?: string
+  outputType?: AgentPipelineStep['outputType']
+  outputRef?: string
+  warnings?: string[]
+  recoveryActions?: PipelineRecoveryAction[]
+}
+
+export interface PipelineRecoveryAction {
+  id: 'retry-step' | 'rerun-from-step' | 'skip-step' | 'open-agent' | 'open-model' | 'edit-pipeline'
+  label: string
+  stepIndex?: number
+  agentId?: string
+  modelId?: string
+}
+
+export interface PipelineRuntimeSnapshot {
+  runId: string
+  agentIds: string[]
+  modelIds: string[]
+  startedAt: number
+  trigger: AgentPipelineTrigger
+  validationWarnings?: string[]
 }
 
 export interface AgentPipelineExecution {
   id: string
+  runId?: string
   pipelineId: string
   pipelineName: string
   trigger: AgentPipelineTrigger
@@ -833,6 +903,8 @@ export interface AgentPipelineExecution {
   steps: AgentPipelineExecutionStep[]
   finalOutput?: string
   error?: string
+  runtime?: PipelineRuntimeSnapshot
+  recoveryActions?: PipelineRecoveryAction[]
 }
 
 // ─── i18n ──────────────────────────────────────────────────────────
