@@ -7,7 +7,7 @@ import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
 import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
-import { executeAgentPipeline, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
+import { executeAgentPipeline, dryRunAgentPipeline, type AgentPipelineProgressStep, type DryRunResult } from '@/services/agentPipelineService'
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
 import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
@@ -125,6 +125,7 @@ export function PipelineLayout() {
   const [pipelineDescription, setPipelineDescription] = useState('')
   const [pipelineVariables, setPipelineVariables] = useState<AgentPipelineVariable[]>([])
   const [pipelineBudget, setPipelineBudget] = useState<AgentPipelineBudget | undefined>(undefined)
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
   const [variableValues, setVariableValues] = useState<Record<string, string>>({})
   const [diagramView, setDiagramView] = useState<'preview' | 'source'>('preview')
   const [copiedMermaid, setCopiedMermaid] = useState(false)
@@ -383,6 +384,38 @@ export function PipelineLayout() {
     if (!copied) {
       console.log('[suora] Pipeline export JSON:\n' + json)
     }
+  }
+
+  const runDryRunPreview = () => {
+    const trimmedName = agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline'
+    const sanitizedBudget: AgentPipelineBudget | undefined = pipelineBudget
+      && (pipelineBudget.maxTotalDurationMs || pipelineBudget.maxTotalTokens || pipelineBudget.maxStepCount)
+      ? { ...pipelineBudget }
+      : undefined
+    const result = dryRunAgentPipeline(
+      {
+        id: selectedSavedPipeline?.id ?? generateId('pipeline-dry'),
+        name: trimmedName,
+        steps: pipeline,
+        ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
+        ...(sanitizedBudget ? { budget: sanitizedBudget } : {}),
+        createdAt: selectedSavedPipeline?.createdAt ?? Date.now(),
+        updatedAt: Date.now(),
+      },
+      { variables: variableValues },
+    )
+    setDryRunResult(result)
+    addNotification({
+      id: generateId('notif'),
+      type: result.valid ? 'info' : 'warning',
+      title: t('agents.pipelineDryRunResultTitle', 'Dry run complete'),
+      message: t(
+        'agents.pipelineDryRunMessage',
+        `${result.steps.filter((step) => step.status === 'would-run').length} step(s) would run, ${result.steps.filter((step) => step.status === 'skipped').length} skipped, ${result.steps.filter((step) => step.status === 'error').length} error(s).`,
+      ),
+      timestamp: Date.now(),
+      read: false,
+    })
   }
 
   const importPipelineFromJson = async () => {
@@ -864,6 +897,7 @@ export function PipelineLayout() {
             <button type="button" onClick={() => replacePipelineDraft([])} disabled={pipeline.length === 0 || running} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('common.clearAll', 'Clear All')}</button>
             <button type="button" onClick={() => void importPipelineFromJson()} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('agents.pipelineImport', 'Import JSON')}</button>
             <button type="button" onClick={() => void exportCurrentPipeline()} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('agents.pipelineExport', 'Export JSON')}</button>
+            <button type="button" onClick={runDryRunPreview} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40" title={t('agents.pipelineDryRunButtonHint', 'Simulate the run without calling any model.')}>{t('agents.pipelineDryRunButton', 'Dry run')}</button>
             <button type="button" onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40">{t('common.saveChanges', 'Save Changes')}</button>
             <button type="button" onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40">{t('common.delete', 'Delete')}</button>
             <button
@@ -885,6 +919,38 @@ export function PipelineLayout() {
               </button>
             )}
           </div>
+
+          {dryRunResult && (
+            <div className="mt-3 rounded-3xl border border-blue-500/20 bg-blue-500/8 px-4 py-3 text-xs text-blue-200">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold">{t('agents.pipelineDryRunResultTitle', 'Dry run preview')}</div>
+                <button type="button" onClick={() => setDryRunResult(null)} className="text-text-muted hover:text-text-primary" aria-label={t('common.close', 'Close')}>×</button>
+              </div>
+              {dryRunResult.budgetExceeded && (
+                <div className="mt-1 text-blue-100">
+                  {t('agents.pipelineBudgetExceeded', 'Budget exceeded')}: {dryRunResult.budgetExceeded.type} {dryRunResult.budgetExceeded.observed}/{dryRunResult.budgetExceeded.limit}
+                </div>
+              )}
+              <ol className="mt-2 space-y-1">
+                {dryRunResult.steps.map((step) => {
+                  const tone = step.status === 'would-run'
+                    ? 'text-emerald-200'
+                    : step.status === 'skipped' || step.status === 'disabled'
+                      ? 'text-text-muted'
+                      : 'text-red-200'
+                  return (
+                    <li key={step.stepIndex} className={tone}>
+                      <span className="font-mono">#{step.stepIndex + 1}</span>{' '}
+                      <span className="uppercase tracking-[0.12em]">{step.status}</span>
+                      {step.modelId ? <span className="ml-2 text-text-muted">[{step.modelId}]</span> : null}
+                      {step.reason ? <span className="ml-2 text-text-muted">— {step.reason}</span> : null}
+                      {step.name ? <span className="ml-2">{step.name}</span> : null}
+                    </li>
+                  )
+                })}
+              </ol>
+            </div>
+          )}
 
           {pipelineValidation.issues.length > 0 && (
             <div className="mt-3 rounded-3xl border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-xs text-amber-200">
@@ -1225,6 +1291,60 @@ export function PipelineLayout() {
                                     </select>
                                   </label>
                                 </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineStepModel', 'Model override')}</span>
+                                    <select
+                                      value={step.modelId ?? ''}
+                                      onChange={(event) => updateStep(idx, { modelId: event.target.value || undefined })}
+                                      className="h-8 max-w-[10rem] rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    >
+                                      <option value="">{t('agents.pipelineStepModelDefault', 'Use agent default')}</option>
+                                      {models.map((modelOption) => (
+                                        <option key={modelOption.id} value={modelOption.id} disabled={modelOption.enabled === false}>
+                                          {modelOption.name}{modelOption.enabled === false ? ` (${t('common.disabled', 'disabled')})` : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineStepOutputTransform', 'Output transform')}</span>
+                                    <select
+                                      value={step.outputTransform ?? ''}
+                                      onChange={(event) => {
+                                        const next = event.target.value as AgentPipelineStep['outputTransform'] | ''
+                                        updateStep(idx, {
+                                          outputTransform: next || undefined,
+                                          // Clear the path when leaving json-path mode.
+                                          ...(next !== 'json-path' ? { outputTransformPath: undefined } : {}),
+                                        })
+                                      }}
+                                      className="h-8 max-w-[10rem] rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    >
+                                      <option value="">{t('agents.pipelineStepOutputTransformNone', 'None')}</option>
+                                      <option value="trim">{t('agents.pipelineStepOutputTransformTrim', 'Trim whitespace')}</option>
+                                      <option value="first-line">{t('agents.pipelineStepOutputTransformFirstLine', 'First line')}</option>
+                                      <option value="last-line">{t('agents.pipelineStepOutputTransformLastLine', 'Last line')}</option>
+                                      <option value="json-path">{t('agents.pipelineStepOutputTransformJsonPath', 'JSON path')}</option>
+                                    </select>
+                                  </label>
+                                </div>
+
+                                {step.outputTransform === 'json-path' && (
+                                  <div>
+                                    <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                      <span>{t('agents.pipelineStepOutputTransformPath', 'JSON path')}</span>
+                                      <input
+                                        type="text"
+                                        value={step.outputTransformPath ?? ''}
+                                        onChange={(event) => updateStep(idx, { outputTransformPath: event.target.value || undefined })}
+                                        placeholder="data.items.0.name"
+                                        className="h-8 w-56 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                      />
+                                    </label>
+                                  </div>
+                                )}
 
                                 <div className="grid gap-2 sm:grid-cols-3">
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">

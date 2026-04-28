@@ -90,7 +90,10 @@ function tryParseJson(raw: string): { ok: true; value: unknown } | { ok: false; 
   try {
     return { ok: true, value: JSON.parse(raw) }
   } catch (error) {
-    // Common case: model wraps JSON in ```json fences. Try to recover.
+    // Common case: model wraps JSON in ```json fences. Try to recover by
+    // parsing the body of the first fenced block (if multiple fenced blocks
+    // are emitted, only the first is considered — a deliberate choice to
+    // keep the recovery predictable).
     const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i)
     if (fenced?.[1]) {
       try {
