@@ -68,12 +68,16 @@ function normalizeRetryCount(retryCount?: number): number {
 }
 
 const MAX_RETRY_BACKOFF_MS = 60_000
+/** Cap on the exponent used for exponential retry backoff so an extreme
+ *  `retryCount` cannot produce an unbounded delay before the per-step cap
+ *  ({@link MAX_RETRY_BACKOFF_MS}) clamps the result. */
+const MAX_EXPONENTIAL_ATTEMPT = 10
 
 function computeRetryDelay(step: AgentPipeline['steps'][number], attemptNumber: number): number {
   const base = Number.isFinite(step.retryBackoffMs) ? Math.max(0, Math.trunc(step.retryBackoffMs ?? 0)) : 0
   if (base === 0) return 0
   if (step.retryBackoffStrategy === 'exponential') {
-    const safeAttempt = Math.max(1, Math.min(attemptNumber, 10))
+    const safeAttempt = Math.max(1, Math.min(attemptNumber, MAX_EXPONENTIAL_ATTEMPT))
     return Math.min(base * 2 ** (safeAttempt - 1), MAX_RETRY_BACKOFF_MS)
   }
   return Math.min(base, MAX_RETRY_BACKOFF_MS)

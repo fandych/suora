@@ -40,19 +40,15 @@ export function validateAgentPipeline(
   }
 
   if (pipeline.budget) {
-    const budgetEntries: Array<{ key: 'maxTotalDurationMs' | 'maxTotalTokens' | 'maxStepCount'; label: string }> = [
-      { key: 'maxTotalDurationMs', label: 'maxTotalDurationMs' },
-      { key: 'maxTotalTokens', label: 'maxTotalTokens' },
-      { key: 'maxStepCount', label: 'maxStepCount' },
-    ]
-    for (const { key, label } of budgetEntries) {
+    const budgetKeys = ['maxTotalDurationMs', 'maxTotalTokens', 'maxStepCount'] as const
+    for (const key of budgetKeys) {
       const value = pipeline.budget[key]
       if (value === undefined) continue
       if (!Number.isFinite(value) || (value as number) < 0 || !Number.isInteger(value)) {
         issues.push({
           severity: 'error',
           code: 'invalid-budget',
-          message: `Pipeline budget "${label}" must be a non-negative integer.`,
+          message: `Pipeline budget "${key}" must be a non-negative integer.`,
         })
       }
     }

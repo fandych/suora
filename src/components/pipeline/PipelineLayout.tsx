@@ -11,8 +11,9 @@ import { executeAgentPipeline, type AgentPipelineProgressStep } from '@/services
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
 import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
+import { PipelineImportError, parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability'
 import { confirm } from '@/services/confirmDialog'
-import type { AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep, AgentPipelineVariable, PipelineStepUsage } from '@/types'
+import type { AgentPipeline, AgentPipelineBudget, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep, AgentPipelineVariable, PipelineStepUsage } from '@/types'
 import { generateId } from '@/utils/helpers'
 
 const PIPELINE_HEADER_BACKGROUND = 'bg-[radial-gradient(circle_at_top_left,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_55%)]'
@@ -123,6 +124,7 @@ export function PipelineLayout() {
   const [searchQuery, setSearchQuery] = useState('')
   const [pipelineDescription, setPipelineDescription] = useState('')
   const [pipelineVariables, setPipelineVariables] = useState<AgentPipelineVariable[]>([])
+  const [pipelineBudget, setPipelineBudget] = useState<AgentPipelineBudget | undefined>(undefined)
   const [variableValues, setVariableValues] = useState<Record<string, string>>({})
   const [diagramView, setDiagramView] = useState<'preview' | 'source'>('preview')
   const [copiedMermaid, setCopiedMermaid] = useState(false)
@@ -195,6 +197,7 @@ export function PipelineLayout() {
     setPipelineDescription(requestedPipeline.description ?? '')
     setPipelineVariables(requestedPipeline.variables ?? [])
     setVariableValues(buildDefaultVariableValues(requestedPipeline.variables))
+    setPipelineBudget(requestedPipeline.budget)
     setAgentPipeline(requestedPipeline.steps)
     setLiveSteps([])
     setActiveExecution(null)
@@ -209,6 +212,7 @@ export function PipelineLayout() {
     setPipelineDescription(selectedPipeline.description ?? '')
     setPipelineVariables(selectedPipeline.variables ?? [])
     setVariableValues(buildDefaultVariableValues(selectedPipeline.variables))
+    setPipelineBudget(selectedPipeline.budget)
   }, [selectedAgentPipelineId, agentPipelines, pipeline.length, agentPipelineName, setAgentPipeline, setAgentPipelineName])
 
   useEffect(() => {
@@ -291,11 +295,11 @@ export function PipelineLayout() {
 
   const pipelineValidation = useMemo(
     () => validateAgentPipeline(
-      { name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline, variables: pipelineVariables },
+      { name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline, variables: pipelineVariables, budget: pipelineBudget },
       agents,
       models,
     ),
-    [agentPipelineName, pipeline, pipelineVariables, agents, models],
+    [agentPipelineName, pipeline, pipelineVariables, pipelineBudget, agents, models],
   )
 
   const successRate = pipelineHistory.length > 0
@@ -308,6 +312,7 @@ export function PipelineLayout() {
     setPipelineDescription('')
     setPipelineVariables([])
     setVariableValues({})
+    setPipelineBudget(undefined)
     clearAgentPipeline()
     setPipelineHistory([])
     setLiveSteps([])
@@ -323,6 +328,7 @@ export function PipelineLayout() {
     setPipelineDescription(selectedPipeline.description ?? '')
     setPipelineVariables(selectedPipeline.variables ?? [])
     setVariableValues(buildDefaultVariableValues(selectedPipeline.variables))
+    setPipelineBudget(selectedPipeline.budget)
     setAgentPipeline(selectedPipeline.steps)
     setLiveSteps([])
     setActiveExecution(null)
@@ -332,6 +338,88 @@ export function PipelineLayout() {
     setAgentPipeline(nextPipeline)
     setLiveSteps([])
     setActiveExecution(null)
+  }
+
+  const exportCurrentPipeline = async () => {
+    const trimmedName = agentPipelineName.trim() || selectedSavedPipeline?.name || 'Pipeline'
+    const sanitizedBudget: AgentPipelineBudget | undefined = pipelineBudget
+      && (pipelineBudget.maxTotalDurationMs || pipelineBudget.maxTotalTokens || pipelineBudget.maxStepCount)
+      ? {
+        ...(pipelineBudget.maxTotalDurationMs ? { maxTotalDurationMs: pipelineBudget.maxTotalDurationMs } : {}),
+        ...(pipelineBudget.maxTotalTokens ? { maxTotalTokens: pipelineBudget.maxTotalTokens } : {}),
+        ...(pipelineBudget.maxStepCount ? { maxStepCount: pipelineBudget.maxStepCount } : {}),
+      }
+      : undefined
+    const json = serializePipelineExport({
+      id: selectedSavedPipeline?.id ?? generateId('pipeline-export'),
+      name: trimmedName,
+      ...(pipelineDescription.trim() ? { description: pipelineDescription.trim() } : {}),
+      steps: pipeline,
+      ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
+      ...(sanitizedBudget ? { budget: sanitizedBudget } : {}),
+      createdAt: selectedSavedPipeline?.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+    })
+
+    let copied = false
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(json)
+        copied = true
+      } catch {
+        copied = false
+      }
+    }
+    addNotification({
+      id: generateId('notif'),
+      type: 'success',
+      title: t('agents.pipelineExportTitle', 'Pipeline exported'),
+      message: copied
+        ? t('agents.pipelineExportCopied', 'Pipeline JSON copied to clipboard.')
+        : t('agents.pipelineExportFallback', 'Could not access clipboard — JSON written to console.'),
+      timestamp: Date.now(),
+      read: false,
+    })
+    if (!copied) {
+      console.log('[suora] Pipeline export JSON:\n' + json)
+    }
+  }
+
+  const importPipelineFromJson = async () => {
+    const raw = typeof window !== 'undefined' ? window.prompt(t('agents.pipelineImportPrompt', 'Paste pipeline JSON to import:')) : null
+    if (!raw) return
+    try {
+      const { pipeline: imported, warnings } = parsePipelineImport(raw)
+      setSelectedAgentPipelineId(null)
+      setAgentPipelineName(imported.name)
+      setPipelineDescription(imported.description ?? '')
+      setPipelineVariables(imported.variables ?? [])
+      setVariableValues(buildDefaultVariableValues(imported.variables))
+      setPipelineBudget(imported.budget)
+      setAgentPipeline(imported.steps)
+      setLiveSteps([])
+      setActiveExecution(null)
+      addNotification({
+        id: generateId('notif'),
+        type: warnings.length > 0 ? 'warning' : 'success',
+        title: t('agents.pipelineImportTitle', 'Pipeline imported'),
+        message: warnings.length > 0
+          ? warnings.join(' ')
+          : t('agents.pipelineImportSuccess', `${imported.name} loaded into the editor. Review and save to keep it.`).replace('{name}', imported.name),
+        timestamp: Date.now(),
+        read: false,
+      })
+    } catch (error) {
+      const message = error instanceof PipelineImportError ? error.message : (error as Error).message
+      addNotification({
+        id: generateId('notif'),
+        type: 'error',
+        title: t('agents.pipelineImportFailedTitle', 'Pipeline import failed'),
+        message,
+        timestamp: Date.now(),
+        read: false,
+      })
+    }
   }
 
   const addStep = () => {
@@ -421,12 +509,21 @@ export function PipelineLayout() {
         ...(variable.description?.trim() ? { description: variable.description.trim() } : { description: undefined }),
       }))
       .filter((variable) => variable.name)
+    const sanitizedBudget: AgentPipelineBudget | undefined = pipelineBudget
+      && (pipelineBudget.maxTotalDurationMs || pipelineBudget.maxTotalTokens || pipelineBudget.maxStepCount)
+      ? {
+        ...(pipelineBudget.maxTotalDurationMs ? { maxTotalDurationMs: pipelineBudget.maxTotalDurationMs } : {}),
+        ...(pipelineBudget.maxTotalTokens ? { maxTotalTokens: pipelineBudget.maxTotalTokens } : {}),
+        ...(pipelineBudget.maxStepCount ? { maxStepCount: pipelineBudget.maxStepCount } : {}),
+      }
+      : undefined
     const nextPipeline: AgentPipeline = {
       id: savedPipeline?.id ?? generateId('pipeline'),
       name: trimmedName,
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       steps: pipeline,
       ...(sanitizedVariables.length > 0 ? { variables: sanitizedVariables } : {}),
+      ...(sanitizedBudget ? { budget: sanitizedBudget } : {}),
       createdAt: savedPipeline?.createdAt ?? now,
       updatedAt: now,
       lastRunAt: savedPipeline?.lastRunAt,
@@ -506,6 +603,7 @@ export function PipelineLayout() {
         name: agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline',
         steps: pipeline,
         ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
+        ...(pipelineBudget ? { budget: pipelineBudget } : {}),
         createdAt: selectedSavedPipeline?.createdAt ?? now,
         updatedAt: now,
         lastRunAt: selectedSavedPipeline?.lastRunAt,
@@ -764,6 +862,8 @@ export function PipelineLayout() {
           <div className="mt-5 flex flex-wrap gap-2">
             <button type="button" onClick={resetPipelineEditor} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('common.new', 'New')}</button>
             <button type="button" onClick={() => replacePipelineDraft([])} disabled={pipeline.length === 0 || running} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('common.clearAll', 'Clear All')}</button>
+            <button type="button" onClick={() => void importPipelineFromJson()} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('agents.pipelineImport', 'Import JSON')}</button>
+            <button type="button" onClick={() => void exportCurrentPipeline()} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('agents.pipelineExport', 'Export JSON')}</button>
             <button type="button" onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40">{t('common.saveChanges', 'Save Changes')}</button>
             <button type="button" onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40">{t('common.delete', 'Delete')}</button>
             <button
@@ -924,6 +1024,71 @@ export function PipelineLayout() {
                     )}
                   </div>
 
+                  <div className="rounded-2xl border border-border-subtle bg-surface-2/55 px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineBudget', 'Budget caps')}</div>
+                        <div className="mt-1 text-xs text-text-muted">{t('agents.pipelineBudgetHint', 'Optional safety limits enforced by the runtime. Leave a field blank or zero to disable that cap. Remaining steps will be skipped when any cap is exceeded.')}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
+                        <span>{t('agents.pipelineBudgetMaxDuration', 'Max duration (ms)')}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={pipelineBudget?.maxTotalDurationMs ?? ''}
+                          onChange={(event) => {
+                            const raw = event.target.value
+                            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)))
+                            setPipelineBudget((current) => {
+                              const next = { ...(current ?? {}), maxTotalDurationMs: parsed }
+                              return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined
+                            })
+                          }}
+                          placeholder="0"
+                          className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
+                        <span>{t('agents.pipelineBudgetMaxTokens', 'Max total tokens')}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={pipelineBudget?.maxTotalTokens ?? ''}
+                          onChange={(event) => {
+                            const raw = event.target.value
+                            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)))
+                            setPipelineBudget((current) => {
+                              const next = { ...(current ?? {}), maxTotalTokens: parsed }
+                              return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined
+                            })
+                          }}
+                          placeholder="0"
+                          className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
+                        <span>{t('agents.pipelineBudgetMaxSteps', 'Max steps')}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={pipelineBudget?.maxStepCount ?? ''}
+                          onChange={(event) => {
+                            const raw = event.target.value
+                            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)))
+                            setPipelineBudget((current) => {
+                              const next = { ...(current ?? {}), maxStepCount: parsed }
+                              return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined
+                            })
+                          }}
+                          placeholder="0"
+                          className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
                     {pipeline.map((step, idx) => {
                       const previewStep = latestExecutionReference[idx]
@@ -1029,6 +1194,35 @@ export function PipelineLayout() {
                                       onChange={(event) => updateStep(idx, { retryCount: normalizeRetryCount(Number(event.target.value)) })}
                                       className="h-8 w-16 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                                     />
+                                  </label>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineRetryBackoff', 'Retry backoff (ms)')}</span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={60_000}
+                                      value={step.retryBackoffMs ?? ''}
+                                      onChange={(event) => {
+                                        const raw = event.target.value
+                                        updateStep(idx, { retryBackoffMs: raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw))) })
+                                      }}
+                                      placeholder="0"
+                                      className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    />
+                                  </label>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineRetryStrategy', 'Retry strategy')}</span>
+                                    <select
+                                      value={step.retryBackoffStrategy ?? 'fixed'}
+                                      onChange={(event) => updateStep(idx, { retryBackoffStrategy: event.target.value === 'exponential' ? 'exponential' : 'fixed' })}
+                                      className="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    >
+                                      <option value="fixed">{t('agents.pipelineRetryStrategyFixed', 'Fixed')}</option>
+                                      <option value="exponential">{t('agents.pipelineRetryStrategyExponential', 'Exponential')}</option>
+                                    </select>
                                   </label>
                                 </div>
 
@@ -1313,6 +1507,11 @@ export function PipelineLayout() {
                             {executionDetail.usage && (
                               <span className="rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
                                 {formatUsageLabel(executionDetail.usage, t)}
+                              </span>
+                            )}
+                            {executionDetail.budgetExceeded && (
+                              <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning" title={t('agents.pipelineBudgetExceededHint', 'Run aborted because a budget cap was exceeded.')}>
+                                {t('agents.pipelineBudgetExceeded', 'Budget exceeded')}: {executionDetail.budgetExceeded.type} {executionDetail.budgetExceeded.observed}/{executionDetail.budgetExceeded.limit}
                               </span>
                             )}
                           </div>
