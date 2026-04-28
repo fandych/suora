@@ -7,12 +7,13 @@ import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
 import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
-import { executeAgentPipeline, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
+import { executeAgentPipeline, dryRunAgentPipeline, type AgentPipelineProgressStep, type DryRunResult } from '@/services/agentPipelineService'
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
 import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
+import { PipelineImportError, parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability'
 import { confirm } from '@/services/confirmDialog'
-import type { AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep } from '@/types'
+import type { AgentPipeline, AgentPipelineBudget, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep, AgentPipelineVariable, PipelineStepUsage } from '@/types'
 import { generateId } from '@/utils/helpers'
 
 const PIPELINE_HEADER_BACKGROUND = 'bg-[radial-gradient(circle_at_top_left,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_55%)]'
@@ -55,6 +56,16 @@ function normalizeRetryCount(value?: number): number {
   return Math.max(0, Math.min(Math.trunc(value ?? 0), 3))
 }
 
+function buildDefaultVariableValues(variables: AgentPipelineVariable[] | undefined): Record<string, string> {
+  if (!variables) return {}
+  const next: Record<string, string> = {}
+  for (const variable of variables) {
+    if (!variable.name) continue
+    next[variable.name] = variable.defaultValue ?? ''
+  }
+  return next
+}
+
 function mapExecutionStep(step: AgentPipelineExecutionStep, agentNameMap: Record<string, string>): AgentPipelineProgressStep {
   return {
     stepIndex: step.stepIndex,
@@ -70,7 +81,21 @@ function mapExecutionStep(step: AgentPipelineExecutionStep, agentNameMap: Record
     durationMs: step.durationMs,
     attempts: step.attempts,
     error: step.error,
+    ...(step.usage ? { usage: step.usage } : {}),
+    ...(step.skipReason ? { skipReason: step.skipReason } : {}),
   }
+}
+
+function formatTokenCount(value?: number): string {
+  if (!Number.isFinite(value) || !value) return '0'
+  if (value < 1000) return String(value)
+  if (value < 1_000_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`
+  return `${(value / 1_000_000).toFixed(1)}M`
+}
+
+function formatUsageLabel(usage: PipelineStepUsage | undefined, t: (key: string, defaultValue?: string) => string): string | null {
+  if (!usage) return null
+  return `${t('agents.pipelineTokensIn', 'in')} ${formatTokenCount(usage.promptTokens)} · ${t('agents.pipelineTokensOut', 'out')} ${formatTokenCount(usage.completionTokens)} · ${t('agents.pipelineTokensTotal', 'total')} ${formatTokenCount(usage.totalTokens)}`
 }
 
 function buildPreviewSteps(pipeline: AgentPipelineStep[], agentNameMap: Record<string, string>): AgentPipelineProgressStep[] {
@@ -98,6 +123,10 @@ export function PipelineLayout() {
   const [panelWidth, setPanelWidth] = useResizablePanel('pipeline', 280)
   const [searchQuery, setSearchQuery] = useState('')
   const [pipelineDescription, setPipelineDescription] = useState('')
+  const [pipelineVariables, setPipelineVariables] = useState<AgentPipelineVariable[]>([])
+  const [pipelineBudget, setPipelineBudget] = useState<AgentPipelineBudget | undefined>(undefined)
+  const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({})
   const [diagramView, setDiagramView] = useState<'preview' | 'source'>('preview')
   const [copiedMermaid, setCopiedMermaid] = useState(false)
   const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([])
@@ -167,6 +196,9 @@ export function PipelineLayout() {
     setSelectedAgentPipelineId(requestedPipeline.id)
     setAgentPipelineName(requestedPipeline.name)
     setPipelineDescription(requestedPipeline.description ?? '')
+    setPipelineVariables(requestedPipeline.variables ?? [])
+    setVariableValues(buildDefaultVariableValues(requestedPipeline.variables))
+    setPipelineBudget(requestedPipeline.budget)
     setAgentPipeline(requestedPipeline.steps)
     setLiveSteps([])
     setActiveExecution(null)
@@ -179,6 +211,9 @@ export function PipelineLayout() {
     setAgentPipeline(selectedPipeline.steps)
     setAgentPipelineName(selectedPipeline.name)
     setPipelineDescription(selectedPipeline.description ?? '')
+    setPipelineVariables(selectedPipeline.variables ?? [])
+    setVariableValues(buildDefaultVariableValues(selectedPipeline.variables))
+    setPipelineBudget(selectedPipeline.budget)
   }, [selectedAgentPipelineId, agentPipelines, pipeline.length, agentPipelineName, setAgentPipeline, setAgentPipelineName])
 
   useEffect(() => {
@@ -260,8 +295,12 @@ export function PipelineLayout() {
   )
 
   const pipelineValidation = useMemo(
-    () => validateAgentPipeline({ name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline }, agents, models),
-    [agentPipelineName, pipeline, agents, models],
+    () => validateAgentPipeline(
+      { name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline, variables: pipelineVariables, budget: pipelineBudget },
+      agents,
+      models,
+    ),
+    [agentPipelineName, pipeline, pipelineVariables, pipelineBudget, agents, models],
   )
 
   const successRate = pipelineHistory.length > 0
@@ -272,6 +311,9 @@ export function PipelineLayout() {
     setSelectedAgentPipelineId(null)
     setAgentPipelineName('')
     setPipelineDescription('')
+    setPipelineVariables([])
+    setVariableValues({})
+    setPipelineBudget(undefined)
     clearAgentPipeline()
     setPipelineHistory([])
     setLiveSteps([])
@@ -285,6 +327,9 @@ export function PipelineLayout() {
     setSelectedAgentPipelineId(selectedPipeline.id)
     setAgentPipelineName(selectedPipeline.name)
     setPipelineDescription(selectedPipeline.description ?? '')
+    setPipelineVariables(selectedPipeline.variables ?? [])
+    setVariableValues(buildDefaultVariableValues(selectedPipeline.variables))
+    setPipelineBudget(selectedPipeline.budget)
     setAgentPipeline(selectedPipeline.steps)
     setLiveSteps([])
     setActiveExecution(null)
@@ -294,6 +339,120 @@ export function PipelineLayout() {
     setAgentPipeline(nextPipeline)
     setLiveSteps([])
     setActiveExecution(null)
+  }
+
+  const exportCurrentPipeline = async () => {
+    const trimmedName = agentPipelineName.trim() || selectedSavedPipeline?.name || 'Pipeline'
+    const sanitizedBudget: AgentPipelineBudget | undefined = pipelineBudget
+      && (pipelineBudget.maxTotalDurationMs || pipelineBudget.maxTotalTokens || pipelineBudget.maxStepCount)
+      ? {
+        ...(pipelineBudget.maxTotalDurationMs ? { maxTotalDurationMs: pipelineBudget.maxTotalDurationMs } : {}),
+        ...(pipelineBudget.maxTotalTokens ? { maxTotalTokens: pipelineBudget.maxTotalTokens } : {}),
+        ...(pipelineBudget.maxStepCount ? { maxStepCount: pipelineBudget.maxStepCount } : {}),
+      }
+      : undefined
+    const json = serializePipelineExport({
+      id: selectedSavedPipeline?.id ?? generateId('pipeline-export'),
+      name: trimmedName,
+      ...(pipelineDescription.trim() ? { description: pipelineDescription.trim() } : {}),
+      steps: pipeline,
+      ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
+      ...(sanitizedBudget ? { budget: sanitizedBudget } : {}),
+      createdAt: selectedSavedPipeline?.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+    })
+
+    let copied = false
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(json)
+        copied = true
+      } catch {
+        copied = false
+      }
+    }
+    addNotification({
+      id: generateId('notif'),
+      type: 'success',
+      title: t('agents.pipelineExportTitle', 'Pipeline exported'),
+      message: copied
+        ? t('agents.pipelineExportCopied', 'Pipeline JSON copied to clipboard.')
+        : t('agents.pipelineExportFallback', 'Could not access clipboard — JSON written to console.'),
+      timestamp: Date.now(),
+      read: false,
+    })
+    if (!copied) {
+      console.log('[suora] Pipeline export JSON:\n' + json)
+    }
+  }
+
+  const runDryRunPreview = () => {
+    const trimmedName = agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline'
+    const sanitizedBudget: AgentPipelineBudget | undefined = pipelineBudget
+      && (pipelineBudget.maxTotalDurationMs || pipelineBudget.maxTotalTokens || pipelineBudget.maxStepCount)
+      ? { ...pipelineBudget }
+      : undefined
+    const result = dryRunAgentPipeline(
+      {
+        id: selectedSavedPipeline?.id ?? generateId('pipeline-dry'),
+        name: trimmedName,
+        steps: pipeline,
+        ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
+        ...(sanitizedBudget ? { budget: sanitizedBudget } : {}),
+        createdAt: selectedSavedPipeline?.createdAt ?? Date.now(),
+        updatedAt: Date.now(),
+      },
+      { variables: variableValues },
+    )
+    setDryRunResult(result)
+    addNotification({
+      id: generateId('notif'),
+      type: result.valid ? 'info' : 'warning',
+      title: t('agents.pipelineDryRunResultTitle', 'Dry run complete'),
+      message: t(
+        'agents.pipelineDryRunMessage',
+        `${result.steps.filter((step) => step.status === 'would-run').length} step(s) would run, ${result.steps.filter((step) => step.status === 'skipped').length} skipped, ${result.steps.filter((step) => step.status === 'error').length} error(s).`,
+      ),
+      timestamp: Date.now(),
+      read: false,
+    })
+  }
+
+  const importPipelineFromJson = async () => {
+    const raw = typeof window !== 'undefined' ? window.prompt(t('agents.pipelineImportPrompt', 'Paste pipeline JSON to import:')) : null
+    if (!raw) return
+    try {
+      const { pipeline: imported, warnings } = parsePipelineImport(raw)
+      setSelectedAgentPipelineId(null)
+      setAgentPipelineName(imported.name)
+      setPipelineDescription(imported.description ?? '')
+      setPipelineVariables(imported.variables ?? [])
+      setVariableValues(buildDefaultVariableValues(imported.variables))
+      setPipelineBudget(imported.budget)
+      setAgentPipeline(imported.steps)
+      setLiveSteps([])
+      setActiveExecution(null)
+      addNotification({
+        id: generateId('notif'),
+        type: warnings.length > 0 ? 'warning' : 'success',
+        title: t('agents.pipelineImportTitle', 'Pipeline imported'),
+        message: warnings.length > 0
+          ? warnings.join(' ')
+          : t('agents.pipelineImportSuccess', `${imported.name} loaded into the editor. Review and save to keep it.`).replace('{name}', imported.name),
+        timestamp: Date.now(),
+        read: false,
+      })
+    } catch (error) {
+      const message = error instanceof PipelineImportError ? error.message : (error as Error).message
+      addNotification({
+        id: generateId('notif'),
+        type: 'error',
+        title: t('agents.pipelineImportFailedTitle', 'Pipeline import failed'),
+        message,
+        timestamp: Date.now(),
+        read: false,
+      })
+    }
   }
 
   const addStep = () => {
@@ -375,11 +534,29 @@ export function PipelineLayout() {
     const now = Date.now()
     const savedPipeline = selectedSavedPipeline
     const trimmedDescription = pipelineDescription.trim()
+    const sanitizedVariables = pipelineVariables
+      .map((variable) => ({
+        ...variable,
+        name: variable.name.trim(),
+        ...(variable.label?.trim() ? { label: variable.label.trim() } : { label: undefined }),
+        ...(variable.description?.trim() ? { description: variable.description.trim() } : { description: undefined }),
+      }))
+      .filter((variable) => variable.name)
+    const sanitizedBudget: AgentPipelineBudget | undefined = pipelineBudget
+      && (pipelineBudget.maxTotalDurationMs || pipelineBudget.maxTotalTokens || pipelineBudget.maxStepCount)
+      ? {
+        ...(pipelineBudget.maxTotalDurationMs ? { maxTotalDurationMs: pipelineBudget.maxTotalDurationMs } : {}),
+        ...(pipelineBudget.maxTotalTokens ? { maxTotalTokens: pipelineBudget.maxTotalTokens } : {}),
+        ...(pipelineBudget.maxStepCount ? { maxStepCount: pipelineBudget.maxStepCount } : {}),
+      }
+      : undefined
     const nextPipeline: AgentPipeline = {
       id: savedPipeline?.id ?? generateId('pipeline'),
       name: trimmedName,
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       steps: pipeline,
+      ...(sanitizedVariables.length > 0 ? { variables: sanitizedVariables } : {}),
+      ...(sanitizedBudget ? { budget: sanitizedBudget } : {}),
       createdAt: savedPipeline?.createdAt ?? now,
       updatedAt: now,
       lastRunAt: savedPipeline?.lastRunAt,
@@ -458,6 +635,8 @@ export function PipelineLayout() {
         id: selectedSavedPipeline?.id ?? generateId('pipeline-draft'),
         name: agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline',
         steps: pipeline,
+        ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
+        ...(pipelineBudget ? { budget: pipelineBudget } : {}),
         createdAt: selectedSavedPipeline?.createdAt ?? now,
         updatedAt: now,
         lastRunAt: selectedSavedPipeline?.lastRunAt,
@@ -466,6 +645,7 @@ export function PipelineLayout() {
         persistExecution: Boolean(selectedSavedPipeline && workspacePath),
         persistLastRun: Boolean(selectedSavedPipeline && workspacePath),
         abortSignal: controller.signal,
+        ...(pipelineVariables.length > 0 ? { variables: variableValues } : {}),
         onStepUpdate: (progressStep) => {
           setLiveSteps((previous) => {
             // Step edits clear liveSteps immediately, so this rebuild only handles
@@ -715,6 +895,9 @@ export function PipelineLayout() {
           <div className="mt-5 flex flex-wrap gap-2">
             <button type="button" onClick={resetPipelineEditor} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('common.new', 'New')}</button>
             <button type="button" onClick={() => replacePipelineDraft([])} disabled={pipeline.length === 0 || running} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('common.clearAll', 'Clear All')}</button>
+            <button type="button" onClick={() => void importPipelineFromJson()} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('agents.pipelineImport', 'Import JSON')}</button>
+            <button type="button" onClick={() => void exportCurrentPipeline()} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('agents.pipelineExport', 'Export JSON')}</button>
+            <button type="button" onClick={runDryRunPreview} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40" title={t('agents.pipelineDryRunButtonHint', 'Simulate the run without calling any model.')}>{t('agents.pipelineDryRunButton', 'Dry run')}</button>
             <button type="button" onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40">{t('common.saveChanges', 'Save Changes')}</button>
             <button type="button" onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40">{t('common.delete', 'Delete')}</button>
             <button
@@ -736,6 +919,38 @@ export function PipelineLayout() {
               </button>
             )}
           </div>
+
+          {dryRunResult && (
+            <div className="mt-3 rounded-3xl border border-blue-500/20 bg-blue-500/8 px-4 py-3 text-xs text-blue-200">
+              <div className="flex items-center justify-between gap-2">
+                <div className="font-semibold">{t('agents.pipelineDryRunResultTitle', 'Dry run preview')}</div>
+                <button type="button" onClick={() => setDryRunResult(null)} className="text-text-muted hover:text-text-primary" aria-label={t('common.close', 'Close')}>×</button>
+              </div>
+              {dryRunResult.budgetExceeded && (
+                <div className="mt-1 text-blue-100">
+                  {t('agents.pipelineBudgetExceeded', 'Budget exceeded')}: {dryRunResult.budgetExceeded.type} {dryRunResult.budgetExceeded.observed}/{dryRunResult.budgetExceeded.limit}
+                </div>
+              )}
+              <ol className="mt-2 space-y-1">
+                {dryRunResult.steps.map((step) => {
+                  const tone = step.status === 'would-run'
+                    ? 'text-emerald-200'
+                    : step.status === 'skipped' || step.status === 'disabled'
+                      ? 'text-text-muted'
+                      : 'text-red-200'
+                  return (
+                    <li key={step.stepIndex} className={tone}>
+                      <span className="font-mono">#{step.stepIndex + 1}</span>{' '}
+                      <span className="uppercase tracking-[0.12em]">{step.status}</span>
+                      {step.modelId ? <span className="ml-2 text-text-muted">[{step.modelId}]</span> : null}
+                      {step.reason ? <span className="ml-2 text-text-muted">— {step.reason}</span> : null}
+                      {step.name ? <span className="ml-2">{step.name}</span> : null}
+                    </li>
+                  )
+                })}
+              </ol>
+            </div>
+          )}
 
           {pipelineValidation.issues.length > 0 && (
             <div className="mt-3 rounded-3xl border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-xs text-amber-200">
@@ -783,6 +998,161 @@ export function PipelineLayout() {
                       rows={2}
                       className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                     />
+                  </div>
+
+                  <div className="rounded-2xl border border-border-subtle bg-surface-2/55 px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineVariables', 'Variables')}</div>
+                        <div className="mt-1 text-xs text-text-muted">{t('agents.pipelineVariablesHint', 'Declare run-time inputs, then reference them in any step task as {{vars.name}} or in runIf conditions as vars.name.')}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPipelineVariables((current) => [...current, { name: '' }])}
+                        className="rounded-xl border border-border-subtle bg-surface-1/80 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent"
+                      >
+                        {t('agents.pipelineAddVariable', '+ Add variable')}
+                      </button>
+                    </div>
+
+                    {pipelineVariables.length === 0 ? (
+                      <div className="mt-3 text-xs text-text-muted">{t('agents.pipelineNoVariables', 'No variables declared yet.')}</div>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {pipelineVariables.map((variable, index) => (
+                          <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+                            <input
+                              value={variable.name}
+                              onChange={(event) => {
+                                const next = event.target.value
+                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: next } : item))
+                              }}
+                              placeholder={t('agents.pipelineVariableName', 'name')}
+                              className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                            />
+                            <input
+                              value={variable.label ?? ''}
+                              onChange={(event) => {
+                                const next = event.target.value
+                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: next } : item))
+                              }}
+                              placeholder={t('agents.pipelineVariableLabel', 'Label (optional)')}
+                              className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                            />
+                            <input
+                              value={variable.defaultValue ?? ''}
+                              onChange={(event) => {
+                                const next = event.target.value
+                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, defaultValue: next } : item))
+                                if (!variable.name) return
+                                setVariableValues((current) => {
+                                  if (current[variable.name] !== undefined && current[variable.name] !== '') return current
+                                  return { ...current, [variable.name]: next }
+                                })
+                              }}
+                              placeholder={t('agents.pipelineVariableDefault', 'Default value')}
+                              className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPipelineVariables((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                              }}
+                              className="rounded-xl border border-border-subtle bg-surface-1/80 px-2 py-1 text-[11px] font-medium text-text-muted transition-colors hover:border-red-500/30 hover:text-red-300"
+                            >
+                              {t('common.remove', 'Remove')}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {pipelineVariables.length > 0 && (
+                      <div className="mt-4 border-t border-border-subtle pt-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineRunValues', 'Run values')}</div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {pipelineVariables.filter((variable) => variable.name.trim()).map((variable) => (
+                            <label key={variable.name} className="flex flex-col gap-1 text-xs text-text-secondary">
+                              <span className="font-medium text-text-primary">{variable.label?.trim() || variable.name}</span>
+                              <input
+                                value={variableValues[variable.name] ?? ''}
+                                onChange={(event) => {
+                                  const next = event.target.value
+                                  setVariableValues((current) => ({ ...current, [variable.name]: next }))
+                                }}
+                                placeholder={variable.defaultValue ?? ''}
+                                className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="rounded-2xl border border-border-subtle bg-surface-2/55 px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineBudget', 'Budget caps')}</div>
+                        <div className="mt-1 text-xs text-text-muted">{t('agents.pipelineBudgetHint', 'Optional safety limits enforced by the runtime. Leave a field blank or zero to disable that cap. Remaining steps will be skipped when any cap is exceeded.')}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
+                        <span>{t('agents.pipelineBudgetMaxDuration', 'Max duration (ms)')}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={pipelineBudget?.maxTotalDurationMs ?? ''}
+                          onChange={(event) => {
+                            const raw = event.target.value
+                            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)))
+                            setPipelineBudget((current) => {
+                              const next = { ...(current ?? {}), maxTotalDurationMs: parsed }
+                              return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined
+                            })
+                          }}
+                          placeholder="0"
+                          className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
+                        <span>{t('agents.pipelineBudgetMaxTokens', 'Max total tokens')}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={pipelineBudget?.maxTotalTokens ?? ''}
+                          onChange={(event) => {
+                            const raw = event.target.value
+                            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)))
+                            setPipelineBudget((current) => {
+                              const next = { ...(current ?? {}), maxTotalTokens: parsed }
+                              return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined
+                            })
+                          }}
+                          placeholder="0"
+                          className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
+                        <span>{t('agents.pipelineBudgetMaxSteps', 'Max steps')}</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={pipelineBudget?.maxStepCount ?? ''}
+                          onChange={(event) => {
+                            const raw = event.target.value
+                            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)))
+                            setPipelineBudget((current) => {
+                              const next = { ...(current ?? {}), maxStepCount: parsed }
+                              return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined
+                            })
+                          }}
+                          placeholder="0"
+                          className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                        />
+                      </label>
+                    </div>
                   </div>
 
                   <div className="space-y-3">
@@ -859,6 +1229,17 @@ export function PipelineLayout() {
                             <details className="rounded-2xl border border-border-subtle bg-surface-2/35 px-3 py-2">
                               <summary className="cursor-pointer text-xs font-medium text-text-secondary">{t('common.advanced', 'Advanced')}</summary>
                               <div className="mt-3 space-y-3">
+                                <div>
+                                  <label className="mb-1 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineRunIf', 'Run if (condition)')}</label>
+                                  <input
+                                    value={step.runIf ?? ''}
+                                    onChange={(event) => updateStep(idx, { runIf: event.target.value })}
+                                    placeholder={t('agents.pipelineRunIfPlaceholder', "step1.status == 'success' && previous.output contains 'approved'")}
+                                    className="w-full rounded-2xl border border-border bg-surface-1 px-3 py-2 font-mono text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                  />
+                                  <div className="mt-1 text-[11px] text-text-muted">{t('agents.pipelineRunIfHint', 'Skip this step when the condition is false. Supports step{N}.field, previous.field, vars.name, ==, !=, contains, not contains, matches, is empty, is not empty, combined with &&.')}</div>
+                                </div>
+
                                 <div className="grid gap-2 sm:grid-cols-2">
                                   <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <input
@@ -878,6 +1259,102 @@ export function PipelineLayout() {
                                       value={normalizeRetryCount(step.retryCount)}
                                       onChange={(event) => updateStep(idx, { retryCount: normalizeRetryCount(Number(event.target.value)) })}
                                       className="h-8 w-16 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    />
+                                  </label>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineRetryBackoff', 'Retry backoff (ms)')}</span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={60_000}
+                                      value={step.retryBackoffMs ?? ''}
+                                      onChange={(event) => {
+                                        const raw = event.target.value
+                                        updateStep(idx, { retryBackoffMs: raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw))) })
+                                      }}
+                                      placeholder="0"
+                                      className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    />
+                                  </label>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineRetryStrategy', 'Retry strategy')}</span>
+                                    <select
+                                      value={step.retryBackoffStrategy ?? 'fixed'}
+                                      onChange={(event) => updateStep(idx, { retryBackoffStrategy: event.target.value === 'exponential' ? 'exponential' : 'fixed' })}
+                                      className="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    >
+                                      <option value="fixed">{t('agents.pipelineRetryStrategyFixed', 'Fixed')}</option>
+                                      <option value="exponential">{t('agents.pipelineRetryStrategyExponential', 'Exponential')}</option>
+                                    </select>
+                                  </label>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineStepModel', 'Model override')}</span>
+                                    <select
+                                      value={step.modelId ?? ''}
+                                      onChange={(event) => updateStep(idx, { modelId: event.target.value || undefined })}
+                                      className="h-8 max-w-[10rem] rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    >
+                                      <option value="">{t('agents.pipelineStepModelDefault', 'Use agent default')}</option>
+                                      {models.map((modelOption) => (
+                                        <option key={modelOption.id} value={modelOption.id} disabled={modelOption.enabled === false}>
+                                          {modelOption.name}{modelOption.enabled === false ? ` (${t('common.disabled', 'disabled')})` : ''}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </label>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineStepOutputTransform', 'Output transform')}</span>
+                                    <select
+                                      value={step.outputTransform ?? ''}
+                                      onChange={(event) => {
+                                        const next = event.target.value as AgentPipelineStep['outputTransform'] | ''
+                                        updateStep(idx, {
+                                          outputTransform: next || undefined,
+                                          // Clear the path when leaving json-path mode.
+                                          ...(next !== 'json-path' ? { outputTransformPath: undefined } : {}),
+                                        })
+                                      }}
+                                      className="h-8 max-w-[10rem] rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    >
+                                      <option value="">{t('agents.pipelineStepOutputTransformNone', 'None')}</option>
+                                      <option value="trim">{t('agents.pipelineStepOutputTransformTrim', 'Trim whitespace')}</option>
+                                      <option value="first-line">{t('agents.pipelineStepOutputTransformFirstLine', 'First line')}</option>
+                                      <option value="last-line">{t('agents.pipelineStepOutputTransformLastLine', 'Last line')}</option>
+                                      <option value="json-path">{t('agents.pipelineStepOutputTransformJsonPath', 'JSON path')}</option>
+                                    </select>
+                                  </label>
+                                </div>
+
+                                {step.outputTransform === 'json-path' && (
+                                  <div>
+                                    <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                      <span>{t('agents.pipelineStepOutputTransformPath', 'JSON path')}</span>
+                                      <input
+                                        type="text"
+                                        value={step.outputTransformPath ?? ''}
+                                        onChange={(event) => updateStep(idx, { outputTransformPath: event.target.value || undefined })}
+                                        placeholder="data.items.0.name"
+                                        className="h-8 w-56 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                      />
+                                    </label>
+                                  </div>
+                                )}
+
+                                <div>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineStepExportVar', 'Export to variable')}</span>
+                                    <input
+                                      type="text"
+                                      value={step.exportVar ?? ''}
+                                      onChange={(event) => updateStep(idx, { exportVar: event.target.value || undefined })}
+                                      placeholder={t('agents.pipelineStepExportVarPlaceholder', 'e.g. topic')}
+                                      className="h-8 w-56 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                                     />
                                   </label>
                                 </div>
@@ -999,6 +1476,15 @@ export function PipelineLayout() {
                             </div>
                             <div className="mt-2 text-sm text-text-secondary">{step.agentName || agentNameMap[step.agentId] || step.agentId}</div>
                             <div className="mt-1 text-xs text-text-muted">{formatDuration(step.durationMs, t)}{step.attempts && step.attempts > 1 ? ` · ${step.attempts} ${t('agents.pipelineAttempts', 'attempts')}` : ''}</div>
+                            {step.usage && (
+                              <div className="mt-1 inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+                                <span aria-hidden="true">🜂</span>
+                                <span>{formatUsageLabel(step.usage, t)}</span>
+                              </div>
+                            )}
+                            {step.skipReason && step.status === 'skipped' && (
+                              <div className="mt-1 text-[11px] text-text-muted">{step.skipReason}</div>
+                            )}
                           </div>
                           {step.startedAt && <div className="text-xs text-text-muted">{new Date(step.startedAt).toLocaleString()}</div>}
                         </div>
@@ -1149,7 +1635,19 @@ export function PipelineLayout() {
                             <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineFinalOutput', 'Final output')}</div>
                             <div className="mt-2 text-sm text-text-secondary whitespace-pre-wrap">{executionDetail.finalOutput || executionDetail.error || t('agents.pipelineNoOutputYet', 'No output yet.')}</div>
                           </div>
-                          <div className="text-xs text-text-muted">{formatDuration(executionDetail.completedAt - executionDetail.startedAt, t)}</div>
+                          <div className="flex flex-col items-end gap-1 text-xs text-text-muted">
+                            <span>{formatDuration(executionDetail.completedAt - executionDetail.startedAt, t)}</span>
+                            {executionDetail.usage && (
+                              <span className="rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+                                {formatUsageLabel(executionDetail.usage, t)}
+                              </span>
+                            )}
+                            {executionDetail.budgetExceeded && (
+                              <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] font-medium text-warning" title={t('agents.pipelineBudgetExceededHint', 'Run aborted because a budget cap was exceeded.')}>
+                                {t('agents.pipelineBudgetExceeded', 'Budget exceeded')}: {executionDetail.budgetExceeded.type} {executionDetail.budgetExceeded.observed}/{executionDetail.budgetExceeded.limit}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1160,6 +1658,14 @@ export function PipelineLayout() {
                               <div>
                                 <div className="text-sm font-semibold text-text-primary">{step.name?.trim() || `${t('agents.pipelineStep', 'Step')} ${step.stepIndex + 1}`}</div>
                                 <div className="mt-1 text-xs text-text-muted">{step.agentName || step.agentId}</div>
+                                {step.usage && (
+                                  <div className="mt-1 inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+                                    {formatUsageLabel(step.usage, t)}
+                                  </div>
+                                )}
+                                {step.skipReason && step.status === 'skipped' && (
+                                  <div className="mt-1 text-[11px] text-text-muted">{step.skipReason}</div>
+                                )}
                               </div>
                               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusStyles(step.status)}`}>{t(`agents.pipelineStatus.${step.status}`, step.status)}</span>
                             </div>

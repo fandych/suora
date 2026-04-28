@@ -1,15 +1,20 @@
-import type { Agent, AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, Model, PipelineRecoveryAction, Skill } from '@/types'
+import type { Agent, AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, Model, PipelineRecoveryAction, PipelineStepUsage, Skill } from '@/types'
 import type { ModelMessage } from 'ai'
 import { generateResponse, initializeProvider, streamResponseWithTools } from '@/services/aiService'
 import { appendPipelineExecutionToDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
 import { buildSystemPrompt, getSkillSystemPrompts, getToolsForAgent, mergeSkillsWithBuiltins } from '@/services/tools'
 import { sanitizeSensitiveText } from '@/services/sanitization'
 import { buildPipelineRecoveryActions, validateAgentPipeline } from '@/services/pipelineValidation'
+import { evaluateRunIf } from '@/services/pipelineRunIf'
+import { applyOutputTransform } from '@/services/pipelineOutputTransforms'
 import { useAppStore } from '@/store/appStore'
 import { generateId } from '@/utils/helpers'
 
 const PIPELINE_REFERENCE_PATTERN = /\{\{\s*([^}]+?)\s*\}\}/g
 const STEP_REFERENCE_PATTERN = /^(?:steps\[(\d+)\]|step(\d+))\.(output|input|task|status|error)$/i
+const VARIABLE_REFERENCE_PATTERN = /^vars\.([A-Za-z_][A-Za-z0-9_]*)$/
+/** Same shape as VARIABLE_REFERENCE_PATTERN's capture group — used to gate `exportVar` writes. */
+const EXPORT_VAR_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 type PipelineStepRuntimeValue = Pick<AgentPipelineExecutionStep, 'stepIndex' | 'agentId' | 'task' | 'input' | 'output' | 'status' | 'error'>
 const MAX_STEP_RETRIES = 3
@@ -32,6 +37,13 @@ export interface ExecuteAgentPipelineOptions {
    * status is 'error'.
    */
   abortSignal?: AbortSignal
+  /**
+   * Optional values for pipeline-level variables. Referenced from steps
+   * using `{{vars.NAME}}` and from `runIf` conditions as `vars.NAME`.
+   * Missing required variables fall back to their declared default; when
+   * neither is set the value resolves to the empty string.
+   */
+  variables?: Record<string, string>
 }
 
 export interface AgentPipelineProgressStep {
@@ -49,11 +61,48 @@ export interface AgentPipelineProgressStep {
   attempts?: number
   error?: string
   recoveryActions?: PipelineRecoveryAction[]
+  usage?: PipelineStepUsage
+  skipReason?: string
 }
 
 function normalizeRetryCount(retryCount?: number): number {
   if (!Number.isFinite(retryCount)) return 0
   return Math.max(0, Math.min(Math.trunc(retryCount ?? 0), MAX_STEP_RETRIES))
+}
+
+const MAX_RETRY_BACKOFF_MS = 60_000
+/** Cap on the exponent used for exponential retry backoff so an extreme
+ *  `retryCount` cannot produce an unbounded delay before the per-step cap
+ *  ({@link MAX_RETRY_BACKOFF_MS}) clamps the result. */
+const MAX_EXPONENTIAL_ATTEMPT = 10
+
+function computeRetryDelay(step: AgentPipeline['steps'][number], attemptNumber: number): number {
+  const base = Number.isFinite(step.retryBackoffMs) ? Math.max(0, Math.trunc(step.retryBackoffMs ?? 0)) : 0
+  if (base === 0) return 0
+  if (step.retryBackoffStrategy === 'exponential') {
+    const safeAttempt = Math.max(1, Math.min(attemptNumber, MAX_EXPONENTIAL_ATTEMPT))
+    return Math.min(base * 2 ** (safeAttempt - 1), MAX_RETRY_BACKOFF_MS)
+  }
+  return Math.min(base, MAX_RETRY_BACKOFF_MS)
+}
+
+function delay(ms: number, abortSignal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    if (abortSignal?.aborted) {
+      resolve()
+      return
+    }
+    const timer = setTimeout(() => {
+      abortSignal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    abortSignal?.addEventListener('abort', onAbort, { once: true })
+  })
 }
 
 function findLatestProducedStep(previousSteps: PipelineStepRuntimeValue[]): PipelineStepRuntimeValue | undefined {
@@ -77,6 +126,7 @@ function sanitizePipelineError(raw: unknown): string {
 function resolvePipelineReference(
   reference: string,
   previousSteps: PipelineStepRuntimeValue[],
+  variables: Record<string, string> = {},
 ): string | undefined {
   const normalized = reference.trim().toLowerCase()
   const previousStep = previousSteps[previousSteps.length - 1]
@@ -101,6 +151,13 @@ function resolvePipelineReference(
     return previousStep?.status
   }
 
+  const variableMatch = reference.trim().match(VARIABLE_REFERENCE_PATTERN)
+  if (variableMatch) {
+    const value = variables[variableMatch[1]]
+    if (value == null || value === '') return undefined
+    return clampPipelineText(`Variable ${variableMatch[1]}`, value, MAX_PIPELINE_REFERENCE_CHARS)
+  }
+
   const stepMatch = normalized.match(STEP_REFERENCE_PATTERN)
   if (!stepMatch) return undefined
 
@@ -120,12 +177,13 @@ function resolvePipelineReference(
 function resolvePipelineTemplate(
   task: string,
   previousSteps: PipelineStepRuntimeValue[],
+  variables: Record<string, string> = {},
 ): { resolvedTask: string; usedReferences: boolean } {
   let usedReferences = false
 
   const resolvedTask = task.replace(PIPELINE_REFERENCE_PATTERN, (_match, rawReference: string) => {
     usedReferences = true
-    const value = resolvePipelineReference(rawReference, previousSteps)
+    const value = resolvePipelineReference(rawReference, previousSteps, variables)
     return value == null || value === ''
       ? `[Missing ${rawReference.trim()}]`
       : value
@@ -137,8 +195,9 @@ function resolvePipelineTemplate(
 function buildStepInput(
   step: AgentPipeline['steps'][number],
   previousSteps: PipelineStepRuntimeValue[],
+  variables: Record<string, string> = {},
 ): string {
-  const { resolvedTask, usedReferences } = resolvePipelineTemplate(step.task, previousSteps)
+  const { resolvedTask, usedReferences } = resolvePipelineTemplate(step.task, previousSteps, variables)
   const latestProducedStep = findLatestProducedStep(previousSteps)
   const previousOutput = latestProducedStep?.output ?? latestProducedStep?.error
 
@@ -147,6 +206,47 @@ function buildStepInput(
     : resolvedTask
 
   return clampPipelineText('Pipeline step input', input, step.maxInputChars ?? MAX_PIPELINE_INPUT_CHARS)
+}
+
+function resolveRunVariables(pipeline: AgentPipeline, supplied: Record<string, string> | undefined): Record<string, string> {
+  const declared = pipeline.variables ?? []
+  const resolved: Record<string, string> = {}
+  const trimmedSupplied = Object.fromEntries(
+    Object.entries(supplied ?? {}).map(([key, value]) => [key, typeof value === 'string' ? value : String(value ?? '')]),
+  )
+
+  for (const variable of declared) {
+    const provided = trimmedSupplied[variable.name]
+    if (provided !== undefined && provided !== '') {
+      resolved[variable.name] = provided
+    } else if (variable.defaultValue !== undefined) {
+      resolved[variable.name] = variable.defaultValue
+    } else {
+      resolved[variable.name] = ''
+    }
+  }
+
+  // Allow ad-hoc variables that aren't declared, but never let them clobber declared ones.
+  for (const [key, value] of Object.entries(trimmedSupplied)) {
+    if (!(key in resolved)) resolved[key] = value
+  }
+
+  return resolved
+}
+
+function aggregateUsage(steps: AgentPipelineExecutionStep[]): PipelineStepUsage | undefined {
+  let prompt = 0
+  let completion = 0
+  let total = 0
+  let hasUsage = false
+  for (const step of steps) {
+    if (!step.usage) continue
+    hasUsage = true
+    prompt += step.usage.promptTokens ?? 0
+    completion += step.usage.completionTokens ?? 0
+    total += step.usage.totalTokens ?? 0
+  }
+  return hasUsage ? { promptTokens: prompt, completionTokens: completion, totalTokens: total } : undefined
 }
 
 function clampStepOutput(step: AgentPipeline['steps'][number], output: string): { output: string; warnings?: string[] } {
@@ -181,7 +281,18 @@ function requiresStreaming(tools: Record<string, unknown>, hasStepUpdates: boole
   return hasStepUpdates || Object.keys(tools).length > 0
 }
 
-function resolvePipelineModel(agent: Agent, models: Model[]): Model | undefined {
+function resolvePipelineModel(
+  agent: Agent,
+  models: Model[],
+  step?: Pick<AgentPipeline['steps'][number], 'modelId'>,
+): Model | undefined {
+  // 1. Step-level override wins when the model exists and is enabled.
+  if (step?.modelId) {
+    const overridden = models.find((model) => model.id === step.modelId)
+    if (overridden && overridden.enabled !== false) return overridden
+    // If the override is missing/disabled fall through to the agent default
+    // so the run does not silently break when a model is removed later.
+  }
   if (agent.modelId) {
     return models.find((model) => model.id === agent.modelId)
   }
@@ -306,6 +417,7 @@ export async function executeAgentPipeline(
   const executionSteps: AgentPipelineExecutionStep[] = []
   const executionContextCache = new Map<string, ReturnType<typeof buildPipelineExecutionContext>>()
   const initializedProviders = new Set<string>()
+  const variables = resolveRunVariables(pipeline, options.variables)
   let previousOutput = ''
   let didFail = false
   let executionError: string | undefined
@@ -355,6 +467,7 @@ export async function executeAgentPipeline(
         startedAt: executionStart,
         trigger: options.trigger ?? 'manual',
         validationWarnings: validation.warnings.map((issue) => issue.message),
+        ...(Object.keys(variables).length > 0 ? { variables } : {}),
       },
       recoveryActions: [{ id: 'edit-pipeline', label: 'Edit pipeline' }],
     }
@@ -399,6 +512,7 @@ export async function executeAgentPipeline(
         completedAt: skippedAt,
         durationMs: 0,
         error: reason,
+        skipReason: reason,
       })
       options.onStepUpdate?.({
         stepIndex: skippedIndex,
@@ -411,9 +525,56 @@ export async function executeAgentPipeline(
         completedAt: skippedAt,
         durationMs: 0,
         error: reason,
+        skipReason: reason,
       })
     }
   }
+
+  let budgetExceeded: AgentPipelineExecution['budgetExceeded']
+
+  /**
+   * Returns the cap that has been exceeded, or `undefined` if all budgets
+   * still have headroom. `executedStepCount` should reflect non-skipped,
+   * non-disabled steps that have either completed or are about to start.
+   */
+  const evaluateBudget = (executedStepCount: number): AgentPipelineExecution['budgetExceeded'] => {
+    const budget = pipeline.budget
+    if (!budget) return undefined
+    const tokens = aggregateUsage(executionSteps)?.totalTokens ?? 0
+
+    if (Number.isFinite(budget.maxTotalDurationMs) && (budget.maxTotalDurationMs ?? 0) > 0) {
+      const elapsed = Date.now() - executionStart
+      if (elapsed > (budget.maxTotalDurationMs ?? 0)) {
+        return { type: 'duration', limit: budget.maxTotalDurationMs ?? 0, observed: elapsed }
+      }
+    }
+    if (Number.isFinite(budget.maxTotalTokens) && (budget.maxTotalTokens ?? 0) > 0) {
+      if (tokens > (budget.maxTotalTokens ?? 0)) {
+        return { type: 'tokens', limit: budget.maxTotalTokens ?? 0, observed: tokens }
+      }
+    }
+    if (Number.isFinite(budget.maxStepCount) && (budget.maxStepCount ?? 0) > 0) {
+      if (executedStepCount > (budget.maxStepCount ?? 0)) {
+        return { type: 'steps', limit: budget.maxStepCount ?? 0, observed: executedStepCount }
+      }
+    }
+    return undefined
+  }
+
+  const formatBudgetReason = (cap: NonNullable<AgentPipelineExecution['budgetExceeded']>): string => {
+    switch (cap.type) {
+      case 'duration':
+        return `Pipeline budget exceeded: total duration ${cap.observed}ms > ${cap.limit}ms`
+      case 'tokens':
+        return `Pipeline budget exceeded: total tokens ${cap.observed} > ${cap.limit}`
+      case 'steps':
+        return `Pipeline budget exceeded: ${cap.observed} executed steps > ${cap.limit}`
+      default:
+        return 'Pipeline budget exceeded'
+    }
+  }
+
+  let executedStepCount = 0
 
   for (const [index, step] of pipeline.steps.entries()) {
     if (step.enabled === false) {
@@ -431,6 +592,7 @@ export async function executeAgentPipeline(
         completedAt: skippedAt,
         durationMs: 0,
         error: 'Step disabled',
+        skipReason: 'Step disabled',
       })
       options.onStepUpdate?.({
         stepIndex: index,
@@ -443,8 +605,93 @@ export async function executeAgentPipeline(
         completedAt: skippedAt,
         durationMs: 0,
         error: 'Step disabled',
+        skipReason: 'Step disabled',
       })
       continue
+    }
+
+    // Evaluate the optional runIf condition before any model work.
+    if (step.runIf?.trim()) {
+      let conditionResult: { passed: boolean; reason?: string }
+      try {
+        conditionResult = evaluateRunIf(step.runIf, executionSteps, variables)
+      } catch (error) {
+        const message = `Invalid runIf condition: ${(error as Error).message}`
+        const completedAt = Date.now()
+        const recoveryActions = buildPipelineRecoveryActions(index, step.agentId)
+        executionSteps.push({
+          id: generateId('pipe-step'),
+          runId,
+          stepIndex: index,
+          agentId: step.agentId,
+          ...(step.name?.trim() ? { name: step.name.trim() } : {}),
+          task: step.task,
+          input: '',
+          status: 'error',
+          startedAt: completedAt,
+          completedAt,
+          durationMs: 0,
+          attempts: 0,
+          error: message,
+          recoveryActions,
+        })
+        options.onStepUpdate?.({
+          stepIndex: index,
+          agentId: step.agentId,
+          name: step.name,
+          task: step.task,
+          input: '',
+          status: 'error',
+          startedAt: completedAt,
+          completedAt,
+          durationMs: 0,
+          attempts: 0,
+          error: message,
+          recoveryActions,
+        })
+        previousOutput = message
+        didFail = true
+        executionError = executionError ?? message
+        if (step.continueOnError === false) {
+          skipRemainingSteps(index + 1, 'Skipped after previous step failed')
+          break
+        }
+        continue
+      }
+
+      if (!conditionResult.passed) {
+        const skippedAt = Date.now()
+        const reason = conditionResult.reason ?? 'Condition not met'
+        executionSteps.push({
+          id: generateId('pipe-step'),
+          runId,
+          stepIndex: index,
+          agentId: step.agentId,
+          ...(step.name?.trim() ? { name: step.name.trim() } : {}),
+          task: step.task,
+          input: '',
+          status: 'skipped',
+          startedAt: skippedAt,
+          completedAt: skippedAt,
+          durationMs: 0,
+          error: reason,
+          skipReason: reason,
+        })
+        options.onStepUpdate?.({
+          stepIndex: index,
+          agentId: step.agentId,
+          name: step.name,
+          task: step.task,
+          input: '',
+          status: 'skipped',
+          startedAt: skippedAt,
+          completedAt: skippedAt,
+          durationMs: 0,
+          error: reason,
+          skipReason: reason,
+        })
+        continue
+      }
     }
 
     // Respect cancellation between steps.
@@ -457,7 +704,7 @@ export async function executeAgentPipeline(
         agentId: step.agentId,
         ...(step.name?.trim() ? { name: step.name.trim() } : {}),
         task: step.task,
-        input: buildStepInput(step, executionSteps),
+        input: buildStepInput(step, executionSteps, variables),
         status: 'error',
         startedAt: completedAt,
         completedAt,
@@ -467,6 +714,18 @@ export async function executeAgentPipeline(
       didFail = true
       executionError = executionError ?? 'Cancelled by user'
       continue
+    }
+
+    // Pre-flight budget check: enforce caps before doing any work for this step.
+    executedStepCount += 1
+    const preCap = evaluateBudget(executedStepCount)
+    if (preCap) {
+      budgetExceeded = preCap
+      const reason = formatBudgetReason(preCap)
+      didFail = true
+      executionError = executionError ?? reason
+      skipRemainingSteps(index, reason)
+      break
     }
 
     if (!step.task.trim()) {
@@ -514,7 +773,7 @@ export async function executeAgentPipeline(
     }
 
     const stepStart = Date.now()
-    const input = buildStepInput(step, executionSteps)
+    const input = buildStepInput(step, executionSteps, variables)
     const runtimeState = useAppStore.getState()
     const agent = runtimeState.agents.find((item) => item.id === step.agentId)
     if (!agent) {
@@ -560,7 +819,7 @@ export async function executeAgentPipeline(
       continue
     }
 
-    const model = resolvePipelineModel(agent, runtimeState.models)
+    const model = resolvePipelineModel(agent, runtimeState.models, step)
     const progressBase: AgentPipelineProgressStep = {
       stepIndex: index,
       agentId: step.agentId,
@@ -633,12 +892,14 @@ export async function executeAgentPipeline(
     try {
       let output = ''
       let lastError: string | undefined
+      let stepUsage: PipelineStepUsage | undefined
       const shouldStream = requiresStreaming(tools as Record<string, unknown>, Boolean(options.onStepUpdate))
       const stepTimeoutMs = step.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS
 
       while (attempts < maxAttempts) {
         attempts += 1
         output = ''
+        stepUsage = undefined
         options.onStepUpdate?.({
           ...progressBase,
           attempts,
@@ -665,6 +926,19 @@ export async function executeAgentPipeline(
                   ...progressBase,
                   output,
                   attempts,
+                  ...(stepUsage ? { usage: stepUsage } : {}),
+                })
+              } else if (event.type === 'usage') {
+                stepUsage = {
+                  promptTokens: event.promptTokens,
+                  completionTokens: event.completionTokens,
+                  totalTokens: event.totalTokens,
+                }
+                options.onStepUpdate?.({
+                  ...progressBase,
+                  output,
+                  attempts,
+                  usage: stepUsage,
                 })
               } else if (event.type === 'error') {
                 streamError = sanitizePipelineError(event.error)
@@ -692,13 +966,26 @@ export async function executeAgentPipeline(
             attempts,
             error: message,
           })
+          const backoffMs = computeRetryDelay(step, attempts)
+          if (backoffMs > 0) {
+            await delay(backoffMs, options.abortSignal)
+          }
         } finally {
           stepAbort.cleanup()
         }
       }
 
       const completedAt = Date.now()
-      const outputResult = clampStepOutput(step, output)
+      // Apply post-process transform (if any) before clamping. The clamped
+      // value is what flows downstream; the original LLM output is kept on
+      // `rawOutput` only when the transform actually changed something.
+      const transformResult = applyOutputTransform(step, output)
+      const transformedOutput = transformResult.transformed
+      const outputResult = clampStepOutput(step, transformedOutput)
+      const combinedWarnings = [
+        ...(transformResult.warning ? [transformResult.warning] : []),
+        ...(outputResult.warnings ?? []),
+      ]
       executionSteps.push({
         id: generateId('pipe-step'),
         runId,
@@ -708,13 +995,17 @@ export async function executeAgentPipeline(
         task: step.task,
         input,
         output: outputResult.output,
+        ...(transformResult.changed ? { rawOutput: output } : {}),
+        ...(model?.id ? { modelId: model.id } : {}),
+        ...(step.exportVar?.trim() ? { exportedVar: step.exportVar.trim() } : {}),
         status: 'success',
         startedAt: stepStart,
         completedAt,
         durationMs: completedAt - stepStart,
         attempts,
         outputType: step.outputType ?? 'text',
-        warnings: outputResult.warnings,
+        ...(combinedWarnings.length > 0 ? { warnings: combinedWarnings } : {}),
+        ...(stepUsage ? { usage: stepUsage } : {}),
       })
       options.onStepUpdate?.({
         ...progressBase,
@@ -723,8 +1014,28 @@ export async function executeAgentPipeline(
         completedAt,
         durationMs: completedAt - stepStart,
         attempts,
+        ...(stepUsage ? { usage: stepUsage } : {}),
       })
       previousOutput = outputResult.output
+      // Publish exported variable so subsequent steps can reference it via
+      // `{{vars.NAME}}` and `runIf`. Validation has already enforced that the
+      // name is identifier-shaped, but we re-check here as a defense-in-depth
+      // guard against pipelines mutated post-validation.
+      const exportName = step.exportVar?.trim()
+      if (exportName && EXPORT_VAR_NAME_PATTERN.test(exportName)) {
+        variables[exportName] = outputResult.output
+      }
+
+      // Post-step budget check (catches token-budget overruns once we know usage).
+      const postCap = evaluateBudget(executedStepCount)
+      if (postCap) {
+        budgetExceeded = postCap
+        const reason = formatBudgetReason(postCap)
+        didFail = true
+        executionError = executionError ?? reason
+        skipRemainingSteps(index + 1, reason)
+        break
+      }
     } catch (error) {
       const completedAt = Date.now()
       const message = sanitizePipelineError(error)
@@ -765,6 +1076,7 @@ export async function executeAgentPipeline(
   }
 
   const completedAt = Date.now()
+  const totalUsage = aggregateUsage(executionSteps)
   const execution: AgentPipelineExecution = {
     id: generateId('pipe-exec'),
     runId,
@@ -785,8 +1097,11 @@ export async function executeAgentPipeline(
       startedAt: executionStart,
       trigger: options.trigger ?? 'manual',
       validationWarnings: validation.warnings.map((issue) => issue.message),
+      ...(Object.keys(variables).length > 0 ? { variables } : {}),
     },
     ...(didFail ? { recoveryActions: [{ id: 'edit-pipeline', label: 'Edit pipeline' }] } : {}),
+    ...(totalUsage ? { usage: totalUsage } : {}),
+    ...(budgetExceeded ? { budgetExceeded } : {}),
   }
 
   const { workspacePath } = useAppStore.getState()
@@ -799,6 +1114,169 @@ export async function executeAgentPipeline(
   }
 
   return execution
+}
+
+/**
+ * Outcome for a single step in a `dryRunAgentPipeline` simulation. Mirrors
+ * the runtime classifications a real run would produce, but never calls a
+ * model so it costs zero tokens.
+ */
+export interface DryRunStepResult {
+  stepIndex: number
+  agentId: string
+  name?: string
+  task: string
+  /** The fully-resolved input (variables + step references substituted, just like a real run). */
+  resolvedInput: string
+  /** The model id that would be used (after step-level override resolution). */
+  modelId?: string
+  /** When the step has `exportVar` set, the variable name that would receive the output. */
+  exportedVar?: string
+  /** Final classification: `would-run`, `skipped`, `error`, or `disabled`. */
+  status: 'would-run' | 'skipped' | 'error' | 'disabled'
+  /** Reason for `skipped` / `error` / `disabled`. */
+  reason?: string
+}
+
+export interface DryRunResult {
+  pipelineId: string
+  pipelineName: string
+  steps: DryRunStepResult[]
+  variables: Record<string, string>
+  validationWarnings: string[]
+  validationErrors: string[]
+  /** When set, the dry run aborted early because a budget cap would have been exceeded. */
+  budgetExceeded?: AgentPipelineExecution['budgetExceeded']
+  /** True when no validation errors were raised. */
+  valid: boolean
+}
+
+/**
+ * Simulate a pipeline run without calling any model. Useful to debug
+ * variable substitution, `runIf` conditions, missing agents/models, and the
+ * `maxStepCount` budget cap before spending tokens. Token / duration budgets
+ * cannot be evaluated in a dry run (no real usage data, no real wall clock),
+ * so only `maxStepCount` is enforced.
+ */
+export function dryRunAgentPipeline(
+  pipeline: AgentPipeline,
+  options: { variables?: Record<string, string> } = {},
+): DryRunResult {
+  const state = useAppStore.getState()
+  const validation = validateAgentPipeline(pipeline, state.agents, state.models)
+  const variables = resolveRunVariables(pipeline, options.variables)
+  const simulatedSteps: PipelineStepRuntimeValue[] = []
+  const dryRunSteps: DryRunStepResult[] = []
+  let executedStepCount = 0
+  let budgetExceeded: AgentPipelineExecution['budgetExceeded']
+
+  for (const [index, step] of pipeline.steps.entries()) {
+    const baseEntry = {
+      stepIndex: index,
+      agentId: step.agentId,
+      ...(step.name?.trim() ? { name: step.name.trim() } : {}),
+      task: step.task,
+    } satisfies Pick<DryRunStepResult, 'stepIndex' | 'agentId' | 'name' | 'task'>
+
+    if (step.enabled === false) {
+      dryRunSteps.push({ ...baseEntry, resolvedInput: '', status: 'disabled', reason: 'Step disabled' })
+      simulatedSteps.push({ stepIndex: index, agentId: step.agentId, task: step.task, input: '', output: '', status: 'skipped', error: 'Step disabled' })
+      continue
+    }
+
+    if (step.runIf?.trim()) {
+      try {
+        const conditionResult = evaluateRunIf(step.runIf, simulatedSteps, variables)
+        if (!conditionResult.passed) {
+          const reason = conditionResult.reason ?? `Condition not met: ${step.runIf}`
+          dryRunSteps.push({ ...baseEntry, resolvedInput: '', status: 'skipped', reason })
+          simulatedSteps.push({ stepIndex: index, agentId: step.agentId, task: step.task, input: '', output: '', status: 'skipped', error: reason })
+          continue
+        }
+      } catch (error) {
+        const reason = `Invalid runIf condition: ${(error as Error).message}`
+        dryRunSteps.push({ ...baseEntry, resolvedInput: '', status: 'error', reason })
+        simulatedSteps.push({ stepIndex: index, agentId: step.agentId, task: step.task, input: '', output: '', status: 'error', error: reason })
+        continue
+      }
+    }
+
+    executedStepCount += 1
+    const stepCap = pipeline.budget?.maxStepCount
+    if (typeof stepCap === 'number' && stepCap > 0 && executedStepCount > stepCap) {
+      budgetExceeded = { type: 'steps', limit: stepCap, observed: executedStepCount }
+      const reason = `Pipeline budget exceeded: ${executedStepCount} executed steps > ${stepCap}`
+      dryRunSteps.push({ ...baseEntry, resolvedInput: '', status: 'skipped', reason })
+      // Mark all remaining steps as skipped too.
+      for (let remaining = index + 1; remaining < pipeline.steps.length; remaining += 1) {
+        const remainingStep = pipeline.steps[remaining]
+        dryRunSteps.push({
+          stepIndex: remaining,
+          agentId: remainingStep.agentId,
+          ...(remainingStep.name?.trim() ? { name: remainingStep.name.trim() } : {}),
+          task: remainingStep.task,
+          resolvedInput: '',
+          status: 'skipped',
+          reason,
+        })
+      }
+      break
+    }
+
+    const agent = state.agents.find((item) => item.id === step.agentId)
+    if (!agent) {
+      dryRunSteps.push({ ...baseEntry, resolvedInput: '', status: 'error', reason: `Step ${index + 1} references a missing agent.` })
+      simulatedSteps.push({ stepIndex: index, agentId: step.agentId, task: step.task, input: '', output: '', status: 'error', error: 'missing agent' })
+      continue
+    }
+
+    const model = resolvePipelineModel(agent, state.models, step)
+    if (!model) {
+      dryRunSteps.push({
+        ...baseEntry,
+        resolvedInput: buildStepInput(step, simulatedSteps, variables),
+        status: 'error',
+        reason: `Step ${index + 1} agent "${agent.name}" has no runnable model.`,
+      })
+      simulatedSteps.push({ stepIndex: index, agentId: step.agentId, task: step.task, input: '', output: '', status: 'error', error: 'no model' })
+      continue
+    }
+
+    const resolvedInput = buildStepInput(step, simulatedSteps, variables)
+    const simulatedOutput = `[dry-run output for step ${index + 1}]`
+    dryRunSteps.push({
+      ...baseEntry,
+      resolvedInput,
+      modelId: model.id,
+      status: 'would-run',
+      ...(step.exportVar?.trim() ? { exportedVar: step.exportVar.trim() } : {}),
+    })
+    // Simulate a successful step so downstream `runIf` and references work.
+    simulatedSteps.push({
+      stepIndex: index,
+      agentId: step.agentId,
+      task: step.task,
+      input: resolvedInput,
+      output: simulatedOutput,
+      status: 'success',
+    })
+    // Publish exported variable so downstream `{{vars.NAME}}` and `runIf` see it.
+    const exportName = step.exportVar?.trim()
+    if (exportName && EXPORT_VAR_NAME_PATTERN.test(exportName)) {
+      variables[exportName] = simulatedOutput
+    }
+  }
+
+  return {
+    pipelineId: pipeline.id,
+    pipelineName: pipeline.name,
+    steps: dryRunSteps,
+    variables,
+    validationErrors: validation.errors.map((issue) => issue.message),
+    validationWarnings: validation.warnings.map((issue) => issue.message),
+    valid: validation.valid,
+    ...(budgetExceeded ? { budgetExceeded } : {}),
+  }
 }
 
 export async function executePipelineById(

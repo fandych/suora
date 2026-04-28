@@ -1,4 +1,5 @@
 import type { Agent, AgentPipeline, AgentPipelineStep, Model, PipelineRecoveryAction } from '@/types'
+import { extractVariableReferences, validateRunIfSyntax } from '@/services/pipelineRunIf'
 
 export type PipelineValidationSeverity = 'error' | 'warning'
 
@@ -24,8 +25,10 @@ function hasInvalidBudget(value: unknown): boolean {
   return value !== undefined && (!Number.isFinite(value) || Number(value) <= 0)
 }
 
+const VALID_VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
+
 export function validateAgentPipeline(
-  pipeline: Pick<AgentPipeline, 'name' | 'steps'>,
+  pipeline: Pick<AgentPipeline, 'name' | 'steps' | 'variables' | 'budget'>,
   agents: Agent[],
   models: Model[],
 ): PipelineValidationResult {
@@ -35,6 +38,55 @@ export function validateAgentPipeline(
   if (enabledSteps.length === 0) {
     issues.push({ severity: 'error', code: 'empty-pipeline', message: 'Pipeline has no enabled steps.' })
   }
+
+  if (pipeline.budget) {
+    const budgetKeys = ['maxTotalDurationMs', 'maxTotalTokens', 'maxStepCount'] as const
+    for (const key of budgetKeys) {
+      const value = pipeline.budget[key]
+      if (value === undefined) continue
+      if (!Number.isFinite(value) || (value as number) < 0 || !Number.isInteger(value)) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-budget',
+          message: `Pipeline budget "${key}" must be a non-negative integer.`,
+        })
+      }
+    }
+    const stepCap = pipeline.budget.maxStepCount
+    if (typeof stepCap === 'number' && stepCap > 0 && enabledSteps.length > stepCap) {
+      issues.push({
+        severity: 'warning',
+        code: 'budget-step-count-too-low',
+        message: `Pipeline budget caps execution at ${stepCap} step(s) but ${enabledSteps.length} are enabled — later steps will be skipped.`,
+      })
+    }
+  }
+
+  const declaredVariableNames = new Set<string>()
+  ;(pipeline.variables ?? []).forEach((variable, variableIndex) => {
+    if (!variable.name || !VALID_VARIABLE_NAME.test(variable.name)) {
+      issues.push({
+        severity: 'error',
+        code: 'invalid-variable-name',
+        message: `Variable #${variableIndex + 1} has an invalid name. Use letters, digits, and underscores only.`,
+      })
+      return
+    }
+    if (declaredVariableNames.has(variable.name)) {
+      issues.push({
+        severity: 'error',
+        code: 'duplicate-variable',
+        message: `Variable "${variable.name}" is declared more than once.`,
+      })
+      return
+    }
+    declaredVariableNames.add(variable.name)
+  })
+
+  // Names that earlier steps will publish via `exportVar`. Treated as
+  // declared from the perspective of any later step's `{{vars.X}}` /
+  // `runIf` references, so a step can produce a value its successor uses.
+  const exportedVariableNames = new Set<string>()
 
   pipeline.steps.forEach((step: AgentPipelineStep, index) => {
     if (step.enabled === false) return
@@ -67,6 +119,104 @@ export function validateAgentPipeline(
     if (hasInvalidBudget(step.maxInputChars)) issues.push({ severity: 'error', code: 'invalid-max-input', stepIndex: index, message: `Step ${index + 1} max input chars must be positive.` })
     if (hasInvalidBudget(step.maxOutputChars)) issues.push({ severity: 'error', code: 'invalid-max-output', stepIndex: index, message: `Step ${index + 1} max output chars must be positive.` })
 
+    if (step.modelId) {
+      const overridden = models.find((model) => model.id === step.modelId)
+      if (!overridden) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-step-model',
+          stepIndex: index,
+          message: `Step ${index + 1} references an unknown model.`,
+          recoveryActions: [{ id: 'edit-pipeline', label: 'Choose a model', stepIndex: index }],
+        })
+      } else if (overridden.enabled === false) {
+        issues.push({
+          severity: 'warning',
+          code: 'disabled-step-model',
+          stepIndex: index,
+          message: `Step ${index + 1} model "${overridden.name}" is disabled — the agent's default model will be used.`,
+        })
+      }
+    }
+
+    if (step.outputTransform !== undefined) {
+      const validTransforms = ['trim', 'first-line', 'last-line', 'json-path'] as const
+      if (!(validTransforms as readonly string[]).includes(step.outputTransform)) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-output-transform',
+          stepIndex: index,
+          message: `Step ${index + 1} output transform must be one of ${validTransforms.join(', ')}.`,
+        })
+      } else if (step.outputTransform === 'json-path' && !(step.outputTransformPath?.trim())) {
+        issues.push({
+          severity: 'error',
+          code: 'missing-transform-path',
+          stepIndex: index,
+          message: `Step ${index + 1} json-path transform requires an outputTransformPath (e.g. "data.items.0.name").`,
+        })
+      }
+    }
+
+    if (step.exportVar !== undefined) {
+      const exportName = step.exportVar.trim()
+      if (!exportName) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-export-var',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar is empty — remove the field or provide a name.`,
+        })
+      } else if (!VALID_VARIABLE_NAME.test(exportName)) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-export-var',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar "${exportName}" must match /^[A-Za-z_][A-Za-z0-9_]*$/.`,
+        })
+      } else if (declaredVariableNames.has(exportName)) {
+        // Overwriting a declared variable's default mid-run is legal but is
+        // almost always a footgun (the supplied value disappears once the step
+        // runs), so surface it as a warning.
+        issues.push({
+          severity: 'warning',
+          code: 'export-var-collision',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar "${exportName}" overwrites a declared pipeline variable; the supplied value will be replaced once this step succeeds.`,
+        })
+        exportedVariableNames.add(exportName)
+      } else {
+        exportedVariableNames.add(exportName)
+      }
+    }
+
+    if (step.retryBackoffMs !== undefined) {
+      if (!Number.isFinite(step.retryBackoffMs) || step.retryBackoffMs < 0) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-retry-backoff',
+          stepIndex: index,
+          message: `Step ${index + 1} retry backoff must be zero or a positive number of milliseconds.`,
+        })
+      } else if (step.retryBackoffMs > 60_000) {
+        issues.push({
+          severity: 'warning',
+          code: 'long-retry-backoff',
+          stepIndex: index,
+          message: `Step ${index + 1} retry backoff exceeds 60s and will be capped by the runtime.`,
+        })
+      }
+    }
+
+    if (step.retryBackoffStrategy !== undefined && step.retryBackoffStrategy !== 'fixed' && step.retryBackoffStrategy !== 'exponential') {
+      issues.push({
+        severity: 'error',
+        code: 'invalid-retry-strategy',
+        stepIndex: index,
+        message: `Step ${index + 1} retry strategy must be either "fixed" or "exponential".`,
+      })
+    }
+
     for (const match of step.task.matchAll(STEP_REFERENCE_PATTERN)) {
       const referenceIndex = Number(match[1] ?? match[2])
       if (!Number.isFinite(referenceIndex) || referenceIndex < 1 || referenceIndex > pipeline.steps.length) {
@@ -74,6 +224,35 @@ export function validateAgentPipeline(
       } else if (referenceIndex - 1 >= index) {
         issues.push({ severity: 'error', code: 'forward-reference', stepIndex: index, message: `Step ${index + 1} references a future step.` })
       }
+    }
+
+    // Validate `{{vars.X}}` references in the task body and runIf condition.
+    const referencedVariables = new Set<string>([
+      ...extractVariableReferences(step.task),
+      ...extractVariableReferences(step.runIf),
+    ])
+    for (const variableName of referencedVariables) {
+      if (!declaredVariableNames.has(variableName) && !exportedVariableNames.has(variableName)) {
+        issues.push({
+          severity: 'error',
+          code: 'unknown-variable',
+          stepIndex: index,
+          message: `Step ${index + 1} references undeclared variable "${variableName}".`,
+          recoveryActions: [{ id: 'edit-pipeline', label: 'Declare variable', stepIndex: index }],
+        })
+      }
+    }
+
+    // Validate runIf syntax.
+    const runIfError = validateRunIfSyntax(step.runIf)
+    if (runIfError) {
+      issues.push({
+        severity: 'error',
+        code: 'invalid-run-if',
+        stepIndex: index,
+        message: `Step ${index + 1} has an invalid runIf condition: ${runIfError}`,
+        recoveryActions: [{ id: 'edit-pipeline', label: 'Edit condition', stepIndex: index }],
+      })
     }
 
     if ((step.maxInputChars ?? 0) > 120_000 || (step.maxOutputChars ?? 0) > 120_000) {

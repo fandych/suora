@@ -49,4 +49,16 @@ describe('pipelineMermaid', () => {
     expect(source).toContain('class step1 success;')
     expect(source).toContain('class step2 error;')
   })
+
+  it('renders runIf conditions on conditional steps and incoming edges', () => {
+    const steps: AgentPipelineStep[] = [
+      { agentId: 'agent-1', task: 'Draft' },
+      { agentId: 'agent-2', task: 'Review', runIf: "step1.status == 'success'" },
+    ]
+
+    const source = buildPipelineMermaidSource(steps)
+
+    expect(source).toContain("if step1.status == 'success'")
+    expect(source).toMatch(/step1 -->\|if step1\.status == 'success'\| step2/)
+  })
 })

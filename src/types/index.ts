@@ -834,22 +834,108 @@ export interface AgentPipelineStep {
   enabled?: boolean
   continueOnError?: boolean
   retryCount?: number
+  /** Base delay (in ms) between retries. Defaults to 0 (no delay). */
+  retryBackoffMs?: number
+  /**
+   * Strategy for spacing retries.
+   *  - `fixed` (default): wait exactly `retryBackoffMs` before each retry.
+   *  - `exponential`: wait `retryBackoffMs * 2^(attempt-1)` before retry N (capped at 60s).
+   */
+  retryBackoffStrategy?: 'fixed' | 'exponential'
   timeoutMs?: number
   maxInputChars?: number
   maxOutputChars?: number
   outputType?: 'text' | 'json' | 'file' | 'table'
+  /**
+   * Optional model id that overrides the agent's default model for this step
+   * only (e.g. use a cheaper model for a summarization step). Falls back to
+   * the agent's `modelId` when unset or when the referenced model is missing
+   * / disabled at run time.
+   */
+  modelId?: string
+  /**
+   * Post-process the LLM output before handing it to downstream steps:
+   *  - `trim`: strip leading/trailing whitespace
+   *  - `first-line` / `last-line`: keep only the first/last non-empty line
+   *  - `json-path`: parse the output as JSON and pluck `outputTransformPath`
+   *    using a dotted path (e.g. `data.items.0.name`). Falls back to the
+   *    untransformed output when the path cannot be resolved.
+   *
+   * The original output is kept on `AgentPipelineExecutionStep.rawOutput`.
+   */
+  outputTransform?: 'trim' | 'first-line' | 'last-line' | 'json-path'
+  /** Dotted path used by the `json-path` transform. Required when transform is `json-path`. */
+  outputTransformPath?: string
+  /**
+   * When set, the step's (transformed) output is also written into the
+   * pipeline variable map under this name, so downstream steps can
+   * reference it as `{{vars.NAME}}` or inside `runIf` (e.g.
+   * `vars.NAME == 'approved'`). Combined with `outputTransform: 'json-path'`
+   * this is the canonical way to lift a scalar out of a model's JSON
+   * response and reuse it by name. The value persists for the rest of the
+   * run only — it is never written back to the saved pipeline.
+   *
+   * Must be a JavaScript-identifier-compatible name (`[A-Za-z_][A-Za-z0-9_]*`).
+   */
+  exportVar?: string
+  /**
+   * Optional condition expression evaluated before the step runs. When the
+   * expression is falsy the step is recorded as 'skipped' with the failed
+   * condition as the reason. Supports references to previous steps
+   * (e.g. `step1.status == 'success'`, `previous.output contains 'approved'`)
+   * and pipeline variables (`vars.NAME != ''`). Multiple clauses may be
+   * combined with `&&` (AND).
+   */
+  runIf?: string
 }
 
 export type AgentPipelineTrigger = 'manual' | 'timer' | 'chat'
+
+/**
+ * Declarative variable definition for an `AgentPipeline`. Values are supplied
+ * at run time (manual run dialog, timer trigger, or chat-command named args)
+ * and are referenced inside step tasks / `runIf` conditions as `{{vars.name}}`.
+ */
+export interface AgentPipelineVariable {
+  name: string
+  label?: string
+  description?: string
+  defaultValue?: string
+  required?: boolean
+}
+
+/**
+ * Optional whole-pipeline budget caps enforced by the runtime. When any cap is
+ * exceeded the run aborts and the remaining steps are recorded as `skipped`
+ * with the budget reason. Each cap is independent — only the ones you set are
+ * checked. A value of `0` or a negative number disables that cap.
+ */
+export interface AgentPipelineBudget {
+  /** Aggregate wall-clock budget across all steps. */
+  maxTotalDurationMs?: number
+  /** Aggregate `usage.totalTokens` budget across all steps. */
+  maxTotalTokens?: number
+  /** Maximum number of steps that may execute (skipped/disabled steps don't count). */
+  maxStepCount?: number
+}
 
 export interface AgentPipeline {
   id: string
   name: string
   description?: string
   steps: AgentPipelineStep[]
+  variables?: AgentPipelineVariable[]
+  /** Optional safety budget enforced by the runtime; see `AgentPipelineBudget`. */
+  budget?: AgentPipelineBudget
   createdAt: number
   updatedAt: number
   lastRunAt?: number
+}
+
+export interface PipelineStepUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
 }
 
 export interface AgentPipelineExecutionStep {
@@ -861,6 +947,16 @@ export interface AgentPipelineExecutionStep {
   task: string
   input: string
   output?: string
+  /**
+   * Original LLM output before `outputTransform` was applied. Only set when
+   * the transform actually changed the value, so existing executions are
+   * unaffected.
+   */
+  rawOutput?: string
+  /** Resolved model id used for this step (after step-level override). */
+  modelId?: string
+  /** When the step had `exportVar` set, the variable name that received the output. */
+  exportedVar?: string
   status: 'success' | 'error' | 'skipped'
   startedAt: number
   completedAt: number
@@ -871,6 +967,10 @@ export interface AgentPipelineExecutionStep {
   outputRef?: string
   warnings?: string[]
   recoveryActions?: PipelineRecoveryAction[]
+  /** Token usage reported by the model provider for this step. */
+  usage?: PipelineStepUsage
+  /** When `status === 'skipped'`, the reason the step was skipped (e.g. condition not met). */
+  skipReason?: string
 }
 
 export interface PipelineRecoveryAction {
@@ -888,6 +988,8 @@ export interface PipelineRuntimeSnapshot {
   startedAt: number
   trigger: AgentPipelineTrigger
   validationWarnings?: string[]
+  /** Variable values supplied to this run; surfaced for debugging and replay. */
+  variables?: Record<string, string>
 }
 
 export interface AgentPipelineExecution {
@@ -905,6 +1007,18 @@ export interface AgentPipelineExecution {
   error?: string
   runtime?: PipelineRuntimeSnapshot
   recoveryActions?: PipelineRecoveryAction[]
+  /** Aggregated token usage across all successful steps. */
+  usage?: PipelineStepUsage
+  /**
+   * When the run aborted because an `AgentPipelineBudget` cap was exceeded,
+   * this records which cap was hit. Surfaced in the UI so the user can raise
+   * the budget or trim the pipeline.
+   */
+  budgetExceeded?: {
+    type: 'duration' | 'tokens' | 'steps'
+    limit: number
+    observed: number
+  }
 }
 
 // ─── i18n ──────────────────────────────────────────────────────────
