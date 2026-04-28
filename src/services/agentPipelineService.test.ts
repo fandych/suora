@@ -458,4 +458,122 @@ describe('agentPipelineService', () => {
     expect(execution.steps[1].usage).toEqual({ promptTokens: 20, completionTokens: 7, totalTokens: 27 })
     expect(execution.usage).toEqual({ promptTokens: 30, completionTokens: 12, totalTokens: 42 })
   })
+
+  it('aborts the run and skips remaining steps when the token budget is exceeded', async () => {
+    const budgetPipeline: AgentPipeline = {
+      ...savedPipeline,
+      budget: { maxTotalTokens: 20 },
+      steps: [
+        { agentId: 'agent-1', task: 'Draft the report' },
+        { agentId: 'agent-2', task: 'Review the report' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'draft-ready' }
+        yield { type: 'usage', promptTokens: 30, completionTokens: 0, totalTokens: 30 }
+      })
+
+    const execution = await executeAgentPipeline(budgetPipeline)
+
+    expect(execution.status).toBe('error')
+    expect(execution.budgetExceeded).toEqual({ type: 'tokens', limit: 20, observed: 30 })
+    expect(execution.steps).toHaveLength(2)
+    expect(execution.steps[0].status).toBe('success')
+    expect(execution.steps[1].status).toBe('skipped')
+    expect(execution.steps[1].skipReason).toContain('budget')
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts the run when the step-count cap is reached', async () => {
+    const budgetPipeline: AgentPipeline = {
+      ...savedPipeline,
+      budget: { maxStepCount: 1 },
+      steps: [
+        { agentId: 'agent-1', task: 'Draft the report' },
+        { agentId: 'agent-2', task: 'Review the report' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'draft-ready' }
+      })
+
+    const execution = await executeAgentPipeline(budgetPipeline)
+
+    expect(execution.status).toBe('error')
+    expect(execution.budgetExceeded?.type).toBe('steps')
+    expect(execution.steps[0].status).toBe('success')
+    expect(execution.steps[1].status).toBe('skipped')
+  })
+
+  it('honors the per-step retry backoff before retrying', async () => {
+    vi.useFakeTimers()
+    try {
+      const retryPipeline: AgentPipeline = {
+        ...savedPipeline,
+        steps: [
+          { agentId: 'agent-1', task: 'Draft', retryCount: 1, retryBackoffMs: 100, retryBackoffStrategy: 'fixed' },
+        ],
+      }
+
+      vi.mocked(streamResponseWithTools)
+        .mockImplementationOnce(async function* () {
+          yield { type: 'error', error: 'temporary' }
+        })
+        .mockImplementationOnce(async function* () {
+          yield { type: 'text-delta', text: 'recovered' }
+        })
+
+      const promise = executeAgentPipeline(retryPipeline)
+      // Allow the rejected attempt to flow through the microtask queue.
+      await vi.advanceTimersByTimeAsync(0)
+      // Before the backoff elapses, the retry has not been triggered.
+      expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+      // After the backoff, the retry runs.
+      await vi.advanceTimersByTimeAsync(100)
+      const execution = await promise
+
+      expect(execution.status).toBe('success')
+      expect(execution.steps[0].attempts).toBe(2)
+      expect(streamResponseWithTools).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('uses exponential growth for the retry backoff when configured', async () => {
+    vi.useFakeTimers()
+    try {
+      const retryPipeline: AgentPipeline = {
+        ...savedPipeline,
+        steps: [
+          { agentId: 'agent-1', task: 'Draft', retryCount: 2, retryBackoffMs: 50, retryBackoffStrategy: 'exponential' },
+        ],
+      }
+
+      vi.mocked(streamResponseWithTools)
+        .mockImplementationOnce(async function* () { yield { type: 'error', error: 'fail-1' } })
+        .mockImplementationOnce(async function* () { yield { type: 'error', error: 'fail-2' } })
+        .mockImplementationOnce(async function* () { yield { type: 'text-delta', text: 'recovered' } })
+
+      const promise = executeAgentPipeline(retryPipeline)
+
+      await vi.advanceTimersByTimeAsync(0)
+      expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+      // First retry waits ~50ms.
+      await vi.advanceTimersByTimeAsync(50)
+      expect(streamResponseWithTools).toHaveBeenCalledTimes(2)
+      // Second retry waits ~100ms (50 * 2^1).
+      await vi.advanceTimersByTimeAsync(100)
+      const execution = await promise
+
+      expect(execution.status).toBe('success')
+      expect(execution.steps[0].attempts).toBe(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

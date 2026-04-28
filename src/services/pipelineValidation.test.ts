@@ -119,4 +119,41 @@ describe('pipelineValidation', () => {
       expect.arrayContaining(['duplicate-variable', 'invalid-variable-name']),
     )
   })
+
+  it('rejects an invalid retry-backoff strategy and negative backoff', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          // @ts-expect-error invalid strategy on purpose
+          { agentId: 'agent-1', task: 'Draft', retryCount: 1, retryBackoffStrategy: 'wild' },
+          { agentId: 'agent-1', task: 'Review', retryCount: 1, retryBackoffMs: -10 },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['invalid-retry-strategy', 'invalid-retry-backoff']),
+    )
+  })
+
+  it('rejects a negative budget cap and warns when the step cap is below the enabled count', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Draft' },
+          { agentId: 'agent-1', task: 'Review' },
+        ],
+        budget: { maxTotalTokens: -5, maxStepCount: 1 },
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.some((issue) => issue.code === 'invalid-budget')).toBe(true)
+    expect(result.warnings.some((issue) => issue.code === 'budget-step-count-too-low')).toBe(true)
+  })
 })

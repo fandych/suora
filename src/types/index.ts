@@ -834,6 +834,14 @@ export interface AgentPipelineStep {
   enabled?: boolean
   continueOnError?: boolean
   retryCount?: number
+  /** Base delay (in ms) between retries. Defaults to 0 (no delay). */
+  retryBackoffMs?: number
+  /**
+   * Strategy for spacing retries.
+   *  - `fixed` (default): wait exactly `retryBackoffMs` before each retry.
+   *  - `exponential`: wait `retryBackoffMs * 2^(attempt-1)` before retry N (capped at 60s).
+   */
+  retryBackoffStrategy?: 'fixed' | 'exponential'
   timeoutMs?: number
   maxInputChars?: number
   maxOutputChars?: number
@@ -864,12 +872,29 @@ export interface AgentPipelineVariable {
   required?: boolean
 }
 
+/**
+ * Optional whole-pipeline budget caps enforced by the runtime. When any cap is
+ * exceeded the run aborts and the remaining steps are recorded as `skipped`
+ * with the budget reason. Each cap is independent — only the ones you set are
+ * checked. A value of `0` or a negative number disables that cap.
+ */
+export interface AgentPipelineBudget {
+  /** Aggregate wall-clock budget across all steps. */
+  maxTotalDurationMs?: number
+  /** Aggregate `usage.totalTokens` budget across all steps. */
+  maxTotalTokens?: number
+  /** Maximum number of steps that may execute (skipped/disabled steps don't count). */
+  maxStepCount?: number
+}
+
 export interface AgentPipeline {
   id: string
   name: string
   description?: string
   steps: AgentPipelineStep[]
   variables?: AgentPipelineVariable[]
+  /** Optional safety budget enforced by the runtime; see `AgentPipelineBudget`. */
+  budget?: AgentPipelineBudget
   createdAt: number
   updatedAt: number
   lastRunAt?: number
@@ -942,6 +967,16 @@ export interface AgentPipelineExecution {
   recoveryActions?: PipelineRecoveryAction[]
   /** Aggregated token usage across all successful steps. */
   usage?: PipelineStepUsage
+  /**
+   * When the run aborted because an `AgentPipelineBudget` cap was exceeded,
+   * this records which cap was hit. Surfaced in the UI so the user can raise
+   * the budget or trim the pipeline.
+   */
+  budgetExceeded?: {
+    type: 'duration' | 'tokens' | 'steps'
+    limit: number
+    observed: number
+  }
 }
 
 // ─── i18n ──────────────────────────────────────────────────────────

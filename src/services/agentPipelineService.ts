@@ -67,6 +67,37 @@ function normalizeRetryCount(retryCount?: number): number {
   return Math.max(0, Math.min(Math.trunc(retryCount ?? 0), MAX_STEP_RETRIES))
 }
 
+const MAX_RETRY_BACKOFF_MS = 60_000
+
+function computeRetryDelay(step: AgentPipeline['steps'][number], attemptNumber: number): number {
+  const base = Number.isFinite(step.retryBackoffMs) ? Math.max(0, Math.trunc(step.retryBackoffMs ?? 0)) : 0
+  if (base === 0) return 0
+  if (step.retryBackoffStrategy === 'exponential') {
+    const safeAttempt = Math.max(1, Math.min(attemptNumber, 10))
+    return Math.min(base * 2 ** (safeAttempt - 1), MAX_RETRY_BACKOFF_MS)
+  }
+  return Math.min(base, MAX_RETRY_BACKOFF_MS)
+}
+
+function delay(ms: number, abortSignal?: AbortSignal): Promise<void> {
+  if (ms <= 0) return Promise.resolve()
+  return new Promise((resolve) => {
+    if (abortSignal?.aborted) {
+      resolve()
+      return
+    }
+    const timer = setTimeout(() => {
+      abortSignal?.removeEventListener('abort', onAbort)
+      resolve()
+    }, ms)
+    const onAbort = () => {
+      clearTimeout(timer)
+      resolve()
+    }
+    abortSignal?.addEventListener('abort', onAbort, { once: true })
+  })
+}
+
 function findLatestProducedStep(previousSteps: PipelineStepRuntimeValue[]): PipelineStepRuntimeValue | undefined {
   for (let index = previousSteps.length - 1; index >= 0; index -= 1) {
     const step = previousSteps[index]
@@ -481,6 +512,52 @@ export async function executeAgentPipeline(
     }
   }
 
+  let budgetExceeded: AgentPipelineExecution['budgetExceeded']
+
+  /**
+   * Returns the cap that has been exceeded, or `undefined` if all budgets
+   * still have headroom. `executedStepCount` should reflect non-skipped,
+   * non-disabled steps that have either completed or are about to start.
+   */
+  const evaluateBudget = (executedStepCount: number): AgentPipelineExecution['budgetExceeded'] => {
+    const budget = pipeline.budget
+    if (!budget) return undefined
+    const tokens = aggregateUsage(executionSteps)?.totalTokens ?? 0
+
+    if (Number.isFinite(budget.maxTotalDurationMs) && (budget.maxTotalDurationMs ?? 0) > 0) {
+      const elapsed = Date.now() - executionStart
+      if (elapsed > (budget.maxTotalDurationMs ?? 0)) {
+        return { type: 'duration', limit: budget.maxTotalDurationMs ?? 0, observed: elapsed }
+      }
+    }
+    if (Number.isFinite(budget.maxTotalTokens) && (budget.maxTotalTokens ?? 0) > 0) {
+      if (tokens > (budget.maxTotalTokens ?? 0)) {
+        return { type: 'tokens', limit: budget.maxTotalTokens ?? 0, observed: tokens }
+      }
+    }
+    if (Number.isFinite(budget.maxStepCount) && (budget.maxStepCount ?? 0) > 0) {
+      if (executedStepCount > (budget.maxStepCount ?? 0)) {
+        return { type: 'steps', limit: budget.maxStepCount ?? 0, observed: executedStepCount }
+      }
+    }
+    return undefined
+  }
+
+  const formatBudgetReason = (cap: NonNullable<AgentPipelineExecution['budgetExceeded']>): string => {
+    switch (cap.type) {
+      case 'duration':
+        return `Pipeline budget exceeded: total duration ${cap.observed}ms > ${cap.limit}ms`
+      case 'tokens':
+        return `Pipeline budget exceeded: total tokens ${cap.observed} > ${cap.limit}`
+      case 'steps':
+        return `Pipeline budget exceeded: ${cap.observed} executed steps > ${cap.limit}`
+      default:
+        return 'Pipeline budget exceeded'
+    }
+  }
+
+  let executedStepCount = 0
+
   for (const [index, step] of pipeline.steps.entries()) {
     if (step.enabled === false) {
       const skippedAt = Date.now()
@@ -619,6 +696,18 @@ export async function executeAgentPipeline(
       didFail = true
       executionError = executionError ?? 'Cancelled by user'
       continue
+    }
+
+    // Pre-flight budget check: enforce caps before doing any work for this step.
+    executedStepCount += 1
+    const preCap = evaluateBudget(executedStepCount)
+    if (preCap) {
+      budgetExceeded = preCap
+      const reason = formatBudgetReason(preCap)
+      didFail = true
+      executionError = executionError ?? reason
+      skipRemainingSteps(index, reason)
+      break
     }
 
     if (!step.task.trim()) {
@@ -859,6 +948,10 @@ export async function executeAgentPipeline(
             attempts,
             error: message,
           })
+          const backoffMs = computeRetryDelay(step, attempts)
+          if (backoffMs > 0) {
+            await delay(backoffMs, options.abortSignal)
+          }
         } finally {
           stepAbort.cleanup()
         }
@@ -894,6 +987,17 @@ export async function executeAgentPipeline(
         ...(stepUsage ? { usage: stepUsage } : {}),
       })
       previousOutput = outputResult.output
+
+      // Post-step budget check (catches token-budget overruns once we know usage).
+      const postCap = evaluateBudget(executedStepCount)
+      if (postCap) {
+        budgetExceeded = postCap
+        const reason = formatBudgetReason(postCap)
+        didFail = true
+        executionError = executionError ?? reason
+        skipRemainingSteps(index + 1, reason)
+        break
+      }
     } catch (error) {
       const completedAt = Date.now()
       const message = sanitizePipelineError(error)
@@ -959,6 +1063,7 @@ export async function executeAgentPipeline(
     },
     ...(didFail ? { recoveryActions: [{ id: 'edit-pipeline', label: 'Edit pipeline' }] } : {}),
     ...(totalUsage ? { usage: totalUsage } : {}),
+    ...(budgetExceeded ? { budgetExceeded } : {}),
   }
 
   const { workspacePath } = useAppStore.getState()

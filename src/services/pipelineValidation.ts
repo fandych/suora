@@ -28,7 +28,7 @@ function hasInvalidBudget(value: unknown): boolean {
 const VALID_VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 export function validateAgentPipeline(
-  pipeline: Pick<AgentPipeline, 'name' | 'steps' | 'variables'>,
+  pipeline: Pick<AgentPipeline, 'name' | 'steps' | 'variables' | 'budget'>,
   agents: Agent[],
   models: Model[],
 ): PipelineValidationResult {
@@ -37,6 +37,33 @@ export function validateAgentPipeline(
 
   if (enabledSteps.length === 0) {
     issues.push({ severity: 'error', code: 'empty-pipeline', message: 'Pipeline has no enabled steps.' })
+  }
+
+  if (pipeline.budget) {
+    const budgetEntries: Array<{ key: 'maxTotalDurationMs' | 'maxTotalTokens' | 'maxStepCount'; label: string }> = [
+      { key: 'maxTotalDurationMs', label: 'maxTotalDurationMs' },
+      { key: 'maxTotalTokens', label: 'maxTotalTokens' },
+      { key: 'maxStepCount', label: 'maxStepCount' },
+    ]
+    for (const { key, label } of budgetEntries) {
+      const value = pipeline.budget[key]
+      if (value === undefined) continue
+      if (!Number.isFinite(value) || (value as number) < 0 || !Number.isInteger(value)) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-budget',
+          message: `Pipeline budget "${label}" must be a non-negative integer.`,
+        })
+      }
+    }
+    const stepCap = pipeline.budget.maxStepCount
+    if (typeof stepCap === 'number' && stepCap > 0 && enabledSteps.length > stepCap) {
+      issues.push({
+        severity: 'warning',
+        code: 'budget-step-count-too-low',
+        message: `Pipeline budget caps execution at ${stepCap} step(s) but ${enabledSteps.length} are enabled — later steps will be skipped.`,
+      })
+    }
   }
 
   const declaredVariableNames = new Set<string>()
@@ -90,6 +117,33 @@ export function validateAgentPipeline(
     if (hasInvalidBudget(step.timeoutMs)) issues.push({ severity: 'error', code: 'invalid-timeout', stepIndex: index, message: `Step ${index + 1} timeout must be a positive number.` })
     if (hasInvalidBudget(step.maxInputChars)) issues.push({ severity: 'error', code: 'invalid-max-input', stepIndex: index, message: `Step ${index + 1} max input chars must be positive.` })
     if (hasInvalidBudget(step.maxOutputChars)) issues.push({ severity: 'error', code: 'invalid-max-output', stepIndex: index, message: `Step ${index + 1} max output chars must be positive.` })
+
+    if (step.retryBackoffMs !== undefined) {
+      if (!Number.isFinite(step.retryBackoffMs) || step.retryBackoffMs < 0) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-retry-backoff',
+          stepIndex: index,
+          message: `Step ${index + 1} retry backoff must be zero or a positive number of milliseconds.`,
+        })
+      } else if (step.retryBackoffMs > 60_000) {
+        issues.push({
+          severity: 'warning',
+          code: 'long-retry-backoff',
+          stepIndex: index,
+          message: `Step ${index + 1} retry backoff exceeds 60s and will be capped by the runtime.`,
+        })
+      }
+    }
+
+    if (step.retryBackoffStrategy !== undefined && step.retryBackoffStrategy !== 'fixed' && step.retryBackoffStrategy !== 'exponential') {
+      issues.push({
+        severity: 'error',
+        code: 'invalid-retry-strategy',
+        stepIndex: index,
+        message: `Step ${index + 1} retry strategy must be either "fixed" or "exponential".`,
+      })
+    }
 
     for (const match of step.task.matchAll(STEP_REFERENCE_PATTERN)) {
       const referenceIndex = Number(match[1] ?? match[2])
