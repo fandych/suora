@@ -206,8 +206,8 @@ button, a, input, select, textarea {
     color-mix(in srgb, var(--t-surface-1) 70%, transparent);
   border-color: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(24px) saturate(1.5);
-  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(20px) saturate(1.45);
+  backdrop-filter: blur(20px) saturate(1.45);
 }
 
 .light .glass {
@@ -315,8 +315,8 @@ button, a, input, select, textarea {
   background-color: color-mix(in srgb, var(--t-surface-1) 52%, transparent) !important;
   border-color: color-mix(in srgb, var(--glass-border) 74%, transparent) !important;
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.45);
-  backdrop-filter: blur(24px) saturate(1.45);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
 }
 
 .module-canvas [class*="rounded-3xl"][class*="border"],
@@ -338,8 +338,8 @@ button, a, input, select, textarea {
     radial-gradient(circle at top left, rgba(var(--t-accent-rgb), 0.2), transparent 42%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.018) 55%),
     color-mix(in srgb, var(--t-surface-1) 52%, transparent) !important;
-  -webkit-backdrop-filter: blur(24px) saturate(1.42);
-  backdrop-filter: blur(24px) saturate(1.42);
+  -webkit-backdrop-filter: blur(20px) saturate(1.38);
+  backdrop-filter: blur(20px) saturate(1.38);
 }
 
 /* Legacy glow hooks kept quiet */
@@ -711,12 +711,11 @@ code, pre, .font-mono, kbd, samp {
   min-height: 100%;
   background:
     radial-gradient(circle at 12% 0%, rgba(var(--t-accent-rgb), 0.16), transparent 28rem),
-    radial-gradient(circle at 88% 86%, color-mix(in srgb, var(--t-accent-secondary) 16%, transparent), transparent 30rem),
     linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 24%, transparent), transparent 24rem),
     linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 24%, transparent) 1px, transparent 1px),
     linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 18%, transparent) 1px, transparent 1px),
     color-mix(in srgb, var(--t-surface-0) 82%, transparent);
-  background-size: auto, auto, auto, 56px 56px, 56px 56px, auto;
+  background-size: auto, auto, 56px 56px, 56px 56px, auto;
 }
 
 .chat-workbench::before {

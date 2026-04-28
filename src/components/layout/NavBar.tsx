@@ -69,7 +69,7 @@ export function NavBar() {
         type="button"
         onClick={() => navigate('/chat')}
         aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`}
-        className="glass-card mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border bg-white/8 transition-colors hover:border-accent/35"
+        className="glass-card mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border transition-colors hover:border-accent/35"
       >
         <img src={logoSvg} alt="SUORA" width={32} height={32} className="h-8 w-8" />
       </button>
