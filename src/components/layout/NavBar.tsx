@@ -41,7 +41,7 @@ const settingsIcon = (
 )
 
 const navButtonBase = 'relative flex h-10 w-10 items-center justify-center rounded-md transition-all'
-const navButtonInactive = 'text-text-muted hover:bg-white/8 hover:text-text-primary hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
+const navButtonInactive = 'glass-hover text-text-muted hover:text-text-primary'
 const navButtonActive = 'nav-item-active text-accent'
 
 function formatRelativeTime(ts: number, locale = 'en') {

@@ -221,7 +221,7 @@ export function CommandPalette() {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 focus-within:bg-white/8 focus-within:shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.18)]">
+        <div className="command-palette-search flex items-center gap-3 px-4 py-3 border-b focus-within:shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.18)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted shrink-0">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -267,7 +267,7 @@ export function CommandPalette() {
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
                     globalIdx === selectedIndex
                       ? 'nav-item-active text-accent'
-                      : 'text-text-primary hover:bg-white/8'
+                      : 'glass-hover text-text-primary'
                   }`}
                   onClick={item.action}
                   onMouseEnter={() => setSelectedIndex(globalIdx)}

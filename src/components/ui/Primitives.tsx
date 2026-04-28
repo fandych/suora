@@ -11,8 +11,8 @@ const buttonBase = 'inline-flex items-center justify-center gap-1.5 border font-
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary: 'border-accent bg-accent text-white hover:bg-accent-hover',
-  secondary: 'glass-subtle border-border-subtle text-text-secondary hover:border-border hover:bg-white/8 hover:text-text-primary',
-  ghost: 'border-transparent bg-transparent text-text-muted hover:bg-white/8 hover:text-text-primary',
+  secondary: 'glass-subtle glass-hover border-border-subtle text-text-secondary hover:border-border hover:text-text-primary',
+  ghost: 'glass-hover border-transparent bg-transparent text-text-muted hover:text-text-primary',
   danger: 'border-danger/30 bg-danger/10 text-danger hover:bg-danger/15',
 }
 
@@ -82,7 +82,7 @@ export function Tabs<TValue extends string>({
           onClick={() => onChange(item.value)}
           className={cx(
             'rounded px-3 py-1.5 text-[12px] font-medium transition-colors',
-            value === item.value ? 'nav-item-active text-text-primary' : 'text-text-muted hover:bg-white/8 hover:text-text-primary',
+            value === item.value ? 'nav-item-active text-text-primary' : 'glass-hover text-text-muted hover:text-text-primary',
           )}
         >
           {item.label}
@@ -98,7 +98,7 @@ export function EntityListItem({ active, className, ...rest }: ButtonHTMLAttribu
       type="button"
       className={cx(
         'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
-        active ? 'border-accent/35 bg-accent/10 text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:border-border-subtle hover:bg-white/8 hover:text-text-primary',
+        active ? 'border-accent/35 bg-accent/10 text-text-primary' : 'glass-hover border-transparent bg-transparent text-text-secondary hover:border-border-subtle hover:text-text-primary',
         className,
       )}
       {...rest}
