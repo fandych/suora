@@ -47,6 +47,8 @@
   --glass-tint-strong: rgba(255, 255, 255, 0.12);
   --glass-border: rgba(255, 255, 255, 0.13);
   --glass-hover: rgba(255, 255, 255, 0.08);
+  --glass-highlight-opacity: 0.72;
+  --pattern-overlay-opacity: 0.38;
   --glass-pattern-opacity: 0.055;
   --glass-shadow: 0 22px 60px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
@@ -76,6 +78,8 @@
   --glass-tint-strong: rgba(255, 255, 255, 0.74);
   --glass-border: rgba(255, 255, 255, 0.72);
   --glass-hover: rgba(255, 255, 255, 0.46);
+  --glass-highlight-opacity: 0.82;
+  --pattern-overlay-opacity: 0.32;
   --glass-pattern-opacity: 0.075;
   --glass-shadow: 0 22px 60px rgba(64, 84, 125, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.75);
 }
@@ -108,7 +112,7 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.38;
+  opacity: var(--pattern-overlay-opacity);
   background-image:
     linear-gradient(115deg, rgba(255, 255, 255, 0.06) 0 1px, transparent 1px 72px),
     radial-gradient(circle at center, rgba(255, 255, 255, 0.06) 0 1px, transparent 1.4px);
@@ -243,7 +247,7 @@ button, a, input, select, textarea {
   pointer-events: none;
   border-radius: inherit;
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), transparent 36%);
-  opacity: 0.72;
+  opacity: var(--glass-highlight-opacity);
 }
 
 .glass-hover:hover {
