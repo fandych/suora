@@ -846,17 +846,15 @@ export function PipelineLayout() {
                               className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                             />
 
-                            <div className="flex flex-wrap gap-2">
-                              <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                <input
-                                  type="checkbox"
-                                  checked={step.enabled !== false}
-                                  onChange={(event) => updateStep(idx, { enabled: event.target.checked })}
-                                  className="h-4 w-4 accent-accent"
-                                />
-                                {t('agents.pipelineStepEnabled', 'Enabled')}
-                              </label>
-                            </div>
+                            <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                              <input
+                                type="checkbox"
+                                checked={step.enabled !== false}
+                                onChange={(event) => updateStep(idx, { enabled: event.target.checked })}
+                                className="h-4 w-4 accent-accent"
+                              />
+                              {t('agents.pipelineStepEnabled', 'Enabled')}
+                            </label>
 
                             <details className="rounded-2xl border border-border-subtle bg-surface-2/35 px-3 py-2">
                               <summary className="cursor-pointer text-xs font-medium text-text-secondary">{t('common.advanced', 'Advanced')}</summary>

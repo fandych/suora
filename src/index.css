@@ -527,22 +527,6 @@ code, pre, .font-mono, kbd, samp {
   box-shadow: none;
 }
 
-/* ── Noise texture overlay for depth ── */
-.noise-overlay::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  opacity: var(--glass-pattern-opacity);
-  background-image:
-    radial-gradient(circle at 20% 20%, rgba(255, 255, 255, 0.8) 0 1px, transparent 1.2px),
-    radial-gradient(circle at 80% 60%, rgba(255, 255, 255, 0.5) 0 1px, transparent 1.4px);
-  background-repeat: repeat;
-  background-size: 256px 256px;
-  pointer-events: none;
-  z-index: 0;
-  border-radius: inherit;
-}
-
 /* ── Display font utility ── */
 .font-display {
   font-family: var(--font-display);
