@@ -129,7 +129,7 @@ export function TimerLayout() {
           {t('timer.new', '+ New')}
         </button>
       }>
-        <div className="px-3 pb-3 pt-1 space-y-3">
+        <div className="module-sidebar-stack px-3 pb-3 pt-1 space-y-3">
           <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
@@ -230,7 +230,7 @@ export function TimerLayout() {
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
-      <div className="flex-1 flex flex-col overflow-y-auto">
+      <div className="module-workspace flex-1 flex flex-col overflow-y-auto">
         {creating ? (
           <TimerForm key="new" onSave={handleCreate} onCancel={() => setCreating(false)} />
         ) : editing && selectedTimer ? (
@@ -243,7 +243,7 @@ export function TimerLayout() {
             onToggle={handleToggle}
           />
         ) : (
-          <div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
+          <div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
             <div className="mx-auto flex h-full w-full max-w-4xl items-start justify-center pt-6">
               <div className="w-full rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/94 via-surface-1/88 to-surface-2/72 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.16)] animate-fade-in xl:p-10">
                 <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">

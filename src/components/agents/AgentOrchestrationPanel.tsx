@@ -277,7 +277,7 @@ export function AgentOrchestrationPanel({
   })
 
   return (
-    <div className="flex-1 flex flex-col bg-surface-1 overflow-hidden">
+    <div className="module-workspace flex-1 flex flex-col overflow-hidden">
       <div className="px-4 py-3 border-b border-border flex items-center justify-between shrink-0">
         <h2 className="text-sm font-semibold text-text-primary">{title ?? t('agents.agentHub', 'Agent Hub')}</h2>
         {onClose && <button title={t('common.close', 'Close')} onClick={onClose} className="text-text-muted hover:text-text-primary text-xs"><IconifyIcon name="ui-close" size={14} color="currentColor" /></button>}
@@ -295,7 +295,7 @@ export function AgentOrchestrationPanel({
         ))}
       </div>}
 
-      <div className="flex-1 overflow-y-auto p-4">
+      <div className="module-canvas flex-1 overflow-y-auto p-4">
         <div className="mb-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SettingsStat label={t('agents.enabledAgents', 'Enabled Agents')} value={`${enabledAgents.length}`} accent />
           <SettingsStat label={t('agents.pipeline', 'Pipeline')} value={`${agentPipelines.length}`} />

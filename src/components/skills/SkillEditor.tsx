@@ -163,8 +163,8 @@ export function SkillEditor({ skill, onSave, onCancel }: {
   const allowedToolCount = (form.frontmatter.allowedTools || form.allowedTools || []).length
 
   return (
-    <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
-      <div className="mx-auto flex w-full max-w-432 flex-col gap-6 px-5 py-6 xl:px-8 xl:py-8">
+    <form onSubmit={handleSubmit} className="module-canvas flex-1 overflow-y-auto">
+      <div className="module-content mx-auto flex w-full max-w-432 flex-col gap-6 px-5 py-6 xl:px-8 xl:py-8">
         <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-start 2xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
@@ -489,4 +489,3 @@ function generatePreview(skill: Skill): string {
   lines.push(skill.content || '')
   return lines.join('\n')
 }
-

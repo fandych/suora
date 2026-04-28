@@ -27,11 +27,11 @@ const SIZE_BASE: Record<ControlSize, string> = {
 }
 
 const SHARED =
-  'border bg-surface-1 text-text-primary placeholder-text-muted/55 transition-colors ' +
+  'glass-subtle border text-text-primary placeholder-text-muted/55 transition-colors ' +
   'focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/25 ' +
   'hover:border-border disabled:cursor-not-allowed disabled:opacity-50'
 
-const SHARED_SM_TONE = 'bg-surface-1 text-text-secondary'
+const SHARED_SM_TONE = 'text-text-secondary'
 
 function controlClass(size: ControlSize, invalid: boolean | undefined, extra: string | undefined) {
   const tone = size === 'sm' ? SHARED_SM_TONE : ''
