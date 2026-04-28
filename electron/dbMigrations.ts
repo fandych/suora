@@ -2,12 +2,16 @@ export const DB_SCHEMA_VERSION = 2
 
 export interface DbMigration {
   version: number
+  description: string
+  script: string
   statements: string[]
 }
 
 export const DB_MIGRATIONS: DbMigration[] = [
   {
     version: 1,
+    description: 'initial schema',
+    script: 'V1__initial_schema.sql',
     statements: [
       `CREATE TABLE IF NOT EXISTS app_meta (
         key TEXT PRIMARY KEY,
@@ -120,6 +124,8 @@ export const DB_MIGRATIONS: DbMigration[] = [
   },
   {
     version: 2,
+    description: 'persisted app state and timer executions',
+    script: 'V2__persisted_app_state_and_timer_executions.sql',
     statements: [
       `CREATE TABLE IF NOT EXISTS app_state (
         key TEXT PRIMARY KEY,

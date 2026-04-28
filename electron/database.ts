@@ -1,5 +1,6 @@
 import fs from 'fs/promises'
 import path from 'path'
+import { createHash } from 'crypto'
 import { createRequire } from 'module'
 import initSqlJs from 'sql.js'
 import type { Database as SqlDatabase, SqlJsStatic } from 'sql.js'
@@ -8,6 +9,7 @@ import { DB_MIGRATIONS, DB_SCHEMA_VERSION } from './dbMigrations.js'
 const require = createRequire(import.meta.url)
 
 export const SUORA_DB_FILENAME = 'suora.db'
+export const SCHEMA_HISTORY_TABLE = 'suora_schema_history'
 
 export type JsonTableName =
   | 'provider_configs'
@@ -76,24 +78,168 @@ function getUserVersion(database: SqlDatabase): number {
   return Number(result[0]?.values[0]?.[0] ?? 0)
 }
 
-function runMigrations(database: SqlDatabase): void {
-  const currentVersion = getUserVersion(database)
-  const pending = DB_MIGRATIONS.filter((migration) => migration.version > currentVersion)
-  if (pending.length === 0) return
+interface AppliedMigration {
+  version: number
+  description: string
+  script: string
+  checksum: string
+  success: boolean
+}
+
+function getMigrationChecksum(statements: string[]): string {
+  return createHash('sha256').update(statements.join('\n-- statement boundary --\n')).digest('hex')
+}
+
+function ensureSchemaHistoryTable(database: SqlDatabase): void {
+  database.run(
+    `CREATE TABLE IF NOT EXISTS ${SCHEMA_HISTORY_TABLE} (
+      installed_rank INTEGER PRIMARY KEY,
+      version INTEGER NOT NULL UNIQUE,
+      description TEXT NOT NULL,
+      type TEXT NOT NULL DEFAULT 'SQL',
+      script TEXT NOT NULL,
+      checksum TEXT NOT NULL,
+      installed_by TEXT NOT NULL,
+      installed_on INTEGER NOT NULL,
+      execution_time INTEGER NOT NULL,
+      success INTEGER NOT NULL
+    )`,
+  )
+  database.run(
+    `CREATE INDEX IF NOT EXISTS idx_${SCHEMA_HISTORY_TABLE}_success
+     ON ${SCHEMA_HISTORY_TABLE}(success)`,
+  )
+}
+
+function getAppliedMigrations(database: SqlDatabase): Map<number, AppliedMigration> {
+  const statement = database.prepare(
+    `SELECT version, description, script, checksum, success
+     FROM ${SCHEMA_HISTORY_TABLE}
+     ORDER BY installed_rank`,
+  )
+  const migrations = new Map<number, AppliedMigration>()
+  try {
+    while (statement.step()) {
+      const row = statement.getAsObject() as Record<string, unknown>
+      migrations.set(Number(row.version), {
+        version: Number(row.version),
+        description: String(row.description ?? ''),
+        script: String(row.script ?? ''),
+        checksum: String(row.checksum ?? ''),
+        success: Number(row.success) === 1,
+      })
+    }
+  } finally {
+    statement.free()
+  }
+  return migrations
+}
+
+function insertMigrationHistory(
+  database: SqlDatabase,
+  migration: (typeof DB_MIGRATIONS)[number],
+  checksum: string,
+  executionTime: number,
+  success: boolean,
+): void {
+  database.run(
+    `INSERT INTO ${SCHEMA_HISTORY_TABLE} (
+       installed_rank,
+       version,
+       description,
+       type,
+       script,
+       checksum,
+       installed_by,
+       installed_on,
+       execution_time,
+       success
+     ) VALUES (
+       (SELECT COALESCE(MAX(installed_rank), 0) + 1 FROM ${SCHEMA_HISTORY_TABLE}),
+       ?, ?, 'SQL', ?, ?, ?, ?, ?, ?
+     )`,
+    [
+      migration.version,
+      migration.description,
+      migration.script,
+      checksum,
+      'suora',
+      Date.now(),
+      executionTime,
+      success ? 1 : 0,
+    ],
+  )
+}
+
+function backfillLegacyMigrationHistory(database: SqlDatabase, userVersion: number): boolean {
+  const applied = getAppliedMigrations(database)
+  if (applied.size > 0 || userVersion <= 0) return false
+
+  const legacyMigrations = DB_MIGRATIONS.filter((migration) => migration.version <= userVersion)
+  if (legacyMigrations.length === 0) return false
 
   database.run('BEGIN')
   try {
-    for (const migration of pending) {
-      for (const statement of migration.statements) {
-        database.run(statement)
-      }
-      database.run(`PRAGMA user_version = ${migration.version}`)
+    for (const migration of legacyMigrations) {
+      insertMigrationHistory(database, migration, getMigrationChecksum(migration.statements), 0, true)
     }
     database.run('COMMIT')
+    return true
   } catch (error) {
     database.run('ROLLBACK')
     throw error
   }
+}
+
+function validateAppliedMigrations(applied: Map<number, AppliedMigration>): void {
+  for (const migration of DB_MIGRATIONS) {
+    const current = applied.get(migration.version)
+    if (!current) continue
+    if (!current.success) {
+      throw new Error(`Database migration ${migration.script} previously failed`)
+    }
+    const expectedChecksum = getMigrationChecksum(migration.statements)
+    if (current.checksum !== expectedChecksum) {
+      throw new Error(
+        `Database migration checksum mismatch for ${migration.script}. Expected ${expectedChecksum}, found ${current.checksum}`,
+      )
+    }
+  }
+}
+
+function runMigrations(database: SqlDatabase): boolean {
+  ensureSchemaHistoryTable(database)
+  let changed = backfillLegacyMigrationHistory(database, getUserVersion(database))
+  let applied = getAppliedMigrations(database)
+  validateAppliedMigrations(applied)
+
+  const pending = DB_MIGRATIONS.filter((migration) => !applied.has(migration.version))
+  for (const migration of pending) {
+    const startedAt = Date.now()
+    const checksum = getMigrationChecksum(migration.statements)
+    database.run('BEGIN')
+    try {
+      for (const statement of migration.statements) {
+        database.run(statement)
+      }
+      insertMigrationHistory(database, migration, checksum, Date.now() - startedAt, true)
+      database.run(`PRAGMA user_version = ${migration.version}`)
+      database.run('COMMIT')
+      changed = true
+    } catch (error) {
+      database.run('ROLLBACK')
+      throw error
+    }
+  }
+
+  applied = getAppliedMigrations(database)
+  validateAppliedMigrations(applied)
+  if (getUserVersion(database) !== DB_SCHEMA_VERSION) {
+    database.run(`PRAGMA user_version = ${DB_SCHEMA_VERSION}`)
+    changed = true
+  }
+
+  return changed
 }
 
 function parseJson(value: unknown): unknown {
@@ -248,10 +394,10 @@ export async function openSuoraDatabase(workspacePath: string): Promise<SuoraDat
 
   const database = new SQL.Database(existing)
   database.run('PRAGMA foreign_keys = ON')
-  runMigrations(database)
+  const migrated = runMigrations(database)
 
   const appDatabase = new SuoraDatabase(filePath, database)
-  if (!existing || appDatabase.schemaVersion !== DB_SCHEMA_VERSION) {
+  if (!existing || migrated || appDatabase.schemaVersion !== DB_SCHEMA_VERSION) {
     await appDatabase.persist()
   }
   return appDatabase
