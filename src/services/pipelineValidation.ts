@@ -1,4 +1,5 @@
 import type { Agent, AgentPipeline, AgentPipelineStep, Model, PipelineRecoveryAction } from '@/types'
+import { extractVariableReferences, validateRunIfSyntax } from '@/services/pipelineRunIf'
 
 export type PipelineValidationSeverity = 'error' | 'warning'
 
@@ -24,8 +25,10 @@ function hasInvalidBudget(value: unknown): boolean {
   return value !== undefined && (!Number.isFinite(value) || Number(value) <= 0)
 }
 
+const VALID_VARIABLE_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
+
 export function validateAgentPipeline(
-  pipeline: Pick<AgentPipeline, 'name' | 'steps'>,
+  pipeline: Pick<AgentPipeline, 'name' | 'steps' | 'variables'>,
   agents: Agent[],
   models: Model[],
 ): PipelineValidationResult {
@@ -35,6 +38,27 @@ export function validateAgentPipeline(
   if (enabledSteps.length === 0) {
     issues.push({ severity: 'error', code: 'empty-pipeline', message: 'Pipeline has no enabled steps.' })
   }
+
+  const declaredVariableNames = new Set<string>()
+  ;(pipeline.variables ?? []).forEach((variable, variableIndex) => {
+    if (!variable.name || !VALID_VARIABLE_NAME.test(variable.name)) {
+      issues.push({
+        severity: 'error',
+        code: 'invalid-variable-name',
+        message: `Variable #${variableIndex + 1} has an invalid name. Use letters, digits, and underscores only.`,
+      })
+      return
+    }
+    if (declaredVariableNames.has(variable.name)) {
+      issues.push({
+        severity: 'error',
+        code: 'duplicate-variable',
+        message: `Variable "${variable.name}" is declared more than once.`,
+      })
+      return
+    }
+    declaredVariableNames.add(variable.name)
+  })
 
   pipeline.steps.forEach((step: AgentPipelineStep, index) => {
     if (step.enabled === false) return
@@ -74,6 +98,35 @@ export function validateAgentPipeline(
       } else if (referenceIndex - 1 >= index) {
         issues.push({ severity: 'error', code: 'forward-reference', stepIndex: index, message: `Step ${index + 1} references a future step.` })
       }
+    }
+
+    // Validate `{{vars.X}}` references in the task body and runIf condition.
+    const referencedVariables = new Set<string>([
+      ...extractVariableReferences(step.task),
+      ...extractVariableReferences(step.runIf),
+    ])
+    for (const variableName of referencedVariables) {
+      if (!declaredVariableNames.has(variableName)) {
+        issues.push({
+          severity: 'error',
+          code: 'unknown-variable',
+          stepIndex: index,
+          message: `Step ${index + 1} references undeclared variable "${variableName}".`,
+          recoveryActions: [{ id: 'edit-pipeline', label: 'Declare variable', stepIndex: index }],
+        })
+      }
+    }
+
+    // Validate runIf syntax.
+    const runIfError = validateRunIfSyntax(step.runIf)
+    if (runIfError) {
+      issues.push({
+        severity: 'error',
+        code: 'invalid-run-if',
+        stepIndex: index,
+        message: `Step ${index + 1} has an invalid runIf condition: ${runIfError}`,
+        recoveryActions: [{ id: 'edit-pipeline', label: 'Edit condition', stepIndex: index }],
+      })
     }
 
     if ((step.maxInputChars ?? 0) > 120_000 || (step.maxOutputChars ?? 0) > 120_000) {

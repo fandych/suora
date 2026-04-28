@@ -46,4 +46,86 @@ describe('pipelineValidation', () => {
     expect(result.valid).toBe(true)
     expect(result.warnings.map((issue) => issue.code)).toContain('large-budget')
   })
+
+  it('rejects malformed runIf expressions', () => {
+    const result = validateAgentPipeline(
+      pipeline([{ agentId: 'agent-1', task: 'Draft', runIf: '==' }]),
+      [agent],
+      [model],
+    )
+
+    expect(result.valid).toBe(false)
+    expect(result.errors.map((issue) => issue.code)).toContain('invalid-run-if')
+  })
+
+  it('accepts valid runIf expressions', () => {
+    const result = validateAgentPipeline(
+      pipeline([
+        { agentId: 'agent-1', task: 'Draft' },
+        { agentId: 'agent-1', task: 'Review', runIf: "step1.status == 'success'" },
+      ]),
+      [agent],
+      [model],
+    )
+
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects references to undeclared variables', () => {
+    const result = validateAgentPipeline(
+      {
+        id: 'pipeline-1',
+        name: 'Pipeline',
+        steps: [{ agentId: 'agent-1', task: 'Use {{vars.unknown}}' }],
+        variables: [{ name: 'declared' }],
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((issue) => issue.code === 'unknown-variable')).toBe(true)
+  })
+
+  it('accepts references to declared variables', () => {
+    const result = validateAgentPipeline(
+      {
+        id: 'pipeline-1',
+        name: 'Pipeline',
+        steps: [{ agentId: 'agent-1', task: 'Use {{vars.mode}}', runIf: "vars.mode == 'live'" }],
+        variables: [{ name: 'mode' }],
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.valid).toBe(true)
+  })
+
+  it('rejects duplicate or invalid variable names', () => {
+    const result = validateAgentPipeline(
+      {
+        id: 'pipeline-1',
+        name: 'Pipeline',
+        steps: [{ agentId: 'agent-1', task: 'Draft' }],
+        variables: [
+          { name: 'mode' },
+          { name: 'mode' },
+          { name: '1bad' },
+        ],
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['duplicate-variable', 'invalid-variable-name']),
+    )
+  })
 })

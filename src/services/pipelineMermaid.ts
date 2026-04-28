@@ -46,7 +46,10 @@ function buildStepLabel(
   const retryCount = Number.isFinite(step.retryCount) ? Math.max(0, Math.trunc(step.retryCount ?? 0)) : 0
   const policy = step.continueOnError === false ? 'stop on error' : 'continue on error'
   const task = truncateLabel(normalizeLabel(step.task, 'No task configured'), 82)
-  const details = [status, retryCount > 0 ? `${retryCount} retry` : undefined, policy]
+  const condition = step.runIf?.trim()
+    ? `if ${truncateLabel(normalizeLabel(step.runIf, ''), 60)}`
+    : undefined
+  const details = [status, retryCount > 0 ? `${retryCount} retry` : undefined, policy, condition]
     .filter(Boolean)
     .join(' · ')
 
@@ -89,7 +92,13 @@ export function buildPipelineMermaidSource(
     for (let index = 0; index < steps.length - 1; index += 1) {
       const current = `step${index + 1}`
       const next = `step${index + 2}`
-      const edgeLabel = steps[index].continueOnError === false ? '|success|' : ''
+      const conditional = steps[index + 1]?.runIf?.trim()
+      const successOnly = steps[index].continueOnError === false
+      const labelParts = [
+        successOnly ? 'success' : '',
+        conditional ? `if ${truncateLabel(normalizeLabel(conditional, ''), 36)}` : '',
+      ].filter(Boolean)
+      const edgeLabel = labelParts.length > 0 ? `|${labelParts.join(' / ')}|` : ''
       lines.push(`  ${current} -->${edgeLabel} ${next}`)
     }
     lines.push(`  step${steps.length} --> finish`)

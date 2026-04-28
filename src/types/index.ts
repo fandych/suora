@@ -838,18 +838,47 @@ export interface AgentPipelineStep {
   maxInputChars?: number
   maxOutputChars?: number
   outputType?: 'text' | 'json' | 'file' | 'table'
+  /**
+   * Optional condition expression evaluated before the step runs. When the
+   * expression is falsy the step is recorded as 'skipped' with the failed
+   * condition as the reason. Supports references to previous steps
+   * (e.g. `step1.status == 'success'`, `previous.output contains 'approved'`)
+   * and pipeline variables (`vars.NAME != ''`). Multiple clauses may be
+   * combined with `&&` (AND).
+   */
+  runIf?: string
 }
 
 export type AgentPipelineTrigger = 'manual' | 'timer' | 'chat'
+
+/**
+ * Declarative variable definition for an `AgentPipeline`. Values are supplied
+ * at run time (manual run dialog, timer trigger, or chat-command named args)
+ * and are referenced inside step tasks / `runIf` conditions as `{{vars.name}}`.
+ */
+export interface AgentPipelineVariable {
+  name: string
+  label?: string
+  description?: string
+  defaultValue?: string
+  required?: boolean
+}
 
 export interface AgentPipeline {
   id: string
   name: string
   description?: string
   steps: AgentPipelineStep[]
+  variables?: AgentPipelineVariable[]
   createdAt: number
   updatedAt: number
   lastRunAt?: number
+}
+
+export interface PipelineStepUsage {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
 }
 
 export interface AgentPipelineExecutionStep {
@@ -871,6 +900,10 @@ export interface AgentPipelineExecutionStep {
   outputRef?: string
   warnings?: string[]
   recoveryActions?: PipelineRecoveryAction[]
+  /** Token usage reported by the model provider for this step. */
+  usage?: PipelineStepUsage
+  /** When `status === 'skipped'`, the reason the step was skipped (e.g. condition not met). */
+  skipReason?: string
 }
 
 export interface PipelineRecoveryAction {
@@ -888,6 +921,8 @@ export interface PipelineRuntimeSnapshot {
   startedAt: number
   trigger: AgentPipelineTrigger
   validationWarnings?: string[]
+  /** Variable values supplied to this run; surfaced for debugging and replay. */
+  variables?: Record<string, string>
 }
 
 export interface AgentPipelineExecution {
@@ -905,6 +940,8 @@ export interface AgentPipelineExecution {
   error?: string
   runtime?: PipelineRuntimeSnapshot
   recoveryActions?: PipelineRecoveryAction[]
+  /** Aggregated token usage across all successful steps. */
+  usage?: PipelineStepUsage
 }
 
 // ─── i18n ──────────────────────────────────────────────────────────

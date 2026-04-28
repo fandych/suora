@@ -329,4 +329,133 @@ describe('agentPipelineService', () => {
     expect(execution.recoveryActions?.[0].label).toBe('Choose an exact pipeline name')
     expect(streamResponseWithTools).not.toHaveBeenCalled()
   })
+
+  it('skips a step whose runIf condition does not match and records the reason', async () => {
+    const conditionalPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft the report' },
+        { agentId: 'agent-2', task: 'Review the report', runIf: "step1.output contains 'approved'" },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: 'draft-ready' }
+    })
+
+    const execution = await executeAgentPipeline(conditionalPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[1].status).toBe('skipped')
+    expect(execution.steps[1].skipReason).toMatch(/Condition not met/)
+    expect(execution.steps[1].skipReason).toContain("step1.output contains 'approved'")
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+    expect(execution.finalOutput).toBe('draft-ready')
+  })
+
+  it('runs a step whose runIf condition matches', async () => {
+    const conditionalPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft the report' },
+        { agentId: 'agent-2', task: 'Review the report', runIf: "step1.status == 'success'" },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'draft-ready' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'review-ready' }
+      })
+
+    const execution = await executeAgentPipeline(conditionalPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[1].status).toBe('success')
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(2)
+  })
+
+  it('rejects pipelines with malformed runIf expressions during validation', async () => {
+    const invalidPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft', runIf: '==' },
+      ],
+    }
+
+    const execution = await executeAgentPipeline(invalidPipeline)
+
+    expect(execution.status).toBe('error')
+    expect(execution.error).toMatch(/invalid runIf/i)
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+  })
+
+  it('substitutes pipeline-level variables and records them in the runtime snapshot', async () => {
+    const variablePipeline: AgentPipeline = {
+      ...savedPipeline,
+      variables: [
+        { name: 'mode', defaultValue: 'live' },
+        { name: 'reviewer' },
+      ],
+      steps: [
+        { agentId: 'agent-1', task: 'Draft for {{vars.mode}} mode for {{vars.reviewer}}' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: 'drafted' }
+    })
+
+    const execution = await executeAgentPipeline(variablePipeline, {
+      variables: { reviewer: 'Alice' },
+    })
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].input).toContain('Draft for live mode for Alice')
+    expect(execution.runtime?.variables).toEqual({ mode: 'live', reviewer: 'Alice' })
+  })
+
+  it('uses vars in runIf conditions to gate steps', async () => {
+    const variablePipeline: AgentPipeline = {
+      ...savedPipeline,
+      variables: [{ name: 'mode' }],
+      steps: [
+        { agentId: 'agent-1', task: 'Draft' },
+        { agentId: 'agent-2', task: 'Review', runIf: "vars.mode == 'live'" },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: 'draft-ready' }
+    })
+
+    const execution = await executeAgentPipeline(variablePipeline, {
+      variables: { mode: 'dry-run' },
+    })
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[1].status).toBe('skipped')
+    expect(execution.steps[1].skipReason).toContain("vars.mode == 'live'")
+  })
+
+  it('captures token usage per step and aggregates it on the execution', async () => {
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'draft-ready' }
+        yield { type: 'usage', promptTokens: 10, completionTokens: 5, totalTokens: 15 }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'review-ready' }
+        yield { type: 'usage', promptTokens: 20, completionTokens: 7, totalTokens: 27 }
+      })
+
+    const execution = await executeAgentPipeline(savedPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].usage).toEqual({ promptTokens: 10, completionTokens: 5, totalTokens: 15 })
+    expect(execution.steps[1].usage).toEqual({ promptTokens: 20, completionTokens: 7, totalTokens: 27 })
+    expect(execution.usage).toEqual({ promptTokens: 30, completionTokens: 12, totalTokens: 42 })
+  })
 })
