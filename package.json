@@ -94,7 +94,7 @@
     "directories": {
       "buildResources": "resources"
     },
-    "icon": "resources/icons/icon-256x256.png",
+    "icon": "resources/icons/icon-1024x1024.png",
     "publish": {
       "provider": "github",
       "owner": "fandych",
