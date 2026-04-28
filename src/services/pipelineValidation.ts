@@ -114,6 +114,45 @@ export function validateAgentPipeline(
     if (hasInvalidBudget(step.maxInputChars)) issues.push({ severity: 'error', code: 'invalid-max-input', stepIndex: index, message: `Step ${index + 1} max input chars must be positive.` })
     if (hasInvalidBudget(step.maxOutputChars)) issues.push({ severity: 'error', code: 'invalid-max-output', stepIndex: index, message: `Step ${index + 1} max output chars must be positive.` })
 
+    if (step.modelId) {
+      const overridden = models.find((model) => model.id === step.modelId)
+      if (!overridden) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-step-model',
+          stepIndex: index,
+          message: `Step ${index + 1} references an unknown model.`,
+          recoveryActions: [{ id: 'edit-pipeline', label: 'Choose a model', stepIndex: index }],
+        })
+      } else if (overridden.enabled === false) {
+        issues.push({
+          severity: 'warning',
+          code: 'disabled-step-model',
+          stepIndex: index,
+          message: `Step ${index + 1} model "${overridden.name}" is disabled — the agent's default model will be used.`,
+        })
+      }
+    }
+
+    if (step.outputTransform !== undefined) {
+      const validTransforms = ['trim', 'first-line', 'last-line', 'json-path'] as const
+      if (!(validTransforms as readonly string[]).includes(step.outputTransform)) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-output-transform',
+          stepIndex: index,
+          message: `Step ${index + 1} output transform must be one of ${validTransforms.join(', ')}.`,
+        })
+      } else if (step.outputTransform === 'json-path' && !(step.outputTransformPath?.trim())) {
+        issues.push({
+          severity: 'error',
+          code: 'missing-transform-path',
+          stepIndex: index,
+          message: `Step ${index + 1} json-path transform requires an outputTransformPath (e.g. "data.items.0.name").`,
+        })
+      }
+    }
+
     if (step.retryBackoffMs !== undefined) {
       if (!Number.isFinite(step.retryBackoffMs) || step.retryBackoffMs < 0) {
         issues.push({

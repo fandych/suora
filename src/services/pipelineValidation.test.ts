@@ -156,4 +156,51 @@ describe('pipelineValidation', () => {
     expect(result.errors.some((issue) => issue.code === 'invalid-budget')).toBe(true)
     expect(result.warnings.some((issue) => issue.code === 'budget-step-count-too-low')).toBe(true)
   })
+
+  it('rejects an unknown step model override and warns when the override is disabled', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Draft', modelId: 'no-such-model' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.some((issue) => issue.code === 'invalid-step-model')).toBe(true)
+
+    const disabledModel = { ...model, id: 'disabled-model', enabled: false }
+    const warnResult = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Draft', modelId: 'disabled-model' },
+        ],
+      },
+      [agent],
+      [model, disabledModel],
+    )
+    expect(warnResult.warnings.some((issue) => issue.code === 'disabled-step-model')).toBe(true)
+  })
+
+  it('requires outputTransformPath when outputTransform is json-path', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Draft', outputTransform: 'json-path' },
+          // @ts-expect-error invalid transform on purpose
+          { agentId: 'agent-1', task: 'Draft', outputTransform: 'wat' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['missing-transform-path', 'invalid-output-transform']),
+    )
+  })
 })

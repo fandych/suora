@@ -847,6 +847,26 @@ export interface AgentPipelineStep {
   maxOutputChars?: number
   outputType?: 'text' | 'json' | 'file' | 'table'
   /**
+   * Optional model id that overrides the agent's default model for this step
+   * only (e.g. use a cheaper model for a summarization step). Falls back to
+   * the agent's `modelId` when unset or when the referenced model is missing
+   * / disabled at run time.
+   */
+  modelId?: string
+  /**
+   * Post-process the LLM output before handing it to downstream steps:
+   *  - `trim`: strip leading/trailing whitespace
+   *  - `first-line` / `last-line`: keep only the first/last non-empty line
+   *  - `json-path`: parse the output as JSON and pluck `outputTransformPath`
+   *    using a dotted path (e.g. `data.items.0.name`). Falls back to the
+   *    untransformed output when the path cannot be resolved.
+   *
+   * The original output is kept on `AgentPipelineExecutionStep.rawOutput`.
+   */
+  outputTransform?: 'trim' | 'first-line' | 'last-line' | 'json-path'
+  /** Dotted path used by the `json-path` transform. Required when transform is `json-path`. */
+  outputTransformPath?: string
+  /**
    * Optional condition expression evaluated before the step runs. When the
    * expression is falsy the step is recorded as 'skipped' with the failed
    * condition as the reason. Supports references to previous steps
@@ -915,6 +935,14 @@ export interface AgentPipelineExecutionStep {
   task: string
   input: string
   output?: string
+  /**
+   * Original LLM output before `outputTransform` was applied. Only set when
+   * the transform actually changed the value, so existing executions are
+   * unaffected.
+   */
+  rawOutput?: string
+  /** Resolved model id used for this step (after step-level override). */
+  modelId?: string
   status: 'success' | 'error' | 'skipped'
   startedAt: number
   completedAt: number

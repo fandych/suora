@@ -16,7 +16,7 @@ vi.mock('@/services/pipelineFiles', () => ({
 
 import { generateResponse, initializeProvider, streamResponseWithTools } from '@/services/aiService'
 import { appendPipelineExecutionToDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
-import { executeAgentPipeline, executePipelineById, executePipelineByReference } from './agentPipelineService'
+import { dryRunAgentPipeline, executeAgentPipeline, executePipelineById, executePipelineByReference } from './agentPipelineService'
 
 const savedPipeline: AgentPipeline = {
   id: 'pipeline-1',
@@ -42,6 +42,7 @@ describe('agentPipelineService', () => {
       workspacePath: 'C:/workspace',
       models: [
         { id: 'model-1', name: 'GPT', provider: 'provider-1', providerType: 'openai', modelId: 'gpt-4.1', enabled: true, isDefault: true },
+        { id: 'model-cheap', name: 'GPT mini', provider: 'provider-1', providerType: 'openai', modelId: 'gpt-4.1-mini', enabled: true },
       ],
       agents: [
         { id: 'agent-1', name: 'Writer', systemPrompt: 'Write', modelId: 'model-1', skills: [], enabled: true, memories: [], autoLearn: false },
@@ -575,5 +576,146 @@ describe('agentPipelineService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('uses the per-step model override when present', async () => {
+    const overridePipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft', modelId: 'model-cheap' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: 'cheap-output' }
+    })
+
+    const execution = await executeAgentPipeline(overridePipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].modelId).toBe('model-cheap')
+    // The mocked streamResponseWithTools is called with the model identifier as the first arg.
+    const callArgs = vi.mocked(streamResponseWithTools).mock.calls[0]
+    expect(callArgs[0]).toContain('gpt-4.1-mini')
+  })
+
+  it('falls back to the agent default at runtime when the step model override is disabled', async () => {
+    // Disabled-model override is a warning at validation time, not an error,
+    // so the run still proceeds — falling through to the agent's default model.
+    useAppStore.setState({
+      models: [
+        { id: 'model-1', name: 'GPT', provider: 'provider-1', providerType: 'openai', modelId: 'gpt-4.1', enabled: true, isDefault: true },
+        { id: 'model-cheap', name: 'GPT mini', provider: 'provider-1', providerType: 'openai', modelId: 'gpt-4.1-mini', enabled: false },
+      ],
+      agents: useAppStore.getState().agents,
+      agentPipelines: useAppStore.getState().agentPipelines,
+      workspacePath: 'C:/workspace',
+      notifications: [],
+    })
+    const overridePipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft', modelId: 'model-cheap' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: 'fallback-output' }
+    })
+
+    const execution = await executeAgentPipeline(overridePipeline)
+
+    expect(execution.status).toBe('success')
+    // Falls back to model-1 (the agent's modelId).
+    expect(execution.steps[0].modelId).toBe('model-1')
+  })
+
+  it('applies the trim output transform before passing output downstream', async () => {
+    const transformPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft', outputTransform: 'trim' },
+        { agentId: 'agent-2', task: 'Review {{previous.output}}' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: '  raw with whitespace  \n' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'reviewed' }
+      })
+
+    const execution = await executeAgentPipeline(transformPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].output).toBe('raw with whitespace')
+    expect(execution.steps[0].rawOutput).toBe('  raw with whitespace  \n')
+    expect(execution.steps[1].input).toContain('Review raw with whitespace')
+  })
+
+  it('extracts a JSON path via the json-path output transform', async () => {
+    const transformPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Draft', outputTransform: 'json-path', outputTransformPath: 'data.title' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools).mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: '{"data":{"title":"Hello"}}' }
+    })
+
+    const execution = await executeAgentPipeline(transformPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].output).toBe('Hello')
+    expect(execution.steps[0].rawOutput).toBe('{"data":{"title":"Hello"}}')
+  })
+
+  it('dryRunAgentPipeline classifies steps without invoking any model', () => {
+    const dryPipeline: AgentPipeline = {
+      ...savedPipeline,
+      variables: [{ name: 'topic', defaultValue: 'launch' }],
+      steps: [
+        { agentId: 'agent-1', task: 'Draft about {{vars.topic}}' },
+        { agentId: 'agent-2', task: 'Review', enabled: false },
+        { agentId: 'agent-2', task: 'Summarize', runIf: "step1.status == 'success'" },
+        { agentId: 'agent-missing', task: 'Broken' },
+      ],
+    }
+
+    const result = dryRunAgentPipeline(dryPipeline)
+
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+    expect(generateResponse).not.toHaveBeenCalled()
+    expect(result.steps).toHaveLength(4)
+    expect(result.steps[0].status).toBe('would-run')
+    expect(result.steps[0].resolvedInput).toContain('Draft about launch')
+    expect(result.steps[0].modelId).toBe('model-1')
+    expect(result.steps[1].status).toBe('disabled')
+    expect(result.steps[2].status).toBe('would-run')
+    expect(result.steps[3].status).toBe('error')
+    expect(result.steps[3].reason).toMatch(/missing agent/)
+    expect(result.variables.topic).toBe('launch')
+  })
+
+  it('dryRunAgentPipeline reports a budget cap that would skip later steps', () => {
+    const dryPipeline: AgentPipeline = {
+      ...savedPipeline,
+      budget: { maxStepCount: 1 },
+      steps: [
+        { agentId: 'agent-1', task: 'A' },
+        { agentId: 'agent-1', task: 'B' },
+      ],
+    }
+
+    const result = dryRunAgentPipeline(dryPipeline)
+
+    expect(result.budgetExceeded?.type).toBe('steps')
+    expect(result.steps[0].status).toBe('would-run')
+    expect(result.steps[1].status).toBe('skipped')
+    expect(result.steps[1].reason).toMatch(/budget/)
   })
 })

@@ -145,6 +145,9 @@ function cloneStep(step: AgentPipelineStep): AgentPipelineStep {
   if (step.maxInputChars !== undefined) cleaned.maxInputChars = step.maxInputChars
   if (step.maxOutputChars !== undefined) cleaned.maxOutputChars = step.maxOutputChars
   if (step.outputType !== undefined) cleaned.outputType = step.outputType
+  if (step.modelId !== undefined) cleaned.modelId = step.modelId
+  if (step.outputTransform !== undefined) cleaned.outputTransform = step.outputTransform
+  if (step.outputTransformPath !== undefined) cleaned.outputTransformPath = step.outputTransformPath
   if (step.runIf !== undefined) cleaned.runIf = step.runIf
   return cleaned
 }
@@ -186,6 +189,20 @@ function sanitizeStep(value: unknown, index: number, warnings: string[]): AgentP
   }
   if (candidate.outputType === 'text' || candidate.outputType === 'json' || candidate.outputType === 'file' || candidate.outputType === 'table') {
     sanitized.outputType = candidate.outputType
+  }
+  if (typeof candidate.modelId === 'string' && candidate.modelId.trim()) {
+    sanitized.modelId = candidate.modelId.trim()
+  }
+  if (
+    candidate.outputTransform === 'trim'
+    || candidate.outputTransform === 'first-line'
+    || candidate.outputTransform === 'last-line'
+    || candidate.outputTransform === 'json-path'
+  ) {
+    sanitized.outputTransform = candidate.outputTransform
+  }
+  if (typeof candidate.outputTransformPath === 'string' && candidate.outputTransformPath.trim()) {
+    sanitized.outputTransformPath = candidate.outputTransformPath
   }
   if (typeof candidate.runIf === 'string') sanitized.runIf = candidate.runIf
   return sanitized
