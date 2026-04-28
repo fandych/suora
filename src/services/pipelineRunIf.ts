@@ -50,7 +50,6 @@ export class RunIfParseError extends Error {
   }
 }
 
-const REFERENCE_PATTERN = /^(?:previous|last|step\d+|steps\[\d+\]|vars\.[A-Za-z_][A-Za-z0-9_]*)(?:\.(output|input|task|status|error))?$/i
 const NUMBER_PATTERN = /^-?\d+(?:\.\d+)?$/
 const REGEX_LITERAL_PATTERN = /^\/(.+)\/([gimsuy]*)$/
 

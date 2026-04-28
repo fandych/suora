@@ -12,7 +12,7 @@ import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
 import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
 import { confirm } from '@/services/confirmDialog'
-import type { AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep } from '@/types'
+import type { AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep, AgentPipelineVariable, PipelineStepUsage } from '@/types'
 import { generateId } from '@/utils/helpers'
 
 const PIPELINE_HEADER_BACKGROUND = 'bg-[radial-gradient(circle_at_top_left,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_55%)]'
@@ -55,6 +55,16 @@ function normalizeRetryCount(value?: number): number {
   return Math.max(0, Math.min(Math.trunc(value ?? 0), 3))
 }
 
+function buildDefaultVariableValues(variables: AgentPipelineVariable[] | undefined): Record<string, string> {
+  if (!variables) return {}
+  const next: Record<string, string> = {}
+  for (const variable of variables) {
+    if (!variable.name) continue
+    next[variable.name] = variable.defaultValue ?? ''
+  }
+  return next
+}
+
 function mapExecutionStep(step: AgentPipelineExecutionStep, agentNameMap: Record<string, string>): AgentPipelineProgressStep {
   return {
     stepIndex: step.stepIndex,
@@ -70,7 +80,21 @@ function mapExecutionStep(step: AgentPipelineExecutionStep, agentNameMap: Record
     durationMs: step.durationMs,
     attempts: step.attempts,
     error: step.error,
+    ...(step.usage ? { usage: step.usage } : {}),
+    ...(step.skipReason ? { skipReason: step.skipReason } : {}),
   }
+}
+
+function formatTokenCount(value?: number): string {
+  if (!Number.isFinite(value) || !value) return '0'
+  if (value < 1000) return String(value)
+  if (value < 1_000_000) return `${(value / 1000).toFixed(value < 10_000 ? 1 : 0)}k`
+  return `${(value / 1_000_000).toFixed(1)}M`
+}
+
+function formatUsageLabel(usage: PipelineStepUsage | undefined, t: (key: string, defaultValue?: string) => string): string | null {
+  if (!usage) return null
+  return `${t('agents.pipelineTokensIn', 'in')} ${formatTokenCount(usage.promptTokens)} · ${t('agents.pipelineTokensOut', 'out')} ${formatTokenCount(usage.completionTokens)} · ${t('agents.pipelineTokensTotal', 'total')} ${formatTokenCount(usage.totalTokens)}`
 }
 
 function buildPreviewSteps(pipeline: AgentPipelineStep[], agentNameMap: Record<string, string>): AgentPipelineProgressStep[] {
@@ -98,6 +122,8 @@ export function PipelineLayout() {
   const [panelWidth, setPanelWidth] = useResizablePanel('pipeline', 280)
   const [searchQuery, setSearchQuery] = useState('')
   const [pipelineDescription, setPipelineDescription] = useState('')
+  const [pipelineVariables, setPipelineVariables] = useState<AgentPipelineVariable[]>([])
+  const [variableValues, setVariableValues] = useState<Record<string, string>>({})
   const [diagramView, setDiagramView] = useState<'preview' | 'source'>('preview')
   const [copiedMermaid, setCopiedMermaid] = useState(false)
   const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([])
@@ -167,6 +193,8 @@ export function PipelineLayout() {
     setSelectedAgentPipelineId(requestedPipeline.id)
     setAgentPipelineName(requestedPipeline.name)
     setPipelineDescription(requestedPipeline.description ?? '')
+    setPipelineVariables(requestedPipeline.variables ?? [])
+    setVariableValues(buildDefaultVariableValues(requestedPipeline.variables))
     setAgentPipeline(requestedPipeline.steps)
     setLiveSteps([])
     setActiveExecution(null)
@@ -179,6 +207,8 @@ export function PipelineLayout() {
     setAgentPipeline(selectedPipeline.steps)
     setAgentPipelineName(selectedPipeline.name)
     setPipelineDescription(selectedPipeline.description ?? '')
+    setPipelineVariables(selectedPipeline.variables ?? [])
+    setVariableValues(buildDefaultVariableValues(selectedPipeline.variables))
   }, [selectedAgentPipelineId, agentPipelines, pipeline.length, agentPipelineName, setAgentPipeline, setAgentPipelineName])
 
   useEffect(() => {
@@ -260,8 +290,12 @@ export function PipelineLayout() {
   )
 
   const pipelineValidation = useMemo(
-    () => validateAgentPipeline({ name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline }, agents, models),
-    [agentPipelineName, pipeline, agents, models],
+    () => validateAgentPipeline(
+      { name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline, variables: pipelineVariables },
+      agents,
+      models,
+    ),
+    [agentPipelineName, pipeline, pipelineVariables, agents, models],
   )
 
   const successRate = pipelineHistory.length > 0
@@ -272,6 +306,8 @@ export function PipelineLayout() {
     setSelectedAgentPipelineId(null)
     setAgentPipelineName('')
     setPipelineDescription('')
+    setPipelineVariables([])
+    setVariableValues({})
     clearAgentPipeline()
     setPipelineHistory([])
     setLiveSteps([])
@@ -285,6 +321,8 @@ export function PipelineLayout() {
     setSelectedAgentPipelineId(selectedPipeline.id)
     setAgentPipelineName(selectedPipeline.name)
     setPipelineDescription(selectedPipeline.description ?? '')
+    setPipelineVariables(selectedPipeline.variables ?? [])
+    setVariableValues(buildDefaultVariableValues(selectedPipeline.variables))
     setAgentPipeline(selectedPipeline.steps)
     setLiveSteps([])
     setActiveExecution(null)
@@ -375,11 +413,20 @@ export function PipelineLayout() {
     const now = Date.now()
     const savedPipeline = selectedSavedPipeline
     const trimmedDescription = pipelineDescription.trim()
+    const sanitizedVariables = pipelineVariables
+      .map((variable) => ({
+        ...variable,
+        name: variable.name.trim(),
+        ...(variable.label?.trim() ? { label: variable.label.trim() } : { label: undefined }),
+        ...(variable.description?.trim() ? { description: variable.description.trim() } : { description: undefined }),
+      }))
+      .filter((variable) => variable.name)
     const nextPipeline: AgentPipeline = {
       id: savedPipeline?.id ?? generateId('pipeline'),
       name: trimmedName,
       ...(trimmedDescription ? { description: trimmedDescription } : {}),
       steps: pipeline,
+      ...(sanitizedVariables.length > 0 ? { variables: sanitizedVariables } : {}),
       createdAt: savedPipeline?.createdAt ?? now,
       updatedAt: now,
       lastRunAt: savedPipeline?.lastRunAt,
@@ -458,6 +505,7 @@ export function PipelineLayout() {
         id: selectedSavedPipeline?.id ?? generateId('pipeline-draft'),
         name: agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline',
         steps: pipeline,
+        ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
         createdAt: selectedSavedPipeline?.createdAt ?? now,
         updatedAt: now,
         lastRunAt: selectedSavedPipeline?.lastRunAt,
@@ -466,6 +514,7 @@ export function PipelineLayout() {
         persistExecution: Boolean(selectedSavedPipeline && workspacePath),
         persistLastRun: Boolean(selectedSavedPipeline && workspacePath),
         abortSignal: controller.signal,
+        ...(pipelineVariables.length > 0 ? { variables: variableValues } : {}),
         onStepUpdate: (progressStep) => {
           setLiveSteps((previous) => {
             // Step edits clear liveSteps immediately, so this rebuild only handles
@@ -785,6 +834,96 @@ export function PipelineLayout() {
                     />
                   </div>
 
+                  <div className="rounded-2xl border border-border-subtle bg-surface-2/55 px-4 py-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineVariables', 'Variables')}</div>
+                        <div className="mt-1 text-xs text-text-muted">{t('agents.pipelineVariablesHint', 'Declare run-time inputs, then reference them in any step task as {{vars.name}} or in runIf conditions as vars.name.')}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPipelineVariables((current) => [...current, { name: '' }])}
+                        className="rounded-xl border border-border-subtle bg-surface-1/80 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent"
+                      >
+                        {t('agents.pipelineAddVariable', '+ Add variable')}
+                      </button>
+                    </div>
+
+                    {pipelineVariables.length === 0 ? (
+                      <div className="mt-3 text-xs text-text-muted">{t('agents.pipelineNoVariables', 'No variables declared yet.')}</div>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {pipelineVariables.map((variable, index) => (
+                          <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
+                            <input
+                              value={variable.name}
+                              onChange={(event) => {
+                                const next = event.target.value
+                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: next } : item))
+                              }}
+                              placeholder={t('agents.pipelineVariableName', 'name')}
+                              className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                            />
+                            <input
+                              value={variable.label ?? ''}
+                              onChange={(event) => {
+                                const next = event.target.value
+                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: next } : item))
+                              }}
+                              placeholder={t('agents.pipelineVariableLabel', 'Label (optional)')}
+                              className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                            />
+                            <input
+                              value={variable.defaultValue ?? ''}
+                              onChange={(event) => {
+                                const next = event.target.value
+                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, defaultValue: next } : item))
+                                if (!variable.name) return
+                                setVariableValues((current) => {
+                                  if (current[variable.name] !== undefined && current[variable.name] !== '') return current
+                                  return { ...current, [variable.name]: next }
+                                })
+                              }}
+                              placeholder={t('agents.pipelineVariableDefault', 'Default value')}
+                              className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPipelineVariables((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                              }}
+                              className="rounded-xl border border-border-subtle bg-surface-1/80 px-2 py-1 text-[11px] font-medium text-text-muted transition-colors hover:border-red-500/30 hover:text-red-300"
+                            >
+                              {t('common.remove', 'Remove')}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {pipelineVariables.length > 0 && (
+                      <div className="mt-4 border-t border-border-subtle pt-3">
+                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineRunValues', 'Run values')}</div>
+                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                          {pipelineVariables.filter((variable) => variable.name.trim()).map((variable) => (
+                            <label key={variable.name} className="flex flex-col gap-1 text-xs text-text-secondary">
+                              <span className="font-medium text-text-primary">{variable.label?.trim() || variable.name}</span>
+                              <input
+                                value={variableValues[variable.name] ?? ''}
+                                onChange={(event) => {
+                                  const next = event.target.value
+                                  setVariableValues((current) => ({ ...current, [variable.name]: next }))
+                                }}
+                                placeholder={variable.defaultValue ?? ''}
+                                className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   <div className="space-y-3">
                     {pipeline.map((step, idx) => {
                       const previewStep = latestExecutionReference[idx]
@@ -859,6 +998,17 @@ export function PipelineLayout() {
                             <details className="rounded-2xl border border-border-subtle bg-surface-2/35 px-3 py-2">
                               <summary className="cursor-pointer text-xs font-medium text-text-secondary">{t('common.advanced', 'Advanced')}</summary>
                               <div className="mt-3 space-y-3">
+                                <div>
+                                  <label className="mb-1 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineRunIf', 'Run if (condition)')}</label>
+                                  <input
+                                    value={step.runIf ?? ''}
+                                    onChange={(event) => updateStep(idx, { runIf: event.target.value })}
+                                    placeholder={t('agents.pipelineRunIfPlaceholder', "step1.status == 'success' && previous.output contains 'approved'")}
+                                    className="w-full rounded-2xl border border-border bg-surface-1 px-3 py-2 font-mono text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                  />
+                                  <div className="mt-1 text-[11px] text-text-muted">{t('agents.pipelineRunIfHint', 'Skip this step when the condition is false. Supports step{N}.field, previous.field, vars.name, ==, !=, contains, not contains, matches, is empty, is not empty, combined with &&.')}</div>
+                                </div>
+
                                 <div className="grid gap-2 sm:grid-cols-2">
                                   <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <input
@@ -999,6 +1149,15 @@ export function PipelineLayout() {
                             </div>
                             <div className="mt-2 text-sm text-text-secondary">{step.agentName || agentNameMap[step.agentId] || step.agentId}</div>
                             <div className="mt-1 text-xs text-text-muted">{formatDuration(step.durationMs, t)}{step.attempts && step.attempts > 1 ? ` · ${step.attempts} ${t('agents.pipelineAttempts', 'attempts')}` : ''}</div>
+                            {step.usage && (
+                              <div className="mt-1 inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+                                <span aria-hidden="true">🜂</span>
+                                <span>{formatUsageLabel(step.usage, t)}</span>
+                              </div>
+                            )}
+                            {step.skipReason && step.status === 'skipped' && (
+                              <div className="mt-1 text-[11px] text-text-muted">{step.skipReason}</div>
+                            )}
                           </div>
                           {step.startedAt && <div className="text-xs text-text-muted">{new Date(step.startedAt).toLocaleString()}</div>}
                         </div>
@@ -1149,7 +1308,14 @@ export function PipelineLayout() {
                             <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineFinalOutput', 'Final output')}</div>
                             <div className="mt-2 text-sm text-text-secondary whitespace-pre-wrap">{executionDetail.finalOutput || executionDetail.error || t('agents.pipelineNoOutputYet', 'No output yet.')}</div>
                           </div>
-                          <div className="text-xs text-text-muted">{formatDuration(executionDetail.completedAt - executionDetail.startedAt, t)}</div>
+                          <div className="flex flex-col items-end gap-1 text-xs text-text-muted">
+                            <span>{formatDuration(executionDetail.completedAt - executionDetail.startedAt, t)}</span>
+                            {executionDetail.usage && (
+                              <span className="rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+                                {formatUsageLabel(executionDetail.usage, t)}
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
@@ -1160,6 +1326,14 @@ export function PipelineLayout() {
                               <div>
                                 <div className="text-sm font-semibold text-text-primary">{step.name?.trim() || `${t('agents.pipelineStep', 'Step')} ${step.stepIndex + 1}`}</div>
                                 <div className="mt-1 text-xs text-text-muted">{step.agentName || step.agentId}</div>
+                                {step.usage && (
+                                  <div className="mt-1 inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
+                                    {formatUsageLabel(step.usage, t)}
+                                  </div>
+                                )}
+                                {step.skipReason && step.status === 'skipped' && (
+                                  <div className="mt-1 text-[11px] text-text-muted">{step.skipReason}</div>
+                                )}
                               </div>
                               <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusStyles(step.status)}`}>{t(`agents.pipelineStatus.${step.status}`, step.status)}</span>
                             </div>

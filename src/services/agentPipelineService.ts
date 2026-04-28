@@ -204,9 +204,9 @@ function aggregateUsage(steps: AgentPipelineExecutionStep[]): PipelineStepUsage 
   for (const step of steps) {
     if (!step.usage) continue
     hasUsage = true
-    prompt += step.usage.promptTokens || 0
-    completion += step.usage.completionTokens || 0
-    total += step.usage.totalTokens || 0
+    prompt += step.usage.promptTokens ?? 0
+    completion += step.usage.completionTokens ?? 0
+    total += step.usage.totalTokens ?? 0
   }
   return hasUsage ? { promptTokens: prompt, completionTokens: completion, totalTokens: total } : undefined
 }

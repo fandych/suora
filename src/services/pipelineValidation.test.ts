@@ -74,12 +74,9 @@ describe('pipelineValidation', () => {
   it('rejects references to undeclared variables', () => {
     const result = validateAgentPipeline(
       {
-        id: 'pipeline-1',
         name: 'Pipeline',
         steps: [{ agentId: 'agent-1', task: 'Use {{vars.unknown}}' }],
         variables: [{ name: 'declared' }],
-        createdAt: 1,
-        updatedAt: 2,
       },
       [agent],
       [model],
@@ -92,12 +89,9 @@ describe('pipelineValidation', () => {
   it('accepts references to declared variables', () => {
     const result = validateAgentPipeline(
       {
-        id: 'pipeline-1',
         name: 'Pipeline',
         steps: [{ agentId: 'agent-1', task: 'Use {{vars.mode}}', runIf: "vars.mode == 'live'" }],
         variables: [{ name: 'mode' }],
-        createdAt: 1,
-        updatedAt: 2,
       },
       [agent],
       [model],
@@ -109,7 +103,6 @@ describe('pipelineValidation', () => {
   it('rejects duplicate or invalid variable names', () => {
     const result = validateAgentPipeline(
       {
-        id: 'pipeline-1',
         name: 'Pipeline',
         steps: [{ agentId: 'agent-1', task: 'Draft' }],
         variables: [
@@ -117,8 +110,6 @@ describe('pipelineValidation', () => {
           { name: 'mode' },
           { name: '1bad' },
         ],
-        createdAt: 1,
-        updatedAt: 2,
       },
       [agent],
       [model],
