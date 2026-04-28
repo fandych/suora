@@ -152,11 +152,6 @@ export function PipelineLayout() {
     () => enabledPipelineSteps.filter((step) => !step.task.trim()).length,
     [enabledPipelineSteps],
   )
-  const retryEnabledSteps = useMemo(
-    () => pipeline.filter((step) => normalizeRetryCount(step.retryCount) > 0).length,
-    [pipeline],
-  )
-
   useEffect(() => {
     if (!workspacePath) return
     loadPipelinesFromDisk(workspacePath).then((savedPipelines) => {
@@ -254,42 +249,13 @@ export function PipelineLayout() {
     [executionDetail, agentNameMap],
   )
 
-  const currentRunningStep = useMemo(
-    () => monitorSteps.find((step) => step.status === 'running') ?? null,
-    [monitorSteps],
-  )
-
   const completedMonitorSteps = useMemo(
     () => monitorSteps.filter((step) => step.status === 'success' || step.status === 'error' || step.status === 'skipped').length,
     [monitorSteps],
   )
 
-  const skippedMonitorSteps = useMemo(
-    () => monitorSteps.filter((step) => step.status === 'skipped').length,
-    [monitorSteps],
-  )
-
-  const successfulMonitorSteps = useMemo(
-    () => monitorSteps.filter((step) => step.status === 'success').length,
-    [monitorSteps],
-  )
-
-  const failedMonitorSteps = useMemo(
-    () => monitorSteps.filter((step) => step.status === 'error').length,
-    [monitorSteps],
-  )
-
-  const progressPercent = pipeline.length > 0
-    ? Math.min(100, Math.round((completedMonitorSteps / pipeline.length) * 100))
-    : 0
-
   const successfulHistoryRuns = useMemo(
     () => pipelineHistory.filter((execution) => execution.status === 'success').length,
-    [pipelineHistory],
-  )
-
-  const failedHistoryRuns = useMemo(
-    () => pipelineHistory.filter((execution) => execution.status === 'error').length,
     [pipelineHistory],
   )
 
@@ -740,23 +706,9 @@ export function PipelineLayout() {
               <p className="mt-2 max-w-3xl text-sm leading-relaxed text-text-muted">{pipelineDescription.trim() || selectedSavedPipeline?.description || t('agents.pipelineMonitorHint', 'Track every handoff, inspect upstream context, and review saved runs without leaving the pipeline canvas.')}</p>
             </div>
 
-            <div className="grid gap-2 sm:grid-cols-2 xl:min-w-130 xl:grid-cols-4">
-              <div className="rounded-2xl border border-border-subtle bg-surface-0/60 px-4 py-3">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{t('agents.pipelineSteps', 'steps')}</div>
-                <div className="mt-2 text-2xl font-semibold text-text-primary">{enabledPipelineSteps.length}/{pipeline.length}</div>
-              </div>
-              <div className="rounded-2xl border border-border-subtle bg-surface-0/60 px-4 py-3">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{t('agents.pipelineRunningStep', 'Active step')}</div>
-                <div className="mt-2 text-2xl font-semibold text-text-primary">{currentRunningStep ? currentRunningStep.stepIndex + 1 : '—'}</div>
-              </div>
-              <div className="rounded-2xl border border-border-subtle bg-surface-0/60 px-4 py-3">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{t('agents.pipelineRetries', 'Retries')}</div>
-                <div className="mt-2 text-2xl font-semibold text-text-primary">{retryEnabledSteps}</div>
-              </div>
-              <div className="rounded-2xl border border-border-subtle bg-surface-0/60 px-4 py-3">
-                <div className="text-[11px] uppercase tracking-[0.18em] text-text-muted">{t('agents.pipelineHistory', 'Execution History')}</div>
-                <div className="mt-2 text-sm font-medium text-text-primary">{selectedSavedPipeline ? `${pipelineHistory.length} ${t('agents.pipelineRuns', 'runs')}` : t('agents.pipelineUnsaved', 'Unsaved')}</div>
-              </div>
+            <div className="flex flex-wrap gap-2 text-[11px] text-text-secondary">
+              <span className="rounded-full border border-border-subtle bg-surface-0/60 px-2.5 py-1">{enabledPipelineSteps.length}/{pipeline.length} {t('agents.pipelineActiveSteps', 'active steps')}</span>
+              {selectedSavedPipeline && <span className="rounded-full border border-border-subtle bg-surface-0/60 px-2.5 py-1">{pipelineHistory.length} {t('agents.pipelineRuns', 'runs')}</span>}
             </div>
           </div>
 
@@ -783,51 +735,6 @@ export function PipelineLayout() {
                 {t('agents.cancelPipeline', '■ Cancel')}
               </button>
             )}
-          </div>
-
-          <div className="mt-4 rounded-3xl border border-border-subtle bg-surface-0/55 px-4 py-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineExecutionStatus', 'Execution status')}</div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-text-secondary">
-                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-medium ${statusStyles(running ? 'running' : (executionDetail?.status ?? activeExecution?.status ?? 'pending'))}`}>
-                    {running
-                      ? t('agents.pipelineStatusRunning', 'Running')
-                      : t(`agents.pipelineStatus.${executionDetail?.status ?? activeExecution?.status ?? 'pending'}`, executionDetail?.status ?? activeExecution?.status ?? 'pending')}
-                  </span>
-                  <span>{completedMonitorSteps}/{pipeline.length || 0} {t('agents.pipelineStepsCompleted', 'steps completed')} ({progressPercent}%)</span>
-                  <span className="text-text-muted">{successfulMonitorSteps} {t('agents.pipelineSucceeded', 'succeeded')} · {failedMonitorSteps} {t('agents.pipelineFailed', 'failed')} · {skippedMonitorSteps} {t('agents.pipelineSkipped', 'skipped')}</span>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2 text-[11px] text-text-secondary">
-                <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineHistory', 'History')}: {pipelineHistory.length}</span>
-                <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineSuccess', 'Success')}: {successfulHistoryRuns}</span>
-                <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineErrors', 'Errors')}: {failedHistoryRuns}</span>
-              </div>
-            </div>
-
-            <div className="mt-4 flex gap-1.5">
-              {(pipeline.length > 0 ? pipeline : [{ agentId: 'placeholder', task: '' }]).map((step, index) => {
-                const stepStatus = monitorSteps[index]?.status ?? 'pending'
-                const segmentClass = stepStatus === 'success'
-                  ? 'bg-emerald-400/90'
-                  : stepStatus === 'error'
-                    ? 'bg-red-400/90'
-                    : stepStatus === 'running'
-                      ? 'bg-amber-400/90'
-                      : stepStatus === 'skipped'
-                        ? 'bg-text-muted/35'
-                        : 'bg-surface-3'
-
-                return (
-                  <div
-                    key={`${step.agentId}-${index}`}
-                    className={`h-2 flex-1 rounded-full transition-colors ${segmentClass}`}
-                  />
-                )
-              })}
-            </div>
           </div>
 
           {pipelineValidation.issues.length > 0 && (
@@ -939,7 +846,7 @@ export function PipelineLayout() {
                               className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                             />
 
-                            <div className="grid gap-2 sm:grid-cols-3">
+                            <div className="flex flex-wrap gap-2">
                               <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                 <input
                                   type="checkbox"
@@ -949,63 +856,69 @@ export function PipelineLayout() {
                                 />
                                 {t('agents.pipelineStepEnabled', 'Enabled')}
                               </label>
-                              <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                <input
-                                  type="checkbox"
-                                  checked={step.continueOnError !== false}
-                                  onChange={(event) => updateStep(idx, { continueOnError: event.target.checked })}
-                                  className="h-4 w-4 accent-accent"
-                                />
-                                {t('agents.pipelineContinueOnError', 'Continue on error')}
-                              </label>
-                              <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                <span>{t('agents.pipelineRetryCount', 'Retries')}</span>
-                                <input
-                                  type="number"
-                                  min={0}
-                                  max={3}
-                                  value={normalizeRetryCount(step.retryCount)}
-                                  onChange={(event) => updateStep(idx, { retryCount: normalizeRetryCount(Number(event.target.value)) })}
-                                  className="h-8 w-16 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
-                                />
-                              </label>
                             </div>
 
-                            <div className="grid gap-2 sm:grid-cols-3">
-                              <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                <span>{t('agents.pipelineStepTimeout', 'Timeout ms')}</span>
-                                <input
-                                  type="number"
-                                  min={1000}
-                                  value={step.timeoutMs ?? ''}
-                                  onChange={(event) => updateStep(idx, { timeoutMs: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
-                                  placeholder="300000"
-                                  className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
-                                />
-                              </label>
-                              <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                <span>{t('agents.pipelineMaxInput', 'Max input')}</span>
-                                <input
-                                  type="number"
-                                  min={1000}
-                                  value={step.maxInputChars ?? ''}
-                                  onChange={(event) => updateStep(idx, { maxInputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
-                                  placeholder="80000"
-                                  className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
-                                />
-                              </label>
-                              <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                <span>{t('agents.pipelineMaxOutput', 'Max output')}</span>
-                                <input
-                                  type="number"
-                                  min={1000}
-                                  value={step.maxOutputChars ?? ''}
-                                  onChange={(event) => updateStep(idx, { maxOutputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
-                                  placeholder="32000"
-                                  className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
-                                />
-                              </label>
-                            </div>
+                            <details className="rounded-2xl border border-border-subtle bg-surface-2/35 px-3 py-2">
+                              <summary className="cursor-pointer text-xs font-medium text-text-secondary">{t('common.advanced', 'Advanced')}</summary>
+                              <div className="mt-3 space-y-3">
+                                <div className="grid gap-2 sm:grid-cols-2">
+                                  <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <input
+                                      type="checkbox"
+                                      checked={step.continueOnError !== false}
+                                      onChange={(event) => updateStep(idx, { continueOnError: event.target.checked })}
+                                      className="h-4 w-4 accent-accent"
+                                    />
+                                    {t('agents.pipelineContinueOnError', 'Continue on error')}
+                                  </label>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineRetryCount', 'Retries')}</span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={3}
+                                      value={normalizeRetryCount(step.retryCount)}
+                                      onChange={(event) => updateStep(idx, { retryCount: normalizeRetryCount(Number(event.target.value)) })}
+                                      className="h-8 w-16 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    />
+                                  </label>
+                                </div>
+
+                                <div className="grid gap-2 sm:grid-cols-3">
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineStepTimeout', 'Timeout ms')}</span>
+                                    <input
+                                      type="number"
+                                      min={1000}
+                                      value={step.timeoutMs ?? ''}
+                                      onChange={(event) => updateStep(idx, { timeoutMs: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
+                                      placeholder="300000"
+                                      className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    />
+                                  </label>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineMaxInput', 'Max input')}</span>
+                                    <input
+                                      type="number"
+                                      min={1000}
+                                      value={step.maxInputChars ?? ''}
+                                      onChange={(event) => updateStep(idx, { maxInputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
+                                      placeholder="80000"
+                                      className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    />
+                                  </label>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineMaxOutput', 'Max output')}</span>
+                                    <input
+                                      type="number"
+                                      min={1000}
+                                      value={step.maxOutputChars ?? ''}
+                                      onChange={(event) => updateStep(idx, { maxOutputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })}
+                                      placeholder="32000"
+                                      className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    />
+                                  </label>
+                                </div>
 
                             {idx > 0 && (
                               <div className="rounded-2xl border border-dashed border-border-subtle bg-surface-2/45 px-3 py-3">
@@ -1031,7 +944,6 @@ export function PipelineLayout() {
                                 </div>
                               </div>
                             )}
-                          </div>
 
                           {idx > 0 && (
                             <div className="mt-4 rounded-2xl border border-dashed border-border-subtle bg-surface-2/60 px-3 py-3">
@@ -1051,6 +963,9 @@ export function PipelineLayout() {
                               <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap text-sm text-text-secondary">{previewStep.output}</div>
                             </div>
                           )}
+                              </div>
+                            </details>
+                        </div>
                         </div>
                       )
                     })}
