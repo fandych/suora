@@ -56,7 +56,7 @@ export function SettingsLayout() {
   return (
     <>
       <SidePanel title={t('settings.title', 'Settings')} width={panelWidth}>
-        <div className="px-3 pb-3 pt-1 space-y-3">
+        <div className="module-sidebar-stack px-3 pb-3 pt-1 space-y-3">
           <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -109,8 +109,8 @@ export function SettingsLayout() {
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
-      <div className="flex-1 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
-        <div className="mx-auto max-w-7xl space-y-6">
+      <div className="module-canvas flex-1 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
+        <div className="module-content mx-auto max-w-7xl space-y-6">
           <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
             <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
               <div className="flex min-w-0 items-start gap-4">

@@ -539,7 +539,7 @@ export function ChannelLayout() {
           </button>
         }
       >
-        <div className="px-3 pb-3 pt-1 space-y-3">
+        <div className="module-sidebar-stack px-3 pb-3 pt-1 space-y-3">
           <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -665,7 +665,7 @@ export function ChannelLayout() {
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520} />
 
-      <div className="flex-1 min-w-0 overflow-y-auto bg-surface-1/30 px-5 py-6 xl:px-8 xl:py-8">
+      <div className="module-canvas flex-1 min-w-0 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
         {editingChannel ? (
           <ChannelEditor
             key={`${isAdding ? 'new' : 'edit'}-${editingChannel.id}`}

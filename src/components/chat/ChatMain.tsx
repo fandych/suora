@@ -511,7 +511,7 @@ export function ChatMain() {
 
   if (!activeSession) {
     return (
-      <div className="flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
+      <div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
         <div className="px-5 pt-5 xl:px-6">
           <div className="rounded-3xl border border-border-subtle/55 bg-surface-1/76 p-5 shadow-sm xl:p-6">
             <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
@@ -550,7 +550,7 @@ export function ChatMain() {
           </div>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-5 xl:px-6">
+        <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-5 xl:px-6">
           <div className="mx-auto grid max-w-384 gap-5 xl:grid-cols-[minmax(0,1.2fr)_minmax(18rem,0.72fr)]">
             <section className="chat-stage-panel relative overflow-hidden rounded-3xl border border-border-subtle/55 bg-surface-1/58 shadow-sm">
               <div className="relative z-10 p-5 xl:p-7">
@@ -634,7 +634,7 @@ export function ChatMain() {
   }
 
   return (
-    <div className="flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
+    <div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
       {openSessionTabs.length > 1 && <ChatTabBar />}
 
       <div
@@ -643,7 +643,7 @@ export function ChatMain() {
         role="log"
         aria-label="Chat messages"
         aria-live="polite"
-        className="min-h-0 flex-1 overflow-y-auto"
+        className="module-canvas min-h-0 flex-1 overflow-y-auto"
       >
         <div className="sticky top-0 z-20 border-b border-border-subtle/45 bg-surface-0/88 px-5 py-3 backdrop-blur-xl xl:px-6">
           <div className="mx-auto max-w-384 rounded-2xl border border-border-subtle/55 bg-surface-1/76 p-4 shadow-sm">

@@ -27,7 +27,7 @@ export function SidePanel({ title, children, action, width }: SidePanelProps) {
     <aside
       ref={panelRef}
       aria-label={title}
-      className="glass h-full min-h-0 w-70 shrink-0 overflow-hidden rounded-lg border flex flex-col"
+      className="glass-strong module-side-panel h-full min-h-0 w-70 shrink-0 overflow-hidden rounded-lg border flex flex-col"
     >
       <div className="h-11 px-3 flex items-center justify-between border-b border-border-subtle shrink-0">
         <h2 className="truncate text-sm font-semibold text-text-secondary">{title}</h2>

@@ -604,7 +604,7 @@ export function PipelineLayout() {
           </button>
         }
       >
-        <div className="p-3 space-y-3">
+        <div className="module-sidebar-stack p-3 space-y-3">
           <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -725,8 +725,8 @@ export function PipelineLayout() {
 
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
-      <div className="flex min-w-0 flex-1 flex-col bg-surface-1/30">
-        <div className={`border-b border-border-subtle px-6 py-5 ${PIPELINE_HEADER_BACKGROUND}`}>
+      <div className="module-workspace flex min-w-0 flex-1 flex-col">
+        <div className={`module-hero-strip border-b border-border-subtle px-6 py-5 ${PIPELINE_HEADER_BACKGROUND}`}>
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-text-muted">
@@ -845,7 +845,7 @@ export function PipelineLayout() {
         </div>
 
         <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.9fr)]">
-          <div className="min-h-0 overflow-y-auto px-6 py-6">
+          <div className="module-canvas min-h-0 overflow-y-auto px-6 py-6">
             <div className="space-y-6">
               <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
                 <div className="flex items-center justify-between gap-3">
@@ -1120,7 +1120,7 @@ export function PipelineLayout() {
           </div>
 
           <aside className="min-h-0 border-t border-border-subtle xl:border-t-0 xl:border-l">
-            <div className="h-full overflow-y-auto px-6 py-6">
+            <div className="module-canvas h-full overflow-y-auto px-6 py-6">
               <div className="space-y-6">
                 <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">

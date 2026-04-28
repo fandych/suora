@@ -55,8 +55,8 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle }: {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-5 py-6 animate-fade-in xl:px-8 xl:py-8">
-      <div className="mx-auto max-w-6xl space-y-6">
+    <div className="module-canvas flex-1 overflow-y-auto px-5 py-6 animate-fade-in xl:px-8 xl:py-8">
+      <div className="module-content mx-auto max-w-6xl space-y-6">
         <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">

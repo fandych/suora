@@ -332,7 +332,7 @@ export function SkillsLayout() {
         />
 
         {/* Tab toggle */}
-        <div className="grid grid-cols-3 gap-1.5 px-3 pb-3 pt-1">
+        <div className="module-sidebar-stack grid grid-cols-3 gap-1.5 px-3 pb-3 pt-1">
           {(['installed', 'browse', 'sources'] as const).map((mode) => (
             <button
               key={mode}
@@ -362,7 +362,7 @@ export function SkillsLayout() {
           ))}
         </div>
 
-        <div className="px-3 pb-3">
+        <div className="module-sidebar-stack px-3 pb-3">
           {viewMode === 'installed' ? (
             <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
               <div className="flex items-start justify-between gap-3">
@@ -440,7 +440,7 @@ export function SkillsLayout() {
 
         {/* Search (for installed + browse tabs) */}
         {viewMode !== 'sources' && (
-          <div className="px-3 pb-3">
+          <div className="module-sidebar-stack px-3 pb-3">
             <div className="relative">
               <IconifyIcon
                 name="lucide:search"
@@ -460,7 +460,7 @@ export function SkillsLayout() {
 
         {/* ── Installed Tab ───────────────────────────────────── */}
         {viewMode === 'installed' && (
-          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
+          <div className="module-sidebar-stack flex-1 overflow-y-auto px-3 pb-3 space-y-2">
             {filteredInstalled.length === 0 && (
               <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3 border border-border-subtle">
@@ -605,7 +605,7 @@ export function SkillsLayout() {
             </div>
 
             {/* Skill cards */}
-            <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-2">
+            <div className="module-sidebar-stack flex-1 overflow-y-auto px-3 pb-3 space-y-2">
               {registryLoading && (
                 <div className="flex items-center justify-center py-8 gap-2">
                   <div className="w-4 h-4 rounded-full border-2 border-accent/30 border-t-accent animate-spin" />
@@ -686,7 +686,7 @@ export function SkillsLayout() {
 
         {/* ── Sources Tab ─────────────────────────────────────── */}
         {viewMode === 'sources' && (
-          <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-3">
+          <div className="module-sidebar-stack flex-1 overflow-y-auto px-3 pb-3 space-y-3">
             <p className="text-[10px] text-text-muted px-1 pt-1">
               {t('skills.sourcesDesc', 'Manage skill registries. Add GitHub repos or custom URLs as skill sources.')}
             </p>
@@ -777,7 +777,7 @@ export function SkillsLayout() {
           onCancel={() => { setIsAdding(false); setEditingId(null) }}
         />
       ) : (
-        <div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
+        <div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
           <div className="mx-auto flex h-full w-full max-w-5xl items-center justify-center">
             <div className="w-full rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/94 via-surface-1/88 to-surface-2/72 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.16)] animate-fade-in xl:p-10">
               <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
@@ -829,4 +829,3 @@ export function SkillsLayout() {
     </>
   )
 }
-

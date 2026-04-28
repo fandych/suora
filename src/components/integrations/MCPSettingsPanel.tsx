@@ -576,7 +576,7 @@ export function MCPSettingsPanel() {
           </button>
         }
       >
-        <div className="px-3 pb-3 pt-1 space-y-3">
+        <div className="module-sidebar-stack px-3 pb-3 pt-1 space-y-3">
           <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -665,7 +665,7 @@ export function MCPSettingsPanel() {
 
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
-      <div className="flex-1 min-w-0 overflow-y-auto bg-surface-1/30 px-5 py-6 xl:px-8 xl:py-8">
+      <div className="module-canvas flex-1 min-w-0 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
         {!form && !selected ? (
           <div className="mx-auto flex h-full w-full max-w-5xl items-center justify-center">
             <div className="w-full rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/94 via-surface-1/88 to-surface-2/72 p-8 text-center shadow-[0_24px_70px_rgba(15,23,42,0.16)] animate-fade-in xl:p-10">

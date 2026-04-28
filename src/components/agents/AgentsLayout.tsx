@@ -184,7 +184,7 @@ function AgentList({
     : agents
 
   return (
-    <div className="px-3 pb-3 space-y-2.5">
+    <div className="module-sidebar-stack px-3 pb-3 space-y-2.5">
       {/* Search */}
       {agents.length > 3 && (
         <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
@@ -590,7 +590,7 @@ export function AgentsLayout() {
           </button>
         </div>
 
-        <div className="px-3 pb-3">
+        <div className="module-sidebar-stack px-3 pb-3">
           {sideTab === 'local' ? (
             <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
               <div className="flex items-start justify-between gap-3">
@@ -674,7 +674,7 @@ export function AgentsLayout() {
         )}
 
         {sideTab === 'marketplace' && (
-          <div className="px-3 pb-3 space-y-3">
+          <div className="module-sidebar-stack px-3 pb-3 space-y-3">
             <div className="relative">
               <IconifyIcon
                 name="ui-search"
@@ -794,7 +794,7 @@ export function AgentsLayout() {
           )}
         </>
       ) : (
-        <div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
+        <div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
           <div className="mx-auto flex h-full w-full max-w-5xl items-center justify-center">
             <div className="w-full rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/94 via-surface-1/88 to-surface-2/72 p-8 shadow-[0_24px_70px_rgba(15,23,42,0.16)] animate-fade-in xl:p-10">
               <div className="flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
