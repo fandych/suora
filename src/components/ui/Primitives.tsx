@@ -11,8 +11,8 @@ const buttonBase = 'inline-flex items-center justify-center gap-1.5 border font-
 
 const buttonVariants: Record<ButtonVariant, string> = {
   primary: 'border-accent bg-accent text-white hover:bg-accent-hover',
-  secondary: 'border-border-subtle bg-surface-1 text-text-secondary hover:border-border hover:bg-surface-2 hover:text-text-primary',
-  ghost: 'border-transparent bg-transparent text-text-muted hover:bg-surface-2 hover:text-text-primary',
+  secondary: 'glass-subtle border-border-subtle text-text-secondary hover:border-border hover:bg-white/8 hover:text-text-primary',
+  ghost: 'border-transparent bg-transparent text-text-muted hover:bg-white/8 hover:text-text-primary',
   danger: 'border-danger/30 bg-danger/10 text-danger hover:bg-danger/15',
 }
 
@@ -45,16 +45,16 @@ export function Badge({ tone = 'neutral', className, ...rest }: HTMLAttributes<H
 }
 
 export function Panel({ className, ...rest }: HTMLAttributes<HTMLElement>) {
-  return <section className={cx('rounded-lg border border-border-subtle bg-surface-1 p-4', className)} {...rest} />
+  return <section className={cx('glass glass-card rounded-lg border p-4', className)} {...rest} />
 }
 
 export function Toolbar({ className, ...rest }: HTMLAttributes<HTMLDivElement>) {
-  return <div className={cx('flex min-h-12 items-center justify-between gap-3 border-b border-border-subtle bg-surface-1 px-4', className)} {...rest} />
+  return <div className={cx('glass-subtle flex min-h-12 items-center justify-between gap-3 border-b px-4', className)} {...rest} />
 }
 
 export function EmptyState({ title, description, action, className }: { title: string; description?: string; action?: ReactNode; className?: string }) {
   return (
-    <div className={cx('flex min-h-40 flex-col items-center justify-center rounded-lg border border-dashed border-border-subtle bg-surface-1 px-6 py-8 text-center', className)}>
+    <div className={cx('glass-subtle flex min-h-40 flex-col items-center justify-center rounded-lg border border-dashed px-6 py-8 text-center', className)}>
       <div className="text-sm font-medium text-text-primary">{title}</div>
       {description && <p className="mt-1 max-w-sm text-[12px] leading-5 text-text-muted">{description}</p>}
       {action && <div className="mt-4">{action}</div>}
@@ -74,7 +74,7 @@ export function Tabs<TValue extends string>({
   className?: string
 }) {
   return (
-    <div className={cx('inline-flex rounded-md border border-border-subtle bg-surface-1 p-0.5', className)}>
+    <div className={cx('glass-subtle inline-flex rounded-md border p-0.5', className)}>
       {items.map((item) => (
         <button
           key={item.value}
@@ -82,7 +82,7 @@ export function Tabs<TValue extends string>({
           onClick={() => onChange(item.value)}
           className={cx(
             'rounded px-3 py-1.5 text-[12px] font-medium transition-colors',
-            value === item.value ? 'bg-surface-3 text-text-primary' : 'text-text-muted hover:text-text-primary',
+            value === item.value ? 'nav-item-active text-text-primary' : 'text-text-muted hover:bg-white/8 hover:text-text-primary',
           )}
         >
           {item.label}
@@ -98,7 +98,7 @@ export function EntityListItem({ active, className, ...rest }: ButtonHTMLAttribu
       type="button"
       className={cx(
         'w-full rounded-lg border px-3 py-2.5 text-left transition-colors',
-        active ? 'border-accent/35 bg-accent/10 text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:border-border-subtle hover:bg-surface-2 hover:text-text-primary',
+        active ? 'border-accent/35 bg-accent/10 text-text-primary' : 'border-transparent bg-transparent text-text-secondary hover:border-border-subtle hover:bg-white/8 hover:text-text-primary',
         className,
       )}
       {...rest}

@@ -75,7 +75,7 @@ export function AppShell() {
   }, [channels])
 
   return (
-    <div className="w-screen h-screen flex bg-surface-0 text-text-primary overflow-hidden relative">
+    <div className="app-aurora w-screen h-screen flex text-text-primary overflow-hidden relative">
       {/* Skip to main content — visible only on focus for keyboard users */}
       <a
         href="#main-content"
@@ -84,7 +84,7 @@ export function AppShell() {
         {t('common.skipToContent', 'Skip to main content')}
       </a>
       <NavBar />
-      <main id="main-content" className="workbench-density relative z-1 flex min-h-0 min-w-0 flex-1 overflow-hidden bg-surface-0">
+      <main id="main-content" className="workbench-density glass-subtle relative z-1 flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-white/5">
         <Outlet />
       </main>
       <CommandPalette />

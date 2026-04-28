@@ -217,11 +217,11 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-lg bg-surface-0 border border-border-subtle rounded-2xl shadow-2xl overflow-hidden animate-slide-up"
+        className="glass-strong w-full max-w-lg border rounded-2xl shadow-2xl overflow-hidden animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-subtle focus-within:bg-surface-1/50 focus-within:shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.18)]">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-white/10 focus-within:bg-white/8 focus-within:shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.18)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted shrink-0">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -266,8 +266,8 @@ export function CommandPalette() {
                   {...{ 'aria-selected': globalIdx === selectedIndex ? 'true' : 'false' }}
                   className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
                     globalIdx === selectedIndex
-                      ? 'bg-accent/10 text-accent'
-                      : 'text-text-primary hover:bg-surface-2'
+                      ? 'nav-item-active text-accent'
+                      : 'text-text-primary hover:bg-white/8'
                   }`}
                   onClick={item.action}
                   onMouseEnter={() => setSelectedIndex(globalIdx)}

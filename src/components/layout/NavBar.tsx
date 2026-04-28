@@ -40,9 +40,9 @@ const settingsIcon = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 )
 
-const navButtonBase = 'relative flex h-10 w-10 items-center justify-center rounded-md transition-colors'
-const navButtonInactive = 'text-text-muted hover:bg-surface-2 hover:text-text-primary'
-const navButtonActive = 'bg-surface-2 text-accent'
+const navButtonBase = 'relative flex h-10 w-10 items-center justify-center rounded-md transition-all'
+const navButtonInactive = 'text-text-muted hover:bg-white/8 hover:text-text-primary hover:shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
+const navButtonActive = 'nav-item-active text-accent'
 
 function formatRelativeTime(ts: number, locale = 'en') {
   const diffSeconds = Math.round((ts - Date.now()) / 1000)
@@ -63,13 +63,13 @@ export function NavBar() {
   const { t } = useI18n()
 
   return (
-    <nav aria-label="Main navigation" className="relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r border-border-subtle bg-surface-1 py-3">
+    <nav aria-label="Main navigation" className="glass-strong relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r py-3">
       {/* Logo */}
       <button
         type="button"
         onClick={() => navigate('/chat')}
         aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`}
-        className="mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border border-border-subtle bg-surface-2 transition-colors hover:border-accent/35"
+        className="glass-card mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border bg-white/8 transition-colors hover:border-accent/35"
       >
         <img src={logoSvg} alt="SUORA" width={32} height={32} className="h-8 w-8" />
       </button>
@@ -187,7 +187,7 @@ function NotificationBell() {
         title={notificationsLabel}
         aria-label={notificationsLabel}
         className={`relative flex h-10 w-10 items-center justify-center rounded-md transition-colors ${
-          open ? 'bg-surface-2 text-accent' : navButtonInactive
+          open ? 'nav-item-active text-accent' : navButtonInactive
         }`}
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -199,7 +199,7 @@ function NotificationBell() {
       </button>
 
       {open && (
-        <div role="dialog" aria-label={t('nav.notifications', 'Notifications')} className="absolute bottom-0 left-full z-50 ml-2 flex max-h-120 w-88 flex-col rounded-lg border border-border-subtle bg-surface-1 shadow-lg">
+        <div role="dialog" aria-label={t('nav.notifications', 'Notifications')} className="glass-strong absolute bottom-0 left-full z-50 ml-2 flex max-h-120 w-88 flex-col rounded-lg border shadow-lg">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border-subtle px-3 py-2.5">
             <span className="text-[15px] font-semibold text-text-primary">{t('nav.notifications', 'Notifications')}</span>
