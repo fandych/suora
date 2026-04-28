@@ -1,5 +1,4 @@
 import type { AgentPipeline, AgentPipelineExecution } from '@/types'
-import { safePathSegment } from '@/utils/pathSegments'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -7,42 +6,14 @@ function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
 }
 
-function pipelinesDir(workspacePath: string): string {
-  return `${workspacePath}/pipelines`
-}
-
-function pipelineFilePath(workspacePath: string, pipelineId: string): string {
-  return `${pipelinesDir(workspacePath)}/${safePathSegment(pipelineId, 'pipeline')}.json`
-}
-
-function pipelineHistoryFilePath(workspacePath: string): string {
-  return `${pipelinesDir(workspacePath)}/history.json`
-}
-
 export async function loadPipelinesFromDisk(workspacePath: string): Promise<AgentPipeline[]> {
   const electron = getElectron()
   if (!electron || !workspacePath) return []
 
   try {
-    const entries = (await electron.invoke('fs:listDir', pipelinesDir(workspacePath))) as
-      | { name: string; isDirectory: boolean; path: string }[]
-      | { error: string }
-
-    if (!Array.isArray(entries)) return []
-
-    const pipelines: AgentPipeline[] = []
-    for (const entry of entries) {
-      if (entry.isDirectory || !entry.name.endsWith('.json') || entry.name === 'history.json') continue
-      try {
-        const raw = await electron.invoke('fs:readFile', entry.path)
-        if (typeof raw === 'string') {
-          pipelines.push(JSON.parse(raw) as AgentPipeline)
-        }
-      } catch {
-        // Ignore corrupt pipeline files.
-      }
-    }
-
+    const result = await electron.invoke('db:listEntities', 'pipelines') as { success?: boolean; data?: unknown; error?: string }
+    if (result?.error || !Array.isArray(result.data)) return []
+    const pipelines = result.data.filter((entry): entry is AgentPipeline => Boolean(entry && typeof entry === 'object' && 'id' in entry && 'updatedAt' in entry))
     return pipelines.sort((left, right) => right.updatedAt - left.updatedAt)
   } catch {
     return []
@@ -54,13 +25,7 @@ export async function savePipelineToDisk(workspacePath: string, pipeline: AgentP
   if (!electron || !workspacePath) return false
 
   try {
-    const ensureResult = await electron.invoke('system:ensureDirectory', pipelinesDir(workspacePath)) as { error?: string }
-    if (ensureResult?.error) return false
-    const result = (await electron.invoke(
-      'fs:writeFile',
-      pipelineFilePath(workspacePath, pipeline.id),
-      JSON.stringify(pipeline, null, 2),
-    )) as { success?: boolean }
+    const result = (await electron.invoke('db:saveEntity', 'pipelines', pipeline.id, pipeline)) as { success?: boolean; error?: string }
     return result?.success ?? false
   } catch {
     return false
@@ -72,7 +37,7 @@ export async function deletePipelineFromDisk(workspacePath: string, pipelineId: 
   if (!electron || !workspacePath) return false
 
   try {
-    const result = (await electron.invoke('fs:deleteFile', pipelineFilePath(workspacePath, pipelineId))) as { success?: boolean }
+    const result = (await electron.invoke('db:deleteEntity', 'pipelines', pipelineId)) as { success?: boolean; error?: string }
     return result?.success ?? false
   } catch {
     return false
@@ -84,10 +49,9 @@ export async function loadPipelineExecutionsFromDisk(workspacePath: string, pipe
   if (!electron || !workspacePath) return []
 
   try {
-    const raw = await electron.invoke('fs:readFile', pipelineHistoryFilePath(workspacePath))
-    if (typeof raw !== 'string') return []
-
-    const executions = JSON.parse(raw) as AgentPipelineExecution[]
+    const result = await electron.invoke('db:listEntities', 'pipeline_executions') as { success?: boolean; data?: unknown; error?: string }
+    if (result?.error || !Array.isArray(result.data)) return []
+    const executions = result.data.filter((entry): entry is AgentPipelineExecution => Boolean(entry && typeof entry === 'object' && 'id' in entry && 'startedAt' in entry))
     const filtered = pipelineId
       ? executions.filter((execution) => execution.pipelineId === pipelineId)
       : executions
@@ -103,15 +67,7 @@ export async function appendPipelineExecutionToDisk(workspacePath: string, execu
   if (!electron || !workspacePath) return false
 
   try {
-    const ensureResult = await electron.invoke('system:ensureDirectory', pipelinesDir(workspacePath)) as { error?: string }
-    if (ensureResult?.error) return false
-    const executions = await loadPipelineExecutionsFromDisk(workspacePath)
-    const nextExecutions = [...executions, execution].slice(-500)
-    const result = (await electron.invoke(
-      'fs:writeFile',
-      pipelineHistoryFilePath(workspacePath),
-      JSON.stringify(nextExecutions, null, 2),
-    )) as { success?: boolean }
+    const result = (await electron.invoke('db:saveEntity', 'pipeline_executions', execution.id, execution)) as { success?: boolean; error?: string }
     return result?.success ?? false
   } catch {
     return false

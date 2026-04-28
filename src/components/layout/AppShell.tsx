@@ -4,7 +4,7 @@ import { NavBar } from './NavBar'
 import { CommandPalette } from '@/components/CommandPalette'
 import { useI18n } from '@/hooks/useI18n'
 import { useAppStore } from '@/store/appStore'
-import { initWorkspacePath, loadSessionsFromWorkspace, loadSettingsFromWorkspace, loadExternalSkillsAndAgents } from '@/store/appStore'
+import { initWorkspacePath, loadSessionsFromWorkspace, loadSettingsFromWorkspace, loadExternalSkillsAndAgents, waitForStoreHydration } from '@/store/appStore'
 import { restoreChannelRuntime } from '@/services/channelMessageHandler'
 import { getResolvedPluginEntryPoint, restoreInstalledPluginRuntime } from '@/services/pluginSystem'
 
@@ -16,7 +16,8 @@ export function AppShell() {
   useEffect(() => {
     let cancelled = false
 
-    initWorkspacePath()
+    waitForStoreHydration()
+      .then(() => initWorkspacePath())
       .then(() => loadSettingsFromWorkspace())
       .then(() => loadSessionsFromWorkspace())
       .then(() => loadExternalSkillsAndAgents())
@@ -84,7 +85,7 @@ export function AppShell() {
         {t('common.skipToContent', 'Skip to main content')}
       </a>
       <NavBar />
-      <main id="main-content" className="workbench-density glass-subtle relative z-1 flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-white/5">
+      <main id="main-content" className="workbench-density relative z-1 flex min-h-0 min-w-0 flex-1 overflow-hidden border-l border-border-subtle/70 bg-surface-0/88">
         <Outlet />
       </main>
       <CommandPalette />

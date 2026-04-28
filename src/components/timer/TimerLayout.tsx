@@ -66,7 +66,6 @@ export function TimerLayout() {
   }, [timers, deferredSearchQuery])
 
   const enabledCount = useMemo(() => timers.filter((timer) => timer.enabled).length, [timers])
-  const upcomingCount = useMemo(() => timers.filter((timer) => timer.nextRun && timer.nextRun > Date.now()).length, [timers])
   const pipelineCount = useMemo(() => timers.filter((timer) => timer.action === 'pipeline').length, [timers])
 
   async function handleCreate(data: TimerFormData) {
@@ -129,35 +128,7 @@ export function TimerLayout() {
           {t('timer.new', '+ New')}
         </button>
       }>
-        <div className="module-sidebar-stack px-3 pb-3 pt-1 space-y-3">
-          <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('timer.scheduler', 'Scheduler')}</div>
-                <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('timer.scheduledWork', 'Scheduled Work')}</div>
-                <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('timer.schedulerHint', 'Queue reminders, prompt runs, and pipelines without digging through raw settings.')}</p>
-              </div>
-              <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
-                <div className="text-xl font-semibold text-text-primary tabular-nums">{timers.length}</div>
-              </div>
-            </div>
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.enabled', 'Enabled')}</div>
-                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledCount}</div>
-              </div>
-              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('timer.upcoming', 'Upcoming')}</div>
-                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{upcomingCount}</div>
-              </div>
-              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.pipeline', 'Pipeline')}</div>
-                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{pipelineCount}</div>
-              </div>
-            </div>
-          </div>
-
+        <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
           <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none" />

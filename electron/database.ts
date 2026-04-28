@@ -18,6 +18,7 @@ export type JsonTableName =
   | 'channel_messages'
   | 'mcp_servers'
   | 'timers'
+  | 'timer_executions'
   | 'pipelines'
   | 'pipeline_executions'
   | 'memories'
@@ -31,6 +32,7 @@ const JSON_TABLES = new Set<JsonTableName>([
   'channel_messages',
   'mcp_servers',
   'timers',
+  'timer_executions',
   'pipelines',
   'pipeline_executions',
   'memories',
@@ -149,6 +151,37 @@ export class SuoraDatabase {
     await this.persist()
   }
 
+  getPersistedStore(key: string): string | null {
+    const statement = this.database.prepare('SELECT value_json FROM app_state WHERE key = ?')
+    try {
+      statement.bind([key])
+      if (!statement.step()) return null
+      const row = statement.getAsObject() as { value_json?: unknown }
+      return typeof row.value_json === 'string' ? row.value_json : null
+    } finally {
+      statement.free()
+    }
+  }
+
+  async savePersistedStore(key: string, serializedValue: string, version: number): Promise<void> {
+    JSON.parse(serializedValue)
+    this.database.run(
+      `INSERT INTO app_state (key, value_json, version, updated_at)
+       VALUES (?, ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET
+         value_json = excluded.value_json,
+         version = excluded.version,
+         updated_at = excluded.updated_at`,
+      [key, serializedValue, version, Date.now()],
+    )
+    await this.persist()
+  }
+
+  async deletePersistedStore(key: string): Promise<void> {
+    this.database.run('DELETE FROM app_state WHERE key = ?', [key])
+    await this.persist()
+  }
+
   listJsonTable(table: JsonTableName): unknown[] {
     assertJsonTable(table)
     const statement = this.database.prepare(`SELECT value_json FROM ${table} ORDER BY updated_at DESC`)
@@ -193,6 +226,7 @@ export class SuoraDatabase {
       channelMessages: this.listJsonTable('channel_messages'),
       mcpServers: this.listJsonTable('mcp_servers'),
       timers: this.listJsonTable('timers'),
+      timerExecutions: this.listJsonTable('timer_executions'),
       pipelines: this.listJsonTable('pipelines'),
       pipelineExecutions: this.listJsonTable('pipeline_executions'),
       memories: this.listJsonTable('memories'),

@@ -25,11 +25,11 @@ export function TodoProgress() {
 
   const loadTodos = useCallback(async () => {
     if (!workspacePath || !activeSessionId) { setTodos([]); return }
-    const filePath = `${workspacePath}/sessions/${activeSessionId}/todos.json`
+    const key = `session-todos:${activeSessionId.replace(/[^a-zA-Z0-9_.-]/g, '_')}`
     try {
-      const content = await electronInvoke('fs:readFile', filePath)
-      if (typeof content === 'string' && content.trim()) {
-        setTodos(JSON.parse(content) as TodoItem[])
+      const result = await electronInvoke('db:loadPersistedStore', key) as { data?: unknown; error?: string }
+      if (typeof result?.data === 'string' && result.data.trim()) {
+        setTodos(JSON.parse(result.data) as TodoItem[])
       } else {
         setTodos([])
       }
@@ -66,7 +66,7 @@ export function TodoProgress() {
           onClick={() => setExpanded(!expanded)}
           className="flex w-full items-center gap-3 px-4 py-3 transition-colors hover:bg-surface-2/42"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[16px] border border-accent/18 bg-accent/10 text-accent">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-accent/18 bg-accent/10 text-accent">
             <IconifyIcon name="ui-clipboard" size={14} color="currentColor" className="text-accent" />
           </div>
           <div className="flex-1 min-w-0">

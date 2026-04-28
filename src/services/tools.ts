@@ -330,18 +330,18 @@ function getPersistedStoreState(): { workspacePath: string; activeSessionId: str
   }
 }
 
-function getSessionTodosPath(): { path: string; error?: string } {
+function getSessionTodosKey(): { key: string; error?: string } {
   const { workspacePath, activeSessionId } = getPersistedStoreState()
-  if (!workspacePath) return { path: '', error: 'Workspace path not set' }
-  if (!activeSessionId) return { path: '', error: 'No active session — please open or create a chat session first' }
-  return { path: `${workspacePath}/sessions/${safePathSegment(activeSessionId, 'session')}/todos.json` }
+  if (!workspacePath) return { key: '', error: 'Workspace path not set' }
+  if (!activeSessionId) return { key: '', error: 'No active session — please open or create a chat session first' }
+  return { key: `session-todos:${safePathSegment(activeSessionId, 'session')}` }
 }
 
-async function readTodos(filePath: string): Promise<TodoItem[]> {
+async function readTodos(key: string): Promise<TodoItem[]> {
   try {
-    const content = await electronInvoke('fs:readFile', filePath)
-    if (typeof content === 'string' && content.trim()) {
-      return JSON.parse(content) as TodoItem[]
+    const result = await electronInvoke('db:loadPersistedStore', key) as { data?: unknown; error?: string }
+    if (typeof result?.data === 'string' && result.data.trim()) {
+      return JSON.parse(result.data) as TodoItem[]
     }
     return []
   } catch {
@@ -349,8 +349,8 @@ async function readTodos(filePath: string): Promise<TodoItem[]> {
   }
 }
 
-async function writeTodos(filePath: string, todos: TodoItem[]): Promise<void> {
-  await electronInvoke('fs:writeFile', filePath, JSON.stringify(todos, null, 2))
+async function writeTodos(key: string, todos: TodoItem[]): Promise<void> {
+  await electronInvoke('db:savePersistedStore', key, JSON.stringify(todos), 1)
 }
 
 // ─── AI SDK tool definitions ───────────────────────────────────────
@@ -749,9 +749,9 @@ export const builtinToolDefs: ToolSet = {
       status: z.enum(['all', 'pending', 'in-progress', 'done']).default('all').describe('Filter by status'),
     }),
     execute: async ({ status }) => {
-      const { path: todosPath, error } = getSessionTodosPath()
+      const { key: todosKey, error } = getSessionTodosKey()
       if (error) return `Error: ${error}`
-      const todos = await readTodos(todosPath)
+      const todos = await readTodos(todosKey)
       const filtered = status === 'all' ? todos : todos.filter((t) => t.status === status)
       if (filtered.length === 0) return status === 'all' ? 'No todos found in this session.' : `No todos with status "${status}" in this session.`
       return filtered.map((t) =>
@@ -769,9 +769,9 @@ export const builtinToolDefs: ToolSet = {
       dueDate: z.string().optional().describe('Due date as ISO string'),
     }),
     execute: async ({ title, description, priority, dueDate }) => {
-      const { path: todosPath, error } = getSessionTodosPath()
+      const { key: todosKey, error } = getSessionTodosKey()
       if (error) return `Error: ${error}`
-      const todos = await readTodos(todosPath)
+      const todos = await readTodos(todosKey)
       const now = new Date().toISOString()
       const item: TodoItem = {
         id: `todo-${crypto.randomUUID()}`,
@@ -784,7 +784,7 @@ export const builtinToolDefs: ToolSet = {
         ...(dueDate ? { dueDate } : {}),
       }
       todos.push(item)
-      await writeTodos(todosPath, todos)
+      await writeTodos(todosKey, todos)
       return `Added todo: ${item.title} (id: ${item.id})`
     },
   }),
@@ -799,9 +799,9 @@ export const builtinToolDefs: ToolSet = {
       priority: z.enum(['low', 'medium', 'high']).optional().describe('New priority'),
     }),
     execute: async ({ id, title, description, status, priority }) => {
-      const { path: todosPath, error } = getSessionTodosPath()
+      const { key: todosKey, error } = getSessionTodosKey()
       if (error) return `Error: ${error}`
-      const todos = await readTodos(todosPath)
+      const todos = await readTodos(todosKey)
       const idx = todos.findIndex((t) => t.id === id)
       if (idx === -1) return `Error: todo with id "${id}" not found in this session`
       const existing = todos[idx]
@@ -813,7 +813,7 @@ export const builtinToolDefs: ToolSet = {
         ...(priority !== undefined ? { priority } : {}),
         updatedAt: new Date().toISOString(),
       }
-      await writeTodos(todosPath, todos)
+      await writeTodos(todosKey, todos)
       return `Updated todo: ${todos[idx].title} (id: ${id})`
     },
   }),
@@ -824,13 +824,13 @@ export const builtinToolDefs: ToolSet = {
       id: z.string().describe('ID of the todo to remove'),
     }),
     execute: async ({ id }) => {
-      const { path: todosPath, error } = getSessionTodosPath()
+      const { key: todosKey, error } = getSessionTodosKey()
       if (error) return `Error: ${error}`
-      const todos = await readTodos(todosPath)
+      const todos = await readTodos(todosKey)
       const idx = todos.findIndex((t) => t.id === id)
       if (idx === -1) return `Error: todo with id "${id}" not found in this session`
       const removed = todos.splice(idx, 1)[0]
-      await writeTodos(todosPath, todos)
+      await writeTodos(todosKey, todos)
       return `Removed todo: ${removed.title} (id: ${id})`
     },
   }),

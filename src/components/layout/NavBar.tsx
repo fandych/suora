@@ -40,8 +40,8 @@ const settingsIcon = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
 )
 
-const navButtonBase = 'relative flex h-10 w-10 items-center justify-center rounded-md transition-all'
-const navButtonInactive = 'glass-hover text-text-muted hover:text-text-primary'
+const navButtonBase = 'relative flex h-10 w-10 items-center justify-center rounded-lg border border-transparent transition-all'
+const navButtonInactive = 'text-text-muted hover:border-border-subtle/70 hover:bg-surface-2/70 hover:text-text-primary'
 const navButtonActive = 'nav-item-active text-accent'
 
 function formatRelativeTime(ts: number, locale = 'en') {
@@ -63,13 +63,13 @@ export function NavBar() {
   const { t } = useI18n()
 
   return (
-    <nav aria-label="Main navigation" className="glass-strong relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r py-3">
+    <nav aria-label="Main navigation" className="relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r border-border-subtle/80 bg-surface-1/96 py-3 shadow-[inset_-1px_0_0_rgba(255,255,255,0.025)]">
       {/* Logo */}
       <button
         type="button"
         onClick={() => navigate('/chat')}
         aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`}
-        className="glass-card mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-md border transition-colors hover:border-accent/35"
+        className="mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-border-subtle/70 bg-surface-2/82 shadow-sm transition-colors hover:border-accent/40"
       >
         <img src={logoSvg} alt="SUORA" width={32} height={32} className="h-8 w-8" />
       </button>
@@ -89,7 +89,7 @@ export function NavBar() {
               className={`${navButtonBase} ${isActive ? navButtonActive : navButtonInactive}`}
             >
               {isActive && (
-                <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-accent" />
+                <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent" />
               )}
               <span className="flex">{item.icon}</span>
             </button>
@@ -130,7 +130,7 @@ export function NavBar() {
         className={`${navButtonBase} ${location.pathname.startsWith('/settings') ? navButtonActive : navButtonInactive}`}
       >
         {location.pathname.startsWith('/settings') && (
-          <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-accent" />
+          <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent" />
         )}
         <span className="flex">{settingsIcon}</span>
       </button>

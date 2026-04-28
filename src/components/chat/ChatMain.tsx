@@ -64,13 +64,13 @@ function PromptActionCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="group rounded-2xl border border-border-subtle/55 bg-surface-0/58 p-4 text-left shadow-sm transition-all duration-200 hover:border-accent/24 hover:bg-surface-0/82 disabled:opacity-45"
+      className="group rounded-md border border-border-subtle/45 bg-surface-0/42 p-3 text-left transition-all duration-200 hover:border-accent/24 hover:bg-surface-0/70 disabled:opacity-45"
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm transition-colors group-hover:border-accent/20 group-hover:bg-accent/10">
-        <IconifyIcon name={icon} size={18} color="currentColor" />
+      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent/10 text-accent transition-colors group-hover:bg-accent/14">
+        <IconifyIcon name={icon} size={16} color="currentColor" />
       </div>
-      <div className="mt-3 text-[14px] font-semibold text-text-primary">{title}</div>
-      <p className="mt-1.5 text-[12px] leading-5 text-text-secondary/78">{detail}</p>
+      <div className="mt-2.5 text-[13px] font-semibold text-text-primary">{title}</div>
+      <p className="mt-1 text-[12px] leading-5 text-text-secondary/72">{detail}</p>
     </button>
   )
 }
@@ -495,16 +495,15 @@ export function ChatMain() {
   if (!activeSession) {
     return (
       <div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
-        <div className="px-5 pt-5 xl:px-6">
-          <div className="rounded-3xl border border-border-subtle/55 bg-surface-1/76 p-5 shadow-sm xl:p-6">
-            <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
+        <div className="border-b border-border-subtle/55 bg-surface-1/72 px-5 py-4 xl:px-6">
+          <div className="mx-auto max-w-384">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div className="max-w-3xl">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.workbench', 'Chat workbench')}</div>
-                <h1 className="mt-2 text-[28px] font-semibold text-text-primary">{t('chat.desktopAssistant', 'Suora')}</h1>
-                <p className="mt-2 max-w-2xl text-[14px] leading-6 text-text-secondary/82">{t('chat.selectOrCreate', 'Select or create a conversation to begin')}</p>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  <SurfaceBadge tone="accent">{t('chat.pipelineCommandHint', 'Try /pipeline list, or say "run Morning Run pipeline"')}</SurfaceBadge>
-                  <SurfaceBadge>{t('chat.multimodalWorkspace', 'Attachments, voice input, and agent routing in one place')}</SurfaceBadge>
+                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.workbench', '企业 AI 工作台')}</div>
+                <h1 className="mt-1.5 text-[24px] font-semibold text-text-primary">{t('chat.desktopAssistant', 'Suora 内部助手')}</h1>
+                <p className="mt-1.5 max-w-2xl text-[13px] leading-5 text-text-secondary/78">{t('chat.selectOrCreate', '选择会话或创建新任务，开始处理内部知识问答、流程执行和文档分析。')}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <SurfaceBadge>{t('chat.multimodalWorkspace', '文件、语音和智能体路由集中处理')}</SurfaceBadge>
                 </div>
               </div>
 
@@ -524,24 +523,23 @@ export function ChatMain() {
                 />
               </div>
             </div>
-
           </div>
         </div>
 
-        <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-5 xl:px-6">
+        <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-4 xl:px-6">
           <div className="mx-auto max-w-384">
-            <section className="chat-stage-panel relative overflow-hidden rounded-3xl border border-border-subtle/55 bg-surface-1/58 shadow-sm">
-              <div className="relative z-10 p-5 xl:p-7">
-                <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-accent/12 bg-accent/10 text-accent shadow-sm">
-                  <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/45 bg-surface-1/42">
+              <div className="relative z-10 p-4 xl:p-5">
+                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-accent/10 text-accent">
+                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 </div>
-                <div className="mt-6 max-w-2xl">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.startHere', 'Start here')}</div>
-                  <h2 className="mt-2 text-[28px] font-semibold text-text-primary">{t('chat.mainPrompt', 'Pick a thread, or launch a fresh one from the composer below.')}</h2>
-                  <p className="mt-3 text-[14px] leading-6 text-text-secondary/82">{t('chat.welcomeBody', 'The chat page now behaves like a workspace instead of a blank prompt. Choose an agent, lock in a model, then jump in with one of these higher-signal starting points.')}</p>
+                <div className="mt-4 max-w-2xl">
+                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.startHere', '开始处理')}</div>
+                  <h2 className="mt-1.5 text-[22px] font-semibold text-text-primary">{t('chat.mainPrompt', '选择一个会话，或从下方输入框发起新的内部任务。')}</h2>
+                  <p className="mt-2 text-[13px] leading-5 text-text-secondary/78">{t('chat.welcomeBody', '选择智能体与模型后，可以进行知识解释、文档撰写、代码分析或任务拆解，所有上下文都保留在当前工作区。')}</p>
                 </div>
 
-                <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   {starterPrompts.map((prompt) => (
                     <PromptActionCard
                       key={prompt.label}
@@ -557,7 +555,7 @@ export function ChatMain() {
           </div>
         </div>
 
-        <div className="px-5 pb-5 xl:px-6">
+        <div className="px-5 pb-4 xl:px-6">
           <ChatInput
             onSend={createSessionAndSend}
             disabled={false}
@@ -581,13 +579,13 @@ export function ChatMain() {
         className="module-canvas min-h-0 flex-1 overflow-y-auto"
       >
         <div className="sticky top-0 z-20 border-b border-border-subtle/45 bg-surface-0/94 px-5 py-3 xl:px-6">
-          <div className="mx-auto max-w-384 rounded-2xl border border-border-subtle/55 bg-surface-1/76 p-4 shadow-sm">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+          <div className="mx-auto max-w-384">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
               <div className="min-w-0 max-w-3xl">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.liveSession', 'Live session')}</div>
-                <h1 className="mt-1 truncate text-[22px] font-semibold text-text-primary">{activeSession.title}</h1>
-                <p className="mt-1.5 line-clamp-2 max-w-2xl text-[13px] leading-5 text-text-secondary/82">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.liveSession', '当前会话')}</div>
+                <h1 className="mt-1 truncate text-[20px] font-semibold text-text-primary">{activeSession.title}</h1>
+                <p className="mt-1 line-clamp-1 max-w-2xl text-[12px] leading-5 text-text-secondary/76">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
                   {displayAgentName && <SurfaceBadge tone="accent">{displayAgentName}</SurfaceBadge>}
                   <SurfaceBadge>{sessionModel?.name ?? t('chat.selectModel', '-- Select Model --')}</SurfaceBadge>
                   <SurfaceBadge>{messages.length} {t('sessions.msgs', 'msgs')}</SurfaceBadge>
@@ -595,7 +593,7 @@ export function ChatMain() {
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-2 xl:w-xl">
+              <div className="grid gap-2 sm:grid-cols-2 xl:w-xl">
                 <AgentDropdown
                   agents={agents}
                   selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''}
@@ -613,7 +611,7 @@ export function ChatMain() {
                     onClick={clearMessages}
                     disabled={isStreaming}
                     title={t('chat.clearConversation', 'Clear conversation')}
-                    className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-2xl border border-border-subtle/55 bg-surface-0/58 px-4 py-3 text-[13px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-35"
+                    className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 py-2 text-[12px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-35"
                   >
                     <IconifyIcon name="ui-trash" size={15} color="currentColor" />
                     {t('common.clear', 'Clear')}
@@ -623,7 +621,7 @@ export function ChatMain() {
             </div>
 
             {!sessionModel && (
-              <div className="mt-6 border-t border-border-subtle/45 pt-4">
+              <div className="mt-3">
                 <SurfaceBadge tone="warning">
                   <IconifyIcon name="ui-warning" size={13} color="currentColor" />
                   {t('chat.selectModelToChat', 'Please select a model to start chatting')}
@@ -633,22 +631,22 @@ export function ChatMain() {
           </div>
         </div>
 
-        <div className="px-6 pb-4 pt-6 xl:px-8">
+        <div className="px-5 pb-4 pt-4 xl:px-6">
           <div className="mx-auto max-w-384">
             {messages.length === 0 ? (
-              <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                <section className="chat-stage-panel relative overflow-hidden rounded-3xl border border-border-subtle/55 bg-surface-1/58 shadow-sm">
-                  <div className="relative z-10 p-5 xl:p-7">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl border border-accent/12 bg-accent/10 text-accent shadow-sm">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_16rem]">
+                <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/45 bg-surface-1/42">
+                  <div className="relative z-10 p-4 xl:p-5">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-md bg-accent/10 text-accent">
                       <AgentAvatar avatar={sessionAgent?.avatar ?? 'ui-sparkles'} size={32} />
                     </div>
-                    <div className="mt-7 max-w-2xl">
-                      <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.readyWhenYouAre', 'Ready when you are')}</div>
-                      <h2 className="mt-2 text-[28px] font-semibold text-text-primary">{displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')}</h2>
-                      <p className="mt-3 text-[14px] leading-6 text-text-secondary/82">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
+                    <div className="mt-4 max-w-2xl">
+                      <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.readyWhenYouAre', '就绪')}</div>
+                      <h2 className="mt-1.5 text-[22px] font-semibold text-text-primary">{displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')}</h2>
+                      <p className="mt-2 text-[13px] leading-5 text-text-secondary/78">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
                     </div>
 
-                    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
                       {starterPrompts.map((suggestion) => (
                         <PromptActionCard
                           key={suggestion.label}
@@ -664,11 +662,11 @@ export function ChatMain() {
                 </section>
 
                 <aside className="hidden xl:block">
-                  <div className="sticky top-4 space-y-4">
-                    <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/58 p-4 shadow-sm">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.context', 'Context')}</div>
-                      <div className="mt-4 flex items-center gap-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-[18px] border border-border-subtle/45 bg-surface-2/80 shadow-sm">
+                  <div className="sticky top-4 space-y-3">
+                    <div className="rounded-md border border-border-subtle/35 bg-surface-1/34 p-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.context', '上下文')}</div>
+                      <div className="mt-3 flex items-center gap-2.5">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-2/70">
                           {sessionAgent ? <AgentAvatar avatar={sessionAgent.avatar} size={20} /> : <IconifyIcon name="ui-sparkles" size={16} color="currentColor" className="text-accent" />}
                         </div>
                         <div className="min-w-0">
@@ -686,11 +684,11 @@ export function ChatMain() {
                       )}
                     </div>
 
-                    <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/58 p-4 shadow-sm">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.hints', 'Hints')}</div>
-                      <div className="mt-3 space-y-2 text-[12px] leading-6 text-text-secondary/82">
-                        <div className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2.5">{t('chat.pipelineCommandHint', 'Try /pipeline list, or say "run Morning Run pipeline"')}</div>
-                        <div className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-3 py-2.5">{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
+                    <div className="rounded-md border border-border-subtle/35 bg-surface-1/34 p-3">
+                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.hints', '提示')}</div>
+                      <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-text-secondary/78">
+                        <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or say "run Morning Run pipeline"')}</div>
+                        <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
                       </div>
                     </div>
                   </div>
@@ -698,8 +696,8 @@ export function ChatMain() {
               </div>
             ) : (
               <div>
-                <section className="chat-transcript relative overflow-hidden rounded-3xl border border-border-subtle/55 shadow-sm">
-                  <div className="relative z-10 p-4 sm:p-5 xl:p-6">
+                <section className="relative overflow-visible">
+                  <div className="relative z-10 px-1 py-1 sm:px-2 xl:px-3">
                     <TodoProgress />
                     <div className="space-y-0.5">
                       {messages.map((msg) => (

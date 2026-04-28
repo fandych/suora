@@ -31,17 +31,11 @@ describe('pipelineFiles', () => {
     vi.mocked(window.electron.invoke).mockReset()
   })
 
-  it('loads saved pipelines from separate pipeline files', async () => {
+  it('loads saved pipelines from SQLite entities', async () => {
     vi.mocked(window.electron.invoke).mockImplementation(async (channel: string, ...args: unknown[]) => {
-      const [filePath] = args as [string?]
-      if (channel === 'fs:listDir' && filePath === 'C:/workspace/pipelines') {
-        return [
-          { name: 'pipeline-1.json', isDirectory: false, path: 'C:/workspace/pipelines/pipeline-1.json' },
-          { name: 'history.json', isDirectory: false, path: 'C:/workspace/pipelines/history.json' },
-        ]
-      }
-      if (channel === 'fs:readFile' && filePath === 'C:/workspace/pipelines/pipeline-1.json') {
-        return JSON.stringify(samplePipeline)
+      const [table] = args as [string?]
+      if (channel === 'db:listEntities' && table === 'pipelines') {
+        return { success: true, data: [samplePipeline] }
       }
       return undefined
     })
@@ -51,51 +45,31 @@ describe('pipelineFiles', () => {
     expect(pipelines).toEqual([samplePipeline])
   })
 
-  it('saves pipelines into the dedicated pipelines directory', async () => {
+  it('saves pipelines into SQLite', async () => {
     vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
 
     const success = await savePipelineToDisk('C:/workspace', samplePipeline)
 
     expect(success).toBe(true)
-    expect(window.electron.invoke).toHaveBeenCalledWith('system:ensureDirectory', 'C:/workspace/pipelines')
     expect(window.electron.invoke).toHaveBeenCalledWith(
-      'fs:writeFile',
-      'C:/workspace/pipelines/pipeline-1.json',
-      JSON.stringify(samplePipeline, null, 2),
+      'db:saveEntity',
+      'pipelines',
+      'pipeline-1',
+      samplePipeline,
     )
   })
 
-  it('sanitizes pipeline ids before writing files', async () => {
+  it('stores execution history in SQLite', async () => {
     vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
-
-    const pipeline = { ...samplePipeline, id: '../pipeline-1' }
-    const success = await savePipelineToDisk('C:/workspace', pipeline)
-
-    expect(success).toBe(true)
-    expect(window.electron.invoke).toHaveBeenCalledWith(
-      'fs:writeFile',
-      'C:/workspace/pipelines/pipeline-1.json',
-      JSON.stringify(pipeline, null, 2),
-    )
-  })
-
-  it('stores execution history in pipelines/history.json', async () => {
-    vi.mocked(window.electron.invoke).mockImplementation(async (channel: string, ...args: unknown[]) => {
-      const [filePath] = args as [string?]
-      if (channel === 'fs:readFile' && filePath === 'C:/workspace/pipelines/history.json') {
-        return JSON.stringify([])
-      }
-      return { success: true }
-    })
 
     const success = await appendPipelineExecutionToDisk('C:/workspace', sampleExecution)
 
     expect(success).toBe(true)
-    expect(window.electron.invoke).toHaveBeenCalledWith('system:ensureDirectory', 'C:/workspace/pipelines')
     expect(window.electron.invoke).toHaveBeenCalledWith(
-      'fs:writeFile',
-      'C:/workspace/pipelines/history.json',
-      JSON.stringify([sampleExecution], null, 2),
+      'db:saveEntity',
+      'pipeline_executions',
+      'exec-1',
+      sampleExecution,
     )
   })
 })

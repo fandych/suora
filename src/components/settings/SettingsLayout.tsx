@@ -56,26 +56,7 @@ export function SettingsLayout() {
   return (
     <>
       <SidePanel title={t('settings.title', 'Settings')} width={panelWidth}>
-        <div className="module-sidebar-stack px-3 pb-3 pt-1 space-y-3">
-          <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('settings.title', 'Settings')}</div>
-                <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('settings.controlCenter', 'Control Center')}</div>
-                <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('settings.controlCenterHint', 'Tune the desktop experience, protect credentials, and keep local data under control.')}</p>
-              </div>
-              <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
-                <div className="text-xl font-semibold text-text-primary tabular-nums">{SETTING_SECTIONS.length}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <SummaryStat label={t('settings.section', 'Section')} value={`${sectionIndex + 1}/${SETTING_SECTIONS.length}`} accent />
-              <SummaryStat label={t('settings.active', 'Active')} value={t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback)} />
-            </div>
-          </div>
-
+        <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
           <div className="space-y-2">
             {SETTING_SECTIONS.map((s) => (
               <button

@@ -1,7 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { MarketplaceSettings, Model, ProviderConfig, ToolSecuritySettings } from '@/types'
 import { updateCachedWorkspacePath } from '@/services/fileStorage'
-import { saveSessionToDisk } from '@/services/sessionFiles'
 import type { AppStore } from '@/store/appStore'
 
 export type ModelConfigSlice = Pick<
@@ -120,14 +119,6 @@ export const createModelConfigSlice: StateCreator<AppStore, [], [], ModelConfigS
           : state.sessions,
       }
     })
-    if (staleSessionIds.size > 0) {
-      const { sessions, workspacePath } = get()
-      if (workspacePath) {
-        for (const s of sessions) {
-          if (staleSessionIds.has(s.id)) saveSessionToDisk(workspacePath, s)
-        }
-      }
-    }
   },
   workspacePath: '',
   setWorkspacePath: (workspacePath) => {

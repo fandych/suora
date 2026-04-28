@@ -102,14 +102,14 @@ function ComposerActionButton({
       disabled={disabled}
       title={label}
       aria-label={label}
-      className={`inline-flex h-9 items-center justify-center gap-2 rounded-xl border px-2.5 text-[12px] font-medium transition-all ${
+      className={`inline-flex h-8 w-8 items-center justify-center rounded-md border text-[12px] font-medium transition-all ${
         active
           ? 'border-danger/18 bg-danger/10 text-danger'
           : 'border-border-subtle/55 bg-surface-0/65 text-text-secondary hover:border-accent/18 hover:bg-accent/10 hover:text-accent'
       } disabled:opacity-30`}
     >
       <span className="text-[13px]">{icon}</span>
-      <span className="hidden lg:inline">{label}</span>
+      <span className="sr-only">{label}</span>
     </button>
   )
 }
@@ -316,8 +316,8 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
   return (
     <div className="mx-auto w-full max-w-384">
       <div
-        className={`relative overflow-hidden rounded-3xl border bg-surface-1/78 shadow-[0_14px_36px_rgba(15,23,42,0.12)] backdrop-blur-xl ${
-          isDragging ? 'border-accent/45 bg-accent/5' : 'border-border-subtle/55'
+        className={`relative overflow-hidden rounded-md ${
+          isDragging ? 'border border-accent/45 bg-accent/5' : 'bg-surface-1/32'
         }`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -329,7 +329,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
           </div>
         )}
 
-        <div className="relative z-10 p-3.5 sm:p-4">
+        <div className="relative z-10 px-3 py-2 sm:px-3.5 sm:py-2.5">
           <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,audio/webm,audio/ogg,audio/mp3,audio/mpeg,audio/wav,audio/mp4,.txt,.md,.json,.csv,.xml,.yaml,.yml,.toml,.js,.ts,.jsx,.tsx,.py,.java,.go,.rs,.rb,.html,.css,.scss,.sql,.sh,.bat,.ps1,.log,.c,.cpp,.h,.swift,.kt,.dart,.lua,.r" multiple className="hidden" onChange={handleFileSelect} aria-label="Attach file" />
 
           {attachments.length > 0 && (
@@ -357,21 +357,16 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
             </div>
           )}
 
-          <div className="rounded-2xl border border-border-subtle/55 bg-surface-0/70 p-3.5 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">
-                <span>{t('chat.composer', 'Composer')}</span>
-                {voiceState === 'listening' && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[10px] text-danger">{t('chat.listening', 'Listening…')}</span>}
-                {isRecording && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[10px] text-danger">{t('chat.recording', 'Recording…')}</span>}
+          <div className="space-y-2">
+            {(voiceState === 'listening' || isRecording || attachments.length > 0) && (
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-text-muted/62">
+                {voiceState === 'listening' && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-danger">{t('chat.listening', 'Listening…')}</span>}
+                {isRecording && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-danger">{t('chat.recording', 'Recording…')}</span>}
+                {attachments.length > 0 && <span>{attachments.length} {t('chat.attachmentsReady', 'attachments ready')}</span>}
               </div>
-              <div className="text-[11px] text-text-muted/72">
-                {attachments.length > 0
-                  ? `${attachments.length} ${t('chat.attachmentsReady', 'attachments ready')}`
-                  : t('chat.dragPasteHint', 'Paste screenshots, drag files, or record audio')}
-              </div>
-            </div>
+            )}
 
-            <div className="mt-2">
+            <div className="rounded-md border border-border-subtle/55 bg-surface-0/70 px-3 py-1.5 transition-colors focus-within:border-accent/45">
               <TextArea
                 ghost
                 ref={textareaRef}
@@ -389,7 +384,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
                       : t('chat.messagePlaceholder', 'Send a message… (Shift+Enter for new line, paste/drag files)')}
                 rows={1}
                 disabled={disabled}
-                className="w-full min-h-14 max-h-40 text-[15px] leading-7"
+                className="w-full min-h-11 max-h-32 text-[14.5px] leading-6"
               />
 
               {interimText && (
@@ -399,8 +394,8 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
               )}
             </div>
 
-            <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex flex-wrap gap-2">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex flex-wrap gap-1.5">
                 <ComposerActionButton
                   label={t('chat.attachFile', 'Attach file (image, audio, code, text)')}
                   icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>}
@@ -462,25 +457,23 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
                 )}
               </div>
 
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <span className="max-w-64 text-right text-[10px] leading-4 text-text-muted/55">
+                  {t('chat.aiDisclaimer', 'AI can make mistakes. Please verify important information.')}
+                </span>
                 {isStreaming ? (
-                  <button type="button" onClick={onStop} title={t('chat.stopGenerating', 'Stop generating')} aria-label={t('chat.stopGenerating', 'Stop generating')} className="inline-flex h-11 items-center gap-2 rounded-xl bg-danger/90 px-4 text-[13px] font-semibold text-white shadow-[0_12px_30px_rgba(220,38,38,0.18)] transition-colors hover:bg-danger">
+                  <button type="button" onClick={onStop} title={t('chat.stopGenerating', 'Stop generating')} aria-label={t('chat.stopGenerating', 'Stop generating')} className="inline-flex h-9 items-center gap-2 rounded-md bg-danger/90 px-3 text-[12px] font-semibold text-white transition-colors hover:bg-danger">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
                     <span>{t('chat.stopGenerating', 'Stop generating')}</span>
                   </button>
                 ) : (
-                  <button type="button" onClick={handleSubmit} disabled={disabled || (!input.trim() && !attachments.length)} title={t('chat.send', 'Send')} aria-label={t('chat.send', 'Send')} className="inline-flex h-11 items-center gap-2 rounded-xl bg-accent px-5 text-[13px] font-semibold text-white shadow-[0_12px_28px_rgba(var(--t-accent-rgb),0.2)] transition-all hover:bg-accent-hover disabled:opacity-25 disabled:shadow-none">
+                  <button type="button" onClick={handleSubmit} disabled={disabled || (!input.trim() && !attachments.length)} title={t('chat.send', 'Send')} aria-label={t('chat.send', 'Send')} className="inline-flex h-9 items-center gap-2 rounded-md bg-accent px-4 text-[12px] font-semibold text-white transition-all hover:bg-accent-hover disabled:opacity-25">
                     <span>{t('chat.send', 'Send')}</span>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
                   </button>
                 )}
               </div>
             </div>
-          </div>
-
-          <div className="mt-3 flex flex-col gap-1.5 px-1 text-[11px] text-text-muted/70 sm:flex-row sm:items-center sm:justify-between">
-            <span>{t('chat.pipelineCommandHint', 'Try /pipeline list, or say "run Morning Run pipeline"')}</span>
-            <span>{t('chat.aiDisclaimer', 'AI can make mistakes. Please verify important information.')}</span>
           </div>
         </div>
       </div>

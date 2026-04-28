@@ -115,8 +115,6 @@ export function SkillsLayout() {
     )
   }, [skills, search])
   const enabledSkillsCount = skills.filter((skill) => skill.enabled).length
-  const localSkillsCount = skills.filter((skill) => skill.source !== 'registry').length
-  const enabledSourcesCount = allSources.filter((source) => source.enabled).length
 
   // ─── Handlers ──────────────────────────────────────────────────
 
@@ -360,82 +358,6 @@ export function SkillsLayout() {
               )}
             </button>
           ))}
-        </div>
-
-        <div className="module-sidebar-stack px-3 pb-3">
-          {viewMode === 'installed' ? (
-            <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('skills.library', 'Library')}</div>
-                  <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('skills.installedSkills', 'Installed Skills')}</div>
-                  <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('skills.installedSkillsHint', 'Keep your reusable prompt instructions organized, searchable, and ready to attach to agents.')}</p>
-                </div>
-                <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
-                  <div className="text-xl font-semibold text-text-primary tabular-nums">{skills.length}</div>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.enabled', 'Enabled')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledSkillsCount}</div>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('skills.local', 'Local')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{localSkillsCount}</div>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('skills.sources', 'Sources')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledSourcesCount}</div>
-                </div>
-              </div>
-            </div>
-          ) : viewMode === 'browse' ? (
-            <div className="rounded-3xl border border-border-subtle/55 bg-linear-to-br from-surface-2/95 via-surface-1/85 to-surface-1/65 p-4 shadow-[0_14px_40px_rgba(15,23,42,0.12)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('skills.registry', 'Registry')}</div>
-                  <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('skills.browseSkills', 'Browse Skills')}</div>
-                  <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('skills.browseSkillsHint', 'Install published SKILL.md packages and use them as a starting point for custom instructions.')}</p>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/50 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.search', 'Search')}</div>
-                  <div className="text-xl font-semibold text-text-primary tabular-nums">{filteredRegistry.length}</div>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('skills.catalog', 'Catalog')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{registrySkills.length}</div>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('skills.sources', 'Sources')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledSourcesCount}</div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-3xl border border-border-subtle/55 bg-linear-to-br from-surface-1/92 to-surface-2/65 p-4 shadow-[0_14px_40px_rgba(15,23,42,0.08)]">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('skills.sources', 'Sources')}</div>
-              <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('skills.registrySources', 'Registry Sources')}</div>
-              <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('skills.registrySourcesHint', 'Switch built-in feeds on or off, and add your own GitHub or custom endpoints when you need a different catalog.')}</p>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.total', 'Total')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{allSources.length}</div>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.enabled', 'Enabled')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledSourcesCount}</div>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('skills.custom', 'Custom')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{allSources.filter((source) => !source.builtin).length}</div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Search (for installed + browse tabs) */}

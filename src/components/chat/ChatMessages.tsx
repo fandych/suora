@@ -341,25 +341,25 @@ function ErrorBubble({ message, onRetry }: { message: Message; onRetry?: () => v
   const [showDetail, setShowDetail] = useState(false)
 
   return (
-    <div className="mb-6 flex justify-start animate-fade-in">
-      <div className="w-full max-w-4xl rounded-[28px] border border-danger/18 bg-danger/6 p-5 shadow-[0_18px_48px_rgba(220,38,38,0.08)]">
-        <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[18px] border border-danger/18 bg-danger/12 text-danger shadow-sm">!</div>
+    <div className="mb-4 flex justify-start animate-fade-in">
+      <div className="w-full max-w-[52rem] rounded-md border border-danger/18 bg-danger/5 px-4 py-3">
+        <div className="flex items-start gap-3">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-danger/10 text-[13px] font-semibold text-danger">!</div>
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[15px] font-semibold text-danger">{error.title}</span>
-              <span className="rounded-full border border-danger/18 bg-danger/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-danger">{t('chat.requestFailed', 'Request failed')}</span>
+              <span className="text-[14px] font-semibold text-danger">{error.title}</span>
+              <span className="rounded-full bg-danger/10 px-2 py-0.5 text-[10px] font-medium text-danger">{t('chat.requestFailed', 'Request failed')}</span>
             </div>
-            <p className="mt-2 text-[14px] leading-7 text-text-secondary">{error.detail}</p>
-            <p className="mt-3 text-[12px] leading-6 text-text-muted"><IconifyIcon name="ui-lightbulb" size={13} color="currentColor" className="inline-block" /> {error.hint}</p>
+            <p className="mt-1.5 text-[13px] leading-6 text-text-secondary">{error.detail}</p>
+            <p className="mt-2 text-[12px] leading-5 text-text-muted"><IconifyIcon name="ui-lightbulb" size={13} color="currentColor" className="inline-block" /> {error.hint}</p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-danger/10 pt-4">
-              {onRetry && <button type="button" onClick={onRetry} className="rounded-full border border-accent/18 bg-accent/10 px-3.5 py-2 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/16">↻ {t('chat.retry', 'Retry')}</button>}
-              <CopyButton text={message.content} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-2 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent" />
-              <button type="button" onClick={() => setShowDetail((value) => !value)} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-2 text-[11px] text-text-muted transition-colors hover:border-border hover:bg-surface-3/45 hover:text-text-secondary">{showDetail ? t('chat.hideDetail', 'Hide detail') : t('chat.showDetail', 'Show detail')}</button>
+            <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-danger/10 pt-3">
+              {onRetry && <button type="button" onClick={onRetry} className="rounded-md bg-accent/10 px-3 py-1.5 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/16">↻ {t('chat.retry', 'Retry')}</button>}
+              <CopyButton text={message.content} className="rounded-md bg-surface-0/45 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:bg-accent/10 hover:text-accent" />
+              <button type="button" onClick={() => setShowDetail((value) => !value)} className="rounded-md bg-surface-0/45 px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:bg-surface-3/45 hover:text-text-secondary">{showDetail ? t('chat.hideDetail', 'Hide detail') : t('chat.showDetail', 'Show detail')}</button>
             </div>
 
-            {showDetail && <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded-[18px] border border-border-subtle/40 bg-surface-0/55 p-3 text-[10px] text-text-muted font-[JetBrains_Mono,monospace]">{message.content}</pre>}
+            {showDetail && <pre className="mt-3 overflow-x-auto whitespace-pre-wrap rounded-md border border-border-subtle/35 bg-surface-0/45 p-3 text-[10px] text-text-muted font-[JetBrains_Mono,monospace]">{message.content}</pre>}
           </div>
         </div>
       </div>

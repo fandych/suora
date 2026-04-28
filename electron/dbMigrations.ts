@@ -1,4 +1,4 @@
-export const DB_SCHEMA_VERSION = 1
+export const DB_SCHEMA_VERSION = 2
 
 export interface DbMigration {
   version: number
@@ -116,6 +116,26 @@ export const DB_MIGRATIONS: DbMigration[] = [
         updated_at INTEGER NOT NULL
       )`,
       `CREATE INDEX IF NOT EXISTS idx_memories_owner ON memories(owner_type, owner_id, scope, created_at)`,
+    ],
+  },
+  {
+    version: 2,
+    statements: [
+      `CREATE TABLE IF NOT EXISTS app_state (
+        key TEXT PRIMARY KEY,
+        value_json TEXT NOT NULL,
+        version INTEGER NOT NULL DEFAULT 0,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_app_state_updated_at ON app_state(updated_at)`,
+      `CREATE TABLE IF NOT EXISTS timer_executions (
+        id TEXT PRIMARY KEY,
+        timer_id TEXT,
+        value_json TEXT NOT NULL,
+        fired_at INTEGER,
+        updated_at INTEGER NOT NULL
+      )`,
+      `CREATE INDEX IF NOT EXISTS idx_timer_executions_timer_fired ON timer_executions(timer_id, fired_at)`,
     ],
   },
 ]

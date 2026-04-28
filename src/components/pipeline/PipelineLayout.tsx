@@ -289,11 +289,6 @@ export function PipelineLayout() {
     [monitorSteps],
   )
 
-  const successfulHistoryRuns = useMemo(
-    () => pipelineHistory.filter((execution) => execution.status === 'success').length,
-    [pipelineHistory],
-  )
-
   const pipelineValidation = useMemo(
     () => validateAgentPipeline(
       { name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline, variables: pipelineVariables, budget: pipelineBudget },
@@ -302,10 +297,6 @@ export function PipelineLayout() {
     ),
     [agentPipelineName, pipeline, pipelineVariables, pipelineBudget, agents, models],
   )
-
-  const successRate = pipelineHistory.length > 0
-    ? Math.round((successfulHistoryRuns / pipelineHistory.length) * 100)
-    : 0
 
   const resetPipelineEditor = () => {
     setSelectedAgentPipelineId(null)
@@ -751,35 +742,6 @@ export function PipelineLayout() {
         }
       >
         <div className="module-sidebar-stack p-3 space-y-3">
-          <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('agents.pipeline', 'Pipeline')}</div>
-                <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('agents.pipelineWorkbench', 'Execution Workbench')}</div>
-                <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('agents.pipelineWorkbenchHint', 'Design handoffs, inspect history, and keep a draft run ready without leaving the builder.')}</p>
-              </div>
-              <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
-                <div className="text-xl font-semibold text-text-primary tabular-nums">{agentPipelines.length}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.pipelineDraft', 'Draft')}</div>
-                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledPipelineSteps.length}/{pipeline.length}</div>
-              </div>
-              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.pipelineHistory', 'History')}</div>
-                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{pipelineHistory.length}</div>
-              </div>
-              <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.pipelineSuccess', 'Success')}</div>
-                <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{pipelineHistory.length > 0 ? `${successRate}%` : '—'}</div>
-              </div>
-            </div>
-          </div>
-
           <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />

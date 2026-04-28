@@ -44,4 +44,19 @@ describe('SuoraDatabase', () => {
 
     await reopened.close()
   })
+
+  it('persists app_state payloads across reopen', async () => {
+    const workspace = await makeWorkspace()
+    const appDatabase = await openSuoraDatabase(workspace)
+    const payload = JSON.stringify({ state: { sessions: [{ id: 'session-1' }] }, version: 18 })
+
+    await appDatabase.savePersistedStore('suora-store', payload, 18)
+    await appDatabase.close()
+
+    const reopened = await openSuoraDatabase(workspace)
+
+    expect(reopened.getPersistedStore('suora-store')).toBe(payload)
+
+    await reopened.close()
+  })
 })

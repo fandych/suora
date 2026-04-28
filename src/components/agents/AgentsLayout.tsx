@@ -3,7 +3,6 @@ import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/hooks/useI18n'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { generateId } from '@/utils/helpers'
-import { loadAgentsFromDisk, saveAgentToDisk, deleteAgentFromDisk } from '@/services/agentFiles'
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import type { Agent, Session } from '@/types'
 import { AgentTestChat } from './AgentTestChat'
@@ -338,7 +337,7 @@ function AgentList({
 export function AgentsLayout() {
   const { t } = useI18n()
   const [panelWidth, setPanelWidth] = useResizablePanel('agents', 280)
-  const { agents, addAgent, updateAgent, removeAgent, setSelectedAgent, addSession, setActiveSession, setActiveModule, workspacePath, addAgentVersion } = useAppStore()
+  const { agents, addAgent, updateAgent, removeAgent, setSelectedAgent, addSession, setActiveSession, setActiveModule, addAgentVersion } = useAppStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
@@ -373,26 +372,12 @@ export function AgentsLayout() {
     }))
   ), [t])
 
-  // Load agents from disk on mount when workspace is configured
-  useEffect(() => {
-    if (!workspacePath) return
-    loadAgentsFromDisk(workspacePath).then((diskAgents) => {
-      const storeIds = new Set(useAppStore.getState().agents.map((a) => a.id))
-      for (const agent of diskAgents) {
-        if (!storeIds.has(agent.id)) {
-          addAgent(agent)
-        }
-      }
-    })
-  }, [workspacePath])
-
   const handleSave = (agent: Agent) => {
     if (editingId) {
       updateAgent(editingId, agent)
     } else {
       addAgent(agent)
     }
-    if (workspacePath) saveAgentToDisk(workspacePath, agent)
     // Create version snapshot
     const existingVersions = useAppStore.getState().agentVersions.filter((v) => v.agentId === agent.id)
     const { memories: _mem, ...snapshotData } = agent
@@ -419,7 +404,6 @@ export function AgentsLayout() {
     })
     if (!ok) return
     removeAgent(id)
-    if (workspacePath) deleteAgentFromDisk(workspacePath, id)
     if (editingId === id) setEditingId(null)
   }
 
@@ -431,7 +415,6 @@ export function AgentsLayout() {
       memories: [], // start fresh
     }
     addAgent(clone)
-    if (workspacePath) saveAgentToDisk(workspacePath, clone)
     setEditingId(clone.id)
     setIsAdding(false)
   }
@@ -467,7 +450,6 @@ export function AgentsLayout() {
           enabled: true,
         }
         addAgent(imported)
-        if (workspacePath) saveAgentToDisk(workspacePath, imported)
         setEditingId(imported.id)
         setIsAdding(false)
       } catch {
@@ -499,11 +481,6 @@ export function AgentsLayout() {
     !marketSearch || a.name.toLowerCase().includes(marketSearch.toLowerCase()) || a.category.toLowerCase().includes(marketSearch.toLowerCase())
   )
   const enabledAgentCount = agents.filter((agent) => agent.enabled).length
-  const autoLearnAgentCount = agents.filter((agent) => agent.autoLearn).length
-  const customAgentCount = agents.filter((agent) => agent.id !== DEFAULT_AGENT_ID && !agent.id.startsWith('builtin-')).length
-  const installedMarketplaceCount = marketplaceAgents.filter((tpl) =>
-    agents.some((agent) => agent.avatar === tpl.avatar && tpl.skills.every((skillId) => agent.skills.includes(skillId))),
-  ).length
 
   const installMarketAgent = (tpl: MarketplaceAgentTemplate) => {
     const greetingTemplate = t('agents.marketplace.greeting', "Hi! I'm {name}. {description}")
@@ -524,7 +501,6 @@ export function AgentsLayout() {
       autoLearn: true,
     }
     addAgent(agent)
-    if (workspacePath) saveAgentToDisk(workspacePath, agent)
     setEditingId(agent.id)
     setSideTab('local')
   }
@@ -588,74 +564,6 @@ export function AgentsLayout() {
           >
             <IconifyIcon name="ui-cart" size={14} color="currentColor" /> {t('agents.market', 'Market')}
           </button>
-        </div>
-
-        <div className="module-sidebar-stack px-3 pb-3">
-          {sideTab === 'local' ? (
-            <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">
-                    {t('agents.studio', 'Studio')}
-                  </div>
-                  <div className="mt-1 text-[18px] font-semibold text-text-primary">
-                    {t('agents.roster', 'Agent Roster')}
-                  </div>
-                  <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">
-                    {t('agents.rosterHint', 'Curate specialists, test their prompts, and keep the active lineup easy to scan.')}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
-                  <div className="text-xl font-semibold text-text-primary tabular-nums">{agents.length}</div>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-2">
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.enabled', 'Enabled')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{enabledAgentCount}</div>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.autoLearn', 'Auto-learn')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{autoLearnAgentCount}</div>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.custom', 'Custom')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{customAgentCount}</div>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="rounded-3xl border border-border-subtle/55 bg-linear-to-br from-surface-2/95 via-surface-1/85 to-surface-1/65 p-4 shadow-[0_14px_40px_rgba(15,23,42,0.12)]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">
-                    {t('agents.curated', 'Curated')}
-                  </div>
-                  <div className="mt-1 text-[18px] font-semibold text-text-primary">
-                    {t('agents.marketCollection', 'Starter Collection')}
-                  </div>
-                  <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">
-                    {t('agents.marketCollectionHint', 'Install ready-made specialists and use them as a starting point for your own workflows.')}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/50 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.installed', 'Installed')}</div>
-                  <div className="text-xl font-semibold text-text-primary tabular-nums">{installedMarketplaceCount}</div>
-                </div>
-              </div>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('agents.catalog', 'Catalog')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{marketplaceAgents.length}</div>
-                </div>
-                <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-                  <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.search', 'Search')}</div>
-                  <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{filteredMarketAgents.length}</div>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
         {sideTab === 'local' && (

@@ -346,7 +346,7 @@ function ChannelDetail({
           </div>
         </div>
       ) : (
-        <div className="h-168 overflow-hidden rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 shadow-[0_18px_46px_rgba(15,23,42,0.08)]">
+        <div className="min-h-135 max-h-[calc(100vh-15rem)] overflow-hidden rounded-md border border-border-subtle/55 bg-surface-1/70">
           {activeTab === 'messages' && <ChannelMessageHistory channelId={channel.id} />}
           {activeTab === 'users' && <ChannelUsersPanel channelId={channel.id} />}
           {activeTab === 'health' && <ChannelHealthMonitor singleChannelId={channel.id} />}
@@ -376,9 +376,6 @@ export function ChannelLayout() {
 
   const selectedChannel = channels.find((c) => c.id === selectedId) || null
   const agentNameMap = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.name])), [agents])
-  const enabledChannelCount = useMemo(() => channels.filter((channel) => channel.enabled).length, [channels])
-  const activeChannelCount = useMemo(() => channels.filter((channel) => channel.enabled && channel.status === 'active').length, [channels])
-  const totalMessageCount = useMemo(() => channels.reduce((count, channel) => count + channel.messageCount, 0), [channels])
 
   const filteredChannels = useMemo(() => {
     const query = deferredSearchQuery.trim().toLowerCase()
@@ -539,46 +536,7 @@ export function ChannelLayout() {
           </button>
         }
       >
-        <div className="module-sidebar-stack px-3 pb-3 pt-1 space-y-3">
-          <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('channels.operations', 'Operations')}</div>
-                <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('channels.channelOps', 'Channel Ops')}</div>
-                <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('channels.channelOpsHint', 'Coordinate inbound routes, reply agents, and live transport state for every external workspace channel.')}</p>
-              </div>
-              <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
-                <div className="text-xl font-semibold text-text-primary tabular-nums">{channels.length}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <SummaryStat label={t('channels.live', 'Live')} value={String(activeChannelCount)} accent />
-              <SummaryStat label={t('common.enabled', 'Enabled')} value={String(enabledChannelCount)} />
-              <SummaryStat label={t('channels.messages', 'Messages')} value={String(totalMessageCount)} />
-            </div>
-
-            <div className={`mt-4 rounded-2xl border px-3 py-3 ${serverRunning ? 'border-green-500/20 bg-green-500/8' : 'border-border-subtle/50 bg-surface-0/55'}`}>
-              <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 text-[12px] font-semibold text-text-primary">
-                    <span className={`h-2.5 w-2.5 rounded-full ${serverRunning ? 'bg-green-400 animate-pulse' : 'bg-text-muted/40'}`} />
-                    {serverRunning ? t('channels.serverRunning', 'Server Running') : t('channels.serverStopped', 'Server Stopped')}
-                  </div>
-                  <p className="mt-1 text-[11px] leading-5 text-text-secondary/78">{serverRunning ? t('channels.serverRunningHint', 'Webhook routes are active. Stream-based channels can keep receiving traffic immediately.') : t('channels.serverStoppedHint', 'Start the channel server before testing webhook-based integrations.')}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={serverRunning ? handleStopServer : handleStartServer}
-                  className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors ${serverRunning ? 'border-red-500/18 bg-red-500/10 text-red-400 hover:bg-red-500/16' : 'border-accent/18 bg-accent/10 text-accent hover:bg-accent/18'}`}
-                >
-                  {serverRunning ? t('channels.stopServer', 'Stop Server') : t('channels.startServer', 'Start Server')}
-                </button>
-              </div>
-            </div>
-          </div>
-
+        <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
           <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55" />
@@ -604,6 +562,20 @@ export function ChannelLayout() {
               <span>{filteredChannels.length} {t('common.results', 'results')}</span>
               {searchQuery.trim() && <span>{channels.length} {t('common.total', 'total')}</span>}
             </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 px-1 py-1 text-[11px] text-text-secondary">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className={`h-2 w-2 shrink-0 rounded-full ${serverRunning ? 'bg-green-400' : 'bg-text-muted/45'}`} />
+              <span className="truncate">{serverRunning ? t('channels.serverRunning', 'Server Running') : t('channels.serverStopped', 'Server Stopped')}</span>
+            </div>
+            <button
+              type="button"
+              onClick={serverRunning ? handleStopServer : handleStartServer}
+              className={`shrink-0 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${serverRunning ? 'border-red-500/18 bg-red-500/8 text-red-400 hover:bg-red-500/14' : 'border-accent/18 bg-accent/10 text-accent hover:bg-accent/18'}`}
+            >
+              {serverRunning ? t('channels.stopServer', 'Stop Server') : t('channels.startServer', 'Start Server')}
+            </button>
           </div>
 
           <div className="space-y-2">

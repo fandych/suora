@@ -3,10 +3,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, ToolSecuritySettings, MarketplaceSettings, ThemeMode, FontSize, CodeFont, BubbleStyle, ProviderConfig, ExternalDirectoryConfig, ChannelConfig, AppNotification, ModelUsageStats, ChannelHistoryMessage, ChannelAccessToken, ChannelHealthStatus, ChannelUser, PluginInfo, AgentVersion, AgentPerformanceStats, AgentPipeline, AgentPipelineStep, AppLocale, ProxySettings, OnboardingState, SkillVersion, EmailConfig, EnvVariable, MCPServerConfig, MCPServerStatus } from '@/types'
 import { setLiveStoreAccessor } from '@/services/tools'
-import { loadWorkspaceSettings } from '@/services/workspaceSettings'
-import { loadSessionsFromDisk, deleteSessionFromDisk, saveSessionToDisk } from '@/services/sessionFiles'
 import { loadExternalResources, syncExternalDirectoryAccess } from '@/services/externalDirectories'
-import { loadAgentsFromDisk } from '@/services/agentFiles'
 import { loadAllSkills } from '@/services/skillRegistry'
 import { setI18nLocale, t } from '@/services/i18n'
 import { fileStateStorage, flushPendingSplitStoreWrites } from '@/services/fileStorage'
@@ -320,7 +317,6 @@ export const useAppStore = create<AppStore>()(
         }
       }),
       removeAgent: (id) => {
-        const affectedIds = new Set(get().sessions.filter((s) => s.agentId === id).map((s) => s.id))
         set((state) => ({
           agents: state.agents.filter((a) => a.id !== id),
           selectedAgent: state.selectedAgent?.id === id ? null : state.selectedAgent,
@@ -328,14 +324,6 @@ export const useAppStore = create<AppStore>()(
             s.agentId === id ? { ...s, agentId: undefined } : s
           ),
         }))
-        if (affectedIds.size > 0) {
-          const { sessions, workspacePath } = get()
-          if (workspacePath) {
-            for (const s of sessions) {
-              if (affectedIds.has(s.id)) saveSessionToDisk(workspacePath, s)
-            }
-          }
-        }
       },
       setSelectedAgent: (agent) => set({ selectedAgent: agent ? normalizeAgent(agent) : null }),
       addAgentMemory: (agentId, memory) => set((state) => ({
@@ -644,7 +632,7 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'suora-store',
-      version: 17,
+      version: 18,
       storage: createJSONStorage(() => fileStateStorage),
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
@@ -772,6 +760,9 @@ export const useAppStore = create<AppStore>()(
           if (!('selectedAgentPipelineId' in state)) state.selectedAgentPipelineId = null
           if (!state.agentPipelines) state.agentPipelines = []
         }
+        if (version < 18) {
+          if (!state.sessions) state.sessions = []
+        }
         return state as Record<string, unknown>
       },
       merge: (persisted, current) => {
@@ -803,13 +794,13 @@ export const useAppStore = create<AppStore>()(
         return merged
       },
       partialize: (state) => ({
+        sessions: state.sessions,
         activeSessionId: state.activeSessionId,
         openSessionTabs: state.openSessionTabs,
         models: state.models,
         selectedModel: state.selectedModel,
         agents: state.agents,
         selectedAgent: state.selectedAgent,
-        skills: state.skills,
         workspacePath: state.workspacePath,
         providerConfigs: state.providerConfigs,
         externalDirectories: state.externalDirectories,
@@ -834,7 +825,6 @@ export const useAppStore = create<AppStore>()(
         onboarding: state.onboarding,
         pluginTools: state.pluginTools,
         mcpServers: state.mcpServers,
-        skillVersions: state.skillVersions,
         codeFont: state.codeFont,
         bubbleStyle: state.bubbleStyle,
         historyRetentionDays: state.historyRetentionDays,
@@ -856,6 +846,16 @@ export const useAppStore = create<AppStore>()(
 setLiveStoreAccessor(() => useAppStore.getState() as unknown as Record<string, unknown>)
 
 // ─── Standalone async helpers (avoid circular ref in store init) ───
+
+export async function waitForStoreHydration(): Promise<void> {
+  if (useAppStore.persist.hasHydrated()) return
+  await new Promise<void>((resolve) => {
+    const unsubscribe = useAppStore.persist.onFinishHydration(() => {
+      unsubscribe()
+      resolve()
+    })
+  })
+}
 
 export async function initWorkspacePath(): Promise<string> {
   const state = useAppStore.getState()
@@ -880,58 +880,47 @@ export async function initWorkspacePath(): Promise<string> {
 export async function loadSessionsFromWorkspace(): Promise<void> {
   const { workspacePath, historyRetentionDays } = useAppStore.getState()
   if (!workspacePath) return
-  const diskSessions = await loadSessionsFromDisk(workspacePath)
-  if (diskSessions.length > 0) {
-    // Migrate old ToolCall field names (args→input, result→output) from pre-v10 sessions
-    const migrated = diskSessions.map((session) => ({
-      ...session,
-      messages: session.messages.map((msg) => {
-        if (!msg.toolCalls?.length) return msg
-        const migratedCalls = msg.toolCalls.map((tc) => {
-          const raw = tc as unknown as Record<string, unknown>
-          if ('args' in raw && !('input' in raw)) {
-            const { args, result, ...rest } = raw
-            return { ...rest, input: args, output: result }
-          }
-          return tc
-        })
-        return { ...msg, toolCalls: migratedCalls }
-      }),
-    })) as typeof diskSessions
+  const currentSessions = useAppStore.getState().sessions
+  if (currentSessions.length === 0) return
 
-    // Auto-clean expired sessions based on history retention setting
-    if (historyRetentionDays > 0) {
-      const cutoff = Date.now() - historyRetentionDays * 86400000
-      const expired: string[] = []
-      const kept = migrated.filter((s) => {
-        if (s.updatedAt < cutoff) { expired.push(s.id); return false }
-        return true
+  const migratedSessions = currentSessions.map((session) => ({
+    ...session,
+    messages: session.messages.map((msg) => {
+      if (!msg.toolCalls?.length) return msg
+      const migratedCalls = msg.toolCalls.map((tc) => {
+        const raw = tc as unknown as Record<string, unknown>
+        if ('args' in raw && !('input' in raw)) {
+          const { args, result, ...rest } = raw
+          return { ...rest, input: args, output: result }
+        }
+        return tc
       })
-      if (expired.length > 0) {
-        for (const id of expired) deleteSessionFromDisk(workspacePath, id)
-        useAppStore.setState((state) => ({
-          sessions: kept,
-          openSessionTabs: state.openSessionTabs.filter((t) => !expired.includes(t)),
-          activeSessionId: state.activeSessionId && expired.includes(state.activeSessionId)
-            ? (kept[0]?.id ?? null)
-            : state.activeSessionId,
-        }))
-        return
-      }
-    }
+      return { ...msg, toolCalls: migratedCalls }
+    }),
+  })) as Session[]
 
-    useAppStore.setState({ sessions: migrated })
+  let merged = migratedSessions.sort((a, b) => b.updatedAt - a.updatedAt)
+
+  // Auto-clean expired sessions based on history retention setting
+  if (historyRetentionDays > 0) {
+    const cutoff = Date.now() - historyRetentionDays * 86400000
+    const expired = merged.filter((session) => session.updatedAt < cutoff).map((session) => session.id)
+    if (expired.length > 0) {
+      const expiredIds = new Set(expired)
+      merged = merged.filter((session) => !expiredIds.has(session.id))
+    }
   }
+
+  useAppStore.setState((state) => ({
+    sessions: merged,
+    openSessionTabs: state.openSessionTabs.filter((tabId) => merged.some((session) => session.id === tabId)),
+    activeSessionId: state.activeSessionId && merged.some((session) => session.id === state.activeSessionId)
+      ? state.activeSessionId
+      : (merged[0]?.id ?? null),
+  }))
 }
 
 export async function loadSettingsFromWorkspace(): Promise<void> {
-  const state = useAppStore.getState()
-  if (!state.workspacePath) return
-  const settings = await loadWorkspaceSettings(state.workspacePath)
-  useAppStore.setState({
-    providerConfigs: settings.providers,
-    externalDirectories: settings.externalDirectories || [],
-  })
   useAppStore.getState().syncModelsFromConfigs()
 }
 
@@ -956,28 +945,22 @@ export async function loadExternalSkillsAndAgents(): Promise<void> {
 
   await syncExternalDirectoryAccess(state.externalDirectories, ['~/.suora/skills'])
 
-  const [diskAgents, diskSkills, { skills: externalSkills, agents: externalAgents }] = await Promise.all([
-    loadAgentsFromDisk(state.workspacePath),
+  const [diskSkills, { skills: externalSkills }] = await Promise.all([
     loadAllSkills(state.workspacePath),
     loadExternalResources(state.externalDirectories),
   ])
 
   const skillMap = new Map<string, Skill>()
+  for (const skill of state.skills) {
+    skillMap.set(skill.name.toLowerCase(), skill)
+  }
   for (const skill of [...diskSkills, ...externalSkills]) {
     skillMap.set(skill.name.toLowerCase(), skill)
   }
 
   useAppStore.setState((current) => {
-    const builtinAgents = current.agents
-      .filter((agent) => agent.id.startsWith('builtin-') || agent.id === DEFAULT_AGENT.id)
-      .map(normalizeAgent)
-
     const agentMap = new Map<string, Agent>()
-    for (const agent of builtinAgents) {
-      agentMap.set(agent.id, agent)
-    }
-    for (const agent of [...diskAgents, ...externalAgents]) {
-      if (agent.id === DEFAULT_AGENT.id || agent.id.startsWith('builtin-')) continue
+    for (const agent of current.agents) {
       agentMap.set(agent.id, normalizeAgent(agent))
     }
 

@@ -1,5 +1,4 @@
 import type { StateCreator } from 'zustand'
-import { deleteSessionFromDisk, saveSessionToDisk } from '@/services/sessionFiles'
 import type { AppStore } from '@/store/appStore'
 
 export type SessionSlice = Pick<
@@ -15,34 +14,7 @@ export type SessionSlice = Pick<
   | 'closeSessionTab'
 >
 
-const sessionSaveTimers = new Map<string, ReturnType<typeof setTimeout>>()
-
-function scheduleSessionSave(get: () => AppStore, sessionId: string): void {
-  const existingTimer = sessionSaveTimers.get(sessionId)
-  if (existingTimer) clearTimeout(existingTimer)
-
-  sessionSaveTimers.set(
-    sessionId,
-    setTimeout(() => {
-      sessionSaveTimers.delete(sessionId)
-      const { sessions, workspacePath, autoSave } = get()
-      if (!workspacePath || !autoSave) return
-
-      const session = sessions.find((entry) => entry.id === sessionId)
-      if (session) saveSessionToDisk(workspacePath, session)
-    }, 500),
-  )
-}
-
-function cancelSessionSave(sessionId: string): void {
-  const existingTimer = sessionSaveTimers.get(sessionId)
-  if (!existingTimer) return
-
-  clearTimeout(existingTimer)
-  sessionSaveTimers.delete(sessionId)
-}
-
-export const createSessionSlice: StateCreator<AppStore, [], [], SessionSlice> = (set, get) => ({
+export const createSessionSlice: StateCreator<AppStore, [], [], SessionSlice> = (set) => ({
   sessions: [],
   activeSessionId: null,
   openSessionTabs: [],
@@ -54,7 +26,6 @@ export const createSessionSlice: StateCreator<AppStore, [], [], SessionSlice> = 
         ? state.openSessionTabs
         : [...state.openSessionTabs, session.id],
     }))
-    scheduleSessionSave(get, session.id)
   },
   updateSession: (id, data) => {
     set((state) => ({
@@ -62,10 +33,8 @@ export const createSessionSlice: StateCreator<AppStore, [], [], SessionSlice> = 
         session.id === id ? { ...session, ...data, updatedAt: Date.now() } : session
       )),
     }))
-    scheduleSessionSave(get, id)
   },
   removeSession: (id) => {
-    cancelSessionSave(id)
     set((state) => {
       const remainingTabs = state.openSessionTabs.filter((tabId) => tabId !== id)
       const remainingSessions = state.sessions.filter((session) => session.id !== id)
@@ -83,9 +52,6 @@ export const createSessionSlice: StateCreator<AppStore, [], [], SessionSlice> = 
         activeSessionId: nextActiveSessionId,
       }
     })
-
-    const { workspacePath } = get()
-    if (workspacePath) deleteSessionFromDisk(workspacePath, id)
   },
   setActiveSession: (id) => {
     set((state) => ({

@@ -22,66 +22,66 @@
   --color-warning: var(--t-warning);
 }
 
-/* ── Dark theme (default) ── SUORA · Quiet Workspace ── */
+/* ── Dark theme (default) ── SUORA · Enterprise AI Workbench ── */
 :root {
-  --t-surface-0: #111214;
-  --t-surface-1: #17191C;
-  --t-surface-2: #1D2024;
-  --t-surface-3: #252930;
-  --t-surface-4: #303640;
-  --t-border: #343A44;
-  --t-border-subtle: #24282F;
-  --t-text-primary: #E8EAED;
-  --t-text-secondary: #A7ADB7;
-  --t-text-muted: #6F7682;
-  --t-accent: #7EA0FF;
-  --t-accent-hover: #9AB5FF;
-  --t-accent-glow: rgba(126, 160, 255, 0.10);
-  --t-accent-soft: rgba(126, 160, 255, 0.08);
-  --t-accent-secondary: #9BC7C4;
-  --t-accent-rgb: 126, 160, 255;
-  --t-success: #5CC8A1;
-  --t-danger: #EF7F7F;
-  --t-warning: #DDB56A;
-  --glass-tint: rgba(255, 255, 255, 0.075);
-  --glass-tint-strong: rgba(255, 255, 255, 0.12);
-  --glass-border: rgba(255, 255, 255, 0.13);
-  --glass-hover: rgba(255, 255, 255, 0.08);
-  --glass-highlight-opacity: 0.72;
-  --pattern-overlay-opacity: 0.38;
-  --glass-pattern-opacity: 0.055;
-  --glass-shadow: 0 22px 60px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --t-surface-0: #071019;
+  --t-surface-1: #0B1622;
+  --t-surface-2: #102033;
+  --t-surface-3: #172A40;
+  --t-surface-4: #22364D;
+  --t-border: #2A4056;
+  --t-border-subtle: #182A3C;
+  --t-text-primary: #EAF2F8;
+  --t-text-secondary: #AAB9C8;
+  --t-text-muted: #71859A;
+  --t-accent: #12A8A0;
+  --t-accent-hover: #27C5BB;
+  --t-accent-glow: rgba(18, 168, 160, 0.16);
+  --t-accent-soft: rgba(18, 168, 160, 0.10);
+  --t-accent-secondary: #4D7CFF;
+  --t-accent-rgb: 18, 168, 160;
+  --t-success: #35B98F;
+  --t-danger: #E45F68;
+  --t-warning: #D9A441;
+  --glass-tint: rgba(9, 22, 34, 0.84);
+  --glass-tint-strong: rgba(8, 19, 30, 0.94);
+  --glass-border: rgba(109, 139, 168, 0.26);
+  --glass-hover: rgba(31, 56, 80, 0.72);
+  --glass-highlight-opacity: 0.48;
+  --pattern-overlay-opacity: 0.28;
+  --glass-pattern-opacity: 0.045;
+  --glass-shadow: 0 18px 42px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.055);
 }
 
-/* ── Light theme ── SUORA · Quiet Workspace ── */
+/* ── Light theme ── SUORA · Enterprise AI Workbench ── */
 .light {
-  --t-surface-0: #F7F8FA;
+  --t-surface-0: #F4F7FA;
   --t-surface-1: #FFFFFF;
-  --t-surface-2: #EEF1F5;
-  --t-surface-3: #E3E7ED;
-  --t-surface-4: #D5DAE3;
-  --t-border: #CBD2DC;
-  --t-border-subtle: #E4E8EF;
-  --t-text-primary: #1D232B;
-  --t-text-secondary: #4E5968;
-  --t-text-muted: #8590A0;
-  --t-accent: #4169D8;
-  --t-accent-hover: #3159C8;
-  --t-accent-glow: rgba(65, 105, 216, 0.10);
-  --t-accent-soft: rgba(65, 105, 216, 0.07);
-  --t-accent-secondary: #467B76;
-  --t-accent-rgb: 65, 105, 216;
-  --t-success: #168F67;
-  --t-danger: #C94C4C;
-  --t-warning: #B87924;
-  --glass-tint: rgba(255, 255, 255, 0.58);
-  --glass-tint-strong: rgba(255, 255, 255, 0.74);
-  --glass-border: rgba(255, 255, 255, 0.72);
-  --glass-hover: rgba(255, 255, 255, 0.46);
-  --glass-highlight-opacity: 0.82;
-  --pattern-overlay-opacity: 0.32;
-  --glass-pattern-opacity: 0.075;
-  --glass-shadow: 0 22px 60px rgba(64, 84, 125, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  --t-surface-2: #EEF3F7;
+  --t-surface-3: #E3EAF1;
+  --t-surface-4: #D4DEE9;
+  --t-border: #C4D0DC;
+  --t-border-subtle: #DDE6EF;
+  --t-text-primary: #162231;
+  --t-text-secondary: #526376;
+  --t-text-muted: #8493A4;
+  --t-accent: #087F8C;
+  --t-accent-hover: #056B78;
+  --t-accent-glow: rgba(8, 127, 140, 0.12);
+  --t-accent-soft: rgba(8, 127, 140, 0.08);
+  --t-accent-secondary: #315BD8;
+  --t-accent-rgb: 8, 127, 140;
+  --t-success: #168A66;
+  --t-danger: #C74F5B;
+  --t-warning: #A66F1F;
+  --glass-tint: rgba(255, 255, 255, 0.86);
+  --glass-tint-strong: rgba(255, 255, 255, 0.96);
+  --glass-border: rgba(141, 158, 178, 0.42);
+  --glass-hover: rgba(230, 238, 246, 0.82);
+  --glass-highlight-opacity: 0.58;
+  --pattern-overlay-opacity: 0.22;
+  --glass-pattern-opacity: 0.045;
+  --glass-shadow: 0 16px 38px rgba(28, 48, 70, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.88);
 }
 
 html, body, #root {
@@ -99,18 +99,17 @@ html, body, #root {
 
 body {
   background:
-    radial-gradient(circle at 18% 14%, rgba(var(--t-accent-rgb), 0.22), transparent 30rem),
-    radial-gradient(circle at 82% 8%, color-mix(in srgb, var(--t-accent-secondary) 24%, transparent), transparent 28rem),
-    radial-gradient(circle at 68% 88%, rgba(var(--t-accent-rgb), 0.12), transparent 34rem),
-    linear-gradient(135deg, var(--t-surface-0), color-mix(in srgb, var(--t-surface-0) 82%, #050814));
+    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 30%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 26%, transparent) 1px, transparent 1px),
+    linear-gradient(145deg, color-mix(in srgb, var(--t-surface-0) 94%, #03111d), color-mix(in srgb, var(--t-surface-2) 30%, var(--t-surface-0)));
+  background-size: 48px 48px, 48px 48px, auto;
   color: var(--color-text-primary);
 }
 
 .app-aurora {
   background:
-    linear-gradient(135deg, color-mix(in srgb, var(--t-surface-0) 78%, transparent), color-mix(in srgb, var(--t-surface-1) 64%, transparent)),
-    radial-gradient(circle at 18% 18%, rgba(var(--t-accent-rgb), 0.16), transparent 24rem),
-    radial-gradient(circle at 94% 82%, color-mix(in srgb, var(--t-accent-secondary) 18%, transparent), transparent 26rem);
+    linear-gradient(180deg, rgba(var(--t-accent-rgb), 0.055), transparent 26%),
+    linear-gradient(135deg, color-mix(in srgb, var(--t-surface-0) 92%, transparent), color-mix(in srgb, var(--t-surface-1) 68%, transparent));
 }
 
 .app-aurora::before,
@@ -118,24 +117,23 @@ body {
   content: '';
   position: absolute;
   pointer-events: none;
-  border-radius: 9999px;
-  filter: blur(18px);
 }
 
 .app-aurora::before {
-  left: 4.5rem;
-  top: -8rem;
-  width: 26rem;
-  height: 26rem;
-  background: radial-gradient(circle, rgba(var(--t-accent-rgb), 0.18), transparent 68%);
+  inset: 0;
+  opacity: var(--pattern-overlay-opacity);
+  background:
+    linear-gradient(90deg, transparent 0, transparent calc(100% - 1px), color-mix(in srgb, var(--t-accent) 28%, transparent) calc(100% - 1px), color-mix(in srgb, var(--t-accent) 28%, transparent) 100%),
+    linear-gradient(180deg, transparent 0, transparent calc(100% - 1px), color-mix(in srgb, var(--t-accent-secondary) 20%, transparent) calc(100% - 1px), color-mix(in srgb, var(--t-accent-secondary) 20%, transparent) 100%);
+  background-size: 96px 96px;
+  mask-image: linear-gradient(90deg, transparent, black 14%, black 86%, transparent);
 }
 
 .app-aurora::after {
-  right: -8rem;
-  bottom: -10rem;
-  width: 34rem;
-  height: 34rem;
-  background: radial-gradient(circle, color-mix(in srgb, var(--t-accent-secondary) 18%, transparent), transparent 70%);
+  inset: 0;
+  background:
+    linear-gradient(115deg, transparent 0 58%, color-mix(in srgb, var(--t-accent-secondary) 7%, transparent) 58% 58.2%, transparent 58.2%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 9rem);
 }
 
 /* Custom scrollbar */
@@ -693,4 +691,269 @@ code, pre, .font-mono, kbd, samp {
 
 .light .chat-stage-panel::before {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), transparent 24%);
+}
+
+/* ── Enterprise AI Workbench Theme ─────────────────────────────────
+   Solid, scan-friendly surfaces for internal enterprise use. */
+:root {
+  --t-surface-0: #08111d;
+  --t-surface-1: #0d1826;
+  --t-surface-2: #122133;
+  --t-surface-3: #172b42;
+  --t-surface-4: #22364f;
+  --t-border: #2a435f;
+  --t-border-subtle: #1b3148;
+  --t-text-primary: #eff6ff;
+  --t-text-secondary: #b8c6d8;
+  --t-text-muted: #7f91a8;
+  --t-accent: #00a6a6;
+  --t-accent-hover: #16c7bd;
+  --t-accent-glow: rgba(0, 166, 166, 0.18);
+  --t-accent-soft: rgba(0, 166, 166, 0.11);
+  --t-accent-secondary: #f0b95b;
+  --t-accent-rgb: 0, 166, 166;
+  --t-success: #39c88f;
+  --t-danger: #f26464;
+  --t-warning: #e4ad4f;
+  --glass-tint: rgba(14, 28, 44, 0.86);
+  --glass-tint-strong: rgba(10, 22, 36, 0.96);
+  --glass-border: rgba(94, 129, 166, 0.22);
+  --glass-hover: rgba(36, 59, 86, 0.62);
+  --glass-highlight-opacity: 0.46;
+  --pattern-overlay-opacity: 0.18;
+  --glass-pattern-opacity: 0.035;
+  --glass-shadow: 0 18px 42px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.light {
+  --t-surface-0: #eef3f8;
+  --t-surface-1: #f8fafc;
+  --t-surface-2: #f1f5f9;
+  --t-surface-3: #e6edf4;
+  --t-surface-4: #d7e1ec;
+  --t-border: #bccbdd;
+  --t-border-subtle: #d8e2ee;
+  --t-text-primary: #142033;
+  --t-text-secondary: #42536a;
+  --t-text-muted: #78879a;
+  --t-accent: #007f8f;
+  --t-accent-hover: #009da8;
+  --t-accent-glow: rgba(0, 127, 143, 0.14);
+  --t-accent-soft: rgba(0, 127, 143, 0.085);
+  --t-accent-secondary: #b7791f;
+  --t-accent-rgb: 0, 127, 143;
+  --t-success: #168c61;
+  --t-danger: #c64545;
+  --t-warning: #a96919;
+  --glass-tint: rgba(248, 250, 252, 0.91);
+  --glass-tint-strong: rgba(255, 255, 255, 0.97);
+  --glass-border: rgba(130, 151, 176, 0.34);
+  --glass-hover: rgba(225, 235, 245, 0.88);
+  --glass-highlight-opacity: 0.56;
+  --pattern-overlay-opacity: 0.13;
+  --glass-pattern-opacity: 0.045;
+  --glass-shadow: 0 16px 38px rgba(40, 59, 83, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+html, body, #root {
+  font-family: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 34%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 24%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, color-mix(in srgb, var(--t-surface-0) 94%, #0f2539), var(--t-surface-0) 48%, color-mix(in srgb, var(--t-surface-0) 92%, #192112));
+  background-size: 40px 40px, 40px 40px, auto;
+}
+
+.app-aurora {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 28%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 20%, transparent) 1px, transparent 1px),
+    linear-gradient(135deg, var(--t-surface-0), color-mix(in srgb, var(--t-surface-1) 78%, var(--t-surface-0)));
+  background-size: 44px 44px, 44px 44px, auto;
+}
+
+.app-aurora::before,
+.app-aurora::after {
+  border-radius: 0;
+  filter: none;
+}
+
+.app-aurora::before {
+  inset: 0;
+  width: auto;
+  height: auto;
+  background:
+    linear-gradient(90deg, transparent 0 68%, rgba(var(--t-accent-rgb), 0.08) 68% 68.15%, transparent 68.15%),
+    linear-gradient(180deg, rgba(var(--t-accent-rgb), 0.085), transparent 34%);
+  opacity: 0.72;
+}
+
+.app-aurora::after {
+  inset: auto 0 0 0;
+  width: auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(var(--t-accent-rgb), 0.48), color-mix(in srgb, var(--t-accent-secondary) 50%, transparent), transparent);
+  opacity: 0.56;
+}
+
+.glass,
+.glass-strong,
+.glass-subtle {
+  background:
+    linear-gradient(180deg, var(--glass-tint), color-mix(in srgb, var(--t-surface-1) 82%, transparent));
+  border-color: var(--glass-border);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(10px) saturate(1.12);
+  backdrop-filter: blur(10px) saturate(1.12);
+}
+
+.glass-strong {
+  background:
+    linear-gradient(180deg, var(--glass-tint-strong), color-mix(in srgb, var(--t-surface-1) 92%, transparent));
+}
+
+.glass-subtle {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 78%, transparent), color-mix(in srgb, var(--t-surface-0) 74%, transparent));
+}
+
+.glass-card::before,
+.chat-stage-panel::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent 34%);
+}
+
+.glass-hover:hover {
+  background: color-mix(in srgb, var(--t-surface-3) 76%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-accent) 18%, var(--glass-border));
+}
+
+.module-workspace {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 18%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 16%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 58%, transparent), color-mix(in srgb, var(--t-surface-0) 94%, transparent));
+  background-size: 44px 44px, 44px 44px, auto;
+}
+
+.module-canvas {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 48%, transparent), transparent 22rem),
+    color-mix(in srgb, var(--t-surface-0) 64%, transparent);
+}
+
+.module-hero-strip {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--t-accent) 10%, transparent), transparent 42%),
+    color-mix(in srgb, var(--t-surface-1) 90%, transparent) !important;
+  box-shadow: inset 0 -1px 0 var(--t-border-subtle);
+}
+
+.module-side-panel {
+  background: color-mix(in srgb, var(--t-surface-1) 94%, transparent);
+  box-shadow: inset -1px 0 0 var(--t-border-subtle);
+}
+
+.nav-item-active {
+  background:
+    linear-gradient(90deg, rgba(var(--t-accent-rgb), 0.2), rgba(var(--t-accent-rgb), 0.07));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-accent) 28%, transparent), 0 10px 22px rgba(var(--t-accent-rgb), 0.13);
+}
+
+.user-bubble-gradient {
+  background: linear-gradient(135deg, var(--t-accent), color-mix(in srgb, var(--t-accent) 58%, var(--t-accent-secondary)));
+  box-shadow: 0 12px 28px rgba(var(--t-accent-rgb), 0.16);
+}
+
+.chat-workbench {
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 22%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 18%, transparent) 1px, transparent 1px),
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 64%, transparent), color-mix(in srgb, var(--t-surface-0) 96%, transparent));
+  background-size: 44px 44px, 44px 44px, auto;
+}
+
+.chat-workbench::before {
+  opacity: 0.3;
+  background: linear-gradient(90deg, transparent, rgba(var(--t-accent-rgb), 0.07), transparent);
+}
+
+.chat-transcript,
+.chat-stage-panel {
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 78%, transparent), color-mix(in srgb, var(--t-surface-2) 34%, transparent));
+  border-color: color-mix(in srgb, var(--t-border) 58%, transparent);
+  box-shadow: none;
+}
+
+.chat-stage-panel::after {
+  right: 0;
+  bottom: 0;
+  width: 44%;
+  height: 2px;
+  border-radius: 0;
+  background: linear-gradient(90deg, transparent, rgba(var(--t-accent-rgb), 0.7), color-mix(in srgb, var(--t-accent-secondary) 70%, transparent));
+  filter: none;
+  opacity: 0.72;
+}
+
+.workbench-density {
+  --workbench-card-radius: 0.375rem;
+  --workbench-panel-bg: color-mix(in srgb, var(--t-surface-1) 86%, transparent);
+}
+
+.workbench-density .shadow-sm,
+.workbench-density .shadow-lg,
+.workbench-density .shadow-2xl,
+.workbench-density [class*="shadow-["] {
+  box-shadow: none !important;
+}
+
+.workbench-density [class*="rounded-4xl"],
+.workbench-density [class*="rounded-3xl"],
+.workbench-density [class*="rounded-2xl"],
+.workbench-density [class*="rounded-xl"],
+.workbench-density [class*="rounded-[28px]"],
+.workbench-density [class*="rounded-[26px]"],
+.workbench-density [class*="rounded-[24px]"],
+.workbench-density [class*="rounded-[22px]"],
+.workbench-density [class*="rounded-[20px]"],
+.workbench-density [class*="rounded-[18px]"] {
+  border-radius: var(--workbench-card-radius) !important;
+}
+
+.workbench-density [class*="tracking-[0.18em]"],
+.workbench-density [class*="tracking-[0.16em]"],
+.workbench-density [class*="tracking-[0.14em]"] {
+  letter-spacing: 0.08em !important;
+}
+
+.workbench-density [class*="bg-linear-to-br"],
+.workbench-density [class*="bg-[radial-gradient"],
+.workbench-density .chat-stage-panel {
+  background-image:
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 92%, transparent), color-mix(in srgb, var(--t-surface-2) 56%, transparent)) !important;
+  background-color: var(--workbench-panel-bg) !important;
+  -webkit-backdrop-filter: blur(8px) saturate(1.05);
+  backdrop-filter: blur(8px) saturate(1.05);
+}
+
+.workbench-density input,
+.workbench-density textarea,
+.workbench-density select {
+  background-color: color-mix(in srgb, var(--t-surface-1) 72%, transparent) !important;
+  border-color: color-mix(in srgb, var(--t-border) 76%, transparent) !important;
+}
+
+.workbench-density input:focus,
+.workbench-density textarea:focus,
+.workbench-density select:focus {
+  box-shadow: 0 0 0 2px rgba(var(--t-accent-rgb), 0.16) !important;
+}
+
+.workbench-density .text-gradient {
+  color: var(--t-accent);
 }

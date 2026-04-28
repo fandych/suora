@@ -112,6 +112,7 @@ const DB_JSON_TABLES = new Set<JsonTableName>([
   'channel_messages',
   'mcp_servers',
   'timers',
+  'timer_executions',
   'pipelines',
   'pipeline_executions',
   'memories',
@@ -365,6 +366,49 @@ ipcMain.handle('db:saveStateSlice', async (_event, key: unknown, value: unknown)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('db:saveStateSlice failed', { error: message })
+    return { error: message }
+  }
+})
+
+ipcMain.handle('db:loadPersistedStore', async (_event, key: unknown) => {
+  try {
+    const keyError = validateDatabaseKey(key, 'Persisted store key')
+    if (keyError) return { error: keyError }
+    const database = await getSuoraDatabase()
+    return { success: true, data: database.getPersistedStore(key as string) }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('db:loadPersistedStore failed', { error: message })
+    return { error: message }
+  }
+})
+
+ipcMain.handle('db:savePersistedStore', async (_event, key: unknown, value: unknown, version: unknown) => {
+  try {
+    const keyError = validateDatabaseKey(key, 'Persisted store key')
+    if (keyError) return { error: keyError }
+    if (typeof value !== 'string' || !value.trim()) return { error: 'Persisted store value is required' }
+    const parsedVersion = typeof version === 'number' && Number.isFinite(version) ? Math.trunc(version) : 0
+    const database = await getSuoraDatabase()
+    await database.savePersistedStore(key as string, value, parsedVersion)
+    return { success: true }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('db:savePersistedStore failed', { error: message })
+    return { error: message }
+  }
+})
+
+ipcMain.handle('db:deletePersistedStore', async (_event, key: unknown) => {
+  try {
+    const keyError = validateDatabaseKey(key, 'Persisted store key')
+    if (keyError) return { error: keyError }
+    const database = await getSuoraDatabase()
+    await database.deletePersistedStore(key as string)
+    return { success: true }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    logger.error('db:deletePersistedStore failed', { error: message })
     return { error: message }
   }
 })
@@ -1676,52 +1720,51 @@ function computeNextRun(timer: StoredTimer): number | undefined {
   return undefined
 }
 
-function getTimersFilePath(): string {
-  const ws = currentWorkspacePath || path.join(app.getPath('home'), '.suora')
-  return path.join(ws, 'timers', 'config.json')
-}
-
 async function readTimers(): Promise<StoredTimer[]> {
-  try {
-    const content = await fs.readFile(getTimersFilePath(), 'utf-8')
-    return JSON.parse(content) as StoredTimer[]
-  } catch {
-    return []
-  }
+  const database = await getSuoraDatabase()
+  return database.listJsonTable('timers')
+    .filter((entry): entry is StoredTimer => Boolean(entry && typeof entry === 'object' && 'id' in entry && 'createdAt' in entry))
 }
 
 async function writeTimers(timers: StoredTimer[]): Promise<void> {
-  const filePath = getTimersFilePath()
-  await fs.mkdir(path.dirname(filePath), { recursive: true })
-  await fs.writeFile(filePath, JSON.stringify(timers, null, 2), 'utf-8')
-}
+  const database = await getSuoraDatabase()
+  const existing = database.listJsonTable('timers')
+    .filter((entry): entry is StoredTimer => Boolean(entry && typeof entry === 'object' && 'id' in entry))
+  const nextIds = new Set(timers.map((timer) => timer.id))
 
-function getTimerHistoryFilePath(): string {
-  const ws = currentWorkspacePath || path.join(app.getPath('home'), '.suora')
-  return path.join(ws, 'timers', 'history.json')
-}
-
-async function readTimerHistory(): Promise<TimerExecutionRecord[]> {
-  try {
-    const content = await fs.readFile(getTimerHistoryFilePath(), 'utf-8')
-    return JSON.parse(content) as TimerExecutionRecord[]
-  } catch {
-    return []
+  for (const timer of timers) {
+    await database.saveJsonEntity('timers', timer.id, timer)
+  }
+  for (const timer of existing) {
+    if (!nextIds.has(timer.id)) await database.deleteJsonEntity('timers', timer.id)
   }
 }
 
+async function readTimerHistory(): Promise<TimerExecutionRecord[]> {
+  const database = await getSuoraDatabase()
+  return database.listJsonTable('timer_executions')
+    .filter((entry): entry is TimerExecutionRecord => Boolean(entry && typeof entry === 'object' && 'id' in entry && 'timerId' in entry && 'firedAt' in entry))
+    .sort((left, right) => left.firedAt - right.firedAt)
+}
+
 async function writeTimerHistory(records: TimerExecutionRecord[]): Promise<void> {
-  const filePath = getTimerHistoryFilePath()
-  await fs.mkdir(path.dirname(filePath), { recursive: true })
-  // Keep only last 500 records to avoid unbounded growth
+  const database = await getSuoraDatabase()
   const trimmed = records.slice(-500)
-  await fs.writeFile(filePath, JSON.stringify(trimmed, null, 2), 'utf-8')
+  const nextIds = new Set(trimmed.map((record) => record.id))
+  const existing = database.listJsonTable('timer_executions')
+    .filter((entry): entry is TimerExecutionRecord => Boolean(entry && typeof entry === 'object' && 'id' in entry))
+
+  for (const record of trimmed) {
+    await database.saveJsonEntity('timer_executions', record.id, record)
+  }
+  for (const record of existing) {
+    if (!nextIds.has(record.id)) await database.deleteJsonEntity('timer_executions', record.id)
+  }
 }
 
 async function appendTimerExecution(record: TimerExecutionRecord): Promise<void> {
-  const records = await readTimerHistory()
-  records.push(record)
-  await writeTimerHistory(records)
+  const database = await getSuoraDatabase()
+  await database.saveJsonEntity('timer_executions', record.id, record)
 }
 
 // IPC: List all timers

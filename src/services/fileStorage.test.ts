@@ -22,7 +22,7 @@ describe('fileStateStorage', () => {
     })
   })
 
-  it('should persist agent and skill metadata into settings.json while keeping model secrets encrypted on disk', async () => {
+  it('should persist non-skill app state into SQLite while keeping model secrets encrypted', async () => {
     fileStateStorage.setItem('suora-store', JSON.stringify({
       version: 16,
       state: {
@@ -74,39 +74,33 @@ describe('fileStateStorage', () => {
     await flushPendingSplitStoreWrites()
     await flushAsyncWork()
 
-    const settingsWrite = vi.mocked(window.electron.invoke).mock.calls.find(
-      ([channel, filePath]) => channel === 'fs:writeFile' && filePath === 'C:/workspace/settings.json',
-    )
-    const modelsWrite = vi.mocked(window.electron.invoke).mock.calls.find(
-      ([channel, filePath]) => channel === 'fs:writeFile' && filePath === 'C:/workspace/models.json',
+    const sqliteWrite = vi.mocked(window.electron.invoke).mock.calls.find(
+      ([channel, key]) => channel === 'db:savePersistedStore' && key === 'suora-store',
     )
 
-    expect(settingsWrite).toBeDefined()
-    expect(modelsWrite).toBeDefined()
+    expect(sqliteWrite).toBeDefined()
 
-    const settingsJson = settingsWrite?.[2]
-    const modelsJson = modelsWrite?.[2]
-    expect(typeof settingsJson).toBe('string')
-    expect(typeof modelsJson).toBe('string')
+    const sqliteJson = sqliteWrite?.[2]
+    expect(typeof sqliteJson).toBe('string')
 
-    const parsed = JSON.parse(settingsJson as string) as Record<string, unknown>
-    const parsedModels = JSON.parse(modelsJson as string) as Record<string, unknown>
-    expect(parsed.agentVersions).toEqual([{ id: 'av-1', agentId: 'agent-1', version: 1, snapshot: { name: 'Agent 1' }, createdAt: 1 }])
-    expect(parsed.agentPerformance).toEqual({ 'agent-1': { agentId: 'agent-1', totalCalls: 2, totalTokens: 20, avgResponseTimeMs: 100, responseTimes: [100], lastUsed: 1, errorCount: 0 } })
-    expect(parsed.agentPipeline).toEqual([{ agentId: 'agent-1', task: 'Draft task' }])
-    expect(parsed.skillVersions).toEqual([{ id: 'sv-1', skillId: 'skill-1', version: 1, snapshot: { name: 'Skill 1' }, createdAt: 1 }])
-    expect(parsed.pluginTools).toEqual({ 'plugin-1': ['tool_a'] })
+    const parsed = JSON.parse(sqliteJson as string) as { state: Record<string, unknown> }
+    expect(parsed.state.agentVersions).toEqual([{ id: 'av-1', agentId: 'agent-1', version: 1, snapshot: { name: 'Agent 1' }, createdAt: 1 }])
+    expect(parsed.state.agentPerformance).toEqual({ 'agent-1': { agentId: 'agent-1', totalCalls: 2, totalTokens: 20, avgResponseTimeMs: 100, responseTimes: [100], lastUsed: 1, errorCount: 0 } })
+    expect(parsed.state.agentPipeline).toEqual([{ agentId: 'agent-1', task: 'Draft task' }])
+    expect(parsed.state.skills).toBeUndefined()
+    expect(parsed.state.skillVersions).toBeUndefined()
+    expect(parsed.state.pluginTools).toEqual({ 'plugin-1': ['tool_a'] })
 
-    expect(parsedModels.providerConfigs).toEqual([
+    expect(parsed.state.providerConfigs).toEqual([
       expect.objectContaining({ id: 'provider-1', apiKey: '' }),
     ])
-    expect(parsedModels.models).toEqual([
+    expect(parsed.state.models).toEqual([
       expect.not.objectContaining({ apiKey: 'sk-provider' }),
     ])
-    expect(parsedModels.selectedModel).toEqual(
+    expect(parsed.state.selectedModel).toEqual(
       expect.not.objectContaining({ apiKey: 'sk-provider' }),
     )
-    expect(parsedModels.apiKeys).toEqual({})
-    expect(parsedModels.encryptedSecrets).toEqual(expect.any(String))
+    expect(parsed.state.apiKeys).toEqual({})
+    expect(parsed.state.encryptedSecrets).toEqual(expect.any(String))
   })
 })

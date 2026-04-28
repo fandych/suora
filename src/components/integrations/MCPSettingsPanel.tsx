@@ -128,9 +128,6 @@ export function MCPSettingsPanel() {
     })
   }, [mcpServers, deferredSearchQuery])
 
-  const enabledServerCount = useMemo(() => mcpServers.filter((server) => server.enabled).length, [mcpServers])
-  const connectedServerCount = useMemo(() => mcpServers.filter((server) => server.status === 'connected').length, [mcpServers])
-  const discoveredToolCount = useMemo(() => mcpServers.reduce((count, server) => count + (server.tools?.length ?? 0), 0), [mcpServers])
   const isExistingServerForm = form ? mcpServers.some((server) => server.id === form.id) : false
 
   useEffect(() => {
@@ -576,28 +573,7 @@ export function MCPSettingsPanel() {
           </button>
         }
       >
-        <div className="module-sidebar-stack px-3 pb-3 pt-1 space-y-3">
-          <div className="rounded-3xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/92 to-surface-2/70 p-4 shadow-[0_14px_40px_rgba(var(--t-accent-rgb),0.06)]">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('mcp.registry', 'Registry')}</div>
-                <div className="mt-1 text-[18px] font-semibold text-text-primary">{t('mcp.serverCatalog', 'Server Catalog')}</div>
-                <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('mcp.serverCatalogHint', 'Keep local processes and remote endpoints organized before they enter the runtime.')}</p>
-              </div>
-              <div className="rounded-2xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
-                <div className="text-xl font-semibold text-text-primary tabular-nums">{mcpServers.length}</div>
-              </div>
-            </div>
-
-            <div className="mt-4 grid grid-cols-4 gap-2">
-              <SummaryStat label={t('mcp.servers', 'Servers')} value={String(mcpServers.length)} accent />
-              <SummaryStat label={t('common.enabled', 'Enabled')} value={String(enabledServerCount)} />
-              <SummaryStat label={t('mcp.connected', 'Connected')} value={String(connectedServerCount)} />
-              <SummaryStat label={t('mcp.tools', 'Tools')} value={String(discoveredToolCount)} />
-            </div>
-          </div>
-
+        <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
           <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none" />

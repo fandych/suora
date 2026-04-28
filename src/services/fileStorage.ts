@@ -1,12 +1,13 @@
-// File-based storage adapter — persists Zustand state into the workspace.
+// SQLite-backed storage adapter — persists Zustand state into suora.db.
 //
-// Data is stored as categorised JSON files within the user-configured workspace:
-//   {workspace}/models.json        — provider configs, models, API keys
-//   {workspace}/settings.json      — all app settings, plugins, analytics, UI state
-//   {workspace}/channels/config.json — channel configs, messages, tokens
+// The primary store is {workspace}/suora.db, table app_state.
+// Legacy workspace JSON files are read only as a one-time migration fallback:
+//   {workspace}/models.json
+//   {workspace}/settings.json
+//   {workspace}/channels/config.json
 //
-// Agents, skills and sessions are persisted separately by their own file services
-// (agentFiles.ts, skillFiles.ts, sessionFiles.ts) and are NOT duplicated here.
+// Skills remain file/registry-based and are intentionally excluded from the
+// SQLite persisted store.
 //
 // An in-memory cache provides synchronous reads (required by tools.ts
 // and other modules that avoid async circular dependencies).
@@ -35,27 +36,9 @@ const cache = new Map<string, string>()
 
 const SPLIT_STORE_NAME = 'suora-store'
 
-/** Keys that belong in models.json (provider/model configuration) */
-const MODELS_KEYS = new Set([
-  'providerConfigs', 'models', 'selectedModel', 'apiKeys',
-])
+const SKILL_STATE_KEYS = new Set(['skills', 'skillVersions'])
 
-/** Keys that belong in channels/config.json */
-const CHANNELS_KEYS = new Set([
-  'channels', 'channelMessages', 'channelTokens', 'channelHealth', 'channelUsers',
-])
-
-/**
- * Keys excluded from settings.json because they are persisted/loaded
- * by their own file services (agentFiles, skillFiles, sessionFiles).
- */
-const EXCLUDED_KEYS = new Set([
-  'agents', 'selectedAgent',
-  'skills',
-  'sessions',
-])
-
-/** Track last-written JSON per file to skip redundant disk writes */
+/** Track last-written payloads to skip redundant disk writes */
 const lastWritten = new Map<string, string>()
 let pendingSplitStoreValue: string | null = null
 let activeSplitStoreFlush: Promise<void> | null = null
@@ -63,14 +46,6 @@ let splitStoreDebounceTimer: ReturnType<typeof setTimeout> | null = null
 let lastSplitStoreError: unknown = null
 
 const SPLIT_STORE_DEBOUNCE_MS = 250
-
-/**
- * Throttle user-visible toast notifications about write failures so that a
- * persistent disk-full condition does not spam the UI with one toast per
- * debounced write attempt.
- */
-const writeFailureToastCooldown = new Map<string, number>()
-const WRITE_FAILURE_TOAST_COOLDOWN_MS = 30_000
 
 /**
  * Deferred warnings that could not be shown immediately (e.g. during early
@@ -90,47 +65,6 @@ function flushDeferredWarnings(): void {
     }
     deferredWarnings.length = 0
   }, 2000)
-}
-
-function notifyWriteFailure(filePath: string, error: unknown): void {
-  const now = Date.now()
-  const last = writeFailureToastCooldown.get(filePath) ?? 0
-  if (now - last < WRITE_FAILURE_TOAST_COOLDOWN_MS) return
-  writeFailureToastCooldown.set(filePath, now)
-
-  const detail = error instanceof Error ? error.message : String(error)
-  toast.error(
-    'Failed to save to disk',
-    `${filePath.split(/[\\/]/).slice(-2).join('/')} — ${detail}`,
-  )
-}
-
-async function writeIfChanged(electron: ElectronBridge, filePath: string, json: string): Promise<void> {
-  if (lastWritten.get(filePath) === json) return
-
-  let lastError: unknown = null
-  const backoffMs = [0, 500, 2_000]
-  for (const delay of backoffMs) {
-    if (delay) await new Promise((resolve) => setTimeout(resolve, delay))
-    try {
-      const result = await electron.invoke('fs:writeFile', filePath, json)
-      // Some handlers return `{ error }` on failure rather than throwing.
-      if (result && typeof result === 'object' && 'error' in result && (result as { error?: unknown }).error) {
-        lastError = (result as { error: unknown }).error
-        continue
-      }
-      lastWritten.set(filePath, json)
-      return
-    } catch (err) {
-      lastError = err
-    }
-  }
-
-  if (lastError !== null) {
-    console.error('[fileStorage] write failed after retries', { filePath, error: lastError })
-    notifyWriteFailure(filePath, lastError)
-    throw lastError instanceof Error ? lastError : new Error(String(lastError))
-  }
 }
 
 // ─── Resolve workspace path ─────────────────────────────────────────
@@ -156,7 +90,7 @@ export function updateCachedWorkspacePath(ws: string): void {
   _resolvedWorkspacePath = ws
 }
 
-// ─── Split & save into workspace files ──────────────────────────────
+// ─── Save into SQLite app_state ─────────────────────────────────────
 
 function splitAndSave(fullValue: string, electron: ElectronBridge): void {
   pendingSplitStoreValue = fullValue
@@ -167,7 +101,7 @@ function splitAndSave(fullValue: string, electron: ElectronBridge): void {
       while (pendingSplitStoreValue !== null) {
         const nextValue = pendingSplitStoreValue
         pendingSplitStoreValue = null
-        await persistSplitStore(nextValue, electron)
+        await persistSqliteStore(nextValue, electron)
       }
     } finally {
       activeSplitStoreFlush = null
@@ -178,48 +112,59 @@ function splitAndSave(fullValue: string, electron: ElectronBridge): void {
   })()
 }
 
-async function persistSplitStore(fullValue: string, electron: ElectronBridge): Promise<void> {
+function getPersistedVersion(fullValue: string): number {
+  try {
+    const parsed = JSON.parse(fullValue) as { version?: unknown }
+    return typeof parsed.version === 'number' && Number.isFinite(parsed.version) ? Math.trunc(parsed.version) : 0
+  } catch {
+    return 0
+  }
+}
+
+async function prepareSqliteStoreValue(fullValue: string, electron: ElectronBridge): Promise<string> {
+  const parsed = JSON.parse(fullValue) as { state?: Record<string, unknown>; version?: number }
+  const state = parsed.state
+  if (!state) return fullValue
+
+  const nextState: Record<string, unknown> = { ...state }
+  for (const key of SKILL_STATE_KEYS) delete nextState[key]
+
+  const modelsProtected = await prepareModelsDataForSave(electron, nextState)
+  const fullyProtected = await prepareSensitiveDataForSave(electron, modelsProtected)
+
+  return JSON.stringify({ ...parsed, state: fullyProtected })
+}
+
+async function restoreSqliteStoreValue(fullValue: string, electron: ElectronBridge): Promise<string> {
+  const parsed = JSON.parse(fullValue) as { state?: Record<string, unknown>; version?: number }
+  const state = parsed.state
+  if (!state) return fullValue
+
+  let restoredState = await restoreSensitiveDataAfterLoad(electron, state)
+  restoredState = await restoreModelsDataAfterLoad(electron, restoredState)
+  for (const key of SKILL_STATE_KEYS) delete restoredState[key]
+
+  const ws = await resolveWorkspacePath(electron)
+  if (!restoredState.workspacePath) restoredState.workspacePath = ws
+
+  return JSON.stringify({ ...parsed, state: restoredState })
+}
+
+async function persistSqliteStore(fullValue: string, electron: ElectronBridge): Promise<void> {
   try {
     lastSplitStoreError = null
-    const parsed = JSON.parse(fullValue) as { state?: Record<string, unknown>; version?: number }
-    const state = parsed.state
-    if (!state) return
+    const protectedValue = await prepareSqliteStoreValue(fullValue, electron)
+    const cacheKey = `sqlite:${SPLIT_STORE_NAME}`
+    if (lastWritten.get(cacheKey) === protectedValue) return
 
-    const ws = (state.workspacePath as string) || _resolvedWorkspacePath
-    if (!ws) return
-
-    if (ws !== _resolvedWorkspacePath) _resolvedWorkspacePath = ws
-
-    // models.json
-    const models: Record<string, unknown> = {}
-    for (const key of MODELS_KEYS) {
-      if (key in state) models[key] = state[key]
+    const result = await electron.invoke('db:savePersistedStore', SPLIT_STORE_NAME, protectedValue, getPersistedVersion(protectedValue))
+    if (result && typeof result === 'object' && 'error' in result && (result as { error?: unknown }).error) {
+      throw new Error(String((result as { error: unknown }).error))
     }
-    const secureModels = await prepareModelsDataForSave(electron, models)
-    const modelsWrite = writeIfChanged(electron, `${ws}/models.json`, JSON.stringify(secureModels, null, 2))
-
-    // channels/config.json
-    const channels: Record<string, unknown> = {}
-    for (const key of CHANNELS_KEYS) {
-      if (key in state) channels[key] = state[key]
-    }
-    const secureChannels = await prepareSensitiveDataForSave(electron, channels)
-    const channelsWrite = writeIfChanged(electron, `${ws}/channels/config.json`, JSON.stringify(secureChannels, null, 2))
-
-    // settings.json — everything not in models, channels, or excluded
-    const settings: Record<string, unknown> = {}
-    for (const [key, value] of Object.entries(state)) {
-      if (MODELS_KEYS.has(key) || CHANNELS_KEYS.has(key) || EXCLUDED_KEYS.has(key)) continue
-      settings[key] = value
-    }
-    settings._storeVersion = parsed.version ?? 0
-    const secureSettings = await prepareSensitiveDataForSave(electron, settings)
-    const settingsWrite = writeIfChanged(electron, `${ws}/settings.json`, JSON.stringify(secureSettings, null, 2))
-
-    await Promise.all([modelsWrite, channelsWrite, settingsWrite])
+    lastWritten.set(cacheKey, protectedValue)
   } catch (err) {
     lastSplitStoreError = err
-    logger.error('[fileStorage] persistSplitStore failed — state kept in memory only', {
+    logger.error('[fileStorage] persistSqliteStore failed — state kept in memory only', {
       error: err instanceof Error ? err.message : String(err),
     })
   }
@@ -371,6 +316,22 @@ async function loadFromWorkspace(electron: ElectronBridge): Promise<string | nul
   return JSON.stringify({ state: restoredMerged, version })
 }
 
+async function loadFromSqlite(electron: ElectronBridge, name: string): Promise<string | null> {
+  try {
+    const result = (await electron.invoke('db:loadPersistedStore', name)) as { success?: boolean; data?: unknown; error?: unknown }
+    if (result?.error) {
+      logger.error('[fileStorage] Failed to load SQLite app_state', { key: name, error: result.error })
+      return null
+    }
+    if (typeof result?.data !== 'string' || result.data.length === 0) return null
+    lastWritten.set(`sqlite:${name}`, result.data)
+    return await restoreSqliteStoreValue(result.data, electron)
+  } catch (error) {
+    logger.error('[fileStorage] Failed to load SQLite app_state', { key: name, error })
+    return null
+  }
+}
+
 // ─── Legacy migration ───────────────────────────────────────────────
 
 const LEGACY_CATEGORY_NAMES = ['settings', 'providers', 'agents', 'skills', 'channels', 'plugins', 'analytics', 'ui-state', 'other']
@@ -402,8 +363,8 @@ async function loadLegacySplitStore(electron: ElectronBridge): Promise<string | 
 
 /**
  * Custom storage adapter for Zustand persist middleware.
- * Saves store state into workspace files (models.json, settings.json, channels/config.json).
- * Falls back to legacy ~/.suora/data/ format for migration.
+ * Saves store state into SQLite app_state and falls back to older JSON formats
+ * only for one-time migration.
  */
 export const fileStateStorage = {
   getItem: async (name: string): Promise<string | null> => {
@@ -413,34 +374,47 @@ export const fileStateStorage = {
     const electron = getElectron()
 
     if (name === SPLIT_STORE_NAME && electron) {
-      // 1. Try workspace files
+      // 1. Try SQLite app_state
+      const sqliteData = await loadFromSqlite(electron, name)
+      if (sqliteData) {
+        cache.set(name, sqliteData)
+        flushDeferredWarnings()
+        return sqliteData
+      }
+
+      // 2. Migrate from legacy workspace files
       const wsData = await loadFromWorkspace(electron)
       if (wsData) {
-        cache.set(name, wsData)
+        const restored = await restoreSqliteStoreValue(await prepareSqliteStoreValue(wsData, electron), electron)
+        cache.set(name, restored)
         flushDeferredWarnings()
-        return wsData
+        splitAndSave(restored, electron)
+        return restored
       }
 
-      // 2. Migrate from legacy ~/.suora/data/ split format
+      // 3. Migrate from legacy ~/.suora/data/ split format
       const legacyData = await loadLegacySplitStore(electron)
       if (legacyData) {
-        cache.set(name, legacyData)
-        splitAndSave(legacyData, electron)
-        return legacyData
+        const restored = await restoreSqliteStoreValue(await prepareSqliteStoreValue(legacyData, electron), electron)
+        cache.set(name, restored)
+        splitAndSave(restored, electron)
+        return restored
       }
 
-      // 3. Migrate from legacy single file
+      // 4. Migrate from legacy single file
       try {
         const legacy = (await electron.invoke('store:load', name)) as string | null
         if (legacy !== null) {
-          cache.set(name, legacy)
-          splitAndSave(legacy, electron)
-          return legacy
+          const restored = await restoreSqliteStoreValue(await prepareSqliteStoreValue(legacy, electron), electron)
+          cache.set(name, restored)
+          splitAndSave(restored, electron)
+          return restored
         }
       } catch { /* fall through */ }
     } else if (electron) {
       try {
-        const data = (await electron.invoke('store:load', name)) as string | null
+        const result = (await electron.invoke('db:loadPersistedStore', name)) as { data?: unknown; error?: unknown }
+        const data = typeof result?.data === 'string' ? result.data : (await electron.invoke('store:load', name)) as string | null
         if (data !== null) {
           cache.set(name, data)
           return data
@@ -448,13 +422,15 @@ export const fileStateStorage = {
       } catch { /* fall through */ }
     }
 
-    // 4. Migrate from localStorage (very legacy)
+    // 5. Migrate from localStorage (very legacy)
     try {
       const legacy = localStorage.getItem(name)
       if (legacy !== null) {
         cache.set(name, legacy)
         if (electron && name === SPLIT_STORE_NAME) {
           splitAndSave(legacy, electron)
+        } else if (electron) {
+          void electron.invoke('db:savePersistedStore', name, legacy, getPersistedVersion(legacy)).catch(() => {})
         }
         localStorage.removeItem(name)
         return legacy
@@ -478,25 +454,15 @@ export const fileStateStorage = {
     const electron = getElectron()
     if (!electron) return
     if (name === SPLIT_STORE_NAME) {
-      const ws = _resolvedWorkspacePath
       if (splitStoreDebounceTimer) {
         clearTimeout(splitStoreDebounceTimer)
         splitStoreDebounceTimer = null
       }
       pendingSplitStoreValue = null
-      if (ws) {
-        lastWritten.delete(`${ws}/models.json`)
-        lastWritten.delete(`${ws}/settings.json`)
-        lastWritten.delete(`${ws}/channels/config.json`)
-        void Promise.all([
-          electron.invoke('fs:deleteFile', `${ws}/models.json`).catch(() => {}),
-          electron.invoke('fs:deleteFile', `${ws}/settings.json`).catch(() => {}),
-          electron.invoke('fs:deleteFile', `${ws}/channels/config.json`).catch(() => {}),
-        ])
-      }
+      void electron.invoke('db:deletePersistedStore', SPLIT_STORE_NAME).catch(() => {})
       return
     }
-    electron.invoke('store:remove', name).catch(() => {})
+    electron.invoke('db:deletePersistedStore', name).catch(() => {})
   },
 }
 
@@ -519,7 +485,7 @@ export function writeCached(name: string, value: string): void {
   cache.set(name, value)
   const electron = getElectron()
   if (electron) {
-    electron.invoke('store:save', name, value).catch(() => {})
+    electron.invoke('db:savePersistedStore', name, value, getPersistedVersion(value)).catch(() => {})
   }
 }
 
@@ -530,6 +496,6 @@ export function removeCached(name: string): void {
   cache.delete(name)
   const electron = getElectron()
   if (electron) {
-    electron.invoke('store:remove', name).catch(() => {})
+    electron.invoke('db:deletePersistedStore', name).catch(() => {})
   }
 }

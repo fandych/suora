@@ -1,9 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { useAppStore, initWorkspacePath, loadExternalSkillsAndAgents } from './appStore'
-import type { Session } from '@/types'
+import { useAppStore, initWorkspacePath, loadExternalSkillsAndAgents, loadSessionsFromWorkspace, loadSettingsFromWorkspace } from './appStore'
+import type { Agent, Session, Skill } from '@/types'
 
 // Mock sessionFiles and other file-based services
 vi.mock('@/services/sessionFiles', () => ({
+  loadSessionsFromDisk: vi.fn().mockResolvedValue([]),
   loadSessionFromDisk: vi.fn().mockResolvedValue(null),
   saveSessionToDisk: vi.fn().mockResolvedValue(undefined),
   deleteSessionFromDisk: vi.fn().mockResolvedValue(undefined),
@@ -28,7 +29,6 @@ vi.mock('@/services/externalDirectories', () => ({
   syncExternalDirectoryAccess: vi.fn().mockResolvedValue(undefined),
 }))
 
-import { loadAgentsFromDisk } from '@/services/agentFiles'
 import { loadAllSkills } from '@/services/skillRegistry'
 import { loadExternalResources, syncExternalDirectoryAccess } from '@/services/externalDirectories'
 
@@ -227,13 +227,7 @@ describe('appStore', () => {
       expect(window.electron.invoke).toHaveBeenCalledWith('workspace:init', 'C:/boot-workspace')
     })
 
-    it('should load persisted agents and skills during startup refresh', async () => {
-      vi.mocked(loadAgentsFromDisk).mockResolvedValueOnce([
-        {
-          id: 'agent-local', name: 'Local Agent', systemPrompt: 'Local prompt',
-          modelId: 'test:model', skills: [], enabled: true, memories: [], autoLearn: false,
-        },
-      ])
+    it('should load file-backed skills without importing file-backed agents during startup refresh', async () => {
       vi.mocked(loadAllSkills).mockResolvedValueOnce([
         {
           id: 'skill-local', name: 'Local Skill', description: 'Local description',
@@ -273,8 +267,6 @@ describe('appStore', () => {
       )
       expect(useAppStore.getState().agents.map((agent) => agent.id)).toEqual([
         'default-assistant',
-        'agent-local',
-        'agent-external',
       ])
       expect(useAppStore.getState().skills.map((skill) => skill.name)).toEqual([
         'Local Skill',
@@ -283,9 +275,9 @@ describe('appStore', () => {
     })
 
     it('should preserve the latest selected agent while startup refresh is still loading', async () => {
-      let resolveAgents!: (value: Awaited<ReturnType<typeof loadAgentsFromDisk>>) => void
-      const pendingAgents = new Promise<Awaited<ReturnType<typeof loadAgentsFromDisk>>>((resolve) => {
-        resolveAgents = resolve
+      let resolveSkills!: (value: Awaited<ReturnType<typeof loadAllSkills>>) => void
+      const pendingSkills = new Promise<Awaited<ReturnType<typeof loadAllSkills>>>((resolve) => {
+        resolveSkills = resolve
       })
 
       const defaultAgent = {
@@ -297,8 +289,7 @@ describe('appStore', () => {
         modelId: 'test:model', skills: [], enabled: true, memories: [], autoLearn: false,
       }
 
-      vi.mocked(loadAgentsFromDisk).mockImplementationOnce(() => pendingAgents)
-      vi.mocked(loadAllSkills).mockResolvedValueOnce([] as never)
+      vi.mocked(loadAllSkills).mockImplementationOnce(() => pendingSkills)
       vi.mocked(loadExternalResources).mockResolvedValueOnce({ skills: [], agents: [] })
 
       useAppStore.setState({
@@ -311,10 +302,91 @@ describe('appStore', () => {
       const refreshPromise = loadExternalSkillsAndAgents()
 
       useAppStore.getState().setSelectedAgent(localAgent)
-      resolveAgents([localAgent])
+      resolveSkills([] as never)
       await refreshPromise
 
       expect(useAppStore.getState().selectedAgent?.id).toBe('agent-local')
+    })
+
+    it('should keep hydrated store sessions without importing legacy disk sessions', async () => {
+      const hydratedSession: Session = {
+        id: 'session-hydrated',
+        title: 'Hydrated session',
+        createdAt: 1000,
+        updatedAt: 3000,
+        messages: [],
+      }
+      const newerHydratedSession: Session = {
+        id: 'session-shared',
+        title: 'Hydrated wins',
+        createdAt: 1000,
+        updatedAt: 5000,
+        messages: [],
+      }
+      useAppStore.setState({
+        workspacePath: 'C:/workspace',
+        sessions: [hydratedSession, newerHydratedSession],
+        openSessionTabs: ['session-hydrated', 'session-shared'],
+        activeSessionId: 'session-shared',
+      })
+
+      await loadSessionsFromWorkspace()
+
+      expect(useAppStore.getState().sessions.map((session) => session.id)).toEqual([
+        'session-shared',
+        'session-hydrated',
+      ])
+      expect(useAppStore.getState().sessions.find((session) => session.id === 'session-shared')?.title).toBe('Hydrated wins')
+      expect(useAppStore.getState().activeSessionId).toBe('session-shared')
+    })
+
+    it('should keep hydrated custom agents and skills when workspace file scans return empty', async () => {
+      const customAgent: Agent = {
+        id: 'agent-hydrated', name: 'Hydrated Agent', systemPrompt: 'Stored prompt',
+        modelId: 'test:model', skills: [], enabled: true, memories: [], autoLearn: false,
+      }
+      const customSkill: Skill = {
+        id: 'skill-hydrated', name: 'Hydrated Skill', description: 'Stored skill',
+        enabled: true, content: 'stored', source: 'local', context: 'inline', frontmatter: { name: 'Hydrated Skill', description: 'Stored skill' },
+      }
+
+      vi.mocked(loadAllSkills).mockResolvedValueOnce([] as never)
+      vi.mocked(loadExternalResources).mockResolvedValueOnce({ skills: [], agents: [] })
+
+      useAppStore.setState({
+        workspacePath: 'C:/workspace',
+        externalDirectories: [],
+        agents: [{
+          id: 'default-assistant', name: 'Assistant', systemPrompt: 'Default prompt',
+          modelId: '', skills: [], enabled: true, memories: [], autoLearn: true,
+        }, customAgent],
+        skills: [customSkill],
+      })
+
+      await loadExternalSkillsAndAgents()
+
+      expect(useAppStore.getState().agents.some((agent) => agent.id === customAgent.id)).toBe(true)
+      expect(useAppStore.getState().skills.some((skill) => skill.id === customSkill.id)).toBe(true)
+    })
+
+    it('should not clear hydrated settings when workspace settings are empty', async () => {
+      useAppStore.setState({
+        workspacePath: 'C:/workspace',
+        providerConfigs: [{
+          id: 'provider-hydrated',
+          name: 'Hydrated Provider',
+          providerType: 'openai-compatible',
+          apiKey: '',
+          baseUrl: '',
+          models: [],
+        }],
+        externalDirectories: [{ path: 'C:/skills', enabled: true, type: 'skills' }],
+      })
+
+      await loadSettingsFromWorkspace()
+
+      expect(useAppStore.getState().providerConfigs.map((provider) => provider.id)).toEqual(['provider-hydrated'])
+      expect(useAppStore.getState().externalDirectories.map((directory) => directory.path)).toEqual(['C:/skills'])
     })
   })
 })

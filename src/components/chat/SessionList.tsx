@@ -80,11 +80,6 @@ export function SessionList({ width }: { width?: number }) {
     addSession(session)
   }
 
-  const totalMessages = useMemo(
-    () => sessions.reduce((sum, session) => sum + session.messages.length, 0),
-    [sessions],
-  )
-
   const filteredSessions = useMemo(() => {
     const query = deferredSearchQuery.trim().toLowerCase()
     if (!query) return sessions
@@ -104,8 +99,6 @@ export function SessionList({ width }: { width?: number }) {
     () => groupSessionsByDate(orderedSessions, t),
     [orderedSessions, t],
   )
-
-  const activeSession = sessions.find((session) => session.id === activeSessionId) ?? null
 
   const startRename = (sessionId: string) => {
     const session = sessions.find((item) => item.id === sessionId)
@@ -160,54 +153,7 @@ export function SessionList({ width }: { width?: number }) {
         </button>
       }
     >
-      <div className="px-3 pb-4 pt-1 space-y-3">
-        <div className="rounded-2xl border border-border-subtle/55 bg-surface-1/72 p-4 shadow-sm">
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">
-                {t('sessions.workspace', 'Workspace')}
-              </div>
-              <div className="mt-1 text-[18px] font-semibold text-text-primary">
-                {t('sessions.controlDeck', 'Conversation Deck')}
-              </div>
-              <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/78">
-                {t('sessions.deckHint', 'Switch context fast, scan message history, and keep active threads close at hand.')}
-              </p>
-            </div>
-            <div className="rounded-xl border border-accent/15 bg-surface-0/70 px-3 py-2 text-right shadow-sm">
-              <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.total', 'Total')}</div>
-              <div className="text-xl font-semibold text-text-primary tabular-nums">{sessions.length}</div>
-            </div>
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-2">
-            <div className="rounded-xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('common.open', 'Open')}</div>
-              <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{openSessionTabs.length}</div>
-            </div>
-            <div className="rounded-xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('sessions.messages', 'Messages')}</div>
-              <div className="mt-1 text-[15px] font-semibold text-text-primary tabular-nums">{totalMessages}</div>
-            </div>
-            <div className="rounded-xl border border-border-subtle/45 bg-surface-0/55 px-3 py-2.5">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{t('sessions.active', 'Active')}</div>
-              <div className="mt-1 truncate text-[15px] font-semibold text-text-primary">{activeSession?.title ?? '—'}</div>
-            </div>
-          </div>
-
-          {activeSession && (
-            <div className="mt-4 rounded-2xl border border-border-subtle/45 bg-surface-0/58 p-3.5 shadow-sm">
-              <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('sessions.liveConversation', 'Live conversation')}</div>
-              <div className="mt-2 truncate text-[13px] font-semibold text-text-primary">{activeSession.title}</div>
-              <div className="mt-2 flex items-center gap-2 text-[11px] text-text-muted">
-                <span>{formatSessionRelativeTime(activeSession.updatedAt, locale)}</span>
-                <span className="h-1 w-1 rounded-full bg-text-muted/30" />
-                <span>{activeSession.messages.length} {t('sessions.msgs', 'msgs')}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
+      <div className="px-3 pb-4 pt-3 space-y-3">
         <div className="rounded-2xl border border-border-subtle/55 bg-surface-0/48 p-3 shadow-sm">
           <div className="relative">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/40">
