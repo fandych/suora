@@ -1346,6 +1346,19 @@ export function PipelineLayout() {
                                   </div>
                                 )}
 
+                                <div>
+                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
+                                    <span>{t('agents.pipelineStepExportVar', 'Export to variable')}</span>
+                                    <input
+                                      type="text"
+                                      value={step.exportVar ?? ''}
+                                      onChange={(event) => updateStep(idx, { exportVar: event.target.value || undefined })}
+                                      placeholder={t('agents.pipelineStepExportVarPlaceholder', 'e.g. topic')}
+                                      className="h-8 w-56 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                    />
+                                  </label>
+                                </div>
+
                                 <div className="grid gap-2 sm:grid-cols-3">
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <span>{t('agents.pipelineStepTimeout', 'Timeout ms')}</span>

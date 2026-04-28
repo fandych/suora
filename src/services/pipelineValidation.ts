@@ -83,6 +83,11 @@ export function validateAgentPipeline(
     declaredVariableNames.add(variable.name)
   })
 
+  // Names that earlier steps will publish via `exportVar`. Treated as
+  // declared from the perspective of any later step's `{{vars.X}}` /
+  // `runIf` references, so a step can produce a value its successor uses.
+  const exportedVariableNames = new Set<string>()
+
   pipeline.steps.forEach((step: AgentPipelineStep, index) => {
     if (step.enabled === false) return
     const agent = agents.find((item) => item.id === step.agentId)
@@ -153,6 +158,38 @@ export function validateAgentPipeline(
       }
     }
 
+    if (step.exportVar !== undefined) {
+      const exportName = step.exportVar.trim()
+      if (!exportName) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-export-var',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar is empty — remove the field or provide a name.`,
+        })
+      } else if (!VALID_VARIABLE_NAME.test(exportName)) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-export-var',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar "${exportName}" must match /^[A-Za-z_][A-Za-z0-9_]*$/.`,
+        })
+      } else if (declaredVariableNames.has(exportName)) {
+        // Overwriting a declared variable's default mid-run is legal but is
+        // almost always a footgun (the supplied value disappears once the step
+        // runs), so surface it as a warning.
+        issues.push({
+          severity: 'warning',
+          code: 'export-var-collision',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar "${exportName}" overwrites a declared pipeline variable; the supplied value will be replaced once this step succeeds.`,
+        })
+        exportedVariableNames.add(exportName)
+      } else {
+        exportedVariableNames.add(exportName)
+      }
+    }
+
     if (step.retryBackoffMs !== undefined) {
       if (!Number.isFinite(step.retryBackoffMs) || step.retryBackoffMs < 0) {
         issues.push({
@@ -195,7 +232,7 @@ export function validateAgentPipeline(
       ...extractVariableReferences(step.runIf),
     ])
     for (const variableName of referencedVariables) {
-      if (!declaredVariableNames.has(variableName)) {
+      if (!declaredVariableNames.has(variableName) && !exportedVariableNames.has(variableName)) {
         issues.push({
           severity: 'error',
           code: 'unknown-variable',

@@ -203,4 +203,36 @@ describe('pipelineValidation', () => {
       expect.arrayContaining(['missing-transform-path', 'invalid-output-transform']),
     )
   })
+
+  it('rejects an invalid exportVar identifier and warns when overwriting a declared variable', () => {
+    const invalidResult = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Draft', exportVar: '1bad-name' },
+          { agentId: 'agent-1', task: 'Draft', exportVar: '' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(invalidResult.errors.filter((issue) => issue.code === 'invalid-export-var').length).toBe(2)
+
+    const collisionResult = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        variables: [{ name: 'topic', defaultValue: 'launch' }],
+        steps: [
+          { agentId: 'agent-1', task: 'Pick', exportVar: 'topic' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(collisionResult.warnings.some((issue) => issue.code === 'export-var-collision')).toBe(true)
+    // No error should be raised for the legal-but-shadowing case.
+    expect(collisionResult.errors.some((issue) => issue.code === 'invalid-export-var')).toBe(false)
+  })
 })

@@ -718,4 +718,105 @@ describe('agentPipelineService', () => {
     expect(result.steps[1].status).toBe('skipped')
     expect(result.steps[1].reason).toMatch(/budget/)
   })
+
+  it('exports a step output into a named pipeline variable for downstream substitution', async () => {
+    const exportPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Pick a topic', exportVar: 'topic' },
+        { agentId: 'agent-2', task: 'Write about {{vars.topic}}' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'quantum computing' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'article' }
+      })
+
+    const execution = await executeAgentPipeline(exportPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].output).toBe('quantum computing')
+    // The second step's prompt should have the exported variable splat in.
+    expect(execution.steps[1].input).toContain('Write about quantum computing')
+  })
+
+  it('exports the transformed output (not the raw output) into the variable', async () => {
+    const exportPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        {
+          agentId: 'agent-1',
+          task: 'Return JSON',
+          outputTransform: 'json-path',
+          outputTransformPath: 'data.title',
+          exportVar: 'title',
+        },
+        { agentId: 'agent-2', task: 'Promote {{vars.title}}' },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: '{"data":{"title":"Hello"}}' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'done' }
+      })
+
+    const execution = await executeAgentPipeline(exportPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].output).toBe('Hello')
+    expect(execution.steps[0].rawOutput).toBe('{"data":{"title":"Hello"}}')
+    expect(execution.steps[1].input).toContain('Promote Hello')
+  })
+
+  it('makes an exported variable visible to downstream runIf conditions', async () => {
+    const exportPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Decide', exportVar: 'decision' },
+        { agentId: 'agent-2', task: 'Approve', runIf: "vars.decision == 'approved'" },
+        { agentId: 'agent-2', task: 'Reject', runIf: "vars.decision == 'rejected'" },
+      ],
+    }
+
+    vi.mocked(streamResponseWithTools)
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'approved' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'approved-output' }
+      })
+
+    const execution = await executeAgentPipeline(exportPipeline)
+
+    expect(execution.status).toBe('success')
+    expect(execution.steps[0].exportedVar).toBe('decision')
+    expect(execution.steps[1].status).toBe('success')
+    expect(execution.steps[2].status).toBe('skipped')
+  })
+
+  it('dryRunAgentPipeline propagates exported variables through the simulation', () => {
+    const dryPipeline: AgentPipeline = {
+      ...savedPipeline,
+      steps: [
+        { agentId: 'agent-1', task: 'Pick', exportVar: 'choice' },
+        { agentId: 'agent-2', task: 'Use {{vars.choice}}' },
+      ],
+    }
+
+    const result = dryRunAgentPipeline(dryPipeline)
+
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+    expect(result.steps[0].status).toBe('would-run')
+    expect(result.steps[0].exportedVar).toBe('choice')
+    // The second step's resolved input should reflect the simulated dry-run
+    // output rather than an empty string.
+    expect(result.steps[1].resolvedInput).toContain('[dry-run output for step 1]')
+  })
 })

@@ -148,6 +148,7 @@ function cloneStep(step: AgentPipelineStep): AgentPipelineStep {
   if (step.modelId !== undefined) cleaned.modelId = step.modelId
   if (step.outputTransform !== undefined) cleaned.outputTransform = step.outputTransform
   if (step.outputTransformPath !== undefined) cleaned.outputTransformPath = step.outputTransformPath
+  if (step.exportVar !== undefined) cleaned.exportVar = step.exportVar
   if (step.runIf !== undefined) cleaned.runIf = step.runIf
   return cleaned
 }
@@ -203,6 +204,9 @@ function sanitizeStep(value: unknown, index: number, warnings: string[]): AgentP
   }
   if (typeof candidate.outputTransformPath === 'string' && candidate.outputTransformPath.trim()) {
     sanitized.outputTransformPath = candidate.outputTransformPath
+  }
+  if (typeof candidate.exportVar === 'string' && candidate.exportVar.trim()) {
+    sanitized.exportVar = candidate.exportVar.trim()
   }
   if (typeof candidate.runIf === 'string') sanitized.runIf = candidate.runIf
   return sanitized

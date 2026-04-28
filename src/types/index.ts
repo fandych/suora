@@ -867,6 +867,18 @@ export interface AgentPipelineStep {
   /** Dotted path used by the `json-path` transform. Required when transform is `json-path`. */
   outputTransformPath?: string
   /**
+   * When set, the step's (transformed) output is also written into the
+   * pipeline variable map under this name, so downstream steps can
+   * reference it as `{{vars.NAME}}` or inside `runIf` (e.g.
+   * `vars.NAME == 'approved'`). Combined with `outputTransform: 'json-path'`
+   * this is the canonical way to lift a scalar out of a model's JSON
+   * response and reuse it by name. The value persists for the rest of the
+   * run only — it is never written back to the saved pipeline.
+   *
+   * Must be a JavaScript-identifier-compatible name (`[A-Za-z_][A-Za-z0-9_]*`).
+   */
+  exportVar?: string
+  /**
    * Optional condition expression evaluated before the step runs. When the
    * expression is falsy the step is recorded as 'skipped' with the failed
    * condition as the reason. Supports references to previous steps
@@ -943,6 +955,8 @@ export interface AgentPipelineExecutionStep {
   rawOutput?: string
   /** Resolved model id used for this step (after step-level override). */
   modelId?: string
+  /** When the step had `exportVar` set, the variable name that received the output. */
+  exportedVar?: string
   status: 'success' | 'error' | 'skipped'
   startedAt: number
   completedAt: number

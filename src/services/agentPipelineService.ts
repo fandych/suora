@@ -13,6 +13,8 @@ import { generateId } from '@/utils/helpers'
 const PIPELINE_REFERENCE_PATTERN = /\{\{\s*([^}]+?)\s*\}\}/g
 const STEP_REFERENCE_PATTERN = /^(?:steps\[(\d+)\]|step(\d+))\.(output|input|task|status|error)$/i
 const VARIABLE_REFERENCE_PATTERN = /^vars\.([A-Za-z_][A-Za-z0-9_]*)$/
+/** Same shape as VARIABLE_REFERENCE_PATTERN's capture group — used to gate `exportVar` writes. */
+const EXPORT_VAR_NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/
 
 type PipelineStepRuntimeValue = Pick<AgentPipelineExecutionStep, 'stepIndex' | 'agentId' | 'task' | 'input' | 'output' | 'status' | 'error'>
 const MAX_STEP_RETRIES = 3
@@ -995,6 +997,7 @@ export async function executeAgentPipeline(
         output: outputResult.output,
         ...(transformResult.changed ? { rawOutput: output } : {}),
         ...(model?.id ? { modelId: model.id } : {}),
+        ...(step.exportVar?.trim() ? { exportedVar: step.exportVar.trim() } : {}),
         status: 'success',
         startedAt: stepStart,
         completedAt,
@@ -1014,6 +1017,14 @@ export async function executeAgentPipeline(
         ...(stepUsage ? { usage: stepUsage } : {}),
       })
       previousOutput = outputResult.output
+      // Publish exported variable so subsequent steps can reference it via
+      // `{{vars.NAME}}` and `runIf`. Validation has already enforced that the
+      // name is identifier-shaped, but we re-check here as a defense-in-depth
+      // guard against pipelines mutated post-validation.
+      const exportName = step.exportVar?.trim()
+      if (exportName && EXPORT_VAR_NAME_PATTERN.test(exportName)) {
+        variables[exportName] = outputResult.output
+      }
 
       // Post-step budget check (catches token-budget overruns once we know usage).
       const postCap = evaluateBudget(executedStepCount)
@@ -1119,6 +1130,8 @@ export interface DryRunStepResult {
   resolvedInput: string
   /** The model id that would be used (after step-level override resolution). */
   modelId?: string
+  /** When the step has `exportVar` set, the variable name that would receive the output. */
+  exportedVar?: string
   /** Final classification: `would-run`, `skipped`, `error`, or `disabled`. */
   status: 'would-run' | 'skipped' | 'error' | 'disabled'
   /** Reason for `skipped` / `error` / `disabled`. */
@@ -1230,11 +1243,13 @@ export function dryRunAgentPipeline(
     }
 
     const resolvedInput = buildStepInput(step, simulatedSteps, variables)
+    const simulatedOutput = `[dry-run output for step ${index + 1}]`
     dryRunSteps.push({
       ...baseEntry,
       resolvedInput,
       modelId: model.id,
       status: 'would-run',
+      ...(step.exportVar?.trim() ? { exportedVar: step.exportVar.trim() } : {}),
     })
     // Simulate a successful step so downstream `runIf` and references work.
     simulatedSteps.push({
@@ -1242,9 +1257,14 @@ export function dryRunAgentPipeline(
       agentId: step.agentId,
       task: step.task,
       input: resolvedInput,
-      output: `[dry-run output for step ${index + 1}]`,
+      output: simulatedOutput,
       status: 'success',
     })
+    // Publish exported variable so downstream `{{vars.NAME}}` and `runIf` see it.
+    const exportName = step.exportVar?.trim()
+    if (exportName && EXPORT_VAR_NAME_PATTERN.test(exportName)) {
+      variables[exportName] = simulatedOutput
+    }
   }
 
   return {
