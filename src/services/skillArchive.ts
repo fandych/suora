@@ -20,8 +20,9 @@ function joinPath(root: string, relativePath: string): string {
 
 /**
  * Calculates the CRC-32 checksum required by ZIP local and central directory
- * records. The returned unsigned 32-bit value verifies the uncompressed file
- * bytes for the dependency-free skill archive writer.
+ * records. ZIP readers use this unsigned 32-bit value to verify the
+ * uncompressed file bytes. The implementation uses the standard reversed
+ * polynomial directly so skill archives can stay small and dependency-free.
  */
 function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff

@@ -578,7 +578,7 @@ async function downloadGitHubSkillDirectory(
     for (const item of items) {
       const safeName = safePathSegment(item.name, '')
       if (!safeName || safeName !== item.name) {
-        throw new Error(`Unsafe file name in ${skillName} skill directory`)
+        throw new Error(`Unsafe file name in ${skillName} skill directory: ${item.name}`)
       }
       const relativePath = `${relativeBase}${safeName}`
 

@@ -17,6 +17,8 @@ declare global {
 }
 
 declare module 'react' {
+  // React's InputHTMLAttributes generic must retain the upstream parameter name
+  // for declaration merging; it is intentionally unused in this augmentation.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface InputHTMLAttributes<T> {
     webkitdirectory?: string

@@ -836,7 +836,8 @@ export async function buildSkillPrompts(
         for (const ref of skill.referenceFiles) {
           try {
             const refPath = resolveSkillReferencePath(ref.path, skill.skillRoot)
-            const resource = skill.bundledResources?.find((entry) => normalizeResourcePath(entry.path) === normalizeResourcePath(ref.path))
+            const normalizedRefPath = normalizeResourcePath(ref.path)
+            const resource = skill.bundledResources?.find((entry) => normalizeResourcePath(entry.path) === normalizedRefPath)
             if (resource?.size && resource.size > MAX_INLINE_REFERENCE_BYTES) {
               const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'
               lines.push(`### ${label}\n\nThis reference exceeds ${MAX_INLINE_REFERENCE_BYTES} bytes. Load it selectively from ${refPath} only when the task needs it.`)

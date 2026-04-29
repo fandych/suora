@@ -226,6 +226,12 @@ function ResourceTreePanel({
     cancelRename()
   }
 
+  const commitRename = (resource: SkillBundledResource) => {
+    handleRename(resource, renameValue).catch((err: unknown) => {
+      toast.error(t('skills.renameResourceFailed', 'Failed to rename resource'), err instanceof Error ? err.message : String(err))
+    })
+  }
+
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -296,11 +302,11 @@ function ResourceTreePanel({
                           onKeyDown={(event) => {
                             if (event.key === 'Enter') {
                               event.preventDefault()
-                              void handleRename(resource, renameValue)
+                              commitRename(resource)
                             }
                             if (event.key === 'Escape') cancelRename()
                           }}
-                          onBlur={() => void handleRename(resource, renameValue)}
+                          onBlur={() => commitRename(resource)}
                           autoFocus
                           className="min-w-0 flex-1 rounded-xl border border-accent/20 bg-surface-0 px-2 py-1 font-mono text-[11px] text-text-primary outline-none"
                         />
