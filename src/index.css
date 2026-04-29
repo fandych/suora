@@ -370,6 +370,20 @@ code, pre, .font-mono, kbd, samp {
   outline: none;
 }
 
+.document-tiptap-wysiwyg .ProseMirror {
+  min-height: 100%;
+  outline: none;
+  cursor: text;
+}
+
+.document-tiptap-wysiwyg .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--t-text-muted);
+  pointer-events: none;
+  height: 0;
+}
+
 .document-prose {
   color: var(--t-text-primary);
   font-size: 0.95rem;
@@ -436,6 +450,51 @@ code, pre, .font-mono, kbd, samp {
   color: var(--t-accent);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+.document-prose img {
+  max-width: 100%;
+  border-radius: 0.75rem;
+  margin: 0.5rem 0;
+}
+
+/* ── Math rendering ─────────────────────────────────────────────────────── */
+
+.document-math-block {
+  display: flex;
+  justify-content: center;
+  overflow-x: auto;
+  padding: 1rem 1.25rem;
+  margin: 0.75rem 0;
+  border: 1px solid var(--t-border-subtle);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--t-surface-0) 80%, transparent);
+  cursor: default;
+  user-select: none;
+}
+
+.document-math-inline {
+  display: inline;
+  cursor: default;
+  user-select: none;
+}
+
+/* ── Mermaid rendering ──────────────────────────────────────────────────── */
+
+.document-mermaid-block {
+  overflow-x: auto;
+  padding: 1rem;
+  margin: 0.75rem 0;
+  border: 1px solid var(--t-border-subtle);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--t-surface-0) 80%, transparent);
+  cursor: default;
+  text-align: center;
+}
+
+.document-mermaid-block svg {
+  max-width: 100%;
+  height: auto;
 }
 
 /* ── Compact desktop workbench density ── */

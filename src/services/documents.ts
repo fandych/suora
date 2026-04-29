@@ -60,6 +60,116 @@ export function findReferencedDocuments(markdown: string, documents: DocumentIte
   return documents.filter((doc) => refs.includes(doc.title.toLowerCase()) || refs.includes(doc.id.toLowerCase()))
 }
 
+// ── Tiptap JSON → Markdown serializer ──────────────────────────────────────
+
+type TiptapMark = { type: string; attrs?: Record<string, string> }
+type TiptapNode = { type: string; text?: string; attrs?: Record<string, unknown>; marks?: TiptapMark[]; content?: TiptapNode[] }
+
+// Mark application order: code first (prevents interference), then formatting, then link last (outermost)
+const MARK_ORDER = ['code', 'bold', 'italic', 'strike', 'link'] as const
+
+function serializeMarks(text: string, marks: TiptapMark[]): string {
+  const markMap = new Map(marks.map((m) => [m.type, m]))
+  let out = text
+  for (const type of MARK_ORDER) {
+    const mark = markMap.get(type)
+    if (!mark) continue
+    if (type === 'code') out = `\`${out}\``
+    else if (type === 'bold') out = `**${out}**`
+    else if (type === 'italic') out = `*${out}*`
+    else if (type === 'strike') out = `~~${out}~~`
+    else if (type === 'link') out = `[${out}](${mark.attrs?.href ?? ''})`
+  }
+  return out
+}
+
+function serializeNode(node: TiptapNode, listPrefix = ''): string {
+  if (node.type === 'text') {
+    const raw = node.text ?? ''
+    return node.marks?.length ? serializeMarks(raw, node.marks) : raw
+  }
+
+  const children = node.content ?? []
+
+  switch (node.type) {
+    case 'doc':
+      return children.map((child) => serializeNode(child)).join('').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n'
+
+    case 'paragraph': {
+      const text = children.map((child) => serializeNode(child)).join('')
+      return listPrefix ? `${listPrefix}${text}\n` : (text ? `${text}\n\n` : '\n')
+    }
+
+    case 'heading': {
+      const level = (node.attrs?.level as number) ?? 1
+      const text = children.map((child) => serializeNode(child)).join('')
+      return `${'#'.repeat(level)} ${text}\n\n`
+    }
+
+    case 'bulletList':
+      return children.map((child) => serializeNode(child, '- ')).join('') + '\n'
+
+    case 'orderedList':
+      return children.map((child, i) => serializeNode(child, `${i + 1}. `)).join('') + '\n'
+
+    case 'listItem': {
+      const first = children[0]
+      const rest = children.slice(1)
+      const firstText = first ? serializeNode(first, listPrefix) : ''
+      const restText = rest.map((child) => serializeNode(child)).join('')
+      return firstText + restText
+    }
+
+    case 'blockquote': {
+      const text = children.map((child) => serializeNode(child)).join('')
+      return text.split('\n').filter(Boolean).map((line) => `> ${line}`).join('\n') + '\n\n'
+    }
+
+    case 'codeBlock': {
+      const lang = (node.attrs?.language as string) ?? ''
+      const code = children.filter((child) => child.type === 'text').map((child) => child.text ?? '').join('')
+      return `\`\`\`${lang}\n${code}\n\`\`\`\n\n`
+    }
+
+    case 'horizontalRule':
+      return '---\n\n'
+
+    case 'hardBreak':
+      return '\n'
+
+    case 'image': {
+      const src = (node.attrs?.src as string) ?? ''
+      const alt = (node.attrs?.alt as string) ?? ''
+      const title = (node.attrs?.title as string) ?? ''
+      return title ? `![${alt}](${src} "${title}")` : `![${alt}](${src})`
+    }
+
+    case 'mathBlock': {
+      const content = (node.attrs?.content as string) ?? ''
+      return `$$\n${content}\n$$\n\n`
+    }
+
+    case 'inlineMath': {
+      const content = (node.attrs?.content as string) ?? ''
+      return `$${content}$`
+    }
+
+    case 'mermaidBlock': {
+      const code = (node.attrs?.code as string) ?? ''
+      return `\`\`\`mermaid\n${code}\n\`\`\`\n\n`
+    }
+
+    default:
+      return children.map((child) => serializeNode(child)).join('')
+  }
+}
+
+export function tiptapJsonToMarkdown(json: TiptapNode): string {
+  return serializeNode(json)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 export function searchDocuments(nodes: DocumentNode[], groupId: string | null, query: string): DocumentSearchResult[] {
   const q = query.trim().toLowerCase()
   const docs = nodes.filter((node): node is DocumentItem => node.type === 'document' && (!groupId || node.groupId === groupId))

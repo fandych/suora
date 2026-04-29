@@ -1,8 +1,9 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 import { useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
@@ -10,8 +11,9 @@ import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
+import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions'
 import { confirm } from '@/services/confirmDialog'
-import { createDocument, createDocumentGroup, createDocumentId, findReferencedDocuments, searchDocuments } from '@/services/documents'
+import { createDocument, createDocumentGroup, createDocumentId, findReferencedDocuments, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
 import { buildDocumentGraph, buildDocumentPath } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentItem, DocumentNode } from '@/types'
 
@@ -24,13 +26,34 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#039;')
 }
 
+function escapeAttr(value: string) {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
 function inlineMarkdown(value: string) {
-  return escapeHtml(value)
+  // Extract inline math tokens before HTML escaping to preserve raw LaTeX.
+  // The pattern intentionally excludes newlines ($\n) because inline math
+  // is single-line by convention; block math uses $$...$$.
+  const mathTokens: string[] = []
+  const tokenized = value.replace(/\$([^$\n]+)\$/g, (_, latex: string) => {
+    mathTokens.push(latex)
+    return `\x01M${mathTokens.length - 1}\x01`
+  })
+
+  let result = escapeHtml(tokenized)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${src}" alt="${alt}">`)
     .replace(/\[\[([^\]\n]+)\]\]/g, '<a href="#doc:$1">$1</a>')
     .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+
+  result = result.replace(/\x01M(\d+)\x01/g, (_, i: string) => {
+    const latex = mathTokens[parseInt(i)]
+    return `<span data-math-inline="${escapeAttr(latex)}"></span>`
+  })
+
+  return result
 }
 
 function markdownToTiptapHtml(markdown: string) {
@@ -38,7 +61,10 @@ function markdownToTiptapHtml(markdown: string) {
   const html: string[] = []
   let list: 'ul' | 'ol' | null = null
   let inCode = false
+  let codeLang = ''
   let code: string[] = []
+  let inMath = false
+  let math: string[] = []
 
   const closeList = () => {
     if (list) {
@@ -48,13 +74,20 @@ function markdownToTiptapHtml(markdown: string) {
   }
 
   lines.forEach((line) => {
+    // ── Code / mermaid fence ──────────────────────────────────────────────
     if (line.trim().startsWith('```')) {
       if (inCode) {
-        html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+        if (codeLang === 'mermaid') {
+          html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`)
+        } else {
+          html.push(`<pre><code class="language-${escapeHtml(codeLang)}">${escapeHtml(code.join('\n'))}</code></pre>`)
+        }
         code = []
+        codeLang = ''
         inCode = false
       } else {
         closeList()
+        codeLang = line.trim().slice(3).trim()
         inCode = true
       }
       return
@@ -65,6 +98,25 @@ function markdownToTiptapHtml(markdown: string) {
       return
     }
 
+    // ── Block math ($$...$$) ───────────────────────────────────────────────
+    if (line.trim() === '$$') {
+      if (inMath) {
+        html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`)
+        math = []
+        inMath = false
+      } else {
+        closeList()
+        inMath = true
+      }
+      return
+    }
+
+    if (inMath) {
+      math.push(line)
+      return
+    }
+
+    // ── Normal inline content ──────────────────────────────────────────────
     const heading = /^(#{1,3})\s+(.*)$/.exec(line)
     if (heading) {
       closeList()
@@ -105,33 +157,59 @@ function markdownToTiptapHtml(markdown: string) {
   })
 
   closeList()
-  if (inCode) html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+  if (inCode) {
+    if (codeLang === 'mermaid') {
+      html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`)
+    } else {
+      html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+    }
+  }
+  if (inMath) html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`)
   return html.join('\n') || '<p></p>'
 }
 
-function DocumentPreview({ markdown }: { markdown: string }) {
-  const html = useMemo(() => markdownToTiptapHtml(markdown), [markdown])
+function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; onUpdate: (markdown: string) => void }) {
+  // Prevents the onUpdate callback from firing during programmatic content resets
+  // that occur when switching between documents, avoiding a feedback loop where
+  // the reset triggers onUpdate which would overwrite the incoming document's markdown.
+  const isSyncingFromPropsRef = useRef(false)
   const editor = useEditor({
     extensions: [
       StarterKit,
-      Placeholder.configure({ placeholder: 'Markdown preview renders here…' }),
+      Placeholder.configure({ placeholder: 'Start writing…' }),
       Link.configure({ openOnClick: false }),
+      Image.configure({ inline: true }),
+      MathBlock,
+      InlineMath,
+      MermaidBlock,
     ],
-    content: html,
-    editable: false,
+    content: markdownToTiptapHtml(document.markdown),
+    editable: true,
     editorProps: {
       attributes: {
         class: 'document-prose min-h-full focus:outline-none',
       },
     },
+    onUpdate: ({ editor: ed }: { editor: { getJSON: () => unknown } }) => {
+      if (isSyncingFromPropsRef.current) return
+      const json = ed.getJSON()
+      const markdown = tiptapJsonToMarkdown(json as Parameters<typeof tiptapJsonToMarkdown>[0])
+      onUpdate(markdown)
+    },
   })
 
   useEffect(() => {
-    if (!editor) return
-    editor.commands.setContent(html, { emitUpdate: false })
-  }, [editor, html])
+    if (!editor || editor.isDestroyed) return
+    // Only sync editor content when the document identity (id) changes, not on every
+    // markdown keystroke — this intentionally avoids overwriting in-flight user edits
+    // that haven't been flushed to the store yet.
+    isSyncingFromPropsRef.current = true
+    editor.commands.setContent(markdownToTiptapHtml(document.markdown), { emitUpdate: false })
+    isSyncingFromPropsRef.current = false
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [document.id])
 
-  return <EditorContent editor={editor} className="document-tiptap-preview h-full" />
+  return <EditorContent editor={editor} className="document-tiptap-wysiwyg h-full" />
 }
 
 function TreeNode({
@@ -217,7 +295,7 @@ export function DocumentsLayout() {
   const deferredQuery = useDeferredValue(query)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [mode, setMode] = useState<'markdown' | 'preview' | 'graph'>('markdown')
+  const [mode, setMode] = useState<'editor' | 'source' | 'graph'>('editor')
   const {
     documentGroups,
     documentNodes,
@@ -276,7 +354,7 @@ export function DocumentsLayout() {
     const doc = createDocument(activeGroup.id, selectedFolderId, t('documents.untitled', 'Untitled Document'))
     addDocument(doc)
     if (selectedFolderId) setExpanded((prev) => new Set(prev).add(selectedFolderId))
-    setMode('markdown')
+    setMode('editor')
   }
 
   const deleteGroup = async () => {
@@ -316,8 +394,9 @@ export function DocumentsLayout() {
           </button>
         }
       >
-        <div className="space-y-4 px-3 py-3">
-          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3">
+        <div className="flex h-full min-h-0 flex-col gap-0 px-3 py-3">
+          {/* Search */}
+          <div className="mb-3 rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3">
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55" />
               <input
@@ -333,65 +412,88 @@ export function DocumentsLayout() {
             </div>
           </div>
 
-          <section>
+          {/* Groups */}
+          <section className="mb-3">
             <div className="mb-2 flex items-center justify-between">
               <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.groups', 'Groups')}</h3>
               {activeGroup && (
                 <button type="button" onClick={deleteGroup} className="text-[10px] font-semibold text-danger/80 hover:text-danger">{t('common.delete', 'Delete')}</button>
               )}
             </div>
-            {activeGroup && (
-              <input
-                value={activeGroup.name}
-                onChange={(event) => updateDocumentGroup(activeGroup.id, { name: event.target.value })}
-                className="mb-2 w-full rounded-2xl border border-border-subtle/55 bg-surface-0/45 px-3 py-2 text-[12px] font-semibold text-text-primary outline-none focus:border-accent/30 focus:ring-2 focus:ring-accent/10"
-                aria-label={t('documents.groupName', 'Group name')}
-              />
+            {documentGroups.length === 0 ? (
+              <button type="button" onClick={createGroup} className="w-full rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-8 text-center text-[12px] text-text-muted hover:border-accent/30 hover:text-accent">
+                {t('documents.emptyGroups', 'Create your first document group')}
+              </button>
+            ) : (
+              <div className="space-y-1.5">
+                {documentGroups.map((group) => {
+                  const isActive = activeGroup?.id === group.id
+                  return (
+                    <div
+                      key={group.id}
+                      className={`flex w-full items-center gap-2 rounded-2xl border px-2.5 py-2 transition-all ${isActive ? 'border-accent/20 bg-accent/10' : 'border-transparent bg-surface-1/20 hover:border-border-subtle/60 hover:bg-surface-3/55'}`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => setSelectedDocumentGroup(group.id)}
+                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                      >
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+                        <span className={`min-w-0 flex-1 truncate text-[12px] font-semibold ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>{group.name}</span>
+                        <span className="shrink-0 text-[10px] text-text-muted">{documentNodes.filter((node) => node.groupId === group.id && node.type === 'document').length}</span>
+                      </button>
+                      <button
+                        type="button"
+                        title={t('documents.groupGraph', 'Knowledge Graph')}
+                        onClick={() => { setSelectedDocumentGroup(group.id); setSelectedDocument(null) }}
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl transition-all ${isActive ? 'text-accent hover:bg-accent/15' : 'text-text-muted/60 hover:bg-surface-3/70 hover:text-text-primary'}`}
+                      >
+                        <IconifyIcon name="ui-chart" size={12} color="currentColor" />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
             )}
-            <div className="space-y-2">
-              {documentGroups.length === 0 ? (
-                <button type="button" onClick={createGroup} className="w-full rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-8 text-center text-[12px] text-text-muted hover:border-accent/30 hover:text-accent">
-                  {t('documents.emptyGroups', 'Create your first document group')}
-                </button>
-              ) : documentGroups.map((group) => (
-                <button
-                  type="button"
-                  key={group.id}
-                  onClick={() => setSelectedDocumentGroup(group.id)}
-                  className={`flex w-full items-center gap-3 rounded-3xl border px-3.5 py-3 text-left transition-all ${activeGroup?.id === group.id ? 'border-accent/20 bg-accent/10 text-text-primary' : 'border-transparent bg-surface-1/20 text-text-secondary hover:border-border-subtle/60 hover:bg-surface-3/55'}`}
-                >
-                  <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
-                  <span className="min-w-0 flex-1 truncate text-[13px] font-semibold">{group.name}</span>
-                  <span className="text-[10px] text-text-muted">{documentNodes.filter((node) => node.groupId === group.id && node.type === 'document').length}</span>
-                </button>
-              ))}
-            </div>
           </section>
 
+          {/* File Tree */}
           {activeGroup && (
-            <section className="space-y-3">
-              <div className="flex items-center gap-2">
-                <button type="button" onClick={createDoc} className="flex-1 rounded-2xl bg-accent/15 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/25">{t('documents.newDoc', '+ Document')}</button>
-                <button type="button" onClick={createFolder} className="flex-1 rounded-2xl border border-border-subtle/65 bg-surface-2/60 px-3 py-2 text-[11px] font-semibold text-text-secondary hover:text-text-primary">{t('documents.newFolderButton', '+ Folder')}</button>
+            <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
+              <div className="flex items-center gap-1.5">
+                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: activeGroup.color }} />
+                <input
+                  value={activeGroup.name}
+                  onChange={(event) => updateDocumentGroup(activeGroup.id, { name: event.target.value })}
+                  className="min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-1.5 py-1 text-[11px] font-semibold text-text-muted outline-none hover:border-border-subtle/55 focus:border-accent/30 focus:bg-surface-0/45 focus:text-text-primary"
+                  aria-label={t('documents.groupName', 'Group name')}
+                />
+                <button type="button" onClick={createDoc} title={t('documents.newDoc', 'New Document')} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent hover:bg-accent/25">
+                  <IconifyIcon name="ui-plus" size={13} color="currentColor" />
+                </button>
+                <button type="button" onClick={createFolder} title={t('documents.newFolderButton', 'New Folder')} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/60 text-text-secondary hover:text-text-primary">
+                  <IconifyIcon name="skill-filesystem" size={13} color="currentColor" />
+                </button>
               </div>
 
-              {query.trim() ? (
-                <div className="space-y-2">
-                  {searchResults.map(({ node, excerpt }) => (
-                    <button key={node.id} type="button" onClick={() => setSelectedDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
-                      <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
-                      <div className="mt-1 truncate text-[10px] text-text-muted">{buildDocumentPath(node, documentNodes)}</div>
-                      <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {rootNodes.length === 0 ? (
-                    <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center text-[12px] leading-relaxed text-text-muted">
-                      {t('documents.emptyTree', 'Create nested folders and markdown documents in this group.')}
-                    </div>
-                  ) : rootNodes.map((node) => (
+              <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+                {query.trim() ? (
+                  <div className="space-y-2">
+                    {searchResults.map(({ node, excerpt }) => (
+                      <button key={node.id} type="button" onClick={() => setSelectedDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
+                        <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
+                        <div className="mt-1 truncate text-[10px] text-text-muted">{buildDocumentPath(node, documentNodes)}</div>
+                        <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
+                      </button>
+                    ))}
+                  </div>
+                ) : rootNodes.length === 0 ? (
+                  <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center text-[12px] leading-relaxed text-text-muted">
+                    {t('documents.emptyTree', 'Create nested folders and markdown documents in this group.')}
+                  </div>
+                ) : (
+                  <div className="space-y-0.5">
+                    {rootNodes.map((node) => (
                     <TreeNode
                       key={node.id}
                       node={node}
@@ -410,8 +512,9 @@ export function DocumentsLayout() {
                       onSelectFolder={setSelectedFolderId}
                     />
                   ))}
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </section>
           )}
         </div>
@@ -427,20 +530,20 @@ export function DocumentsLayout() {
                   onChange={(event) => updateDocumentNode(activeDocument.id, { title: event.target.value })}
                   className="w-full bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary outline-none placeholder:text-text-muted"
                 />
-                <p className="mt-1 truncate text-[11px] text-text-muted" aria-label={`${activeGroup?.name ?? ''} folder, ${buildDocumentPath(activeDocument, documentNodes)}`}>
+                <p className="mt-1 truncate text-[11px] text-text-muted" aria-label={`${activeGroup?.name ?? ''} / ${buildDocumentPath(activeDocument, documentNodes)}`}>
                   {activeGroup?.name} / {buildDocumentPath(activeDocument, documentNodes)}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex rounded-2xl border border-border-subtle/55 bg-surface-0/45 p-1">
-                  {(['markdown', 'preview', 'graph'] as const).map((value) => (
+                  {(['editor', 'source', 'graph'] as const).map((value) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => setMode(value)}
                       className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
                     >
-                      {value === 'markdown' ? t('documents.markdown', 'Markdown') : value === 'preview' ? t('documents.tiptapPreview', 'Tiptap Preview') : t('documents.graph', 'Graph')}
+                      {value === 'editor' ? t('documents.editor', 'Editor') : value === 'source' ? t('documents.source', 'Source') : t('documents.graph', 'Graph')}
                     </button>
                   ))}
                 </div>
@@ -451,7 +554,14 @@ export function DocumentsLayout() {
             </header>
             <div className={`grid min-h-0 flex-1 overflow-hidden ${mode === 'graph' ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_280px]'}`}>
               <div className="min-h-0 overflow-hidden p-5">
-                {mode === 'markdown' ? (
+                {mode === 'editor' ? (
+                  <div className="h-full overflow-y-auto rounded-[2rem] border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <DocumentTiptapEditor
+                      document={activeDocument}
+                      onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}
+                    />
+                  </div>
+                ) : mode === 'source' ? (
                   <textarea
                     value={activeDocument.markdown}
                     onChange={(event) => updateDocumentNode(activeDocument.id, { markdown: event.target.value })}
@@ -459,42 +569,59 @@ export function DocumentsLayout() {
                     className="h-full w-full resize-none rounded-[2rem] border border-border-subtle/70 bg-surface-0/62 p-5 font-[var(--font-code)] text-[13px] leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none placeholder:text-text-muted focus:border-accent/30 focus:ring-4 focus:ring-accent/10"
                     placeholder={t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.')}
                   />
-                ) : mode === 'preview' ? (
-                  <div className="h-full overflow-y-auto rounded-[2rem] border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <DocumentPreview markdown={activeDocument.markdown} />
-                  </div>
                 ) : (
                   <DocumentGraphView graph={documentGraph} selectedDocumentId={activeDocument.id} onSelectDocument={setSelectedDocument} />
                 )}
               </div>
-              {mode !== 'graph' && <aside className="min-h-0 overflow-y-auto border-l border-border-subtle/80 bg-surface-1/64 p-4">
-                <div className="rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.references', 'Markdown References')}</h3>
-                  <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.referencesHint', 'Use [[Document Title]] or [Title](#doc:id) to connect notes in this group.')}</p>
-                  <div className="mt-4 space-y-2">
-                    {referencedDocuments.length === 0 ? (
-                      <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noReferences', 'No resolved references yet.')}</p>
-                    ) : referencedDocuments.map((doc) => (
-                      <button key={doc.id} type="button" onClick={() => setSelectedDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
-                        <span className="block truncate text-[12px] font-semibold text-text-primary">{doc.title}</span>
-                        <span className="mt-1 block truncate text-[10px] text-text-muted">{buildDocumentPath(doc, documentNodes)}</span>
-                      </button>
-                    ))}
+              {mode !== 'graph' && (
+                <aside className="min-h-0 overflow-y-auto border-l border-border-subtle/80 bg-surface-1/64 p-4">
+                  <div className="rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.references', 'References')}</h3>
+                    <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.referencesHint', 'Use [[Document Title]] or [Title](#doc:id) to connect notes in this group.')}</p>
+                    <div className="mt-4 space-y-2">
+                      {referencedDocuments.length === 0 ? (
+                        <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noReferences', 'No resolved references yet.')}</p>
+                      ) : referencedDocuments.map((doc) => (
+                        <button key={doc.id} type="button" onClick={() => setSelectedDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
+                          <span className="block truncate text-[12px] font-semibold text-text-primary">{doc.title}</span>
+                          <span className="mt-1 block truncate text-[10px] text-text-muted">{buildDocumentPath(doc, documentNodes)}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
-                <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.outline', 'Outline')}</h3>
-                  <div className="mt-3 space-y-1">
-                    {activeDocument.markdown.split('\n').filter((line) => /^#{1,3}\s+/.test(line)).slice(0, 12).map((line, index) => (
-                      <div key={`${line}-${index}`} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 text-[11px] text-text-secondary">
-                        {line.replace(/^#{1,3}\s+/, '')}
-                      </div>
-                    ))}
+                  <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.outline', 'Outline')}</h3>
+                    <div className="mt-3 space-y-1">
+                      {activeDocument.markdown.split('\n').filter((line) => /^#{1,3}\s+/.test(line)).slice(0, 12).map((line, index) => (
+                        <div key={`${line}-${index}`} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 text-[11px] text-text-secondary">
+                          {line.replace(/^#{1,3}\s+/, '')}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </aside>}
+                </aside>
+              )}
             </div>
           </>
+        ) : activeGroup ? (
+          /* Group-level knowledge graph — shown when a group is selected but no document is open */
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <header className="flex min-h-0 shrink-0 items-center gap-3 border-b border-border-subtle/80 bg-surface-1/72 px-5 py-3">
+              <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: activeGroup.color }} />
+              <h2 className="text-base font-semibold text-text-primary">{activeGroup.name}</h2>
+              <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2 py-0.5 text-[10px] text-text-muted">
+                {t('documents.knowledgeGraph', 'Knowledge Graph')}
+              </span>
+              <div className="ml-auto flex gap-2">
+                <button type="button" onClick={createDoc} className="rounded-2xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/25">
+                  {t('documents.newDoc', '+ Document')}
+                </button>
+              </div>
+            </header>
+            <div className="min-h-0 flex-1 overflow-hidden p-5">
+              <DocumentGraphView graph={documentGraph} selectedDocumentId={null} onSelectDocument={setSelectedDocument} />
+            </div>
+          </div>
         ) : (
           <div className="flex flex-1 items-center justify-center p-8">
             <div className="max-w-lg rounded-[2rem] border border-border-subtle/70 bg-surface-1/70 p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
@@ -504,8 +631,8 @@ export function DocumentsLayout() {
               <h2 className="text-xl font-semibold text-text-primary">{t('documents.emptyTitle', 'Build a document knowledge space')}</h2>
               <p className="mt-3 text-[13px] leading-relaxed text-text-secondary">{t('documents.emptyBody', 'Create document groups, nest folders freely, write Markdown, resolve references, and find notes progressively as you type.')}</p>
               <div className="mt-6 flex justify-center gap-3">
-                <button type="button" onClick={documentGroups.length ? createDoc : createGroup} className="rounded-2xl bg-accent px-4 py-2 text-[12px] font-semibold text-white hover:bg-accent-hover">
-                  {documentGroups.length ? t('documents.newDoc', '+ Document') : t('documents.addGroup', '+ Group')}
+                <button type="button" onClick={createGroup} className="rounded-2xl bg-accent px-4 py-2 text-[12px] font-semibold text-white hover:bg-accent-hover">
+                  {t('documents.addGroup', '+ Group')}
                 </button>
               </div>
             </div>
