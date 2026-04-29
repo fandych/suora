@@ -129,7 +129,7 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
                     type="number"
                     aria-label="Max tokens"
                     value={maxTokens ?? ''}
-                    onChange={(e) => { setMaxTokens(e.target.value ? parseInt(e.target.value) : undefined); setSaved(false) }}
+                    onChange={(e) => { setMaxTokens(e.target.value ? parseInt(e.target.value, 10) : undefined); setSaved(false) }}
                     placeholder="Default (provider limit)"
                     min={256}
                     max={128000}

@@ -268,7 +268,7 @@ export function DataSettings() {
               min={0}
               max={3650}
               value={historyRetentionDays}
-              onChange={(e) => setHistoryRetentionDays(Math.max(0, parseInt(e.target.value) || 0))}
+              onChange={(e) => setHistoryRetentionDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
               aria-label="History retention days"
               className={`${settingsInputClass} w-32`}
             />

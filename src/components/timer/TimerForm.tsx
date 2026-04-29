@@ -60,7 +60,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
       value={form.schedule ? toLocalDatetimeValue(form.schedule) : ''}
       onChange={(e) => {
         const d = new Date(e.target.value)
-        if (!isNaN(d.getTime())) {
+        if (!Number.isNaN(d.getTime())) {
           setForm({ ...form, schedule: d.toISOString() })
         } else {
           setForm({ ...form, schedule: '' })
@@ -108,7 +108,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
   const scheduleSummary = form.type === 'once'
     ? (form.schedule ? new Date(form.schedule).toLocaleString() : t('timer.notScheduled', 'Not scheduled'))
     : form.type === 'interval'
-      ? t('timer.everyMinutes', 'Every {minutes} minutes').replace('{minutes}', form.schedule || '0')
+      ? t('timer.everyMinutes', 'Every {minutes} minutes').replace('{minutes}', () => form.schedule || '0')
       : (form.schedule || t('timer.cronPending', 'Cron pending'))
 
   const actionSummary = form.action === 'pipeline'

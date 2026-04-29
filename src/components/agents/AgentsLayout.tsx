@@ -496,7 +496,7 @@ export function AgentsLayout() {
       temperature: tpl.temperature,
       maxTokens: 8192,
       enabled: true,
-      greeting: greetingTemplate.replace('{name}', tpl.name).replace('{description}', tpl.description),
+      greeting: greetingTemplate.replace('{name}', () => tpl.name).replace('{description}', () => tpl.description),
       responseStyle: 'balanced',
       allowedTools: [],
       memories: [],

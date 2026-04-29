@@ -35,7 +35,7 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
       electronInvoke('timer:history', timer.id)
         .then((res) => {
           const r = res as { history?: TimerExecution[] }
-          if (r.history) setHistory(r.history.reverse())
+          if (r.history) setHistory([...r.history].reverse())
         })
         .catch(() => { /* ignore */ })
     }

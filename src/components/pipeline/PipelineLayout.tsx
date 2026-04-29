@@ -185,6 +185,8 @@ export function PipelineLayout() {
     if (!workspacePath) return
     loadPipelinesFromDisk(workspacePath).then((savedPipelines) => {
       setAgentPipelines(savedPipelines)
+    }).catch(() => {
+      // Ignore pipeline loading errors
     })
   }, [workspacePath, setAgentPipelines])
 
@@ -246,6 +248,8 @@ export function PipelineLayout() {
 
         return getValidExecutionId(current, executions)
       })
+    }).catch(() => {
+      // Ignore execution history loading errors
     })
   }, [workspacePath, selectedAgentPipelineId, requestedExecutionId, requestedTimerId, requestedFiredAt])
 
@@ -429,7 +433,7 @@ export function PipelineLayout() {
         title: t('agents.pipelineImportTitle', 'Pipeline imported'),
         message: warnings.length > 0
           ? warnings.join(' ')
-          : t('agents.pipelineImportSuccess', `${imported.name} loaded into the editor. Review and save to keep it.`).replace('{name}', imported.name),
+          : t('agents.pipelineImportSuccess', `${imported.name} loaded into the editor. Review and save to keep it.`).replace('{name}', () => imported.name),
         timestamp: Date.now(),
         read: false,
       })
@@ -471,8 +475,9 @@ export function PipelineLayout() {
   const duplicateStep = (idx: number) => {
     const step = pipeline[idx]
     if (!step) return
-    const duplicateName = step.name?.trim()
-      ? t('agents.pipelineStepCopyName', '{name} copy').replace('{name}', step.name.trim())
+    const trimmedName = step.name?.trim()
+    const duplicateName = trimmedName
+      ? t('agents.pipelineStepCopyName', '{name} copy').replace('{name}', () => trimmedName)
       : undefined
     replacePipelineDraft([
       ...pipeline.slice(0, idx + 1),
@@ -577,7 +582,7 @@ export function PipelineLayout() {
       id: generateId('notif'),
       type: 'success',
       title: t('agents.pipelineSavedTitle', 'Pipeline saved'),
-      message: t('agents.pipelineSavedBody', `${nextPipeline.name} is now available for timers and history tracking.`).replace('{name}', nextPipeline.name),
+      message: t('agents.pipelineSavedBody', `${nextPipeline.name} is now available for timers and history tracking.`).replace('{name}', () => nextPipeline.name),
       timestamp: Date.now(),
       read: false,
     })
@@ -587,7 +592,7 @@ export function PipelineLayout() {
     if (!workspacePath || !selectedSavedPipeline) return
     const confirmed = await confirm({
       title: t('agents.pipelineDeleteTitle', 'Delete pipeline?'),
-      body: t('agents.pipelineDeleteBody', `"${selectedSavedPipeline.name}" will be permanently removed from disk.`).replace('{name}', selectedSavedPipeline.name),
+      body: t('agents.pipelineDeleteBody', `"${selectedSavedPipeline.name}" will be permanently removed from disk.`).replace('{name}', () => selectedSavedPipeline.name),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })

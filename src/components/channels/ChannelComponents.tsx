@@ -13,7 +13,7 @@ export function ChannelCopyButton({ text, className = '' }: { text: string; clas
     navigator.clipboard.writeText(text).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    })
+    }).catch(() => { /* clipboard access denied */ })
   }
   return (
     <button onClick={copy} title="Copy" className={`text-[11px] px-1.5 py-0.5 rounded-md transition-colors inline-flex items-center gap-1 ${copied ? 'text-success' : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'} ${className}`}>

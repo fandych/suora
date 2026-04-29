@@ -67,7 +67,13 @@ export type StreamMessageHandler = (channel: ChannelConfig, message: ChannelMess
 
 function httpRequest(url: string, options: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
-    const parsedUrl = new URL(url)
+    let parsedUrl: URL
+    try {
+      parsedUrl = new URL(url)
+    } catch {
+      reject(new Error(`Invalid URL: ${url}`))
+      return
+    }
     const transport = parsedUrl.protocol === 'https:' ? https : http
     const req = transport.request(parsedUrl, {
       method: options.method || 'GET',

@@ -63,6 +63,13 @@ export function SessionList({ width }: { width?: number }) {
   const [editTitle, setEditTitle] = useState('')
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; sessionId: string } | null>(null)
   const editInputRef = useRef<HTMLInputElement>(null)
+  const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (focusTimerRef.current) clearTimeout(focusTimerRef.current)
+    }
+  }, [])
 
   const handleNewSession = () => {
     if (!selectedModel) {
@@ -107,7 +114,8 @@ export function SessionList({ width }: { width?: number }) {
     setEditingId(sessionId)
     setEditTitle(session.title)
     setContextMenu(null)
-    setTimeout(() => editInputRef.current?.focus(), 50)
+    if (focusTimerRef.current) clearTimeout(focusTimerRef.current)
+    focusTimerRef.current = setTimeout(() => editInputRef.current?.focus(), 50)
   }
 
   const commitRename = () => {

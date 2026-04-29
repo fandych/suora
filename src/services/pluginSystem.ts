@@ -576,8 +576,8 @@ export function checkPluginUpdate(current: PluginInfo, latestVersion: string): b
 }
 
 function compareVersions(a: string, b: string): number {
-  const pa = a.split('.').map(Number)
-  const pb = b.split('.').map(Number)
+  const pa = a.split('.').map((s) => { const n = Number(s); return Number.isNaN(n) ? 0 : n })
+  const pb = b.split('.').map((s) => { const n = Number(s); return Number.isNaN(n) ? 0 : n })
   for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
     const na = pa[i] || 0
     const nb = pb[i] || 0

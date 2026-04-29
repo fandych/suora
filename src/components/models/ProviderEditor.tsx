@@ -377,7 +377,7 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
                             type="checkbox"
                             checked={model.enabled}
                             onChange={() => toggleModel(index)}
-                            aria-label={t('models.enableModel', `Enable ${model.name}`).replace('{name}', model.name)}
+                            aria-label={t('models.enableModel', `Enable ${model.name}`).replace('{name}', () => model.name)}
                             className="mt-0.5 h-4 w-4 rounded border-border bg-surface-2 text-accent focus:ring-accent/30"
                           />
                           <div className="min-w-0 flex-1">
@@ -468,7 +468,7 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
                     {saving ? t('models.saving', 'Saving...') : t('models.saveConfiguration', 'Save Configuration')}
                   </button>
                   {saved && <span className="text-sm font-medium text-green-500 animate-fade-in">{workspacePath ? t('models.savedToWorkspace', 'Saved to workspace') : t('models.saved', 'Saved')}</span>}
-                  {validationResult && !validationResult.valid && <span className="text-sm font-medium text-yellow-500 animate-fade-in"><IconifyIcon name="ui-warning" size={14} color="currentColor" /> {t('models.savedWithValidationWarning', 'Saved, but API key validation failed: {error}').replace('{error}', validationResult.error?.slice(0, 60) ?? '')}</span>}
+                  {validationResult && !validationResult.valid && <span className="text-sm font-medium text-yellow-500 animate-fade-in"><IconifyIcon name="ui-warning" size={14} color="currentColor" /> {t('models.savedWithValidationWarning', 'Saved, but API key validation failed: {error}').replace('{error}', () => validationResult.error?.slice(0, 60) ?? '')}</span>}
                   {validationResult?.valid && !saved && <span className="text-sm font-medium text-green-500 animate-fade-in"><IconifyIcon name="ui-check" size={14} color="currentColor" /> {t('models.apiKeyValid', 'API key valid')}</span>}
                 </div>
               </div>

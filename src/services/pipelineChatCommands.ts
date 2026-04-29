@@ -79,14 +79,15 @@ function findMentionedPipeline(
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return value.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function removeMentionedPipelineNames(input: string, pipelines: PipelineChatReference[]): string {
   return pipelines.reduce((current, pipeline) => {
     const name = pipeline.name.trim()
     if (!name) return current
-    return current.replace(new RegExp(escapeRegExp(name), 'gi'), ' ')
+    // Use function replacer to avoid $-substitution in replacement string
+    return current.replace(new RegExp(escapeRegExp(name), 'gi'), () => ' ')
   }, input)
 }
 

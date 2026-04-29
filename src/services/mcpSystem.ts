@@ -93,6 +93,7 @@ export async function testMcpServerConnection(
       headers: server.headers,
       signal: controller.signal,
     })
+    clearTimeout(timeout)
 
     if (!response.ok) {
       return {

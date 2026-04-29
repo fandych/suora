@@ -44,7 +44,7 @@ export function ModelsLayout() {
   // Load settings from workspace on mount
   useEffect(() => {
     if (workspacePath && !loaded) {
-      loadSettingsFromWorkspace().then(() => setLoaded(true))
+      loadSettingsFromWorkspace().then(() => setLoaded(true)).catch(() => setLoaded(true))
     } else {
       setLoaded(true)
     }

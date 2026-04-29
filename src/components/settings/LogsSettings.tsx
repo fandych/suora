@@ -22,7 +22,7 @@ export function LogsSettings() {
   const [tab, setTab] = useState<'overview' | 'detail'>('overview')
   const deferredSearch = useDeferredValue(search)
 
-  useEffect(() => { setLogs(getAuditLog().reverse()) }, [])
+  useEffect(() => { setLogs([...getAuditLog()].reverse()) }, [])
 
   const displayed = useMemo(() => {
     const query = deferredSearch.trim().toLowerCase()

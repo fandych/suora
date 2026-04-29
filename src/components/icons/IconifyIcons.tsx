@@ -414,6 +414,9 @@ export function useSkillIconsReady(): boolean {
     let cancelled = false
     loadIconCollection('lucide').then(() => {
       if (!cancelled) setReady(true)
+    }).catch(() => {
+      // Failed to load, but let the UI render anyway
+      if (!cancelled) setReady(true)
     })
     return () => { cancelled = true }
   }, [ready])

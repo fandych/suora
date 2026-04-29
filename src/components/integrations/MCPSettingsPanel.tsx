@@ -199,7 +199,7 @@ export function MCPSettingsPanel() {
     if (!target) return
     const ok = await confirm({
       title: t('mcp.deleteTitle', 'Delete MCP server?'),
-      body: t('mcp.deleteBody', `"${target.name}" will be removed.`).replace('{name}', target.name),
+      body: t('mcp.deleteBody', `"${target.name}" will be removed.`).replace('{name}', () => target.name),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })

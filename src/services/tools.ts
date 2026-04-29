@@ -2016,14 +2016,19 @@ export const builtinToolDefs: ToolSet = {
         }, { to, subject, body, cc, bcc, isHtml: isHtml || false })
 
         // Race against a timeout so the tool never hangs forever
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(
+          timeoutHandle = setTimeout(() => reject(new Error(
             `Email send timed out after ${EMAIL_TIMEOUT / 1000}s. ` +
             `Check SMTP config: host=${cfg.smtpHost}, port=${port}, secure=${cfg.secure || false}. ` +
             `Common causes: wrong port, firewall blocking, or incorrect secure/TLS setting.`
           )), EMAIL_TIMEOUT)
         })
 
+        if (timeoutHandle) {
+          const handle = timeoutHandle
+          sendPromise.finally(() => clearTimeout(handle))
+        }
         const result = await Promise.race([sendPromise, timeoutPromise]) as { success: boolean; messageId?: string; error?: string }
 
         if (!result.success) {
@@ -2232,7 +2237,7 @@ export const builtinToolDefs: ToolSet = {
           fontSize: { validate: (v) => ['small', 'medium', 'large'].includes(v), transform: (v) => v },
           locale: { validate: (v) => ['en', 'zh'].includes(v), transform: (v) => v },
           bubbleStyle: { validate: (v) => ['default', 'minimal', 'bordered', 'glassmorphism'].includes(v), transform: (v) => v },
-          historyRetentionDays: { validate: (v) => !isNaN(Number(v)) && Number(v) >= 0, transform: (v) => Number(v) },
+          historyRetentionDays: { validate: (v) => Number.isFinite(Number(v)) && Number(v) >= 0, transform: (v) => Number(v) },
           autoSave: { validate: (v) => ['true', 'false'].includes(v.toLowerCase()), transform: (v) => v.toLowerCase() === 'true' },
         }
         const handler = allowedSettings[setting]

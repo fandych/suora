@@ -150,7 +150,7 @@ function compareSemverLike(a: string, b: string): number {
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
+  return value.replace(/[|\\{}()[\]^$+*?.-]/g, '\\$&')
 }
 
 function wildcardPatternToRegex(pattern: string): RegExp {
@@ -209,7 +209,12 @@ function getBootConfigPath(): string {
 function loadInitialWorkspacePath(): string {
   try {
     const raw = readFileSync(getBootConfigPath(), 'utf-8')
-    const config = JSON.parse(raw) as { workspacePath?: string }
+    let config: { workspacePath?: string }
+    try {
+      config = JSON.parse(raw) as { workspacePath?: string }
+    } catch {
+      return getDefaultWorkspacePath()
+    }
     if (typeof config.workspacePath === 'string' && config.workspacePath.trim()) {
       return resolveUserPath(config.workspacePath, app.getPath('home'))
     }
@@ -406,7 +411,12 @@ ipcMain.handle('workspace:getBootConfig', async () => {
   try {
     const bootConfigPath = getBootConfigPath()
     const data = await fs.readFile(bootConfigPath, 'utf-8')
-    const config = JSON.parse(data) as { workspacePath?: string }
+    let config: { workspacePath?: string }
+    try {
+      config = JSON.parse(data) as { workspacePath?: string }
+    } catch {
+      return { workspacePath: currentWorkspacePath }
+    }
     if (typeof config.workspacePath === 'string' && config.workspacePath.trim()) {
       return { workspacePath: path.resolve(config.workspacePath) }
     }
@@ -771,7 +781,13 @@ ipcMain.handle('iconify:listCollections', async () => {
   try {
     const collectionsPath = path.join(path.dirname(require.resolve('@iconify/json/package.json')), 'collections.json')
     const raw = await fs.readFile(collectionsPath, 'utf-8')
-    const data = JSON.parse(raw) as Record<string, { name: string; total: number; category?: string }>
+    let data: Record<string, { name: string; total: number; category?: string }>
+    try {
+      data = JSON.parse(raw) as Record<string, { name: string; total: number; category?: string }>
+    } catch {
+      logger.error('Failed to parse icon collections JSON')
+      return []
+    }
     return Object.entries(data).map(([prefix, meta]) => ({
       prefix,
       name: meta.name,
@@ -794,7 +810,12 @@ ipcMain.handle('iconify:loadCollection', async (_event, prefix: string) => {
     const resolvedPath = path.resolve(filePath)
     if (!isWithinDirectory(resolvedPath, jsonDir)) return null
     const raw = await fs.readFile(resolvedPath, 'utf-8')
-    return JSON.parse(raw)
+    try {
+      return JSON.parse(raw)
+    } catch {
+      logger.error('Failed to parse icon collection JSON', { prefix })
+      return null
+    }
   } catch (err: unknown) {
     logger.error('Failed to load icon collection', { prefix, error: err instanceof Error ? err.message : String(err) })
     return null
@@ -809,7 +830,13 @@ ipcMain.handle('iconify:getIconNames', async (_event, prefix: string) => {
     const resolvedPath = path.resolve(filePath)
     if (!isWithinDirectory(resolvedPath, jsonDir)) return []
     const raw = await fs.readFile(resolvedPath, 'utf-8')
-    const data = JSON.parse(raw)
+    let data: { icons?: Record<string, unknown> }
+    try {
+      data = JSON.parse(raw)
+    } catch {
+      logger.error('Failed to parse icon names JSON', { prefix })
+      return []
+    }
     return data.icons ? Object.keys(data.icons) : []
   } catch (err: unknown) {
     logger.error('Failed to get icon names', { prefix, error: err instanceof Error ? err.message : String(err) })
@@ -1117,7 +1144,8 @@ ipcMain.handle('fs:editFile', async (_event, filePath: string, oldText: string, 
     if (content.indexOf(oldText, firstMatch + oldText.length) !== -1) {
       return { error: `Old text is not unique in ${filePath}; provide a more specific snippet` }
     }
-    const updated = content.replace(oldText, newText)
+    // Use function replacer to avoid $-substitution in replacement string
+    const updated = content.replace(oldText, () => newText)
     await atomicWriteFile(filePath, updated)
     return { success: true }
   } catch (err: unknown) {
@@ -1160,7 +1188,9 @@ ipcMain.handle('fs:searchFiles', async (_event, dirPath: string, pattern: string
   let excludeRegex: RegExp | null = null
   if (excludePattern) {
     try {
-      excludeRegex = new RegExp(excludePattern.replace(/\*/g, '.*'), 'i')
+      // Escape regex special chars except *, then replace * with .*
+      const escaped = excludePattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+      excludeRegex = new RegExp(escaped, 'i')
     } catch {
       // ignore invalid exclude patterns
     }
@@ -1348,7 +1378,12 @@ function parseDDGHtml(html: string, query: string): WebSearchResponse {
     // DDG wraps URLs in a redirect: //duckduckgo.com/l/?uddg=ENCODED_URL&...
     const uddgMatch = url.match(/[?&]uddg=([^&]+)/)
     if (uddgMatch) {
-      url = decodeURIComponent(uddgMatch[1])
+      try {
+        url = decodeURIComponent(uddgMatch[1])
+      } catch {
+        // Skip malformed URL
+        continue
+      }
     }
     // Skip ad links and internal DDG links
     if (url.startsWith('https://duckduckgo.com') || url.startsWith('//duckduckgo.com')) continue
@@ -2123,7 +2158,7 @@ function stopTimerEngine() {
 
 // ─── IPC Handlers: Channel Integration ──────────────────────────────
 
-const channelService = getChannelService(process.env.CHANNEL_PORT ? parseInt(process.env.CHANNEL_PORT) : 3000)
+const channelService = getChannelService(process.env.CHANNEL_PORT ? parseInt(process.env.CHANNEL_PORT, 10) : 3000)
 
 // Initialize channel service message handler
 channelService.onMessage(async (event: ChannelWebhookEvent) => {
@@ -2343,7 +2378,11 @@ interface WindowState {
 async function loadWindowState(): Promise<WindowState> {
   try {
     const content = await fs.readFile(getWindowStatePath(), 'utf-8')
-    return JSON.parse(content) as WindowState
+    try {
+      return JSON.parse(content) as WindowState
+    } catch {
+      return { width: 1400, height: 900 }
+    }
   } catch {
     return { width: 1400, height: 900 }
   }
@@ -2703,10 +2742,14 @@ ipcMain.handle('crash:getLogs', async () => {
     const logs = await Promise.all(
       files.filter((f) => f.endsWith('.json')).slice(-20).map(async (f) => {
         const content = await fs.readFile(path.join(crashLogDir, f), 'utf-8')
-        return JSON.parse(content)
+        try {
+          return JSON.parse(content)
+        } catch {
+          return null
+        }
       })
     )
-    return logs.sort((a: { timestamp: string }, b: { timestamp: string }) => b.timestamp.localeCompare(a.timestamp))
+    return logs.filter((log) => log !== null).sort((a: { timestamp: string }, b: { timestamp: string }) => b.timestamp.localeCompare(a.timestamp))
   } catch {
     return []
   }

@@ -299,8 +299,13 @@ export function compileCustomCode(code: string): CompileResult {
           })
 
           try {
+            const resultPromise = Promise.resolve().then(() => executeFn(args, { signal: controller.signal }))
+            if (timeoutHandle) {
+              const handle = timeoutHandle
+              resultPromise.finally(() => clearTimeout(handle))
+            }
             const result = await Promise.race([
-              Promise.resolve().then(() => executeFn(args, { signal: controller.signal })),
+              resultPromise,
               timeoutPromise,
             ])
             return safeSerializeCustomToolResult(result)

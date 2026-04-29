@@ -185,14 +185,17 @@ export function speak(text: string, settings: VoiceSettings): Promise<void> {
     speechSynthesis.speak(utterance)
   })
 
+  let timeoutHandle: ReturnType<typeof setTimeout> | null = null
   const timeoutPromise = new Promise<void>((_, reject) => {
-    setTimeout(() => {
+    timeoutHandle = setTimeout(() => {
       speechSynthesis.cancel()
       reject(new Error('Speech synthesis timed out after 30 seconds'))
     }, TTS_TIMEOUT_MS)
   })
 
-  return Promise.race([speechPromise, timeoutPromise])
+  return Promise.race([speechPromise, timeoutPromise]).finally(() => {
+    if (timeoutHandle) clearTimeout(timeoutHandle)
+  })
 }
 
 /**
