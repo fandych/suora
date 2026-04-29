@@ -183,8 +183,10 @@ export function buildDocumentGraph(
 
   const addEdge = (edge: DocumentGraphEdge) => {
     graphEdges.set(edge.id, edge)
-    graphNodes.get(edge.source)!.weight += edge.weight
-    graphNodes.get(edge.target)!.weight += edge.weight
+    const source = graphNodes.get(edge.source)
+    const target = graphNodes.get(edge.target)
+    if (source) source.weight += edge.weight
+    if (target) target.weight += edge.weight
   }
 
   scopedGroups.forEach((group) => {
@@ -215,7 +217,8 @@ export function buildDocumentGraph(
   })
 
   scopedNodes.forEach((node) => {
-    const sourceId = node.parentId && nodeById.has(node.parentId) ? graphNodeId(nodeById.get(node.parentId)!) : `doc-graph:${node.groupId}`
+    const parent = node.parentId ? nodeById.get(node.parentId) : null
+    const sourceId = parent ? graphNodeId(parent) : `doc-graph:${node.groupId}`
     const targetId = graphNodeId(node)
     addEdge({
       id: edgeId('contains', sourceId, targetId),

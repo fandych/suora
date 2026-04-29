@@ -141,8 +141,9 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
             </filter>
           </defs>
           {visibleEdges.map((edge) => {
-            const source = positionedById.get(edge.source)!
-            const target = positionedById.get(edge.target)!
+            const source = positionedById.get(edge.source)
+            const target = positionedById.get(edge.target)
+            if (!source || !target) return null
             const highlighted = source.related || target.related || source.active || target.active
             return (
               <g key={edge.id}>
