@@ -26,8 +26,8 @@ const TYPED_ARRAY_CTORS = {
   Uint32Array,
   Float32Array,
   Float64Array,
-  BigInt64Array: typeof BigInt64Array === 'undefined' ? undefined : BigInt64Array,
-  BigUint64Array: typeof BigUint64Array === 'undefined' ? undefined : BigUint64Array,
+  BigInt64Array,
+  BigUint64Array,
 } as const
 const BIGINT_TYPED_ARRAY_NAMES = new Set<TypedArrayName>(['BigInt64Array', 'BigUint64Array'])
 
@@ -45,6 +45,15 @@ function reviveBigInt(value: unknown): bigint | undefined {
   } catch {
     return undefined
   }
+}
+
+function isJsonByteArraySample(values: unknown[]): boolean {
+  const sampleSize = Math.min(values.length, 32)
+  for (let index = 0; index < sampleSize; index += 1) {
+    const entry = values[index]
+    if (typeof entry !== 'number' || !Number.isInteger(entry) || entry < 0 || entry > 255) return false
+  }
+  return true
 }
 
 function restoreUndefined(value: unknown): unknown {
@@ -154,8 +163,12 @@ export function safeJsonReviver(_key: string, value: unknown): unknown {
     }
     case 'Map': {
       const entries = tagged.entries
-      if (!Array.isArray(entries) || !entries.every((entry) => Array.isArray(entry) && entry.length >= 2)) return value
-      return new Map(entries as [unknown, unknown][])
+      if (!Array.isArray(entries)) return value
+      try {
+        return new Map(entries as [unknown, unknown][])
+      } catch {
+        return value
+      }
     }
     case 'Set': {
       const values = tagged.values
@@ -172,12 +185,12 @@ export function safeJsonReviver(_key: string, value: unknown): unknown {
     }
     case 'ArrayBuffer': {
       const values = tagged.values
-      if (!Array.isArray(values) || !values.every((entry) => Number.isInteger(entry) && entry >= 0 && entry <= 255)) return value
+      if (!Array.isArray(values) || !isJsonByteArraySample(values)) return value
       return Uint8Array.from(values as number[]).buffer
     }
     case 'DataView': {
       const values = tagged.values
-      if (!Array.isArray(values) || !values.every((entry) => Number.isInteger(entry) && entry >= 0 && entry <= 255)) return value
+      if (!Array.isArray(values) || !isJsonByteArraySample(values)) return value
       const bytes = Uint8Array.from(values as number[])
       return new DataView(bytes.buffer)
     }

@@ -22,6 +22,7 @@ const PROVIDER_TYPES = new Set<ProviderConfig['providerType']>([
   'cohere',
   'openai-compatible',
 ])
+const MAX_IMPORTED_PROVIDER_MODELS = 500
 
 function isProviderConfig(value: unknown): value is ProviderConfig {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -34,6 +35,7 @@ function isProviderConfig(value: unknown): value is ProviderConfig {
     && typeof config.providerType === 'string'
     && PROVIDER_TYPES.has(config.providerType as ProviderConfig['providerType'])
     && Array.isArray(config.models)
+    && config.models.length <= MAX_IMPORTED_PROVIDER_MODELS
     && config.models.every((model) =>
       model
       && typeof model === 'object'

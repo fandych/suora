@@ -171,6 +171,15 @@ export interface AuditLogEntry {
 const MAX_AUDIT_LOG = 1000
 const AUDIT_STORAGE_KEY = 'suora-audit-log'
 let auditLogCache: AuditLogEntry[] | null = null
+let auditLogPersistTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleAuditLogPersist(): void {
+  if (auditLogPersistTimer) return
+  auditLogPersistTimer = setTimeout(() => {
+    auditLogPersistTimer = null
+    writeCached(AUDIT_STORAGE_KEY, safeStringify(auditLogCache ?? []))
+  }, 0)
+}
 
 export function getAuditLog(): AuditLogEntry[] {
   if (auditLogCache) return [...auditLogCache]
@@ -189,11 +198,15 @@ export function addAuditEntry(entry: AuditLogEntry): void {
   log.push(entry)
   // Keep only the most recent entries
   auditLogCache = log.length > MAX_AUDIT_LOG ? log.slice(-MAX_AUDIT_LOG) : log
-  writeCached(AUDIT_STORAGE_KEY, safeStringify(auditLogCache))
+  scheduleAuditLogPersist()
 }
 
 export function clearAuditLog(): void {
   auditLogCache = null
+  if (auditLogPersistTimer) {
+    clearTimeout(auditLogPersistTimer)
+    auditLogPersistTimer = null
+  }
   removeCached(AUDIT_STORAGE_KEY)
 }
 

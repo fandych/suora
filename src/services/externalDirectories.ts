@@ -118,19 +118,33 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]>
 
         // Determine source based on directory path
         const skill: Skill = {
-          ...skillData,
           id: skillData.id,
           name: skillData.name,
           description: skillData.description ?? '',
+          enabled: skillData.enabled ?? true,
+          source,
           content: skillData.content ?? skillData.prompt ?? '',
           frontmatter: skillData.frontmatter ?? {
             name: skillData.name,
             description: skillData.description ?? '',
           },
+          allowedTools: skillData.allowedTools,
+          whenToUse: skillData.whenToUse,
           context: skillData.context ?? 'inline',
-          type: 'custom',
-          source,
-          enabled: skillData.enabled ?? true,
+          referenceFiles: skillData.referenceFiles,
+          filePath: skillData.filePath,
+          skillRoot: skillData.skillRoot,
+          icon: skillData.icon,
+          category: skillData.category,
+          author: skillData.author,
+          version: skillData.version,
+          type: skillData.type ?? 'custom',
+          prompt: skillData.prompt,
+          tools: skillData.tools,
+          customCode: skillData.customCode,
+          config: skillData.config,
+          dependencies: skillData.dependencies,
+          changelog: skillData.changelog,
         }
 
         skills.push(skill)
