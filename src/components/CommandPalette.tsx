@@ -8,7 +8,7 @@ import type { Session } from '@/types'
 
 interface PaletteItem {
   id: string
-  type: 'session' | 'agent' | 'skill' | 'model' | 'action'
+  type: 'session' | 'document' | 'agent' | 'skill' | 'model' | 'action'
   title: string
   subtitle?: string
   icon: string
@@ -29,7 +29,7 @@ export function CommandPalette() {
   const listRef = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
 
-  const { sessions, agents, skills, models, providerConfigs, setActiveSession, setSelectedAgent, addSession, selectedModel, selectedAgent } = useAppStore()
+  const { sessions, documentNodes, setSelectedDocument, agents, skills, models, providerConfigs, setActiveSession, setSelectedAgent, addSession, selectedModel, selectedAgent } = useAppStore()
 
   // Listen for Cmd+K / Ctrl+K plus programmatic open events.
   useEffect(() => {
@@ -87,6 +87,7 @@ export function CommandPalette() {
         },
       },
       { id: 'action-pipeline', type: 'action', title: t('nav.pipeline', 'Pipeline'), subtitle: t('commandPalette.pipelineSubtitle', 'Build and run agent pipelines'), icon: 'skill-agent-comm', action: () => { navigate('/pipeline'); setOpen(false) } },
+      { id: 'action-documents', type: 'action', title: t('nav.documents', 'Documents'), subtitle: t('commandPalette.documentsSubtitle', 'Write markdown notes and nested document groups'), icon: 'skill-code-review', action: () => { navigate('/documents'); setOpen(false) } },
       { id: 'action-settings', type: 'action', title: t('nav.settings', 'Settings'), subtitle: t('commandPalette.settingsSubtitle', 'Open settings page'), icon: 'action-settings', action: () => { navigate('/settings'); setOpen(false) } },
       { id: 'action-models', type: 'action', title: t('nav.models', 'Models'), subtitle: t('commandPalette.modelsSubtitle', 'Manage AI models'), icon: 'action-models', action: () => { navigate('/models'); setOpen(false) } },
       { id: 'action-mcp', type: 'action', title: t('nav.mcp', 'MCP Servers'), subtitle: t('commandPalette.mcpSubtitle', 'Configure MCP servers'), icon: 'ui-plugin', action: () => { navigate('/mcp'); setOpen(false) } },
@@ -105,6 +106,17 @@ export function CommandPalette() {
         subtitle: `${session.messages.length} ${t('commandPalette.messages', 'messages')}`,
         icon: 'action-chat',
         action: () => { setActiveSession(session.id); navigate('/chat'); setOpen(false) },
+      })
+    }
+
+    for (const document of documentNodes.filter((node) => node.type === 'document').slice(0, 20)) {
+      results.push({
+        id: `document-${document.id}`,
+        type: 'document',
+        title: document.title,
+        subtitle: document.markdown.slice(0, 80).replace(/\s+/g, ' '),
+        icon: 'skill-code-review',
+        action: () => { setSelectedDocument(document.id); navigate('/documents'); setOpen(false) },
       })
     }
 
@@ -146,7 +158,7 @@ export function CommandPalette() {
     }
 
     return results
-  }, [sessions, agents, skills, models, providerConfigs, navigate, setActiveSession, setSelectedAgent, addSession, selectedAgent, selectedModel, t])
+  }, [sessions, documentNodes, setSelectedDocument, agents, skills, models, providerConfigs, navigate, setActiveSession, setSelectedAgent, addSession, selectedAgent, selectedModel, t])
 
   const filtered = useMemo(() => {
     if (!query.trim()) return items.filter((i) => i.type === 'action')
@@ -192,6 +204,7 @@ export function CommandPalette() {
   const typeLabel: Record<string, string> = {
     action: t('commandPalette.actions', 'Actions'),
     session: t('sessions.title', 'Sessions'),
+    document: t('nav.documents', 'Documents'),
     agent: t('nav.agents', 'Agents'),
     skill: t('nav.skills', 'Skills'),
     model: t('nav.models', 'Models'),

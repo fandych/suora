@@ -1,7 +1,7 @@
 // Global state management using Zustand
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, ToolSecuritySettings, MarketplaceSettings, ThemeMode, FontSize, CodeFont, BubbleStyle, ProviderConfig, ExternalDirectoryConfig, ChannelConfig, AppNotification, ModelUsageStats, ChannelHistoryMessage, ChannelAccessToken, ChannelHealthStatus, ChannelUser, PluginInfo, AgentVersion, AgentPerformanceStats, AgentPipeline, AgentPipelineStep, AppLocale, ProxySettings, OnboardingState, SkillVersion, EmailConfig, EnvVariable, MCPServerConfig, MCPServerStatus } from '@/types'
+import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, ToolSecuritySettings, MarketplaceSettings, ThemeMode, FontSize, CodeFont, BubbleStyle, ProviderConfig, ExternalDirectoryConfig, ChannelConfig, AppNotification, ModelUsageStats, ChannelHistoryMessage, ChannelAccessToken, ChannelHealthStatus, ChannelUser, PluginInfo, AgentVersion, AgentPerformanceStats, AgentPipeline, AgentPipelineStep, AppLocale, ProxySettings, OnboardingState, SkillVersion, EmailConfig, EnvVariable, MCPServerConfig, MCPServerStatus, DocumentGroup, DocumentFolder, DocumentItem, DocumentNode } from '@/types'
 import { setLiveStoreAccessor } from '@/services/tools'
 import { loadExternalResources, syncExternalDirectoryAccess } from '@/services/externalDirectories'
 import { loadAllSkills } from '@/services/skillRegistry'
@@ -113,6 +113,21 @@ export interface AppStore {
   setActiveSession: (id: string | null) => void
   openSessionTab: (id: string) => void
   closeSessionTab: (id: string) => void
+
+  // Documents
+  documentGroups: DocumentGroup[]
+  documentNodes: DocumentNode[]
+  selectedDocumentGroupId: string | null
+  selectedDocumentId: string | null
+  addDocumentGroup: (group: DocumentGroup) => void
+  updateDocumentGroup: (id: string, data: Partial<DocumentGroup>) => void
+  removeDocumentGroup: (id: string) => void
+  setSelectedDocumentGroup: (id: string | null) => void
+  addDocumentFolder: (folder: DocumentFolder) => void
+  addDocument: (document: DocumentItem) => void
+  updateDocumentNode: (id: string, data: Partial<DocumentNode>) => void
+  removeDocumentNode: (id: string) => void
+  setSelectedDocument: (id: string | null) => void
 
   // Models
   models: Model[]
@@ -302,6 +317,69 @@ export const useAppStore = create<AppStore>()(
       ...createUIPreferencesSlice(set, get, api),
       ...createSessionSlice(set, get, api),
       ...createModelConfigSlice(set, get, api),
+
+      // Documents
+      documentGroups: [],
+      documentNodes: [],
+      selectedDocumentGroupId: null,
+      selectedDocumentId: null,
+      addDocumentGroup: (group) => set((state) => ({
+        documentGroups: [group, ...state.documentGroups.filter((item) => item.id !== group.id)],
+        selectedDocumentGroupId: group.id,
+      })),
+      updateDocumentGroup: (id, data) => set((state) => ({
+        documentGroups: state.documentGroups.map((group) =>
+          group.id === id ? { ...group, ...data, updatedAt: Date.now() } : group
+        ),
+      })),
+      removeDocumentGroup: (id) => set((state) => {
+        const remainingGroups = state.documentGroups.filter((group) => group.id !== id)
+        const remainingNodes = state.documentNodes.filter((node) => node.groupId !== id)
+        const selectedDocumentId = state.selectedDocumentId && remainingNodes.some((node) => node.id === state.selectedDocumentId)
+          ? state.selectedDocumentId
+          : null
+        return {
+          documentGroups: remainingGroups,
+          documentNodes: remainingNodes,
+          selectedDocumentGroupId: state.selectedDocumentGroupId === id ? (remainingGroups[0]?.id ?? null) : state.selectedDocumentGroupId,
+          selectedDocumentId,
+        }
+      }),
+      setSelectedDocumentGroup: (id) => set((state) => {
+        const selectedDocumentId = state.selectedDocumentId && state.documentNodes.some((node) => node.id === state.selectedDocumentId && node.groupId === id)
+          ? state.selectedDocumentId
+          : null
+        return { selectedDocumentGroupId: id, selectedDocumentId }
+      }),
+      addDocumentFolder: (folder) => set((state) => ({
+        documentNodes: [...state.documentNodes.filter((item) => item.id !== folder.id), folder],
+      })),
+      addDocument: (document) => set((state) => ({
+        documentNodes: [...state.documentNodes.filter((item) => item.id !== document.id), document],
+        selectedDocumentGroupId: document.groupId,
+        selectedDocumentId: document.id,
+      })),
+      updateDocumentNode: (id, data) => set((state) => ({
+        documentNodes: state.documentNodes.map((node) =>
+          node.id === id ? ({ ...node, ...data, updatedAt: Date.now() } as DocumentNode) : node
+        ),
+      })),
+      removeDocumentNode: (id) => set((state) => {
+        const collectIds = (targetId: string, ids = new Set<string>()) => {
+          ids.add(targetId)
+          for (const child of state.documentNodes.filter((node) => node.parentId === targetId)) {
+            collectIds(child.id, ids)
+          }
+          return ids
+        }
+        const idsToRemove = collectIds(id)
+        const remainingNodes = state.documentNodes.filter((node) => !idsToRemove.has(node.id))
+        return {
+          documentNodes: remainingNodes,
+          selectedDocumentId: state.selectedDocumentId && idsToRemove.has(state.selectedDocumentId) ? null : state.selectedDocumentId,
+        }
+      }),
+      setSelectedDocument: (id) => set({ selectedDocumentId: id }),
 
       // Agents (seeded with built-in agents)
       agents: [...BUILTIN_AGENTS],
@@ -633,7 +711,7 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'suora-store',
-      version: 18,
+      version: 19,
       storage: createSafePersistStorage<Record<string, unknown>>(fileStateStorage),
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
@@ -764,6 +842,12 @@ export const useAppStore = create<AppStore>()(
         if (version < 18) {
           if (!state.sessions) state.sessions = []
         }
+        if (version < 19) {
+          if (!state.documentGroups) state.documentGroups = []
+          if (!state.documentNodes) state.documentNodes = []
+          if (!('selectedDocumentGroupId' in state)) state.selectedDocumentGroupId = null
+          if (!('selectedDocumentId' in state)) state.selectedDocumentId = null
+        }
         return state as Record<string, unknown>
       },
       merge: (persisted, current) => {
@@ -791,6 +875,12 @@ export const useAppStore = create<AppStore>()(
         if (!merged.agentPipelines) {
           merged.agentPipelines = []
         }
+        if (!merged.documentGroups) {
+          merged.documentGroups = []
+        }
+        if (!merged.documentNodes) {
+          merged.documentNodes = []
+        }
 
         return merged
       },
@@ -798,6 +888,10 @@ export const useAppStore = create<AppStore>()(
         sessions: state.sessions,
         activeSessionId: state.activeSessionId,
         openSessionTabs: state.openSessionTabs,
+        documentGroups: state.documentGroups,
+        documentNodes: state.documentNodes,
+        selectedDocumentGroupId: state.selectedDocumentGroupId,
+        selectedDocumentId: state.selectedDocumentId,
         models: state.models,
         selectedModel: state.selectedModel,
         agents: state.agents,
