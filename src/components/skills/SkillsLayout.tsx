@@ -234,12 +234,23 @@ export function SkillsLayout() {
 
     if (workspacePath) {
       const skillDir = `${workspacePath}/.suora/skills/${skillDirectorySegment(parsed.name)}`
-      await window.electron.invoke('system:ensureDirectory', skillDir)
-      await window.electron.invoke('fs:writeFile', `${skillDir}/SKILL.md`, bundle.skillMarkdown)
-      for (const resource of bundle.resources) {
-        const parent = resource.path.split('/').slice(0, -1).join('/')
-        if (parent) await window.electron.invoke('system:ensureDirectory', `${skillDir}/${parent}`)
-        await window.electron.invoke('fs:writeFile', `${skillDir}/${resource.path}`, resource.content)
+      try {
+        const ensureRoot = await window.electron.invoke('system:ensureDirectory', skillDir) as { success?: boolean; error?: string }
+        if (!ensureRoot?.success) throw new Error(ensureRoot?.error || `Failed to create ${skillDir}`)
+        const writeSkill = await window.electron.invoke('fs:writeFile', `${skillDir}/SKILL.md`, bundle.skillMarkdown) as { success?: boolean; error?: string }
+        if (!writeSkill?.success) throw new Error(writeSkill?.error || 'Failed to write SKILL.md')
+        for (const resource of bundle.resources) {
+          const parent = resource.path.split('/').slice(0, -1).join('/')
+          if (parent) {
+            const ensureParent = await window.electron.invoke('system:ensureDirectory', `${skillDir}/${parent}`) as { success?: boolean; error?: string }
+            if (!ensureParent?.success) throw new Error(ensureParent?.error || `Failed to create ${parent}`)
+          }
+          const writeResource = await window.electron.invoke('fs:writeFile', `${skillDir}/${resource.path}`, resource.content) as { success?: boolean; error?: string }
+          if (!writeResource?.success) throw new Error(writeResource?.error || `Failed to write ${resource.path}`)
+        }
+      } catch (err: unknown) {
+        toast.error(t('skills.importSkillFolderFailed', 'Failed to import skill folder'), err instanceof Error ? err.message : String(err))
+        return
       }
       parsed.filePath = `${skillDir}/SKILL.md`
       parsed.skillRoot = skillDir

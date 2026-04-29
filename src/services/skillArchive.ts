@@ -145,6 +145,8 @@ async function collectSkillArchiveFiles(skill: Skill): Promise<Array<{ path: str
       const content = await electron.invoke('fs:readFile', joinPath(skill.skillRoot, relativePath)) as string | { error?: string }
       if (typeof content === 'string') {
         files.set(relativePath, content)
+      } else {
+        throw new Error(`Failed to read bundled resource ${relativePath}: ${content.error ?? 'unknown error'}`)
       }
     }
   }

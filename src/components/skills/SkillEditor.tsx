@@ -203,8 +203,12 @@ function ResourceTreePanel({
 
     if (skill.skillRoot) {
       const parent = normalizedNext.split('/').slice(0, -1).join('/')
-      if (parent) await window.electron.invoke('system:ensureDirectory', joinSkillPath(skill.skillRoot, parent))
-      await window.electron.invoke('fs:moveFile', joinSkillPath(skill.skillRoot, resource.path), joinSkillPath(skill.skillRoot, normalizedNext))
+      if (parent) {
+        const ensureResult = await window.electron.invoke('system:ensureDirectory', joinSkillPath(skill.skillRoot, parent)) as { success?: boolean; error?: string }
+        if (!ensureResult?.success) throw new Error(ensureResult?.error || t('skills.createResourceDirectoryFailed', 'Failed to create resource directory.'))
+      }
+      const moveResult = await window.electron.invoke('fs:moveFile', joinSkillPath(skill.skillRoot, resource.path), joinSkillPath(skill.skillRoot, normalizedNext)) as { success?: boolean; error?: string }
+      if (!moveResult?.success) throw new Error(moveResult?.error || t('skills.renameResourceFailed', 'Failed to rename resource.'))
     }
 
     const oldPath = normalizeResourcePath(resource.path)

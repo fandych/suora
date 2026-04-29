@@ -606,12 +606,12 @@ async function downloadGitHubSkillDirectory(
       const content = await electron.invoke('web:fetchText', item.download_url) as { content?: string; error?: string }
       if (content.error || typeof content.content !== 'string') {
         throw new Error(content.error
-          ? `Failed to download ${item.path}: ${content.error}`
+          ? `Failed to download ${item.path} (${item.name}): ${content.error}`
           : `Unexpected response format while downloading ${item.path}`)
       }
 
       const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${safeName}`, content.content) as { success?: boolean; error?: string }
-      if (!writeResult?.success) throw new Error(writeResult?.error || `Failed to write ${relativePath}`)
+      if (!writeResult?.success) throw new Error(writeResult && writeResult.error ? writeResult.error : `Failed to write ${relativePath}`)
       const hash = await sha256Text(content.content)
       downloaded.set(relativePath, {
         type: 'file',
