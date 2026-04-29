@@ -59,7 +59,7 @@
 src/
 ├── App.tsx                  # React Router (8 rutas)
 ├── index.css                # Tokens @theme de Tailwind (oscuro/claro)
-├── store/appStore.ts        # Estado global Zustand (versión 12)
+├── store/appStore.ts        # Estado global Zustand (versión 18)
 ├── services/
 �?  ├── aiService.ts         # Integración IA multiproveedor
 �?  ├── tools.ts             # 18 categorías de habilidades, 42+ herramientas
@@ -132,7 +132,7 @@ El renderer utiliza `@vitejs/plugin-react` + `@tailwindcss/vite`, con el alias d
 
 Un único store de Zustand con middleware `persist` respaldado por almacenamiento de archivos IPC.
 
-**Nombre del store:** `suora-store` · **Versión:** 12 · **Backend:** `~/.suora/data/`
+**Nombre del store:** `suora-store` · **Versión:** 18 · **Backend:** `{workspace}/`
 
 ### Segmentos de estado principales
 
@@ -152,12 +152,12 @@ Un único store de Zustand con middleware `persist` respaldado por almacenamient
 ### Flujo de persistencia
 
 ```
-Zustand �?adaptador fileStateStorage �?IPC (store:load/save/remove) �?~/.suora/data/*.json
+Zustand �?adaptador fileStateStorage �?IPC (db:loadPersistedStore / db:savePersistedStore) �?{workspace}/{settings,models}.json + sessions/, agents/, channels/, …
 ```
 
 Un caché `Map` en memoria permite lecturas síncronas mediante `readCached()`/`writeCached()`. En la primera carga, el adaptador verifica el almacenamiento de archivos, recurre a `localStorage` (migración) y luego almacena en caché.
 
-### Migraciones (Versión 1 �?12)
+### Migraciones (Versión 1 �?18)
 
 v2: memoria de agente, herramientas de habilidades · v3: valores predeterminados de `toolSecurity` · v5: `workspacePath` · v7: migración de `providerConfigs` de Record a Array · v8: confirmación deshabilitada por defecto · v9: `globalMemories`, relleno retroactivo del ámbito de memoria · v10: canales, plugins, locale, agente, incorporación · v11: `pluginTools`, `skillVersions` · v12: `emailConfig`
 
@@ -294,7 +294,7 @@ window.electron.send(channel, ...args): void                 // Lista blanca; se
 | Navegador | `browser:navigate`, `browser:screenshot`, `browser:evaluate`, `browser:extractLinks`, `browser:extractText`, `browser:fillForm`, `browser:click` |
 | Portapapeles | `clipboard:read`, `clipboard:write` |
 | Temporizadores | `timer:list`, `timer:create`, `timer:update`, `timer:delete`, `timer:history` |
-| Store | `store:load`, `store:save`, `store:remove` |
+| Store | `db:getSnapshot`, `db:loadPersistedStore`, `db:savePersistedStore`, `db:listEntities`, `db:saveEntity`, `db:deleteEntity` |
 | Almacenamiento seguro | `safe-storage:encrypt`, `safe-storage:decrypt`, `safe-storage:isAvailable` |
 | Sistema | `system:getDefaultWorkspacePath`, `system:ensureDirectory`, `system:info`, `system:notify`, `system:screenshot` |
 | Canales | `channel:start/stop/status/register`, `channel:getWebhookUrl`, `channel:sendMessage`, `channel:sendMessageQueued`, `channel:getAccessToken`, `channel:healthCheck`, `channel:debugSend` |

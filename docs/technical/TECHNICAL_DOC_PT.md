@@ -59,7 +59,7 @@
 src/
 ├── App.tsx                  # React Router (8 rotas)
 ├── index.css                # Tokens @theme do Tailwind (escuro/claro)
-├── store/appStore.ts        # Estado global Zustand (versão 12)
+├── store/appStore.ts        # Estado global Zustand (versão 18)
 ├── services/
 �?  ├── aiService.ts         # Integração IA multi-provedor
 �?  ├── tools.ts             # 18 categorias de habilidades, 42+ ferramentas
@@ -132,7 +132,7 @@ O renderer utiliza `@vitejs/plugin-react` + `@tailwindcss/vite`, com o alias de 
 
 Um único store Zustand com middleware `persist` apoiado em armazenamento de arquivos via IPC.
 
-**Nome do store:** `suora-store` · **Versão:** 12 · **Backend:** `~/.suora/data/`
+**Nome do store:** `suora-store` · **Versão:** 18 · **Backend:** `{workspace}/`
 
 ### Segmentos de estado principais
 
@@ -152,12 +152,12 @@ Um único store Zustand com middleware `persist` apoiado em armazenamento de arq
 ### Fluxo de persistência
 
 ```
-Zustand �?adaptador fileStateStorage �?IPC (store:load/save/remove) �?~/.suora/data/*.json
+Zustand �?adaptador fileStateStorage �?IPC (db:loadPersistedStore / db:savePersistedStore) �?{workspace}/{settings,models}.json + sessions/, agents/, channels/, …
 ```
 
 Um cache `Map` em memória permite leituras síncronas por meio de `readCached()`/`writeCached()`. No primeiro carregamento, o adaptador verifica o armazenamento de arquivos, recorre ao `localStorage` (migração) e depois armazena em cache.
 
-### Migrações (Versão 1 �?12)
+### Migrações (Versão 1 �?18)
 
 v2: memória de agente, ferramentas de habilidades · v3: valores padrão de `toolSecurity` · v5: `workspacePath` · v7: migração de `providerConfigs` de Record para Array · v8: confirmação desabilitada por padrão · v9: `globalMemories`, preenchimento retroativo do escopo de memória · v10: canais, plugins, locale, agente, onboarding · v11: `pluginTools`, `skillVersions` · v12: `emailConfig`
 
@@ -294,7 +294,7 @@ window.electron.send(channel, ...args): void                 // Lista de permiss
 | Navegador | `browser:navigate`, `browser:screenshot`, `browser:evaluate`, `browser:extractLinks`, `browser:extractText`, `browser:fillForm`, `browser:click` |
 | Área de transferência | `clipboard:read`, `clipboard:write` |
 | Temporizadores | `timer:list`, `timer:create`, `timer:update`, `timer:delete`, `timer:history` |
-| Store | `store:load`, `store:save`, `store:remove` |
+| Store | `db:getSnapshot`, `db:loadPersistedStore`, `db:savePersistedStore`, `db:listEntities`, `db:saveEntity`, `db:deleteEntity` |
 | Armazenamento seguro | `safe-storage:encrypt`, `safe-storage:decrypt`, `safe-storage:isAvailable` |
 | Sistema | `system:getDefaultWorkspacePath`, `system:ensureDirectory`, `system:info`, `system:notify`, `system:screenshot` |
 | Canais | `channel:start/stop/status/register`, `channel:getWebhookUrl`, `channel:sendMessage`, `channel:sendMessageQueued`, `channel:getAccessToken`, `channel:healthCheck`, `channel:debugSend` |

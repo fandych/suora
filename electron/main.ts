@@ -291,64 +291,12 @@ function enforceFsPathInWorkspace(targetPath: string): string | null {
   return `Path is outside the workspace: ${targetPath}`
 }
 
-// ─── IPC Handlers: File-based Store ─────────────────────────────────
-
-const storeDataDir = path.join(app.getPath('home'), '.suora', 'data')
-
-function storeFilePath(name: string): string {
-  // Sanitize the key to a safe filename (keep only alphanumerics, dashes, dots)
-  const safe = name.replace(/[^a-zA-Z0-9\-_.]/g, '_')
-  return path.join(storeDataDir, `${safe}.json`)
-}
-
-ipcMain.handle('store:load', async (_event, name: string) => {
-  try {
-    const filePath = storeFilePath(name)
-    const data = await fs.readFile(filePath, 'utf-8')
-    return data
-  } catch (err: unknown) {
-    // File doesn't exist yet — that's OK, return null
-    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return null
-    }
-    logger.warn('store:load failed', { name, error: err instanceof Error ? err.message : String(err) })
-    return null
-  }
-})
-
-ipcMain.handle('store:save', async (_event, name: string, value: string) => {
-  try {
-    const filePath = storeFilePath(name)
-    await atomicWriteFile(filePath, value)
-    return { success: true }
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    logger.error('store:save failed', { name, error: message })
-    return { error: message }
-  }
-})
-
-ipcMain.handle('store:remove', async (_event, name: string) => {
-  try {
-    const filePath = storeFilePath(name)
-    await fs.unlink(filePath)
-    return { success: true }
-  } catch (err: unknown) {
-    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { success: true }
-    }
-    const message = err instanceof Error ? err.message : String(err)
-    logger.warn('store:remove failed', { name, error: message })
-    return { error: message }
-  }
-})
-
-// ─── IPC Handlers: SQLite Store ────────────────────────────────────
+// ─── IPC Handlers: Workspace JSON Store ────────────────────────────
 
 ipcMain.handle('db:getSnapshot', async () => {
   try {
     const database = await getSuoraDatabase()
-    return { success: true, path: database.path, data: database.getSnapshot() }
+    return { success: true, path: database.path, data: await database.getSnapshot() }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('db:getSnapshot failed', { error: message })
@@ -375,7 +323,7 @@ ipcMain.handle('db:loadPersistedStore', async (_event, key: unknown) => {
     const keyError = validateDatabaseKey(key, 'Persisted store key')
     if (keyError) return { error: keyError }
     const database = await getSuoraDatabase()
-    return { success: true, data: database.getPersistedStore(key as string) }
+    return { success: true, data: await database.getPersistedStore(key as string) }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('db:loadPersistedStore failed', { error: message })
@@ -417,7 +365,7 @@ ipcMain.handle('db:listEntities', async (_event, table: unknown) => {
   try {
     if (!isJsonTableName(table)) return { error: 'Unsupported database table' }
     const database = await getSuoraDatabase()
-    return { success: true, data: database.listJsonTable(table) }
+    return { success: true, data: await database.listJsonTable(table) }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err)
     logger.error('db:listEntities failed', { error: message })
@@ -1722,13 +1670,13 @@ function computeNextRun(timer: StoredTimer): number | undefined {
 
 async function readTimers(): Promise<StoredTimer[]> {
   const database = await getSuoraDatabase()
-  return database.listJsonTable('timers')
+  return (await database.listJsonTable('timers'))
     .filter((entry): entry is StoredTimer => Boolean(entry && typeof entry === 'object' && 'id' in entry && 'createdAt' in entry))
 }
 
 async function writeTimers(timers: StoredTimer[]): Promise<void> {
   const database = await getSuoraDatabase()
-  const existing = database.listJsonTable('timers')
+  const existing = (await database.listJsonTable('timers'))
     .filter((entry): entry is StoredTimer => Boolean(entry && typeof entry === 'object' && 'id' in entry))
   const nextIds = new Set(timers.map((timer) => timer.id))
 
@@ -1742,7 +1690,7 @@ async function writeTimers(timers: StoredTimer[]): Promise<void> {
 
 async function readTimerHistory(): Promise<TimerExecutionRecord[]> {
   const database = await getSuoraDatabase()
-  return database.listJsonTable('timer_executions')
+  return (await database.listJsonTable('timer_executions'))
     .filter((entry): entry is TimerExecutionRecord => Boolean(entry && typeof entry === 'object' && 'id' in entry && 'timerId' in entry && 'firedAt' in entry))
     .sort((left, right) => left.firedAt - right.firedAt)
 }
@@ -1751,7 +1699,7 @@ async function writeTimerHistory(records: TimerExecutionRecord[]): Promise<void>
   const database = await getSuoraDatabase()
   const trimmed = records.slice(-500)
   const nextIds = new Set(trimmed.map((record) => record.id))
-  const existing = database.listJsonTable('timer_executions')
+  const existing = (await database.listJsonTable('timer_executions'))
     .filter((entry): entry is TimerExecutionRecord => Boolean(entry && typeof entry === 'object' && 'id' in entry))
 
   for (const record of trimmed) {

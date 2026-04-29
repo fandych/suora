@@ -58,7 +58,7 @@
 src/
 ├── App.tsx                  # React Router (8 routes)
 ├── index.css                # Tailwind @theme tokens (dark/light)
-├── store/appStore.ts        # Zustand global state (version 12)
+├── store/appStore.ts        # Zustand global state (version 18)
 ├── services/
 �?  ├── aiService.ts         # Multi-provider AI integration
 �?  ├── tools.ts             # 18 skill categories, 42+ tools
@@ -131,7 +131,7 @@ The renderer uses `@vitejs/plugin-react` + `@tailwindcss/vite`, with the path al
 
 A single Zustand store with a `persist` middleware backed by IPC file storage.
 
-**Store name:** `suora-store` · **Version:** 12 · **Backend:** `~/.suora/data/`
+**Store name:** `suora-store` · **Version:** 18 · **Backend:** `{workspace}/`
 
 ### Key State Slices
 
@@ -151,12 +151,12 @@ A single Zustand store with a `persist` middleware backed by IPC file storage.
 ### Persistence Flow
 
 ```
-Zustand �?fileStateStorage adapter �?IPC (store:load/save/remove) �?~/.suora/data/*.json
+Zustand �?fileStateStorage adapter �?IPC (db:loadPersistedStore / db:savePersistedStore) �?{workspace}/{settings,models}.json + sessions/, agents/, channels/, …
 ```
 
 An in-memory `Map` cache enables synchronous reads via `readCached()`/`writeCached()`. On first load, the adapter checks file storage, falls back to `localStorage` (migration), then caches.
 
-### Migrations (Version 1 �?12)
+### Migrations (Version 1 �?18)
 
 v2: agent memory, skill tools · v3: `toolSecurity` defaults · v5: `workspacePath` · v7: migrate `providerConfigs` from Record to Array · v8: disable confirmation by default · v9: `globalMemories`, backfill memory scope · v10: channels, plugins, locale, agent, onboarding · v11: `pluginTools`, `skillVersions` · v12: `emailConfig`
 
@@ -293,7 +293,7 @@ window.electron.send(channel, ...args): void                 // Whitelisted; sil
 | Browser | `browser:navigate`, `browser:screenshot`, `browser:evaluate`, `browser:extractLinks`, `browser:extractText`, `browser:fillForm`, `browser:click` |
 | Clipboard | `clipboard:read`, `clipboard:write` |
 | Timer | `timer:list`, `timer:create`, `timer:update`, `timer:delete`, `timer:history` |
-| Store | `store:load`, `store:save`, `store:remove` |
+| Store | `db:getSnapshot`, `db:loadPersistedStore`, `db:savePersistedStore`, `db:listEntities`, `db:saveEntity`, `db:deleteEntity` |
 | Safe Storage | `safe-storage:encrypt`, `safe-storage:decrypt`, `safe-storage:isAvailable` |
 | System | `system:getDefaultWorkspacePath`, `system:ensureDirectory`, `system:info`, `system:notify`, `system:screenshot` |
 | Channels | `channel:start/stop/status/register`, `channel:getWebhookUrl`, `channel:sendMessage`, `channel:sendMessageQueued`, `channel:getAccessToken`, `channel:healthCheck`, `channel:debugSend` |

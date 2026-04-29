@@ -1,15 +1,8 @@
 import fs from 'fs/promises'
 import path from 'path'
-import { createHash } from 'crypto'
-import { createRequire } from 'module'
-import initSqlJs from 'sql.js'
-import type { Database as SqlDatabase, SqlJsStatic } from 'sql.js'
-import { DB_MIGRATIONS, DB_SCHEMA_VERSION } from './dbMigrations.js'
 
-const require = createRequire(import.meta.url)
-
-export const SUORA_DB_FILENAME = 'suora.db'
-export const SCHEMA_HISTORY_TABLE = 'suora_schema_history'
+export const SUORA_STORAGE_VERSION = 2
+export const SPLIT_STORE_NAME = 'suora-store'
 
 export type JsonTableName =
   | 'provider_configs'
@@ -40,28 +33,109 @@ const JSON_TABLES = new Set<JsonTableName>([
   'memories',
 ])
 
-let sqlModulePromise: Promise<SqlJsStatic> | null = null
+const TOP_LEVEL_DIRECTORIES = [
+  'sessions',
+  'timers',
+  'timers/executions',
+  'pipelines',
+  'pipelines/executions',
+  'agents',
+  'skills',
+  'documents',
+  'channels',
+  'memories',
+  'mcp',
+] as const
+
+const MODEL_STATE_KEYS = new Set([
+  'models',
+  'selectedModel',
+  'providerConfigs',
+  'apiKeys',
+  'encryptedSecrets',
+  'encryptionVersion',
+])
+
+const SETTINGS_EXCLUDED_KEYS = new Set([
+  ...MODEL_STATE_KEYS,
+  'sessions',
+  'activeSessionId',
+  'openSessionTabs',
+  'agents',
+  'skills',
+  'skillVersions',
+  'channels',
+  'channelMessages',
+  'channelTokens',
+  'channelHealth',
+  'channelUsers',
+  'globalMemories',
+  'agentPipelines',
+  'mcpServers',
+])
+
+const TABLE_FILES: Partial<Record<JsonTableName, string>> = {
+  agents: 'agents/index.json',
+  skills: 'skills/index.json',
+  channels: 'channels/index.json',
+  channel_messages: 'channels/messages.json',
+  mcp_servers: 'mcp/index.json',
+  timers: 'timers/index.json',
+  pipelines: 'pipelines/index.json',
+  memories: 'memories/index.json',
+}
+
+// Tables stored as a directory of per-ID JSON files (e.g. `timers/executions/{id}.json`).
+// Each entity is its own file, which keeps frequent appends/reads cheap and avoids
+// rewriting a large index file every time an execution is recorded.
+const TABLE_DIRECTORIES: Partial<Record<JsonTableName, string>> = {
+  timer_executions: 'timers/executions',
+  pipeline_executions: 'pipelines/executions',
+}
+
+interface PersistedPayload {
+  state?: Record<string, unknown>
+  version?: number
+}
+
+interface SessionLike {
+  id: string
+  messages?: unknown[]
+  [key: string]: unknown
+}
+
+interface AgentLike {
+  id: string
+  memories?: unknown[]
+  [key: string]: unknown
+}
 
 function assertJsonTable(table: JsonTableName): void {
-  if (!JSON_TABLES.has(table)) throw new Error(`Unsupported database table: ${table}`)
+  if (!JSON_TABLES.has(table)) throw new Error(`Unsupported storage table: ${table}`)
 }
 
-function getSqlModule(): Promise<SqlJsStatic> {
-  if (!sqlModulePromise) {
-    sqlModulePromise = (async () => {
-      const wasmPath = require.resolve('sql.js/dist/sql-wasm.wasm')
-      const wasmBuffer = await fs.readFile(wasmPath)
-      const wasmBinary = wasmBuffer.buffer.slice(
-        wasmBuffer.byteOffset,
-        wasmBuffer.byteOffset + wasmBuffer.byteLength,
-      ) as ArrayBuffer
-      return initSqlJs({ wasmBinary })
-    })()
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function isEntity(value: unknown): value is { id: string } {
+  return isRecord(value) && typeof value.id === 'string' && value.id.length > 0
+}
+
+function safeSegment(value: string): string {
+  return value.replace(/[^a-zA-Z0-9._-]/g, '_') || 'unknown'
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
   }
-  return sqlModulePromise
 }
 
-async function atomicWriteBuffer(filePath: string, data: Uint8Array): Promise<void> {
+async function atomicWriteFile(filePath: string, data: string): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
   await fs.writeFile(tempPath, data)
@@ -73,332 +147,458 @@ async function atomicWriteBuffer(filePath: string, data: Uint8Array): Promise<vo
   }
 }
 
-function getUserVersion(database: SqlDatabase): number {
-  const result = database.exec('PRAGMA user_version')
-  return Number(result[0]?.values[0]?.[0] ?? 0)
+async function writeJson(filePath: string, value: unknown): Promise<void> {
+  await atomicWriteFile(filePath, `${JSON.stringify(value, null, 2)}\n`)
 }
 
-interface AppliedMigration {
-  version: number
-  description: string
-  script: string
-  checksum: string
-  success: boolean
-}
-
-function getMigrationChecksum(statements: string[]): string {
-  return createHash('sha256').update(statements.join('\n-- statement boundary --\n')).digest('hex')
-}
-
-function ensureSchemaHistoryTable(database: SqlDatabase): void {
-  database.run(
-    `CREATE TABLE IF NOT EXISTS ${SCHEMA_HISTORY_TABLE} (
-      installed_rank INTEGER PRIMARY KEY,
-      version INTEGER NOT NULL UNIQUE,
-      description TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'SQL',
-      script TEXT NOT NULL,
-      checksum TEXT NOT NULL,
-      installed_by TEXT NOT NULL,
-      installed_on INTEGER NOT NULL,
-      execution_time INTEGER NOT NULL,
-      success INTEGER NOT NULL
-    )`,
-  )
-  database.run(
-    `CREATE INDEX IF NOT EXISTS idx_${SCHEMA_HISTORY_TABLE}_success
-     ON ${SCHEMA_HISTORY_TABLE}(success)`,
-  )
-}
-
-function getAppliedMigrations(database: SqlDatabase): Map<number, AppliedMigration> {
-  const statement = database.prepare(
-    `SELECT version, description, script, checksum, success
-     FROM ${SCHEMA_HISTORY_TABLE}
-     ORDER BY installed_rank`,
-  )
-  const migrations = new Map<number, AppliedMigration>()
+async function readJson<T>(filePath: string, fallback: T): Promise<T> {
   try {
-    while (statement.step()) {
-      const row = statement.getAsObject() as Record<string, unknown>
-      migrations.set(Number(row.version), {
-        version: Number(row.version),
-        description: String(row.description ?? ''),
-        script: String(row.script ?? ''),
-        checksum: String(row.checksum ?? ''),
-        success: Number(row.success) === 1,
-      })
-    }
-  } finally {
-    statement.free()
-  }
-  return migrations
-}
-
-function insertMigrationHistory(
-  database: SqlDatabase,
-  migration: (typeof DB_MIGRATIONS)[number],
-  checksum: string,
-  executionTime: number,
-  success: boolean,
-): void {
-  database.run(
-    `INSERT INTO ${SCHEMA_HISTORY_TABLE} (
-       installed_rank,
-       version,
-       description,
-       type,
-       script,
-       checksum,
-       installed_by,
-       installed_on,
-       execution_time,
-       success
-     ) VALUES (
-       (SELECT COALESCE(MAX(installed_rank), 0) + 1 FROM ${SCHEMA_HISTORY_TABLE}),
-       ?, ?, 'SQL', ?, ?, ?, ?, ?, ?
-     )`,
-    [
-      migration.version,
-      migration.description,
-      migration.script,
-      checksum,
-      'suora',
-      Date.now(),
-      executionTime,
-      success ? 1 : 0,
-    ],
-  )
-}
-
-function backfillLegacyMigrationHistory(database: SqlDatabase, userVersion: number): boolean {
-  const applied = getAppliedMigrations(database)
-  if (applied.size > 0 || userVersion <= 0) return false
-
-  const legacyMigrations = DB_MIGRATIONS.filter((migration) => migration.version <= userVersion)
-  if (legacyMigrations.length === 0) return false
-
-  database.run('BEGIN')
-  try {
-    for (const migration of legacyMigrations) {
-      insertMigrationHistory(database, migration, getMigrationChecksum(migration.statements), 0, true)
-    }
-    database.run('COMMIT')
-    return true
+    return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T
   } catch (error) {
-    database.run('ROLLBACK')
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return fallback
     throw error
   }
 }
 
-function validateAppliedMigrations(applied: Map<number, AppliedMigration>): void {
-  for (const migration of DB_MIGRATIONS) {
-    const current = applied.get(migration.version)
-    if (!current) continue
-    if (!current.success) {
-      throw new Error(`Database migration ${migration.script} previously failed`)
-    }
-    const expectedChecksum = getMigrationChecksum(migration.statements)
-    if (current.checksum !== expectedChecksum) {
-      throw new Error(
-        `Database migration checksum mismatch for ${migration.script}. Expected ${expectedChecksum}, found ${current.checksum}`,
-      )
-    }
+async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
+  try {
+    return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return null
+    throw error
   }
 }
 
-function runMigrations(database: SqlDatabase): boolean {
-  ensureSchemaHistoryTable(database)
-  let changed = backfillLegacyMigrationHistory(database, getUserVersion(database))
-  let applied = getAppliedMigrations(database)
-  validateAppliedMigrations(applied)
-
-  const pending = DB_MIGRATIONS.filter((migration) => !applied.has(migration.version))
-  for (const migration of pending) {
-    const startedAt = Date.now()
-    const checksum = getMigrationChecksum(migration.statements)
-    database.run('BEGIN')
-    try {
-      for (const statement of migration.statements) {
-        database.run(statement)
-      }
-      insertMigrationHistory(database, migration, checksum, Date.now() - startedAt, true)
-      database.run(`PRAGMA user_version = ${migration.version}`)
-      database.run('COMMIT')
-      changed = true
-    } catch (error) {
-      database.run('ROLLBACK')
-      throw error
-    }
-  }
-
-  applied = getAppliedMigrations(database)
-  validateAppliedMigrations(applied)
-  if (getUserVersion(database) !== DB_SCHEMA_VERSION) {
-    database.run(`PRAGMA user_version = ${DB_SCHEMA_VERSION}`)
-    changed = true
-  }
-
-  return changed
+function asArray(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (isRecord(value) && Array.isArray(value.items)) return value.items
+  return []
 }
 
-function parseJson(value: unknown): unknown {
-  if (typeof value !== 'string') return null
-  return JSON.parse(value)
+function asObject(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {}
+}
+
+function withoutMessages(session: SessionLike): Record<string, unknown> {
+  const { messages: _messages, ...metadata } = session
+  return metadata
+}
+
+function buildSessionMemories(sessionId: string, state: Record<string, unknown>): unknown[] {
+  const globalMemories = Array.isArray(state.globalMemories) ? state.globalMemories : []
+  return globalMemories.filter((entry) => isRecord(entry) && entry.scope === 'session' && entry.source === sessionId)
+}
+
+function splitSettingsState(state: Record<string, unknown>, version: number): Record<string, unknown> {
+  const settings: Record<string, unknown> = { _storageVersion: SUORA_STORAGE_VERSION, _storeVersion: version }
+  for (const [key, value] of Object.entries(state)) {
+    if (!SETTINGS_EXCLUDED_KEYS.has(key)) settings[key] = value
+  }
+  if (isEntity(state.selectedAgent)) settings.selectedAgentId = state.selectedAgent.id
+  if ('agentPipeline' in state) settings.agentPipeline = state.agentPipeline
+  if ('agentPipelineName' in state) settings.agentPipelineName = state.agentPipelineName
+  if ('selectedAgentPipelineId' in state) settings.selectedAgentPipelineId = state.selectedAgentPipelineId
+  return settings
+}
+
+function splitModelState(state: Record<string, unknown>): Record<string, unknown> {
+  const models: Record<string, unknown> = { _storageVersion: SUORA_STORAGE_VERSION }
+  for (const key of MODEL_STATE_KEYS) {
+    if (key in state) models[key] = state[key]
+  }
+  return models
+}
+
+function parsePersistedStore(value: string): PersistedPayload {
+  const parsed = JSON.parse(value) as PersistedPayload
+  if (!isRecord(parsed.state)) return parsed
+  return parsed
 }
 
 export function getDatabasePath(workspacePath: string): string {
-  return path.join(workspacePath, SUORA_DB_FILENAME)
+  return path.resolve(workspacePath)
 }
 
 export class SuoraDatabase {
   readonly path: string
-  readonly database: SqlDatabase
 
-  constructor(filePath: string, database: SqlDatabase) {
-    this.path = filePath
-    this.database = database
+  constructor(workspacePath: string) {
+    this.path = path.resolve(workspacePath)
   }
 
   get schemaVersion(): number {
-    return getUserVersion(this.database)
+    return SUORA_STORAGE_VERSION
+  }
+
+  async initialize(): Promise<void> {
+    await fs.mkdir(this.path, { recursive: true })
+    await Promise.all(TOP_LEVEL_DIRECTORIES.map((directory) => fs.mkdir(path.join(this.path, directory), { recursive: true })))
+    await this.ensureJsonFile('settings.json', { _storageVersion: SUORA_STORAGE_VERSION, _storeVersion: 0 })
+    await this.ensureJsonFile('models.json', { _storageVersion: SUORA_STORAGE_VERSION })
+    await this.ensureJsonFile('sessions/index.json', { sessions: [], activeSessionId: null, openSessionTabs: [] })
+    await this.ensureJsonFile('timers/index.json', [])
+    await this.ensureJsonFile('pipelines/index.json', [])
+    await this.ensureJsonFile('agents/index.json', [])
+    await this.ensureJsonFile('skills/index.json', [])
+    await this.ensureJsonFile('documents/index.json', [])
+    await this.ensureJsonFile('channels/index.json', [])
+    await this.ensureJsonFile('memories/index.json', [])
+    await this.ensureJsonFile('mcp/index.json', [])
+    await this.migrateLegacyLayout()
+  }
+
+  private file(relativePath: string): string {
+    return path.join(this.path, relativePath)
+  }
+
+  private async ensureJsonFile(relativePath: string, defaultValue: unknown): Promise<void> {
+    const filePath = this.file(relativePath)
+    if (!(await pathExists(filePath))) await writeJson(filePath, defaultValue)
   }
 
   async persist(): Promise<void> {
-    await atomicWriteBuffer(this.path, this.database.export())
+    // File-backed storage is persisted eagerly by each write.
   }
 
   async close(): Promise<void> {
     await this.persist()
-    this.database.close()
-  }
-
-  getStateSlices(): Record<string, unknown> {
-    const statement = this.database.prepare('SELECT key, value_json FROM settings ORDER BY key')
-    const slices: Record<string, unknown> = {}
-    try {
-      while (statement.step()) {
-        const row = statement.getAsObject() as { key?: unknown; value_json?: unknown }
-        if (typeof row.key === 'string') slices[row.key] = parseJson(row.value_json)
-      }
-    } finally {
-      statement.free()
-    }
-    return slices
   }
 
   async saveStateSlice(key: string, value: unknown): Promise<void> {
-    this.database.run(
-      `INSERT INTO settings (key, value_json, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      [key, JSON.stringify(value), Date.now()],
-    )
-    await this.persist()
+    const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
+    settings[key] = value
+    settings._storageVersion = SUORA_STORAGE_VERSION
+    await writeJson(this.file('settings.json'), settings)
   }
 
-  getPersistedStore(key: string): string | null {
-    const statement = this.database.prepare('SELECT value_json FROM app_state WHERE key = ?')
-    try {
-      statement.bind([key])
-      if (!statement.step()) return null
-      const row = statement.getAsObject() as { value_json?: unknown }
-      return typeof row.value_json === 'string' ? row.value_json : null
-    } finally {
-      statement.free()
+  async getPersistedStore(key: string): Promise<string | null> {
+    if (key !== SPLIT_STORE_NAME) {
+      const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
+      const stores = asObject(settings._persistedStores)
+      return typeof stores[key] === 'string' ? stores[key] : null
     }
+
+    const state = await this.loadSplitState()
+    if (Object.keys(state).length === 0) return null
+    const version = typeof state._storeVersion === 'number' ? state._storeVersion : 0
+    delete state._storeVersion
+    return JSON.stringify({ state, version })
   }
 
   async savePersistedStore(key: string, serializedValue: string, version: number): Promise<void> {
     JSON.parse(serializedValue)
-    this.database.run(
-      `INSERT INTO app_state (key, value_json, version, updated_at)
-       VALUES (?, ?, ?, ?)
-       ON CONFLICT(key) DO UPDATE SET
-         value_json = excluded.value_json,
-         version = excluded.version,
-         updated_at = excluded.updated_at`,
-      [key, serializedValue, version, Date.now()],
-    )
-    await this.persist()
+    if (key !== SPLIT_STORE_NAME) {
+      const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
+      const stores = asObject(settings._persistedStores)
+      stores[key] = serializedValue
+      settings._persistedStores = stores
+      await writeJson(this.file('settings.json'), settings)
+      return
+    }
+
+    const parsed = parsePersistedStore(serializedValue)
+    if (!isRecord(parsed.state)) return
+    await this.saveSplitState(parsed.state, Number.isFinite(version) ? Math.trunc(version) : (parsed.version ?? 0))
   }
 
   async deletePersistedStore(key: string): Promise<void> {
-    this.database.run('DELETE FROM app_state WHERE key = ?', [key])
-    await this.persist()
+    if (key !== SPLIT_STORE_NAME) {
+      const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
+      const stores = asObject(settings._persistedStores)
+      delete stores[key]
+      settings._persistedStores = stores
+      await writeJson(this.file('settings.json'), settings)
+      return
+    }
+
+    await Promise.all([
+      writeJson(this.file('settings.json'), { _storageVersion: SUORA_STORAGE_VERSION, _storeVersion: 0 }),
+      writeJson(this.file('models.json'), { _storageVersion: SUORA_STORAGE_VERSION }),
+      writeJson(this.file('sessions/index.json'), { sessions: [], activeSessionId: null, openSessionTabs: [] }),
+      writeJson(this.file('agents/index.json'), []),
+      writeJson(this.file('channels/index.json'), []),
+      writeJson(this.file('memories/index.json'), []),
+      writeJson(this.file('mcp/index.json'), []),
+      this.clearEntityDirectory('timers/executions'),
+      this.clearEntityDirectory('pipelines/executions'),
+    ])
   }
 
-  listJsonTable(table: JsonTableName): unknown[] {
+  async listJsonTable(table: JsonTableName): Promise<unknown[]> {
     assertJsonTable(table)
-    const statement = this.database.prepare(`SELECT value_json FROM ${table} ORDER BY updated_at DESC`)
-    const rows: unknown[] = []
-    try {
-      while (statement.step()) {
-        const row = statement.getAsObject() as { value_json?: unknown }
-        rows.push(parseJson(row.value_json))
-      }
-    } finally {
-      statement.free()
-    }
-    return rows
+    if (table === 'models') return asArray((await readJson<Record<string, unknown>>(this.file('models.json'), {})).models)
+    if (table === 'provider_configs') return asArray((await readJson<Record<string, unknown>>(this.file('models.json'), {})).providerConfigs)
+
+    const directoryPath = TABLE_DIRECTORIES[table]
+    if (directoryPath) return await this.readEntityDirectory(directoryPath)
+
+    const relativePath = TABLE_FILES[table]
+    if (!relativePath) return []
+    return asArray(await readJson<unknown>(this.file(relativePath), []))
   }
 
   async saveJsonEntity(table: JsonTableName, id: string, value: unknown): Promise<void> {
     assertJsonTable(table)
-    this.database.run(
-      `INSERT INTO ${table} (id, value_json, updated_at)
-       VALUES (?, ?, ?)
-       ON CONFLICT(id) DO UPDATE SET value_json = excluded.value_json, updated_at = excluded.updated_at`,
-      [id, JSON.stringify(value), Date.now()],
-    )
-    await this.persist()
+    if (table === 'models' || table === 'provider_configs') {
+      const models = await readJson<Record<string, unknown>>(this.file('models.json'), {})
+      const key = table === 'models' ? 'models' : 'providerConfigs'
+      const items = asArray(models[key]).filter((entry) => !(isEntity(entry) && entry.id === id))
+      models[key] = [value, ...items]
+      models._storageVersion = SUORA_STORAGE_VERSION
+      await writeJson(this.file('models.json'), models)
+      return
+    }
+
+    const directoryPath = TABLE_DIRECTORIES[table]
+    if (directoryPath) {
+      await fs.mkdir(this.file(directoryPath), { recursive: true })
+      await writeJson(this.file(path.join(directoryPath, `${safeSegment(id)}.json`)), value)
+      return
+    }
+
+    const relativePath = TABLE_FILES[table]
+    if (!relativePath) throw new Error(`Unsupported storage table: ${table}`)
+    const items = asArray(await readJson<unknown>(this.file(relativePath), []))
+      .filter((entry) => !(isEntity(entry) && entry.id === id))
+    await writeJson(this.file(relativePath), [value, ...items])
   }
 
   async deleteJsonEntity(table: JsonTableName, id: string): Promise<void> {
     assertJsonTable(table)
-    this.database.run(`DELETE FROM ${table} WHERE id = ?`, [id])
-    await this.persist()
+    if (table === 'models' || table === 'provider_configs') {
+      const models = await readJson<Record<string, unknown>>(this.file('models.json'), {})
+      const key = table === 'models' ? 'models' : 'providerConfigs'
+      models[key] = asArray(models[key]).filter((entry) => !(isEntity(entry) && entry.id === id))
+      await writeJson(this.file('models.json'), models)
+      return
+    }
+
+    const directoryPath = TABLE_DIRECTORIES[table]
+    if (directoryPath) {
+      const filePath = this.file(path.join(directoryPath, `${safeSegment(id)}.json`))
+      try {
+        await fs.unlink(filePath)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
+      return
+    }
+
+    const relativePath = TABLE_FILES[table]
+    if (!relativePath) throw new Error(`Unsupported storage table: ${table}`)
+    const items = asArray(await readJson<unknown>(this.file(relativePath), []))
+      .filter((entry) => !(isEntity(entry) && entry.id === id))
+    await writeJson(this.file(relativePath), items)
   }
 
-  getSnapshot(): Record<string, unknown> {
+  private async readEntityDirectory(relativeDir: string): Promise<unknown[]> {
+    const dirPath = this.file(relativeDir)
+    let entries: string[]
+    try {
+      entries = await fs.readdir(dirPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw error
+    }
+    const files = entries.filter((name) => name.endsWith('.json'))
+    const records = await Promise.all(files.map(async (name) => {
+      try {
+        return JSON.parse(await fs.readFile(path.join(dirPath, name), 'utf-8')) as unknown
+      } catch {
+        return null
+      }
+    }))
+    return records.filter((entry) => entry !== null)
+  }
+
+  async getSnapshot(): Promise<Record<string, unknown>> {
     return {
       schemaVersion: this.schemaVersion,
-      settings: this.getStateSlices(),
-      providerConfigs: this.listJsonTable('provider_configs'),
-      models: this.listJsonTable('models'),
-      agents: this.listJsonTable('agents'),
-      skills: this.listJsonTable('skills'),
-      channels: this.listJsonTable('channels'),
-      channelMessages: this.listJsonTable('channel_messages'),
-      mcpServers: this.listJsonTable('mcp_servers'),
-      timers: this.listJsonTable('timers'),
-      timerExecutions: this.listJsonTable('timer_executions'),
-      pipelines: this.listJsonTable('pipelines'),
-      pipelineExecutions: this.listJsonTable('pipeline_executions'),
-      memories: this.listJsonTable('memories'),
+      settings: await readJson<Record<string, unknown>>(this.file('settings.json'), {}),
+      providerConfigs: await this.listJsonTable('provider_configs'),
+      models: await this.listJsonTable('models'),
+      agents: await this.listJsonTable('agents'),
+      skills: await this.listJsonTable('skills'),
+      channels: await this.listJsonTable('channels'),
+      channelMessages: await this.listJsonTable('channel_messages'),
+      mcpServers: await this.listJsonTable('mcp_servers'),
+      timers: await this.listJsonTable('timers'),
+      timerExecutions: await this.listJsonTable('timer_executions'),
+      pipelines: await this.listJsonTable('pipelines'),
+      pipelineExecutions: await this.listJsonTable('pipeline_executions'),
+      memories: await this.listJsonTable('memories'),
     }
+  }
+
+  private async saveSplitState(state: Record<string, unknown>, version: number): Promise<void> {
+    await this.initialize()
+
+    const sessions = Array.isArray(state.sessions) ? state.sessions.filter(isEntity) as SessionLike[] : []
+    const sessionIndex = {
+      sessions: sessions.map(withoutMessages),
+      activeSessionId: typeof state.activeSessionId === 'string' ? state.activeSessionId : null,
+      openSessionTabs: Array.isArray(state.openSessionTabs) ? state.openSessionTabs : [],
+    }
+
+    await writeJson(this.file('sessions/index.json'), sessionIndex)
+    await this.pruneChildDirectories('sessions', new Set(sessions.map((session) => safeSegment(session.id))))
+    await Promise.all(sessions.map(async (session) => {
+      const sessionDir = this.file(path.join('sessions', safeSegment(session.id)))
+      await fs.mkdir(sessionDir, { recursive: true })
+      await writeJson(path.join(sessionDir, 'conversation.json'), { messages: Array.isArray(session.messages) ? session.messages : [] })
+      await writeJson(path.join(sessionDir, 'memories.json'), buildSessionMemories(session.id, state))
+    }))
+
+    const agents = Array.isArray(state.agents) ? state.agents.filter(isEntity) as AgentLike[] : []
+    await writeJson(this.file('agents/index.json'), agents)
+    await this.pruneChildDirectories('agents', new Set(agents.map((agent) => safeSegment(agent.id))))
+    await Promise.all(agents.map(async (agent) => {
+      const agentDir = this.file(path.join('agents', safeSegment(agent.id)))
+      await fs.mkdir(agentDir, { recursive: true })
+      await writeJson(path.join(agentDir, 'memories.json'), Array.isArray(agent.memories) ? agent.memories : [])
+    }))
+
+    await Promise.all([
+      writeJson(this.file('models.json'), splitModelState(state)),
+      writeJson(this.file('settings.json'), splitSettingsState(state, version)),
+      writeJson(this.file('skills/index.json'), Array.isArray(state.skills) ? state.skills : []),
+      writeJson(this.file('skills/versions.json'), Array.isArray(state.skillVersions) ? state.skillVersions : []),
+      writeJson(this.file('channels/index.json'), Array.isArray(state.channels) ? state.channels : []),
+      writeJson(this.file('channels/messages.json'), Array.isArray(state.channelMessages) ? state.channelMessages : []),
+      writeJson(this.file('channels/tokens.json'), isRecord(state.channelTokens) ? state.channelTokens : {}),
+      writeJson(this.file('channels/health.json'), isRecord(state.channelHealth) ? state.channelHealth : {}),
+      writeJson(this.file('channels/users.json'), isRecord(state.channelUsers) ? state.channelUsers : {}),
+      writeJson(this.file('memories/index.json'), Array.isArray(state.globalMemories) ? state.globalMemories : []),
+      writeJson(this.file('pipelines/index.json'), Array.isArray(state.agentPipelines) ? state.agentPipelines : []),
+      writeJson(this.file('mcp/index.json'), Array.isArray(state.mcpServers) ? state.mcpServers : []),
+    ])
+  }
+
+  private async loadSplitState(): Promise<Record<string, unknown>> {
+    await this.initialize()
+    const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
+    const models = await readJson<Record<string, unknown>>(this.file('models.json'), {})
+    const sessionIndexRaw = await readJson<unknown>(this.file('sessions/index.json'), { sessions: [] })
+    const sessionIndex = asObject(sessionIndexRaw)
+    const sessionMetadata = asArray(sessionIndex.sessions).filter(isEntity) as SessionLike[]
+    const sessions = await Promise.all(sessionMetadata.map(async (session) => {
+      const sessionDir = this.file(path.join('sessions', safeSegment(session.id)))
+      const conversation = await readJsonIfExists<unknown>(path.join(sessionDir, 'conversation.json'))
+      const messages = Array.isArray(conversation) ? conversation : asArray(asObject(conversation).messages)
+      return { ...session, messages }
+    }))
+
+    const rawAgents = await readJson<unknown>(this.file('agents/index.json'), [])
+    const agentMetadata = asArray(rawAgents).filter(isEntity) as AgentLike[]
+    const agents = await Promise.all(agentMetadata.map(async (agent) => {
+      const memories = await readJsonIfExists<unknown[]>(this.file(path.join('agents', safeSegment(agent.id), 'memories.json')))
+      return Array.isArray(memories) ? { ...agent, memories } : agent
+    }))
+
+    const selectedAgentId = typeof settings.selectedAgentId === 'string' ? settings.selectedAgentId : undefined
+    const selectedAgent = selectedAgentId ? agents.find((agent) => agent.id === selectedAgentId) : undefined
+    const state: Record<string, unknown> = {
+      ...settings,
+      ...models,
+      sessions,
+      activeSessionId: typeof sessionIndex.activeSessionId === 'string' ? sessionIndex.activeSessionId : null,
+      openSessionTabs: Array.isArray(sessionIndex.openSessionTabs) ? sessionIndex.openSessionTabs : [],
+      agents,
+      selectedAgent: selectedAgent ?? null,
+      skills: asArray(await readJson<unknown>(this.file('skills/index.json'), [])),
+      skillVersions: asArray(await readJson<unknown>(this.file('skills/versions.json'), [])),
+      channels: asArray(await readJson<unknown>(this.file('channels/index.json'), [])),
+      channelMessages: asArray(await readJson<unknown>(this.file('channels/messages.json'), [])),
+      channelTokens: await readJson<Record<string, unknown>>(this.file('channels/tokens.json'), {}),
+      channelHealth: await readJson<Record<string, unknown>>(this.file('channels/health.json'), {}),
+      channelUsers: await readJson<Record<string, unknown>>(this.file('channels/users.json'), {}),
+      globalMemories: asArray(await readJson<unknown>(this.file('memories/index.json'), [])),
+      agentPipelines: asArray(await readJson<unknown>(this.file('pipelines/index.json'), [])),
+      mcpServers: asArray(await readJson<unknown>(this.file('mcp/index.json'), [])),
+    }
+
+    state._storeVersion = typeof settings._storeVersion === 'number' ? settings._storeVersion : 0
+    delete state._storageVersion
+    delete state.selectedAgentId
+    delete state._persistedStores
+    return state
+  }
+
+  private async pruneChildDirectories(parent: string, keepNames: Set<string>): Promise<void> {
+    let entries: Array<{ name: string; isDirectory: () => boolean }>
+    try {
+      entries = await fs.readdir(this.file(parent), { withFileTypes: true })
+    } catch {
+      return
+    }
+    await Promise.all(entries
+      .filter((entry) => entry.isDirectory() && !keepNames.has(entry.name))
+      .map((entry) => fs.rm(this.file(path.join(parent, entry.name)), { recursive: true, force: true })))
+  }
+
+  private async clearEntityDirectory(relativeDir: string): Promise<void> {
+    const dirPath = this.file(relativeDir)
+    let entries: string[]
+    try {
+      entries = await fs.readdir(dirPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw error
+    }
+    await Promise.all(entries
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => fs.unlink(path.join(dirPath, name)).catch(() => {})))
+  }
+
+  private async migrateLegacyLayout(): Promise<void> {
+    await this.migrateLegacyExecutionsFile('timers/executions.json', 'timers/executions')
+    await this.migrateLegacyExecutionsFile('pipelines/executions.json', 'pipelines/executions')
+    await this.migrateLegacyMcpServers()
+  }
+
+  private async migrateLegacyExecutionsFile(legacyRelative: string, targetDir: string): Promise<void> {
+    const legacyPath = this.file(legacyRelative)
+    if (!(await pathExists(legacyPath))) return
+    try {
+      const records = asArray(await readJson<unknown>(legacyPath, []))
+      await fs.mkdir(this.file(targetDir), { recursive: true })
+      for (const record of records) {
+        if (!isEntity(record)) continue
+        const filePath = this.file(path.join(targetDir, `${safeSegment(record.id)}.json`))
+        if (await pathExists(filePath)) continue
+        await writeJson(filePath, record)
+      }
+      await fs.unlink(legacyPath).catch(() => {})
+    } catch {
+      // Leave the legacy file in place if migration fails so we can retry on next start.
+    }
+  }
+
+  private async migrateLegacyMcpServers(): Promise<void> {
+    const settingsPath = this.file('settings.json')
+    if (!(await pathExists(settingsPath))) return
+    let settings: Record<string, unknown>
+    try {
+      settings = await readJson<Record<string, unknown>>(settingsPath, {})
+    } catch {
+      return
+    }
+    if (!('mcpServers' in settings)) return
+    const legacy = asArray(settings.mcpServers)
+    const targetPath = this.file('mcp/index.json')
+    const existing = asArray(await readJson<unknown>(targetPath, []))
+    if (existing.length === 0 && legacy.length > 0) {
+      await writeJson(targetPath, legacy)
+    }
+    delete settings.mcpServers
+    await writeJson(settingsPath, settings)
   }
 }
 
 export async function openSuoraDatabase(workspacePath: string): Promise<SuoraDatabase> {
-  const SQL = await getSqlModule()
-  const filePath = getDatabasePath(workspacePath)
-  let existing: Uint8Array | undefined
-
-  try {
-    existing = new Uint8Array(await fs.readFile(filePath))
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code
-    if (code !== 'ENOENT') throw error
-  }
-
-  const database = new SQL.Database(existing)
-  database.run('PRAGMA foreign_keys = ON')
-  const migrated = runMigrations(database)
-
-  const appDatabase = new SuoraDatabase(filePath, database)
-  if (!existing || migrated || appDatabase.schemaVersion !== DB_SCHEMA_VERSION) {
-    await appDatabase.persist()
-  }
-  return appDatabase
+  const database = new SuoraDatabase(workspacePath)
+  await database.initialize()
+  return database
 }

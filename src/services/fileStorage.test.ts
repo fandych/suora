@@ -22,7 +22,7 @@ describe('fileStateStorage', () => {
     })
   })
 
-  it('should persist non-skill app state into SQLite while keeping model secrets encrypted', async () => {
+  it('should persist non-skill app state into workspace files while keeping model secrets encrypted', async () => {
     fileStateStorage.setItem('suora-store', JSON.stringify({
       version: 16,
       state: {
@@ -74,16 +74,16 @@ describe('fileStateStorage', () => {
     await flushPendingSplitStoreWrites()
     await flushAsyncWork()
 
-    const sqliteWrite = vi.mocked(window.electron.invoke).mock.calls.find(
+    const filesystemWrite = vi.mocked(window.electron.invoke).mock.calls.find(
       ([channel, key]) => channel === 'db:savePersistedStore' && key === 'suora-store',
     )
 
-    expect(sqliteWrite).toBeDefined()
+    expect(filesystemWrite).toBeDefined()
 
-    const sqliteJson = sqliteWrite?.[2]
-    expect(typeof sqliteJson).toBe('string')
+    const filesystemJson = filesystemWrite?.[2]
+    expect(typeof filesystemJson).toBe('string')
 
-    const parsed = JSON.parse(sqliteJson as string) as { state: Record<string, unknown> }
+    const parsed = JSON.parse(filesystemJson as string) as { state: Record<string, unknown> }
     expect(parsed.state.agentVersions).toEqual([{ id: 'av-1', agentId: 'agent-1', version: 1, snapshot: { name: 'Agent 1' }, createdAt: 1 }])
     expect(parsed.state.agentPerformance).toEqual({ 'agent-1': { agentId: 'agent-1', totalCalls: 2, totalTokens: 20, avgResponseTimeMs: 100, responseTimes: [100], lastUsed: 1, errorCount: 0 } })
     expect(parsed.state.agentPipeline).toEqual([{ agentId: 'agent-1', task: 'Draft task' }])

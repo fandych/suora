@@ -58,7 +58,7 @@
 src/
 ├── App.tsx                  # React Router (8 Routen)
 ├── index.css                # Tailwind @theme-Token (Dunkel/Hell)
-├── store/appStore.ts        # Globaler Zustand mit Zustand (Version 12)
+├── store/appStore.ts        # Globaler Zustand mit Zustand (Version 18)
 ├── services/
 �?  ├── aiService.ts         # Multi-Provider-KI-Integration
 �?  ├── tools.ts             # 18 Skill-Kategorien, 42+ Tools
@@ -131,7 +131,7 @@ Der Renderer verwendet `@vitejs/plugin-react` + `@tailwindcss/vite`, mit dem Pfa
 
 Ein einzelner Zustand-Store mit `persist`-Middleware, gestützt auf IPC-Dateispeicher.
 
-**Store-Name:** `suora-store` · **Version:** 12 · **Backend:** `~/.suora/data/`
+**Store-Name:** `suora-store` · **Version:** 18 · **Backend:** `{workspace}/`
 
 ### Wichtige Zustandsbereiche
 
@@ -151,12 +151,12 @@ Ein einzelner Zustand-Store mit `persist`-Middleware, gestützt auf IPC-Dateispe
 ### Persistenz-Ablauf
 
 ```
-Zustand �?fileStateStorage-Adapter �?IPC (store:load/save/remove) �?~/.suora/data/*.json
+Zustand �?fileStateStorage-Adapter �?IPC (db:loadPersistedStore / db:savePersistedStore) �?{workspace}/{settings,models}.json + sessions/, agents/, channels/, …
 ```
 
 Ein In-Memory-`Map`-Cache ermöglicht synchrone Lesezugriffe über `readCached()`/`writeCached()`. Beim ersten Laden prüft der Adapter den Dateispeicher, fällt auf `localStorage` zurück (Migration) und speichert dann im Cache.
 
-### Migrationen (Version 1 �?12)
+### Migrationen (Version 1 �?18)
 
 v2: Agent-Speicher, Skill-Tools · v3: `toolSecurity`-Standardwerte · v5: `workspacePath` · v7: Migration von `providerConfigs` von Record zu Array · v8: Bestätigung standardmäßig deaktiviert · v9: `globalMemories`, Nachrüstung des Speicherbereichs · v10: Kanäle, Plugins, Locale, Agent, Onboarding · v11: `pluginTools`, `skillVersions` · v12: `emailConfig`
 
@@ -293,7 +293,7 @@ window.electron.send(channel, ...args): void                 // Whitelist; wird 
 | Browser | `browser:navigate`, `browser:screenshot`, `browser:evaluate`, `browser:extractLinks`, `browser:extractText`, `browser:fillForm`, `browser:click` |
 | Zwischenablage | `clipboard:read`, `clipboard:write` |
 | Timer | `timer:list`, `timer:create`, `timer:update`, `timer:delete`, `timer:history` |
-| Store | `store:load`, `store:save`, `store:remove` |
+| Store | `db:getSnapshot`, `db:loadPersistedStore`, `db:savePersistedStore`, `db:listEntities`, `db:saveEntity`, `db:deleteEntity` |
 | Sicherer Speicher | `safe-storage:encrypt`, `safe-storage:decrypt`, `safe-storage:isAvailable` |
 | System | `system:getDefaultWorkspacePath`, `system:ensureDirectory`, `system:info`, `system:notify`, `system:screenshot` |
 | Kanäle | `channel:start/stop/status/register`, `channel:getWebhookUrl`, `channel:sendMessage`, `channel:sendMessageQueued`, `channel:getAccessToken`, `channel:healthCheck`, `channel:debugSend` |

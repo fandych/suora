@@ -2,57 +2,18 @@ import fs from 'fs/promises'
 import os from 'os'
 import path from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { DB_SCHEMA_VERSION } from './dbMigrations'
-import { SCHEMA_HISTORY_TABLE, getDatabasePath, openSuoraDatabase, type SuoraDatabase } from './database'
+import { SUORA_STORAGE_VERSION, getDatabasePath, openSuoraDatabase } from './database'
 
 const tempDirectories: string[] = []
 
 async function makeWorkspace(): Promise<string> {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'suora-db-'))
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'suora-fs-store-'))
   tempDirectories.push(directory)
   return directory
 }
 
-function readMigrationHistory(appDatabase: SuoraDatabase): Array<{
-  version: number
-  script: string
-  checksum: string
-  success: number
-}> {
-  const statement = appDatabase.database.prepare(
-    `SELECT version, script, checksum, success
-     FROM ${SCHEMA_HISTORY_TABLE}
-     ORDER BY installed_rank`,
-  )
-  const rows: Array<{ version: number; script: string; checksum: string; success: number }> = []
-  try {
-    while (statement.step()) {
-      const row = statement.getAsObject() as Record<string, unknown>
-      rows.push({
-        version: Number(row.version),
-        script: String(row.script),
-        checksum: String(row.checksum),
-        success: Number(row.success),
-      })
-    }
-  } finally {
-    statement.free()
-  }
-  return rows
-}
-
-function hasTable(appDatabase: SuoraDatabase, tableName: string): boolean {
-  const statement = appDatabase.database.prepare(
-    `SELECT name
-     FROM sqlite_master
-     WHERE type = 'table' AND name = ?`,
-  )
-  try {
-    statement.bind([tableName])
-    return statement.step()
-  } finally {
-    statement.free()
-  }
+async function readJson<T>(filePath: string): Promise<T> {
+  return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T
 }
 
 afterEach(async () => {
@@ -60,71 +21,25 @@ afterEach(async () => {
 })
 
 describe('SuoraDatabase', () => {
-  it('creates a workspace SQLite database with the current schema', async () => {
+  it('creates the workspace filesystem storage layout', async () => {
     const workspace = await makeWorkspace()
     const appDatabase = await openSuoraDatabase(workspace)
 
     expect(appDatabase.path).toBe(getDatabasePath(workspace))
-    expect(appDatabase.schemaVersion).toBe(DB_SCHEMA_VERSION)
-    expect(readMigrationHistory(appDatabase).map(({ version, script, success }) => ({ version, script, success }))).toEqual([
-      { version: 1, script: 'V1__initial_schema.sql', success: 1 },
-      { version: 2, script: 'V2__persisted_app_state_and_timer_executions.sql', success: 1 },
-    ])
+    expect(appDatabase.schemaVersion).toBe(SUORA_STORAGE_VERSION)
+
+    await expect(fs.stat(path.join(workspace, 'sessions', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'timers', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'pipelines', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'agents', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'skills', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'documents', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'channels', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'memories', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'settings.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'models.json'))).resolves.toBeTruthy()
 
     await appDatabase.close()
-    await expect(fs.stat(getDatabasePath(workspace))).resolves.toBeTruthy()
-  })
-
-  it('backfills migration history for legacy current databases', async () => {
-    const workspace = await makeWorkspace()
-    const appDatabase = await openSuoraDatabase(workspace)
-
-    appDatabase.database.run(`DROP TABLE ${SCHEMA_HISTORY_TABLE}`)
-    appDatabase.database.run(`PRAGMA user_version = ${DB_SCHEMA_VERSION}`)
-    await appDatabase.close()
-
-    const reopened = await openSuoraDatabase(workspace)
-
-    expect(reopened.schemaVersion).toBe(DB_SCHEMA_VERSION)
-    expect(readMigrationHistory(reopened).map(({ version, script, success }) => ({ version, script, success }))).toEqual([
-      { version: 1, script: 'V1__initial_schema.sql', success: 1 },
-      { version: 2, script: 'V2__persisted_app_state_and_timer_executions.sql', success: 1 },
-    ])
-
-    await reopened.close()
-  })
-
-  it('upgrades legacy v1 databases and records the v2 migration', async () => {
-    const workspace = await makeWorkspace()
-    const appDatabase = await openSuoraDatabase(workspace)
-
-    appDatabase.database.run(`DROP TABLE ${SCHEMA_HISTORY_TABLE}`)
-    appDatabase.database.run('DROP TABLE app_state')
-    appDatabase.database.run('DROP TABLE timer_executions')
-    appDatabase.database.run('PRAGMA user_version = 1')
-    await appDatabase.close()
-
-    const upgraded = await openSuoraDatabase(workspace)
-
-    expect(upgraded.schemaVersion).toBe(DB_SCHEMA_VERSION)
-    expect(hasTable(upgraded, 'app_state')).toBe(true)
-    expect(hasTable(upgraded, 'timer_executions')).toBe(true)
-    expect(readMigrationHistory(upgraded).map(({ version, script, success }) => ({ version, script, success }))).toEqual([
-      { version: 1, script: 'V1__initial_schema.sql', success: 1 },
-      { version: 2, script: 'V2__persisted_app_state_and_timer_executions.sql', success: 1 },
-    ])
-
-    await upgraded.close()
-  })
-
-  it('rejects modified applied migration checksums', async () => {
-    const workspace = await makeWorkspace()
-    const appDatabase = await openSuoraDatabase(workspace)
-
-    appDatabase.database.run(`UPDATE ${SCHEMA_HISTORY_TABLE} SET checksum = ? WHERE version = 1`, ['changed'])
-    await appDatabase.close()
-
-    await expect(openSuoraDatabase(workspace)).rejects.toThrow(/checksum mismatch/)
   })
 
   it('persists settings and JSON entities across reopen', async () => {
@@ -136,25 +51,146 @@ describe('SuoraDatabase', () => {
     await appDatabase.close()
 
     const reopened = await openSuoraDatabase(workspace)
+    const snapshot = await reopened.getSnapshot()
 
-    expect(reopened.getStateSlices()).toEqual({ theme: 'dark' })
-    expect(reopened.listJsonTable('agents')).toEqual([{ id: 'agent-1', name: 'Assistant' }])
+    expect(snapshot.settings).toMatchObject({ theme: 'dark' })
+    expect(await reopened.listJsonTable('agents')).toEqual([{ id: 'agent-1', name: 'Assistant' }])
 
     await reopened.close()
   })
 
-  it('persists app_state payloads across reopen', async () => {
+  it('splits Zustand app state into workspace files and rebuilds it on load', async () => {
     const workspace = await makeWorkspace()
     const appDatabase = await openSuoraDatabase(workspace)
-    const payload = JSON.stringify({ state: { sessions: [{ id: 'session-1' }] }, version: 18 })
+    const payload = JSON.stringify({
+      state: {
+        sessions: [{ id: 'session-1', title: 'Chat', createdAt: 1, updatedAt: 2, messages: [{ id: 'msg-1', role: 'user', content: 'Hi', timestamp: 3 }] }],
+        activeSessionId: 'session-1',
+        openSessionTabs: ['session-1'],
+        agents: [{ id: 'agent-1', name: 'Assistant', memories: [{ id: 'memory-1' }] }],
+        selectedAgent: { id: 'agent-1' },
+        providerConfigs: [{ id: 'openai', models: [] }],
+        models: [{ id: 'openai:gpt-4.1', provider: 'openai' }],
+        selectedModel: { id: 'openai:gpt-4.1', provider: 'openai' },
+        globalMemories: [{ id: 'global-memory' }],
+        channels: [{ id: 'channel-1' }],
+        agentPipelines: [{ id: 'pipeline-1', updatedAt: 1 }],
+        theme: 'dark',
+      },
+      version: 18,
+    })
 
     await appDatabase.savePersistedStore('suora-store', payload, 18)
     await appDatabase.close()
 
-    const reopened = await openSuoraDatabase(workspace)
+    expect(await readJson(path.join(workspace, 'sessions', 'index.json'))).toMatchObject({
+      sessions: [{ id: 'session-1', title: 'Chat', createdAt: 1, updatedAt: 2 }],
+      activeSessionId: 'session-1',
+    })
+    expect(await readJson(path.join(workspace, 'sessions', 'session-1', 'conversation.json'))).toEqual({
+      messages: [{ id: 'msg-1', role: 'user', content: 'Hi', timestamp: 3 }],
+    })
+    expect(await readJson(path.join(workspace, 'agents', 'agent-1', 'memories.json'))).toEqual([{ id: 'memory-1' }])
+    expect(await readJson(path.join(workspace, 'models.json'))).toMatchObject({ providerConfigs: [{ id: 'openai', models: [] }] })
 
-    expect(reopened.getPersistedStore('suora-store')).toBe(payload)
+    const reopened = await openSuoraDatabase(workspace)
+    const restored = JSON.parse((await reopened.getPersistedStore('suora-store')) ?? '{}') as { state: Record<string, unknown>; version: number }
+
+    expect(restored.version).toBe(18)
+    expect(restored.state.sessions).toEqual([{ id: 'session-1', title: 'Chat', createdAt: 1, updatedAt: 2, messages: [{ id: 'msg-1', role: 'user', content: 'Hi', timestamp: 3 }] }])
+    expect(restored.state.selectedAgent).toMatchObject({ id: 'agent-1', memories: [{ id: 'memory-1' }] })
+    expect(restored.state.agentPipelines).toEqual([{ id: 'pipeline-1', updatedAt: 1 }])
 
     await reopened.close()
+  })
+
+  it('persists generic store payloads in settings metadata', async () => {
+    const workspace = await makeWorkspace()
+    const appDatabase = await openSuoraDatabase(workspace)
+    const payload = JSON.stringify({ state: { value: true }, version: 1 })
+
+    await appDatabase.savePersistedStore('other-store', payload, 1)
+    await appDatabase.close()
+
+    const reopened = await openSuoraDatabase(workspace)
+    expect(await reopened.getPersistedStore('other-store')).toBe(payload)
+
+    await reopened.deletePersistedStore('other-store')
+    expect(await reopened.getPersistedStore('other-store')).toBeNull()
+
+    await reopened.close()
+  })
+
+  it('stores timer and pipeline executions as one file per id', async () => {
+    const workspace = await makeWorkspace()
+    const appDatabase = await openSuoraDatabase(workspace)
+
+    await appDatabase.saveJsonEntity('timer_executions', 'tx-1', { id: 'tx-1', timerId: 't-1', firedAt: 1 })
+    await appDatabase.saveJsonEntity('timer_executions', 'tx-2', { id: 'tx-2', timerId: 't-1', firedAt: 2 })
+    await appDatabase.saveJsonEntity('pipeline_executions', 'px-1', { id: 'px-1', pipelineId: 'p-1', startedAt: 10 })
+
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions', 'tx-1.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions', 'tx-2.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'pipelines', 'executions', 'px-1.json'))).resolves.toBeTruthy()
+    // The legacy single-file index should not be created for executions.
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions.json'))).rejects.toThrow()
+    await expect(fs.stat(path.join(workspace, 'pipelines', 'executions.json'))).rejects.toThrow()
+
+    const timers = await appDatabase.listJsonTable('timer_executions') as Array<{ id: string }>
+    expect(timers.map((entry) => entry.id).sort()).toEqual(['tx-1', 'tx-2'])
+
+    await appDatabase.deleteJsonEntity('timer_executions', 'tx-1')
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions', 'tx-1.json'))).rejects.toThrow()
+    expect((await appDatabase.listJsonTable('timer_executions')).map((entry) => (entry as { id: string }).id)).toEqual(['tx-2'])
+
+    await appDatabase.close()
+  })
+
+  it('stores MCP server configs in a dedicated mcp folder', async () => {
+    const workspace = await makeWorkspace()
+    const appDatabase = await openSuoraDatabase(workspace)
+
+    await expect(fs.stat(path.join(workspace, 'mcp', 'index.json'))).resolves.toBeTruthy()
+
+    await appDatabase.saveJsonEntity('mcp_servers', 'mcp-1', { id: 'mcp-1', name: 'Local' })
+    expect(await readJson(path.join(workspace, 'mcp', 'index.json'))).toEqual([{ id: 'mcp-1', name: 'Local' }])
+
+    const settings = await readJson<Record<string, unknown>>(path.join(workspace, 'settings.json'))
+    expect('mcpServers' in settings).toBe(false)
+
+    await appDatabase.close()
+  })
+
+  it('migrates legacy executions.json files and settings.mcpServers on initialize', async () => {
+    const workspace = await makeWorkspace()
+    // Seed a workspace that mimics the previous layout.
+    await fs.mkdir(path.join(workspace, 'timers'), { recursive: true })
+    await fs.mkdir(path.join(workspace, 'pipelines'), { recursive: true })
+    await fs.writeFile(
+      path.join(workspace, 'timers', 'executions.json'),
+      JSON.stringify([{ id: 'tx-old', timerId: 't', firedAt: 1 }]),
+    )
+    await fs.writeFile(
+      path.join(workspace, 'pipelines', 'executions.json'),
+      JSON.stringify([{ id: 'px-old', pipelineId: 'p', startedAt: 1 }]),
+    )
+    await fs.writeFile(
+      path.join(workspace, 'settings.json'),
+      JSON.stringify({ _storeVersion: 0, mcpServers: [{ id: 'mcp-old', name: 'Legacy' }], theme: 'dark' }),
+    )
+
+    const appDatabase = await openSuoraDatabase(workspace)
+
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions.json'))).rejects.toThrow()
+    await expect(fs.stat(path.join(workspace, 'pipelines', 'executions.json'))).rejects.toThrow()
+    expect(await readJson(path.join(workspace, 'timers', 'executions', 'tx-old.json'))).toMatchObject({ id: 'tx-old' })
+    expect(await readJson(path.join(workspace, 'pipelines', 'executions', 'px-old.json'))).toMatchObject({ id: 'px-old' })
+    expect(await readJson(path.join(workspace, 'mcp', 'index.json'))).toEqual([{ id: 'mcp-old', name: 'Legacy' }])
+
+    const migratedSettings = await readJson<Record<string, unknown>>(path.join(workspace, 'settings.json'))
+    expect('mcpServers' in migratedSettings).toBe(false)
+    expect(migratedSettings.theme).toBe('dark')
+
+    await appDatabase.close()
   })
 })
