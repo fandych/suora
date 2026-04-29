@@ -65,14 +65,20 @@ export function findReferencedDocuments(markdown: string, documents: DocumentIte
 type TiptapMark = { type: string; attrs?: Record<string, string> }
 type TiptapNode = { type: string; text?: string; attrs?: Record<string, unknown>; marks?: TiptapMark[]; content?: TiptapNode[] }
 
+// Mark application order: code first (prevents interference), then formatting, then link last (outermost)
+const MARK_ORDER = ['code', 'bold', 'italic', 'strike', 'link'] as const
+
 function serializeMarks(text: string, marks: TiptapMark[]): string {
+  const markMap = new Map(marks.map((m) => [m.type, m]))
   let out = text
-  for (const mark of marks) {
-    if (mark.type === 'code') out = `\`${out}\``
-    else if (mark.type === 'bold') out = `**${out}**`
-    else if (mark.type === 'italic') out = `*${out}*`
-    else if (mark.type === 'strike') out = `~~${out}~~`
-    else if (mark.type === 'link') out = `[${out}](${mark.attrs?.href ?? ''})`
+  for (const type of MARK_ORDER) {
+    const mark = markMap.get(type)
+    if (!mark) continue
+    if (type === 'code') out = `\`${out}\``
+    else if (type === 'bold') out = `**${out}**`
+    else if (type === 'italic') out = `*${out}*`
+    else if (type === 'strike') out = `~~${out}~~`
+    else if (type === 'link') out = `[${out}](${mark.attrs?.href ?? ''})`
   }
   return out
 }
@@ -121,7 +127,7 @@ function serializeNode(node: TiptapNode, listPrefix = ''): string {
 
     case 'codeBlock': {
       const lang = (node.attrs?.language as string) ?? ''
-      const code = children.map((child) => (child.type === 'text' ? (child.text ?? '') : '')).join('')
+      const code = children.filter((child) => child.type === 'text').map((child) => child.text ?? '').join('')
       return `\`\`\`${lang}\n${code}\n\`\`\`\n\n`
     }
 

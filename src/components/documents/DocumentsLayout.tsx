@@ -110,7 +110,10 @@ function markdownToTiptapHtml(markdown: string) {
 }
 
 function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; onUpdate: (markdown: string) => void }) {
-  const suppressUpdateRef = useRef(false)
+  // Prevents the onUpdate callback from firing during programmatic content resets
+  // that occur when switching between documents, avoiding a feedback loop where
+  // the reset triggers onUpdate which would overwrite the incoming document's markdown.
+  const isSyncingFromPropsRef = useRef(false)
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -125,7 +128,7 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
       },
     },
     onUpdate: ({ editor: ed }: { editor: { getJSON: () => unknown } }) => {
-      if (suppressUpdateRef.current) return
+      if (isSyncingFromPropsRef.current) return
       const json = ed.getJSON()
       const markdown = tiptapJsonToMarkdown(json as Parameters<typeof tiptapJsonToMarkdown>[0])
       onUpdate(markdown)
@@ -134,9 +137,12 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
-    suppressUpdateRef.current = true
+    // Only sync editor content when the document identity (id) changes, not on every
+    // markdown keystroke — this intentionally avoids overwriting in-flight user edits
+    // that haven't been flushed to the store yet.
+    isSyncingFromPropsRef.current = true
     editor.commands.setContent(markdownToTiptapHtml(document.markdown), { emitUpdate: false })
-    suppressUpdateRef.current = false
+    isSyncingFromPropsRef.current = false
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document.id])
 
@@ -407,7 +413,7 @@ export function DocumentsLayout() {
                 </button>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-y-auto space-y-0.5 pr-0.5">
+              <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
                 {query.trim() ? (
                   <div className="space-y-2">
                     {searchResults.map(({ node, excerpt }) => (
@@ -423,7 +429,8 @@ export function DocumentsLayout() {
                     {t('documents.emptyTree', 'Create nested folders and markdown documents in this group.')}
                   </div>
                 ) : (
-                  rootNodes.map((node) => (
+                  <div className="space-y-0.5">
+                    {rootNodes.map((node) => (
                     <TreeNode
                       key={node.id}
                       node={node}
@@ -441,7 +448,8 @@ export function DocumentsLayout() {
                       onSelectDocument={setSelectedDocument}
                       onSelectFolder={setSelectedFolderId}
                     />
-                  ))
+                  ))}
+                  </div>
                 )}
               </div>
             </section>
