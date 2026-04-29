@@ -266,7 +266,8 @@ export function DocumentsLayout() {
       updatedAt: now,
     }
     addDocumentFolder(folder)
-    if (folder.parentId) setExpanded((prev) => new Set(prev).add(folder.parentId))
+    const parentId = folder.parentId
+    if (parentId) setExpanded((prev) => new Set(prev).add(parentId))
     setSelectedFolderId(folder.id)
   }
 
