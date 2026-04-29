@@ -470,7 +470,7 @@ ipcMain.handle('fs:listDir', async (_event, dirPath: string) => {
     const entries = await fs.readdir(dirPath, { withFileTypes: true })
     return Promise.all(entries.map(async (e) => {
       const entryPath = path.join(dirPath, e.name)
-      const stat = await fs.stat(entryPath).catch(() => null)
+      const stat = e.isFile() ? await fs.stat(entryPath).catch(() => null) : null
       return {
         name: e.name,
         isDirectory: e.isDirectory(),

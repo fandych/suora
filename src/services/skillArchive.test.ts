@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { Skill } from '@/types'
-import { buildSkillFromFolderFiles, exportSkillToZipBlob } from './skillArchive'
+import { buildSkillFromDataTransferItems, buildSkillFromFolderFiles, exportSkillToZipBlob } from './skillArchive'
 
 describe('skillArchive', () => {
   beforeEach(() => {
@@ -22,6 +22,52 @@ describe('skillArchive', () => {
     const bundle = await buildSkillFromFolderFiles(list)
 
     expect(bundle?.skillMarkdown).toContain('name: folder-skill')
+    expect(bundle?.resources).toEqual([
+      { path: 'references/docs.md', content: '# Docs', size: 6 },
+    ])
+  })
+
+  it('builds a folder-backed skill import bundle from dropped directory entries', async () => {
+    const makeFileEntry = (name: string, content: string): FileSystemFileEntry => ({
+      name,
+      fullPath: `/${name}`,
+      isFile: true,
+      isDirectory: false,
+      file: (resolve: (file: File) => void) => resolve(new File([content], name)),
+    } as unknown as FileSystemFileEntry)
+    const skillEntry = makeFileEntry('SKILL.md', '---\nname: dropped-skill\ndescription: Dropped skill\n---\n\nUse resources.')
+    const docsEntry = makeFileEntry('docs.md', '# Docs')
+    const referencesEntry = {
+      name: 'references',
+      fullPath: '/references',
+      isFile: false,
+      isDirectory: true,
+      createReader: () => ({
+        readEntries: vi.fn()
+          .mockImplementationOnce((resolve: (entries: FileSystemEntry[]) => void) => resolve([docsEntry]))
+          .mockImplementationOnce((resolve: (entries: FileSystemEntry[]) => void) => resolve([])),
+      }),
+    } as unknown as FileSystemDirectoryEntry
+    const rootEntry = {
+      name: 'dropped-skill',
+      fullPath: '/dropped-skill',
+      isFile: false,
+      isDirectory: true,
+      createReader: () => ({
+        readEntries: vi.fn()
+          .mockImplementationOnce((resolve: (entries: FileSystemEntry[]) => void) => resolve([skillEntry, referencesEntry]))
+          .mockImplementationOnce((resolve: (entries: FileSystemEntry[]) => void) => resolve([])),
+      }),
+    } as unknown as FileSystemDirectoryEntry
+    const items = Object.assign([{
+      webkitGetAsEntry: () => rootEntry,
+    }], {
+      item: (index: number) => index === 0 ? { webkitGetAsEntry: () => rootEntry } : null,
+    }) as unknown as DataTransferItemList
+
+    const bundle = await buildSkillFromDataTransferItems(items)
+
+    expect(bundle?.skillMarkdown).toContain('name: dropped-skill')
     expect(bundle?.resources).toEqual([
       { path: 'references/docs.md', content: '# Docs', size: 6 },
     ])

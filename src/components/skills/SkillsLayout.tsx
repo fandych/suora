@@ -13,7 +13,7 @@ import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { SkillEditor } from './SkillEditor'
 import { settingsInputClass, settingsSoftButtonClass } from '@/components/settings/panelUi'
-import { buildSkillFromFolderFiles, downloadBlob, exportSkillToZipBlob, skillArchiveName } from '@/services/skillArchive'
+import { buildSkillFromDataTransferItems, buildSkillFromFolderFiles, downloadBlob, exportSkillToZipBlob, skillArchiveName } from '@/services/skillArchive'
 import { skillDirectorySegment } from '@/utils/pathSegments'
 
 type ViewMode = 'installed' | 'browse' | 'sources'
@@ -211,50 +211,66 @@ export function SkillsLayout() {
     e.target.value = ''
   }
 
+  const importSkillFolderBundle = async (bundle: {
+    skillMarkdown: string
+    resources: Array<{ path: string; content: string; size: number }>
+  } | null) => {
+    if (!bundle) {
+      toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), t('skills.folderImportMissingSkill', 'The selected folder must contain a SKILL.md file.'))
+      return
+    }
+    const parsed = parseSkillMarkdown(bundle.skillMarkdown, 'SKILL.md', 'local')
+    if (!parsed) {
+      toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), t('skills.parseFailedDetail', 'Make sure the file has YAML frontmatter.'))
+      return
+    }
+
+    const resources = buildImportedResourceManifest(bundle.resources)
+    parsed.bundledResources = resources
+    parsed.referenceFiles = resources
+      .filter((resource) => resource.type === 'file' && resource.path.toLowerCase().startsWith('references/'))
+      .map((resource) => ({ path: resource.path, label: resource.path }))
+
+    if (workspacePath) {
+      const skillDir = `${workspacePath}/.suora/skills/${skillDirectorySegment(parsed.name)}`
+      await window.electron.invoke('system:ensureDirectory', skillDir)
+      await window.electron.invoke('fs:writeFile', `${skillDir}/SKILL.md`, bundle.skillMarkdown)
+      for (const resource of bundle.resources) {
+        const parent = resource.path.split('/').slice(0, -1).join('/')
+        if (parent) await window.electron.invoke('system:ensureDirectory', `${skillDir}/${parent}`)
+        await window.electron.invoke('fs:writeFile', `${skillDir}/${resource.path}`, resource.content)
+      }
+      parsed.filePath = `${skillDir}/SKILL.md`
+      parsed.skillRoot = skillDir
+      parsed.referenceFiles = resources
+        .filter((resource) => resource.type === 'file' && resource.path.toLowerCase().startsWith('references/'))
+        .map((resource) => ({ path: `${skillDir}/${resource.path}`, label: resource.path }))
+    }
+
+    addSkill(parsed)
+    setEditingId(parsed.id)
+    setIsAdding(false)
+    toast.success(t('skills.importedSkill', 'Skill imported'), parsed.name)
+  }
+
   const handleImportFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (!files?.length) return
     try {
-      const bundle = await buildSkillFromFolderFiles(files)
-      if (!bundle) {
-        toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), t('skills.folderImportMissingSkill', 'The selected folder must contain a SKILL.md file.'))
-        return
-      }
-      const parsed = parseSkillMarkdown(bundle.skillMarkdown, 'SKILL.md', 'local')
-      if (!parsed) {
-        toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), t('skills.parseFailedDetail', 'Make sure the file has YAML frontmatter.'))
-        return
-      }
-
-      const resources = buildImportedResourceManifest(bundle.resources)
-      parsed.bundledResources = resources
-      parsed.referenceFiles = resources
-        .filter((resource) => resource.type === 'file' && resource.path.toLowerCase().startsWith('references/'))
-        .map((resource) => ({ path: resource.path, label: resource.path }))
-
-      if (workspacePath) {
-        const skillDir = `${workspacePath}/.suora/skills/${skillDirectorySegment(parsed.name)}`
-        await window.electron.invoke('system:ensureDirectory', skillDir)
-        await window.electron.invoke('fs:writeFile', `${skillDir}/SKILL.md`, bundle.skillMarkdown)
-        for (const resource of bundle.resources) {
-          const parent = resource.path.split('/').slice(0, -1).join('/')
-          if (parent) await window.electron.invoke('system:ensureDirectory', `${skillDir}/${parent}`)
-          await window.electron.invoke('fs:writeFile', `${skillDir}/${resource.path}`, resource.content)
-        }
-        parsed.filePath = `${skillDir}/SKILL.md`
-        parsed.skillRoot = skillDir
-        parsed.referenceFiles = resources
-          .filter((resource) => resource.type === 'file' && resource.path.toLowerCase().startsWith('references/'))
-          .map((resource) => ({ path: `${skillDir}/${resource.path}`, label: resource.path }))
-      }
-
-      addSkill(parsed)
-      setEditingId(parsed.id)
-      setIsAdding(false)
-      toast.success(t('skills.importedSkill', 'Skill imported'), parsed.name)
+      await importSkillFolderBundle(await buildSkillFromFolderFiles(files))
     } finally {
       e.target.value = ''
     }
+  }
+
+  const handleDropSkillFolder = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const bundle = event.dataTransfer.items.length
+      ? await buildSkillFromDataTransferItems(event.dataTransfer.items)
+      : event.dataTransfer.files.length
+        ? await buildSkillFromFolderFiles(event.dataTransfer.files)
+        : null
+    await importSkillFolderBundle(bundle)
   }
 
   const handleInstallFromRegistry = async (entry: RegistrySkillEntry) => {
@@ -436,8 +452,17 @@ export function SkillsLayout() {
           onChange={handleImportFolder}
           className="hidden"
           aria-label="Import skill folder"
-          {...{ webkitdirectory: '', directory: '' }}
+          webkitdirectory=""
+          directory=""
         />
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          onDragOver={(event) => {
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'copy'
+          }}
+          onDrop={handleDropSkillFolder}
+        >
 
         {/* Tab toggle */}
         <div className="module-sidebar-stack grid grid-cols-3 gap-1.5 px-3 pb-3 pt-1">
@@ -821,6 +846,7 @@ export function SkillsLayout() {
             </div>
           </div>
         )}
+        </div>
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 

@@ -120,6 +120,8 @@ function ResourceTreePanel({
   const [selectedPath, setSelectedPath] = useState(referenceResources[0]?.path ?? '')
   const [preview, setPreview] = useState('')
   const [previewError, setPreviewError] = useState('')
+  const [renamingPath, setRenamingPath] = useState('')
+  const [renameValue, setRenameValue] = useState('')
 
   useEffect(() => {
     if (!selectedPath || !skill.skillRoot) {
@@ -176,9 +178,22 @@ function ResourceTreePanel({
     removeResourceFromState(resource.path)
   }
 
-  const handleRename = async (resource: SkillBundledResource) => {
-    const nextPath = window.prompt(t('skills.renameResourcePrompt', 'New resource path'), resource.path)
-    if (!nextPath || nextPath === resource.path || !isSafeResourcePath(nextPath)) return
+  const startRename = (resource: SkillBundledResource) => {
+    setRenamingPath(resource.path)
+    setRenameValue(resource.path)
+  }
+
+  const cancelRename = () => {
+    setRenamingPath('')
+    setRenameValue('')
+  }
+
+  const handleRename = async (resource: SkillBundledResource, nextPath: string) => {
+    if (!nextPath || nextPath === resource.path) {
+      cancelRename()
+      return
+    }
+    if (!isSafeResourcePath(nextPath)) return
     const normalizedNext = normalizeResourcePath(nextPath)
 
     if (skill.skillRoot) {
@@ -203,6 +218,7 @@ function ResourceTreePanel({
       }),
     })
     if (selectedPath === oldPath) setSelectedPath(normalizedNext)
+    cancelRename()
   }
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -268,16 +284,33 @@ function ResourceTreePanel({
                   {entries.map((resource) => (
                     <div key={resource.path} className="group flex items-center gap-2 rounded-2xl bg-surface-2/60 px-3 py-2">
                       <IconifyIcon name={resource.type === 'directory' ? 'lucide:folder' : resource.executable ? 'lucide:file-terminal' : 'lucide:file'} size={12} color="currentColor" className="text-text-muted" />
-                      <button
-                        type="button"
-                        onClick={() => resource.path.toLowerCase().startsWith('references/') && setSelectedPath(resource.path)}
-                        className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-text-secondary hover:text-accent"
-                      >
-                        {resource.path}{resource.type === 'directory' ? '/' : ''}
-                      </button>
+                      {renamingPath === resource.path ? (
+                        <input
+                          value={renameValue}
+                          onChange={(event) => setRenameValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              void handleRename(resource, renameValue)
+                            }
+                            if (event.key === 'Escape') cancelRename()
+                          }}
+                          onBlur={() => void handleRename(resource, renameValue)}
+                          autoFocus
+                          className="min-w-0 flex-1 rounded-xl border border-accent/20 bg-surface-0 px-2 py-1 font-mono text-[11px] text-text-primary outline-none"
+                        />
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => resource.path.toLowerCase().startsWith('references/') && setSelectedPath(resource.path)}
+                          className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-text-secondary hover:text-accent"
+                        >
+                          {resource.path}{resource.type === 'directory' ? '/' : ''}
+                        </button>
+                      )}
                       {resource.size !== undefined && <span className="text-[9px] tabular-nums text-text-muted">{resource.size}b</span>}
                       {resource.warning && <IconifyIcon name="lucide:triangle-alert" size={12} color="currentColor" className="text-warning" />}
-                      <button type="button" onClick={() => handleRename(resource)} className="opacity-0 transition-opacity group-hover:opacity-100 text-text-muted hover:text-accent">
+                      <button type="button" onClick={() => startRename(resource)} className="opacity-0 transition-opacity group-hover:opacity-100 text-text-muted hover:text-accent">
                         <IconifyIcon name="lucide:pencil" size={12} color="currentColor" />
                       </button>
                       <button type="button" onClick={() => handleDelete(resource)} className="opacity-0 transition-opacity group-hover:opacity-100 text-text-muted hover:text-danger">

@@ -50,6 +50,8 @@ function concatBytes(chunks: Uint8Array[]): Uint8Array {
 }
 
 export async function exportSkillToZipBlob(skill: Skill): Promise<Blob> {
+  // Keep ZIP creation dependency-free because this app only needs small,
+  // uncompressed skill archives and avoids adding a full archive library.
   const files = await collectSkillArchiveFiles(skill)
   const localParts: Uint8Array[] = []
   const centralParts: Uint8Array[] = []
@@ -174,6 +176,72 @@ export async function buildSkillFromFolderFiles(files: FileList): Promise<{
     skillMarkdown: resources.find((resource) => resource.path.toLowerCase() === 'skill.md')?.content ?? '',
     resources: resources.filter((resource) => resource.path.toLowerCase() !== 'skill.md' && resource.path),
   }
+}
+
+export async function buildSkillFromDataTransferItems(items: DataTransferItemList): Promise<{
+  skillMarkdown: string
+  resources: Array<{ path: string; content: string; size: number }>
+} | null> {
+  const entries = Array.from(items)
+    .map((item) => item.webkitGetAsEntry?.())
+    .filter((entry): entry is FileSystemEntry => Boolean(entry))
+  if (!entries.length) return null
+
+  const files = (await Promise.all(entries.map((entry) => readDroppedEntry(entry, '')))).flat()
+  if (!files.length) return null
+
+  const rootPrefix = findCommonSkillPrefix(files.map((file) => file.path))
+  const normalized = files.map((file) => ({
+    ...file,
+    path: normalizePath(file.path.slice(rootPrefix.length)),
+  }))
+  const skillMarkdown = normalized.find((file) => file.path.toLowerCase() === 'skill.md')?.content
+  if (!skillMarkdown) return null
+
+  return {
+    skillMarkdown,
+    resources: normalized.filter((file) => file.path && file.path.toLowerCase() !== 'skill.md'),
+  }
+}
+
+async function readDroppedEntry(entry: FileSystemEntry, basePath: string): Promise<Array<{ path: string; content: string; size: number }>> {
+  if (entry.isFile) {
+    const file = await readDroppedFile(entry as FileSystemFileEntry)
+    return [{
+      path: normalizePath(`${basePath}/${file.name}`),
+      content: await file.text(),
+      size: file.size,
+    }]
+  }
+
+  if (!entry.isDirectory) return []
+  const directory = entry as FileSystemDirectoryEntry
+  const children = await readAllDirectoryEntries(directory.createReader())
+  const nextBase = normalizePath(`${basePath}/${entry.name}`)
+  return (await Promise.all(children.map((child) => readDroppedEntry(child, nextBase)))).flat()
+}
+
+function readDroppedFile(entry: FileSystemFileEntry): Promise<File> {
+  return new Promise((resolve, reject) => {
+    entry.file(resolve, reject)
+  })
+}
+
+function readAllDirectoryEntries(reader: FileSystemDirectoryReader): Promise<FileSystemEntry[]> {
+  const allEntries: FileSystemEntry[] = []
+  return new Promise((resolve, reject) => {
+    const readBatch = () => {
+      reader.readEntries((entries) => {
+        if (entries.length === 0) {
+          resolve(allEntries)
+          return
+        }
+        allEntries.push(...entries)
+        readBatch()
+      }, reject)
+    }
+    readBatch()
+  })
 }
 
 export function skillArchiveName(skill: Skill): string {

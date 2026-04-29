@@ -1,6 +1,7 @@
 /**
  * Global window electron bridge type declarations
  */
+import 'react'
 
 interface ElectronAPI {
   invoke: (channel: string, ...args: unknown[]) => Promise<unknown>
@@ -12,6 +13,14 @@ interface ElectronAPI {
 declare global {
   interface Window {
     electron: ElectronAPI
+  }
+}
+
+declare module 'react' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface InputHTMLAttributes<T> {
+    webkitdirectory?: string
+    directory?: string
   }
 }
 
