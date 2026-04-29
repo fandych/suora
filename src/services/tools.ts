@@ -21,7 +21,7 @@ import {
 } from '@/services/vectorMemory'
 import { readCached, writeCached } from '@/services/fileStorage'
 import { delegateToAgent } from '@/services/agentCommunication'
-import { confirm, confirmChoice } from '@/services/confirmDialog'
+import { confirmChoice } from '@/services/confirmDialog'
 import { safePathSegment } from '@/utils/pathSegments'
 import { safeParse, safeStringify } from '@/utils/safeJson'
 
