@@ -8,9 +8,10 @@
 
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
-import type { Skill, ToolMeta } from '@/types'
+import type { DocumentGroup, DocumentItem, DocumentNode, Skill, ToolMeta } from '@/types'
 import { getPluginTools } from '@/services/pluginSystem'
 import { logger } from '@/services/logger'
+import { serializeSkillToMarkdown } from '@/services/skillRegistry'
 import {
   getIndex,
   rebuildIndexFromStore,
@@ -91,6 +92,7 @@ const EVENTS_STORAGE_KEY = 'suora-event-triggers'
 
 // Late-binding accessor for live Zustand store state (set by appStore after creation)
 let _liveStoreAccessor: (() => Record<string, unknown>) | null = null
+let _liveStoreWriter: ((updater: (state: Record<string, unknown>) => void) => void) | null = null
 
 /**
  * Register a live store state accessor to avoid reading from the file cache.
@@ -98,6 +100,10 @@ let _liveStoreAccessor: (() => Record<string, unknown>) | null = null
  */
 export function setLiveStoreAccessor(accessor: () => Record<string, unknown>) {
   _liveStoreAccessor = accessor
+}
+
+export function setLiveStoreWriter(writer: (updater: (state: Record<string, unknown>) => void) => void) {
+  _liveStoreWriter = writer
 }
 
 function readStoreState(): Record<string, unknown> | null {
@@ -129,6 +135,15 @@ function readStoreState(): Record<string, unknown> | null {
 export { readStoreState as readLiveStoreState }
 
 function writeStoreState(updater: (state: Record<string, unknown>) => void): boolean {
+  if (_liveStoreWriter) {
+    try {
+      _liveStoreWriter(updater)
+      return true
+    } catch {
+      return false
+    }
+  }
+
   try {
     const raw = readCached(STORE_KEY)
     if (!raw) return false
@@ -276,7 +291,7 @@ function ensureCommandAllowed(command: string): string | null {
 }
 
 function isHighRiskAction(action: string): boolean {
-  return /^(write_file|edit_file|delete_file|create_directory|move_file|copy_file|shell|browser_evaluate|browser_fill_form|browser_click|browser_screenshot|clipboard_read|clipboard_write|git_commit|email_|env_set|timer_create|timer_update|timer_delete)/.test(action)
+  return /^(write_file|edit_file|delete_file|create_directory|move_file|copy_file|document_update|skill_update|shell|browser_evaluate|browser_fill_form|browser_click|browser_screenshot|clipboard_read|clipboard_write|git_commit|email_|env_set|timer_create|timer_update|timer_delete)/.test(action)
 }
 
 async function confirmIfNeeded(action: string): Promise<boolean> {
@@ -315,6 +330,88 @@ interface TodoItem {
   createdAt: string
   updatedAt: string
   dueDate?: string
+}
+
+function resolveDocument(
+  nodes: DocumentNode[],
+  documentIdOrTitle: string,
+): DocumentItem | null {
+  const query = documentIdOrTitle.trim().toLowerCase()
+  const docs = nodes.filter((node): node is DocumentItem => node.type === 'document')
+  return docs.find((doc) => doc.id === documentIdOrTitle)
+    ?? docs.find((doc) => doc.title.toLowerCase() === query)
+    ?? docs.find((doc) => doc.title.toLowerCase().includes(query))
+    ?? null
+}
+
+function resolveSkill(skills: Skill[], skillIdOrName: string): Skill | null {
+  const query = skillIdOrName.trim().toLowerCase()
+  return skills.find((skill) => skill.id === skillIdOrName)
+    ?? skills.find((skill) => skill.name.toLowerCase() === query)
+    ?? skills.find((skill) => skill.name.toLowerCase().includes(query))
+    ?? null
+}
+
+function summarizeMarkdown(value: string, maxLength = 240): string {
+  const compact = value.replace(/\s+/g, ' ').trim()
+  return compact.length > maxLength ? `${compact.slice(0, maxLength)}...` : compact
+}
+
+function getSkillInstructionContent(skill: Skill): string {
+  return skill.content ?? skill.prompt ?? ''
+}
+
+function getSkillSourceLabel(skill: Skill): string {
+  return skill.source ?? skill.type ?? 'unknown'
+}
+
+function buildUpdatedSkillContent(
+  skill: Skill,
+  updates: {
+    content: string
+    name?: string
+    description?: string
+    whenToUse?: string
+  },
+): Skill {
+  const nextName = updates.name ?? skill.name
+  const nextDescription = updates.description ?? skill.description
+  const frontmatter = skill.frontmatter ?? {
+    name: nextName,
+    description: nextDescription,
+  }
+  const metadataPatch = {
+    ...(updates.name ? { name: updates.name } : {}),
+    ...(updates.description !== undefined ? { description: updates.description } : {}),
+    ...(updates.whenToUse !== undefined ? { whenToUse: updates.whenToUse } : {}),
+  }
+  const legacyPromptPatch = Object.prototype.hasOwnProperty.call(skill, 'prompt')
+    ? { prompt: updates.content }
+    : {}
+
+  return {
+    ...skill,
+    ...metadataPatch,
+    content: updates.content,
+    ...legacyPromptPatch,
+    frontmatter: {
+      ...frontmatter,
+      ...metadataPatch,
+      name: updates.name ?? frontmatter.name ?? nextName,
+      description: updates.description ?? frontmatter.description ?? nextDescription,
+    },
+  }
+}
+
+async function persistSkillFileIfPossible(skill: Skill): Promise<string> {
+  if (!skill.filePath) return 'No SKILL.md file path is available; updated in app state only.'
+  const blocked = ensureAllowedPath(skill.filePath)
+  if (blocked) return `${blocked}; updated in app state only.`
+  const result = await electronInvoke('fs:writeFile', skill.filePath, serializeSkillToMarkdown(skill))
+  if (typeof result === 'object' && result && 'error' in result) {
+    return `Failed to persist SKILL.md to disk: ${formatToolError((result as { error: unknown }).error)}`
+  }
+  return `Persisted SKILL.md to ${skill.filePath}.`
 }
 
 function getPersistedStoreState(): { workspacePath: string; activeSessionId: string } {
@@ -2266,20 +2363,187 @@ export const builtinToolDefs: ToolSet = {
     },
   }),
 
+  list_documents: tool({
+    description: 'List editable Markdown documents stored in Suora before reading or updating documents.',
+    inputSchema: z.object({
+      query: z.string().optional().describe('Optional title/content search query'),
+      group_id: z.string().optional().describe('Optional document group ID to filter by'),
+    }),
+    execute: async ({ query, group_id }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const groups = (state.documentGroups || []) as DocumentGroup[]
+        const nodes = (state.documentNodes || []) as DocumentNode[]
+        const q = query?.trim().toLowerCase()
+        const docs = nodes
+          .filter((node): node is DocumentItem => node.type === 'document')
+          .filter((doc) => !group_id || doc.groupId === group_id)
+          .filter((doc) => !q || doc.title.toLowerCase().includes(q) || doc.markdown.toLowerCase().includes(q))
+          .sort((a, b) => b.updatedAt - a.updatedAt)
+
+        if (!docs.length) return query ? `No documents matching "${query}".` : 'No documents found.'
+        return docs.slice(0, 30).map((doc) => {
+          const groupName = groups.find((group) => group.id === doc.groupId)?.name || doc.groupId
+          const selected = state.selectedDocumentId === doc.id ? '> ' : '  '
+          return `${selected}${doc.title} (id: ${doc.id}, group: ${groupName}, updated: ${new Date(doc.updatedAt).toLocaleString()})\n  ${summarizeMarkdown(doc.markdown)}`
+        }).join('\n\n')
+      } catch (err) {
+        return `Error listing documents: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
+  read_document: tool({
+    description: 'Read the full Markdown content of a Suora document by ID or title so an agent can inspect it before editing.',
+    inputSchema: z.object({
+      document_id: z.string().describe('Document ID or exact/partial title'),
+    }),
+    execute: async ({ document_id }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const nodes = (state.documentNodes || []) as DocumentNode[]
+        const doc = resolveDocument(nodes, document_id)
+        if (!doc) return `Document not found: ${document_id}. Use list_documents to find available documents.`
+        return JSON.stringify({
+          id: doc.id,
+          title: doc.title,
+          groupId: doc.groupId,
+          parentId: doc.parentId,
+          updatedAt: doc.updatedAt,
+          markdown: doc.markdown,
+        }, null, 2)
+      } catch (err) {
+        return `Error reading document: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
+  update_document: tool({
+    description: 'Replace a Suora document with revised Markdown. Typically requires reading the document first and preserving user content unless asked to change it.',
+    inputSchema: z.object({
+      document_id: z.string().describe('Document ID or exact/partial title to update'),
+      markdown: z.string().describe('Complete replacement Markdown content'),
+      title: z.string().optional().describe('Optional new document title'),
+      reason: z.string().describe('Short reason for the edit, shown in confirmation/tool output'),
+    }),
+    execute: async ({ document_id, markdown, title, reason }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const nodes = (state.documentNodes || []) as DocumentNode[]
+        const doc = resolveDocument(nodes, document_id)
+        if (!doc) return `Document not found: ${document_id}. Use list_documents to find available documents.`
+        if (!markdown.trim()) return 'Error: Refusing to replace document with empty Markdown.'
+        if (!(await confirmIfNeeded(`document_update\n${doc.title} (${doc.id})\nReason: ${reason}\nNew length: ${markdown.length} characters`))) {
+          return 'Cancelled by user confirmation policy.'
+        }
+
+        const now = Date.now()
+        const nextTitle = title?.trim() || doc.title
+        if (!writeStoreState((s) => {
+          const arr = (s.documentNodes || []) as DocumentNode[]
+          s.documentNodes = arr.map((node) => node.id === doc.id
+            ? { ...node, title: nextTitle, markdown, updatedAt: now }
+            : node)
+          s.selectedDocumentId = doc.id
+          s.selectedDocumentGroupId = doc.groupId
+        })) return 'Error: Store not available'
+
+        return `Updated document "${nextTitle}" (${doc.id}). Reason: ${reason}`
+      } catch (err) {
+        return `Error updating document: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
   list_skills: tool({
-    description: 'List all available skills and their status.',
+    description: 'List all available skills and their status. Use this before read_skill or update_skill_content when the user asks to modify a skill through chat.',
     inputSchema: z.object({}),
     execute: async () => {
       try {
         const state = readStoreState()
         if (!state) return 'No skills available'
-        const skills = (state.skills || []) as Array<{ id: string; name: string; enabled: boolean; type: string; icon?: string; tools: Array<{ id: string }> }>
+        const skills = (state.skills || []) as Skill[]
         if (skills.length === 0) return 'No skills available.'
         return skills.map((s) =>
-          `${s.name} [${s.enabled ? 'ON' : 'OFF'}] (${s.id}) — ${s.type}, ${s.tools.length} tools`
+          `${s.name} [${s.enabled !== false ? 'ON' : 'OFF'}] (${s.id}) — ${getSkillSourceLabel(s)}${s.filePath ? `, file: ${s.filePath}` : ''}\n  ${s.description || '(no description)'}`
         ).join('\n')
       } catch (err) {
         return `Error: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
+  read_skill: tool({
+    description: 'Read a Suora skill definition and its instruction content by ID or name so an agent can inspect it before editing.',
+    inputSchema: z.object({
+      skill_id: z.string().describe('Skill ID or exact/partial skill name'),
+    }),
+    execute: async ({ skill_id }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const skills = (state.skills || []) as Skill[]
+        const skill = resolveSkill(skills, skill_id)
+        if (!skill) return `Skill not found: ${skill_id}. Use list_skills to find available skills.`
+        return JSON.stringify({
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+          enabled: skill.enabled !== false,
+          source: getSkillSourceLabel(skill),
+          filePath: skill.filePath,
+          whenToUse: skill.whenToUse,
+          allowedTools: skill.allowedTools,
+          context: skill.context,
+          content: getSkillInstructionContent(skill),
+        }, null, 2)
+      } catch (err) {
+        return `Error reading skill: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
+  update_skill_content: tool({
+    description: 'Replace a Suora skill instruction body with revised Markdown. Typically requires reading the skill first and returning the complete new instruction content.',
+    inputSchema: z.object({
+      skill_id: z.string().describe('Skill ID or exact/partial skill name to update'),
+      content: z.string().describe('Complete replacement Markdown instruction body for the skill'),
+      name: z.string().optional().describe('Optional new skill name'),
+      description: z.string().optional().describe('Optional new skill description'),
+      when_to_use: z.string().optional().describe('Optional updated when-to-use guidance'),
+      reason: z.string().describe('Short reason for the edit, shown in confirmation/tool output'),
+    }),
+    execute: async ({ skill_id, content, name, description, when_to_use, reason }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const skills = (state.skills || []) as Skill[]
+        const skill = resolveSkill(skills, skill_id)
+        if (!skill) return `Skill not found: ${skill_id}. Use list_skills to find available skills.`
+        if (!content.trim()) return 'Error: Refusing to replace skill content with empty Markdown.'
+        if (!(await confirmIfNeeded(`skill_update\n${skill.name} (${skill.id})\nReason: ${reason}\nNew length: ${content.length} characters`))) {
+          return 'Cancelled by user confirmation policy.'
+        }
+
+        const nextSkill = buildUpdatedSkillContent(skill, {
+          content,
+          name: name?.trim() || undefined,
+          description,
+          whenToUse: when_to_use,
+        })
+
+        if (!writeStoreState((s) => {
+          const arr = (s.skills || []) as Skill[]
+          s.skills = arr.map((entry) => entry.id === skill.id ? nextSkill : entry)
+        })) return 'Error: Store not available'
+
+        const persistence = await persistSkillFileIfPossible(nextSkill)
+        return `Updated skill "${nextSkill.name}" (${nextSkill.id}). Reason: ${reason}\n${persistence}`
+      } catch (err) {
+        return `Error updating skill: ${err instanceof Error ? err.message : String(err)}`
       }
     },
   }),
@@ -2459,7 +2723,10 @@ export const TOOL_META: Record<string, ToolMeta> = {
   list_sessions:         { userFacingName: 'List sessions', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   list_providers:        { userFacingName: 'List providers', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   list_plugins:          { userFacingName: 'List plugins', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
+  list_documents:        { userFacingName: 'List documents', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'document markdown notes' },
+  read_document:         { userFacingName: 'Read document', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'document markdown content' },
   list_skills:           { userFacingName: 'List skills', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
+  read_skill:            { userFacingName: 'Read skill', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'skill instructions content' },
   get_settings:          { userFacingName: 'Get settings', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   skill_suggest_improvements: { userFacingName: 'Suggest improvements', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
 
@@ -2487,8 +2754,10 @@ export const TOOL_META: Record<string, ToolMeta> = {
   git_commit:            { userFacingName: 'Git commit', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
   env_set:               { userFacingName: 'Set env var', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   env_delete:            { userFacingName: 'Delete env var', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
+  update_document:       { userFacingName: 'Update document', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true, searchHint: 'edit document markdown note' },
   skill_create:          { userFacingName: 'Create skill', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   skill_improve:         { userFacingName: 'Improve skill', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
+  update_skill_content:  { userFacingName: 'Update skill content', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true, searchHint: 'edit skill instructions markdown' },
   switch_model:          { userFacingName: 'Switch model', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   create_session:        { userFacingName: 'Create session', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   switch_session:        { userFacingName: 'Switch session', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
