@@ -6,6 +6,7 @@ import { useI18n } from '@/hooks/useI18n'
 import type { Skill, SkillBundledResource, SkillFrontmatter, SkillSource, SkillExecutionContext } from '@/types'
 import { MarkdownEditor } from './SkillEditorPanels'
 import { confirm } from '@/services/confirmDialog'
+import { toast } from '@/services/toast'
 import {
   settingsCheckboxClass,
   settingsInputClass,
@@ -88,6 +89,7 @@ function normalizeResourcePath(pathValue: string): string {
 }
 
 function isSafeResourcePath(pathValue: string): boolean {
+  if (pathValue.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(pathValue)) return false
   const normalized = normalizeResourcePath(pathValue)
   return Boolean(normalized) && !normalized.split('/').includes('..')
 }
@@ -193,7 +195,10 @@ function ResourceTreePanel({
       cancelRename()
       return
     }
-    if (!isSafeResourcePath(nextPath)) return
+    if (!isSafeResourcePath(nextPath)) {
+      toast.error(t('skills.invalidResourcePath', 'Invalid resource path'), t('skills.invalidResourcePathHint', 'Paths cannot be empty, absolute, or contain "..".'))
+      return
+    }
     const normalizedNext = normalizeResourcePath(nextPath)
 
     if (skill.skillRoot) {
@@ -361,7 +366,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
 }) {
   const [dirty, setDirty] = useState(false)
   const [validationError, setValidationError] = useState('')
-  const [activeTab, setActiveTab] = useState<SkillEditorTab>('metadata')
+  const [activeTab, setActiveTab] = useState<SkillEditorTab>(skill?.bundledResources?.length ? 'resources' : 'metadata')
   const [form, setForm] = useState<Skill>(skill ?? makeDefaultSkill())
   const { t } = useI18n()
   const [showIconPicker, setShowIconPicker] = useState(false)

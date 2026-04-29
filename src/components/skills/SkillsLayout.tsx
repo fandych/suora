@@ -211,12 +211,13 @@ export function SkillsLayout() {
     e.target.value = ''
   }
 
+  const invalidFolderDetail = t('skills.folderImportInvalid', 'The selected folder does not contain a valid SKILL.md file or could not be read.')
   const importSkillFolderBundle = async (bundle: {
     skillMarkdown: string
     resources: Array<{ path: string; content: string; size: number }>
   } | null) => {
     if (!bundle) {
-      toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), t('skills.folderImportMissingSkill', 'The selected folder must contain a SKILL.md file.'))
+      toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), invalidFolderDetail)
       return
     }
     const parsed = parseSkillMarkdown(bundle.skillMarkdown, 'SKILL.md', 'local')

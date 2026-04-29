@@ -325,7 +325,8 @@ export async function installSkillFromRegistry(
 
     const safeSkillDirName = skillDirectorySegment(entry.name)
     const skillDir = `${targetDir}/${safeSkillDirName}`
-    await electron.invoke('system:ensureDirectory', skillDir)
+    const ensureResult = await electron.invoke('system:ensureDirectory', skillDir) as { success?: boolean; error?: string }
+    if (ensureResult?.error) throw new Error(`Failed to create skill directory ${skillDir}: ${ensureResult.error}`)
     const installLog = [`Installing ${entry.name} from ${entry.repository}`]
     const installedFiles = await downloadGitHubSkillDirectory(electron, repo.owner, repo.repo, entry.name, skillDir, installLog)
     const skillMarkdown = installedFiles.get('SKILL.md')?.content ?? installedFiles.get('skill.md')?.content
@@ -592,11 +593,11 @@ async function downloadGitHubSkillDirectory(
       if (item.type !== 'file' || !item.download_url) continue
       fileCount++
       if (fileCount > MAX_SKILL_RESOURCE_FILES) {
-        throw new Error(`Skill has too many files (${fileCount}; max ${MAX_SKILL_RESOURCE_FILES})`)
+        throw new Error(`Skill has too many files: ${fileCount} (maximum: ${MAX_SKILL_RESOURCE_FILES})`)
       }
       totalBytes += item.size ?? 0
       if (totalBytes > MAX_SKILL_RESOURCE_BYTES) {
-        throw new Error(`Skill is too large (${totalBytes} bytes; max ${MAX_SKILL_RESOURCE_BYTES})`)
+        throw new Error(`Skill is too large: ${totalBytes.toLocaleString()} bytes (maximum: ${MAX_SKILL_RESOURCE_BYTES.toLocaleString()} bytes)`)
       }
       if (!isExpectedGitHubRawUrl(item.download_url, owner, repo)) {
         throw new Error(`Unexpected download URL for ${item.path}`)
@@ -605,7 +606,7 @@ async function downloadGitHubSkillDirectory(
       if (content.error || typeof content.content !== 'string') {
         throw new Error(content.error
           ? `Failed to download ${item.path}: ${content.error}`
-          : `Unexpected response while downloading ${item.path}: ${typeof content.content}`)
+          : `Unexpected response format while downloading ${item.path}`)
       }
 
       const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${safeName}`, content.content) as { success?: boolean; error?: string }
