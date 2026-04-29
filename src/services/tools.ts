@@ -2399,7 +2399,7 @@ export const builtinToolDefs: ToolSet = {
         if (!writeStoreState((s) => {
           const arr = (s.documentNodes || []) as DocumentNode[]
           s.documentNodes = arr.map((node) => node.id === doc.id
-            ? { ...node, title: nextTitle, markdown, updatedAt: now } as DocumentNode
+            ? { ...node, title: nextTitle, markdown, updatedAt: now }
             : node)
           s.selectedDocumentId = doc.id
           s.selectedDocumentGroupId = doc.groupId
@@ -2482,15 +2482,16 @@ export const builtinToolDefs: ToolSet = {
           return 'Cancelled by user confirmation policy.'
         }
 
+        const trimmedName = name?.trim()
         const nextSkill: Skill = {
           ...skill,
-          ...(name?.trim() ? { name: name.trim() } : {}),
+          ...(trimmedName ? { name: trimmedName } : {}),
           ...(description !== undefined ? { description } : {}),
           ...(when_to_use !== undefined ? { whenToUse: when_to_use } : {}),
           content,
           frontmatter: {
             ...skill.frontmatter,
-            ...(name?.trim() ? { name: name.trim() } : {}),
+            ...(trimmedName ? { name: trimmedName } : {}),
             ...(description !== undefined ? { description } : {}),
             ...(when_to_use !== undefined ? { whenToUse: when_to_use } : {}),
           },
