@@ -470,15 +470,6 @@ export function searchRegistrySkills(
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-function getSkillContentUrl(entry: RegistrySkillEntry): string | null {
-  // GitHub raw content URL
-  const match = entry.repository.match(/^([^/]+)\/([^/]+)$/)
-  if (!match) return null
-
-  const [, owner, repo] = match
-  return `https://raw.githubusercontent.com/${owner}/${repo}/main/skills/${entry.name}/SKILL.md`
-}
-
 function parseRepository(repository: string): { owner: string; repo: string } | null {
   const match = repository.match(/^([^/]+)\/([^/]+)$/)
   if (!match) return null
