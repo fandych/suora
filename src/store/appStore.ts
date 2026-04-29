@@ -11,6 +11,7 @@ import { createSessionSlice } from '@/store/slices/sessionSlice'
 import { createModelConfigSlice } from '@/store/slices/modelConfigSlice'
 import { createUIPreferencesSlice } from '@/store/slices/uiPreferencesSlice'
 import { createSafePersistStorage } from '@/services/safePersistStorage'
+import { taskFingerprint } from '@/utils/taskFingerprint'
 
 function normalizeAgentMaxTurns(maxTurns: number | undefined): number | undefined {
   if (typeof maxTurns !== 'number' || !Number.isFinite(maxTurns)) return undefined
@@ -28,16 +29,6 @@ function normalizeAgent(agent: Agent): Agent {
 function normalizeAgentPatch(agent: Partial<Agent>): Partial<Agent> {
   if (agent.maxTurns === undefined) return agent
   return { ...agent, maxTurns: normalizeAgentMaxTurns(agent.maxTurns) }
-}
-
-function taskFingerprint(taskText: string): string {
-  return taskText
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]+/gu, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length >= 3)
-    .slice(0, 12)
-    .join(' ')
 }
 
 // ─── Default general-purpose agent ─────────────────────────────────

@@ -5,6 +5,8 @@ import { useI18n } from '@/hooks/useI18n'
 import type { ScheduledTask, TimerType } from '@/types'
 import { toLocalDatetimeValue, getNextCronExecutions, type TimerFormData } from './timerHelpers'
 
+const LOCAL_TIMEZONE = Intl.DateTimeFormat().resolvedOptions().timeZone
+
 export function TimerForm({ initial, onSave, onCancel }: {
   initial?: ScheduledTask
   onSave: (data: TimerFormData) => void
@@ -20,7 +22,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
     prompt: initial?.prompt ?? '',
     agentId: initial?.agentId ?? '',
     pipelineId: initial?.pipelineId ?? '',
-    timezone: initial?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+    timezone: initial?.timezone ?? LOCAL_TIMEZONE,
     missedRunPolicy: initial?.missedRunPolicy ?? 'skip',
     maxRetries: initial?.maxRetries ?? 0,
     retryIntervalMinutes: initial?.retryIntervalMinutes ?? 5,

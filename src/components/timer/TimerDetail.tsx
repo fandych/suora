@@ -121,7 +121,7 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
                 <InfoCard label={t('timer.lastRun', 'Last Run')} value={timer.lastRun ? formatDateTime(timer.lastRun) : t('timer.never', 'Never')} />
                 <InfoCard label={t('timer.created', 'Created')} value={formatDateTime(timer.createdAt)} />
                 <InfoCard label={t('timer.timezone', 'Timezone')} value={timer.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone} />
-                <InfoCard label={t('timer.retries', 'Retries')} value={`${timer.maxRetries ?? 0} × ${timer.retryIntervalMinutes ?? 5}m`} />
+                <InfoCard label={t('timer.retries', 'Retries')} value={`${t('timer.max', 'Max')}: ${timer.maxRetries ?? 0}, ${t('timer.interval', 'Interval')}: ${timer.retryIntervalMinutes ?? 5}m`} />
                 <InfoCard label={t('timer.missedRuns', 'Missed runs')} value={timer.missedRunPolicy ?? 'skip'} />
                 <InfoCard label={t('timer.calendar', 'Calendar')} value={timer.calendarRule ?? 'all-days'} />
               </div>

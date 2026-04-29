@@ -47,7 +47,7 @@ export function buildAttachmentManifest(attachment: MessageAttachment): Attachme
         : attachment.type === 'file'
           ? 'text'
           : 'unknown'
-  const privacyRisk: AttachmentManifest['privacyRisk'] = /key|secret|token|credential|password|env/i.test(`${attachment.name}\n${attachment.data.slice(0, 400)}`)
+  const privacyRisk: AttachmentManifest['privacyRisk'] = /key|secret|token|credential|password|env/i.test(`${attachment.name}\n${attachment.data}`)
     ? 'high'
     : attachment.size > MAX_TEXT_ATTACHMENT_CHARS
       ? 'medium'

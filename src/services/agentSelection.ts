@@ -1,4 +1,5 @@
 import type { Agent, AgentPerformanceStats, AgentSelectionPreference, Skill } from '@/types'
+import { taskFingerprint } from '@/utils/taskFingerprint'
 
 export interface AgentSelectionScore {
   agent: Agent
@@ -13,16 +14,6 @@ const KEYWORD_WEIGHTS: Array<[RegExp, string, number]> = [
   [/\bdeploy|ci|docker|server|ops\b/i, 'operations task keywords', 14],
   [/分析|总结|写|修复|测试|部署|数据库|流水线/u, 'localized task keywords', 10],
 ]
-
-function fingerprint(input: string): string {
-  return input
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s_-]+/gu, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length >= 3)
-    .slice(0, 12)
-    .join(' ')
-}
 
 function textScore(input: string, text: string | undefined): number {
   if (!text) return 0
@@ -43,7 +34,7 @@ export function scoreAgentsForTask(
   preferences: AgentSelectionPreference[] = [],
 ): AgentSelectionScore[] {
   const enabledAgents = agents.filter((agent) => agent.enabled !== false)
-  const taskKey = fingerprint(input)
+  const taskKey = taskFingerprint(input)
   return enabledAgents
     .map((agent) => {
       const reasons: string[] = []

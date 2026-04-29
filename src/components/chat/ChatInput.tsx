@@ -27,6 +27,7 @@ import { formatFileSize } from './ChatMessages'
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const MAX_FILE_SIZE = 2 * 1024 * 1024
+const MAX_ATTACHMENT_CONTEXT_CHARS = 24_000
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
@@ -93,8 +94,9 @@ function fileToAttachment(
       const reader = new FileReader()
       reader.onload = () => {
         const data = reader.result as string
-        const truncated = data.length > 24_000
-        const attachment: MessageAttachment = { id: generateId('att'), type: 'file', name: file.name, mimeType: file.type || 'text/plain', data, size: file.size, summary: data.slice(0, 500), truncated }
+        const truncated = data.length > MAX_ATTACHMENT_CONTEXT_CHARS
+        const storedData = truncated ? data.slice(0, MAX_ATTACHMENT_CONTEXT_CHARS) : data
+        const attachment: MessageAttachment = { id: generateId('att'), type: 'file', name: file.name, mimeType: file.type || 'text/plain', data: storedData, size: file.size, summary: data.slice(0, 500), truncated }
         resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
       }
       reader.onerror = () => { onReject?.(file, { kind: 'read-failed' }); resolve(null) }
@@ -110,7 +112,7 @@ function fileToAttachment(
         mimeType: file.type,
         data: '',
         size: file.size,
-        summary: 'Document attached as a manifest. Extract text before asking content-specific questions if the provider cannot read this format directly.',
+        summary: 'Document metadata attached only; original byte size is preserved for review. Extract text before asking content-specific questions if the provider cannot read this format directly.',
         truncated: true,
       }
       resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
