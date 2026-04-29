@@ -68,7 +68,7 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
       cancelText: options.cancelText ?? 'Cancel',
       danger: options.danger ?? false,
       choices: options.choices,
-      resolve: (value) => resolve(value === true || value === 'confirm'),
+      resolve: (value) => resolve(value === true),
     })
   })
 }
@@ -82,6 +82,10 @@ export function confirmChoice(
   cancelValue = 'cancel',
 ): Promise<ConfirmChoiceValue> {
   return new Promise<ConfirmChoiceValue>((resolve) => {
+    if (options.choices.length === 0) {
+      resolve(cancelValue)
+      return
+    }
     const primary = options.choices.find((choice) => choice.variant === 'primary') ?? options.choices[0]
     useConfirmStore.getState().push({
       id: _nextId++,

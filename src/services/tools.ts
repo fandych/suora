@@ -30,6 +30,7 @@ const OFFICIAL_MARKETPLACE_URL = 'https://raw.githubusercontent.com/suora-market
 // ─── Constants ─────────────────────────────────────────────────────
 
 const PREVIEW_LENGTH = 80
+const DEFAULT_BLOCKED_COMMANDS = ['rm -rf', 'del /f /q', 'format', 'shutdown']
 
 /** Shape of the persisted store state used by memory tools to avoid circular import with appStore. */
 interface PersistedMemoryEntry {
@@ -188,7 +189,7 @@ function getPersistedSecuritySettings() {
     if (!raw) {
       return {
         allowedDirectories: [] as string[],
-        blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
+        blockedCommands: DEFAULT_BLOCKED_COMMANDS,
         requireConfirmation: true,
       }
     }
@@ -196,13 +197,13 @@ function getPersistedSecuritySettings() {
     const sec = parsed.state?.toolSecurity
     return {
       allowedDirectories: sec?.allowedDirectories || [],
-      blockedCommands: sec?.blockedCommands || ['rm -rf', 'del /f /q', 'format', 'shutdown'],
+      blockedCommands: sec?.blockedCommands || DEFAULT_BLOCKED_COMMANDS,
       requireConfirmation: sec?.requireConfirmation ?? true,
     }
   } catch {
     return {
       allowedDirectories: [] as string[],
-      blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
+      blockedCommands: DEFAULT_BLOCKED_COMMANDS,
       requireConfirmation: true,
     }
   }
@@ -298,7 +299,7 @@ export async function runWithToolConfirmationBypass<T>(operation: () => Promise<
   try {
     return await operation()
   } finally {
-    toolConfirmationBypassDepth = Math.max(0, toolConfirmationBypassDepth - 1)
+    toolConfirmationBypassDepth -= 1
   }
 }
 
@@ -327,7 +328,7 @@ async function confirmIfNeeded(action: string): Promise<boolean> {
       const current = (state.toolSecurity ?? {}) as Partial<ToolSecuritySettings>
       state.toolSecurity = {
         allowedDirectories: current.allowedDirectories ?? [],
-        blockedCommands: current.blockedCommands ?? ['rm -rf', 'del /f /q', 'format', 'shutdown'],
+        blockedCommands: current.blockedCommands ?? DEFAULT_BLOCKED_COMMANDS,
         requireConfirmation: false,
       }
     })

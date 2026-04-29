@@ -45,6 +45,7 @@ export function ConfirmDialogHost() {
     ? t('common.cancel', 'Cancel')
     : current.cancelText
   const choices = current.choices?.length ? current.choices : undefined
+  const primaryChoiceIndex = choices ? Math.max(0, choices.findIndex((item) => item.variant === 'primary')) : -1
   const buttonClass = (variant: 'primary' | 'danger' | 'secondary' | undefined) => {
     if (variant === 'danger') return 'bg-danger/90 hover:bg-danger text-white focus:ring-danger/40'
     if (variant === 'primary') return 'bg-accent/90 hover:bg-accent text-white focus:ring-accent/40'
@@ -85,7 +86,7 @@ export function ConfirmDialogHost() {
               <button
                 key={choice.value}
                 type="button"
-                ref={index === choices.findIndex((item) => item.variant === 'primary') ? confirmBtnRef : undefined}
+                ref={index === primaryChoiceIndex ? confirmBtnRef : undefined}
                 onClick={() => resolveTop(choice.value)}
                 className={`px-4 py-2 text-[13px] rounded-xl transition-colors font-medium focus:outline-none focus:ring-2 ${buttonClass(choice.variant)}`}
               >
