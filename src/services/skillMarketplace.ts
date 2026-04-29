@@ -16,6 +16,7 @@ import type { SkillRegistrySource, RegistrySkillEntry, Skill } from '@/types'
 import { t } from '@/services/i18n'
 import { parseSkillMarkdown } from '@/services/skillRegistry'
 import { logger } from '@/services/logger'
+import { safePathSegment } from '@/utils/pathSegments'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 type GitHubContentItem = {
@@ -303,7 +304,8 @@ export async function installSkillFromRegistry(
       return null
     }
 
-    const skillDir = `${targetDir}/${entry.name}`
+    const safeSkillDirName = safePathSegment(entry.name, 'skill')
+    const skillDir = `${targetDir}/${safeSkillDirName}`
     await electron.invoke('system:ensureDirectory', skillDir)
     const installedFiles = await downloadGitHubSkillDirectory(electron, repo.owner, repo.repo, entry.name, skillDir)
     const skillMarkdown = installedFiles.get('SKILL.md') ?? installedFiles.get('skill.md')
@@ -503,22 +505,29 @@ async function downloadGitHubSkillDirectory(
   async function visit(remotePath: string, localDir: string, relativeBase = ''): Promise<void> {
     const items = await fetchGitHubDirectory(electron, owner, repo, remotePath)
     for (const item of items) {
-      const relativePath = `${relativeBase}${item.name}`
+      const safeName = safePathSegment(item.name, '')
+      if (!safeName || safeName !== item.name) {
+        throw new Error(`Unsafe file name in skill directory: ${item.name}`)
+      }
+      const relativePath = `${relativeBase}${safeName}`
 
       if (item.type === 'dir') {
-        const nextLocalDir = `${localDir}/${item.name}`
+        const nextLocalDir = `${localDir}/${safeName}`
         await electron.invoke('system:ensureDirectory', nextLocalDir)
         await visit(item.path, nextLocalDir, `${relativePath}/`)
         continue
       }
 
       if (item.type !== 'file' || !item.download_url) continue
+      if (!isExpectedGitHubRawUrl(item.download_url, owner, repo)) {
+        throw new Error(`Unexpected download URL for ${item.path}`)
+      }
       const content = await electron.invoke('web:fetchText', item.download_url) as { content?: string; error?: string }
       if (content.error || typeof content.content !== 'string') {
         throw new Error(content.error || `Failed to download ${item.path}`)
       }
 
-      const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${item.name}`, content.content) as { success?: boolean; error?: string }
+      const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${safeName}`, content.content) as { success?: boolean; error?: string }
       if (!writeResult?.success) throw new Error(writeResult?.error || `Failed to write ${relativePath}`)
       downloaded.set(relativePath, content.content)
     }
@@ -526,6 +535,18 @@ async function downloadGitHubSkillDirectory(
 
   await visit(`skills/${skillName}`, targetDir)
   return downloaded
+}
+
+function isExpectedGitHubRawUrl(url: string, owner: string, repo: string): boolean {
+  try {
+    const parsed = new URL(url)
+    const normalizedPath = decodeURIComponent(parsed.pathname)
+    return parsed.protocol === 'https:'
+      && parsed.hostname === 'raw.githubusercontent.com'
+      && normalizedPath.startsWith(`/${owner}/${repo}/`)
+  } catch {
+    return false
+  }
 }
 
 function getSkillContentUrlFromInstallInfo(
