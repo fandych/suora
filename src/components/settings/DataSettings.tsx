@@ -1,9 +1,10 @@
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
-import type { Agent, Skill, Session } from '@/types'
+import type { Agent, ProviderConfig, Skill, Session } from '@/types'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
 
 export function DataSettings() {
@@ -23,7 +24,7 @@ export function DataSettings() {
       providerConfigs,
       externalDirectories,
     }
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+    const blob = new Blob([safeStringify(exportData, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
@@ -39,14 +40,15 @@ export function DataSettings() {
     const reader = new FileReader()
     reader.onload = async () => {
       try {
-        const data = JSON.parse(reader.result as string)
+        const data = safeParse<Record<string, unknown>>(reader.result as string)
         if (!data || typeof data !== 'object' || Array.isArray(data)) {
           throw new Error('Invalid file format — expected a JSON object')
         }
         const importAgents = Array.isArray(data.agents) ? data.agents : []
         const importSkills = Array.isArray(data.skills) ? data.skills : []
         const importSessions = Array.isArray(data.sessions) ? data.sessions : []
-        const hasProviders = data.providerConfigs && Array.isArray(data.providerConfigs)
+        const importProviderConfigs = Array.isArray(data.providerConfigs) ? data.providerConfigs as ProviderConfig[] : []
+        const hasProviders = importProviderConfigs.length > 0
         const total = importAgents.length + importSkills.length + importSessions.length + (hasProviders ? 1 : 0)
         if (total === 0) {
           toast.warning(t('settings.importEmpty', 'Nothing to import from this file.'))
@@ -69,7 +71,7 @@ export function DataSettings() {
         importAgents.forEach((agent: Agent) => addAgent(agent))
         importSkills.forEach((skill: Skill) => addSkill(skill))
         importSessions.forEach((session: Session) => addSession(session))
-        if (hasProviders) { setProviderConfigs(data.providerConfigs); syncModelsFromConfigs() }
+        if (hasProviders) { setProviderConfigs(importProviderConfigs); syncModelsFromConfigs() }
         toast.success(t('settings.importSuccess', 'Data imported successfully!'), summary)
         input.value = ''
       } catch (err) {

@@ -18,6 +18,7 @@
 
 import type { Skill, SkillSource, SkillFrontmatter, SkillExecutionContext } from '@/types'
 import { logger } from '@/services/logger'
+import { safeParse } from '@/utils/safeJson'
 import { safePathSegment } from '@/utils/pathSegments'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
@@ -443,7 +444,7 @@ async function loadSkillsFromDirectory(
         try {
           const raw = await electron.invoke('fs:readFile', entry.path)
           if (typeof raw === 'string') {
-            const legacy = JSON.parse(raw) as Record<string, unknown>
+            const legacy = safeParse<Record<string, unknown>>(raw)
             const skill = migrateLegacySkill(legacy, entry.path, source)
             if (skill) skills.push(skill)
           }

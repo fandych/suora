@@ -22,6 +22,7 @@ import { readCached, writeCached } from '@/services/fileStorage'
 import { delegateToAgent } from '@/services/agentCommunication'
 import { confirm } from '@/services/confirmDialog'
 import { safePathSegment } from '@/utils/pathSegments'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 const OFFICIAL_MARKETPLACE_URL = 'https://raw.githubusercontent.com/suora-market/skills/main/skills.json'
 
@@ -114,7 +115,7 @@ function readStoreState(): Record<string, unknown> | null {
   try {
     const raw = readCached(STORE_KEY)
     if (!raw) return null
-    const parsed = JSON.parse(raw) as { state?: Record<string, unknown> }
+    const parsed = safeParse<{ state?: Record<string, unknown> }>(raw)
     return parsed.state || null
   } catch {
     return null
@@ -131,9 +132,9 @@ function writeStoreState(updater: (state: Record<string, unknown>) => void): boo
   try {
     const raw = readCached(STORE_KEY)
     if (!raw) return false
-    const store = JSON.parse(raw) as { state: Record<string, unknown> }
+    const store = safeParse<{ state: Record<string, unknown> }>(raw)
     updater(store.state)
-    const serialized = JSON.stringify(store)
+    const serialized = safeStringify(store)
     writeCached(STORE_KEY, serialized)
     window.dispatchEvent(new StorageEvent('storage', { key: STORE_KEY, newValue: serialized }))
     return true
@@ -176,7 +177,7 @@ function getPersistedSecuritySettings() {
         requireConfirmation: true,
       }
     }
-    const parsed = JSON.parse(raw) as { state?: { toolSecurity?: { allowedDirectories?: string[]; blockedCommands?: string[]; requireConfirmation?: boolean } } }
+    const parsed = safeParse<{ state?: { toolSecurity?: { allowedDirectories?: string[]; blockedCommands?: string[]; requireConfirmation?: boolean } } }>(raw)
     const sec = parsed.state?.toolSecurity
     return {
       allowedDirectories: sec?.allowedDirectories || [],
@@ -201,7 +202,7 @@ function getPersistedMarketplaceSettings() {
         privateUrl: '',
       }
     }
-    const parsed = JSON.parse(raw) as { state?: { marketplace?: { source?: 'official' | 'private'; privateUrl?: string } } }
+    const parsed = safeParse<{ state?: { marketplace?: { source?: 'official' | 'private'; privateUrl?: string } } }>(raw)
     const market = parsed.state?.marketplace
     return {
       source: market?.source ?? 'official',
@@ -320,7 +321,7 @@ function getPersistedStoreState(): { workspacePath: string; activeSessionId: str
   try {
     const raw = readCached(STORE_KEY)
     if (!raw) return { workspacePath: '', activeSessionId: '' }
-    const parsed = JSON.parse(raw) as { state?: { workspacePath?: string; activeSessionId?: string } }
+    const parsed = safeParse<{ state?: { workspacePath?: string; activeSessionId?: string } }>(raw)
     return {
       workspacePath: parsed.state?.workspacePath || '',
       activeSessionId: parsed.state?.activeSessionId || '',
@@ -341,7 +342,7 @@ async function readTodos(key: string): Promise<TodoItem[]> {
   try {
     const result = await electronInvoke('db:loadPersistedStore', key) as { data?: unknown; error?: string }
     if (typeof result?.data === 'string' && result.data.trim()) {
-      return JSON.parse(result.data) as TodoItem[]
+      return safeParse<TodoItem[]>(result.data)
     }
     return []
   } catch {
@@ -350,7 +351,7 @@ async function readTodos(key: string): Promise<TodoItem[]> {
 }
 
 async function writeTodos(key: string, todos: TodoItem[]): Promise<void> {
-  await electronInvoke('db:savePersistedStore', key, JSON.stringify(todos), 1)
+  await electronInvoke('db:savePersistedStore', key, safeStringify(todos), 1)
 }
 
 // ─── AI SDK tool definitions ───────────────────────────────────────
@@ -1292,7 +1293,7 @@ export const builtinToolDefs: ToolSet = {
       try {
         const raw = readCached(STORE_KEY)
         if (!raw) return 'Error: Store not available'
-        const parsed = JSON.parse(raw) as PersistedStoreShape
+        const parsed = safeParse<PersistedStoreShape>(raw)
         const fromAgentId = parsed.state?.selectedAgent?.id ?? 'unknown'
         const agentList = parsed.state?.agents
         if (!agentList?.length) return 'Error: No agents available'
@@ -1352,7 +1353,7 @@ export const builtinToolDefs: ToolSet = {
       try {
         const raw = readCached(STORE_KEY)
         if (!raw) return 'Error: Store not available'
-        const parsed = JSON.parse(raw) as PersistedStoreShape
+        const parsed = safeParse<PersistedStoreShape>(raw)
         if (!parsed.state?.agents?.length) return 'Error: No agents available'
 
         const needle = agent_name.toLowerCase()
@@ -1374,7 +1375,7 @@ export const builtinToolDefs: ToolSet = {
 
         if (!target.memories) target.memories = []
         target.memories.push(memory)
-        writeCached(STORE_KEY, JSON.stringify(parsed))
+        writeCached(STORE_KEY, safeStringify(parsed))
 
         const preview = message.length > PREVIEW_LENGTH ? `${message.slice(0, PREVIEW_LENGTH)}...` : message
         return `Notification sent to "${target.name ?? agent_name}": ${preview}`
@@ -1393,7 +1394,7 @@ export const builtinToolDefs: ToolSet = {
       try {
         const raw = readCached(EVENTS_STORAGE_KEY)
         if (!raw) return 'No event triggers configured.'
-        const triggers = JSON.parse(raw) as Array<{ id: string; name: string; type: string; enabled: boolean; agentId: string; pattern?: string }>
+        const triggers = safeParse<Array<{ id: string; name: string; type: string; enabled: boolean; agentId: string; pattern?: string }>>(raw)
         if (triggers.length === 0) return 'No event triggers configured.'
         return triggers.map((t) =>
           `- ${t.name} (${t.type}, ${t.enabled ? 'enabled' : 'disabled'}) → agent: ${t.agentId}${t.pattern ? `, pattern: ${t.pattern}` : ''}`
@@ -1416,7 +1417,7 @@ export const builtinToolDefs: ToolSet = {
     execute: async ({ name, type, pattern, agent_id, prompt_template }) => {
       try {
         const raw = readCached(EVENTS_STORAGE_KEY)
-        const triggers = raw ? JSON.parse(raw) as Array<Record<string, unknown>> : []
+        const triggers = raw ? safeParse<Array<Record<string, unknown>>>(raw) : []
         const trigger = {
           id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
           name,
@@ -1428,7 +1429,7 @@ export const builtinToolDefs: ToolSet = {
           createdAt: Date.now(),
         }
         triggers.push(trigger)
-        writeCached(EVENTS_STORAGE_KEY, JSON.stringify(triggers))
+        writeCached(EVENTS_STORAGE_KEY, safeStringify(triggers))
         return `Created event trigger: "${name}" (${type})`
       } catch (err) {
         return `Error creating trigger: ${err instanceof Error ? err.message : String(err)}`
@@ -1445,10 +1446,10 @@ export const builtinToolDefs: ToolSet = {
       try {
         const raw = readCached(EVENTS_STORAGE_KEY)
         if (!raw) return `Trigger not found: ${id}`
-        const triggers = JSON.parse(raw) as Array<{ id: string }>
+        const triggers = safeParse<Array<{ id: string }>>(raw)
         const filtered = triggers.filter((t) => t.id !== id)
         if (filtered.length === triggers.length) return `Trigger not found: ${id}`
-        writeCached(EVENTS_STORAGE_KEY, JSON.stringify(filtered))
+        writeCached(EVENTS_STORAGE_KEY, safeStringify(filtered))
         return `Deleted trigger: ${id}`
       } catch (err) {
         return `Error deleting trigger: ${err instanceof Error ? err.message : String(err)}`
@@ -1471,7 +1472,7 @@ export const builtinToolDefs: ToolSet = {
       try {
         const raw = readCached(STORE_KEY)
         if (!raw) return 'Error: Store not available'
-        const parsed = JSON.parse(raw) as { state?: { skills?: Array<Record<string, unknown>> } }
+        const parsed = safeParse<{ state?: { skills?: Array<Record<string, unknown>> } }>(raw)
         if (!parsed.state) return 'Error: Store state not available'
 
         // Check for duplicate name
@@ -1497,7 +1498,7 @@ export const builtinToolDefs: ToolSet = {
 
         if (!parsed.state.skills) parsed.state.skills = []
         parsed.state.skills.push(newSkill)
-        writeCached(STORE_KEY, JSON.stringify(parsed))
+        writeCached(STORE_KEY, safeStringify(parsed))
 
         return `Created new skill "${name}" (${skillId}). Reason: ${reason}`
       } catch (err) {
@@ -1517,7 +1518,7 @@ export const builtinToolDefs: ToolSet = {
       try {
         const raw = readCached(STORE_KEY)
         if (!raw) return 'Error: Store not available'
-        const parsed = JSON.parse(raw) as { state?: { skills?: Array<Record<string, unknown>> } }
+        const parsed = safeParse<{ state?: { skills?: Array<Record<string, unknown>> } }>(raw)
         if (!parsed.state?.skills) return 'Error: No skills found'
 
         const idx = parsed.state.skills.findIndex((s) => s.id === skill_id)
@@ -1530,7 +1531,7 @@ export const builtinToolDefs: ToolSet = {
 
         let updateObj: Record<string, unknown>
         try {
-          updateObj = JSON.parse(updates)
+          updateObj = safeParse(updates)
         } catch {
           return 'Error: Invalid JSON in updates'
         }
@@ -1543,7 +1544,7 @@ export const builtinToolDefs: ToolSet = {
           }
         }
 
-        writeCached(STORE_KEY, JSON.stringify(parsed))
+        writeCached(STORE_KEY, safeStringify(parsed))
         return `Improved skill "${parsed.state.skills[idx].name}". Reason: ${reason}`
       } catch (err) {
         return `Error improving skill: ${err instanceof Error ? err.message : String(err)}`
@@ -1560,7 +1561,7 @@ export const builtinToolDefs: ToolSet = {
       try {
         const raw = readCached(STORE_KEY)
         if (!raw) return 'Error: Store not available'
-        const parsed = JSON.parse(raw) as { state?: { skills?: Array<{ id: string; name: string; description?: string; prompt?: string; customCode?: string; tools?: Array<unknown> }> } }
+        const parsed = safeParse<{ state?: { skills?: Array<{ id: string; name: string; description?: string; prompt?: string; customCode?: string; tools?: Array<unknown> }> } }>(raw)
         if (!parsed.state?.skills) return 'Error: No skills found'
 
         const skill = parsed.state.skills.find((s) => s.id === skill_id)
@@ -1637,8 +1638,8 @@ export const builtinToolDefs: ToolSet = {
       if (iterations < 1 || iterations > 100) {
         return 'Error: Iterations must be between 1 and 100.'
       }
-      const vars = variables ? JSON.parse(variables) : {}
-      return `Loop configured: ${iterations} iterations of "${action_description}"\nVariables: ${JSON.stringify(vars)}\n\nNote: In practice, you should break down the loop into individual tool calls for better control and error handling.`
+      const vars = variables ? safeParse(variables) : {}
+      return `Loop configured: ${iterations} iterations of "${action_description}"\nVariables: ${safeStringify(vars)}\n\nNote: In practice, you should break down the loop into individual tool calls for better control and error handling.`
     },
   }),
 

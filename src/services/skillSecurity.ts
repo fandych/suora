@@ -5,6 +5,7 @@
 
 import type { Skill, SkillSignature } from '@/types'
 import { readCached, writeCached, removeCached } from '@/services/fileStorage'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 // ─── SHA-256 hashing ────────────────────────────────────────────────
 
@@ -174,7 +175,7 @@ export function getAuditLog(): AuditLogEntry[] {
   try {
     const raw = readCached(AUDIT_STORAGE_KEY)
     if (!raw) return []
-    return JSON.parse(raw) as AuditLogEntry[]
+    return safeParse<AuditLogEntry[]>(raw)
   } catch {
     return []
   }
@@ -185,7 +186,7 @@ export function addAuditEntry(entry: AuditLogEntry): void {
   log.push(entry)
   // Keep only the most recent entries
   while (log.length > MAX_AUDIT_LOG) log.shift()
-  writeCached(AUDIT_STORAGE_KEY, JSON.stringify(log))
+  writeCached(AUDIT_STORAGE_KEY, safeStringify(log))
 }
 
 export function clearAuditLog(): void {

@@ -1,6 +1,7 @@
 // External directory loading for skills and agents
 import type { Skill, Agent, ExternalDirectoryConfig, SkillSource } from '@/types'
 import { parseSkillMarkdown } from '@/services/skillRegistry'
+import { safeParse } from '@/utils/safeJson'
 
 interface DirEntry {
   name: string
@@ -94,10 +95,10 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]>
           console.warn(`Failed to read ${entry.name}:`, (content as { error: string }).error)
           continue
         }
-        const skillData = JSON.parse(content)
+        const skillData = safeParse<Partial<Skill>>(content)
 
         // Validate required fields
-        if (!skillData.id || !skillData.name || !skillData.tools) {
+        if (typeof skillData.id !== 'string' || typeof skillData.name !== 'string' || !Array.isArray(skillData.tools)) {
           console.warn(`Invalid skill file ${entry.name}: missing required fields`)
           continue
         }
@@ -105,6 +106,15 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]>
         // Determine source based on directory path
         const skill: Skill = {
           ...skillData,
+          id: skillData.id,
+          name: skillData.name,
+          description: skillData.description ?? '',
+          content: skillData.content ?? skillData.prompt ?? '',
+          frontmatter: skillData.frontmatter ?? {
+            name: skillData.name,
+            description: skillData.description ?? '',
+          },
+          context: skillData.context ?? 'inline',
           type: 'custom',
           source,
           enabled: skillData.enabled ?? true,
@@ -147,10 +157,10 @@ export async function loadAgentsFromDirectory(dirPath: string): Promise<Agent[]>
           console.warn(`Failed to read ${entry.name}:`, (content as { error: string }).error)
           continue
         }
-        const agentData = JSON.parse(content)
+        const agentData = safeParse<Partial<Agent>>(content)
 
         // Validate required fields
-        if (!agentData.id || !agentData.name || !agentData.systemPrompt) {
+        if (typeof agentData.id !== 'string' || typeof agentData.name !== 'string' || typeof agentData.systemPrompt !== 'string') {
           console.warn(`Invalid agent file ${entry.name}: missing required fields`)
           continue
         }

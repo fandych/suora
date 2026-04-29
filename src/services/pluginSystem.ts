@@ -9,6 +9,7 @@
 
 import type { PluginInfo, PluginHookType, PluginStatus, PluginPermission, PluginAPIContext, PluginManifestV2, PluginConfigField } from '@/types'
 import { readCached } from '@/services/fileStorage'
+import { safeParse } from '@/utils/safeJson'
 import type { ToolSet } from 'ai'
 import { z } from 'zod'
 
@@ -94,7 +95,7 @@ export function createPluginAPIContext(pluginId: string, permissions: PluginPerm
   function getStoreState(): Record<string, unknown> {
     try {
       const raw = readCached('suora-store')
-      return raw ? (JSON.parse(raw) as { state?: Record<string, unknown> }).state || {} : {}
+      return raw ? safeParse<{ state?: Record<string, unknown> }>(raw).state || {} : {}
     } catch {
       return {}
     }

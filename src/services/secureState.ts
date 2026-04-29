@@ -1,4 +1,5 @@
 import type { Model, ProviderConfig } from '@/types'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 export type ElectronBridge = {
   invoke: (ch: string, ...args: unknown[]) => Promise<unknown>
@@ -71,7 +72,7 @@ async function encryptSecrets(
 ): Promise<string | null> {
   const result = (await electron.invoke(
     'safe-storage:encrypt',
-    JSON.stringify(secrets),
+    safeStringify(secrets),
   )) as { data?: string; error?: string }
 
   return typeof result.data === 'string' && !result.error ? result.data : null
@@ -89,7 +90,7 @@ async function decryptSecrets(
   if (typeof result.data !== 'string' || result.error) return null
 
   try {
-    const parsed = JSON.parse(result.data) as Partial<SecureModelsSecrets>
+    const parsed = safeParse<Partial<SecureModelsSecrets>>(result.data)
     return {
       version: typeof parsed.version === 'number' ? parsed.version : SECURE_MODELS_VERSION,
       providerApiKeys: isStringRecord(parsed.providerApiKeys) ? parsed.providerApiKeys : {},
@@ -106,7 +107,7 @@ async function encryptPathSecrets(
 ): Promise<string | null> {
   const result = (await electron.invoke(
     'safe-storage:encrypt',
-    JSON.stringify(secrets),
+    safeStringify(secrets),
   )) as { data?: string; error?: string }
 
   return typeof result.data === 'string' && !result.error ? result.data : null
@@ -124,7 +125,7 @@ async function decryptPathSecrets(
   if (typeof result.data !== 'string' || result.error) return null
 
   try {
-    const parsed = JSON.parse(result.data) as Partial<SecurePathSecrets>
+    const parsed = safeParse<Partial<SecurePathSecrets>>(result.data)
     return {
       version: typeof parsed.version === 'number' ? parsed.version : SECURE_PATH_SECRETS_VERSION,
       values: isStringRecord(parsed.values) ? parsed.values : {},

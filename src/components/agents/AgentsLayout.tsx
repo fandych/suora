@@ -13,6 +13,7 @@ import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
 import { settingsInputClass } from '@/components/settings/panelUi'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 const DEFAULT_AGENT_ID = 'default-assistant'
 
@@ -421,7 +422,7 @@ export function AgentsLayout() {
 
   const handleExport = (agent: Agent) => {
     const exportData = { ...agent }
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+    const blob = new Blob([safeStringify(exportData, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -436,7 +437,7 @@ export function AgentsLayout() {
     const reader = new FileReader()
     reader.onload = () => {
       try {
-        const data = JSON.parse(reader.result as string) as Agent
+        const data = safeParse<Agent>(reader.result as string)
         if (!data.name || !data.systemPrompt) {
           toast.error(t('agents.invalidFile', 'Invalid agent file: missing required fields.'))
           return

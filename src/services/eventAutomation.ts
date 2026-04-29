@@ -5,6 +5,7 @@
 
 import type { EventTrigger } from '@/types'
 import { readCached, writeCached } from '@/services/fileStorage'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -21,14 +22,14 @@ export function loadTriggers(): EventTrigger[] {
   try {
     const raw = readCached(EVENTS_STORAGE_KEY)
     if (!raw) return []
-    return JSON.parse(raw) as EventTrigger[]
+    return safeParse<EventTrigger[]>(raw)
   } catch {
     return []
   }
 }
 
 export function saveTriggers(triggers: EventTrigger[]): void {
-  writeCached(EVENTS_STORAGE_KEY, JSON.stringify(triggers))
+  writeCached(EVENTS_STORAGE_KEY, safeStringify(triggers))
 }
 
 export function addTrigger(trigger: EventTrigger): void {
@@ -171,7 +172,7 @@ export function getAgentName(agentId: string): string {
   try {
     const raw = readCached(STORE_KEY)
     if (!raw) return agentId
-    const parsed = JSON.parse(raw) as { state?: { agents?: Array<{ id: string; name: string }> } }
+    const parsed = safeParse<{ state?: { agents?: Array<{ id: string; name: string }> } }>(raw)
     const agent = parsed.state?.agents?.find((a) => a.id === agentId)
     return agent?.name ?? agentId
   } catch {
