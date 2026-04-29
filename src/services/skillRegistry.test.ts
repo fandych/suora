@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildSkillPrompts, deleteSkillFromDisk, loadLocalSkills, parseSkillMarkdown, saveSkillToDisk, serializeSkillToMarkdown } from './skillRegistry'
+import { buildSkillPrompts, deleteSkillFromDisk, getSkillLockStatus, loadLocalSkills, loadSkillsLockfile, parseSkillMarkdown, saveSkillToDisk, serializeSkillToMarkdown } from './skillRegistry'
 
 describe('skillRegistry', () => {
   beforeEach(() => {
@@ -144,5 +144,47 @@ Plan carefully.
     expect(prompt).toContain('### schemas\n\n# Schema docs')
     expect(prompt).toContain('Skill root: /workspace/skills/creator')
     expect(prompt).toContain('- scripts/aggregate.py')
+    expect(prompt).toContain('Available script paths:')
+    expect(prompt).toContain('/workspace/skills/creator/scripts/aggregate.py')
+  })
+
+  it('loads skills-lock.json and reports lock verification status', async () => {
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel, filePath) => {
+      if (channel === 'fs:readFile' && filePath === '/workspace/skills-lock.json') {
+        return JSON.stringify({
+          version: 1,
+          skills: {
+            'skill-creator': {
+              source: 'anthropics/skills',
+              sourceType: 'github',
+              computedHash: 'hash-1',
+            },
+          },
+        })
+      }
+      return { error: `unexpected ${channel}:${filePath}` }
+    })
+
+    const lockfile = await loadSkillsLockfile('/workspace')
+    const skill = parseSkillMarkdown(
+      '---\nname: skill-creator\ndescription: Creates skills\n---\n\nUse bundled resources.',
+      '/workspace/skills/creator/SKILL.md',
+      'registry',
+    )
+    if (!skill) throw new Error('Expected parsed skill')
+
+    expect(lockfile?.skills['skill-creator'].source).toBe('anthropics/skills')
+    expect(getSkillLockStatus(skill, lockfile)).toBe('locked')
+    skill.installInfo = {
+      sourceId: 'skills-sh',
+      repository: 'anthropics/skills',
+      skillName: 'skill-creator',
+      installedVersion: '1.0.0',
+      installedAt: 1,
+      manifestHash: 'hash-1',
+    }
+    expect(getSkillLockStatus(skill, lockfile)).toBe('verified')
+    skill.installInfo.manifestHash = 'hash-2'
+    expect(getSkillLockStatus(skill, lockfile)).toBe('mismatch')
   })
 })

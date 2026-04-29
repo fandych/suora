@@ -16,7 +16,7 @@
  * No tool specification needed — agents decide which tools to use autonomously.
  */
 
-import type { Skill, SkillSource, SkillFrontmatter, SkillExecutionContext, SkillBundledResource, SkillReferenceFile } from '@/types'
+import type { Skill, SkillSource, SkillFrontmatter, SkillExecutionContext, SkillBundledResource, SkillReferenceFile, SkillsLockfile } from '@/types'
 import { logger } from '@/services/logger'
 import { safeParse } from '@/utils/safeJson'
 import { safePathSegment } from '@/utils/pathSegments'
@@ -666,6 +666,40 @@ export async function loadAllSkills(workspacePath: string): Promise<Skill[]> {
   }
 
   return Array.from(seen.values())
+}
+
+export async function loadSkillsLockfile(workspacePath: string): Promise<SkillsLockfile | null> {
+  const electron = getElectron()
+  if (!electron || !workspacePath) return null
+
+  try {
+    const raw = await electron.invoke('fs:readFile', `${workspacePath}/skills-lock.json`) as string | { error?: string }
+    if (typeof raw !== 'string') return null
+    const parsed = safeParse<Partial<SkillsLockfile>>(raw)
+    if (parsed.version !== 1 || typeof parsed.skills !== 'object' || !parsed.skills) return null
+    const skills: SkillsLockfile['skills'] = {}
+    for (const [name, entry] of Object.entries(parsed.skills)) {
+      if (!entry || typeof entry !== 'object') continue
+      const value = entry as Partial<SkillsLockfile['skills'][string]>
+      if (typeof value.source !== 'string' || typeof value.computedHash !== 'string') continue
+      skills[name] = {
+        source: value.source,
+        sourceType: typeof value.sourceType === 'string' ? value.sourceType : undefined,
+        computedHash: value.computedHash,
+      }
+    }
+    return { version: 1, skills }
+  } catch {
+    return null
+  }
+}
+
+export function getSkillLockStatus(skill: Skill, lockfile: SkillsLockfile | null): 'not-locked' | 'locked' | 'verified' | 'mismatch' {
+  const entry = lockfile?.skills[skill.name]
+  if (!entry) return 'not-locked'
+  const installedHash = skill.installInfo?.manifestHash
+  if (!installedHash) return 'locked'
+  return installedHash === entry.computedHash ? 'verified' : 'mismatch'
 }
 
 /**

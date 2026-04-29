@@ -357,6 +357,17 @@ export interface SkillRegistryPreview {
   installLog: string[]
 }
 
+export interface SkillLockEntry {
+  source: string
+  sourceType?: string
+  computedHash: string
+}
+
+export interface SkillsLockfile {
+  version: number
+  skills: Record<string, SkillLockEntry>
+}
+
 /**
  * Skill — prompt-based capability for AI agents.
  *

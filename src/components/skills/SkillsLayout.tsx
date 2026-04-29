@@ -4,8 +4,8 @@ import { useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
-import type { Skill, RegistrySkillEntry, SkillRegistrySource, SkillBundledResource } from '@/types'
-import { loadAllSkills, createBlankSkill, deleteSkillFromDisk, saveSkillToDisk, serializeSkillToMarkdown, parseSkillMarkdown } from '@/services/skillRegistry'
+import type { Skill, RegistrySkillEntry, SkillRegistrySource, SkillBundledResource, SkillsLockfile } from '@/types'
+import { loadAllSkills, createBlankSkill, deleteSkillFromDisk, saveSkillToDisk, serializeSkillToMarkdown, parseSkillMarkdown, loadSkillsLockfile, getSkillLockStatus } from '@/services/skillRegistry'
 import { browseRegistrySkills, searchRegistrySkills, installSkillFromRegistry, uninstallSkill, getDefaultRegistrySources, previewSkillInstall } from '@/services/skillMarketplace'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
@@ -56,6 +56,7 @@ export function SkillsLayout() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const folderInputRef = useRef<HTMLInputElement>(null)
   const [previewingEntryId, setPreviewingEntryId] = useState<string | null>(null)
+  const [skillsLockfile, setSkillsLockfile] = useState<SkillsLockfile | null>(null)
   const { t } = useI18n()
   useSkillIconsReady()
 
@@ -93,6 +94,7 @@ export function SkillsLayout() {
         if (!storeIds.has(skill.id)) addSkill(skill)
       }
     })
+    loadSkillsLockfile(workspacePath).then(setSkillsLockfile)
   }, [workspacePath, addSkill])
 
   // Fetch registry skills when switching to browse
@@ -510,8 +512,10 @@ export function SkillsLayout() {
               </div>
             )}
             {filteredInstalled.map((skill) => {
-              const isActive = editingId === skill.id
-              return (
+                const isActive = editingId === skill.id
+                const lockStatus = getSkillLockStatus(skill, skillsLockfile)
+                const lockEntry = skillsLockfile?.skills[skill.name]
+                return (
               <div
                 key={skill.id}
                 tabIndex={0}
@@ -548,6 +552,24 @@ export function SkillsLayout() {
                         </span>
                         {skill.category && <span className="px-1.5 py-0.5 rounded-full bg-surface-3/80 text-[9px]">{skill.category}</span>}
                         {skill.frontmatter?.context && <span className="px-1.5 py-0.5 rounded-full bg-accent/10 text-accent text-[9px]">{t(`skills.context.${skill.frontmatter.context}`, skill.frontmatter.context)}</span>}
+                        {lockStatus !== 'not-locked' && (
+                          <span
+                            title={lockEntry ? `${lockEntry.source} · ${lockEntry.computedHash}` : undefined}
+                            className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                              lockStatus === 'verified'
+                                ? 'bg-success/10 text-success'
+                                : lockStatus === 'mismatch'
+                                  ? 'bg-danger/10 text-danger'
+                                  : 'bg-warning/10 text-warning'
+                            }`}
+                          >
+                            {lockStatus === 'verified'
+                              ? t('skills.lockVerified', 'lock verified')
+                              : lockStatus === 'mismatch'
+                                ? t('skills.lockMismatch', 'lock mismatch')
+                                : t('skills.locked', 'locked')}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
