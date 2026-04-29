@@ -31,7 +31,7 @@ describe('pipelineFiles', () => {
     vi.mocked(window.electron.invoke).mockReset()
   })
 
-  it('loads saved pipelines from SQLite entities', async () => {
+  it('loads saved pipelines from workspace storage entities', async () => {
     vi.mocked(window.electron.invoke).mockImplementation(async (channel: string, ...args: unknown[]) => {
       const [table] = args as [string?]
       if (channel === 'db:listEntities' && table === 'pipelines') {
@@ -45,7 +45,7 @@ describe('pipelineFiles', () => {
     expect(pipelines).toEqual([samplePipeline])
   })
 
-  it('saves pipelines into SQLite', async () => {
+  it('saves pipelines into workspace storage', async () => {
     vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
 
     const success = await savePipelineToDisk('C:/workspace', samplePipeline)
@@ -59,7 +59,7 @@ describe('pipelineFiles', () => {
     )
   })
 
-  it('stores execution history in SQLite', async () => {
+  it('stores execution history in workspace storage', async () => {
     vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
 
     const success = await appendPipelineExecutionToDisk('C:/workspace', sampleExecution)
