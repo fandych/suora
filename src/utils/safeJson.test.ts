@@ -43,6 +43,19 @@ describe('safeJson', () => {
     expect(out.list).toEqual([1, undefined, 3])
   })
 
+  it('restores undefined without mutating previously returned parse results', () => {
+    const json = safeStringify({ nested: { value: undefined }, list: [undefined] })
+    const first = safeParse<{ nested: { value?: undefined }; list: Array<undefined> }>(json)
+    const second = safeParse<{ nested: { value?: undefined }; list: Array<undefined> }>(json)
+
+    expect(first).not.toBe(second)
+    expect(first.nested).not.toBe(second.nested)
+    expect(Object.prototype.hasOwnProperty.call(first.nested, 'value')).toBe(true)
+    expect(Object.prototype.hasOwnProperty.call(second.nested, 'value')).toBe(true)
+    expect(first.list).toEqual([undefined])
+    expect(second.list).toEqual([undefined])
+  })
+
   it('preserves non-finite numbers', () => {
     const out = safeParse<{ nan: number; inf: number; negInf: number }>(
       safeStringify({ nan: Number.NaN, inf: Infinity, negInf: -Infinity }),

@@ -59,17 +59,16 @@ function isJsonByteArraySample(values: unknown[]): boolean {
 function restoreUndefined(value: unknown): unknown {
   if (value === UNDEFINED_SENTINEL) return undefined
   if (Array.isArray(value)) {
-    for (let index = 0; index < value.length; index += 1) {
-      value[index] = restoreUndefined(value[index])
-    }
-    return value
+    return value.map((entry) => restoreUndefined(entry))
   }
   if (!value || typeof value !== 'object') return value
+  if (Object.getPrototypeOf(value) !== Object.prototype) return value
   const record = value as Record<string, unknown>
-  for (const key of Object.keys(value)) {
-    record[key] = restoreUndefined(record[key])
+  const restored: Record<string, unknown> = {}
+  for (const key of Object.keys(record)) {
+    restored[key] = restoreUndefined(record[key])
   }
-  return value
+  return restored
 }
 
 // NOTE: JSON.stringify calls each value's `toJSON()` *before* passing it to the

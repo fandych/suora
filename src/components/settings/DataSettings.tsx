@@ -24,28 +24,49 @@ const PROVIDER_TYPES = new Set<ProviderConfig['providerType']>([
 ])
 const MAX_IMPORTED_PROVIDER_MODELS = 500
 
-function isProviderConfig(value: unknown): value is ProviderConfig {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+function coerceProviderConfig(value: unknown): ProviderConfig | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const config = value as Partial<ProviderConfig>
-  return (
-    typeof config.id === 'string'
-    && typeof config.name === 'string'
-    && typeof config.apiKey === 'string'
-    && typeof config.baseUrl === 'string'
-    && typeof config.providerType === 'string'
-    && PROVIDER_TYPES.has(config.providerType as ProviderConfig['providerType'])
-    && Array.isArray(config.models)
-    && config.models.length <= MAX_IMPORTED_PROVIDER_MODELS
-    && config.models.every((model) =>
-      model
-      && typeof model === 'object'
-      && typeof model.modelId === 'string'
-      && typeof model.name === 'string'
-      && typeof model.enabled === 'boolean'
-      && (model.temperature === undefined || typeof model.temperature === 'number')
-      && (model.maxTokens === undefined || typeof model.maxTokens === 'number')
-    )
-  )
+  if (
+    typeof config.id !== 'string'
+    || typeof config.name !== 'string'
+    || typeof config.apiKey !== 'string'
+    || typeof config.baseUrl !== 'string'
+    || typeof config.providerType !== 'string'
+    || !PROVIDER_TYPES.has(config.providerType as ProviderConfig['providerType'])
+    || !Array.isArray(config.models)
+    || config.models.length > MAX_IMPORTED_PROVIDER_MODELS
+  ) return null
+
+  const models: ProviderConfig['models'] = []
+  for (const model of config.models) {
+    if (
+      !model
+      || typeof model !== 'object'
+      || typeof model.modelId !== 'string'
+      || typeof model.name !== 'string'
+      || typeof model.enabled !== 'boolean'
+      || (model.temperature !== undefined && typeof model.temperature !== 'number')
+      || (model.maxTokens !== undefined && typeof model.maxTokens !== 'number')
+    ) return null
+
+    models.push({
+      modelId: model.modelId,
+      name: model.name,
+      enabled: model.enabled,
+      ...(model.temperature === undefined ? {} : { temperature: model.temperature }),
+      ...(model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens }),
+    })
+  }
+
+  return {
+    id: config.id,
+    name: config.name,
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    providerType: config.providerType as ProviderConfig['providerType'],
+    models,
+  }
 }
 
 export function DataSettings() {
@@ -89,7 +110,7 @@ export function DataSettings() {
         const importSkills = Array.isArray(data.skills) ? data.skills : []
         const importSessions = Array.isArray(data.sessions) ? data.sessions : []
         const importProviderConfigs = Array.isArray(data.providerConfigs)
-          ? data.providerConfigs.filter(isProviderConfig)
+          ? data.providerConfigs.map(coerceProviderConfig).filter((config): config is ProviderConfig => config !== null)
           : []
         const hasProviders = importProviderConfigs.length > 0
         const total = importAgents.length + importSkills.length + importSessions.length + (hasProviders ? 1 : 0)
