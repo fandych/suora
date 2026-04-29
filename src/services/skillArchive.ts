@@ -1,4 +1,4 @@
-import type { Skill, SkillBundledResource } from '@/types'
+import type { Skill } from '@/types'
 import { serializeSkillToMarkdown } from '@/services/skillRegistry'
 import { safePathSegment } from '@/utils/pathSegments'
 
@@ -109,7 +109,9 @@ export async function exportSkillToZipBlob(skill: Skill): Promise<Blob> {
   writeUint32(end, offset)
   writeUint16(end, 0)
 
-  return new Blob([concatBytes([...localParts, centralDirectory, new Uint8Array(end)])], { type: 'application/zip' })
+  const zipBytes = concatBytes([...localParts, centralDirectory, new Uint8Array(end)])
+  const zipBuffer = zipBytes.buffer.slice(zipBytes.byteOffset, zipBytes.byteOffset + zipBytes.byteLength) as ArrayBuffer
+  return new Blob([zipBuffer], { type: 'application/zip' })
 }
 
 export function downloadBlob(blob: Blob, filename: string): void {
