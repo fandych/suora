@@ -5,6 +5,7 @@ import { toGraphifyExport } from '@/services/graphifyAdapter'
 import type { DocumentGraph, DocumentGraphEdgeType, DocumentGraphNode } from '@/services/documentGraph'
 
 const EDGE_TYPES: DocumentGraphEdgeType[] = ['contains', 'references', 'tagged', 'external-link']
+// Keep the adapter preview compact enough for the inspector panel without rendering the full graph JSON.
 const GRAPHIFY_PREVIEW_MAX_CHARS = 1400
 
 const NODE_STYLE: Record<DocumentGraphNode['type'], { color: string; radius: number; label: string }> = {

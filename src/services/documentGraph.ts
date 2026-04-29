@@ -74,6 +74,14 @@ function externalNodeId(groupId: string, url: string) {
   return `doc-graph:${groupId}:external:${encodeURIComponent(url)}`
 }
 
+function externalLinkLabel(url: string) {
+  try {
+    return new URL(url).hostname
+  } catch {
+    return url
+  }
+}
+
 function edgeId(type: DocumentGraphEdgeType, source: string, target: string, suffix = '') {
   return `doc-graph-edge:${type}:${source}->${target}${suffix ? `:${suffix}` : ''}`
 }
@@ -290,7 +298,7 @@ export function buildDocumentGraph(
         addNode({
           id: targetNodeId,
           type: 'external-link',
-          label: new URL(url).hostname,
+          label: externalLinkLabel(url),
           groupId: doc.groupId,
           weight: 1,
           metadata: { url },

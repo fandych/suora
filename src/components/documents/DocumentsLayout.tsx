@@ -266,7 +266,7 @@ export function DocumentsLayout() {
       updatedAt: now,
     }
     addDocumentFolder(folder)
-    if (folder.parentId) setExpanded((prev) => new Set(prev).add(folder.parentId as string))
+    if (folder.parentId) setExpanded((prev) => new Set(prev).add(folder.parentId))
     setSelectedFolderId(folder.id)
   }
 
@@ -426,7 +426,9 @@ export function DocumentsLayout() {
                   onChange={(event) => updateDocumentNode(activeDocument.id, { title: event.target.value })}
                   className="w-full bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary outline-none placeholder:text-text-muted"
                 />
-                 <p className="mt-1 truncate text-[11px] text-text-muted">{activeGroup?.name} / {buildDocumentPath(activeDocument, documentNodes)}</p>
+                <p className="mt-1 truncate text-[11px] text-text-muted" aria-label={`${activeGroup?.name ?? ''} folder, ${buildDocumentPath(activeDocument, documentNodes)}`}>
+                  {activeGroup?.name} / {buildDocumentPath(activeDocument, documentNodes)}
+                </p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex rounded-2xl border border-border-subtle/55 bg-surface-0/45 p-1">
