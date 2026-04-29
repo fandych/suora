@@ -219,6 +219,19 @@ export function parseIconValue(value: string): { name: string; color?: string } 
   return { name: value }
 }
 
+/**
+ * Validate that a colour string is a safe CSS colour (hex, rgb/rgba/hsl/hsla,
+ * or a known keyword) before splicing it into raw SVG markup. Without this,
+ * a crafted value such as `"/><script>…</script>` would XSS the renderer
+ * since the SVG body is injected via dangerouslySetInnerHTML.
+ */
+const SAFE_CSS_COLOR_RE = /^(?:#[0-9a-fA-F]{3,8}|currentColor|transparent|inherit|initial|unset|[a-zA-Z]{3,32}|rgba?\(\s*[\d.,%\s/]+\)|hsla?\(\s*[\d.,%\s/]+\))$/
+
+function safeCssColor(input: string | undefined, fallback: string): string {
+  if (!input) return fallback
+  return SAFE_CSS_COLOR_RE.test(input) ? input : fallback
+}
+
 interface IconifyIconProps {
   /** Icon name: preset ("agent-robot") or iconify ("mdi:home") */
   name: string
@@ -264,7 +277,7 @@ export function IconifyIcon({ name: rawName, size = 20, className, color }: Icon
     )
   }
 
-  const fillColor = resolvedColor ?? data.color
+  const fillColor = safeCssColor(resolvedColor ?? data.color, 'currentColor')
 
   return (
     <svg
