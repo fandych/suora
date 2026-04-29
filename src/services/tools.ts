@@ -357,6 +357,14 @@ function summarizeMarkdown(value: string, maxLength = 240): string {
   return compact.length > maxLength ? `${compact.slice(0, maxLength)}...` : compact
 }
 
+function getSkillInstructionContent(skill: Skill): string {
+  return skill.content ?? skill.prompt ?? ''
+}
+
+function getSkillSourceLabel(skill: Skill): string {
+  return skill.source ?? skill.type ?? 'unknown'
+}
+
 function buildUpdatedSkillContent(
   skill: Skill,
   updates: {
@@ -366,19 +374,31 @@ function buildUpdatedSkillContent(
     whenToUse?: string
   },
 ): Skill {
+  const nextName = updates.name ?? skill.name
+  const nextDescription = updates.description ?? skill.description
+  const frontmatter = skill.frontmatter ?? {
+    name: nextName,
+    description: nextDescription,
+  }
   const metadataPatch = {
     ...(updates.name ? { name: updates.name } : {}),
     ...(updates.description !== undefined ? { description: updates.description } : {}),
     ...(updates.whenToUse !== undefined ? { whenToUse: updates.whenToUse } : {}),
   }
+  const legacyPromptPatch = Object.prototype.hasOwnProperty.call(skill, 'prompt')
+    ? { prompt: updates.content }
+    : {}
 
   return {
     ...skill,
     ...metadataPatch,
     content: updates.content,
+    ...legacyPromptPatch,
     frontmatter: {
-      ...skill.frontmatter,
+      ...frontmatter,
       ...metadataPatch,
+      name: updates.name ?? frontmatter.name ?? nextName,
+      description: updates.description ?? frontmatter.description ?? nextDescription,
     },
   }
 }
@@ -2448,7 +2468,7 @@ export const builtinToolDefs: ToolSet = {
         const skills = (state.skills || []) as Skill[]
         if (skills.length === 0) return 'No skills available.'
         return skills.map((s) =>
-          `${s.name} [${s.enabled ? 'ON' : 'OFF'}] (${s.id}) — ${s.source}${s.filePath ? `, file: ${s.filePath}` : ''}\n  ${s.description || '(no description)'}`
+          `${s.name} [${s.enabled !== false ? 'ON' : 'OFF'}] (${s.id}) — ${getSkillSourceLabel(s)}${s.filePath ? `, file: ${s.filePath}` : ''}\n  ${s.description || '(no description)'}`
         ).join('\n')
       } catch (err) {
         return `Error: ${err instanceof Error ? err.message : String(err)}`
@@ -2472,13 +2492,13 @@ export const builtinToolDefs: ToolSet = {
           id: skill.id,
           name: skill.name,
           description: skill.description,
-          enabled: skill.enabled,
-          source: skill.source,
+          enabled: skill.enabled !== false,
+          source: getSkillSourceLabel(skill),
           filePath: skill.filePath,
           whenToUse: skill.whenToUse,
           allowedTools: skill.allowedTools,
           context: skill.context,
-          content: skill.content ?? skill.prompt ?? '',
+          content: getSkillInstructionContent(skill),
         }, null, 2)
       } catch (err) {
         return `Error reading skill: ${err instanceof Error ? err.message : String(err)}`
