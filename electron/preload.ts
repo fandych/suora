@@ -45,6 +45,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'shell:openUrl',
   'web:search',
   'web:fetch',
+  'web:fetchText',
   'clipboard:read',
   'clipboard:write',
   'timer:list',

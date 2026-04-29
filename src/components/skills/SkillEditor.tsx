@@ -161,6 +161,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
     || t('skills.heroFallback', 'A reusable prompt package that can be attached to agents and activated when its trigger conditions match.')
   const activeContext = form.frontmatter.context || form.context || 'inline'
   const allowedToolCount = (form.frontmatter.allowedTools || form.allowedTools || []).length
+  const bundledResourceCount = form.bundledResources?.length ?? 0
 
   return (
     <form onSubmit={handleSubmit} className="module-canvas flex-1 overflow-y-auto">
@@ -205,7 +206,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:w-136">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 2xl:w-168">
               <SummaryStat
                 label={t('common.version', 'Version')}
                 value={form.frontmatter.version || form.version || '1.0.0'}
@@ -220,6 +221,11 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                 label={t('skills.allowedTools', 'Allowed Tools')}
                 value={`${allowedToolCount}`}
                 hint={t('skills.optionalHints', 'optional hints')}
+              />
+              <SummaryStat
+                label={t('skills.resources', 'Resources')}
+                value={`${bundledResourceCount}`}
+                hint={t('skills.bundledFiles', 'bundled files')}
               />
               <SummaryStat
                 label={t('skills.preview', 'Preview')}
@@ -422,6 +428,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip1', 'Lead with the exact behavior you want, then add constraints and examples only when they materially improve consistency.')}</div>
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip2', 'Use headings and short bullets so the resulting SKILL.md stays readable to both humans and models.')}</div>
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip3', 'Keep tool hints sparse. The best skills define judgment and process, not a giant list of commands.')}</div>
+                  <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip4', 'Folder skills can bundle scripts/, references/, and assets/ next to SKILL.md; mention when to read or run each resource.')}</div>
                 </div>
               </EditorSection>
 

@@ -300,6 +300,18 @@ export interface SkillReferenceFile {
 }
 
 /**
+ * File or directory bundled with a folder-backed skill.
+ */
+export interface SkillBundledResource {
+  /** Path relative to the skill root, using forward slashes */
+  path: string
+  /** Whether this entry is a file or directory */
+  type: 'file' | 'directory'
+  /** Optional byte size when known */
+  size?: number
+}
+
+/**
  * Information about where a registry skill was installed from.
  */
 export interface SkillInstallInfo {
@@ -353,6 +365,8 @@ export interface Skill {
   context: SkillExecutionContext
   /** External reference files loaded into prompt at runtime */
   referenceFiles?: SkillReferenceFile[]
+  /** Files/folders bundled alongside SKILL.md (scripts, references, assets, etc.) */
+  bundledResources?: SkillBundledResource[]
   /** Installation info for registry-sourced skills */
   installInfo?: SkillInstallInfo
   /** File path on disk (for local/project/user skills) */

@@ -1395,6 +1395,19 @@ ipcMain.handle('web:fetch', async (_event, url: string) => {
   }
 })
 
+ipcMain.handle('web:fetchText', async (_event, url: string) => {
+  try {
+    validatePublicHttpUrl(url)
+    const raw = await fetchUrl(url)
+    if (raw.length > MAX_IPC_TEXT_FILE_BYTES) {
+      return { error: `Response is too large (${raw.length} bytes)` }
+    }
+    return { content: raw, url }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
 // ─── IPC Handlers: Browser Automation ──────────────────────────────
 
 let automationWindow: BrowserWindow | null = null

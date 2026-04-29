@@ -18,6 +18,13 @@ import { parseSkillMarkdown } from '@/services/skillRegistry'
 import { logger } from '@/services/logger'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
+type GitHubContentItem = {
+  name: string
+  path: string
+  type: 'file' | 'dir'
+  download_url?: string | null
+  size?: number
+}
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
@@ -280,7 +287,7 @@ export async function discoverSkillsFromGitHub(
 // ─── Skill Installation ────────────────────────────────────────────
 
 /**
- * Install a skill from a registry by downloading its SKILL.md file.
+ * Install a skill from a registry by downloading its full skill directory.
  */
 export async function installSkillFromRegistry(
   entry: RegistrySkillEntry,
@@ -290,42 +297,25 @@ export async function installSkillFromRegistry(
   if (!electron) return null
 
   try {
-    // Determine the raw content URL
-    const contentUrl = getSkillContentUrl(entry)
-    if (!contentUrl) {
-      logger.error(`[marketplace] Cannot determine content URL for skill: ${entry.name}`)
+    const repo = parseRepository(entry.repository)
+    if (!repo) {
+      logger.error(`[marketplace] Cannot determine repository for skill: ${entry.name}`)
       return null
     }
 
-    // Fetch the SKILL.md content
-    const result = (await electron.invoke('web:fetch', contentUrl)) as {
-      content?: string
-      error?: string
-    }
-
-    if (result.error || !result.content) {
-      logger.error(`[marketplace] Failed to fetch skill content: ${result.error}`)
+    const skillDir = `${targetDir}/${entry.name}`
+    await electron.invoke('system:ensureDirectory', skillDir)
+    const installedFiles = await downloadGitHubSkillDirectory(electron, repo.owner, repo.repo, entry.name, skillDir)
+    const skillMarkdown = installedFiles.get('SKILL.md') ?? installedFiles.get('skill.md')
+    if (!skillMarkdown) {
+      logger.error(`[marketplace] Failed to fetch SKILL.md for: ${entry.name}`)
       return null
     }
 
     // Parse to validate it's a valid skill
-    const skill = parseSkillMarkdown(result.content, `${entry.name}/SKILL.md`, 'registry')
+    const skill = parseSkillMarkdown(skillMarkdown, `${entry.name}/SKILL.md`, 'registry')
     if (!skill) {
       logger.error(`[marketplace] Invalid SKILL.md format for: ${entry.name}`)
-      return null
-    }
-
-    // Save to disk
-    const skillDir = `${targetDir}/${entry.name}`
-    await electron.invoke('system:ensureDirectory', skillDir)
-    const writeResult = (await electron.invoke(
-      'fs:writeFile',
-      `${skillDir}/SKILL.md`,
-      result.content,
-    )) as { success?: boolean }
-
-    if (!writeResult?.success) {
-      logger.error(`[marketplace] Failed to write SKILL.md for: ${entry.name}`)
       return null
     }
 
@@ -339,6 +329,12 @@ export async function installSkillFromRegistry(
     }
     skill.filePath = `${skillDir}/SKILL.md`
     skill.skillRoot = skillDir
+    skill.bundledResources = Array.from(installedFiles.keys())
+      .filter((path) => path.toLowerCase() !== 'skill.md')
+      .map((path) => ({ path, type: 'file' as const }))
+    skill.referenceFiles = skill.bundledResources
+      .filter((resource) => resource.path.toLowerCase().startsWith('references/'))
+      .map((resource) => ({ path: `${skillDir}/${resource.path}`, label: resource.path }))
     skill.downloads = entry.downloads
     skill.rating = entry.rating
 
@@ -481,6 +477,64 @@ function getSkillContentUrl(entry: RegistrySkillEntry): string | null {
 
   const [, owner, repo] = match
   return `https://raw.githubusercontent.com/${owner}/${repo}/main/skills/${entry.name}/SKILL.md`
+}
+
+function parseRepository(repository: string): { owner: string; repo: string } | null {
+  const match = repository.match(/^([^/]+)\/([^/]+)$/)
+  if (!match) return null
+  return { owner: match[1], repo: match[2] }
+}
+
+async function fetchGitHubDirectory(
+  electron: ElectronBridge,
+  owner: string,
+  repo: string,
+  path: string,
+): Promise<GitHubContentItem[]> {
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`
+  const result = (await electron.invoke('web:fetch', apiUrl)) as { content?: string; error?: string }
+  if (result.error || !result.content) throw new Error(result.error || `Failed to list ${path}`)
+
+  const parsed = JSON.parse(result.content) as GitHubContentItem[] | { message?: string }
+  if (!Array.isArray(parsed)) throw new Error(parsed.message || `Invalid GitHub contents response for ${path}`)
+  return parsed
+}
+
+async function downloadGitHubSkillDirectory(
+  electron: ElectronBridge,
+  owner: string,
+  repo: string,
+  skillName: string,
+  targetDir: string,
+): Promise<Map<string, string>> {
+  const downloaded = new Map<string, string>()
+
+  async function visit(remotePath: string, localDir: string, relativeBase = ''): Promise<void> {
+    const items = await fetchGitHubDirectory(electron, owner, repo, remotePath)
+    for (const item of items) {
+      const relativePath = `${relativeBase}${item.name}`
+
+      if (item.type === 'dir') {
+        const nextLocalDir = `${localDir}/${item.name}`
+        await electron.invoke('system:ensureDirectory', nextLocalDir)
+        await visit(item.path, nextLocalDir, `${relativePath}/`)
+        continue
+      }
+
+      if (item.type !== 'file' || !item.download_url) continue
+      const content = await electron.invoke('web:fetchText', item.download_url) as { content?: string; error?: string }
+      if (content.error || typeof content.content !== 'string') {
+        throw new Error(content.error || `Failed to download ${item.path}`)
+      }
+
+      const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${item.name}`, content.content) as { success?: boolean; error?: string }
+      if (!writeResult?.success) throw new Error(writeResult?.error || `Failed to write ${relativePath}`)
+      downloaded.set(relativePath, content.content)
+    }
+  }
+
+  await visit(`skills/${skillName}`, targetDir)
+  return downloaded
 }
 
 function getSkillContentUrlFromInstallInfo(

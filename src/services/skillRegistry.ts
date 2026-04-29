@@ -16,12 +16,16 @@
  * No tool specification needed — agents decide which tools to use autonomously.
  */
 
-import type { Skill, SkillSource, SkillFrontmatter, SkillExecutionContext } from '@/types'
+import type { Skill, SkillSource, SkillFrontmatter, SkillExecutionContext, SkillBundledResource, SkillReferenceFile } from '@/types'
 import { logger } from '@/services/logger'
 import { safeParse } from '@/utils/safeJson'
 import { safePathSegment } from '@/utils/pathSegments'
 
-type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
+export type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
+type DirEntry = { name: string; isDirectory: boolean; path: string; size?: number }
+
+const MAX_BUNDLED_RESOURCE_ENTRIES = 300
+const REFERENCE_FILE_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.csv'])
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
@@ -369,6 +373,96 @@ function simpleHash(str: string): number {
   return Math.abs(hash)
 }
 
+function normalizeResourcePath(pathValue: string): string {
+  return pathValue.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function getFileExtension(filePath: string): string {
+  const name = filePath.split('/').pop() ?? ''
+  const index = name.lastIndexOf('.')
+  return index >= 0 ? name.slice(index).toLowerCase() : ''
+}
+
+function isRootSkillMarkdown(relativePath: string): boolean {
+  return normalizeResourcePath(relativePath).toLowerCase() === 'skill.md'
+}
+
+function isReferenceResource(resource: SkillBundledResource): boolean {
+  if (resource.type !== 'file') return false
+  const normalized = normalizeResourcePath(resource.path).toLowerCase()
+  return normalized.startsWith('references/') && REFERENCE_FILE_EXTENSIONS.has(getFileExtension(normalized))
+}
+
+function buildReferenceFilesFromResources(
+  skillRoot: string,
+  resources: SkillBundledResource[],
+): SkillReferenceFile[] {
+  return resources
+    .filter(isReferenceResource)
+    .map((resource) => ({
+      path: `${skillRoot}/${resource.path}`,
+      label: resource.path,
+    }))
+}
+
+async function collectBundledResources(
+  electron: ElectronBridge,
+  currentDir: string,
+  relativeBase = '',
+  remainingEntries = { count: MAX_BUNDLED_RESOURCE_ENTRIES },
+): Promise<SkillBundledResource[]> {
+  if (remainingEntries.count <= 0) return []
+
+  const entries = (await electron.invoke('fs:listDir', currentDir)) as DirEntry[] | { error: string }
+  if (!Array.isArray(entries)) return []
+
+  const resources: SkillBundledResource[] = []
+  for (const entry of entries) {
+    if (remainingEntries.count <= 0) break
+
+    const relativePath = normalizeResourcePath(`${relativeBase}${entry.name}`)
+    if (isRootSkillMarkdown(relativePath)) continue
+
+    resources.push({
+      path: relativePath,
+      type: entry.isDirectory ? 'directory' : 'file',
+      ...(typeof entry.size === 'number' ? { size: entry.size } : {}),
+    })
+    remainingEntries.count--
+
+    if (entry.isDirectory) {
+      const nested = await collectBundledResources(
+        electron,
+        entry.path,
+        `${relativePath}/`,
+        remainingEntries,
+      )
+      resources.push(...nested)
+    }
+  }
+
+  return resources
+}
+
+export async function attachBundledResources(
+  electron: ElectronBridge,
+  skill: Skill,
+  skillRoot: string,
+): Promise<Skill> {
+  const bundledResources = await collectBundledResources(electron, skillRoot)
+  const referenceFiles = buildReferenceFilesFromResources(skillRoot, bundledResources)
+
+  return {
+    ...skill,
+    skillRoot,
+    bundledResources,
+    referenceFiles: [
+      ...(skill.referenceFiles ?? []),
+      ...referenceFiles,
+    ],
+  }
+}
+
 // ─── Skill Loading from Directories ────────────────────────────────
 
 /**
@@ -384,7 +478,7 @@ async function loadSkillsFromDirectory(
 ): Promise<Skill[]> {
   try {
     const entries = (await electron.invoke('fs:listDir', dir)) as
-      | { name: string; isDirectory: boolean; path: string }[]
+      | DirEntry[]
       | { error: string }
 
     if (!Array.isArray(entries)) return []
@@ -400,8 +494,7 @@ async function loadSkillsFromDirectory(
           if (typeof raw === 'string') {
             const skill = parseSkillMarkdown(raw, skillMdPath, source)
             if (skill) {
-              skill.skillRoot = entry.path
-              skills.push(skill)
+              skills.push(await attachBundledResources(electron, skill, entry.path))
             }
           }
         } catch {
@@ -412,8 +505,7 @@ async function loadSkillsFromDirectory(
             if (typeof raw === 'string') {
               const skill = parseSkillMarkdown(raw, skillMdPathLower, source)
               if (skill) {
-                skill.skillRoot = entry.path
-                skills.push(skill)
+                skills.push(await attachBundledResources(electron, skill, entry.path))
               }
             }
           } catch {
@@ -687,7 +779,12 @@ export async function buildSkillPrompts(
       if (electron) {
         for (const ref of skill.referenceFiles) {
           try {
-            const content = await electron.invoke('fs:readFile', ref.path) as string | { error: string }
+            const refPath = ref.path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(ref.path)
+              ? ref.path
+              : skill.skillRoot
+                ? `${skill.skillRoot}/${normalizeResourcePath(ref.path)}`
+                : ref.path
+            const content = await electron.invoke('fs:readFile', refPath) as string | { error: string }
             if (typeof content === 'string' && content.trim()) {
               const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'
               lines.push(`### ${label}\n\n${content.trim()}`)
@@ -697,6 +794,15 @@ export async function buildSkillPrompts(
           }
         }
       }
+    }
+
+    if (skill.bundledResources?.length) {
+      const manifest = skill.bundledResources
+        .slice(0, 80)
+        .map((resource) => `- ${resource.path}${resource.type === 'directory' ? '/' : ''}`)
+        .join('\n')
+      const rootHint = skill.skillRoot ? `Skill root: ${skill.skillRoot}\n` : ''
+      lines.push(`### Bundled resources\n\n${rootHint}Use these files and folders as needed; read only the resources relevant to the task.\n${manifest}`)
     }
 
     parts.push(`<skill name="${skill.name}">\n${lines.join('\n\n')}\n</skill>`)
