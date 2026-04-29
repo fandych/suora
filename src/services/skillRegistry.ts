@@ -414,7 +414,12 @@ async function collectBundledResources(
   if (remainingEntries.count <= 0) return []
 
   const entries = (await electron.invoke('fs:listDir', currentDir)) as DirEntry[] | { error: string }
-  if (!Array.isArray(entries)) return []
+  if (!Array.isArray(entries)) {
+    if (entries?.error) {
+      logger.warn(`[skillRegistry] Failed to list bundled resources in ${currentDir}`, { error: entries.error })
+    }
+    return []
+  }
 
   const resources: SkillBundledResource[] = []
   for (const entry of entries) {

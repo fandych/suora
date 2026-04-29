@@ -206,7 +206,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5 2xl:w-168">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:w-168 2xl:grid-cols-5">
               <SummaryStat
                 label={t('common.version', 'Version')}
                 value={form.frontmatter.version || form.version || '1.0.0'}

@@ -486,7 +486,8 @@ async function fetchGitHubDirectory(
 ): Promise<GitHubContentItem[]> {
   const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`
   const result = (await electron.invoke('web:fetch', apiUrl)) as { content?: string; error?: string }
-  if (result.error || !result.content) throw new Error(result.error || `Failed to list ${path}`)
+  if (result.error) throw new Error(`GitHub API failed to list ${path}: ${result.error}`)
+  if (!result.content) throw new Error(`GitHub API returned an empty response for ${path}`)
 
   const parsed = JSON.parse(result.content) as GitHubContentItem[] | { message?: string }
   if (!Array.isArray(parsed)) throw new Error(parsed.message || `Invalid GitHub contents response for ${path}`)
@@ -507,7 +508,7 @@ async function downloadGitHubSkillDirectory(
     for (const item of items) {
       const safeName = safePathSegment(item.name, '')
       if (!safeName || safeName !== item.name) {
-        throw new Error(`Unsafe file name in skill directory: ${item.name}`)
+        throw new Error('Unsafe file name in skill directory')
       }
       const relativePath = `${relativeBase}${safeName}`
 
@@ -524,7 +525,7 @@ async function downloadGitHubSkillDirectory(
       }
       const content = await electron.invoke('web:fetchText', item.download_url) as { content?: string; error?: string }
       if (content.error || typeof content.content !== 'string') {
-        throw new Error(content.error || `Failed to download ${item.path}`)
+        throw new Error(content.error || `Unexpected response while downloading ${item.path}: ${typeof content.content}`)
       }
 
       const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${safeName}`, content.content) as { success?: boolean; error?: string }
