@@ -300,7 +300,10 @@ export function compileCustomCode(code: string): CompileResult {
 
           try {
             const resultPromise = Promise.resolve().then(() => executeFn(args, { signal: controller.signal }))
-            if (timeoutHandle) resultPromise.finally(() => clearTimeout(timeoutHandle!))
+            if (timeoutHandle) {
+              const handle = timeoutHandle
+              resultPromise.finally(() => clearTimeout(handle))
+            }
             const result = await Promise.race([
               resultPromise,
               timeoutPromise,

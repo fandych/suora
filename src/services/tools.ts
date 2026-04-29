@@ -2025,7 +2025,10 @@ export const builtinToolDefs: ToolSet = {
           )), EMAIL_TIMEOUT)
         })
 
-        if (timeoutHandle) sendPromise.finally(() => clearTimeout(timeoutHandle!))
+        if (timeoutHandle) {
+          const handle = timeoutHandle
+          sendPromise.finally(() => clearTimeout(handle))
+        }
         const result = await Promise.race([sendPromise, timeoutPromise]) as { success: boolean; messageId?: string; error?: string }
 
         if (!result.success) {
