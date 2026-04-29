@@ -74,7 +74,7 @@ export function AgentEditAssistant({
   }
 
   return (
-    <section className="rounded-3xl border border-accent/15 bg-linear-to-br from-accent/10 via-surface-0/62 to-surface-2/50 p-4 shadow-[0_16px_42px_rgba(var(--t-accent-rgb),0.08)]">
+    <section className="rounded-3xl border border-accent/15 bg-gradient-to-br from-accent/10 via-surface-0/62 to-surface-2/50 p-4 shadow-[0_16px_42px_rgba(var(--t-accent-rgb),0.08)]">
       <div className="flex items-start gap-3">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-accent/20 bg-accent/12 text-accent">
           <IconifyIcon name="agent-robot" size={20} color="currentColor" />

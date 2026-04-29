@@ -72,13 +72,14 @@ export async function runAgentEdit(request: AgentEditRequest): Promise<string> {
     },
   ]
 
-  const result = stripMarkdownFence(await generateResponse(
+  const response = await generateResponse(
     `${request.model.provider}:${request.model.modelId}`,
     messages,
     systemPrompt,
     request.model.apiKey,
     request.model.baseUrl,
-  ))
+  )
+  const result = stripMarkdownFence(typeof response === 'string' ? response : '')
 
   if (!result) {
     throw new Error('Agent returned empty content.')
