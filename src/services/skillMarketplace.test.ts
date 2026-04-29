@@ -91,6 +91,7 @@ describe('skillMarketplace', () => {
 
     expect(installed?.skillRoot).toBe('/workspace/.suora/skills/skill-creator')
     expect(installed?.bundledResources).toEqual([
+      { path: 'references', type: 'directory' },
       { path: 'references/schemas.md', type: 'file' },
     ])
     expect(installed?.referenceFiles).toEqual([

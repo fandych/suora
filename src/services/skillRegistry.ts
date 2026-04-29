@@ -377,6 +377,14 @@ function normalizeResourcePath(pathValue: string): string {
   return pathValue.replace(/\\/g, '/').replace(/^\/+/, '')
 }
 
+function joinSkillResourcePath(skillRoot: string, resourcePath: string): string {
+  return `${skillRoot.replace(/[\\/]+$/, '')}/${normalizeResourcePath(resourcePath)}`
+}
+
+function isAbsolutePath(pathValue: string): boolean {
+  return pathValue.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(pathValue)
+}
+
 function getFileExtension(filePath: string): string {
   const name = filePath.split('/').pop() ?? ''
   const index = name.lastIndexOf('.')
@@ -400,7 +408,7 @@ function buildReferenceFilesFromResources(
   return resources
     .filter(isReferenceResource)
     .map((resource) => ({
-      path: `${skillRoot}/${resource.path}`,
+      path: joinSkillResourcePath(skillRoot, resource.path),
       label: resource.path,
     }))
 }
@@ -784,10 +792,10 @@ export async function buildSkillPrompts(
       if (electron) {
         for (const ref of skill.referenceFiles) {
           try {
-            const refPath = ref.path.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(ref.path)
+            const refPath = isAbsolutePath(ref.path)
               ? ref.path
               : skill.skillRoot
-                ? `${skill.skillRoot}/${normalizeResourcePath(ref.path)}`
+                ? joinSkillResourcePath(skill.skillRoot, ref.path)
                 : ref.path
             const content = await electron.invoke('fs:readFile', refPath) as string | { error: string }
             if (typeof content === 'string' && content.trim()) {

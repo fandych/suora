@@ -26,6 +26,10 @@ type GitHubContentItem = {
   download_url?: string | null
   size?: number
 }
+type DownloadedSkillResource = {
+  type: 'file' | 'directory'
+  content?: string
+}
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
@@ -308,7 +312,7 @@ export async function installSkillFromRegistry(
     const skillDir = `${targetDir}/${safeSkillDirName}`
     await electron.invoke('system:ensureDirectory', skillDir)
     const installedFiles = await downloadGitHubSkillDirectory(electron, repo.owner, repo.repo, entry.name, skillDir)
-    const skillMarkdown = installedFiles.get('SKILL.md') ?? installedFiles.get('skill.md')
+    const skillMarkdown = installedFiles.get('SKILL.md')?.content ?? installedFiles.get('skill.md')?.content
     if (!skillMarkdown) {
       logger.error(`[marketplace] Failed to fetch SKILL.md for: ${entry.name}`)
       return null
@@ -331,11 +335,11 @@ export async function installSkillFromRegistry(
     }
     skill.filePath = `${skillDir}/SKILL.md`
     skill.skillRoot = skillDir
-    skill.bundledResources = Array.from(installedFiles.keys())
-      .filter((path) => path.toLowerCase() !== 'skill.md')
-      .map((path) => ({ path, type: 'file' as const }))
+    skill.bundledResources = Array.from(installedFiles.entries())
+      .filter(([path]) => path.toLowerCase() !== 'skill.md')
+      .map(([path, resource]) => ({ path, type: resource.type }))
     skill.referenceFiles = skill.bundledResources
-      .filter((resource) => resource.path.toLowerCase().startsWith('references/'))
+      .filter((resource) => resource.type === 'file' && resource.path.toLowerCase().startsWith('references/'))
       .map((resource) => ({ path: `${skillDir}/${resource.path}`, label: resource.path }))
     skill.downloads = entry.downloads
     skill.rating = entry.rating
@@ -500,21 +504,22 @@ async function downloadGitHubSkillDirectory(
   repo: string,
   skillName: string,
   targetDir: string,
-): Promise<Map<string, string>> {
-  const downloaded = new Map<string, string>()
+): Promise<Map<string, DownloadedSkillResource>> {
+  const downloaded = new Map<string, DownloadedSkillResource>()
 
   async function visit(remotePath: string, localDir: string, relativeBase = ''): Promise<void> {
     const items = await fetchGitHubDirectory(electron, owner, repo, remotePath)
     for (const item of items) {
       const safeName = safePathSegment(item.name, '')
       if (!safeName || safeName !== item.name) {
-        throw new Error('Unsafe file name in skill directory')
+        throw new Error(`Unsafe file name in ${skillName} skill directory`)
       }
       const relativePath = `${relativeBase}${safeName}`
 
       if (item.type === 'dir') {
         const nextLocalDir = `${localDir}/${safeName}`
         await electron.invoke('system:ensureDirectory', nextLocalDir)
+        downloaded.set(relativePath, { type: 'directory' })
         await visit(item.path, nextLocalDir, `${relativePath}/`)
         continue
       }
@@ -525,12 +530,12 @@ async function downloadGitHubSkillDirectory(
       }
       const content = await electron.invoke('web:fetchText', item.download_url) as { content?: string; error?: string }
       if (content.error || typeof content.content !== 'string') {
-        throw new Error(content.error || `Unexpected response while downloading ${item.path}: ${typeof content.content}`)
+        throw new Error(content.error || `Unexpected response while downloading ${relativePath}: ${typeof content.content}`)
       }
 
       const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${safeName}`, content.content) as { success?: boolean; error?: string }
       if (!writeResult?.success) throw new Error(writeResult?.error || `Failed to write ${relativePath}`)
-      downloaded.set(relativePath, content.content)
+      downloaded.set(relativePath, { type: 'file', content: content.content })
     }
   }
 
