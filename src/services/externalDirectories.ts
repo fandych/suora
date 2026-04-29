@@ -22,6 +22,19 @@ function getSkillSource(dirPath: string): SkillSource {
   return 'workspace'
 }
 
+function isLegacySkillTools(value: unknown): boolean {
+  return Array.isArray(value) && value.every((tool) => {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool)) return false
+    const candidate = tool as Record<string, unknown>
+    return (
+      typeof candidate.id === 'string'
+      && typeof candidate.name === 'string'
+      && typeof candidate.description === 'string'
+      && Array.isArray(candidate.params)
+    )
+  })
+}
+
 function isElectronError(value: unknown): value is { error: string } {
   return !!value && typeof value === 'object' && 'error' in value
 }
@@ -98,7 +111,7 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]>
         const skillData = safeParse<Partial<Skill>>(content)
 
         // Validate required fields
-        if (typeof skillData.id !== 'string' || typeof skillData.name !== 'string' || !Array.isArray(skillData.tools)) {
+        if (typeof skillData.id !== 'string' || typeof skillData.name !== 'string' || !isLegacySkillTools(skillData.tools)) {
           console.warn(`Invalid skill file ${entry.name}: missing required fields`)
           continue
         }

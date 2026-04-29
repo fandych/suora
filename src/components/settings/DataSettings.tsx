@@ -7,6 +7,45 @@ import { toast } from '@/services/toast'
 import { safeParse, safeStringify } from '@/utils/safeJson'
 import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
 
+const PROVIDER_TYPES = new Set<ProviderConfig['providerType']>([
+  'anthropic',
+  'openai',
+  'google',
+  'ollama',
+  'deepseek',
+  'zhipu',
+  'minimax',
+  'groq',
+  'together',
+  'fireworks',
+  'perplexity',
+  'cohere',
+  'openai-compatible',
+])
+
+function isProviderConfig(value: unknown): value is ProviderConfig {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+  const config = value as Partial<ProviderConfig>
+  return (
+    typeof config.id === 'string'
+    && typeof config.name === 'string'
+    && typeof config.apiKey === 'string'
+    && typeof config.baseUrl === 'string'
+    && typeof config.providerType === 'string'
+    && PROVIDER_TYPES.has(config.providerType as ProviderConfig['providerType'])
+    && Array.isArray(config.models)
+    && config.models.every((model) =>
+      model
+      && typeof model === 'object'
+      && typeof model.modelId === 'string'
+      && typeof model.name === 'string'
+      && typeof model.enabled === 'boolean'
+      && (model.temperature === undefined || typeof model.temperature === 'number')
+      && (model.maxTokens === undefined || typeof model.maxTokens === 'number')
+    )
+  )
+}
+
 export function DataSettings() {
   const { t } = useI18n()
   const { historyRetentionDays, setHistoryRetentionDays, agents, skills, sessions, providerConfigs, externalDirectories } = useAppStore()
@@ -47,7 +86,9 @@ export function DataSettings() {
         const importAgents = Array.isArray(data.agents) ? data.agents : []
         const importSkills = Array.isArray(data.skills) ? data.skills : []
         const importSessions = Array.isArray(data.sessions) ? data.sessions : []
-        const importProviderConfigs = Array.isArray(data.providerConfigs) ? data.providerConfigs as ProviderConfig[] : []
+        const importProviderConfigs = Array.isArray(data.providerConfigs)
+          ? data.providerConfigs.filter(isProviderConfig)
+          : []
         const hasProviders = importProviderConfigs.length > 0
         const total = importAgents.length + importSkills.length + importSessions.length + (hasProviders ? 1 : 0)
         if (total === 0) {

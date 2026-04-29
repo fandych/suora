@@ -188,9 +188,8 @@ export function addAuditEntry(entry: AuditLogEntry): void {
   const log = auditLogCache ?? getAuditLog()
   log.push(entry)
   // Keep only the most recent entries
-  if (log.length > MAX_AUDIT_LOG) log.splice(0, log.length - MAX_AUDIT_LOG)
-  auditLogCache = log
-  writeCached(AUDIT_STORAGE_KEY, safeStringify(log))
+  auditLogCache = log.length > MAX_AUDIT_LOG ? log.slice(-MAX_AUDIT_LOG) : log
+  writeCached(AUDIT_STORAGE_KEY, safeStringify(auditLogCache))
 }
 
 export function clearAuditLog(): void {
