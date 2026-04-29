@@ -5,7 +5,6 @@ import { IconPicker } from '@/components/icons/IconPicker'
 import { useI18n } from '@/hooks/useI18n'
 import type { Skill, SkillBundledResource, SkillFrontmatter, SkillSource, SkillExecutionContext } from '@/types'
 import { MarkdownEditor } from './SkillEditorPanels'
-import { AgentEditAssistant } from '@/components/AgentEditAssistant'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
 import {
@@ -724,14 +723,6 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip2', 'Use headings and short bullets so the resulting SKILL.md stays readable to both humans and models.')}</div>
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip3', 'Keep tool hints sparse. The best skills define judgment and process, not a giant list of commands.')}</div>
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip4', 'Folder skills can bundle scripts/, references/, and assets/ next to SKILL.md; mention when to read or run each resource.')}</div>
-                </div>
-                <div className="mt-5">
-                  <AgentEditAssistant
-                    target="skill"
-                    title={displayName}
-                    currentContent={form.content ?? ''}
-                    onApply={(content) => updateForm({ content })}
-                  />
                 </div>
               </EditorSection>
 
