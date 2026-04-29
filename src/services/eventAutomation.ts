@@ -161,8 +161,9 @@ function fireEvent(trigger: EventTrigger, context: Record<string, string>): void
  */
 export function resolvePromptTemplate(template: string, context: Record<string, string>): string {
   let result = template
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   for (const [key, value] of Object.entries(context)) {
-    result = result.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), value)
+    result = result.replace(new RegExp(`\\{\\{${escapeRegex(key)}\\}\\}`, 'g'), value)
   }
   return result
 }

@@ -554,14 +554,22 @@ export class ChannelService {
     // Handle message events
     if (body.header?.event_type === 'im.message.receive_v1') {
       const event = body.event
+      // Parse JSON content safely
+      let messageText = ''
+      try {
+        messageText = JSON.parse(event.message.content).text || ''
+      } catch {
+        messageText = String(event.message.content || '')
+      }
+
       const message: ChannelMessage = {
         id: event.message.message_id,
         channelId: channel.id,
         platform: 'feishu',
         senderId: event.sender.sender_id.user_id,
         senderName: event.sender.sender_id.union_id,
-        content: JSON.parse(event.message.content).text || '',
-        timestamp: parseInt(event.message.create_time),
+        content: messageText,
+        timestamp: parseInt(event.message.create_time, 10),
         messageType: 'text',
         chatId: event.message.chat_id,
         chatType: event.message.chat_type === 'group' ? 'group' : 'private',
@@ -644,7 +652,7 @@ export class ChannelService {
         senderId: body.FromUserName,
         senderName: body.FromUserName,
         content: body.Content || '',
-        timestamp: parseInt(body.CreateTime) * 1000,
+        timestamp: parseInt(body.CreateTime, 10) * 1000,
         messageType: 'text',
         chatId: body.FromUserName,
         chatType: 'private',
@@ -984,7 +992,7 @@ export class ChannelService {
   ): boolean {
     // Prevent replay attacks (request must be within 5 minutes)
     const now = Math.floor(Date.now() / 1000)
-    if (Math.abs(now - parseInt(timestamp)) > SLACK_REQUEST_MAX_AGE_SECONDS) return false
+    if (Math.abs(now - parseInt(timestamp, 10)) > SLACK_REQUEST_MAX_AGE_SECONDS) return false
 
     const sigBasestring = `v0:${timestamp}:${body}`
     const mySignature = 'v0=' + crypto

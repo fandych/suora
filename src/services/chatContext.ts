@@ -37,7 +37,8 @@ function attachmentManifest(attachments: MessageAttachment[]): string {
 }
 
 export function buildAttachmentManifest(attachment: MessageAttachment): AttachmentManifest {
-  const extension = attachment.name.includes('.') ? attachment.name.split('.').pop()?.toLowerCase() : undefined
+  const parts = attachment.name.split('.')
+  const extension = parts.length > 1 ? parts[parts.length - 1].toLowerCase() : undefined
   const kind: AttachmentManifest['kind'] = attachment.type === 'audio'
     ? 'audio'
     : attachment.type === 'image'

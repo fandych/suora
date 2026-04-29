@@ -116,10 +116,12 @@ export interface WeChatXMLMessage {
 }
 
 function parseWeChatXMLWithRegex(xml: string): WeChatXMLMessage | null {
+  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const getTag = (tag: string): string | undefined => {
-    const cdataMatch = xml.match(new RegExp(`<${tag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${tag}>`))
+    const escapedTag = escapeRegex(tag)
+    const cdataMatch = xml.match(new RegExp(`<${escapedTag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${escapedTag}>`))
     if (cdataMatch) return cdataMatch[1]
-    const plainMatch = xml.match(new RegExp(`<${tag}>([^<]*)</${tag}>`))
+    const plainMatch = xml.match(new RegExp(`<${escapedTag}>([^<]*)</${escapedTag}>`))
     return plainMatch ? plainMatch[1] : undefined
   }
 

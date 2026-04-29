@@ -274,7 +274,7 @@ export function SkillLogPanel({ skill }: { skill: Skill }) {
   useEffect(() => {
     const all = getAuditLog()
     const filtered = all.filter((e) => toolNames.has(e.toolName))
-    setLogs(filtered.reverse())
+    setLogs([...filtered].reverse())
   }, [toolNames])
 
   const displayed = filter === 'all' ? logs : logs.filter((l) => l.status === filter)

@@ -2232,7 +2232,7 @@ export const builtinToolDefs: ToolSet = {
           fontSize: { validate: (v) => ['small', 'medium', 'large'].includes(v), transform: (v) => v },
           locale: { validate: (v) => ['en', 'zh'].includes(v), transform: (v) => v },
           bubbleStyle: { validate: (v) => ['default', 'minimal', 'bordered', 'glassmorphism'].includes(v), transform: (v) => v },
-          historyRetentionDays: { validate: (v) => !isNaN(Number(v)) && Number(v) >= 0, transform: (v) => Number(v) },
+          historyRetentionDays: { validate: (v) => Number.isFinite(Number(v)) && Number(v) >= 0, transform: (v) => Number(v) },
           autoSave: { validate: (v) => ['true', 'false'].includes(v.toLowerCase()), transform: (v) => v.toLowerCase() === 'true' },
         }
         const handler = allowedSettings[setting]

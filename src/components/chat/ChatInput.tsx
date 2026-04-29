@@ -51,7 +51,10 @@ const ACCEPTED_DOCUMENT_TYPES = [
 function isTextFile(file: File): boolean {
   if (file.type.startsWith('text/')) return true
   if (file.type === 'application/json' || file.type === 'application/xml') return true
-  const ext = '.' + file.name.split('.').pop()?.toLowerCase()
+  const parts = file.name.split('.')
+  if (parts.length < 2) return false
+  const last = parts[parts.length - 1] ?? ''
+  const ext = '.' + last.toLowerCase()
   return ACCEPTED_TEXT_EXTENSIONS.includes(ext)
 }
 
@@ -59,7 +62,8 @@ function truncateTextForContext(value: string, maxChars: number): string {
   if (value.length <= maxChars) return value
   const candidate = value.slice(0, maxChars)
   const boundary = Math.max(candidate.lastIndexOf('\n'), candidate.lastIndexOf(' '), candidate.lastIndexOf('\t'))
-  return candidate.slice(0, boundary > maxChars * 0.75 ? boundary : maxChars).trimEnd()
+  // If no good boundary found (all -1), or boundary is too early, use maxChars
+  return candidate.slice(0, boundary >= 0 && boundary > maxChars * 0.75 ? boundary : maxChars).trimEnd()
 }
 
 type AttachmentRejectReason =
@@ -321,7 +325,10 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
               `${t('chat.recordedAudio', 'Recorded audio')} — ${formatFileSize(blob.size)} exceeds ${formatFileSize(MAX_AUDIO_SIZE)} limit`,
             )
             setIsRecording(false); setRecordingDuration(0)
-            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+            if (recordingTimerRef.current) {
+              clearInterval(recordingTimerRef.current)
+              recordingTimerRef.current = null
+            }
             return
           }
           const reader = new FileReader()
@@ -335,7 +342,10 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
           reader.readAsDataURL(blob)
         }
         setIsRecording(false); setRecordingDuration(0)
-        if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+        if (recordingTimerRef.current) {
+          clearInterval(recordingTimerRef.current)
+          recordingTimerRef.current = null
+        }
       }
 
       mediaRecorderRef.current = mediaRecorder
@@ -350,13 +360,19 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop()
-    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+    if (recordingTimerRef.current) {
+      clearInterval(recordingTimerRef.current)
+      recordingTimerRef.current = null
+    }
   }, [])
 
   useEffect(() => {
     return () => {
       if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop()
-      if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+      if (recordingTimerRef.current) {
+        clearInterval(recordingTimerRef.current)
+        recordingTimerRef.current = null
+      }
     }
   }, [])
 

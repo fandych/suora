@@ -150,7 +150,7 @@ function compareSemverLike(a: string, b: string): number {
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
+  return value.replace(/[|\\{}()[\]^$+*?.]/g, '\\$&')
 }
 
 function wildcardPatternToRegex(pattern: string): RegExp {
@@ -1160,7 +1160,9 @@ ipcMain.handle('fs:searchFiles', async (_event, dirPath: string, pattern: string
   let excludeRegex: RegExp | null = null
   if (excludePattern) {
     try {
-      excludeRegex = new RegExp(excludePattern.replace(/\*/g, '.*'), 'i')
+      // Escape regex special chars except *, then replace * with .*
+      const escaped = excludePattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
+      excludeRegex = new RegExp(escaped, 'i')
     } catch {
       // ignore invalid exclude patterns
     }
@@ -2123,7 +2125,7 @@ function stopTimerEngine() {
 
 // ─── IPC Handlers: Channel Integration ──────────────────────────────
 
-const channelService = getChannelService(process.env.CHANNEL_PORT ? parseInt(process.env.CHANNEL_PORT) : 3000)
+const channelService = getChannelService(process.env.CHANNEL_PORT ? parseInt(process.env.CHANNEL_PORT, 10) : 3000)
 
 // Initialize channel service message handler
 channelService.onMessage(async (event: ChannelWebhookEvent) => {
