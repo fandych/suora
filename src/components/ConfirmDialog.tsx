@@ -44,6 +44,13 @@ export function ConfirmDialogHost() {
   const cancelText = current.cancelText === 'Cancel'
     ? t('common.cancel', 'Cancel')
     : current.cancelText
+  const choices = current.choices?.length ? current.choices : undefined
+  const primaryChoiceIndex = choices ? Math.max(0, choices.findIndex((item) => item.variant === 'primary')) : -1
+  const buttonClass = (variant: 'primary' | 'danger' | 'secondary' | undefined) => {
+    if (variant === 'danger') return 'bg-danger/90 hover:bg-danger text-white focus:ring-danger/40'
+    if (variant === 'primary') return 'bg-accent/90 hover:bg-accent text-white focus:ring-accent/40'
+    return 'bg-surface-2/60 hover:bg-surface-3/60 text-text-secondary hover:text-text-primary focus:ring-border-subtle/70'
+  }
 
   return (
     <div
@@ -66,7 +73,7 @@ export function ConfirmDialogHost() {
         <p className="mt-3 text-[14px] text-text-secondary leading-relaxed whitespace-pre-wrap">
           {current.body}
         </p>
-        <div className="mt-6 flex items-center justify-end gap-2">
+        <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={() => resolveTop(false)}
@@ -74,18 +81,32 @@ export function ConfirmDialogHost() {
           >
             {cancelText}
           </button>
-          <button
-            type="button"
-            ref={confirmBtnRef}
-            onClick={() => resolveTop(true)}
-            className={`px-4 py-2 text-[13px] rounded-xl transition-colors font-medium focus:outline-none focus:ring-2 ${
-              current.danger
-                ? 'bg-danger/90 hover:bg-danger text-white focus:ring-danger/40'
-                : 'bg-accent/90 hover:bg-accent text-white focus:ring-accent/40'
-            }`}
-          >
-            {confirmText}
-          </button>
+          {choices ? (
+            choices.map((choice, index) => (
+              <button
+                key={choice.value}
+                type="button"
+                ref={index === primaryChoiceIndex ? confirmBtnRef : undefined}
+                onClick={() => resolveTop(choice.value)}
+                className={`px-4 py-2 text-[13px] rounded-xl transition-colors font-medium focus:outline-none focus:ring-2 ${buttonClass(choice.variant)}`}
+              >
+                {choice.label}
+              </button>
+            ))
+          ) : (
+            <button
+              type="button"
+              ref={confirmBtnRef}
+              onClick={() => resolveTop(true)}
+              className={`px-4 py-2 text-[13px] rounded-xl transition-colors font-medium focus:outline-none focus:ring-2 ${
+                current.danger
+                  ? 'bg-danger/90 hover:bg-danger text-white focus:ring-danger/40'
+                  : 'bg-accent/90 hover:bg-accent text-white focus:ring-accent/40'
+              }`}
+            >
+              {confirmText}
+            </button>
+          )}
         </div>
       </div>
     </div>

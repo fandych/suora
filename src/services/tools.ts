@@ -8,7 +8,7 @@
 
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
-import type { DocumentGroup, DocumentItem, DocumentNode, Skill, ToolMeta } from '@/types'
+import type { DocumentGroup, DocumentItem, DocumentNode, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
 import { getPluginTools } from '@/services/pluginSystem'
 import { logger } from '@/services/logger'
 import { serializeSkillToMarkdown } from '@/services/skillRegistry'
@@ -21,7 +21,7 @@ import {
 } from '@/services/vectorMemory'
 import { readCached, writeCached } from '@/services/fileStorage'
 import { delegateToAgent } from '@/services/agentCommunication'
-import { confirm } from '@/services/confirmDialog'
+import { confirmChoice } from '@/services/confirmDialog'
 import { safePathSegment } from '@/utils/pathSegments'
 import { safeParse, safeStringify } from '@/utils/safeJson'
 
@@ -30,6 +30,7 @@ const OFFICIAL_MARKETPLACE_URL = 'https://raw.githubusercontent.com/suora-market
 // ─── Constants ─────────────────────────────────────────────────────
 
 const PREVIEW_LENGTH = 80
+const DEFAULT_BLOCKED_COMMANDS = ['rm -rf', 'del /f /q', 'format', 'shutdown']
 
 /** Shape of the persisted store state used by memory tools to avoid circular import with appStore. */
 interface PersistedMemoryEntry {
@@ -188,7 +189,7 @@ function getPersistedSecuritySettings() {
     if (!raw) {
       return {
         allowedDirectories: [] as string[],
-        blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
+        blockedCommands: DEFAULT_BLOCKED_COMMANDS,
         requireConfirmation: true,
       }
     }
@@ -196,13 +197,13 @@ function getPersistedSecuritySettings() {
     const sec = parsed.state?.toolSecurity
     return {
       allowedDirectories: sec?.allowedDirectories || [],
-      blockedCommands: sec?.blockedCommands || ['rm -rf', 'del /f /q', 'format', 'shutdown'],
+      blockedCommands: sec?.blockedCommands || DEFAULT_BLOCKED_COMMANDS,
       requireConfirmation: sec?.requireConfirmation ?? true,
     }
   } catch {
     return {
       allowedDirectories: [] as string[],
-      blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
+      blockedCommands: DEFAULT_BLOCKED_COMMANDS,
       requireConfirmation: true,
     }
   }
@@ -290,21 +291,50 @@ function ensureCommandAllowed(command: string): string | null {
   return null
 }
 
-function isHighRiskAction(action: string): boolean {
-  return /^(write_file|edit_file|delete_file|create_directory|move_file|copy_file|document_update|skill_update|shell|browser_evaluate|browser_fill_form|browser_click|browser_screenshot|clipboard_read|clipboard_write|git_commit|email_|env_set|timer_create|timer_update|timer_delete)/.test(action)
+let sessionToolConfirmationAllowed = false
+let toolConfirmationBypassDepth = 0
+
+export async function runWithToolConfirmationBypass<T>(operation: () => Promise<T>): Promise<T> {
+  toolConfirmationBypassDepth += 1
+  try {
+    return await operation()
+  } finally {
+    toolConfirmationBypassDepth -= 1
+  }
 }
 
 async function confirmIfNeeded(action: string): Promise<boolean> {
+  if (toolConfirmationBypassDepth > 0 || sessionToolConfirmationAllowed) return true
   const sec = getPersistedSecuritySettings()
-  if (!sec.requireConfirmation && !isHighRiskAction(action)) return true
+  if (!sec.requireConfirmation) return true
   const [title, ...rest] = action.split('\n')
-  return confirm({
+  const choice = await confirmChoice({
     title: `Tool confirmation: ${title}`,
     body: rest.join('\n') || 'This tool call requires your approval before executing.',
     danger: true,
-    confirmText: 'Allow',
     cancelText: 'Deny',
+    choices: [
+      { value: 'allow_session', label: 'Allow this session', variant: 'secondary' },
+      { value: 'allow_all', label: 'Allow all', variant: 'secondary' },
+      { value: 'allow', label: 'Allow', variant: 'primary' },
+    ],
   })
+  if (choice === 'allow_session') {
+    sessionToolConfirmationAllowed = true
+    return true
+  }
+  if (choice === 'allow_all') {
+    writeStoreState((state) => {
+      const current = (state.toolSecurity ?? {}) as Partial<ToolSecuritySettings>
+      state.toolSecurity = {
+        allowedDirectories: current.allowedDirectories ?? [],
+        blockedCommands: current.blockedCommands ?? DEFAULT_BLOCKED_COMMANDS,
+        requireConfirmation: false,
+      }
+    })
+    return true
+  }
+  return choice === 'allow'
 }
 
 // ─── Platform detection ────────────────────────────────────────────
@@ -3206,7 +3236,6 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string): ToolSe
       inputSchema: toolDef.inputSchema,
       execute: async (args: Record<string, unknown>) => {
         const meta = getToolMeta(name)
-        const security = getPersistedSecuritySettings()
         const running = runningCounts.get(name) ?? 0
         const effectiveMode = agentPermissionMode || 'default'
 
@@ -3218,14 +3247,6 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string): ToolSe
         if (effectiveMode === 'plan' && (meta.isDestructive || meta.requiresConfirmation) && !meta.isReadOnly) {
           logger.warn(`[ToolExec:PlanMode] ${name} blocked — plan mode requires approval`, { tool: name })
           return `Tool "${name}" is blocked in plan mode. Only read-only tools are allowed without explicit plan approval.`
-        }
-
-        if (effectiveMode !== 'bypassPermissions' && effectiveMode !== 'acceptEdits') {
-          // Default mode: use global confirmation policy
-          if (security.requireConfirmation && meta.requiresConfirmation) {
-            logger.warn(`[ToolExec:PolicyDenied] ${name} requires confirmation`, { tool: name, args })
-            return `Tool "${name}" is blocked by confirmation policy. Disable confirmation mode in Tool Security settings or use a non-destructive alternative.`
-          }
         }
 
         // Prevent overlapping execution for tools that are not concurrency-safe.
@@ -3242,7 +3263,17 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string): ToolSe
         logger.info(`[ToolExec:Start] ${name}`, { tool: name, input: args })
 
         try {
-          const result = await (originalExecute as (args: Record<string, unknown>) => Promise<string>)(args)
+          const shouldBypassNestedConfirm = effectiveMode === 'bypassPermissions' || (effectiveMode === 'acceptEdits' && !meta.isDestructive)
+          const requiresWrapperConfirmation = effectiveMode === 'default' && meta.requiresConfirmation
+          if (requiresWrapperConfirmation && !(await confirmIfNeeded(`${name}\n${inputLog}`))) {
+            logger.warn(`[ToolExec:Cancelled] ${name} denied by confirmation policy`, { tool: name })
+            return 'Cancelled by user confirmation policy.'
+          }
+
+          const executeOriginal = () => (originalExecute as (args: Record<string, unknown>) => Promise<string>)(args)
+          const result = shouldBypassNestedConfirm || requiresWrapperConfirmation
+            ? await runWithToolConfirmationBypass(executeOriginal)
+            : await executeOriginal()
           const duration = (performance.now() - startTime).toFixed(0)
           const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
           const isErrorResult = typeof result === 'string' && (

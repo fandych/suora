@@ -1,6 +1,6 @@
 import { useAppStore } from '@/store/appStore'
 import { streamResponseWithTools, initializeProvider, validateModelConfig } from './aiService'
-import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt } from './tools'
+import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt, runWithToolConfirmationBypass } from './tools'
 import type { ChannelConfig, ChannelMessage, ChannelHistoryMessage, ChannelUser, ChannelUserConversationMessage } from '@/types'
 import type { ModelMessage } from 'ai'
 import { logger } from './logger'
@@ -382,7 +382,7 @@ export async function handleChannelMessage(
     const filteredTools = getToolsForAgent(agent.skills, allSkills, {
       allowedTools: agent.allowedTools,
       disallowedTools: agent.disallowedTools,
-      permissionMode: (agent as unknown as { permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' }).permissionMode,
+      permissionMode: 'bypassPermissions',
     })
 
     // Add skill system prompts
@@ -404,35 +404,37 @@ export async function handleChannelMessage(
     let fullResponse = ''
 
     try {
-      for await (const event of streamResponseWithTools(
-        modelIdentifier,
-        conversationMessages,
-        {
-          systemPrompt,
-          tools: filteredTools,
-          maxSteps: Math.max(2, Math.min(agent.maxTurns ?? 20, 50)),
-          apiKey: model.apiKey,
-          baseUrl: model.baseUrl,
+      await runWithToolConfirmationBypass(async () => {
+        for await (const event of streamResponseWithTools(
+          modelIdentifier,
+          conversationMessages,
+          {
+            systemPrompt,
+            tools: filteredTools,
+            maxSteps: Math.max(2, Math.min(agent.maxTurns ?? 20, 50)),
+            apiKey: model.apiKey,
+            baseUrl: model.baseUrl,
+          }
+        )) {
+          switch (event.type) {
+            case 'text-delta':
+              fullResponse += event.text
+              break
+            case 'tool-call':
+              logger.info('Channel tool call', { toolName: event.toolName, toolCallId: event.toolCallId })
+              break
+            case 'tool-result':
+              logger.info('Channel tool result', { toolName: event.toolName, outputLength: event.output?.length ?? 0 })
+              break
+            case 'tool-error':
+              logger.error('Channel tool error', { toolName: event.toolName, error: event.error })
+              break
+            case 'error':
+              logger.error('Channel stream error', { error: event.error })
+              break
+          }
         }
-      )) {
-        switch (event.type) {
-          case 'text-delta':
-            fullResponse += event.text
-            break
-          case 'tool-call':
-            logger.info('Channel tool call', { toolName: event.toolName, toolCallId: event.toolCallId })
-            break
-          case 'tool-result':
-            logger.info('Channel tool result', { toolName: event.toolName, outputLength: event.output?.length ?? 0 })
-            break
-          case 'tool-error':
-            logger.error('Channel tool error', { toolName: event.toolName, error: event.error })
-            break
-          case 'error':
-            logger.error('Channel stream error', { error: event.error })
-            break
-        }
-      }
+      })
     } catch (error) {
       logger.error('Error streaming response', { error })
       throw error

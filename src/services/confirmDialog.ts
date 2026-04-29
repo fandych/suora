@@ -15,6 +15,15 @@ export interface ConfirmOptions {
   cancelText?: string
   /** When true, the confirm button is rendered in the danger style. */
   danger?: boolean
+  choices?: ConfirmChoice[]
+}
+
+export type ConfirmChoiceValue = string
+
+export interface ConfirmChoice {
+  value: ConfirmChoiceValue
+  label: string
+  variant?: 'primary' | 'danger' | 'secondary'
 }
 
 interface ConfirmEntry extends Required<Pick<ConfirmOptions, 'title' | 'body'>> {
@@ -22,13 +31,14 @@ interface ConfirmEntry extends Required<Pick<ConfirmOptions, 'title' | 'body'>> 
   confirmText: string
   cancelText: string
   danger: boolean
-  resolve: (value: boolean) => void
+  choices?: ConfirmChoice[]
+  resolve: (value: boolean | ConfirmChoiceValue) => void
 }
 
 interface ConfirmStore {
   queue: ConfirmEntry[]
   push: (entry: ConfirmEntry) => void
-  resolveTop: (value: boolean) => void
+  resolveTop: (value: boolean | ConfirmChoiceValue) => void
 }
 
 let _nextId = 1
@@ -57,7 +67,39 @@ export function confirm(options: ConfirmOptions): Promise<boolean> {
       confirmText: options.confirmText ?? 'Confirm',
       cancelText: options.cancelText ?? 'Cancel',
       danger: options.danger ?? false,
-      resolve,
+      choices: options.choices,
+      resolve: (value) => resolve(value === true),
+    })
+  })
+}
+
+/**
+ * Open a confirmation dialog with multiple explicit choices.
+ * Resolves to the selected choice value, or `cancelValue` when cancelled.
+ */
+export function confirmChoice(
+  options: ConfirmOptions & { choices: ConfirmChoice[] },
+  cancelValue = 'cancel',
+): Promise<ConfirmChoiceValue> {
+  return new Promise<ConfirmChoiceValue>((resolve) => {
+    if (options.choices.length === 0) {
+      resolve(cancelValue)
+      return
+    }
+    const primary = options.choices.find((choice) => choice.variant === 'primary') ?? options.choices[0]
+    useConfirmStore.getState().push({
+      id: _nextId++,
+      title: options.title,
+      body: options.body,
+      confirmText: options.confirmText ?? primary?.label ?? 'Confirm',
+      cancelText: options.cancelText ?? 'Cancel',
+      danger: options.danger ?? false,
+      choices: options.choices,
+      resolve: (value) => {
+        if (value === false) resolve(cancelValue)
+        else if (value === true) resolve(primary?.value ?? 'confirm')
+        else resolve(value)
+      },
     })
   })
 }
