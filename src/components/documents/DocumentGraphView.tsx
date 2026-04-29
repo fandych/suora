@@ -5,6 +5,7 @@ import { toGraphifyExport } from '@/services/graphifyAdapter'
 import type { DocumentGraph, DocumentGraphEdgeType, DocumentGraphNode } from '@/services/documentGraph'
 
 const EDGE_TYPES: DocumentGraphEdgeType[] = ['contains', 'references', 'tagged', 'external-link']
+const GRAPHIFY_PREVIEW_MAX_CHARS = 1400
 
 const NODE_STYLE: Record<DocumentGraphNode['type'], { color: string; radius: number; label: string }> = {
   group: { color: '#12A8A0', radius: 26, label: 'Group' },
@@ -97,7 +98,7 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
   const visibleEdges = filteredEdges.filter((edge) => positionedById.has(edge.source) && positionedById.has(edge.target))
   const selectedNode = (selectedNodeId && graph.nodes.find((node) => node.id === selectedNodeId)) || (selectedDocumentId && graph.nodes.find((node) => node.documentId === selectedDocumentId)) || null
   const backlinks = selectedDocumentId ? graph.backlinksByDocumentId[selectedDocumentId] ?? [] : []
-  const graphifyPreview = useMemo(() => JSON.stringify(toGraphifyExport(graph), null, 2).slice(0, 1400), [graph])
+  const graphifyPreview = useMemo(() => JSON.stringify(toGraphifyExport(graph), null, 2).slice(0, GRAPHIFY_PREVIEW_MAX_CHARS), [graph])
 
   const toggleEdge = (edgeType: DocumentGraphEdgeType) => {
     setEnabledEdges((prev) => {
