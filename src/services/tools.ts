@@ -357,13 +357,43 @@ function summarizeMarkdown(value: string, maxLength = 240): string {
   return compact.length > maxLength ? `${compact.slice(0, maxLength)}...` : compact
 }
 
+function formatToolError(value: unknown): string {
+  return value instanceof Error ? value.message : String(value ?? 'Unknown error')
+}
+
+function buildUpdatedSkillContent(
+  skill: Skill,
+  updates: {
+    content: string
+    name?: string
+    description?: string
+    whenToUse?: string
+  },
+): Skill {
+  const metadataPatch = {
+    ...(updates.name ? { name: updates.name } : {}),
+    ...(updates.description !== undefined ? { description: updates.description } : {}),
+    ...(updates.whenToUse !== undefined ? { whenToUse: updates.whenToUse } : {}),
+  }
+
+  return {
+    ...skill,
+    ...metadataPatch,
+    content: updates.content,
+    frontmatter: {
+      ...skill.frontmatter,
+      ...metadataPatch,
+    },
+  }
+}
+
 async function persistSkillFileIfPossible(skill: Skill): Promise<string> {
   if (!skill.filePath) return 'No SKILL.md file path is available; updated in app state only.'
   const blocked = ensureAllowedPath(skill.filePath)
   if (blocked) return `${blocked}; updated in app state only.`
   const result = await electronInvoke('fs:writeFile', skill.filePath, serializeSkillToMarkdown(skill))
   if (typeof result === 'object' && result && 'error' in result) {
-    return `Failed to persist SKILL.md to disk: ${(result as { error: string }).error}`
+    return `Failed to persist SKILL.md to disk: ${formatToolError((result as { error: unknown }).error)}`
   }
   return `Persisted SKILL.md to ${skill.filePath}.`
 }
@@ -2482,20 +2512,12 @@ export const builtinToolDefs: ToolSet = {
           return 'Cancelled by user confirmation policy.'
         }
 
-        const trimmedName = name?.trim()
-        const nextSkill: Skill = {
-          ...skill,
-          ...(trimmedName ? { name: trimmedName } : {}),
-          ...(description !== undefined ? { description } : {}),
-          ...(when_to_use !== undefined ? { whenToUse: when_to_use } : {}),
+        const nextSkill = buildUpdatedSkillContent(skill, {
           content,
-          frontmatter: {
-            ...skill.frontmatter,
-            ...(trimmedName ? { name: trimmedName } : {}),
-            ...(description !== undefined ? { description } : {}),
-            ...(when_to_use !== undefined ? { whenToUse: when_to_use } : {}),
-          },
-        }
+          name: name?.trim() || undefined,
+          description,
+          whenToUse: when_to_use,
+        })
 
         if (!writeStoreState((s) => {
           const arr = (s.skills || []) as Skill[]
