@@ -11,3 +11,7 @@ export function safePathSegment(value: string, fallback = FALLBACK_SEGMENT): str
   if (!sanitized || sanitized === '.' || sanitized === '..') return fallback
   return sanitized.slice(0, 120)
 }
+
+export function skillDirectorySegment(skillName: string): string {
+  return safePathSegment(skillName.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'), 'skill')
+}

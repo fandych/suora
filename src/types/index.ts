@@ -300,6 +300,24 @@ export interface SkillReferenceFile {
 }
 
 /**
+ * File or directory bundled with a folder-backed skill.
+ */
+export interface SkillBundledResource {
+  /** Path relative to the skill root, using forward slashes */
+  path: string
+  /** Whether this entry is a file or directory */
+  type: 'file' | 'directory'
+  /** Optional byte size when known */
+  size?: number
+  /** Optional SHA-256 content hash for integrity checks */
+  hash?: string
+  /** Whether the file appears to be executable or script-like */
+  executable?: boolean
+  /** Optional warning generated while scanning or installing this resource */
+  warning?: string
+}
+
+/**
  * Information about where a registry skill was installed from.
  */
 export interface SkillInstallInfo {
@@ -313,12 +331,41 @@ export interface SkillInstallInfo {
   installedVersion: string
   /** Timestamp of installation */
   installedAt: number
+  /** SHA-256 hash of the installed directory manifest */
+  manifestHash?: string
+  /** Whether the source is built-in/trusted */
+  trustedSource?: boolean
+  /** Installation log lines for troubleshooting */
+  installLog?: string[]
   /** Timestamp of last update check */
   lastCheckedAt?: number
   /** Whether an update is available */
   updateAvailable?: boolean
   /** Latest available version */
   latestVersion?: string
+}
+
+export interface SkillRegistryPreview {
+  entryId: string
+  resources: SkillBundledResource[]
+  fileCount: number
+  directoryCount: number
+  totalBytes: number
+  manifestHash: string
+  trustedSource: boolean
+  warnings: string[]
+  installLog: string[]
+}
+
+export interface SkillLockEntry {
+  source: string
+  sourceType?: string
+  computedHash: string
+}
+
+export interface SkillsLockfile {
+  version: number
+  skills: Record<string, SkillLockEntry>
 }
 
 /**
@@ -353,6 +400,8 @@ export interface Skill {
   context: SkillExecutionContext
   /** External reference files loaded into prompt at runtime */
   referenceFiles?: SkillReferenceFile[]
+  /** Files/folders bundled alongside SKILL.md (scripts, references, assets, etc.) */
+  bundledResources?: SkillBundledResource[]
   /** Installation info for registry-sourced skills */
   installInfo?: SkillInstallInfo
   /** File path on disk (for local/project/user skills) */
@@ -421,6 +470,8 @@ export interface SkillRegistrySource {
   enabled: boolean
   /** Whether this is a built-in source (cannot be removed) */
   builtin?: boolean
+  /** Whether this is a trusted source */
+  trusted?: boolean
   /** Optional description */
   description?: string
   /** Optional icon */
@@ -455,6 +506,10 @@ export interface RegistrySkillEntry {
   url?: string
   /** Raw content preview (first ~200 chars of SKILL.md body) */
   preview?: string
+  /** True when this entry comes from a built-in/trusted registry source */
+  trustedSource?: boolean
+  /** Optional install preview populated before installation */
+  installPreview?: SkillRegistryPreview
 }
 
 // ─── Marketplace Settings ──────────────────────────────────────────

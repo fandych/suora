@@ -1,6 +1,6 @@
 // External directory loading for skills and agents
 import type { Skill, Agent, ExternalDirectoryConfig, SkillSource } from '@/types'
-import { parseSkillMarkdown } from '@/services/skillRegistry'
+import { attachBundledResources, parseSkillMarkdown } from '@/services/skillRegistry'
 import { safeParse } from '@/utils/safeJson'
 
 interface DirEntry {
@@ -88,8 +88,7 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]>
         const nestedSkill = await readSkillMarkdown(`${entry.path}/SKILL.md`, source)
           ?? await readSkillMarkdown(`${entry.path}/skill.md`, source)
         if (nestedSkill) {
-          nestedSkill.skillRoot = entry.path
-          skills.push(nestedSkill)
+          skills.push(await attachBundledResources(electron, nestedSkill, entry.path))
         }
         continue
       }

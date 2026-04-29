@@ -1,11 +1,12 @@
-﻿import { useState, type ReactNode } from 'react'
+﻿import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { generateId } from '@/utils/helpers'
 import { SkillIcon, IconifyIcon, getSkillIconName } from '@/components/icons/IconifyIcons'
 import { IconPicker } from '@/components/icons/IconPicker'
 import { useI18n } from '@/hooks/useI18n'
-import type { Skill, SkillFrontmatter, SkillSource, SkillExecutionContext } from '@/types'
+import type { Skill, SkillBundledResource, SkillFrontmatter, SkillSource, SkillExecutionContext } from '@/types'
 import { MarkdownEditor } from './SkillEditorPanels'
 import { confirm } from '@/services/confirmDialog'
+import { toast } from '@/services/toast'
 import {
   settingsCheckboxClass,
   settingsInputClass,
@@ -24,6 +25,7 @@ const skillInputClass = `${settingsInputClass} bg-surface-2/75`
 const skillSelectClass = `${settingsSelectClass} bg-surface-2/75`
 const skillMonoInputClass = `${settingsMonoInputClass} bg-surface-2/75`
 const skillTextAreaClass = `${settingsTextAreaClass} rounded-3xl bg-surface-2/75`
+type SkillEditorTab = 'metadata' | 'content' | 'resources' | 'preview'
 
 function makeDefaultSkill(): Skill {
   return {
@@ -82,6 +84,295 @@ function SummaryStat({
   )
 }
 
+function normalizeResourcePath(pathValue: string): string {
+  return pathValue.replace(/\\/g, '/').replace(/^\/+/, '').split('/').filter(Boolean).join('/')
+}
+
+function isSafeResourcePath(pathValue: string): boolean {
+  if (pathValue.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(pathValue)) return false
+  const normalized = normalizeResourcePath(pathValue)
+  return Boolean(normalized) && !normalized.split('/').includes('..')
+}
+
+function joinSkillPath(skillRoot: string, resourcePath: string): string {
+  return `${skillRoot.replace(/[\\/]+$/, '')}/${normalizeResourcePath(resourcePath)}`
+}
+
+function sortResources(resources: SkillBundledResource[]): SkillBundledResource[] {
+  return [...resources].sort((a, b) => {
+    const aDepth = a.path.split('/').length
+    const bDepth = b.path.split('/').length
+    if (aDepth !== bDepth) return aDepth - bDepth
+    if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+    return a.path.localeCompare(b.path)
+  })
+}
+
+function ResourceTreePanel({
+  skill,
+  onChange,
+}: {
+  skill: Skill
+  onChange: (patch: Partial<Skill>) => void
+}) {
+  const { t } = useI18n()
+  const uploadInputRef = useRef<HTMLInputElement>(null)
+  const resources = useMemo(() => sortResources(skill.bundledResources ?? []), [skill.bundledResources])
+  const referenceResources = resources.filter((resource) => resource.type === 'file' && resource.path.toLowerCase().startsWith('references/'))
+  const [selectedPath, setSelectedPath] = useState(referenceResources[0]?.path ?? '')
+  const [preview, setPreview] = useState('')
+  const [previewError, setPreviewError] = useState('')
+  const [renamingPath, setRenamingPath] = useState('')
+  const [renameValue, setRenameValue] = useState('')
+
+  useEffect(() => {
+    if (!selectedPath || !skill.skillRoot) {
+      setPreview('')
+      setPreviewError('')
+      return
+    }
+
+    let cancelled = false
+    const refPath = joinSkillPath(skill.skillRoot, selectedPath)
+    window.electron.invoke('fs:readFile', refPath).then((result) => {
+      if (cancelled) return
+      if (typeof result === 'string') {
+        setPreview(result)
+        setPreviewError('')
+      } else {
+        setPreview('')
+        setPreviewError((result as { error?: string })?.error ?? t('skills.referencePreviewFailed', 'Unable to read reference file.'))
+      }
+    }).catch((err: unknown) => {
+      if (cancelled) return
+      setPreview('')
+      setPreviewError(err instanceof Error ? err.message : String(err))
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedPath, skill.skillRoot, t])
+
+  const removeResourceFromState = (resourcePath: string) => {
+    const normalized = normalizeResourcePath(resourcePath)
+    onChange({
+      bundledResources: resources.filter((resource) => normalizeResourcePath(resource.path) !== normalized && !normalizeResourcePath(resource.path).startsWith(`${normalized}/`)),
+      referenceFiles: (skill.referenceFiles ?? []).filter((ref) => !normalizeResourcePath(ref.path).endsWith(normalized)),
+    })
+    if (selectedPath === normalized) setSelectedPath('')
+  }
+
+  const handleDelete = async (resource: SkillBundledResource) => {
+    if (!skill.skillRoot) {
+      removeResourceFromState(resource.path)
+      return
+    }
+    const ok = await confirm({
+      title: t('skills.deleteResourceTitle', 'Delete bundled resource?'),
+      body: t('skills.deleteResourceBody', `"${resource.path}" will be removed from this skill.`),
+      danger: true,
+      confirmText: t('common.delete', 'Delete'),
+    })
+    if (!ok) return
+    const channel = resource.type === 'directory' ? 'fs:deleteDir' : 'fs:deleteFile'
+    await window.electron.invoke(channel, joinSkillPath(skill.skillRoot, resource.path))
+    removeResourceFromState(resource.path)
+  }
+
+  const startRename = (resource: SkillBundledResource) => {
+    setRenamingPath(resource.path)
+    setRenameValue(resource.path)
+  }
+
+  const cancelRename = () => {
+    setRenamingPath('')
+    setRenameValue('')
+  }
+
+  const handleRename = async (resource: SkillBundledResource, nextPath: string) => {
+    if (!nextPath || nextPath === resource.path) {
+      cancelRename()
+      return
+    }
+    if (!isSafeResourcePath(nextPath)) {
+      toast.error(t('skills.invalidResourcePath', 'Invalid resource path'), t('skills.invalidResourcePathHint', 'Paths cannot be empty, absolute, or contain "..".'))
+      return
+    }
+    const normalizedNext = normalizeResourcePath(nextPath)
+
+    if (skill.skillRoot) {
+      const parent = normalizedNext.split('/').slice(0, -1).join('/')
+      if (parent) {
+        const ensureResult = await window.electron.invoke('system:ensureDirectory', joinSkillPath(skill.skillRoot, parent)) as { success?: boolean; error?: string }
+        if (!ensureResult?.success) throw new Error(ensureResult?.error || t('skills.createResourceDirectoryFailed', 'Failed to create resource directory.'))
+      }
+      const moveResult = await window.electron.invoke('fs:moveFile', joinSkillPath(skill.skillRoot, resource.path), joinSkillPath(skill.skillRoot, normalizedNext)) as { success?: boolean; error?: string }
+      if (!moveResult?.success) throw new Error(moveResult?.error || t('skills.renameResourceFailed', 'Failed to rename resource.'))
+    }
+
+    const oldPath = normalizeResourcePath(resource.path)
+    onChange({
+      bundledResources: resources.map((entry) => {
+        const entryPath = normalizeResourcePath(entry.path)
+        if (entryPath === oldPath) return { ...entry, path: normalizedNext }
+        if (entryPath.startsWith(`${oldPath}/`)) return { ...entry, path: `${normalizedNext}/${entryPath.slice(oldPath.length + 1)}` }
+        return entry
+      }),
+      referenceFiles: (skill.referenceFiles ?? []).map((ref) => {
+        const refPath = normalizeResourcePath(ref.path)
+        return refPath.endsWith(oldPath)
+          ? { ...ref, path: skill.skillRoot ? joinSkillPath(skill.skillRoot, normalizedNext) : normalizedNext, label: normalizedNext }
+          : ref
+      }),
+    })
+    if (selectedPath === oldPath) setSelectedPath(normalizedNext)
+    cancelRename()
+  }
+
+  const commitRename = (resource: SkillBundledResource) => {
+    handleRename(resource, renameValue).catch((err: unknown) => {
+      toast.error(t('skills.renameResourceFailed', 'Failed to rename resource'), err instanceof Error ? err.message : String(err))
+    })
+  }
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !skill.skillRoot) return
+    const resourcePath = normalizeResourcePath(`assets/${file.name}`)
+    await window.electron.invoke('system:ensureDirectory', joinSkillPath(skill.skillRoot, 'assets'))
+    await window.electron.invoke('fs:writeFile', joinSkillPath(skill.skillRoot, resourcePath), await file.text())
+    onChange({
+      bundledResources: [
+        ...resources.filter((resource) => normalizeResourcePath(resource.path) !== resourcePath),
+        { path: resourcePath, type: 'file', size: file.size },
+      ],
+    })
+  }
+
+  const grouped = {
+    scripts: resources.filter((resource) => resource.path.toLowerCase().startsWith('scripts/')),
+    references: resources.filter((resource) => resource.path.toLowerCase().startsWith('references/')),
+    assets: resources.filter((resource) => resource.path.toLowerCase().startsWith('assets/')),
+    other: resources.filter((resource) => !/^(scripts|references|assets)\//i.test(resource.path)),
+  }
+
+  return (
+    <div className="grid gap-6 xl:grid-cols-[minmax(18rem,0.85fr)_minmax(0,1.15fr)]">
+      <EditorSection
+        eyebrow={t('skills.resources', 'Resources')}
+        title={t('skills.resourceTree', 'Bundled File Tree')}
+        description={t('skills.resourceTreeHint', 'Browse and manage files packaged alongside SKILL.md.')}
+      >
+        <div className="mb-4 flex flex-wrap gap-2">
+          <input ref={uploadInputRef} type="file" onChange={handleUpload} className="hidden" />
+          <button
+            type="button"
+            onClick={() => uploadInputRef.current?.click()}
+            disabled={!skill.skillRoot}
+            className="rounded-2xl bg-accent/10 px-3 py-2 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/18 disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            <IconifyIcon name="lucide:upload" size={12} color="currentColor" /> {t('skills.uploadResource', 'Upload resource')}
+          </button>
+          {!skill.skillRoot && (
+            <span className="text-[11px] leading-8 text-text-muted">{t('skills.saveBeforeResources', 'Save the skill to disk before editing resources.')}</span>
+          )}
+        </div>
+
+        <div className="space-y-3">
+          {Object.entries(grouped).map(([group, entries]) => (
+            <div key={group} className="rounded-3xl border border-border-subtle/45 bg-surface-0/55 p-3">
+              <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.15em] text-text-muted/60">
+                <IconifyIcon
+                  name={group === 'scripts' ? 'lucide:terminal-square' : group === 'references' ? 'lucide:book-open' : group === 'assets' ? 'lucide:image' : 'lucide:folder'}
+                  size={12}
+                  color="currentColor"
+                />
+                {group}
+                <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] tabular-nums">{entries.length}</span>
+              </div>
+              {entries.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border-subtle/45 px-3 py-2 text-[11px] text-text-muted">{t('common.empty', 'Empty')}</div>
+              ) : (
+                <div className="space-y-1.5">
+                  {entries.map((resource) => (
+                    <div key={resource.path} className="group flex items-center gap-2 rounded-2xl bg-surface-2/60 px-3 py-2">
+                      <IconifyIcon name={resource.type === 'directory' ? 'lucide:folder' : resource.executable ? 'lucide:file-terminal' : 'lucide:file'} size={12} color="currentColor" className="text-text-muted" />
+                      {renamingPath === resource.path ? (
+                        <input
+                          value={renameValue}
+                          onChange={(event) => setRenameValue(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') {
+                              event.preventDefault()
+                              commitRename(resource)
+                            }
+                            if (event.key === 'Escape') cancelRename()
+                          }}
+                          onBlur={() => commitRename(resource)}
+                          autoFocus
+                          className="min-w-0 flex-1 rounded-xl border border-accent/20 bg-surface-0 px-2 py-1 font-mono text-[11px] text-text-primary outline-none"
+                        />
+                      ) : resource.path.toLowerCase().startsWith('references/') ? (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedPath(resource.path)}
+                          className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-text-secondary hover:text-accent"
+                        >
+                          {resource.path}{resource.type === 'directory' ? '/' : ''}
+                        </button>
+                      ) : (
+                        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-text-secondary">
+                          {resource.path}{resource.type === 'directory' ? '/' : ''}
+                        </span>
+                      )}
+                      {resource.size !== undefined && <span className="text-[9px] tabular-nums text-text-muted">{resource.size}b</span>}
+                      {resource.warning && <IconifyIcon name="lucide:triangle-alert" size={12} color="currentColor" className="text-warning" />}
+                      <button type="button" onClick={() => startRename(resource)} className="opacity-0 transition-opacity group-hover:opacity-100 text-text-muted hover:text-accent">
+                        <IconifyIcon name="lucide:pencil" size={12} color="currentColor" />
+                      </button>
+                      <button type="button" onClick={() => handleDelete(resource)} className="opacity-0 transition-opacity group-hover:opacity-100 text-text-muted hover:text-danger">
+                        <IconifyIcon name="lucide:trash-2" size={12} color="currentColor" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </EditorSection>
+
+      <EditorSection
+        eyebrow={t('skills.references', 'References')}
+        title={t('skills.referencePreview', 'Reference Preview')}
+        description={t('skills.referencePreviewHint', 'Click a file under references/ to inspect its contents without leaving the editor.')}
+      >
+        {referenceResources.length > 0 && (
+          <select
+            aria-label="Reference file"
+            value={selectedPath}
+            onChange={(event) => setSelectedPath(event.target.value)}
+            className={`${skillSelectClass} mb-4`}
+          >
+            {referenceResources.map((resource) => <option key={resource.path} value={resource.path}>{resource.path}</option>)}
+          </select>
+        )}
+        {previewError ? (
+          <div className="rounded-3xl border border-danger/20 bg-danger/8 p-4 text-[12px] text-danger">{previewError}</div>
+        ) : preview ? (
+          <pre className="max-h-168 overflow-auto rounded-3xl border border-border-subtle/55 bg-surface-2/75 p-5 font-mono text-xs leading-6 text-text-secondary whitespace-pre-wrap">{preview}</pre>
+        ) : (
+          <div className="rounded-3xl border border-dashed border-border-subtle/55 bg-surface-0/45 p-8 text-center text-[12px] text-text-muted">
+            {t('skills.noReferenceSelected', 'No reference file selected.')}
+          </div>
+        )}
+      </EditorSection>
+    </div>
+  )
+}
+
 export function SkillEditor({ skill, onSave, onCancel }: {
   skill: Skill | null
   onSave: (skill: Skill) => void
@@ -89,7 +380,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
 }) {
   const [dirty, setDirty] = useState(false)
   const [validationError, setValidationError] = useState('')
-  const [activeTab, setActiveTab] = useState<'metadata' | 'content' | 'preview'>('metadata')
+  const [activeTab, setActiveTab] = useState<SkillEditorTab>(skill?.bundledResources?.length ? 'resources' : 'metadata')
   const [form, setForm] = useState<Skill>(skill ?? makeDefaultSkill())
   const { t } = useI18n()
   const [showIconPicker, setShowIconPicker] = useState(false)
@@ -161,6 +452,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
     || t('skills.heroFallback', 'A reusable prompt package that can be attached to agents and activated when its trigger conditions match.')
   const activeContext = form.frontmatter.context || form.context || 'inline'
   const allowedToolCount = (form.frontmatter.allowedTools || form.allowedTools || []).length
+  const bundledResourceCount = form.bundledResources?.length ?? 0
 
   return (
     <form onSubmit={handleSubmit} className="module-canvas flex-1 overflow-y-auto">
@@ -205,7 +497,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:w-136">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:w-168 2xl:grid-cols-5">
               <SummaryStat
                 label={t('common.version', 'Version')}
                 value={form.frontmatter.version || form.version || '1.0.0'}
@@ -220,6 +512,11 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                 label={t('skills.allowedTools', 'Allowed Tools')}
                 value={`${allowedToolCount}`}
                 hint={t('skills.optionalHints', 'optional hints')}
+              />
+              <SummaryStat
+                label={t('skills.resources', 'Resources')}
+                value={`${bundledResourceCount}`}
+                hint={t('skills.bundledFiles', 'bundled files')}
               />
               <SummaryStat
                 label={t('skills.preview', 'Preview')}
@@ -248,6 +545,9 @@ export function SkillEditor({ skill, onSave, onCancel }: {
             </button>
             <button type="button" className={tabCls('content')} onClick={() => setActiveTab('content')}>
               <IconifyIcon name="lucide:file-text" size={12} color="currentColor" /> {t('skills.content', 'Content')}
+            </button>
+            <button type="button" className={tabCls('resources')} onClick={() => setActiveTab('resources')}>
+              <IconifyIcon name="lucide:folder-tree" size={12} color="currentColor" /> {t('skills.resources', 'Resources')}
             </button>
             <button type="button" className={tabCls('preview')} onClick={() => setActiveTab('preview')}>
               <IconifyIcon name="lucide:eye" size={12} color="currentColor" /> {t('skills.preview', 'Preview')}
@@ -422,6 +722,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip1', 'Lead with the exact behavior you want, then add constraints and examples only when they materially improve consistency.')}</div>
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip2', 'Use headings and short bullets so the resulting SKILL.md stays readable to both humans and models.')}</div>
                   <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip3', 'Keep tool hints sparse. The best skills define judgment and process, not a giant list of commands.')}</div>
+                  <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip4', 'Folder skills can bundle scripts/, references/, and assets/ next to SKILL.md; mention when to read or run each resource.')}</div>
                 </div>
               </EditorSection>
 
@@ -438,6 +739,10 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                 />
               </EditorSection>
             </div>
+          )}
+
+          {activeTab === 'resources' && (
+            <ResourceTreePanel skill={form} onChange={updateForm} />
           )}
 
           {activeTab === 'preview' && (

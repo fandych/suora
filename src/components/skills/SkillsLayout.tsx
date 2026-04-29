@@ -4,21 +4,42 @@ import { useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
-import type { Skill, RegistrySkillEntry, SkillRegistrySource } from '@/types'
-import { loadAllSkills, createBlankSkill, deleteSkillFromDisk, saveSkillToDisk, serializeSkillToMarkdown, parseSkillMarkdown } from '@/services/skillRegistry'
-import { browseRegistrySkills, searchRegistrySkills, installSkillFromRegistry, uninstallSkill, getDefaultRegistrySources } from '@/services/skillMarketplace'
+import type { Skill, RegistrySkillEntry, SkillRegistrySource, SkillBundledResource, SkillsLockfile } from '@/types'
+import { loadAllSkills, createBlankSkill, deleteSkillFromDisk, saveSkillToDisk, serializeSkillToMarkdown, parseSkillMarkdown, loadSkillsLockfile, getSkillLockStatus } from '@/services/skillRegistry'
+import { browseRegistrySkills, searchRegistrySkills, installSkillFromRegistry, uninstallSkill, getDefaultRegistrySources, previewSkillInstall } from '@/services/skillMarketplace'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { SkillEditor } from './SkillEditor'
 import { settingsInputClass, settingsSoftButtonClass } from '@/components/settings/panelUi'
+import { buildSkillFromDataTransferItems, buildSkillFromFolderFiles, downloadBlob, exportSkillToZipBlob, skillArchiveName } from '@/services/skillArchive'
+import { skillDirectorySegment } from '@/utils/pathSegments'
 
 type ViewMode = 'installed' | 'browse' | 'sources'
 
 const SKILL_VIEW_MODES = new Set<ViewMode>(['installed', 'browse', 'sources'])
 
 const ALL_CATEGORY = 'All'
+
+function buildImportedResourceManifest(resources: Array<{ path: string; size: number }>): SkillBundledResource[] {
+  const manifest = new Map<string, SkillBundledResource>()
+  for (const resource of resources) {
+    const parts = resource.path.split('/').filter(Boolean)
+    for (let i = 1; i < parts.length; i++) {
+      const dirPath = parts.slice(0, i).join('/')
+      manifest.set(dirPath, { path: dirPath, type: 'directory' })
+    }
+    manifest.set(resource.path, {
+      path: resource.path,
+      type: 'file',
+      size: resource.size,
+      executable: resource.path.toLowerCase().startsWith('scripts/'),
+      warning: resource.path.toLowerCase().startsWith('scripts/') ? `Executable script detected: ${resource.path}` : undefined,
+    })
+  }
+  return Array.from(manifest.values()).sort((a, b) => a.path.localeCompare(b.path))
+}
 
 export function SkillsLayout() {
   const [panelWidth, setPanelWidth] = useResizablePanel('skills', 280)
@@ -33,6 +54,9 @@ export function SkillsLayout() {
   const [search, setSearch] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const folderInputRef = useRef<HTMLInputElement>(null)
+  const [previewingEntryId, setPreviewingEntryId] = useState<string | null>(null)
+  const [skillsLockfile, setSkillsLockfile] = useState<SkillsLockfile | null>(null)
   const { t } = useI18n()
   useSkillIconsReady()
 
@@ -70,6 +94,7 @@ export function SkillsLayout() {
         if (!storeIds.has(skill.id)) addSkill(skill)
       }
     })
+    loadSkillsLockfile(workspacePath).then(setSkillsLockfile)
   }, [workspacePath, addSkill])
 
   // Fetch registry skills when switching to browse
@@ -158,15 +183,13 @@ export function SkillsLayout() {
     if (skill) updateSkill(id, { enabled: !skill.enabled })
   }
 
-  const handleExportMarkdown = (skill: Skill) => {
+  const handleExportMarkdown = async (skill: Skill) => {
+    if (skill.bundledResources?.length) {
+      downloadBlob(await exportSkillToZipBlob(skill), skillArchiveName(skill))
+      return
+    }
     const md = serializeSkillToMarkdown(skill)
-    const blob = new Blob([md], { type: 'text/markdown' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${skill.name.replace(/\s+/g, '-').toLowerCase()}-SKILL.md`
-    a.click()
-    URL.revokeObjectURL(url)
+    downloadBlob(new Blob([md], { type: 'text/markdown' }), `${skill.name.replace(/\s+/g, '-').toLowerCase()}-SKILL.md`)
   }
 
   const handleImportMarkdown = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,6 +211,80 @@ export function SkillsLayout() {
     e.target.value = ''
   }
 
+  const folderImportErrorMessage = t('skills.folderImportInvalid', 'The selected folder does not contain a valid SKILL.md file or could not be read.')
+  const importSkillFolderBundle = async (bundle: {
+    skillMarkdown: string
+    resources: Array<{ path: string; content: string; size: number }>
+  } | null) => {
+    if (!bundle) {
+      toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), folderImportErrorMessage)
+      return
+    }
+    const parsed = parseSkillMarkdown(bundle.skillMarkdown, 'SKILL.md', 'local')
+    if (!parsed) {
+      toast.error(t('skills.parseFailed', 'Failed to parse SKILL.md'), t('skills.parseFailedDetail', 'Make sure the file has YAML frontmatter.'))
+      return
+    }
+
+    const resources = buildImportedResourceManifest(bundle.resources)
+    parsed.bundledResources = resources
+    parsed.referenceFiles = resources
+      .filter((resource) => resource.type === 'file' && resource.path.toLowerCase().startsWith('references/'))
+      .map((resource) => ({ path: resource.path, label: resource.path }))
+
+    if (workspacePath) {
+      const skillDir = `${workspacePath}/.suora/skills/${skillDirectorySegment(parsed.name)}`
+      try {
+        const ensureRoot = await window.electron.invoke('system:ensureDirectory', skillDir) as { success?: boolean; error?: string }
+        if (!ensureRoot?.success) throw new Error(ensureRoot?.error || `Failed to create ${skillDir}`)
+        const writeSkill = await window.electron.invoke('fs:writeFile', `${skillDir}/SKILL.md`, bundle.skillMarkdown) as { success?: boolean; error?: string }
+        if (!writeSkill?.success) throw new Error(writeSkill?.error || 'Failed to write SKILL.md')
+        for (const resource of bundle.resources) {
+          const parent = resource.path.split('/').slice(0, -1).join('/')
+          if (parent) {
+            const ensureParent = await window.electron.invoke('system:ensureDirectory', `${skillDir}/${parent}`) as { success?: boolean; error?: string }
+            if (!ensureParent?.success) throw new Error(ensureParent?.error || `Failed to create ${parent}`)
+          }
+          const writeResource = await window.electron.invoke('fs:writeFile', `${skillDir}/${resource.path}`, resource.content) as { success?: boolean; error?: string }
+          if (!writeResource?.success) throw new Error(writeResource?.error || `Failed to write ${resource.path}`)
+        }
+      } catch (err: unknown) {
+        toast.error(t('skills.importSkillFolderFailed', 'Failed to import skill folder'), err instanceof Error ? err.message : String(err))
+        return
+      }
+      parsed.filePath = `${skillDir}/SKILL.md`
+      parsed.skillRoot = skillDir
+      parsed.referenceFiles = resources
+        .filter((resource) => resource.type === 'file' && resource.path.toLowerCase().startsWith('references/'))
+        .map((resource) => ({ path: `${skillDir}/${resource.path}`, label: resource.path }))
+    }
+
+    addSkill(parsed)
+    setEditingId(parsed.id)
+    setIsAdding(false)
+    toast.success(t('skills.importedSkill', 'Skill imported'), parsed.name)
+  }
+
+  const handleImportFolder = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length) return
+    try {
+      await importSkillFolderBundle(await buildSkillFromFolderFiles(files))
+    } finally {
+      e.target.value = ''
+    }
+  }
+
+  const handleDropSkillFolder = async (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault()
+    const bundle = event.dataTransfer.items.length
+      ? await buildSkillFromDataTransferItems(event.dataTransfer.items)
+      : event.dataTransfer.files.length
+        ? await buildSkillFromFolderFiles(event.dataTransfer.files)
+        : null
+    await importSkillFolderBundle(bundle)
+  }
+
   const handleInstallFromRegistry = async (entry: RegistrySkillEntry) => {
     const targetDir = workspacePath
       ? `${workspacePath}/.suora/skills`
@@ -197,6 +294,28 @@ export function SkillsLayout() {
       return
     }
     try {
+      setPreviewingEntryId(entry.id)
+      const preview = entry.installPreview ?? await previewSkillInstall(entry)
+      setPreviewingEntryId(null)
+      if (preview) {
+        const warningText = preview.warnings.length ? `\n\n${preview.warnings.join('\n')}` : ''
+        const ok = await confirm({
+          title: t('skills.installPreviewTitle', 'Install skill?'),
+          body: t(
+            'skills.installPreviewBody',
+            `"${entry.name}" contains {files} files, {dirs} folders, and {bytes} bytes. Source: {trust}.`,
+          )
+            .replace('{files}', String(preview.fileCount))
+            .replace('{dirs}', String(preview.directoryCount))
+            .replace('{bytes}', preview.totalBytes.toLocaleString())
+            .replace('{trust}', preview.trustedSource ? t('skills.trustedSource', 'trusted') : t('skills.untrustedSource', 'untrusted'))
+            + warningText,
+          danger: preview.warnings.length > 0,
+          confirmText: t('common.install', 'Install'),
+        })
+        if (!ok) return
+        entry = { ...entry, installPreview: preview, trustedSource: preview.trustedSource }
+      }
       const installed = await installSkillFromRegistry(entry, targetDir)
       if (installed) {
         addSkill(installed)
@@ -209,6 +328,8 @@ export function SkillsLayout() {
         t('skills.installFailed', 'Failed to install skill'),
         err instanceof Error ? err.message : 'Unknown error',
       )
+    } finally {
+      setPreviewingEntryId(null)
     }
   }
 
@@ -220,7 +341,8 @@ export function SkillsLayout() {
       body: t(
         'skills.uninstallBody',
         `"${skill.name}" and its files will be removed from this workspace. You can reinstall it later from the registry.`,
-      ).replace('{name}', skill.name),
+      ).replace('{name}', skill.name)
+        + (skill.bundledResources?.length ? `\n\n${t('skills.resourcesToDelete', 'Resources to delete')}: ${skill.bundledResources.length}` : ''),
       danger: true,
       confirmText: t('skills.uninstall', 'Uninstall'),
     })
@@ -312,6 +434,13 @@ export function SkillsLayout() {
               <IconifyIcon name="lucide:upload" size={14} color="currentColor" />
             </button>
             <button
+              onClick={() => folderInputRef.current?.click()}
+              title={t('skills.importSkillFolder', 'Import skill folder')}
+              className="text-[11px] px-2 py-1 rounded-lg text-text-muted hover:bg-surface-3/60 transition-colors"
+            >
+              <IconifyIcon name="lucide:folder-up" size={14} color="currentColor" />
+            </button>
+            <button
               onClick={handleCreateSkill}
               className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium"
             >
@@ -328,6 +457,24 @@ export function SkillsLayout() {
           className="hidden"
           aria-label="Import SKILL.md file"
         />
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          onChange={handleImportFolder}
+          className="hidden"
+          aria-label="Import skill folder"
+          webkitdirectory=""
+          directory=""
+        />
+        <div
+          className="flex min-h-0 flex-1 flex-col"
+          onDragOver={(event) => {
+            event.preventDefault()
+            event.dataTransfer.dropEffect = 'copy'
+          }}
+          onDrop={handleDropSkillFolder}
+        >
 
         {/* Tab toggle */}
         <div className="module-sidebar-stack grid grid-cols-3 gap-1.5 px-3 pb-3 pt-1">
@@ -402,8 +549,10 @@ export function SkillsLayout() {
               </div>
             )}
             {filteredInstalled.map((skill) => {
-              const isActive = editingId === skill.id
-              return (
+                const isActive = editingId === skill.id
+                const lockStatus = getSkillLockStatus(skill, skillsLockfile)
+                const lockEntry = skillsLockfile?.skills[skill.name]
+                return (
               <div
                 key={skill.id}
                 tabIndex={0}
@@ -440,6 +589,24 @@ export function SkillsLayout() {
                         </span>
                         {skill.category && <span className="px-1.5 py-0.5 rounded-full bg-surface-3/80 text-[9px]">{skill.category}</span>}
                         {skill.frontmatter?.context && <span className="px-1.5 py-0.5 rounded-full bg-accent/10 text-accent text-[9px]">{t(`skills.context.${skill.frontmatter.context}`, skill.frontmatter.context)}</span>}
+                        {lockStatus !== 'not-locked' && (
+                          <span
+                            title={lockEntry ? `${lockEntry.source} · ${lockEntry.computedHash}` : undefined}
+                            className={`px-1.5 py-0.5 rounded-full text-[9px] ${
+                              lockStatus === 'verified'
+                                ? 'bg-success/10 text-success'
+                                : lockStatus === 'mismatch'
+                                  ? 'bg-danger/10 text-danger'
+                                  : 'bg-warning/10 text-warning'
+                            }`}
+                          >
+                            {lockStatus === 'verified'
+                              ? t('skills.lockVerified', 'lock verified')
+                              : lockStatus === 'mismatch'
+                                ? t('skills.lockMismatch', 'lock mismatch')
+                                : t('skills.locked', 'locked')}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -572,9 +739,10 @@ export function SkillsLayout() {
                       ) : (
                         <button
                           onClick={() => handleInstallFromRegistry(entry)}
+                          disabled={previewingEntryId === entry.id}
                           className="text-[10px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 font-semibold shrink-0 transition-colors"
                         >
-                          {t('common.install', 'Install')}
+                          {previewingEntryId === entry.id ? t('common.loading', 'Loading...') : t('common.install', 'Install')}
                         </button>
                       )}
                     </div>
@@ -587,6 +755,9 @@ export function SkillsLayout() {
                       {entry.category && (
                         <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface-3 text-text-muted">{entry.category}</span>
                       )}
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded ${entry.trustedSource ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                        {entry.trustedSource ? t('skills.trustedSource', 'trusted') : t('skills.untrustedSource', 'untrusted')}
+                      </span>
                       {entry.url && (
                         <a
                           href={entry.url}
@@ -687,6 +858,7 @@ export function SkillsLayout() {
             </div>
           </div>
         )}
+        </div>
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 

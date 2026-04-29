@@ -16,12 +16,19 @@
  * No tool specification needed — agents decide which tools to use autonomously.
  */
 
-import type { Skill, SkillSource, SkillFrontmatter, SkillExecutionContext } from '@/types'
+import type { Skill, SkillSource, SkillFrontmatter, SkillExecutionContext, SkillBundledResource, SkillReferenceFile, SkillsLockfile } from '@/types'
 import { logger } from '@/services/logger'
 import { safeParse } from '@/utils/safeJson'
 import { safePathSegment } from '@/utils/pathSegments'
 
-type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
+export type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
+type DirEntry = { name: string; isDirectory: boolean; path: string; size?: number }
+
+const MAX_BUNDLED_RESOURCE_ENTRIES = 300
+const MAX_INLINE_REFERENCE_BYTES = 64 * 1024
+const MAX_PROMPT_SCRIPT_PATHS = 30
+const MAX_PROMPT_RESOURCE_ENTRIES = 80
+const REFERENCE_FILE_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.csv'])
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
@@ -369,6 +376,115 @@ function simpleHash(str: string): number {
   return Math.abs(hash)
 }
 
+function normalizeResourcePath(pathValue: string): string {
+  return pathValue.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function joinSkillResourcePath(skillRoot: string, resourcePath: string): string {
+  return `${skillRoot.replace(/[\\/]+$/, '')}/${normalizeResourcePath(resourcePath)}`
+}
+
+function isAbsolutePath(pathValue: string): boolean {
+  return pathValue.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(pathValue)
+}
+
+function resolveSkillReferencePath(refPath: string, skillRoot?: string): string {
+  if (isAbsolutePath(refPath)) return refPath
+  if (skillRoot) return joinSkillResourcePath(skillRoot, refPath)
+  return refPath
+}
+
+function getFileExtension(filePath: string): string {
+  const name = filePath.split('/').pop() ?? ''
+  const index = name.lastIndexOf('.')
+  return index >= 0 ? name.slice(index).toLowerCase() : ''
+}
+
+function isRootSkillMarkdown(relativePath: string): boolean {
+  return normalizeResourcePath(relativePath).toLowerCase() === 'skill.md'
+}
+
+function isReferenceResource(resource: SkillBundledResource): boolean {
+  if (resource.type !== 'file') return false
+  const normalized = normalizeResourcePath(resource.path).toLowerCase()
+  return normalized.startsWith('references/') && REFERENCE_FILE_EXTENSIONS.has(getFileExtension(normalized))
+}
+
+function buildReferenceFilesFromResources(
+  skillRoot: string,
+  resources: SkillBundledResource[],
+): SkillReferenceFile[] {
+  return resources
+    .filter(isReferenceResource)
+    .map((resource) => ({
+      path: joinSkillResourcePath(skillRoot, resource.path),
+      label: resource.path,
+    }))
+}
+
+async function collectBundledResources(
+  electron: ElectronBridge,
+  currentDir: string,
+  relativeBase = '',
+  remainingEntries = { count: MAX_BUNDLED_RESOURCE_ENTRIES },
+): Promise<SkillBundledResource[]> {
+  if (remainingEntries.count <= 0) return []
+
+  const entries = (await electron.invoke('fs:listDir', currentDir)) as DirEntry[] | { error: string }
+  if (!Array.isArray(entries)) {
+    if (entries?.error) {
+      logger.warn(`[skillRegistry] Failed to list bundled resources in ${currentDir}`, { error: entries.error })
+    }
+    return []
+  }
+
+  const resources: SkillBundledResource[] = []
+  for (const entry of entries) {
+    if (remainingEntries.count <= 0) break
+
+    const relativePath = normalizeResourcePath(`${relativeBase}${entry.name}`)
+    if (isRootSkillMarkdown(relativePath)) continue
+
+    resources.push({
+      path: relativePath,
+      type: entry.isDirectory ? 'directory' : 'file',
+      ...(typeof entry.size === 'number' ? { size: entry.size } : {}),
+    })
+    remainingEntries.count--
+
+    if (entry.isDirectory) {
+      const nested = await collectBundledResources(
+        electron,
+        entry.path,
+        `${relativePath}/`,
+        remainingEntries,
+      )
+      resources.push(...nested)
+    }
+  }
+
+  return resources
+}
+
+export async function attachBundledResources(
+  electron: ElectronBridge,
+  skill: Skill,
+  skillRoot: string,
+): Promise<Skill> {
+  const bundledResources = await collectBundledResources(electron, skillRoot)
+  const referenceFiles = buildReferenceFilesFromResources(skillRoot, bundledResources)
+
+  return {
+    ...skill,
+    skillRoot,
+    bundledResources,
+    referenceFiles: [
+      ...(skill.referenceFiles ?? []),
+      ...referenceFiles,
+    ],
+  }
+}
+
 // ─── Skill Loading from Directories ────────────────────────────────
 
 /**
@@ -384,7 +500,7 @@ async function loadSkillsFromDirectory(
 ): Promise<Skill[]> {
   try {
     const entries = (await electron.invoke('fs:listDir', dir)) as
-      | { name: string; isDirectory: boolean; path: string }[]
+      | DirEntry[]
       | { error: string }
 
     if (!Array.isArray(entries)) return []
@@ -400,8 +516,7 @@ async function loadSkillsFromDirectory(
           if (typeof raw === 'string') {
             const skill = parseSkillMarkdown(raw, skillMdPath, source)
             if (skill) {
-              skill.skillRoot = entry.path
-              skills.push(skill)
+              skills.push(await attachBundledResources(electron, skill, entry.path))
             }
           }
         } catch {
@@ -412,8 +527,7 @@ async function loadSkillsFromDirectory(
             if (typeof raw === 'string') {
               const skill = parseSkillMarkdown(raw, skillMdPathLower, source)
               if (skill) {
-                skill.skillRoot = entry.path
-                skills.push(skill)
+                skills.push(await attachBundledResources(electron, skill, entry.path))
               }
             }
           } catch {
@@ -562,6 +676,40 @@ export async function loadAllSkills(workspacePath: string): Promise<Skill[]> {
   return Array.from(seen.values())
 }
 
+export async function loadSkillsLockfile(workspacePath: string): Promise<SkillsLockfile | null> {
+  const electron = getElectron()
+  if (!electron || !workspacePath) return null
+
+  try {
+    const raw = await electron.invoke('fs:readFile', `${workspacePath}/skills-lock.json`) as string | { error?: string }
+    if (typeof raw !== 'string') return null
+    const parsed = safeParse<Partial<SkillsLockfile>>(raw)
+    if (parsed.version !== 1 || typeof parsed.skills !== 'object' || !parsed.skills) return null
+    const skills: SkillsLockfile['skills'] = {}
+    for (const [name, entry] of Object.entries(parsed.skills)) {
+      if (!entry || typeof entry !== 'object') continue
+      const value = entry as Partial<SkillsLockfile['skills'][string]>
+      if (typeof value.source !== 'string' || typeof value.computedHash !== 'string') continue
+      skills[name] = {
+        source: value.source,
+        sourceType: typeof value.sourceType === 'string' ? value.sourceType : undefined,
+        computedHash: value.computedHash,
+      }
+    }
+    return { version: 1, skills }
+  } catch {
+    return null
+  }
+}
+
+export function getSkillLockStatus(skill: Skill, lockfile: SkillsLockfile | null): 'not-locked' | 'locked' | 'verified' | 'mismatch' {
+  const entry = lockfile?.skills[skill.name]
+  if (!entry) return 'not-locked'
+  const installedHash = skill.installInfo?.manifestHash
+  if (!installedHash) return 'locked'
+  return installedHash === entry.computedHash ? 'verified' : 'mismatch'
+}
+
 /**
  * Save a skill to disk as a SKILL.md file.
  */
@@ -687,7 +835,15 @@ export async function buildSkillPrompts(
       if (electron) {
         for (const ref of skill.referenceFiles) {
           try {
-            const content = await electron.invoke('fs:readFile', ref.path) as string | { error: string }
+            const refPath = resolveSkillReferencePath(ref.path, skill.skillRoot)
+            const normalizedRefPath = normalizeResourcePath(ref.path)
+            const resource = skill.bundledResources?.find((entry) => normalizeResourcePath(entry.path) === normalizedRefPath)
+            if (resource?.size && resource.size > MAX_INLINE_REFERENCE_BYTES) {
+              const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'
+              lines.push(`### ${label}\n\nThis reference exceeds ${MAX_INLINE_REFERENCE_BYTES} bytes. Load it selectively from ${refPath} only when the task needs it.`)
+              continue
+            }
+            const content = await electron.invoke('fs:readFile', refPath) as string | { error: string }
             if (typeof content === 'string' && content.trim()) {
               const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'
               lines.push(`### ${label}\n\n${content.trim()}`)
@@ -697,6 +853,22 @@ export async function buildSkillPrompts(
           }
         }
       }
+    }
+
+    if (skill.bundledResources?.length) {
+      const scripts = skill.bundledResources
+        .filter((resource) => resource.type === 'file' && normalizeResourcePath(resource.path).toLowerCase().startsWith('scripts/'))
+        .map((resource) => `- ${skill.skillRoot ? joinSkillResourcePath(skill.skillRoot, resource.path) : resource.path}`)
+        .slice(0, MAX_PROMPT_SCRIPT_PATHS)
+      const manifest = skill.bundledResources
+        .slice(0, MAX_PROMPT_RESOURCE_ENTRIES)
+        .map((resource) => `- ${resource.path}${resource.type === 'directory' ? '/' : ''}${resource.size ? ` (${resource.size} bytes)` : ''}${resource.executable ? ' [script]' : ''}`)
+        .join('\n')
+      const rootHint = skill.skillRoot ? `Skill root: ${skill.skillRoot}\n` : ''
+      const scriptHint = scripts.length
+        ? `\nAvailable script paths:\n${scripts.join('\n')}\n`
+        : ''
+      lines.push(`### Bundled resources\n\n${rootHint}Use these files and folders as needed; read only the resources relevant to the task.${scriptHint}\n${manifest}`)
     }
 
     parts.push(`<skill name="${skill.name}">\n${lines.join('\n\n')}\n</skill>`)

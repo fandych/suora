@@ -6,6 +6,7 @@
 import type { Skill, SkillSignature } from '@/types'
 import { readCached, writeCached, removeCached } from '@/services/fileStorage'
 import { safeParse, safeStringify } from '@/utils/safeJson'
+import { sha256Text } from '@/utils/hash'
 
 // ─── SHA-256 hashing ────────────────────────────────────────────────
 
@@ -24,11 +25,7 @@ export async function computeSkillHash(skill: Skill): Promise<string> {
     prompt: skill.prompt || '',
   })
 
-  const encoder = new TextEncoder()
-  const data = encoder.encode(payload)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+  return sha256Text(payload)
 }
 
 /**

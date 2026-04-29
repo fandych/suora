@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { deleteSkillFromDisk, parseSkillMarkdown, saveSkillToDisk, serializeSkillToMarkdown } from './skillRegistry'
+import { buildSkillPrompts, deleteSkillFromDisk, getSkillLockStatus, loadLocalSkills, loadSkillsLockfile, parseSkillMarkdown, saveSkillToDisk, serializeSkillToMarkdown } from './skillRegistry'
 
 describe('skillRegistry', () => {
   beforeEach(() => {
@@ -78,5 +78,113 @@ Plan carefully.
 
     await expect(deleteSkillFromDisk('/workspace/skills/review/SKILL.md')).resolves.toBe(true)
     expect(window.electron.invoke).toHaveBeenCalledWith('fs:deleteDir', '/workspace/skills/review')
+  })
+
+  it('discovers bundled files and reference files for folder skills', async () => {
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel, filePath) => {
+      if (channel === 'fs:listDir' && filePath === '/workspace/skills') {
+        return [{ name: 'creator', isDirectory: true, path: '/workspace/skills/creator' }]
+      }
+      if (channel === 'fs:listDir' && filePath === '/workspace/skills/creator') {
+        return [
+          { name: 'SKILL.md', isDirectory: false, path: '/workspace/skills/creator/SKILL.md' },
+          { name: 'references', isDirectory: true, path: '/workspace/skills/creator/references' },
+          { name: 'scripts', isDirectory: true, path: '/workspace/skills/creator/scripts' },
+        ]
+      }
+      if (channel === 'fs:listDir' && filePath === '/workspace/skills/creator/references') {
+        return [{ name: 'schemas.md', isDirectory: false, path: '/workspace/skills/creator/references/schemas.md' }]
+      }
+      if (channel === 'fs:listDir' && filePath === '/workspace/skills/creator/scripts') {
+        return [{ name: 'aggregate.py', isDirectory: false, path: '/workspace/skills/creator/scripts/aggregate.py' }]
+      }
+      if (channel === 'fs:readFile' && filePath === '/workspace/skills/creator/SKILL.md') {
+        return '---\nname: skill-creator\ndescription: Creates skills\n---\n\nUse bundled resources.'
+      }
+      return { error: `unexpected ${channel}:${filePath}` }
+    })
+
+    const skills = await loadLocalSkills('/workspace')
+
+    expect(skills).toHaveLength(1)
+    expect(skills[0].bundledResources).toEqual([
+      { path: 'references', type: 'directory' },
+      { path: 'references/schemas.md', type: 'file' },
+      { path: 'scripts', type: 'directory' },
+      { path: 'scripts/aggregate.py', type: 'file' },
+    ])
+    expect(skills[0].referenceFiles).toEqual([
+      { path: '/workspace/skills/creator/references/schemas.md', label: 'references/schemas.md' },
+    ])
+  })
+
+  it('adds reference content and bundled resource manifest to skill prompts', async () => {
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel, filePath) => {
+      if (channel === 'fs:readFile' && filePath === '/workspace/skills/creator/references/schemas.md') {
+        return '# Schema docs'
+      }
+      return { error: `unexpected ${channel}:${filePath}` }
+    })
+
+    const skill = parseSkillMarkdown(
+      '---\nname: skill-creator\ndescription: Creates skills\n---\n\nUse bundled resources.',
+      '/workspace/skills/creator/SKILL.md',
+      'local',
+    )
+    if (!skill) throw new Error('Expected parsed skill')
+    skill.skillRoot = '/workspace/skills/creator'
+    skill.referenceFiles = [{ path: 'references/schemas.md', label: 'schemas' }]
+    skill.bundledResources = [
+      { path: 'references/schemas.md', type: 'file' },
+      { path: 'scripts/aggregate.py', type: 'file' },
+    ]
+
+    const prompt = await buildSkillPrompts([skill.id], [skill])
+
+    expect(prompt).toContain('### schemas\n\n# Schema docs')
+    expect(prompt).toContain('Skill root: /workspace/skills/creator')
+    expect(prompt).toContain('- scripts/aggregate.py')
+    expect(prompt).toContain('Available script paths:')
+    expect(prompt).toContain('/workspace/skills/creator/scripts/aggregate.py')
+  })
+
+  it('loads skills-lock.json and reports lock verification status', async () => {
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel, filePath) => {
+      if (channel === 'fs:readFile' && filePath === '/workspace/skills-lock.json') {
+        return JSON.stringify({
+          version: 1,
+          skills: {
+            'skill-creator': {
+              source: 'anthropics/skills',
+              sourceType: 'github',
+              computedHash: 'hash-1',
+            },
+          },
+        })
+      }
+      return { error: `unexpected ${channel}:${filePath}` }
+    })
+
+    const lockfile = await loadSkillsLockfile('/workspace')
+    const skill = parseSkillMarkdown(
+      '---\nname: skill-creator\ndescription: Creates skills\n---\n\nUse bundled resources.',
+      '/workspace/skills/creator/SKILL.md',
+      'registry',
+    )
+    if (!skill) throw new Error('Expected parsed skill')
+
+    expect(lockfile?.skills['skill-creator'].source).toBe('anthropics/skills')
+    expect(getSkillLockStatus(skill, lockfile)).toBe('locked')
+    skill.installInfo = {
+      sourceId: 'skills-sh',
+      repository: 'anthropics/skills',
+      skillName: 'skill-creator',
+      installedVersion: '1.0.0',
+      installedAt: 1,
+      manifestHash: 'hash-1',
+    }
+    expect(getSkillLockStatus(skill, lockfile)).toBe('verified')
+    skill.installInfo.manifestHash = 'hash-2'
+    expect(getSkillLockStatus(skill, lockfile)).toBe('mismatch')
   })
 })

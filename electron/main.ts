@@ -10,7 +10,7 @@ import crypto from 'crypto'
 import https from 'https'
 import net from 'net'
 import { CronExpressionParser } from 'cron-parser'
-import { atomicWriteFile, canonicalizePathSync, isWithinRoot, readTextFileRange, readTextFileWithLimit, resolveUserPath } from './fsUtils.js'
+import { MAX_IPC_TEXT_FILE_BYTES, atomicWriteFile, canonicalizePathSync, isWithinRoot, readTextFileRange, readTextFileWithLimit, resolveUserPath } from './fsUtils.js'
 import { initLogger, getLogger, closeLogger, type LogLevel } from './logger.js'
 import { getChannelService, type ChannelWebhookEvent } from './channelService.js'
 import { openSuoraDatabase, type JsonTableName, type SuoraDatabase } from './database.js'
@@ -468,10 +468,15 @@ ipcMain.handle('fs:listDir', async (_event, dirPath: string) => {
     const pathErr = enforceFsPathInWorkspace(dirPath)
     if (pathErr) return { error: pathErr }
     const entries = await fs.readdir(dirPath, { withFileTypes: true })
-    return entries.map((e) => ({
-      name: e.name,
-      isDirectory: e.isDirectory(),
-      path: path.join(dirPath, e.name),
+    return Promise.all(entries.map(async (e) => {
+      const entryPath = path.join(dirPath, e.name)
+      const stat = e.isFile() ? await fs.stat(entryPath).catch(() => null) : null
+      return {
+        name: e.name,
+        isDirectory: e.isDirectory(),
+        path: entryPath,
+        ...(stat?.isFile() ? { size: stat.size } : {}),
+      }
     }))
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
@@ -1390,6 +1395,19 @@ ipcMain.handle('web:fetch', async (_event, url: string) => {
     const raw = await fetchUrl(url)
     const text = stripHtml(raw)
     return { content: text.slice(0, 8000), url, truncated: text.length > 8000 }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('web:fetchText', async (_event, url: string) => {
+  try {
+    validatePublicHttpUrl(url)
+    const raw = await fetchUrl(url)
+    if (raw.length > MAX_IPC_TEXT_FILE_BYTES) {
+      return { error: `Response is too large (${raw.length} bytes)` }
+    }
+    return { content: raw, url }
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
   }

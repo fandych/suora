@@ -12,12 +12,36 @@
  * into the local skills directory. No npm/package installation needed.
  */
 
-import type { SkillRegistrySource, RegistrySkillEntry, Skill } from '@/types'
+import type { SkillRegistrySource, RegistrySkillEntry, Skill, SkillBundledResource, SkillRegistryPreview } from '@/types'
 import { t } from '@/services/i18n'
 import { parseSkillMarkdown } from '@/services/skillRegistry'
 import { logger } from '@/services/logger'
+import { safePathSegment, skillDirectorySegment } from '@/utils/pathSegments'
+import { sha256Text } from '@/utils/hash'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
+type GitHubContentItem = {
+  name: string
+  path: string
+  type: 'file' | 'dir'
+  download_url?: string | null
+  size?: number
+}
+type DownloadedSkillResource = {
+  type: 'file' | 'directory'
+  content?: string
+  size?: number
+  hash?: string
+  executable?: boolean
+  warning?: string
+}
+
+const MAX_SKILL_RESOURCE_FILES = 150
+const MAX_SKILL_RESOURCE_BYTES = 4 * 1024 * 1024
+const MAX_SKILL_RESOURCE_DEPTH = 8
+const SCRIPT_LIKE_EXTENSIONS = new Set(['.bat', '.cmd', '.js', '.mjs', '.cjs', '.ps1', '.py', '.rb', '.sh', '.ts'])
+const TEXT_REFERENCE_EXTENSIONS = new Set(['.csv', '.json', '.md', '.markdown', '.txt', '.yaml', '.yml'])
+const TRUSTED_SOURCE_IDS = new Set(['skills-sh', 'vercel-agent-skills', 'anthropics-skills'])
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
@@ -34,6 +58,7 @@ export function getDefaultRegistrySources(): SkillRegistrySource[] {
       url: 'https://skills.sh',
       enabled: true,
       builtin: true,
+      trusted: true,
       description: t('skills.registrySource.skillsSh', 'The open agent skills ecosystem by Vercel'),
       icon: 'lucide:globe',
     },
@@ -44,6 +69,7 @@ export function getDefaultRegistrySources(): SkillRegistrySource[] {
       url: 'https://github.com/vercel-labs/agent-skills',
       enabled: true,
       builtin: true,
+      trusted: true,
       description: t('skills.registrySource.vercel', 'Official Vercel agent skills collection'),
       icon: 'lucide:triangle',
     },
@@ -54,6 +80,7 @@ export function getDefaultRegistrySources(): SkillRegistrySource[] {
       url: 'https://github.com/anthropics/skills',
       enabled: true,
       builtin: true,
+      trusted: true,
       description: t('skills.registrySource.anthropic', 'Official Anthropic agent skills'),
       icon: 'lucide:brain',
     },
@@ -260,6 +287,7 @@ export async function discoverSkillsFromGitHub(
           icon: skill.icon,
           category: skill.category,
           installed: false,
+          trustedSource: TRUSTED_SOURCE_IDS.has(sourceId),
           url: `https://github.com/${owner}/${repo}/tree/main/skills/${item.name}`,
           preview: skill.content.slice(0, 200),
         })
@@ -280,7 +308,7 @@ export async function discoverSkillsFromGitHub(
 // ─── Skill Installation ────────────────────────────────────────────
 
 /**
- * Install a skill from a registry by downloading its SKILL.md file.
+ * Install a skill from a registry by downloading its full skill directory.
  */
 export async function installSkillFromRegistry(
   entry: RegistrySkillEntry,
@@ -290,44 +318,35 @@ export async function installSkillFromRegistry(
   if (!electron) return null
 
   try {
-    // Determine the raw content URL
-    const contentUrl = getSkillContentUrl(entry)
-    if (!contentUrl) {
-      logger.error(`[marketplace] Cannot determine content URL for skill: ${entry.name}`)
+    const repo = parseRepository(entry.repository)
+    if (!repo) {
+      logger.error(`[marketplace] Cannot determine repository for skill: ${entry.name}`)
       return null
     }
 
-    // Fetch the SKILL.md content
-    const result = (await electron.invoke('web:fetch', contentUrl)) as {
-      content?: string
-      error?: string
-    }
-
-    if (result.error || !result.content) {
-      logger.error(`[marketplace] Failed to fetch skill content: ${result.error}`)
+    const safeSkillDirName = skillDirectorySegment(entry.name)
+    const skillDir = `${targetDir}/${safeSkillDirName}`
+    const ensureResult = await electron.invoke('system:ensureDirectory', skillDir) as { success?: boolean; error?: string }
+    if (ensureResult?.error) throw new Error(`Failed to create skill directory ${skillDir}: ${ensureResult.error}`)
+    const installLog = [`Installing ${entry.name} from ${entry.repository}`]
+    const installedFiles = await downloadGitHubSkillDirectory(electron, repo.owner, repo.repo, entry.name, skillDir, installLog)
+    const skillMarkdown = installedFiles.get('SKILL.md')?.content ?? installedFiles.get('skill.md')?.content
+    if (!skillMarkdown) {
+      logger.error(`[marketplace] Failed to fetch SKILL.md for: ${entry.name}`)
       return null
     }
 
     // Parse to validate it's a valid skill
-    const skill = parseSkillMarkdown(result.content, `${entry.name}/SKILL.md`, 'registry')
+    const skill = parseSkillMarkdown(skillMarkdown, `${entry.name}/SKILL.md`, 'registry')
     if (!skill) {
       logger.error(`[marketplace] Invalid SKILL.md format for: ${entry.name}`)
       return null
     }
 
-    // Save to disk
-    const skillDir = `${targetDir}/${entry.name}`
-    await electron.invoke('system:ensureDirectory', skillDir)
-    const writeResult = (await electron.invoke(
-      'fs:writeFile',
-      `${skillDir}/SKILL.md`,
-      result.content,
-    )) as { success?: boolean }
-
-    if (!writeResult?.success) {
-      logger.error(`[marketplace] Failed to write SKILL.md for: ${entry.name}`)
-      return null
-    }
+    const bundledResources = resourcesFromDownloadedFiles(installedFiles)
+      .filter((resource) => resource.path.toLowerCase() !== 'skill.md')
+    const manifestHash = await computeResourceManifestHash(bundledResources)
+    const trustedSource = entry.trustedSource ?? TRUSTED_SOURCE_IDS.has(entry.sourceId)
 
     // Add install info
     skill.installInfo = {
@@ -336,9 +355,18 @@ export async function installSkillFromRegistry(
       skillName: entry.name,
       installedVersion: entry.version,
       installedAt: Date.now(),
+      manifestHash,
+      trustedSource,
+      installLog,
     }
     skill.filePath = `${skillDir}/SKILL.md`
     skill.skillRoot = skillDir
+    skill.bundledResources = bundledResources
+    skill.referenceFiles = skill.bundledResources
+      .filter((resource) => resource.type === 'file'
+        && resource.path.toLowerCase().startsWith('references/')
+        && TEXT_REFERENCE_EXTENSIONS.has(getFileExtension(resource.path)))
+      .map((resource) => ({ path: `${skillDir}/${resource.path}`, label: resource.path }))
     skill.downloads = entry.downloads
     skill.rating = entry.rating
 
@@ -377,6 +405,31 @@ export async function uninstallSkill(skill: Skill): Promise<boolean> {
 }
 
 /**
+ * Build a dry-run manifest for a registry skill before installation.
+ */
+export async function previewSkillInstall(entry: RegistrySkillEntry): Promise<SkillRegistryPreview | null> {
+  const electron = getElectron()
+  if (!electron) return null
+
+  const repo = parseRepository(entry.repository)
+  if (!repo) return null
+
+  try {
+    const installLog = [`Previewing ${entry.name} from ${entry.repository}`]
+    const resources = await listGitHubSkillDirectory(electron, repo.owner, repo.repo, entry.name, installLog)
+    const warnings = resources
+      .map((resource) => resource.warning)
+      .filter((warning): warning is string => Boolean(warning))
+    return buildRegistryPreview(entry, resources, installLog, warnings)
+  } catch (err) {
+    logger.warn(`[marketplace] Failed to preview ${entry.name}`, {
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
+}
+
+/**
  * Check if updates are available for installed registry skills.
  */
 export async function checkSkillUpdates(
@@ -391,21 +444,31 @@ export async function checkSkillUpdates(
     if (!skill.installInfo) continue
 
     try {
-      const contentUrl = getSkillContentUrlFromInstallInfo(skill.installInfo)
-      if (!contentUrl) continue
+      const repo = parseRepository(skill.installInfo.repository)
+      if (repo && skill.installInfo.manifestHash) {
+        const remoteResources = await listGitHubSkillDirectory(electron, repo.owner, repo.repo, skill.installInfo.skillName)
+        const remoteHash = await computeResourceManifestHash(remoteResources.filter((resource) => resource.path.toLowerCase() !== 'skill.md'))
+        if (remoteHash !== skill.installInfo.manifestHash) {
+          updates.set(skill.id, skill.installInfo.installedVersion || 'updated')
+          continue
+        }
+      } else {
+        const contentUrl = getSkillContentUrlFromInstallInfo(skill.installInfo)
+        if (!contentUrl) continue
 
-      const result = (await electron.invoke('web:fetch', contentUrl)) as {
-        content?: string
-        error?: string
-      }
+        const result = (await electron.invoke('web:fetch', contentUrl)) as {
+          content?: string
+          error?: string
+        }
 
-      if (result.error || !result.content) continue
+        if (result.error || !result.content) continue
 
-      const remote = parseSkillMarkdown(result.content, 'remote', 'registry')
-      if (!remote) continue
+        const remote = parseSkillMarkdown(result.content, 'remote', 'registry')
+        if (!remote) continue
 
-      if (remote.version && remote.version !== skill.installInfo.installedVersion) {
-        updates.set(skill.id, remote.version)
+        if (remote.version && remote.version !== skill.installInfo.installedVersion) {
+          updates.set(skill.id, remote.version)
+        }
       }
     } catch {
       // Skip
@@ -431,6 +494,7 @@ export async function browseRegistrySkills(
   const featured = getFeaturedSkills().map((s) => ({
     ...s,
     installed: installedSkillNames.has(s.name),
+    trustedSource: TRUSTED_SOURCE_IDS.has(s.sourceId),
   }))
   allEntries.push(...featured)
 
@@ -474,13 +538,216 @@ export function searchRegistrySkills(
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
-function getSkillContentUrl(entry: RegistrySkillEntry): string | null {
-  // GitHub raw content URL
-  const match = entry.repository.match(/^([^/]+)\/([^/]+)$/)
+function parseRepository(repository: string): { owner: string; repo: string } | null {
+  const match = repository.match(/^([^/]+)\/([^/]+)$/)
   if (!match) return null
+  return { owner: match[1], repo: match[2] }
+}
 
-  const [, owner, repo] = match
-  return `https://raw.githubusercontent.com/${owner}/${repo}/main/skills/${entry.name}/SKILL.md`
+async function fetchGitHubDirectory(
+  electron: ElectronBridge,
+  owner: string,
+  repo: string,
+  path: string,
+): Promise<GitHubContentItem[]> {
+  const apiUrl = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`
+  const result = (await electron.invoke('web:fetch', apiUrl)) as { content?: string; error?: string }
+  if (result.error) throw new Error(`GitHub API failed to list ${path}: ${result.error}`)
+  if (!result.content) throw new Error(`GitHub API returned an empty response for ${path}`)
+
+  const parsed = JSON.parse(result.content) as GitHubContentItem[] | { message?: string }
+  if (!Array.isArray(parsed)) throw new Error(parsed.message || `Invalid GitHub contents response for ${path}`)
+  return parsed
+}
+
+async function downloadGitHubSkillDirectory(
+  electron: ElectronBridge,
+  owner: string,
+  repo: string,
+  skillName: string,
+  targetDir: string,
+  installLog: string[] = [],
+): Promise<Map<string, DownloadedSkillResource>> {
+  const downloaded = new Map<string, DownloadedSkillResource>()
+  let fileCount = 0
+  let totalBytes = 0
+
+  async function visit(remotePath: string, localDir: string, relativeBase = '', depth = 0): Promise<void> {
+    if (depth > MAX_SKILL_RESOURCE_DEPTH) throw new Error(`Skill directory is too deep at ${remotePath}`)
+    const items = await fetchGitHubDirectory(electron, owner, repo, remotePath)
+    for (const item of items) {
+      const safeName = safePathSegment(item.name, '')
+      if (!safeName || safeName !== item.name) {
+        throw new Error(`Unsafe file name in ${skillName} skill directory: ${item.name}`)
+      }
+      const relativePath = `${relativeBase}${safeName}`
+
+      if (item.type === 'dir') {
+        const nextLocalDir = `${localDir}/${safeName}`
+        await electron.invoke('system:ensureDirectory', nextLocalDir)
+        downloaded.set(relativePath, { type: 'directory' })
+        installLog.push(`Created directory ${relativePath}/`)
+        await visit(item.path, nextLocalDir, `${relativePath}/`, depth + 1)
+        continue
+      }
+
+      if (item.type !== 'file' || !item.download_url) continue
+      fileCount++
+      if (fileCount > MAX_SKILL_RESOURCE_FILES) {
+        throw new Error(`Skill has too many files: ${fileCount} (maximum: ${MAX_SKILL_RESOURCE_FILES})`)
+      }
+      totalBytes += item.size ?? 0
+      if (totalBytes > MAX_SKILL_RESOURCE_BYTES) {
+        throw new Error(`Skill is too large: ${totalBytes.toLocaleString()} bytes (maximum: ${MAX_SKILL_RESOURCE_BYTES.toLocaleString()} bytes)`)
+      }
+      if (!isExpectedGitHubRawUrl(item.download_url, owner, repo)) {
+        throw new Error(`Unexpected download URL for ${item.path}`)
+      }
+      const content = await electron.invoke('web:fetchText', item.download_url) as { content?: string; error?: string }
+      if (content.error || typeof content.content !== 'string') {
+        throw new Error(content.error
+          ? `Failed to download ${item.path} (${item.name}): ${content.error}`
+          : `Unexpected response format while downloading ${item.path}`)
+      }
+
+      const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${safeName}`, content.content) as { success?: boolean; error?: string }
+      if (!writeResult?.success) throw new Error(writeResult && writeResult.error ? writeResult.error : `Failed to write ${relativePath}`)
+      const hash = await sha256Text(content.content)
+      downloaded.set(relativePath, {
+        type: 'file',
+        content: content.content,
+        size: item.size ?? content.content.length,
+        hash,
+        executable: isScriptLikePath(relativePath),
+        warning: isScriptLikePath(relativePath) ? `Executable script detected: ${relativePath}` : undefined,
+      })
+      installLog.push(`Downloaded ${relativePath}`)
+    }
+  }
+
+  await visit(`skills/${skillName}`, targetDir)
+  return downloaded
+}
+
+async function listGitHubSkillDirectory(
+  electron: ElectronBridge,
+  owner: string,
+  repo: string,
+  skillName: string,
+  installLog: string[] = [],
+): Promise<SkillBundledResource[]> {
+  const resources: SkillBundledResource[] = []
+  let fileCount = 0
+  let totalBytes = 0
+
+  async function visit(remotePath: string, relativeBase = '', depth = 0): Promise<void> {
+    if (depth > MAX_SKILL_RESOURCE_DEPTH) throw new Error(`Skill directory is too deep at ${remotePath}`)
+    const items = await fetchGitHubDirectory(electron, owner, repo, remotePath)
+    for (const item of items) {
+      const safeName = safePathSegment(item.name, '')
+      if (!safeName || safeName !== item.name) throw new Error(`Unsafe file name in ${skillName} skill directory`)
+      const relativePath = `${relativeBase}${safeName}`
+
+      if (item.type === 'dir') {
+        resources.push({ path: relativePath, type: 'directory' })
+        installLog.push(`Found directory ${relativePath}/`)
+        await visit(item.path, `${relativePath}/`, depth + 1)
+        continue
+      }
+
+      if (item.type !== 'file') continue
+      fileCount++
+      totalBytes += item.size ?? 0
+      const warning = isScriptLikePath(relativePath) ? `Executable script detected: ${relativePath}` : undefined
+      resources.push({
+        path: relativePath,
+        type: 'file',
+        size: item.size,
+        executable: isScriptLikePath(relativePath),
+        warning,
+      })
+      installLog.push(`Found file ${relativePath}${item.size ? ` (${item.size} bytes)` : ''}`)
+    }
+  }
+
+  await visit(`skills/${skillName}`)
+  if (fileCount > MAX_SKILL_RESOURCE_FILES) throw new Error(`Skill has too many files (${fileCount}; max ${MAX_SKILL_RESOURCE_FILES})`)
+  if (totalBytes > MAX_SKILL_RESOURCE_BYTES) throw new Error(`Skill is too large (${totalBytes} bytes; max ${MAX_SKILL_RESOURCE_BYTES})`)
+  return resources
+}
+
+function resourcesFromDownloadedFiles(downloaded: Map<string, DownloadedSkillResource>): SkillBundledResource[] {
+  return Array.from(downloaded.entries()).map(([path, resource]) => ({
+    path,
+    type: resource.type,
+    ...(typeof resource.size === 'number' ? { size: resource.size } : {}),
+    ...(resource.hash ? { hash: resource.hash } : {}),
+    ...(resource.executable ? { executable: true } : {}),
+    ...(resource.warning ? { warning: resource.warning } : {}),
+  }))
+}
+
+async function buildRegistryPreview(
+  entry: RegistrySkillEntry,
+  resources: SkillBundledResource[],
+  installLog: string[],
+  warnings: string[],
+): Promise<SkillRegistryPreview> {
+  const fileCount = resources.filter((resource) => resource.type === 'file').length
+  const directoryCount = resources.filter((resource) => resource.type === 'directory').length
+  const totalBytes = resources.reduce((sum, resource) => sum + (resource.size ?? 0), 0)
+  const manifestHash = await computeResourceManifestHash(resources.filter((resource) => resource.path.toLowerCase() !== 'skill.md'))
+  return {
+    entryId: entry.id,
+    resources,
+    fileCount,
+    directoryCount,
+    totalBytes,
+    manifestHash,
+    trustedSource: entry.trustedSource ?? TRUSTED_SOURCE_IDS.has(entry.sourceId),
+    warnings,
+    installLog,
+  }
+}
+
+async function computeResourceManifestHash(resources: SkillBundledResource[]): Promise<string> {
+  // Directory structure is intentionally part of the integrity hash: moving the
+  // same file content to a different bundled path changes how a skill resolves it.
+  const manifest = resources
+    .map((resource) => [
+      resource.path,
+      resource.type,
+      resource.size ?? 0,
+      resource.hash ?? '',
+      resource.executable ? 'x' : '',
+    ].join(':'))
+    .sort()
+    .join('\n')
+  return sha256Text(manifest)
+}
+
+function getFileExtension(filePath: string): string {
+  const name = filePath.split('/').pop() ?? ''
+  const dot = name.lastIndexOf('.')
+  return dot >= 0 ? name.slice(dot).toLowerCase() : ''
+}
+
+function isScriptLikePath(filePath: string): boolean {
+  const normalized = filePath.toLowerCase()
+  return normalized.startsWith('scripts/')
+    || SCRIPT_LIKE_EXTENSIONS.has(getFileExtension(normalized))
+}
+
+function isExpectedGitHubRawUrl(url: string, owner: string, repo: string): boolean {
+  try {
+    const parsed = new URL(url)
+    const normalizedPath = decodeURIComponent(parsed.pathname)
+    return parsed.protocol === 'https:'
+      && parsed.hostname === 'raw.githubusercontent.com'
+      && normalizedPath.startsWith(`/${owner}/${repo}/`)
+  } catch {
+    return false
+  }
 }
 
 function getSkillContentUrlFromInstallInfo(
