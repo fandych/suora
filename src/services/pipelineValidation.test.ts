@@ -100,6 +100,35 @@ describe('pipelineValidation', () => {
     expect(result.valid).toBe(true)
   })
 
+  it('rejects same-step references to variables exported only after the step runs', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Use {{vars.generated}} before it exists', exportVar: 'generated' },
+          { agentId: 'agent-1', task: 'Use {{vars.generated}} after export' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.valid).toBe(false)
+    expect(result.errors.find((issue) => issue.code === 'unknown-variable')?.stepIndex).toBe(0)
+  })
+
+  it('rejects agents whose configured model is disabled when no fallback is selected', () => {
+    const disabledModel = { ...model, enabled: false }
+    const result = validateAgentPipeline(
+      pipeline([{ agentId: 'agent-1', task: 'Draft' }]),
+      [agent],
+      [disabledModel],
+    )
+
+    expect(result.valid).toBe(false)
+    expect(result.errors.some((issue) => issue.code === 'missing-model')).toBe(true)
+  })
+
   it('rejects duplicate or invalid variable names', () => {
     const result = validateAgentPipeline(
       {

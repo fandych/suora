@@ -149,15 +149,32 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
     setSaving(true)
     setValidationResult(null)
 
-    updateProviderConfig(providerId, { name, providerType, apiKey, baseUrl, models })
+    const trimmedName = name.trim()
+    if (!trimmedName) {
+      setValidationResult({ valid: false, error: t('models.providerNameRequired', 'Provider name is required') })
+      setSaving(false)
+      return
+    }
+    if (!models.some((model) => model.enabled)) {
+      setValidationResult({ valid: false, error: t('models.enabledModelRequired', 'Enable at least one model before saving') })
+      setSaving(false)
+      return
+    }
+
+    updateProviderConfig(providerId, { name: trimmedName, providerType, apiKey, baseUrl, models })
     syncModelsFromConfigs()
+    let savedSuccessfully = true
     if (workspacePath) {
-      await saveSettingsToWorkspace()
+      savedSuccessfully = await saveSettingsToWorkspace()
     }
     setSaving(false)
+    if (!savedSuccessfully) {
+      setValidationResult({ valid: false, error: t('models.saveFailed', 'Could not save configuration to workspace') })
+      return
+    }
     setSaved(true)
     onSaved()
-  }, [name, providerType, apiKey, baseUrl, models, providerId, updateProviderConfig, syncModelsFromConfigs, workspacePath, onSaved])
+  }, [name, providerType, apiKey, baseUrl, models, providerId, updateProviderConfig, syncModelsFromConfigs, workspacePath, onSaved, t])
 
   if (!config) {
     return (
@@ -280,11 +297,11 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
                     </div>
                     <button
                       type="button"
-                      disabled={testing || (!apiKey && !isOllama) || models.length === 0}
+                      disabled={testing || (!apiKey && !isOllama) || enabledModelCount === 0}
                       onClick={async () => {
                         setTesting(true)
                         setTestResult(null)
-                        const firstModel = models.find((m) => m.enabled) || models[0]
+                         const firstModel = models.find((m) => m.enabled)
                         if (!firstModel) { setTesting(false); return }
                         const result = await testConnection(
                           providerType,

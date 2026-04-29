@@ -103,7 +103,9 @@ export function validateAgentPipeline(
         recoveryActions: [{ id: 'edit-pipeline', label: 'Choose another agent', stepIndex: index }],
       })
     } else {
-      const model = agent.modelId ? models.find((item) => item.id === agent.modelId) : models.find((item) => item.isDefault) ?? models[0]
+      const model = agent.modelId
+        ? models.find((item) => item.id === agent.modelId && item.enabled !== false)
+        : models.find((item) => item.isDefault && item.enabled !== false) ?? models.find((item) => item.enabled !== false)
       if (!model) {
         issues.push({
           severity: 'error',
@@ -155,38 +157,6 @@ export function validateAgentPipeline(
           stepIndex: index,
           message: `Step ${index + 1} json-path transform requires an outputTransformPath (e.g. "data.items.0.name").`,
         })
-      }
-    }
-
-    if (step.exportVar !== undefined) {
-      const exportName = step.exportVar.trim()
-      if (!exportName) {
-        issues.push({
-          severity: 'error',
-          code: 'invalid-export-var',
-          stepIndex: index,
-          message: `Step ${index + 1} exportVar is empty — remove the field or provide a name.`,
-        })
-      } else if (!VALID_VARIABLE_NAME.test(exportName)) {
-        issues.push({
-          severity: 'error',
-          code: 'invalid-export-var',
-          stepIndex: index,
-          message: `Step ${index + 1} exportVar "${exportName}" must match /^[A-Za-z_][A-Za-z0-9_]*$/.`,
-        })
-      } else if (declaredVariableNames.has(exportName)) {
-        // Overwriting a declared variable's default mid-run is legal but is
-        // almost always a footgun (the supplied value disappears once the step
-        // runs), so surface it as a warning.
-        issues.push({
-          severity: 'warning',
-          code: 'export-var-collision',
-          stepIndex: index,
-          message: `Step ${index + 1} exportVar "${exportName}" overwrites a declared pipeline variable; the supplied value will be replaced once this step succeeds.`,
-        })
-        exportedVariableNames.add(exportName)
-      } else {
-        exportedVariableNames.add(exportName)
       }
     }
 
@@ -253,6 +223,38 @@ export function validateAgentPipeline(
         message: `Step ${index + 1} has an invalid runIf condition: ${runIfError}`,
         recoveryActions: [{ id: 'edit-pipeline', label: 'Edit condition', stepIndex: index }],
       })
+    }
+
+    if (step.exportVar !== undefined) {
+      const exportName = step.exportVar.trim()
+      if (!exportName) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-export-var',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar is empty — remove the field or provide a name.`,
+        })
+      } else if (!VALID_VARIABLE_NAME.test(exportName)) {
+        issues.push({
+          severity: 'error',
+          code: 'invalid-export-var',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar "${exportName}" must match /^[A-Za-z_][A-Za-z0-9_]*$/.`,
+        })
+      } else if (declaredVariableNames.has(exportName)) {
+        // Overwriting a declared variable's default mid-run is legal but is
+        // almost always a footgun (the supplied value disappears once the step
+        // runs), so surface it as a warning.
+        issues.push({
+          severity: 'warning',
+          code: 'export-var-collision',
+          stepIndex: index,
+          message: `Step ${index + 1} exportVar "${exportName}" overwrites a declared pipeline variable; the supplied value will be replaced once this step succeeds.`,
+        })
+        exportedVariableNames.add(exportName)
+      } else {
+        exportedVariableNames.add(exportName)
+      }
     }
 
     if ((step.maxInputChars ?? 0) > 120_000 || (step.maxOutputChars ?? 0) > 120_000) {

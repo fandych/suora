@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, shell, clipboard, Notification, desktopCapturer, Tray, Menu, globalShortcut, nativeImage, safeStorage } from 'electron'
 import { fileURLToPath } from 'url'
+import { createRequire } from 'module'
 import path from 'path'
 import os from 'os'
 import fs from 'fs/promises'
@@ -19,6 +20,7 @@ import type { ChannelConfig } from '../src/types/index.js'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
+const require = createRequire(import.meta.url)
 const isDev = !app.isPackaged
 
 const GITHUB_RELEASES_URL = 'https://api.github.com/repos/fandych/suora/releases/latest'
@@ -145,6 +147,43 @@ function compareSemverLike(a: string, b: string): number {
     if (diff !== 0) return diff > 0 ? 1 : -1
   }
   return 0
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[|\\{}()[\]^$+?.]/g, '\\$&')
+}
+
+function wildcardPatternToRegex(pattern: string): RegExp {
+  let re = ''
+  for (const char of pattern) {
+    if (char === '*') {
+      re += '.*'
+    } else if (char === '?') {
+      re += '.'
+    } else {
+      re += escapeRegExp(char)
+    }
+  }
+  return new RegExp(`^${re}$`, 'i')
+}
+
+function globToRegex(glob: string): RegExp {
+  const placeholder = '\u0000DOUBLESTAR\u0000'
+  const escaped = glob
+    .replace(/\*\*/g, placeholder)
+    .split('*')
+    .map((part) => part
+      .split('?')
+      .map((segment) => escapeRegExp(segment))
+      .join('[^/\\\\]'))
+    .join('[^/\\\\]*')
+    .split(placeholder)
+    .join('.*')
+  return new RegExp(`^${escaped}$`, 'i')
+}
+
+function isWithinDirectory(candidatePath: string, directoryPath: string): boolean {
+  return isWithinRoot(path.resolve(candidatePath), path.resolve(directoryPath))
 }
 
 let mainWindow: BrowserWindow | null = null
@@ -753,7 +792,7 @@ ipcMain.handle('iconify:loadCollection', async (_event, prefix: string) => {
     const filePath = path.join(jsonDir, `${prefix}.json`)
     // Ensure the resolved path is within the expected directory
     const resolvedPath = path.resolve(filePath)
-    if (!resolvedPath.startsWith(path.resolve(jsonDir))) return null
+    if (!isWithinDirectory(resolvedPath, jsonDir)) return null
     const raw = await fs.readFile(resolvedPath, 'utf-8')
     return JSON.parse(raw)
   } catch (err: unknown) {
@@ -768,7 +807,7 @@ ipcMain.handle('iconify:getIconNames', async (_event, prefix: string) => {
     const jsonDir = getIconifyJsonDir()
     const filePath = path.join(jsonDir, `${prefix}.json`)
     const resolvedPath = path.resolve(filePath)
-    if (!resolvedPath.startsWith(path.resolve(jsonDir))) return []
+    if (!isWithinDirectory(resolvedPath, jsonDir)) return []
     const raw = await fs.readFile(resolvedPath, 'utf-8')
     const data = JSON.parse(raw)
     return data.icons ? Object.keys(data.icons) : []
@@ -1100,6 +1139,14 @@ ipcMain.handle('fs:searchFiles', async (_event, dirPath: string, pattern: string
   const contextLines = Math.min(options?.contextLines ?? 0, MAX_CONTEXT_LINES)
   const excludePattern = options?.excludePattern ?? ''
   const results: { file: string; line: number; content: string; context?: string[] }[] = []
+  let filePatternRegex: RegExp | null = null
+  if (filePattern) {
+    try {
+      filePatternRegex = wildcardPatternToRegex(filePattern)
+    } catch {
+      return { error: `Invalid file pattern: ${filePattern}` }
+    }
+  }
 
   let searchRegex: RegExp | null = null
   if (useRegex) {
@@ -1138,7 +1185,7 @@ ipcMain.handle('fs:searchFiles', async (_event, dirPath: string, pattern: string
           if (excludeRegex && excludeRegex.test(entry.name)) continue
           await walk(fullPath)
         } else {
-          if (filePattern && !entry.name.match(new RegExp(filePattern.replace(/\*/g, '.*'), 'i'))) continue
+          if (filePatternRegex && !filePatternRegex.test(entry.name)) continue
           if (excludeRegex && excludeRegex.test(entry.name)) continue
           try {
             const text = await fs.readFile(fullPath, 'utf-8')
@@ -1188,17 +1235,6 @@ ipcMain.handle('fs:glob', async (_event, basePath: string, pattern: string, excl
     )
     const results: string[] = []
     const MAX_RESULTS = 500
-
-    // Convert simple glob pattern to regex
-    function globToRegex(glob: string): RegExp {
-      let re = glob
-        .replace(/\./g, '\\.')
-        .replace(/\*\*/g, '{{DOUBLESTAR}}')
-        .replace(/\*/g, '[^/\\\\]*')
-        .replace(/\?/g, '[^/\\\\]')
-        .replace(/\{\{DOUBLESTAR\}\}/g, '.*')
-      return new RegExp(`^${re}$`, 'i')
-    }
 
     const regex = globToRegex(pattern)
 

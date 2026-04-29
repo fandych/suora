@@ -99,6 +99,27 @@ describe('aiService', () => {
   })
 
   describe('streamResponseWithTools', () => {
+    it('resolves Ollama providers initialized without an API key', async () => {
+      vi.mocked(streamText).mockReturnValueOnce({
+        fullStream: (async function* () {
+          yield { type: 'text-delta' as const, text: 'local' }
+        })(),
+      } as never)
+
+      initializeProvider('ollama', '', undefined, 'ollama')
+
+      const events = []
+      for await (const event of streamResponseWithTools(
+        'ollama:llama3',
+        [{ role: 'user', content: 'hello' }],
+        { providerType: 'ollama' },
+      )) {
+        events.push(event)
+      }
+
+      expect(events).toContainEqual({ type: 'text-delta', text: 'local' })
+    })
+
     it('should clamp tool-enabled maxSteps to at least 2', async () => {
       vi.mocked(streamText).mockReturnValueOnce({
         fullStream: (async function* () {
