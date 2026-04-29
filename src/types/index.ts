@@ -309,6 +309,12 @@ export interface SkillBundledResource {
   type: 'file' | 'directory'
   /** Optional byte size when known */
   size?: number
+  /** Optional SHA-256 content hash for integrity checks */
+  hash?: string
+  /** Whether the file appears to be executable or script-like */
+  executable?: boolean
+  /** Optional warning generated while scanning or installing this resource */
+  warning?: string
 }
 
 /**
@@ -325,12 +331,30 @@ export interface SkillInstallInfo {
   installedVersion: string
   /** Timestamp of installation */
   installedAt: number
+  /** SHA-256 hash of the installed directory manifest */
+  manifestHash?: string
+  /** Whether the source is built-in/trusted */
+  trustedSource?: boolean
+  /** Installation log lines for troubleshooting */
+  installLog?: string[]
   /** Timestamp of last update check */
   lastCheckedAt?: number
   /** Whether an update is available */
   updateAvailable?: boolean
   /** Latest available version */
   latestVersion?: string
+}
+
+export interface SkillRegistryPreview {
+  entryId: string
+  resources: SkillBundledResource[]
+  fileCount: number
+  directoryCount: number
+  totalBytes: number
+  manifestHash: string
+  trustedSource: boolean
+  warnings: string[]
+  installLog: string[]
 }
 
 /**
@@ -435,6 +459,8 @@ export interface SkillRegistrySource {
   enabled: boolean
   /** Whether this is a built-in source (cannot be removed) */
   builtin?: boolean
+  /** Whether this is a trusted source */
+  trusted?: boolean
   /** Optional description */
   description?: string
   /** Optional icon */
@@ -469,6 +495,10 @@ export interface RegistrySkillEntry {
   url?: string
   /** Raw content preview (first ~200 chars of SKILL.md body) */
   preview?: string
+  /** True when this entry comes from a built-in/trusted registry source */
+  trustedSource?: boolean
+  /** Optional install preview populated before installation */
+  installPreview?: SkillRegistryPreview
 }
 
 // ─── Marketplace Settings ──────────────────────────────────────────

@@ -25,6 +25,7 @@ export type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promi
 type DirEntry = { name: string; isDirectory: boolean; path: string; size?: number }
 
 const MAX_BUNDLED_RESOURCE_ENTRIES = 300
+const MAX_INLINE_REFERENCE_BYTES = 64 * 1024
 const REFERENCE_FILE_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.csv'])
 
 function getElectron(): ElectronBridge | undefined {
@@ -797,6 +798,12 @@ export async function buildSkillPrompts(
               : skill.skillRoot
                 ? joinSkillResourcePath(skill.skillRoot, ref.path)
                 : ref.path
+            const resource = skill.bundledResources?.find((entry) => normalizeResourcePath(entry.path) === normalizeResourcePath(ref.path))
+            if (resource?.size && resource.size > MAX_INLINE_REFERENCE_BYTES) {
+              const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'
+              lines.push(`### ${label}\n\nReference file is large (${resource.size} bytes). Read it on demand from ${refPath} instead of loading it all upfront.`)
+              continue
+            }
             const content = await electron.invoke('fs:readFile', refPath) as string | { error: string }
             if (typeof content === 'string' && content.trim()) {
               const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'
@@ -810,12 +817,19 @@ export async function buildSkillPrompts(
     }
 
     if (skill.bundledResources?.length) {
+      const scripts = skill.bundledResources
+        .filter((resource) => resource.type === 'file' && normalizeResourcePath(resource.path).toLowerCase().startsWith('scripts/'))
+        .map((resource) => `- ${skill.skillRoot ? joinSkillResourcePath(skill.skillRoot, resource.path) : resource.path}`)
+        .slice(0, 30)
       const manifest = skill.bundledResources
         .slice(0, 80)
-        .map((resource) => `- ${resource.path}${resource.type === 'directory' ? '/' : ''}`)
+        .map((resource) => `- ${resource.path}${resource.type === 'directory' ? '/' : ''}${resource.size ? ` (${resource.size} bytes)` : ''}${resource.executable ? ' [script]' : ''}`)
         .join('\n')
       const rootHint = skill.skillRoot ? `Skill root: ${skill.skillRoot}\n` : ''
-      lines.push(`### Bundled resources\n\n${rootHint}Use these files and folders as needed; read only the resources relevant to the task.\n${manifest}`)
+      const scriptHint = scripts.length
+        ? `\nAvailable script paths:\n${scripts.join('\n')}\n`
+        : ''
+      lines.push(`### Bundled resources\n\n${rootHint}Use these files and folders as needed; read only the resources relevant to the task.${scriptHint}\n${manifest}`)
     }
 
     parts.push(`<skill name="${skill.name}">\n${lines.join('\n\n')}\n</skill>`)

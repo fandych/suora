@@ -468,10 +468,15 @@ ipcMain.handle('fs:listDir', async (_event, dirPath: string) => {
     const pathErr = enforceFsPathInWorkspace(dirPath)
     if (pathErr) return { error: pathErr }
     const entries = await fs.readdir(dirPath, { withFileTypes: true })
-    return entries.map((e) => ({
-      name: e.name,
-      isDirectory: e.isDirectory(),
-      path: path.join(dirPath, e.name),
+    return Promise.all(entries.map(async (e) => {
+      const entryPath = path.join(dirPath, e.name)
+      const stat = await fs.stat(entryPath).catch(() => null)
+      return {
+        name: e.name,
+        isDirectory: e.isDirectory(),
+        path: entryPath,
+        ...(stat?.isFile() ? { size: stat.size } : {}),
+      }
     }))
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
