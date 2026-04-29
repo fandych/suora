@@ -47,7 +47,9 @@ export function TimerLayout() {
 
   useEffect(() => {
     if (!workspacePath) return
-    loadPipelinesFromDisk(workspacePath).then((pipelines) => setAgentPipelines(pipelines))
+    loadPipelinesFromDisk(workspacePath).then((pipelines) => setAgentPipelines(pipelines)).catch(() => {
+      // Ignore pipeline loading errors
+    })
   }, [workspacePath, setAgentPipelines])
 
   const selectedTimer = timers.find((t) => t.id === selectedId) ?? null

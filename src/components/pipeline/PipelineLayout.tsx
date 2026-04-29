@@ -185,6 +185,8 @@ export function PipelineLayout() {
     if (!workspacePath) return
     loadPipelinesFromDisk(workspacePath).then((savedPipelines) => {
       setAgentPipelines(savedPipelines)
+    }).catch(() => {
+      // Ignore pipeline loading errors
     })
   }, [workspacePath, setAgentPipelines])
 
@@ -246,6 +248,8 @@ export function PipelineLayout() {
 
         return getValidExecutionId(current, executions)
       })
+    }).catch(() => {
+      // Ignore execution history loading errors
     })
   }, [workspacePath, selectedAgentPipelineId, requestedExecutionId, requestedTimerId, requestedFiredAt])
 

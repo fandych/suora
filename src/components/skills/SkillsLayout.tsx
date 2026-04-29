@@ -93,8 +93,12 @@ export function SkillsLayout() {
       for (const skill of incoming) {
         if (!storeIds.has(skill.id)) addSkill(skill)
       }
+    }).catch(() => {
+      // Ignore skill loading errors - user will see empty list
     })
-    loadSkillsLockfile(workspacePath).then(setSkillsLockfile)
+    loadSkillsLockfile(workspacePath).then(setSkillsLockfile).catch(() => {
+      // Ignore lockfile errors
+    })
   }, [workspacePath, addSkill])
 
   // Fetch registry skills when switching to browse

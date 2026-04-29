@@ -79,7 +79,7 @@ function findMentionedPipeline(
 }
 
 function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  return value.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function removeMentionedPipelineNames(input: string, pipelines: PipelineChatReference[]): string {

@@ -116,7 +116,7 @@ export interface WeChatXMLMessage {
 }
 
 function parseWeChatXMLWithRegex(xml: string): WeChatXMLMessage | null {
-  const escapeRegex = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const escapeRegex = (s: string) => s.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&')
   const getTag = (tag: string): string | undefined => {
     const escapedTag = escapeRegex(tag)
     const cdataMatch = xml.match(new RegExp(`<${escapedTag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${escapedTag}>`))

@@ -15,11 +15,13 @@ export function useResizablePanel(
   defaultWidth: number = 280,
 ): [number, (width: number) => void] {
   const [width, setWidthState] = useState<number>(() => {
-    const saved = localStorage.getItem(`panel-width:${key}`)
-    if (saved) {
-      const parsed = Number(saved)
-      if (!Number.isNaN(parsed) && parsed > 0) return clampPanelWidth(parsed)
-    }
+    try {
+      const saved = localStorage.getItem(`panel-width:${key}`)
+      if (saved) {
+        const parsed = Number(saved)
+        if (!Number.isNaN(parsed) && parsed > 0) return clampPanelWidth(parsed)
+      }
+    } catch { /* localStorage may be unavailable */ }
     return clampPanelWidth(defaultWidth)
   })
 
@@ -27,7 +29,9 @@ export function useResizablePanel(
     (newWidth: number) => {
       const nextWidth = clampPanelWidth(newWidth)
       setWidthState(nextWidth)
-      localStorage.setItem(`panel-width:${key}`, String(nextWidth))
+      try {
+        localStorage.setItem(`panel-width:${key}`, String(nextWidth))
+      } catch { /* localStorage may be unavailable */ }
     },
     [key],
   )

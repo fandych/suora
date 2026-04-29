@@ -32,7 +32,13 @@ const SLACK_REQUEST_MAX_AGE_SECONDS = 300
 
 async function httpRequest(url: string, options: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
-    const parsedUrl = new URL(url)
+    let parsedUrl: URL
+    try {
+      parsedUrl = new URL(url)
+    } catch {
+      reject(new Error(`Invalid URL: ${url}`))
+      return
+    }
     const transport = parsedUrl.protocol === 'https:' ? https : http
     const req = transport.request(parsedUrl, {
       method: options.method || 'GET',
@@ -570,7 +576,7 @@ export class ChannelService {
         senderId: event.sender.sender_id.user_id,
         senderName: event.sender.sender_id.union_id,
         content: messageText,
-        timestamp: parseInt(event.message.create_time, 10),
+        timestamp: (() => { const ts = parseInt(event.message.create_time, 10); return Number.isNaN(ts) ? Date.now() : ts })(),
         messageType: 'text',
         chatId: event.message.chat_id,
         chatType: event.message.chat_type === 'group' ? 'group' : 'private',
@@ -696,6 +702,7 @@ export class ChannelService {
       }
 
       if (event.type === 'message' && !event.subtype) {
+        const parsedTs = event.ts ? parseFloat(event.ts) : NaN
         const message: ChannelMessage = {
           id: event.client_msg_id || event.ts || `slack-${Date.now()}`,
           channelId: channel.id,
@@ -703,7 +710,7 @@ export class ChannelService {
           senderId: event.user || '',
           senderName: event.user || '',
           content: event.text || '',
-          timestamp: event.ts ? Math.floor(parseFloat(event.ts) * 1000) : Date.now(),
+          timestamp: Number.isNaN(parsedTs) ? Date.now() : Math.floor(parsedTs * 1000),
           messageType: 'text',
           chatId: event.channel,
           chatType: event.channel_type === 'im' ? 'private' : 'group',
@@ -823,7 +830,7 @@ export class ChannelService {
         senderId: body.author.id || '',
         senderName: body.author.username || body.author.global_name || '',
         content: body.content,
-        timestamp: body.timestamp ? new Date(body.timestamp).getTime() : Date.now(),
+        timestamp: (() => { const ts = body.timestamp ? new Date(body.timestamp).getTime() : NaN; return Number.isNaN(ts) ? Date.now() : ts })(),
         messageType: 'text',
         chatId: body.channel_id || '',
         chatType: body.guild_id ? 'group' : 'private',
@@ -865,7 +872,7 @@ export class ChannelService {
       senderId: from.id || '',
       senderName: from.name || '',
       content: body.text || '',
-      timestamp: body.timestamp ? new Date(body.timestamp).getTime() : Date.now(),
+      timestamp: (() => { const ts = body.timestamp ? new Date(body.timestamp).getTime() : NaN; return Number.isNaN(ts) ? Date.now() : ts })(),
       messageType: 'text',
       chatId,
       chatType: conversation.isGroup ? 'group' : 'private',
@@ -912,7 +919,7 @@ export class ChannelService {
       senderId,
       senderName,
       content,
-      timestamp: body.timestamp ? new Date(body.timestamp).getTime() : Date.now(),
+      timestamp: (() => { const ts = body.timestamp ? new Date(body.timestamp).getTime() : NaN; return Number.isNaN(ts) ? Date.now() : ts })(),
       messageType: 'text',
       chatId,
       chatType: body.chatType || body.chat_type || 'private',
@@ -993,7 +1000,8 @@ export class ChannelService {
   ): boolean {
     // Prevent replay attacks (request must be within 5 minutes)
     const now = Math.floor(Date.now() / 1000)
-    if (Math.abs(now - parseInt(timestamp, 10)) > SLACK_REQUEST_MAX_AGE_SECONDS) return false
+    const tsSeconds = parseInt(timestamp, 10)
+    if (Number.isNaN(tsSeconds) || Math.abs(now - tsSeconds) > SLACK_REQUEST_MAX_AGE_SECONDS) return false
 
     const sigBasestring = `v0:${timestamp}:${body}`
     const mySignature = 'v0=' + crypto

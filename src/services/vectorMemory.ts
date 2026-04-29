@@ -69,7 +69,8 @@ function termFrequency(tokens: string[]): Map<string, number> {
     tf.set(t, (tf.get(t) || 0) + 1)
   }
   // normalise by max frequency to keep values in [0,1]
-  const max = Math.max(...tf.values(), 1)
+  const tfValues = [...tf.values()]
+  const max = tfValues.length > 0 ? Math.max(...tfValues, 1) : 1
   for (const [k, v] of tf) {
     tf.set(k, v / max)
   }

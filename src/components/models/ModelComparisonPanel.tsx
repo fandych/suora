@@ -58,7 +58,7 @@ export function ModelComparisonPanel({ onClose }: { onClose: () => void }) {
   const fastestTime = useMemo(() => {
     const times = Object.values(results).map((result) => result.time).filter((time) => Number.isFinite(time))
     if (times.length === 0) return 0
-    return Math.min(...times)
+    return times.length > 0 ? Math.min(...times) : 0
   }, [results])
 
   return (

@@ -92,6 +92,8 @@ export function AgentOrchestrationPanel({
     if (!supportsPipeline || !workspacePath) return
     loadPipelinesFromDisk(workspacePath).then((savedPipelines) => {
       setAgentPipelines(savedPipelines)
+    }).catch(() => {
+      // Ignore pipeline loading errors
     })
   }, [supportsPipeline, workspacePath, setAgentPipelines])
 
@@ -114,7 +116,9 @@ export function AgentOrchestrationPanel({
       return
     }
 
-    loadPipelineExecutionsFromDisk(workspacePath, selectedAgentPipelineId).then(setPipelineHistory)
+    loadPipelineExecutionsFromDisk(workspacePath, selectedAgentPipelineId).then(setPipelineHistory).catch(() => {
+      // Ignore execution history loading errors
+    })
   }, [supportsPipeline, workspacePath, selectedAgentPipelineId])
 
   const enabledAgents = agents.filter((a) => a.enabled !== false)
@@ -505,7 +509,8 @@ export function AgentOrchestrationPanel({
                     {stats.responseTimes.length > 1 && (
                       <div className="mt-2 flex h-6 items-end gap-0.5">
                         {stats.responseTimes.slice(-30).map((t, i) => {
-                          const max = Math.max(...stats.responseTimes.slice(-30))
+                          const slicedTimes = stats.responseTimes.slice(-30)
+                          const max = slicedTimes.length > 0 ? Math.max(...slicedTimes) : 0
                           const h = max > 0 ? (t / max) * 100 : 0
                           return <div key={i} className="flex-1 bg-accent/40 rounded-t" {...{ style: { height: `${Math.max(h, 5)}%` } }} title={`${t}ms`} role="img" aria-label={`Response time ${t}ms`} />
                         })}
