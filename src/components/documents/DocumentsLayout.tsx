@@ -2,7 +2,6 @@ import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
-import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
 import { useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
@@ -16,6 +15,38 @@ import { confirm } from '@/services/confirmDialog'
 import { createDocument, createDocumentGroup, createDocumentId, findReferencedDocuments, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
 import { buildDocumentGraph, buildDocumentPath } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentItem, DocumentNode } from '@/types'
+
+const DOCUMENT_GROUP_COLOR_CLASS: Record<string, string> = {
+  '#12A8A0': 'bg-[#12A8A0]',
+  '#4D7CFF': 'bg-[#4D7CFF]',
+  '#D9A441': 'bg-[#D9A441]',
+  '#35B98F': 'bg-[#35B98F]',
+  '#E45F68': 'bg-[#E45F68]',
+  '#9B7CFF': 'bg-[#9B7CFF]',
+}
+
+function sortDocumentNodes(a: DocumentNode, b: DocumentNode) {
+  return a.type === b.type ? a.title.localeCompare(b.title) : a.type === 'folder' ? -1 : 1
+}
+
+function getDocumentGroupColorClass(color: string) {
+  return DOCUMENT_GROUP_COLOR_CLASS[color] ?? 'bg-accent'
+}
+
+function collectAncestorFolderIds(parentId: string | null, nodes: DocumentNode[]) {
+  const ids: string[] = []
+  const visited = new Set<string>()
+  let currentId = parentId
+
+  while (currentId && !visited.has(currentId)) {
+    visited.add(currentId)
+    ids.push(currentId)
+    const currentNode = nodes.find((node) => node.id === currentId && node.type === 'folder')
+    currentId = currentNode?.parentId ?? null
+  }
+
+  return ids
+}
 
 function escapeHtml(value: string) {
   return value
@@ -177,7 +208,6 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
     extensions: [
       StarterKit,
       Placeholder.configure({ placeholder: 'Start writing…' }),
-      Link.configure({ openOnClick: false }),
       Image.configure({ inline: true }),
       MathBlock,
       InlineMath,
@@ -206,7 +236,6 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
     isSyncingFromPropsRef.current = true
     editor.commands.setContent(markdownToTiptapHtml(document.markdown), { emitUpdate: false })
     isSyncingFromPropsRef.current = false
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [document.id])
 
   return <EditorContent editor={editor} className="document-tiptap-wysiwyg h-full" />
@@ -215,71 +244,209 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
 function TreeNode({
   node,
   nodes,
-  level,
   selectedDocumentId,
   selectedFolderId,
+  editingNodeId,
+  editingTitle,
   expanded,
   onToggle,
   onSelectDocument,
   onSelectFolder,
+  onStartRename,
+  onEditingTitleChange,
+  onCommitRename,
+  onCancelRename,
+  onCreateDocument,
+  onCreateFolder,
+  onDeleteNode,
 }: {
   node: DocumentNode
   nodes: DocumentNode[]
-  level: number
   selectedDocumentId: string | null
   selectedFolderId: string | null
+  editingNodeId: string | null
+  editingTitle: string
   expanded: Set<string>
   onToggle: (id: string) => void
   onSelectDocument: (id: string) => void
   onSelectFolder: (id: string) => void
+  onStartRename: (node: DocumentNode) => void
+  onEditingTitleChange: (value: string) => void
+  onCommitRename: () => void
+  onCancelRename: () => void
+  onCreateDocument: (parentId: string | null) => void
+  onCreateFolder: (parentId: string | null) => void
+  onDeleteNode: (node: DocumentNode) => void
 }) {
+  const { t } = useI18n()
   const children = nodes
     .filter((child) => child.parentId === node.id)
-    .sort((a, b) => (a.type === b.type ? a.title.localeCompare(b.title) : a.type === 'folder' ? -1 : 1))
+    .sort(sortDocumentNodes)
   const isExpanded = expanded.has(node.id)
   const isActive = node.type === 'document' ? selectedDocumentId === node.id : selectedFolderId === node.id
+  const isEditing = editingNodeId === node.id
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => {
-          if (node.type === 'folder') {
-            onSelectFolder(node.id)
-            onToggle(node.id)
-          } else {
-            onSelectDocument(node.id)
-          }
-        }}
-        className={`group flex w-full items-center gap-2 rounded-2xl px-3 py-2 text-left text-[12px] transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}
-        style={{ paddingLeft: `${12 + level * 14}px` }}
-      >
-        {node.type === 'folder' ? (
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center text-text-muted">
-            <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
-          </span>
+      <div className={`group flex items-center gap-1 rounded-2xl px-1.5 py-1 transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
+        {isEditing ? (
+          <>
+            {node.type === 'folder' ? (
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => onToggle(node.id)}
+                aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${node.title}` : `${t('documents.expandFolder', 'Expand folder')}: ${node.title}`}
+                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
+                title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}
+              >
+                <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
+              </button>
+            ) : (
+              <span className="h-8 w-8 shrink-0" />
+            )}
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
+              <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={15} color="currentColor" />
+            </span>
+            <input
+              autoFocus
+              value={editingTitle}
+              onChange={(event) => onEditingTitleChange(event.target.value)}
+              onBlur={onCommitRename}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) onCommitRename()
+                if (event.key === 'Escape') onCancelRename()
+              }}
+              aria-label={t('documents.nodeName', 'Document or folder name')}
+              className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-2 text-[12px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"
+            />
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onCommitRename}
+              aria-label={t('documents.saveNodeName', 'Save name')}
+              title={t('common.save', 'Save')}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success transition-colors hover:bg-success/15"
+            >
+              <IconifyIcon name="ui-check" size={14} color="currentColor" />
+            </button>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onCancelRename}
+              aria-label={t('documents.cancelRename', 'Cancel rename')}
+              title={t('common.cancel', 'Cancel')}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
+            >
+              <IconifyIcon name="ui-close" size={14} color="currentColor" />
+            </button>
+          </>
         ) : (
-          <span className="h-5 w-5 shrink-0" />
+          <>
+            <button
+              type="button"
+              onClick={() => {
+                if (node.type === 'folder') {
+                  onSelectFolder(node.id)
+                  onToggle(node.id)
+                } else {
+                  onSelectDocument(node.id)
+                }
+              }}
+              onDoubleClick={() => onStartRename(node)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left"
+            >
+              {node.type === 'folder' ? (
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-text-muted">
+                  <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
+                </span>
+              ) : (
+                <span className="h-5 w-5 shrink-0" />
+              )}
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
+                <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={15} color="currentColor" />
+              </span>
+              <span className="min-w-0 flex-1 truncate font-medium">{node.title}</span>
+            </button>
+            <div className={`flex shrink-0 items-center gap-1 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
+              {node.type === 'folder' && (
+                <>
+                  <button
+                    type="button"
+                    title={t('documents.newDocInFolder', 'New child document')}
+                    aria-label={`${t('documents.newDocInFolder', 'New child document')}: ${node.title}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onCreateDocument(node.id)
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-xl bg-accent/15 text-accent transition-colors hover:bg-accent/25"
+                  >
+                    <IconifyIcon name="ui-plus" size={13} color="currentColor" />
+                  </button>
+                  <button
+                    type="button"
+                    title={t('documents.newSubfolder', 'New subfolder')}
+                    aria-label={`${t('documents.newSubfolder', 'New subfolder')}: ${node.title}`}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onCreateFolder(node.id)
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
+                  >
+                    <IconifyIcon name="skill-filesystem" size={13} color="currentColor" />
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                title={t('common.rename', 'Rename')}
+                aria-label={`${t('common.rename', 'Rename')}: ${node.title}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onStartRename(node)
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
+              >
+                <IconifyIcon name="ui-edit" size={13} color="currentColor" />
+              </button>
+              <button
+                type="button"
+                title={t('common.delete', 'Delete')}
+                aria-label={`${t('common.delete', 'Delete')}: ${node.title}`}
+                onClick={(event) => {
+                  event.stopPropagation()
+                  onDeleteNode(node)
+                }}
+                className="flex h-7 w-7 items-center justify-center rounded-xl border border-danger/20 bg-danger/10 text-danger transition-colors hover:bg-danger/15"
+              >
+                <IconifyIcon name="ui-trash" size={13} color="currentColor" />
+              </button>
+            </div>
+          </>
         )}
-        <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
-          <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={15} color="currentColor" />
-        </span>
-        <span className="min-w-0 flex-1 truncate font-medium">{node.title}</span>
-      </button>
+      </div>
       {node.type === 'folder' && isExpanded && children.length > 0 && (
-        <div className="mt-1 space-y-1">
+        <div className="mt-1 space-y-1 pl-4">
           {children.map((child) => (
             <TreeNode
               key={child.id}
               node={child}
               nodes={nodes}
-              level={level + 1}
               selectedDocumentId={selectedDocumentId}
               selectedFolderId={selectedFolderId}
+              editingNodeId={editingNodeId}
+              editingTitle={editingTitle}
               expanded={expanded}
               onToggle={onToggle}
               onSelectDocument={onSelectDocument}
               onSelectFolder={onSelectFolder}
+              onStartRename={onStartRename}
+              onEditingTitleChange={onEditingTitleChange}
+              onCommitRename={onCommitRename}
+              onCancelRename={onCancelRename}
+              onCreateDocument={onCreateDocument}
+              onCreateFolder={onCreateFolder}
+              onDeleteNode={onDeleteNode}
             />
           ))}
         </div>
@@ -294,6 +461,8 @@ export function DocumentsLayout() {
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
+  const [editingTitle, setEditingTitle] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [mode, setMode] = useState<'editor' | 'source' | 'graph'>('editor')
   const {
@@ -319,49 +488,147 @@ export function DocumentsLayout() {
   const searchResults = useMemo(() => searchDocuments(documentNodes, activeGroup?.id ?? null, deferredQuery), [documentNodes, activeGroup?.id, deferredQuery])
   const referencedDocuments = useMemo(() => activeDocument ? findReferencedDocuments(activeDocument.markdown, groupDocuments).filter((doc) => doc.id !== activeDocument.id) : [], [activeDocument, groupDocuments])
   const documentGraph = useMemo(() => buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroup?.id ?? null }), [documentGroups, documentNodes, activeGroup?.id])
+  const activeDocumentAncestorKey = useMemo(
+    () => activeDocument ? collectAncestorFolderIds(activeDocument.parentId, documentNodes).join('|') : '',
+    [activeDocument?.id, activeDocument?.parentId, documentNodes],
+  )
 
   useEffect(() => {
     if (!selectedDocumentGroupId && documentGroups[0]) setSelectedDocumentGroup(documentGroups[0].id)
   }, [documentGroups, selectedDocumentGroupId, setSelectedDocumentGroup])
+
+  useEffect(() => {
+    if (selectedFolderId && !groupNodes.some((node) => node.type === 'folder' && node.id === selectedFolderId)) {
+      setSelectedFolderId(null)
+    }
+  }, [groupNodes, selectedFolderId])
+
+  useEffect(() => {
+    if (editingNodeId && !groupNodes.some((node) => node.id === editingNodeId)) {
+      setEditingNodeId(null)
+      setEditingTitle('')
+    }
+  }, [editingNodeId, groupNodes])
+
+  useEffect(() => {
+    if (!activeDocument) return
+    setSelectedFolderId(activeDocument.parentId)
+
+    if (!activeDocumentAncestorKey) return
+
+    const ancestorIds = activeDocumentAncestorKey.split('|').filter(Boolean)
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      ancestorIds.forEach((id) => next.add(id))
+      return next
+    })
+  }, [activeDocument?.id, activeDocument?.parentId, activeDocumentAncestorKey])
+
+  const revealNode = (node: DocumentNode) => {
+    const ancestorIds = collectAncestorFolderIds(node.parentId, documentNodes)
+    if (node.type === 'folder') ancestorIds.push(node.id)
+    if (!ancestorIds.length) return
+
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      ancestorIds.forEach((id) => next.add(id))
+      return next
+    })
+  }
+
+  const openDocument = (documentId: string) => {
+    const doc = documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === documentId)
+    if (!doc) return
+
+    setSelectedDocumentGroup(doc.groupId)
+    setSelectedDocument(doc.id)
+    setSelectedFolderId(doc.parentId)
+    revealNode(doc)
+    setMode('editor')
+  }
+
+  const focusFolder = (folderId: string) => {
+    const folder = documentNodes.find((node): node is DocumentFolder => node.type === 'folder' && node.id === folderId)
+    if (!folder) return
+
+    setSelectedDocumentGroup(folder.groupId)
+    setSelectedFolderId(folder.id)
+    revealNode(folder)
+  }
 
   const createGroup = () => {
     const group = createDocumentGroup(t('documents.newGroup', 'New Document Group'))
     addDocumentGroup(group)
     const doc = createDocument(group.id, null, t('documents.welcomeDoc', 'Welcome'))
     addDocument(doc)
+    setSelectedFolderId(null)
+    setMode('editor')
   }
 
-  const createFolder = () => {
+  const createFolder = (parentId: string | null = selectedFolderId) => {
     if (!activeGroup) return
     const now = Date.now()
     const folder: DocumentFolder = {
       id: createDocumentId('doc-folder'),
       groupId: activeGroup.id,
-      parentId: selectedFolderId,
+      parentId,
       type: 'folder',
       title: t('documents.newFolder', 'New Folder'),
       createdAt: now,
       updatedAt: now,
     }
     addDocumentFolder(folder)
-    const parentId = folder.parentId
-    if (parentId) setExpanded((prev) => new Set(prev).add(parentId))
+    const nextParentId = folder.parentId
+    if (nextParentId) setExpanded((prev) => new Set(prev).add(nextParentId))
     setSelectedFolderId(folder.id)
+    setEditingNodeId(folder.id)
+    setEditingTitle(folder.title)
   }
 
-  const createDoc = () => {
+  const createDoc = (parentId: string | null = selectedFolderId) => {
     if (!activeGroup) return
-    const doc = createDocument(activeGroup.id, selectedFolderId, t('documents.untitled', 'Untitled Document'))
+    const doc = createDocument(activeGroup.id, parentId, t('documents.untitled', 'Untitled Document'))
     addDocument(doc)
-    if (selectedFolderId) setExpanded((prev) => new Set(prev).add(selectedFolderId))
+    if (parentId) setExpanded((prev) => new Set(prev).add(parentId))
+    setSelectedFolderId(parentId)
     setMode('editor')
+  }
+
+  const startRenameNode = (node: DocumentNode) => {
+    setEditingNodeId(node.id)
+    setEditingTitle(node.title)
+
+    if (node.type === 'folder') {
+      focusFolder(node.id)
+      return
+    }
+
+    openDocument(node.id)
+  }
+
+  const cancelRenameNode = () => {
+    setEditingNodeId(null)
+    setEditingTitle('')
+  }
+
+  const commitRenameNode = () => {
+    if (!editingNodeId) return
+
+    const nextTitle = editingTitle.trim()
+    if (!nextTitle) {
+      cancelRenameNode()
+      return
+    }
+
+    updateDocumentNode(editingNodeId, { title: nextTitle })
+    cancelRenameNode()
   }
 
   const deleteGroup = async () => {
     if (!activeGroup) return
     const ok = await confirm({
       title: t('documents.deleteGroupTitle', 'Delete document group?'),
-      body: t('documents.deleteGroupBody', `"${activeGroup.name}" and all nested documents will be removed. This cannot be undone.`),
+      body: t('documents.deleteGroupBody', '"{name}" and all nested documents will be removed. This cannot be undone.').replace('{name}', activeGroup.name),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })
@@ -372,16 +639,33 @@ export function DocumentsLayout() {
     if (!activeDocument) return
     const ok = await confirm({
       title: t('documents.deleteDocumentTitle', 'Delete document?'),
-      body: t('documents.deleteDocumentBody', `"${activeDocument.title}" will be removed. This cannot be undone.`),
+      body: t('documents.deleteDocumentBody', '"{name}" will be removed. This cannot be undone.').replace('{name}', activeDocument.title),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })
     if (ok) removeDocumentNode(activeDocument.id)
   }
 
+  const deleteNode = async (node: DocumentNode) => {
+    const isFolder = node.type === 'folder'
+    const ok = await confirm({
+      title: isFolder ? t('documents.deleteFolderTitle', 'Delete folder?') : t('documents.deleteDocumentTitle', 'Delete document?'),
+      body: isFolder
+        ? t('documents.deleteFolderBody', '"{name}" and all nested documents will be removed. This cannot be undone.').replace('{name}', node.title)
+        : t('documents.deleteDocumentBody', '"{name}" will be removed. This cannot be undone.').replace('{name}', node.title),
+      danger: true,
+      confirmText: t('common.delete', 'Delete'),
+    })
+
+    if (!ok) return
+
+    if (editingNodeId === node.id) cancelRenameNode()
+    removeDocumentNode(node.id)
+  }
+
   const rootNodes = groupNodes
     .filter((node) => node.parentId === null)
-    .sort((a, b) => (a.type === b.type ? a.title.localeCompare(b.title) : a.type === 'folder' ? -1 : 1))
+    .sort(sortDocumentNodes)
 
   return (
     <>
@@ -438,7 +722,7 @@ export function DocumentsLayout() {
                         onClick={() => setSelectedDocumentGroup(group.id)}
                         className="flex min-w-0 flex-1 items-center gap-2 text-left"
                       >
-                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: group.color }} />
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${getDocumentGroupColorClass(group.color)}`} />
                         <span className={`min-w-0 flex-1 truncate text-[12px] font-semibold ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>{group.name}</span>
                         <span className="shrink-0 text-[10px] text-text-muted">{documentNodes.filter((node) => node.groupId === group.id && node.type === 'document').length}</span>
                       </button>
@@ -461,17 +745,17 @@ export function DocumentsLayout() {
           {activeGroup && (
             <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
               <div className="flex items-center gap-1.5">
-                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: activeGroup.color }} />
+                <div className={`h-2 w-2 rounded-full ${getDocumentGroupColorClass(activeGroup.color)}`} />
                 <input
                   value={activeGroup.name}
                   onChange={(event) => updateDocumentGroup(activeGroup.id, { name: event.target.value })}
                   className="min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-1.5 py-1 text-[11px] font-semibold text-text-muted outline-none hover:border-border-subtle/55 focus:border-accent/30 focus:bg-surface-0/45 focus:text-text-primary"
                   aria-label={t('documents.groupName', 'Group name')}
                 />
-                <button type="button" onClick={createDoc} title={t('documents.newDoc', 'New Document')} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent hover:bg-accent/25">
+                <button type="button" onClick={() => createDoc()} title={t('documents.newDoc', 'New Document')} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent hover:bg-accent/25">
                   <IconifyIcon name="ui-plus" size={13} color="currentColor" />
                 </button>
-                <button type="button" onClick={createFolder} title={t('documents.newFolderButton', 'New Folder')} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/60 text-text-secondary hover:text-text-primary">
+                <button type="button" onClick={() => createFolder()} title={t('documents.newFolderButton', 'New Folder')} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/60 text-text-secondary hover:text-text-primary">
                   <IconifyIcon name="skill-filesystem" size={13} color="currentColor" />
                 </button>
               </div>
@@ -480,7 +764,7 @@ export function DocumentsLayout() {
                 {query.trim() ? (
                   <div className="space-y-2">
                     {searchResults.map(({ node, excerpt }) => (
-                      <button key={node.id} type="button" onClick={() => setSelectedDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
+                      <button key={node.id} type="button" onClick={() => openDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
                         <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
                         <div className="mt-1 truncate text-[10px] text-text-muted">{buildDocumentPath(node, documentNodes)}</div>
                         <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
@@ -498,9 +782,10 @@ export function DocumentsLayout() {
                       key={node.id}
                       node={node}
                       nodes={groupNodes}
-                      level={0}
                       selectedDocumentId={selectedDocumentId}
                       selectedFolderId={selectedFolderId}
+                      editingNodeId={editingNodeId}
+                      editingTitle={editingTitle}
                       expanded={expanded}
                       onToggle={(id) => setExpanded((prev) => {
                         const next = new Set(prev)
@@ -508,8 +793,15 @@ export function DocumentsLayout() {
                         else next.add(id)
                         return next
                       })}
-                      onSelectDocument={setSelectedDocument}
-                      onSelectFolder={setSelectedFolderId}
+                      onSelectDocument={openDocument}
+                      onSelectFolder={focusFolder}
+                      onStartRename={startRenameNode}
+                      onEditingTitleChange={setEditingTitle}
+                      onCommitRename={commitRenameNode}
+                      onCancelRename={cancelRenameNode}
+                      onCreateDocument={createDoc}
+                      onCreateFolder={createFolder}
+                      onDeleteNode={deleteNode}
                     />
                   ))}
                   </div>
@@ -528,6 +820,7 @@ export function DocumentsLayout() {
                 <input
                   value={activeDocument.title}
                   onChange={(event) => updateDocumentNode(activeDocument.id, { title: event.target.value })}
+                  aria-label={t('documents.documentTitle', 'Document title')}
                   className="w-full bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary outline-none placeholder:text-text-muted"
                 />
                 <p className="mt-1 truncate text-[11px] text-text-muted" aria-label={`${activeGroup?.name ?? ''} / ${buildDocumentPath(activeDocument, documentNodes)}`}>
@@ -547,7 +840,7 @@ export function DocumentsLayout() {
                     </button>
                   ))}
                 </div>
-                <button type="button" onClick={deleteActiveDocument} className="rounded-2xl border border-danger/20 bg-danger/10 px-3 py-2 text-[11px] font-semibold text-danger/90 hover:bg-danger/15">
+                <button type="button" onClick={deleteActiveDocument} aria-label={t('documents.deleteCurrentDocument', 'Delete current document')} className="rounded-2xl border border-danger/20 bg-danger/10 px-3 py-2 text-[11px] font-semibold text-danger/90 hover:bg-danger/15">
                   {t('common.delete', 'Delete')}
                 </button>
               </div>
@@ -555,7 +848,7 @@ export function DocumentsLayout() {
             <div className={`grid min-h-0 flex-1 overflow-hidden ${mode === 'graph' ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_280px]'}`}>
               <div className="min-h-0 overflow-hidden p-5">
                 {mode === 'editor' ? (
-                  <div className="h-full overflow-y-auto rounded-[2rem] border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                  <div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     <DocumentTiptapEditor
                       document={activeDocument}
                       onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}
@@ -566,11 +859,11 @@ export function DocumentsLayout() {
                     value={activeDocument.markdown}
                     onChange={(event) => updateDocumentNode(activeDocument.id, { markdown: event.target.value })}
                     spellCheck
-                    className="h-full w-full resize-none rounded-[2rem] border border-border-subtle/70 bg-surface-0/62 p-5 font-[var(--font-code)] text-[13px] leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none placeholder:text-text-muted focus:border-accent/30 focus:ring-4 focus:ring-accent/10"
+                    className="h-full w-full resize-none rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-5 font-(--font-code) text-[13px] leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none placeholder:text-text-muted focus:border-accent/30 focus:ring-4 focus:ring-accent/10"
                     placeholder={t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.')}
                   />
                 ) : (
-                  <DocumentGraphView graph={documentGraph} selectedDocumentId={activeDocument.id} onSelectDocument={setSelectedDocument} />
+                  <DocumentGraphView graph={documentGraph} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument} />
                 )}
               </div>
               {mode !== 'graph' && (
@@ -582,7 +875,7 @@ export function DocumentsLayout() {
                       {referencedDocuments.length === 0 ? (
                         <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noReferences', 'No resolved references yet.')}</p>
                       ) : referencedDocuments.map((doc) => (
-                        <button key={doc.id} type="button" onClick={() => setSelectedDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
+                        <button key={doc.id} type="button" onClick={() => openDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
                           <span className="block truncate text-[12px] font-semibold text-text-primary">{doc.title}</span>
                           <span className="mt-1 block truncate text-[10px] text-text-muted">{buildDocumentPath(doc, documentNodes)}</span>
                         </button>
@@ -607,24 +900,24 @@ export function DocumentsLayout() {
           /* Group-level knowledge graph — shown when a group is selected but no document is open */
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <header className="flex min-h-0 shrink-0 items-center gap-3 border-b border-border-subtle/80 bg-surface-1/72 px-5 py-3">
-              <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: activeGroup.color }} />
+              <span className={`h-3 w-3 shrink-0 rounded-full ${getDocumentGroupColorClass(activeGroup.color)}`} />
               <h2 className="text-base font-semibold text-text-primary">{activeGroup.name}</h2>
               <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2 py-0.5 text-[10px] text-text-muted">
                 {t('documents.knowledgeGraph', 'Knowledge Graph')}
               </span>
               <div className="ml-auto flex gap-2">
-                <button type="button" onClick={createDoc} className="rounded-2xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/25">
-                  {t('documents.newDoc', '+ Document')}
+                <button type="button" onClick={() => createDoc()} className="rounded-2xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/25">
+                  {t('documents.addDocument', '+ Document')}
                 </button>
               </div>
             </header>
             <div className="min-h-0 flex-1 overflow-hidden p-5">
-              <DocumentGraphView graph={documentGraph} selectedDocumentId={null} onSelectDocument={setSelectedDocument} />
+              <DocumentGraphView graph={documentGraph} selectedDocumentId={null} onSelectDocument={openDocument} />
             </div>
           </div>
         ) : (
           <div className="flex flex-1 items-center justify-center p-8">
-            <div className="max-w-lg rounded-[2rem] border border-border-subtle/70 bg-surface-1/70 p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
+            <div className="max-w-lg rounded-4xl border border-border-subtle/70 bg-surface-1/70 p-8 text-center shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
               <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl border border-accent/15 bg-accent/10 text-accent">
                 <IconifyIcon name="skill-code-review" size={26} color="currentColor" />
               </div>

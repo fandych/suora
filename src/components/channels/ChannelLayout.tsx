@@ -346,7 +346,7 @@ function ChannelDetail({
           </div>
         </div>
       ) : (
-        <div className="min-h-135 max-h-[calc(100vh-15rem)] overflow-hidden rounded-md border border-border-subtle/55 bg-surface-1/70">
+        <div className="flex h-[calc(100vh-15rem)] min-h-135 max-h-[calc(100vh-15rem)] flex-col overflow-hidden rounded-4xl border border-border-subtle/55 bg-surface-1/70">
           {activeTab === 'messages' && <ChannelMessageHistory channelId={channel.id} />}
           {activeTab === 'users' && <ChannelUsersPanel channelId={channel.id} />}
           {activeTab === 'health' && <ChannelHealthMonitor singleChannelId={channel.id} />}

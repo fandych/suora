@@ -8,7 +8,7 @@ import { loadAllSkills } from '@/services/skillRegistry'
 import { setI18nLocale, t } from '@/services/i18n'
 import { fileStateStorage, flushPendingSplitStoreWrites } from '@/services/fileStorage'
 import { createSessionSlice } from '@/store/slices/sessionSlice'
-import { createModelConfigSlice } from '@/store/slices/modelConfigSlice'
+import { createModelConfigSlice, normalizeToolSecuritySettings, syncToolSecurityToElectron } from '@/store/slices/modelConfigSlice'
 import { createUIPreferencesSlice } from '@/store/slices/uiPreferencesSlice'
 import { createSafePersistStorage } from '@/services/safePersistStorage'
 import { taskFingerprint } from '@/utils/taskFingerprint'
@@ -865,7 +865,7 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'suora-store',
-      version: 20,
+      version: 21,
       storage: createSafePersistStorage<Record<string, unknown>>(fileStateStorage),
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
@@ -1006,6 +1006,13 @@ export const useAppStore = create<AppStore>()(
           state.agents = mergeBuiltinAgents((state.agents || []) as Agent[])
           if (!state.agentSelectionPreferences) state.agentSelectionPreferences = []
         }
+        if (version < 21) {
+          const sec = state.toolSecurity as Partial<ToolSecuritySettings> | undefined
+          state.toolSecurity = normalizeToolSecuritySettings({
+            ...sec,
+            sandboxMode: sec?.sandboxMode ?? (sec?.requireConfirmation === false ? 'relaxed' : 'workspace'),
+          })
+        }
         return state as Record<string, unknown>
       },
       merge: (persisted, current) => {
@@ -1042,6 +1049,7 @@ export const useAppStore = create<AppStore>()(
         if (!merged.agentSelectionPreferences) {
           merged.agentSelectionPreferences = []
         }
+        merged.toolSecurity = normalizeToolSecuritySettings(merged.toolSecurity)
 
         return merged
       },
@@ -1127,6 +1135,7 @@ export async function initWorkspacePath(): Promise<string> {
     // Notify main process so fs:* path enforcement is active
     const electron = (window as unknown as { electron?: { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> } }).electron
     if (electron) electron.invoke('workspace:init', state.workspacePath).catch(() => {})
+    syncToolSecurityToElectron(state.toolSecurity)
     return state.workspacePath
   }
   const electron = (window as unknown as { electron?: { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> } }).electron
@@ -1138,6 +1147,7 @@ export async function initWorkspacePath(): Promise<string> {
   useAppStore.setState({ workspacePath: initialPath })
   // Notify main process so fs:* path enforcement is active
   await electron.invoke('workspace:init', initialPath).catch(() => {})
+  syncToolSecurityToElectron(useAppStore.getState().toolSecurity)
   return initialPath
 }
 

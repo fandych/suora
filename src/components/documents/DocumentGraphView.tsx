@@ -16,6 +16,14 @@ const NODE_STYLE: Record<DocumentGraphNode['type'], { color: string; radius: num
   'external-link': { color: '#E45F68', radius: 15, label: 'External' },
 }
 
+const NODE_SWATCH_CLASS: Record<DocumentGraphNode['type'], string> = {
+  group: 'bg-[#12A8A0]',
+  folder: 'bg-[#D9A441]',
+  document: 'bg-[#4D7CFF]',
+  tag: 'bg-[#35B98F]',
+  'external-link': 'bg-[#E45F68]',
+}
+
 interface DocumentGraphViewProps {
   graph: DocumentGraph
   selectedDocumentId: string | null
@@ -112,8 +120,8 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
 
   return (
     <div className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)_300px] gap-4">
-      <div className="relative min-h-0 overflow-hidden rounded-[2rem] border border-border-subtle/70 bg-[radial-gradient(circle_at_20%_15%,rgba(var(--t-accent-rgb),0.18),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-        <div className="absolute inset-0 opacity-[0.12]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)', backgroundSize: '38px 38px' }} />
+      <div className="relative min-h-0 overflow-hidden rounded-4xl border border-border-subtle/70 bg-[radial-gradient(circle_at_20%_15%,rgba(var(--t-accent-rgb),0.18),transparent_28%),linear-gradient(135deg,rgba(255,255,255,0.06),rgba(255,255,255,0.015))] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+        <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.5)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.5)_1px,transparent_1px)] bg-size-[38px_38px] opacity-[0.12]" />
         <div className="relative z-10 flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold text-text-primary">{t('documents.graphTitle', 'Knowledge Graph')}</h3>
@@ -132,7 +140,7 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
           </div>
         </div>
 
-        <svg viewBox="0 0 860 530" className="relative z-10 mt-3 h-[calc(100%-4.25rem)] min-h-[360px] w-full">
+        <svg viewBox="0 0 860 530" className="relative z-10 mt-3 h-[calc(100%-4.25rem)] min-h-90 w-full">
           <defs>
             <filter id="graphGlow" x="-50%" y="-50%" width="200%" height="200%">
               <feGaussianBlur stdDeviation="5" result="blur" />
@@ -164,21 +172,10 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
           })}
           {positionedNodes.map((node) => {
             const style = NODE_STYLE[node.type]
+            const documentId = node.documentId
             const radius = style.radius + Math.min(10, node.weight)
-            return (
-              <g
-                key={node.id}
-                role={node.documentId ? 'button' : 'img'}
-                tabIndex={node.documentId ? 0 : -1}
-                onClick={() => {
-                  setSelectedNodeId(node.id)
-                  if (node.documentId) onSelectDocument(node.documentId)
-                }}
-                onKeyDown={(event) => {
-                  if (node.documentId && (event.key === 'Enter' || event.key === ' ')) onSelectDocument(node.documentId)
-                }}
-                className={node.documentId ? 'cursor-pointer outline-none' : 'outline-none'}
-              >
+            const nodeMarkup = (
+              <>
                 <circle
                   cx={node.x}
                   cy={node.y}
@@ -200,13 +197,35 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
                 <text x={node.x} y={node.y + radius + 17} textAnchor="middle" className="fill-text-primary text-[11px] font-semibold">
                   {node.label.length > 18 ? `${node.label.slice(0, 17)}…` : node.label}
                 </text>
+              </>
+            )
+
+            return documentId ? (
+              <g
+                key={node.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  setSelectedNodeId(node.id)
+                  onSelectDocument(documentId)
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') onSelectDocument(documentId)
+                }}
+                className="cursor-pointer outline-none"
+              >
+                {nodeMarkup}
+              </g>
+            ) : (
+              <g key={node.id} className="outline-none">
+                {nodeMarkup}
               </g>
             )
           })}
         </svg>
       </div>
 
-      <aside className="min-h-0 overflow-y-auto rounded-[2rem] border border-border-subtle/70 bg-surface-0/55 p-4">
+      <aside className="min-h-0 overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/55 p-4">
         <section>
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.graphFilters', 'Graph Filters')}</h3>
           <div className="mt-3 flex flex-wrap gap-2">
@@ -228,7 +247,7 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
           {selectedNode ? (
             <div className="mt-3">
               <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: NODE_STYLE[selectedNode.type].color }} />
+                <span className={`h-2.5 w-2.5 rounded-full ${NODE_SWATCH_CLASS[selectedNode.type]}`} />
                 <span className="text-[12px] font-semibold text-text-primary">{selectedNode.label}</span>
               </div>
               <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/80">{selectedNode.metadata.path || selectedNode.metadata.url || NODE_STYLE[selectedNode.type].label}</p>

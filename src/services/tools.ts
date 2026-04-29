@@ -184,6 +184,17 @@ function normalizePath(input: string): string {
 }
 
 function getPersistedSecuritySettings() {
+  const liveState = readStoreState()
+  const liveSecurity = liveState?.toolSecurity as Partial<ToolSecuritySettings> | undefined
+  if (liveSecurity) {
+    return {
+      allowedDirectories: liveSecurity.allowedDirectories || [],
+      blockedCommands: liveSecurity.blockedCommands || DEFAULT_BLOCKED_COMMANDS,
+      requireConfirmation: liveSecurity.requireConfirmation ?? true,
+      sandboxMode: liveSecurity.sandboxMode === 'relaxed' ? 'relaxed' as const : 'workspace' as const,
+    }
+  }
+
   try {
     const raw = readCached(STORE_KEY)
     if (!raw) {
@@ -191,20 +202,23 @@ function getPersistedSecuritySettings() {
         allowedDirectories: [] as string[],
         blockedCommands: DEFAULT_BLOCKED_COMMANDS,
         requireConfirmation: true,
+        sandboxMode: 'workspace' as const,
       }
     }
-    const parsed = safeParse<{ state?: { toolSecurity?: { allowedDirectories?: string[]; blockedCommands?: string[]; requireConfirmation?: boolean } } }>(raw)
+    const parsed = safeParse<{ state?: { toolSecurity?: Partial<ToolSecuritySettings> } }>(raw)
     const sec = parsed.state?.toolSecurity
     return {
       allowedDirectories: sec?.allowedDirectories || [],
       blockedCommands: sec?.blockedCommands || DEFAULT_BLOCKED_COMMANDS,
       requireConfirmation: sec?.requireConfirmation ?? true,
+      sandboxMode: sec?.sandboxMode === 'relaxed' ? 'relaxed' as const : 'workspace' as const,
     }
   } catch {
     return {
       allowedDirectories: [] as string[],
       blockedCommands: DEFAULT_BLOCKED_COMMANDS,
       requireConfirmation: true,
+      sandboxMode: 'workspace' as const,
     }
   }
 }
@@ -248,6 +262,7 @@ function resolveMarketplaceUrl() {
  */
 function getEffectiveAllowedDirectories(): string[] {
   const sec = getPersistedSecuritySettings()
+  if (sec.sandboxMode === 'relaxed') return []
   if (sec.allowedDirectories.length > 0) return sec.allowedDirectories
   // Fall back to workspace path as the default sandbox boundary
   const { workspacePath } = getPersistedStoreState()
@@ -274,17 +289,34 @@ function ensureAllowedPath(targetPath: string): string | null {
   return null
 }
 
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function findBlockedCommandPattern(command: string, blockedCommands: string[]): string | undefined {
+  const normalizedCommand = command.toLowerCase()
+
+  return blockedCommands.find((blockedCommand) => {
+    const pattern = blockedCommand.trim().toLowerCase()
+    if (!pattern) return false
+    if (/^[a-z0-9_.-]+$/i.test(pattern)) {
+      const tokenPattern = new RegExp('(?:^|[\\r\\n|;&(){}])\\s*' + escapeRegExp(pattern) + '(?:$|\\s|[/:])', 'i')
+      return tokenPattern.test(command)
+    }
+    return normalizedCommand.includes(pattern)
+  })
+}
+
 function ensureCommandAllowed(command: string): string | null {
   const sec = getPersistedSecuritySettings()
   const trimmed = command.trim()
   if (!trimmed) return 'Empty command'
-  // Mirror the main-process metacharacter rejection for fast UX feedback.
-  // The authoritative policy is enforced in the Electron main process.
-  if (/[|;&`$<>(){}\n\r\\]/.test(trimmed)) {
+  // Mirror strict-mode main-process metacharacter rejection for fast UX feedback.
+  // Relaxed mode intentionally lets the platform shell parse full shell syntax.
+  if (sec.sandboxMode !== 'relaxed' && /[|;&`$<>(){}\n\r\\]/.test(trimmed)) {
     return 'Shell metacharacters are not allowed (| ; & $ ` < > ( ) { } \\ newline)'
   }
-  const cmd = trimmed.toLowerCase()
-  const blocked = sec.blockedCommands.find((b) => b && cmd.includes(b.toLowerCase()))
+  const blocked = findBlockedCommandPattern(trimmed, sec.blockedCommands)
   if (blocked) {
     return `Command blocked by sandbox policy: ${blocked}`
   }
@@ -330,6 +362,7 @@ async function confirmIfNeeded(action: string): Promise<boolean> {
         allowedDirectories: current.allowedDirectories ?? [],
         blockedCommands: current.blockedCommands ?? DEFAULT_BLOCKED_COMMANDS,
         requireConfirmation: false,
+        sandboxMode: current.sandboxMode === 'relaxed' ? 'relaxed' : 'workspace',
       }
     })
     return true

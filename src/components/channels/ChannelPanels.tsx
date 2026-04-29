@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { ChannelPlatformIcon } from './ChannelIcons'
-import { ChannelMessageBubble } from './ChannelComponents'
+import { ChannelMessageBubble, normalizeChannelDirection } from './ChannelComponents'
 
 function PanelShell({
   eyebrow,
@@ -95,8 +95,9 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
   const filtered = useMemo(
     () => channelMessages
       .filter((message) => (!channelId || message.channelId === channelId))
-      .filter((message) => filter === 'all' || message.direction === filter)
-      .filter((message) => userFilter === 'all' || message.senderId === userFilter),
+      .filter((message) => filter === 'all' || normalizeChannelDirection(message.direction) === filter)
+      .filter((message) => userFilter === 'all' || message.senderId === userFilter)
+      .sort((left, right) => left.timestamp - right.timestamp),
     [channelId, channelMessages, filter, userFilter],
   )
 
@@ -112,17 +113,17 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
 
   const getChannel = useCallback((id: string) => channels.find((channel) => channel.id === id), [channels])
 
-  // Auto-scroll to bottom when new messages arrive (not on filter changes)
-  const prevMsgCountRef = useRef(channelMessages.length)
+  // Auto-scroll to the latest visible item when the channel receives new messages.
+  const prevMsgCountRef = useRef(totalMessages)
   useEffect(() => {
-    if (channelMessages.length > prevMsgCountRef.current && scrollRef.current) {
+    if (totalMessages > prevMsgCountRef.current && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-    prevMsgCountRef.current = channelMessages.length
-  }, [channelMessages.length])
+    prevMsgCountRef.current = totalMessages
+  }, [totalMessages])
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-5 p-5">
+    <div className="flex h-full min-h-0 flex-col gap-5 overflow-hidden p-5">
       <PanelShell
         eyebrow={t('channels.messages', 'Messages')}
         title={selectedChannel ? selectedChannel.name : t('channels.messageStream', 'Message Stream')}
@@ -149,7 +150,7 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
               key={value}
               type="button"
               onClick={() => setFilter(value)}
-              className={`rounded-2xl border px-4 py-2.5 text-[11px] font-semibold transition-colors ${filter === value ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}
+              className={`rounded-2xl border px-3.5 py-2 text-[10px] font-semibold transition-colors ${filter === value ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}
             >
               {value === 'all' ? t('channels.filterAll', 'All') : value === 'incoming' ? t('channels.filterIncoming', 'Incoming') : t('channels.filterOutgoing', 'Outgoing')}
             </button>
@@ -162,7 +163,7 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
                 value={userFilter}
                 onChange={(e) => setUserFilter(e.target.value)}
                 aria-label={t('channels.filterByUser', 'Filter by user')}
-                className="max-w-44 rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2.5 text-[11px] text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                className="max-w-44 rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2 text-[10px] text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
               >
                 <option value="all">{t('channels.allUsers', 'All users')}</option>
                 {channelSenders.map((user) => (
@@ -176,7 +177,7 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
         </div>
       </PanelShell>
 
-      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto rounded-4xl border border-border-subtle/55 bg-surface-0/35 px-6 py-5 shadow-[0_12px_28px_rgba(15,23,42,0.05)]">
+      <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-scroll overscroll-contain rounded-4xl border border-border-subtle/55 bg-surface-0/35 px-5 py-4 pr-3 shadow-[0_12px_28px_rgba(15,23,42,0.05)]">
         {filtered.length === 0 ? (
           <EmptyPanelState
             icon="action-chat"
@@ -184,7 +185,7 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
             description={t('channels.messagesAppearHere', 'Messages from connected channels will appear here.')}
           />
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             {filtered.map((msg) => (
               <ChannelMessageBubble
                 key={msg.id}

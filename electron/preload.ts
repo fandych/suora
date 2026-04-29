@@ -11,6 +11,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'workspace:init',
   'workspace:getBootConfig',
   'workspace:setExternalDirectories',
+  'workspace:setToolSecurity',
   'db:getSnapshot',
   'db:saveStateSlice',
   'db:loadPersistedStore',

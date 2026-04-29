@@ -33,6 +33,7 @@ export const DEFAULT_TOOL_SECURITY: ToolSecuritySettings = {
   allowedDirectories: [],
   blockedCommands: ['rm -rf', 'del /f /q', 'format', 'shutdown'],
   requireConfirmation: true,
+  sandboxMode: 'workspace',
 }
 
 export const DEFAULT_MARKETPLACE: MarketplaceSettings = {
@@ -122,9 +123,30 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
 ]
 
 function getElectron() {
+  if (typeof window === 'undefined') return undefined
   return (window as unknown as {
     electron?: { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> }
   }).electron
+}
+
+export function normalizeToolSecuritySettings(settings?: Partial<ToolSecuritySettings>): ToolSecuritySettings {
+  return {
+    allowedDirectories: Array.isArray(settings?.allowedDirectories) ? settings.allowedDirectories : [],
+    blockedCommands: Array.isArray(settings?.blockedCommands) ? settings.blockedCommands : DEFAULT_TOOL_SECURITY.blockedCommands,
+    requireConfirmation: settings?.requireConfirmation ?? DEFAULT_TOOL_SECURITY.requireConfirmation,
+    sandboxMode: settings?.sandboxMode === 'relaxed' ? 'relaxed' : 'workspace',
+  }
+}
+
+export function syncToolSecurityToElectron(settings?: Partial<ToolSecuritySettings>): void {
+  const electron = getElectron()
+  if (!electron) return
+  const normalized = normalizeToolSecuritySettings(settings)
+  electron.invoke('workspace:setToolSecurity', {
+    allowedDirectories: normalized.allowedDirectories,
+    blockedCommands: normalized.blockedCommands,
+    sandboxMode: normalized.sandboxMode,
+  }).catch(() => {})
 }
 
 function buildModelsFromProviderConfigs(providerConfigs: ProviderConfig[]): Model[] {
@@ -206,6 +228,7 @@ export const createModelConfigSlice: StateCreator<AppStore, [], [], ModelConfigS
     updateCachedWorkspacePath(workspacePath)
     const electron = getElectron()
     if (electron) electron.invoke('workspace:init', workspacePath).catch(() => {})
+    syncToolSecurityToElectron(get().toolSecurity)
   },
   apiKeys: {},
   setApiKey: (provider, key) => set((state) => ({
@@ -216,9 +239,11 @@ export const createModelConfigSlice: StateCreator<AppStore, [], [], ModelConfigS
     plugins: { ...state.plugins, [name]: config },
   })),
   toolSecurity: DEFAULT_TOOL_SECURITY,
-  setToolSecurity: (data) => set((state) => ({
-    toolSecurity: { ...state.toolSecurity, ...data },
-  })),
+  setToolSecurity: (data) => {
+    const next = normalizeToolSecuritySettings({ ...get().toolSecurity, ...data })
+    set({ toolSecurity: next })
+    syncToolSecurityToElectron(next)
+  },
   marketplace: DEFAULT_MARKETPLACE,
   setMarketplace: (data) => set((state) => ({
     marketplace: { ...state.marketplace, ...data },

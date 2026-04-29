@@ -673,6 +673,7 @@ export interface ToolSecuritySettings {
   allowedDirectories: string[]
   blockedCommands: string[]
   requireConfirmation: boolean
+  sandboxMode: 'workspace' | 'relaxed'
 }
 
 // ─── Skill Security (signing) ──────────────────────────────────────

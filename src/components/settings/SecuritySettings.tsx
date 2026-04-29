@@ -281,6 +281,8 @@ function EnvVarsSection() {
 export function SecuritySettings() {
   const { t } = useI18n()
   const { toolSecurity, setToolSecurity, envVariables } = useAppStore()
+  const sandboxMode = toolSecurity.sandboxMode ?? 'workspace'
+  const relaxedSandbox = sandboxMode === 'relaxed'
 
   return (
     <div className="space-y-6">
@@ -294,8 +296,9 @@ export function SecuritySettings() {
             </p>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:w-lg xl:grid-cols-5">
             <SettingsStat label={t('settings.confirmation', 'Confirmation')} value={toolSecurity.requireConfirmation ? t('settings.required', 'Required') : t('settings.relaxed', 'Relaxed')} accent />
+            <SettingsStat label={t('settings.sandbox', 'Sandbox')} value={relaxedSandbox ? t('settings.relaxed', 'Relaxed') : t('settings.workspace', 'Workspace')} />
             <SettingsStat label={t('settings.allowedDirs', 'Allowed Dirs')} value={String(toolSecurity.allowedDirectories.length)} />
             <SettingsStat label={t('settings.blockedPatterns', 'Blocked')} value={String(toolSecurity.blockedCommands.length)} />
             <SettingsStat label={t('settings.envVars', 'Env Vars')} value={String(envVariables.length)} />
@@ -317,9 +320,24 @@ export function SecuritySettings() {
       </SettingsSection>
 
       <SettingsSection
+        eyebrow={t('settings.sandbox', 'Sandbox')}
+        title={t('settings.sandboxBoundaries', 'Sandbox Boundaries')}
+        description={t('settings.sandboxBoundariesDesc', 'Choose whether filesystem tools stay inside the workspace and allowed directories, or can work with any local path.')}
+      >
+        <SettingsToggleRow
+          label={t('settings.relaxFilesystemSandbox', 'Relax filesystem sandbox')}
+          description={t('settings.relaxFilesystemSandboxDesc', 'When enabled, tools and Electron file IPC can access paths outside the workspace and allowed directory list. Blocked shell patterns still apply.')}
+          checked={relaxedSandbox}
+          onChange={() => setToolSecurity({ sandboxMode: relaxedSandbox ? 'workspace' : 'relaxed' })}
+        />
+      </SettingsSection>
+
+      <SettingsSection
         eyebrow={t('settings.allowedDirs', 'Allowed Directories')}
         title={t('settings.filesystemAccess', 'Filesystem Access')}
-        description={t('settings.filesystemAccessDesc', 'Restrict tool writes and reads to a curated set of folders. Leaving this empty means the app falls back to the current workspace rules.')}
+        description={relaxedSandbox
+          ? t('settings.filesystemAccessRelaxedDesc', 'Relaxed sandbox is active, so this allowlist is not enforced until workspace sandbox mode is restored.')
+          : t('settings.filesystemAccessDesc', 'Restrict tool writes and reads to a curated set of folders. Leaving this empty means the app falls back to the current workspace rules.')}
       >
         <ListEditor
           items={toolSecurity.allowedDirectories}
@@ -330,7 +348,9 @@ export function SecuritySettings() {
           }}
           onRemove={(value) => setToolSecurity({ allowedDirectories: toolSecurity.allowedDirectories.filter((directory) => directory !== value) })}
           placeholder="C:/Users/Fandy/.suora"
-          emptyText={t('settings.emptyNoRestriction', 'Empty means no path restriction.')}
+          emptyText={relaxedSandbox
+            ? t('settings.emptyRelaxedSandbox', 'Relaxed sandbox is active; directory restrictions are disabled.')
+            : t('settings.emptyWorkspaceRestriction', 'Empty falls back to the current workspace only.')}
         />
       </SettingsSection>
 

@@ -228,6 +228,10 @@ let currentWorkspacePath: string = loadInitialWorkspacePath()
 let currentWorkspaceCanonicalPath: string = canonicalizePathSync(currentWorkspacePath)
 let currentExternalDirectoryPaths: string[] = []
 let currentExternalDirectoryCanonicalPaths: string[] = []
+let currentToolSandboxMode: 'workspace' | 'relaxed' = 'workspace'
+let currentToolAllowedDirectoryPaths: string[] = []
+let currentToolAllowedDirectoryCanonicalPaths: string[] = []
+let currentToolBlockedCommands: string[] = ['rm -rf', 'del /f /q', 'format', 'shutdown']
 let suoraDatabase: SuoraDatabase | null = null
 let suoraDatabaseWorkspacePath: string | null = null
 
@@ -249,6 +253,11 @@ const DB_JSON_TABLES = new Set<JsonTableName>([
 function refreshAllowedFsRoots(): void {
   currentWorkspaceCanonicalPath = canonicalizePathSync(currentWorkspacePath)
   currentExternalDirectoryCanonicalPaths = currentExternalDirectoryPaths.map((entry) => canonicalizePathSync(entry))
+  currentToolAllowedDirectoryCanonicalPaths = currentToolAllowedDirectoryPaths.map((entry) => canonicalizePathSync(entry))
+}
+
+function normalizeSandboxMode(value: unknown): 'workspace' | 'relaxed' {
+  return value === 'relaxed' ? 'relaxed' : 'workspace'
 }
 
 function isJsonTableName(table: unknown): table is JsonTableName {
@@ -407,6 +416,25 @@ ipcMain.handle('workspace:setExternalDirectories', async (_event, directories: s
   }
 })
 
+ipcMain.handle('workspace:setToolSecurity', async (_event, settings: unknown) => {
+  try {
+    const candidate = settings && typeof settings === 'object' ? settings as { sandboxMode?: unknown; allowedDirectories?: unknown; blockedCommands?: unknown } : {}
+    currentToolSandboxMode = normalizeSandboxMode(candidate.sandboxMode)
+    currentToolAllowedDirectoryPaths = Array.isArray(candidate.allowedDirectories)
+      ? candidate.allowedDirectories
+          .filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+          .map((entry) => resolveUserPath(entry, app.getPath('home')))
+      : []
+    currentToolBlockedCommands = Array.isArray(candidate.blockedCommands)
+      ? candidate.blockedCommands.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+      : []
+    refreshAllowedFsRoots()
+    return { success: true, sandboxMode: currentToolSandboxMode, allowedDirectoryCount: currentToolAllowedDirectoryPaths.length }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
 ipcMain.handle('workspace:getBootConfig', async () => {
   try {
     const bootConfigPath = getBootConfigPath()
@@ -433,6 +461,7 @@ ipcMain.handle('workspace:getBootConfig', async () => {
  * to the default workspace root, so unrestricted access is avoided.
  */
 function enforceFsPathInWorkspace(targetPath: string): string | null {
+  if (currentToolSandboxMode === 'relaxed') return null
   if (!currentWorkspacePath) {
     logger.warn('Blocked fs operation before workspace initialisation', { targetPath })
     return 'Workspace is not initialized yet'
@@ -442,6 +471,9 @@ function enforceFsPathInWorkspace(targetPath: string): string | null {
     return null
   }
   if (currentExternalDirectoryCanonicalPaths.some((externalRoot) => isWithinRoot(resolved, externalRoot))) {
+    return null
+  }
+  if (currentToolAllowedDirectoryCanonicalPaths.some((allowedRoot) => isWithinRoot(resolved, allowedRoot))) {
     return null
   }
   logger.warn('Blocked fs operation outside workspace', { targetPath: resolved, workspace: currentWorkspaceCanonicalPath })
@@ -982,15 +1014,92 @@ function getBinaryName(fullPath: string): string {
   return bare.replace(/\.(exe|cmd|bat|ps1|sh)$/i, '')
 }
 
+function findBlockedCommandPattern(command: string, blockedCommands: string[]): string | undefined {
+  const normalizedCommand = command.toLowerCase()
+
+  return blockedCommands.find((blockedCommand) => {
+    const pattern = blockedCommand.trim().toLowerCase()
+    if (!pattern) return false
+    if (/^[a-z0-9_.-]+$/i.test(pattern)) {
+      const tokenPattern = new RegExp('(?:^|[\\r\\n|;&(){}])\\s*' + escapeRegExp(pattern) + '(?:$|\\s|[/:])', 'i')
+      return tokenPattern.test(command)
+    }
+    return normalizedCommand.includes(pattern)
+  })
+}
+
 interface ShellExecResult {
   stdout: string
   stderr: string
   error?: string
 }
 
+function getRelaxedShellCommand(command: string): { bin: string; args: string[] } {
+  if (process.platform === 'win32') {
+    return {
+      bin: 'powershell.exe',
+      args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+    }
+  }
+
+  return { bin: process.env.SHELL || '/bin/sh', args: ['-lc', command] }
+}
+
+function getShellEnv(relaxed: boolean): NodeJS.ProcessEnv {
+  if (relaxed) return { ...process.env }
+
+  const minimalEnv: NodeJS.ProcessEnv = {
+    PATH: process.env.PATH ?? '',
+    HOME: process.env.HOME ?? '',
+    LANG: process.env.LANG ?? 'C.UTF-8',
+  }
+  if (process.platform === 'win32') {
+    minimalEnv.SYSTEMROOT = process.env.SYSTEMROOT ?? ''
+    minimalEnv.USERPROFILE = process.env.USERPROFILE ?? ''
+    minimalEnv.TEMP = process.env.TEMP ?? ''
+    minimalEnv.TMP = process.env.TMP ?? ''
+    minimalEnv.PATHEXT = process.env.PATHEXT ?? ''
+  }
+  return minimalEnv
+}
+
+function executeShellCommand(bin: string, args: string[], relaxed = false): Promise<ShellExecResult> {
+  return new Promise<ShellExecResult>((resolve) => {
+    execFile(
+      bin,
+      args,
+      {
+        timeout: 30_000,
+        maxBuffer: 1024 * 1024,
+        cwd: currentWorkspacePath,
+        windowsHide: true,
+        env: getShellEnv(relaxed),
+      },
+      (error, stdout, stderr) => {
+        resolve({
+          stdout: stdout?.toString() || '',
+          stderr: stderr?.toString() || '',
+          error: error ? error.message : undefined,
+        })
+      },
+    )
+  })
+}
+
 ipcMain.handle('shell:exec', async (_event, command: unknown): Promise<ShellExecResult> => {
   if (typeof command !== 'string' || !command.trim()) {
     return { stdout: '', stderr: '', error: 'Command must be a non-empty string' }
+  }
+  const relaxedShellSandbox = currentToolSandboxMode === 'relaxed'
+  const blocked = findBlockedCommandPattern(command, currentToolBlockedCommands)
+  if (blocked) {
+    logger.warn('shell:exec blocked command pattern', { blocked })
+    return { stdout: '', stderr: '', error: `Command blocked by sandbox policy: ${blocked}` }
+  }
+
+  if (relaxedShellSandbox) {
+    const relaxed = getRelaxedShellCommand(command)
+    return executeShellCommand(relaxed.bin, relaxed.args, true)
   }
 
   // Reject shell metacharacters — no chaining, pipes, subshells, redirections.
@@ -1027,39 +1136,7 @@ ipcMain.handle('shell:exec', async (_event, command: unknown): Promise<ShellExec
     }
   }
 
-  return new Promise<ShellExecResult>((resolve) => {
-    // Minimal env — never inherit `process.env`, which contains API keys
-    // (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.) loaded by the renderer.
-    const minimalEnv: NodeJS.ProcessEnv = {
-      PATH: process.env.PATH ?? '',
-      HOME: process.env.HOME ?? '',
-      LANG: process.env.LANG ?? 'C.UTF-8',
-    }
-    if (process.platform === 'win32') {
-      minimalEnv.SYSTEMROOT = process.env.SYSTEMROOT ?? ''
-      minimalEnv.USERPROFILE = process.env.USERPROFILE ?? ''
-      minimalEnv.TEMP = process.env.TEMP ?? ''
-      minimalEnv.TMP = process.env.TMP ?? ''
-    }
-    execFile(
-      bin,
-      args,
-      {
-        timeout: 30_000,
-        maxBuffer: 1024 * 1024,
-        cwd: currentWorkspacePath,
-        windowsHide: true,
-        env: minimalEnv,
-      },
-      (error, stdout, stderr) => {
-        resolve({
-          stdout: stdout?.toString() || '',
-          stderr: stderr?.toString() || '',
-          error: error ? error.message : undefined,
-        })
-      },
-    )
-  })
+  return executeShellCommand(bin, args)
 })
 
 ipcMain.handle('git:status', async (_event, repoPath: string) => {
