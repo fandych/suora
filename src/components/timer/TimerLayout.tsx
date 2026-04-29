@@ -10,6 +10,7 @@ import { electronInvoke, electronOn, electronOff, formatRelative, TIMER_REFRESH_
 import { TimerForm } from './TimerForm'
 import { TimerDetail } from './TimerDetail'
 import { loadPipelinesFromDisk } from '@/services/pipelineFiles'
+import { handleTimerFired } from '@/services/timerRuntime'
 
 export function TimerLayout() {
   const [panelWidth, setPanelWidth] = useResizablePanel('timer', 280)
@@ -77,6 +78,11 @@ export function TimerLayout() {
       prompt: data.prompt,
       agentId: data.agentId || undefined,
       pipelineId: data.pipelineId || undefined,
+      timezone: data.timezone,
+      missedRunPolicy: data.missedRunPolicy,
+      maxRetries: data.maxRetries,
+      retryIntervalMinutes: data.retryIntervalMinutes,
+      calendarRule: data.calendarRule,
       enabled: true,
     })) as { timer?: ScheduledTask; error?: string }
     if (result.timer) {
@@ -96,6 +102,11 @@ export function TimerLayout() {
       prompt: data.prompt,
       agentId: data.agentId || undefined,
       pipelineId: data.pipelineId || undefined,
+      timezone: data.timezone,
+      missedRunPolicy: data.missedRunPolicy,
+      maxRetries: data.maxRetries,
+      retryIntervalMinutes: data.retryIntervalMinutes,
+      calendarRule: data.calendarRule,
     })
     setEditing(false)
     loadTimers()
@@ -111,6 +122,12 @@ export function TimerLayout() {
   async function handleToggle() {
     if (!selectedTimer) return
     await electronInvoke('timer:update', selectedTimer.id, { enabled: !selectedTimer.enabled })
+    loadTimers()
+  }
+
+  async function handleRunNow() {
+    if (!selectedTimer) return
+    await handleTimerFired({ ...selectedTimer, lastRun: Date.now() })
     loadTimers()
   }
 
@@ -212,6 +229,7 @@ export function TimerLayout() {
             onEdit={() => setEditing(true)}
             onDelete={handleDelete}
             onToggle={handleToggle}
+            onRunNow={handleRunNow}
           />
         ) : (
           <div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">

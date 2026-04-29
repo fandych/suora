@@ -1,4 +1,4 @@
-import type { Agent, AgentPerformanceStats, Skill } from '@/types'
+import type { Agent, AgentPerformanceStats, AgentSelectionPreference, Skill } from '@/types'
 
 export interface AgentSelectionScore {
   agent: Agent
@@ -13,6 +13,16 @@ const KEYWORD_WEIGHTS: Array<[RegExp, string, number]> = [
   [/\bdeploy|ci|docker|server|ops\b/i, 'operations task keywords', 14],
   [/分析|总结|写|修复|测试|部署|数据库|流水线/u, 'localized task keywords', 10],
 ]
+
+function fingerprint(input: string): string {
+  return input
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s_-]+/gu, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length >= 3)
+    .slice(0, 12)
+    .join(' ')
+}
 
 function textScore(input: string, text: string | undefined): number {
   if (!text) return 0
@@ -30,8 +40,10 @@ export function scoreAgentsForTask(
   agents: Agent[],
   skills: Skill[],
   performance: Record<string, AgentPerformanceStats> = {},
+  preferences: AgentSelectionPreference[] = [],
 ): AgentSelectionScore[] {
   const enabledAgents = agents.filter((agent) => agent.enabled !== false)
+  const taskKey = fingerprint(input)
   return enabledAgents
     .map((agent) => {
       const reasons: string[] = []
@@ -67,6 +79,16 @@ export function scoreAgentsForTask(
         const successRate = Math.max(0, (stats.totalCalls - stats.errorCount) / stats.totalCalls)
         score += Math.round(successRate * 12)
         reasons.push(`${Math.round(successRate * 100)}% historical success`)
+        if (stats.preferenceBoost) {
+          score += Math.min(10, stats.preferenceBoost)
+          reasons.push('user preference boost')
+        }
+      }
+
+      const preference = preferences.find((item) => item.agentId === agent.id && item.taskFingerprint === taskKey)
+      if (preference) {
+        score += Math.min(36, 18 + preference.count * 6)
+        reasons.push('matches your previous routing choice')
       }
 
       return { agent, score: Math.round(score), reasons: reasons.slice(0, 4) }
@@ -79,6 +101,7 @@ export function selectBestAgentForTask(
   agents: Agent[],
   skills: Skill[],
   performance: Record<string, AgentPerformanceStats> = {},
+  preferences: AgentSelectionPreference[] = [],
 ): AgentSelectionScore | null {
-  return scoreAgentsForTask(input, agents, skills, performance)[0] ?? null
+  return scoreAgentsForTask(input, agents, skills, performance, preferences)[0] ?? null
 }

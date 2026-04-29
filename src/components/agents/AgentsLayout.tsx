@@ -388,6 +388,7 @@ export function AgentsLayout() {
       version: existingVersions.length + 1,
       snapshot: snapshotData,
       createdAt: Date.now(),
+      source: editingId ? 'manual' : 'marketplace',
     })
     setEditingId(null)
     setIsAdding(false)

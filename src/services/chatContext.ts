@@ -8,7 +8,7 @@ import type {
   ToolResultPart,
   UserModelMessage,
 } from 'ai'
-import type { Message, MessageAttachment } from '@/types'
+import type { AttachmentManifest, Message, MessageAttachment } from '@/types'
 import { formatToolEnvelopeForModel } from '@/services/runtimeOutput'
 
 export const MAX_TEXT_ATTACHMENT_CHARS = 24_000
@@ -28,10 +28,40 @@ function clampTextAttachment(name: string, data: string): string {
 function attachmentManifest(attachments: MessageAttachment[]): string {
   if (attachments.length === 0) return ''
   const rows = attachments.map((attachment) => {
+    const manifest = attachment.manifest ?? buildAttachmentManifest(attachment)
     const duration = attachment.duration ? `, duration=${attachment.duration}s` : ''
-    return `- ${attachment.name}: type=${attachment.type}, mime=${attachment.mimeType}, size=${attachment.size}${duration}, fingerprint=${attachment.name}:${attachment.size}:${attachment.mimeType}`
+    const summary = attachment.summary ? `, summary=${attachment.summary.slice(0, 240)}` : ''
+    return `- ${attachment.name}: type=${attachment.type}, mime=${attachment.mimeType}, size=${attachment.size}, risk=${manifest.privacyRisk}${duration}${summary}, fingerprint=${attachment.name}:${attachment.size}:${attachment.mimeType}`
   })
   return `[Attachment manifest]\n${rows.join('\n')}`
+}
+
+export function buildAttachmentManifest(attachment: MessageAttachment): AttachmentManifest {
+  const extension = attachment.name.includes('.') ? attachment.name.split('.').pop()?.toLowerCase() : undefined
+  const kind: AttachmentManifest['kind'] = attachment.type === 'audio'
+    ? 'audio'
+    : attachment.type === 'image'
+      ? 'image'
+      : /pdf|officedocument|msword|presentation|spreadsheet/.test(attachment.mimeType)
+        ? 'document'
+        : attachment.type === 'file'
+          ? 'text'
+          : 'unknown'
+  const privacyRisk: AttachmentManifest['privacyRisk'] = /key|secret|token|credential|password|env/i.test(`${attachment.name}\n${attachment.data.slice(0, 400)}`)
+    ? 'high'
+    : attachment.size > MAX_TEXT_ATTACHMENT_CHARS
+      ? 'medium'
+      : 'low'
+  return {
+    kind,
+    name: attachment.name,
+    mimeType: attachment.mimeType,
+    size: attachment.size,
+    extension,
+    privacyRisk,
+    contentPreview: attachment.type === 'file' ? attachment.data.slice(0, 240) : undefined,
+    chunks: attachment.type === 'file' ? Math.max(1, Math.ceil(attachment.data.length / MAX_TEXT_ATTACHMENT_CHARS)) : undefined,
+  }
 }
 
 function messageTokenCost(message: Message): number {
@@ -49,15 +79,19 @@ function messageTokenCost(message: Message): number {
 export function buildContextSummary(messages: Message[], tokenBudget = DEFAULT_MODEL_HISTORY_TOKEN_BUDGET): string | undefined {
   const total = messages.reduce((sum, message) => sum + messageTokenCost(message), 0)
   if (total <= tokenBudget) return undefined
-  return `Earlier conversation was pruned to fit the model context budget. Original approximate history: ${total.toLocaleString()} tokens; budget: ${tokenBudget.toLocaleString()} tokens.`
+  const pinned = messages.filter((message) => message.pinned).length
+  const tools = messages.reduce((sum, message) => sum + (message.toolCalls?.length ?? 0), 0)
+  return `Earlier conversation was pruned and summarized to fit the model context budget. Original approximate history: ${total.toLocaleString()} tokens; budget: ${tokenBudget.toLocaleString()} tokens. Preserved pinned messages: ${pinned}. Tool results summarized: ${tools}.`
 }
 
 export function selectMessagesForModel(messages: Message[], tokenBudget = DEFAULT_MODEL_HISTORY_TOKEN_BUDGET): Message[] {
   const selected: Message[] = []
+  const pinnedMessages = messages.filter((message) => message.pinned)
   let remaining = tokenBudget
 
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
+    if (message.pinned) continue
     const cost = messageTokenCost(message)
     const isRecent = messages.length - index <= RESERVED_RECENT_MESSAGES
     if (!isRecent && selected.length > 0 && remaining - cost < 0) break
@@ -66,6 +100,9 @@ export function selectMessagesForModel(messages: Message[], tokenBudget = DEFAUL
   }
 
   const summary = buildContextSummary(messages, tokenBudget)
+  for (const pinned of pinnedMessages) {
+    if (!selected.some((message) => message.id === pinned.id)) selected.unshift(pinned)
+  }
   if (summary && selected.length > 0) {
     selected.unshift({
       id: 'context-summary',

@@ -33,6 +33,12 @@ export interface ModelUsageStats {
   totalCompletionTokens: number
   totalTokens: number
   lastUsed: number
+  /** Rolling average latency for successful and failed calls when known. */
+  avgLatencyMs?: number
+  /** Last 50 call latencies, used for trend display without storing every call. */
+  latencies?: number[]
+  errorCount?: number
+  lastError?: string
 }
 
 export interface Model {
@@ -116,6 +122,23 @@ export interface MessageAttachment {
   data: string         // base64 encoded data (image/audio) or text content (file)
   size: number         // file size in bytes
   duration?: number    // audio duration in seconds
+  /** Structured manifest generated before injection into model context. */
+  manifest?: AttachmentManifest
+  /** Optional human-readable summary or transcription for large/audio files. */
+  summary?: string
+  /** Whether the full attachment content was clipped before reaching the model. */
+  truncated?: boolean
+}
+
+export interface AttachmentManifest {
+  kind: 'image' | 'text' | 'audio' | 'document' | 'unknown'
+  name: string
+  mimeType: string
+  size: number
+  extension?: string
+  privacyRisk: 'low' | 'medium' | 'high'
+  contentPreview?: string
+  chunks?: number
 }
 
 export interface RuntimeSnapshot {
@@ -163,6 +186,11 @@ export interface Message {
   errorInfo?: MessageErrorInfo
   cancellation?: CancellationMetadata
   contextSummary?: string
+  pinned?: boolean
+  branchOfMessageId?: string
+  branchRootSessionId?: string
+  citations?: MessageCitation[]
+  documentContextIds?: string[]
 }
 
 export interface Session {
@@ -173,6 +201,24 @@ export interface Session {
   agentId?: string
   modelId?: string
   messages: Message[]
+  parentSessionId?: string
+  branchOfMessageId?: string
+  pinnedMessageIds?: string[]
+  documentContextIds?: string[]
+}
+
+export type MessageCitationKind = 'document' | 'tool' | 'web' | 'attachment' | 'file'
+
+export interface MessageCitation {
+  id: string
+  kind: MessageCitationKind
+  title: string
+  uri?: string
+  documentId?: string
+  toolCallId?: string
+  attachmentId?: string
+  snippet?: string
+  confidence?: 'low' | 'medium' | 'high'
 }
 
 // ─── Documents ──────────────────────────────────────────────────────
@@ -223,6 +269,12 @@ export interface AgentMemoryEntry {
   createdAt: number
   source: string           // session id that generated this
   embedding?: number[]     // optional pre-computed embedding vector (for future use with real embedding APIs)
+  tags?: string[]
+  confidence?: number
+  lastUsedAt?: number
+  expiresAt?: number
+  autoRecall?: boolean
+  reviewed?: boolean
 }
 
 export interface Agent {
@@ -586,6 +638,11 @@ export interface ScheduledTask {
   updatedAt: number
   lastRun?: number
   nextRun?: number
+  timezone?: string
+  missedRunPolicy?: 'skip' | 'run-once' | 'run-all'
+  maxRetries?: number
+  retryIntervalMinutes?: number
+  calendarRule?: 'all-days' | 'weekdays' | 'weekends'
 }
 
 export interface TimerExecution {
@@ -693,6 +750,18 @@ export interface ProviderConfig {
     | 'cohere'              // Cohere
     | 'openai-compatible'   // Generic OpenAI-compatible
   models: ProviderModelEntry[]
+  presetId?: string
+  description?: string
+}
+
+export interface ProviderPreset {
+  id: string
+  name: string
+  providerType: ProviderConfig['providerType']
+  baseUrl: string
+  description: string
+  defaultModels: ProviderModelEntry[]
+  requiresApiKey: boolean
 }
 
 export interface ExternalDirectoryConfig {
@@ -904,6 +973,7 @@ export interface AgentVersion {
   snapshot: Omit<Agent, 'memories'>   // full agent config snapshot (minus memories)
   createdAt: number
   label?: string
+  source?: 'manual' | 'import' | 'marketplace' | 'migration' | 'rollback'
 }
 
 // ─── Agent Performance Stats ───────────────────────────────────────
@@ -916,6 +986,14 @@ export interface AgentPerformanceStats {
   responseTimes: number[]     // last 50 response times
   lastUsed: number
   errorCount: number
+  preferenceBoost?: number
+}
+
+export interface AgentSelectionPreference {
+  agentId: string
+  taskFingerprint: string
+  selectedAt: number
+  count: number
 }
 
 export interface AgentPipelineStep {

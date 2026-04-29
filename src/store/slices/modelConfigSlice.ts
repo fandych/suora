@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand'
-import type { MarketplaceSettings, Model, ProviderConfig, ToolSecuritySettings } from '@/types'
+import type { MarketplaceSettings, Model, ProviderConfig, ProviderPreset, ToolSecuritySettings } from '@/types'
 import { updateCachedWorkspacePath } from '@/services/fileStorage'
 import type { AppStore } from '@/store/appStore'
 
@@ -40,6 +40,86 @@ export const DEFAULT_MARKETPLACE: MarketplaceSettings = {
   privateUrl: '',
   registrySources: [],
 }
+
+export const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    providerType: 'openai',
+    baseUrl: '',
+    description: 'Official OpenAI API with GPT models.',
+    requiresApiKey: true,
+    defaultModels: [
+      { modelId: 'gpt-4.1', name: 'GPT-4.1', enabled: true },
+      { modelId: 'gpt-4.1-mini', name: 'GPT-4.1 Mini', enabled: false },
+    ],
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    providerType: 'anthropic',
+    baseUrl: '',
+    description: 'Claude models from Anthropic.',
+    requiresApiKey: true,
+    defaultModels: [
+      { modelId: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', enabled: true },
+    ],
+  },
+  {
+    id: 'google',
+    name: 'Google Gemini',
+    providerType: 'google',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai',
+    description: 'Gemini through the OpenAI-compatible endpoint.',
+    requiresApiKey: true,
+    defaultModels: [
+      { modelId: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', enabled: true },
+      { modelId: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', enabled: false },
+    ],
+  },
+  {
+    id: 'ollama',
+    name: 'Ollama Local',
+    providerType: 'ollama',
+    baseUrl: 'http://localhost:11434/v1',
+    description: 'Local Ollama server; no API key required.',
+    requiresApiKey: false,
+    defaultModels: [
+      { modelId: 'llama3.1', name: 'Llama 3.1', enabled: true },
+    ],
+  },
+  {
+    id: 'dashscope',
+    name: 'DashScope',
+    providerType: 'openai-compatible',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    description: 'Alibaba Cloud DashScope OpenAI-compatible API.',
+    requiresApiKey: true,
+    defaultModels: [
+      { modelId: 'qwen-plus', name: 'Qwen Plus', enabled: true },
+    ],
+  },
+  {
+    id: 'kimi',
+    name: 'Kimi',
+    providerType: 'openai-compatible',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    description: 'Moonshot Kimi OpenAI-compatible API.',
+    requiresApiKey: true,
+    defaultModels: [
+      { modelId: 'moonshot-v1-8k', name: 'Moonshot v1 8K', enabled: true },
+    ],
+  },
+  {
+    id: 'openai-compatible',
+    name: 'OpenAI Compatible',
+    providerType: 'openai-compatible',
+    baseUrl: '',
+    description: 'Custom provider that follows the OpenAI chat completions API.',
+    requiresApiKey: true,
+    defaultModels: [],
+  },
+]
 
 function getElectron() {
   return (window as unknown as {

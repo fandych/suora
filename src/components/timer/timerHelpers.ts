@@ -75,4 +75,9 @@ export interface TimerFormData {
   prompt: string
   agentId: string
   pipelineId: string
+  timezone?: string
+  missedRunPolicy?: 'skip' | 'run-once' | 'run-all'
+  maxRetries?: number
+  retryIntervalMinutes?: number
+  calendarRule?: 'all-days' | 'weekdays' | 'weekends'
 }
