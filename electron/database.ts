@@ -1,7 +1,7 @@
 import fs from 'fs/promises'
 import path from 'path'
 
-export const SUORA_STORAGE_VERSION = 1
+export const SUORA_STORAGE_VERSION = 2
 export const SPLIT_STORE_NAME = 'suora-store'
 
 export type JsonTableName =
@@ -36,12 +36,15 @@ const JSON_TABLES = new Set<JsonTableName>([
 const TOP_LEVEL_DIRECTORIES = [
   'sessions',
   'timers',
+  'timers/executions',
   'pipelines',
+  'pipelines/executions',
   'agents',
   'skills',
   'documents',
   'channels',
   'memories',
+  'mcp',
 ] as const
 
 const MODEL_STATE_KEYS = new Set([
@@ -68,6 +71,7 @@ const SETTINGS_EXCLUDED_KEYS = new Set([
   'channelUsers',
   'globalMemories',
   'agentPipelines',
+  'mcpServers',
 ])
 
 const TABLE_FILES: Partial<Record<JsonTableName, string>> = {
@@ -75,13 +79,18 @@ const TABLE_FILES: Partial<Record<JsonTableName, string>> = {
   skills: 'skills/index.json',
   channels: 'channels/index.json',
   channel_messages: 'channels/messages.json',
-  // MCP does not have a requested top-level folder; keep it with other app settings.
-  mcp_servers: 'settings.json',
+  mcp_servers: 'mcp/index.json',
   timers: 'timers/index.json',
-  timer_executions: 'timers/executions.json',
   pipelines: 'pipelines/index.json',
-  pipeline_executions: 'pipelines/executions.json',
   memories: 'memories/index.json',
+}
+
+// Tables stored as a directory of per-ID JSON files (e.g. `timers/executions/{id}.json`).
+// Each entity is its own file, which keeps frequent appends/reads cheap and avoids
+// rewriting a large index file every time an execution is recorded.
+const TABLE_DIRECTORIES: Partial<Record<JsonTableName, string>> = {
+  timer_executions: 'timers/executions',
+  pipeline_executions: 'pipelines/executions',
 }
 
 interface PersistedPayload {
@@ -236,6 +245,8 @@ export class SuoraDatabase {
     await this.ensureJsonFile('documents/index.json', [])
     await this.ensureJsonFile('channels/index.json', [])
     await this.ensureJsonFile('memories/index.json', [])
+    await this.ensureJsonFile('mcp/index.json', [])
+    await this.migrateLegacyLayout()
   }
 
   private file(relativePath: string): string {
@@ -309,6 +320,9 @@ export class SuoraDatabase {
       writeJson(this.file('agents/index.json'), []),
       writeJson(this.file('channels/index.json'), []),
       writeJson(this.file('memories/index.json'), []),
+      writeJson(this.file('mcp/index.json'), []),
+      this.clearEntityDirectory('timers/executions'),
+      this.clearEntityDirectory('pipelines/executions'),
     ])
   }
 
@@ -316,7 +330,9 @@ export class SuoraDatabase {
     assertJsonTable(table)
     if (table === 'models') return asArray((await readJson<Record<string, unknown>>(this.file('models.json'), {})).models)
     if (table === 'provider_configs') return asArray((await readJson<Record<string, unknown>>(this.file('models.json'), {})).providerConfigs)
-    if (table === 'mcp_servers') return asArray((await readJson<Record<string, unknown>>(this.file('settings.json'), {})).mcpServers)
+
+    const directoryPath = TABLE_DIRECTORIES[table]
+    if (directoryPath) return await this.readEntityDirectory(directoryPath)
 
     const relativePath = TABLE_FILES[table]
     if (!relativePath) return []
@@ -334,10 +350,11 @@ export class SuoraDatabase {
       await writeJson(this.file('models.json'), models)
       return
     }
-    if (table === 'mcp_servers') {
-      const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
-      settings.mcpServers = [value, ...asArray(settings.mcpServers).filter((entry) => !(isEntity(entry) && entry.id === id))]
-      await writeJson(this.file('settings.json'), settings)
+
+    const directoryPath = TABLE_DIRECTORIES[table]
+    if (directoryPath) {
+      await fs.mkdir(this.file(directoryPath), { recursive: true })
+      await writeJson(this.file(path.join(directoryPath, `${safeSegment(id)}.json`)), value)
       return
     }
 
@@ -357,10 +374,15 @@ export class SuoraDatabase {
       await writeJson(this.file('models.json'), models)
       return
     }
-    if (table === 'mcp_servers') {
-      const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
-      settings.mcpServers = asArray(settings.mcpServers).filter((entry) => !(isEntity(entry) && entry.id === id))
-      await writeJson(this.file('settings.json'), settings)
+
+    const directoryPath = TABLE_DIRECTORIES[table]
+    if (directoryPath) {
+      const filePath = this.file(path.join(directoryPath, `${safeSegment(id)}.json`))
+      try {
+        await fs.unlink(filePath)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      }
       return
     }
 
@@ -369,6 +391,26 @@ export class SuoraDatabase {
     const items = asArray(await readJson<unknown>(this.file(relativePath), []))
       .filter((entry) => !(isEntity(entry) && entry.id === id))
     await writeJson(this.file(relativePath), items)
+  }
+
+  private async readEntityDirectory(relativeDir: string): Promise<unknown[]> {
+    const dirPath = this.file(relativeDir)
+    let entries: string[]
+    try {
+      entries = await fs.readdir(dirPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+      throw error
+    }
+    const files = entries.filter((name) => name.endsWith('.json'))
+    const records = await Promise.all(files.map(async (name) => {
+      try {
+        return JSON.parse(await fs.readFile(path.join(dirPath, name), 'utf-8')) as unknown
+      } catch {
+        return null
+      }
+    }))
+    return records.filter((entry) => entry !== null)
   }
 
   async getSnapshot(): Promise<Record<string, unknown>> {
@@ -430,6 +472,7 @@ export class SuoraDatabase {
       writeJson(this.file('channels/users.json'), isRecord(state.channelUsers) ? state.channelUsers : {}),
       writeJson(this.file('memories/index.json'), Array.isArray(state.globalMemories) ? state.globalMemories : []),
       writeJson(this.file('pipelines/index.json'), Array.isArray(state.agentPipelines) ? state.agentPipelines : []),
+      writeJson(this.file('mcp/index.json'), Array.isArray(state.mcpServers) ? state.mcpServers : []),
     ])
   }
 
@@ -473,6 +516,7 @@ export class SuoraDatabase {
       channelUsers: await readJson<Record<string, unknown>>(this.file('channels/users.json'), {}),
       globalMemories: asArray(await readJson<unknown>(this.file('memories/index.json'), [])),
       agentPipelines: asArray(await readJson<unknown>(this.file('pipelines/index.json'), [])),
+      mcpServers: asArray(await readJson<unknown>(this.file('mcp/index.json'), [])),
     }
 
     state._storeVersion = typeof settings._storeVersion === 'number' ? settings._storeVersion : 0
@@ -492,6 +536,64 @@ export class SuoraDatabase {
     await Promise.all(entries
       .filter((entry) => entry.isDirectory() && !keepNames.has(entry.name))
       .map((entry) => fs.rm(this.file(path.join(parent, entry.name)), { recursive: true, force: true })))
+  }
+
+  private async clearEntityDirectory(relativeDir: string): Promise<void> {
+    const dirPath = this.file(relativeDir)
+    let entries: string[]
+    try {
+      entries = await fs.readdir(dirPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+      throw error
+    }
+    await Promise.all(entries
+      .filter((name) => name.endsWith('.json'))
+      .map((name) => fs.unlink(path.join(dirPath, name)).catch(() => {})))
+  }
+
+  private async migrateLegacyLayout(): Promise<void> {
+    await this.migrateLegacyExecutionsFile('timers/executions.json', 'timers/executions')
+    await this.migrateLegacyExecutionsFile('pipelines/executions.json', 'pipelines/executions')
+    await this.migrateLegacyMcpServers()
+  }
+
+  private async migrateLegacyExecutionsFile(legacyRelative: string, targetDir: string): Promise<void> {
+    const legacyPath = this.file(legacyRelative)
+    if (!(await pathExists(legacyPath))) return
+    try {
+      const records = asArray(await readJson<unknown>(legacyPath, []))
+      await fs.mkdir(this.file(targetDir), { recursive: true })
+      for (const record of records) {
+        if (!isEntity(record)) continue
+        const filePath = this.file(path.join(targetDir, `${safeSegment(record.id)}.json`))
+        if (await pathExists(filePath)) continue
+        await writeJson(filePath, record)
+      }
+      await fs.unlink(legacyPath).catch(() => {})
+    } catch {
+      // Leave the legacy file in place if migration fails so we can retry on next start.
+    }
+  }
+
+  private async migrateLegacyMcpServers(): Promise<void> {
+    const settingsPath = this.file('settings.json')
+    if (!(await pathExists(settingsPath))) return
+    let settings: Record<string, unknown>
+    try {
+      settings = await readJson<Record<string, unknown>>(settingsPath, {})
+    } catch {
+      return
+    }
+    if (!('mcpServers' in settings)) return
+    const legacy = asArray(settings.mcpServers)
+    const targetPath = this.file('mcp/index.json')
+    const existing = asArray(await readJson<unknown>(targetPath, []))
+    if (existing.length === 0 && legacy.length > 0) {
+      await writeJson(targetPath, legacy)
+    }
+    delete settings.mcpServers
+    await writeJson(settingsPath, settings)
   }
 }
 

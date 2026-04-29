@@ -120,4 +120,77 @@ describe('SuoraDatabase', () => {
 
     await reopened.close()
   })
+
+  it('stores timer and pipeline executions as one file per id', async () => {
+    const workspace = await makeWorkspace()
+    const appDatabase = await openSuoraDatabase(workspace)
+
+    await appDatabase.saveJsonEntity('timer_executions', 'tx-1', { id: 'tx-1', timerId: 't-1', firedAt: 1 })
+    await appDatabase.saveJsonEntity('timer_executions', 'tx-2', { id: 'tx-2', timerId: 't-1', firedAt: 2 })
+    await appDatabase.saveJsonEntity('pipeline_executions', 'px-1', { id: 'px-1', pipelineId: 'p-1', startedAt: 10 })
+
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions', 'tx-1.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions', 'tx-2.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'pipelines', 'executions', 'px-1.json'))).resolves.toBeTruthy()
+    // The legacy single-file index should not be created for executions.
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions.json'))).rejects.toThrow()
+    await expect(fs.stat(path.join(workspace, 'pipelines', 'executions.json'))).rejects.toThrow()
+
+    const timers = await appDatabase.listJsonTable('timer_executions') as Array<{ id: string }>
+    expect(timers.map((entry) => entry.id).sort()).toEqual(['tx-1', 'tx-2'])
+
+    await appDatabase.deleteJsonEntity('timer_executions', 'tx-1')
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions', 'tx-1.json'))).rejects.toThrow()
+    expect((await appDatabase.listJsonTable('timer_executions')).map((entry) => (entry as { id: string }).id)).toEqual(['tx-2'])
+
+    await appDatabase.close()
+  })
+
+  it('stores MCP server configs in a dedicated mcp folder', async () => {
+    const workspace = await makeWorkspace()
+    const appDatabase = await openSuoraDatabase(workspace)
+
+    await expect(fs.stat(path.join(workspace, 'mcp', 'index.json'))).resolves.toBeTruthy()
+
+    await appDatabase.saveJsonEntity('mcp_servers', 'mcp-1', { id: 'mcp-1', name: 'Local' })
+    expect(await readJson(path.join(workspace, 'mcp', 'index.json'))).toEqual([{ id: 'mcp-1', name: 'Local' }])
+
+    const settings = await readJson<Record<string, unknown>>(path.join(workspace, 'settings.json'))
+    expect('mcpServers' in settings).toBe(false)
+
+    await appDatabase.close()
+  })
+
+  it('migrates legacy executions.json files and settings.mcpServers on initialize', async () => {
+    const workspace = await makeWorkspace()
+    // Seed a workspace that mimics the previous layout.
+    await fs.mkdir(path.join(workspace, 'timers'), { recursive: true })
+    await fs.mkdir(path.join(workspace, 'pipelines'), { recursive: true })
+    await fs.writeFile(
+      path.join(workspace, 'timers', 'executions.json'),
+      JSON.stringify([{ id: 'tx-old', timerId: 't', firedAt: 1 }]),
+    )
+    await fs.writeFile(
+      path.join(workspace, 'pipelines', 'executions.json'),
+      JSON.stringify([{ id: 'px-old', pipelineId: 'p', startedAt: 1 }]),
+    )
+    await fs.writeFile(
+      path.join(workspace, 'settings.json'),
+      JSON.stringify({ _storeVersion: 0, mcpServers: [{ id: 'mcp-old', name: 'Legacy' }], theme: 'dark' }),
+    )
+
+    const appDatabase = await openSuoraDatabase(workspace)
+
+    await expect(fs.stat(path.join(workspace, 'timers', 'executions.json'))).rejects.toThrow()
+    await expect(fs.stat(path.join(workspace, 'pipelines', 'executions.json'))).rejects.toThrow()
+    expect(await readJson(path.join(workspace, 'timers', 'executions', 'tx-old.json'))).toMatchObject({ id: 'tx-old' })
+    expect(await readJson(path.join(workspace, 'pipelines', 'executions', 'px-old.json'))).toMatchObject({ id: 'px-old' })
+    expect(await readJson(path.join(workspace, 'mcp', 'index.json'))).toEqual([{ id: 'mcp-old', name: 'Legacy' }])
+
+    const migratedSettings = await readJson<Record<string, unknown>>(path.join(workspace, 'settings.json'))
+    expect('mcpServers' in migratedSettings).toBe(false)
+    expect(migratedSettings.theme).toBe('dark')
+
+    await appDatabase.close()
+  })
 })
