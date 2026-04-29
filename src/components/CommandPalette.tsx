@@ -56,7 +56,8 @@ export function CommandPalette() {
     if (open) {
       setQuery('')
       setSelectedIndex(0)
-      setTimeout(() => inputRef.current?.focus(), 50)
+      const focusTimer = setTimeout(() => inputRef.current?.focus(), 50)
+      return () => clearTimeout(focusTimer)
     }
   }, [open])
 

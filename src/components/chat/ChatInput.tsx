@@ -239,6 +239,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const interimTextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSubmit = () => {
     const text = input.trim()
@@ -354,7 +355,8 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
       recordingTimerRef.current = setInterval(() => setRecordingDuration((d) => d + 1), 1000)
     } catch {
       setInterimText(t('chat.microphoneDenied', 'Microphone access denied'))
-      setTimeout(() => setInterimText(''), 3000)
+      if (interimTextTimerRef.current) clearTimeout(interimTextTimerRef.current)
+      interimTextTimerRef.current = setTimeout(() => setInterimText(''), 3000)
     }
   }, [t])
 
@@ -372,6 +374,10 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
       if (recordingTimerRef.current) {
         clearInterval(recordingTimerRef.current)
         recordingTimerRef.current = null
+      }
+      if (interimTextTimerRef.current) {
+        clearTimeout(interimTextTimerRef.current)
+        interimTextTimerRef.current = null
       }
     }
   }, [])

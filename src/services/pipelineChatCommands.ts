@@ -86,7 +86,8 @@ function removeMentionedPipelineNames(input: string, pipelines: PipelineChatRefe
   return pipelines.reduce((current, pipeline) => {
     const name = pipeline.name.trim()
     if (!name) return current
-    return current.replace(new RegExp(escapeRegExp(name), 'gi'), ' ')
+    // Use function replacer to avoid $-substitution in replacement string
+    return current.replace(new RegExp(escapeRegExp(name), 'gi'), () => ' ')
   }, input)
 }
 

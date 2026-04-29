@@ -184,9 +184,9 @@ function resolvePipelineTemplate(
   const resolvedTask = task.replace(PIPELINE_REFERENCE_PATTERN, (_match, rawReference: string) => {
     usedReferences = true
     const value = resolvePipelineReference(rawReference, previousSteps, variables)
-    return value == null || value === ''
-      ? `[Missing ${rawReference.trim()}]`
-      : value
+    // Return value directly from function to avoid $-substitution in replacement string
+    if (value == null || value === '') return `[Missing ${rawReference.trim()}]`
+    return value
   })
 
   return { resolvedTask, usedReferences }

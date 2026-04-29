@@ -308,9 +308,10 @@ async function sendCustomMessage(channel: ChannelConfig, chatId: string, content
     // Use JSON.stringify to properly escape values, then strip surrounding quotes
     const safeContent = JSON.stringify(content).slice(1, -1)
     const safeChatId = JSON.stringify(chatId).slice(1, -1)
+    // Use function replacer to avoid $-substitution in replacement strings
     const payload = template
-      .replace(/\{\{content\}\}/g, safeContent)
-      .replace(/\{\{chatId\}\}/g, safeChatId)
+      .replace(/\{\{content\}\}/g, () => safeContent)
+      .replace(/\{\{chatId\}\}/g, () => safeChatId)
 
     const headers: Record<string, string> = { 'Content-Type': 'application/json; charset=utf-8' }
     if (channel.customAuthHeader && channel.customAuthValue) {

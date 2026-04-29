@@ -58,7 +58,8 @@ function tryParseStringLiteral(raw: string): string | undefined {
   if (trimmed.length < 2) return undefined
   const quote = trimmed[0]
   if ((quote === '"' || quote === "'") && trimmed.endsWith(quote)) {
-    return trimmed.slice(1, -1).replace(new RegExp(`\\\\${quote}`, 'g'), quote)
+    // Use function replacer to avoid $-substitution in replacement string
+    return trimmed.slice(1, -1).replace(new RegExp(`\\\\${quote}`, 'g'), () => quote)
   }
   return undefined
 }

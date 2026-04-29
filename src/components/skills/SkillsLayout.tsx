@@ -341,7 +341,7 @@ export function SkillsLayout() {
       body: t(
         'skills.uninstallBody',
         `"${skill.name}" and its files will be removed from this workspace. You can reinstall it later from the registry.`,
-      ).replace('{name}', skill.name)
+      ).replace('{name}', () => skill.name)
         + (skill.bundledResources?.length ? `\n\n${t('skills.resourcesToDelete', 'Resources to delete')}: ${skill.bundledResources.length}` : ''),
       danger: true,
       confirmText: t('skills.uninstall', 'Uninstall'),

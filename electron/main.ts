@@ -1117,7 +1117,8 @@ ipcMain.handle('fs:editFile', async (_event, filePath: string, oldText: string, 
     if (content.indexOf(oldText, firstMatch + oldText.length) !== -1) {
       return { error: `Old text is not unique in ${filePath}; provide a more specific snippet` }
     }
-    const updated = content.replace(oldText, newText)
+    // Use function replacer to avoid $-substitution in replacement string
+    const updated = content.replace(oldText, () => newText)
     await atomicWriteFile(filePath, updated)
     return { success: true }
   } catch (err: unknown) {
@@ -2763,6 +2764,7 @@ app.whenReady().then(async () => {
   // Check for updates after 10s delay (non-blocking)
   if (!isDev) {
     updateCheckTimeout = setTimeout(() => {
+      updateCheckTimeout = null
       checkForUpdates().then((update) => {
         if (update && mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('updater:available', update)
