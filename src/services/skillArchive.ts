@@ -23,6 +23,7 @@ function crc32(bytes: Uint8Array): number {
   for (const byte of bytes) {
     crc ^= byte
     for (let i = 0; i < 8; i++) {
+      // Reversed CRC-32 polynomial used by the ZIP file format.
       crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0)
     }
   }

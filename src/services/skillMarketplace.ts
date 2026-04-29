@@ -16,7 +16,7 @@ import type { SkillRegistrySource, RegistrySkillEntry, Skill, SkillBundledResour
 import { t } from '@/services/i18n'
 import { parseSkillMarkdown } from '@/services/skillRegistry'
 import { logger } from '@/services/logger'
-import { safePathSegment } from '@/utils/pathSegments'
+import { safePathSegment, skillDirectorySegment } from '@/utils/pathSegments'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 type GitHubContentItem = {
@@ -323,7 +323,7 @@ export async function installSkillFromRegistry(
       return null
     }
 
-    const safeSkillDirName = safePathSegment(entry.name, 'skill')
+    const safeSkillDirName = skillDirectorySegment(entry.name)
     const skillDir = `${targetDir}/${safeSkillDirName}`
     await electron.invoke('system:ensureDirectory', skillDir)
     const installLog = [`Installing ${entry.name} from ${entry.repository}`]
@@ -603,7 +603,9 @@ async function downloadGitHubSkillDirectory(
       }
       const content = await electron.invoke('web:fetchText', item.download_url) as { content?: string; error?: string }
       if (content.error || typeof content.content !== 'string') {
-        throw new Error(content.error || `Unexpected response while downloading ${relativePath}: ${typeof content.content}`)
+        throw new Error(content.error
+          ? `Failed to download ${item.path}: ${content.error}`
+          : `Unexpected response while downloading ${item.path}: ${typeof content.content}`)
       }
 
       const writeResult = await electron.invoke('fs:writeFile', `${localDir}/${safeName}`, content.content) as { success?: boolean; error?: string }
@@ -707,6 +709,8 @@ async function buildRegistryPreview(
 }
 
 async function computeResourceManifestHash(resources: SkillBundledResource[]): Promise<string> {
+  // Directory structure is intentionally part of the integrity hash: moving the
+  // same file content to a different bundled path changes how a skill resolves it.
   const manifest = resources
     .map((resource) => [
       resource.path,

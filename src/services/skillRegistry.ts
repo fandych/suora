@@ -26,6 +26,8 @@ type DirEntry = { name: string; isDirectory: boolean; path: string; size?: numbe
 
 const MAX_BUNDLED_RESOURCE_ENTRIES = 300
 const MAX_INLINE_REFERENCE_BYTES = 64 * 1024
+const MAX_PROMPT_SCRIPT_PATHS = 30
+const MAX_PROMPT_RESOURCE_ENTRIES = 80
 const REFERENCE_FILE_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.csv'])
 
 function getElectron(): ElectronBridge | undefined {
@@ -835,7 +837,7 @@ export async function buildSkillPrompts(
             const resource = skill.bundledResources?.find((entry) => normalizeResourcePath(entry.path) === normalizeResourcePath(ref.path))
             if (resource?.size && resource.size > MAX_INLINE_REFERENCE_BYTES) {
               const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'
-              lines.push(`### ${label}\n\nReference file is large (${resource.size} bytes). Read it on demand from ${refPath} instead of loading it all upfront.`)
+              lines.push(`### ${label}\n\nThis reference exceeds ${MAX_INLINE_REFERENCE_BYTES} bytes. Load it selectively from ${refPath} only when the task needs it.`)
               continue
             }
             const content = await electron.invoke('fs:readFile', refPath) as string | { error: string }
@@ -854,9 +856,9 @@ export async function buildSkillPrompts(
       const scripts = skill.bundledResources
         .filter((resource) => resource.type === 'file' && normalizeResourcePath(resource.path).toLowerCase().startsWith('scripts/'))
         .map((resource) => `- ${skill.skillRoot ? joinSkillResourcePath(skill.skillRoot, resource.path) : resource.path}`)
-        .slice(0, 30)
+        .slice(0, MAX_PROMPT_SCRIPT_PATHS)
       const manifest = skill.bundledResources
-        .slice(0, 80)
+        .slice(0, MAX_PROMPT_RESOURCE_ENTRIES)
         .map((resource) => `- ${resource.path}${resource.type === 'directory' ? '/' : ''}${resource.size ? ` (${resource.size} bytes)` : ''}${resource.executable ? ' [script]' : ''}`)
         .join('\n')
       const rootHint = skill.skillRoot ? `Skill root: ${skill.skillRoot}\n` : ''

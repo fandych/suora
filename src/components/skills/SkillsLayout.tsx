@@ -14,7 +14,7 @@ import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { SkillEditor } from './SkillEditor'
 import { settingsInputClass, settingsSoftButtonClass } from '@/components/settings/panelUi'
 import { buildSkillFromFolderFiles, downloadBlob, exportSkillToZipBlob, skillArchiveName } from '@/services/skillArchive'
-import { safePathSegment } from '@/utils/pathSegments'
+import { skillDirectorySegment } from '@/utils/pathSegments'
 
 type ViewMode = 'installed' | 'browse' | 'sources'
 
@@ -233,7 +233,7 @@ export function SkillsLayout() {
         .map((resource) => ({ path: resource.path, label: resource.path }))
 
       if (workspacePath) {
-        const skillDir = `${workspacePath}/.suora/skills/${safePathSegment(parsed.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-'), 'skill')}`
+        const skillDir = `${workspacePath}/.suora/skills/${skillDirectorySegment(parsed.name)}`
         await window.electron.invoke('system:ensureDirectory', skillDir)
         await window.electron.invoke('fs:writeFile', `${skillDir}/SKILL.md`, bundle.skillMarkdown)
         for (const resource of bundle.resources) {
