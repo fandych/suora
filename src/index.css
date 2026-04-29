@@ -365,6 +365,79 @@ code, pre, .font-mono, kbd, samp {
   white-space: nowrap;
 }
 
+.document-tiptap-preview .ProseMirror {
+  min-height: 100%;
+  outline: none;
+}
+
+.document-prose {
+  color: var(--t-text-primary);
+  font-size: 0.95rem;
+  line-height: 1.75;
+}
+
+.document-prose h1,
+.document-prose h2,
+.document-prose h3 {
+  color: var(--t-text-primary);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  margin: 1.1em 0 0.45em;
+}
+
+.document-prose h1 { font-size: 1.75rem; }
+.document-prose h2 { font-size: 1.3rem; }
+.document-prose h3 { font-size: 1.05rem; }
+
+.document-prose p {
+  margin: 0.65em 0;
+}
+
+.document-prose ul,
+.document-prose ol {
+  margin: 0.8em 0;
+  padding-left: 1.5rem;
+}
+
+.document-prose blockquote {
+  margin: 1rem 0;
+  border-left: 3px solid var(--t-accent);
+  padding: 0.5rem 0 0.5rem 1rem;
+  color: var(--t-text-secondary);
+  background: rgba(var(--t-accent-rgb), 0.06);
+  border-radius: 0 1rem 1rem 0;
+}
+
+.document-prose pre {
+  overflow-x: auto;
+  border: 1px solid var(--t-border-subtle);
+  border-radius: 1rem;
+  background: color-mix(in srgb, var(--t-surface-0) 86%, black);
+  padding: 1rem;
+}
+
+.document-prose code {
+  border: 1px solid var(--t-border-subtle);
+  border-radius: 0.45rem;
+  background: var(--t-surface-2);
+  color: var(--t-accent);
+  padding: 0.1rem 0.35rem;
+  font-size: 0.86em;
+}
+
+.document-prose pre code {
+  border: 0;
+  background: transparent;
+  color: var(--t-text-primary);
+  padding: 0;
+}
+
+.document-prose a {
+  color: var(--t-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* ── Compact desktop workbench density ── */
 .workbench-density {
   --workbench-card-radius: 0.375rem;

@@ -8,6 +8,7 @@ const translations: Record<AppLocale, TranslationMap> = {
   en: {
     // Navigation
     'nav.chat': 'Chat',
+    'nav.documents': 'Documents',
     'nav.pipeline': 'Pipeline',
     'nav.timer': 'Timer',
     'nav.agents': 'Agents',
@@ -26,6 +27,7 @@ const translations: Record<AppLocale, TranslationMap> = {
 
     // App
     'app.loadingChat': 'Loading Chat…',
+    'app.loadingDocuments': 'Loading Documents…',
     'app.loadingPipeline': 'Loading Pipeline…',
     'app.loadingModels': 'Loading Models…',
     'app.loadingAgents': 'Loading Agents…',
@@ -48,6 +50,7 @@ const translations: Record<AppLocale, TranslationMap> = {
     'commandPalette.openHint': '↵ Open',
     'commandPalette.closeHint': 'ESC Close',
     'commandPalette.pipelineSubtitle': 'Build and run agent pipelines',
+    'commandPalette.documentsSubtitle': 'Write markdown notes and nested document groups',
     'commandPalette.settingsSubtitle': 'Open settings page',
     'commandPalette.modelsSubtitle': 'Manage AI models',
     'commandPalette.mcpSubtitle': 'Configure MCP servers',

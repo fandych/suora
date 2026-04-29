@@ -1,6 +1,6 @@
 // Type definitions for the application
 
-export type ActiveModule = 'chat' | 'pipeline' | 'timer' | 'agents' | 'skills' | 'models' | 'mcp' | 'settings'
+export type ActiveModule = 'chat' | 'documents' | 'pipeline' | 'timer' | 'agents' | 'skills' | 'models' | 'mcp' | 'settings'
 
 export type Provider = string
 
@@ -174,6 +174,42 @@ export interface Session {
   modelId?: string
   messages: Message[]
 }
+
+// ─── Documents ──────────────────────────────────────────────────────
+
+export type DocumentNodeType = 'folder' | 'document'
+
+export interface DocumentGroup {
+  id: string
+  name: string
+  description?: string
+  color: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface DocumentFolder {
+  id: string
+  groupId: string
+  parentId: string | null
+  type: 'folder'
+  title: string
+  createdAt: number
+  updatedAt: number
+}
+
+export interface DocumentItem {
+  id: string
+  groupId: string
+  parentId: string | null
+  type: 'document'
+  title: string
+  markdown: string
+  createdAt: number
+  updatedAt: number
+}
+
+export type DocumentNode = DocumentFolder | DocumentItem
 
 // ─── Agent with self-learning & customization ──────────────────────
 

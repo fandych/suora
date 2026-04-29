@@ -13,6 +13,7 @@ import { initTimerRuntimeListener } from '@/services/timerRuntime'
 import { toast } from '@/services/toast'
 
 const ChatLayout = lazy(() => import('@/components/chat/ChatLayout').then(m => ({ default: m.ChatLayout })))
+const DocumentsLayout = lazy(() => import('@/components/documents/DocumentsLayout').then(m => ({ default: m.DocumentsLayout })))
 const PipelineLayout = lazy(() => import('@/components/pipeline/PipelineLayout').then(m => ({ default: m.PipelineLayout })))
 const ModelsLayout = lazy(() => import('@/components/models/ModelsLayout').then(m => ({ default: m.ModelsLayout })))
 const AgentsLayout = lazy(() => import('@/components/agents/AgentsLayout').then(m => ({ default: m.AgentsLayout })))
@@ -48,6 +49,7 @@ export default function App() {
       children: [
         { index: true, element: <Navigate to="/chat" replace /> },
         { path: 'chat', element: <LazyPage label={t('app.loadingChat', 'Loading Chat…')}><ChatLayout /></LazyPage> },
+        { path: 'documents', element: <LazyPage label={t('app.loadingDocuments', 'Loading Documents…')}><DocumentsLayout /></LazyPage> },
         { path: 'pipeline', element: <LazyPage label={t('app.loadingPipeline', 'Loading Pipeline…')}><PipelineLayout /></LazyPage> },
         { path: 'models', element: <Navigate to="/models/providers" replace /> },
         { path: 'models/:view', element: <LazyPage label={t('app.loadingModels', 'Loading Models…')}><ModelsLayout /></LazyPage> },
