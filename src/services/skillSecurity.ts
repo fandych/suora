@@ -170,26 +170,31 @@ export interface AuditLogEntry {
 
 const MAX_AUDIT_LOG = 1000
 const AUDIT_STORAGE_KEY = 'suora-audit-log'
+let auditLogCache: AuditLogEntry[] | null = null
 
 export function getAuditLog(): AuditLogEntry[] {
+  if (auditLogCache) return [...auditLogCache]
   try {
     const raw = readCached(AUDIT_STORAGE_KEY)
-    if (!raw) return []
-    return safeParse<AuditLogEntry[]>(raw)
+    auditLogCache = raw ? safeParse<AuditLogEntry[]>(raw) : []
+    return [...auditLogCache]
   } catch {
+    auditLogCache = []
     return []
   }
 }
 
 export function addAuditEntry(entry: AuditLogEntry): void {
-  const log = getAuditLog()
+  const log = auditLogCache ?? getAuditLog()
   log.push(entry)
   // Keep only the most recent entries
-  while (log.length > MAX_AUDIT_LOG) log.shift()
+  if (log.length > MAX_AUDIT_LOG) log.splice(0, log.length - MAX_AUDIT_LOG)
+  auditLogCache = log
   writeCached(AUDIT_STORAGE_KEY, safeStringify(log))
 }
 
 export function clearAuditLog(): void {
+  auditLogCache = null
   removeCached(AUDIT_STORAGE_KEY)
 }
 
