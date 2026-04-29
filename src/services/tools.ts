@@ -357,10 +357,6 @@ function summarizeMarkdown(value: string, maxLength = 240): string {
   return compact.length > maxLength ? `${compact.slice(0, maxLength)}...` : compact
 }
 
-function formatToolError(value: unknown): string {
-  return value instanceof Error ? value.message : String(value ?? 'Unknown error')
-}
-
 function buildUpdatedSkillContent(
   skill: Skill,
   updates: {
