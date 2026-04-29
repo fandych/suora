@@ -2016,14 +2016,16 @@ export const builtinToolDefs: ToolSet = {
         }, { to, subject, body, cc, bcc, isHtml: isHtml || false })
 
         // Race against a timeout so the tool never hangs forever
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null
         const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error(
+          timeoutHandle = setTimeout(() => reject(new Error(
             `Email send timed out after ${EMAIL_TIMEOUT / 1000}s. ` +
             `Check SMTP config: host=${cfg.smtpHost}, port=${port}, secure=${cfg.secure || false}. ` +
             `Common causes: wrong port, firewall blocking, or incorrect secure/TLS setting.`
           )), EMAIL_TIMEOUT)
         })
 
+        if (timeoutHandle) sendPromise.finally(() => clearTimeout(timeoutHandle!))
         const result = await Promise.race([sendPromise, timeoutPromise]) as { success: boolean; messageId?: string; error?: string }
 
         if (!result.success) {

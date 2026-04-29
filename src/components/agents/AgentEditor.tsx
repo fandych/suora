@@ -684,7 +684,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
                       type="number"
                       aria-label="Max tokens"
                       value={form.maxTokens ?? 4096}
-                      onChange={(e) => updateForm({ maxTokens: parseInt(e.target.value) || 4096 })}
+                      onChange={(e) => updateForm({ maxTokens: parseInt(e.target.value, 10) || 4096 })}
                       min={256}
                       max={128000}
                       className={editorInputClass}

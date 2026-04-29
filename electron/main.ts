@@ -2763,7 +2763,6 @@ app.whenReady().then(async () => {
   // Check for updates after 10s delay (non-blocking)
   if (!isDev) {
     updateCheckTimeout = setTimeout(() => {
-      updateCheckTimeout = null
       checkForUpdates().then((update) => {
         if (update && mainWindow && !mainWindow.isDestroyed()) {
           mainWindow.webContents.send('updater:available', update)

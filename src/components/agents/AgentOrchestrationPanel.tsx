@@ -90,7 +90,6 @@ export function AgentOrchestrationPanel({
 
   useEffect(() => {
     if (!supportsPipeline || !workspacePath) return
-    if (!workspacePath) return
     loadPipelinesFromDisk(workspacePath).then((savedPipelines) => {
       setAgentPipelines(savedPipelines)
     })
