@@ -29,6 +29,7 @@ const TYPED_ARRAY_CTORS = {
   BigInt64Array: typeof BigInt64Array === 'undefined' ? undefined : BigInt64Array,
   BigUint64Array: typeof BigUint64Array === 'undefined' ? undefined : BigUint64Array,
 } as const
+const BIGINT_TYPED_ARRAY_NAMES = new Set<TypedArrayName>(['BigInt64Array', 'BigUint64Array'])
 
 type TypedArrayName = keyof typeof TYPED_ARRAY_CTORS
 type TypedArrayValue = InstanceType<NonNullable<(typeof TYPED_ARRAY_CTORS)[TypedArrayName]>>
@@ -185,13 +186,23 @@ export function safeJsonReviver(_key: string, value: unknown): unknown {
       const ctor = TYPED_ARRAY_CTORS[tagged.name as TypedArrayName]
       if (!ctor) return value
       const values = tagged.values
-      if (tagged.name === 'BigInt64Array' || tagged.name === 'BigUint64Array') {
+      if (BIGINT_TYPED_ARRAY_NAMES.has(tagged.name as TypedArrayName)) {
         const bigints = values.map(reviveBigInt)
         if (bigints.some((entry) => entry === undefined)) return value
-        return new ctor(bigints as bigint[])
+        return new (ctor as BigInt64ArrayConstructor | BigUint64ArrayConstructor)(bigints as bigint[])
       }
       if (!values.every((entry) => typeof entry === 'number' && Number.isFinite(entry))) return value
-      return new ctor(values as number[])
+      return new (ctor as
+        | Int8ArrayConstructor
+        | Uint8ArrayConstructor
+        | Uint8ClampedArrayConstructor
+        | Int16ArrayConstructor
+        | Uint16ArrayConstructor
+        | Int32ArrayConstructor
+        | Uint32ArrayConstructor
+        | Float32ArrayConstructor
+        | Float64ArrayConstructor
+      )(values as number[])
     }
     default:
       return value

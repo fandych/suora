@@ -34,6 +34,42 @@ describe('safeJson', () => {
     expect(out.n).toBe(12345678901234567890n)
   })
 
+  it('preserves undefined object properties and array entries', () => {
+    const out = safeParse<{ a?: undefined; list: Array<number | undefined> }>(
+      safeStringify({ a: undefined, list: [1, undefined, 3] }),
+    )
+    expect(Object.prototype.hasOwnProperty.call(out, 'a')).toBe(true)
+    expect(out.a).toBeUndefined()
+    expect(out.list).toEqual([1, undefined, 3])
+  })
+
+  it('preserves non-finite numbers', () => {
+    const out = safeParse<{ nan: number; inf: number; negInf: number }>(
+      safeStringify({ nan: Number.NaN, inf: Infinity, negInf: -Infinity }),
+    )
+    expect(Number.isNaN(out.nan)).toBe(true)
+    expect(out.inf).toBe(Infinity)
+    expect(out.negInf).toBe(-Infinity)
+  })
+
+  it('preserves RegExp, URL, ArrayBuffer and typed arrays', () => {
+    const input = {
+      pattern: /suora/gi,
+      url: new URL('https://example.com/path?q=1'),
+      buffer: Uint8Array.from([1, 2, 3]).buffer,
+      bytes: new Uint16Array([4, 5, 6]),
+    }
+    const out = safeParse<typeof input>(safeStringify(input))
+    expect(out.pattern).toBeInstanceOf(RegExp)
+    expect(out.pattern.source).toBe('suora')
+    expect(out.pattern.flags).toContain('g')
+    expect(out.url).toBeInstanceOf(URL)
+    expect(out.url.toString()).toBe('https://example.com/path?q=1')
+    expect(Array.from(new Uint8Array(out.buffer))).toEqual([1, 2, 3])
+    expect(out.bytes).toBeInstanceOf(Uint16Array)
+    expect(Array.from(out.bytes)).toEqual([4, 5, 6])
+  })
+
   it('rehydrates Error with name/message/stack', () => {
     const e = new TypeError('boom')
     const out = safeParse<{ err: Error }>(safeStringify({ err: e }))
@@ -57,6 +93,12 @@ describe('safeJson', () => {
     const obj = { __suora_t: 42, value: 'nope' }
     const out = safeParse(safeStringify(obj))
     expect(out).toEqual(obj)
+  })
+
+  it('leaves malformed tagged values unchanged instead of throwing', () => {
+    expect(safeParse('{"__suora_t":"BigInt","value":"nope"}')).toEqual({ __suora_t: 'BigInt', value: 'nope' })
+    expect(safeParse('{"__suora_t":"Map","entries":[1]}')).toEqual({ __suora_t: 'Map', entries: [1] })
+    expect(safeParse('{"__suora_t":"RegExp","source":"(","flags":"g"}')).toEqual({ __suora_t: 'RegExp', source: '(', flags: 'g' })
   })
 
   it('handles nested rich types', () => {

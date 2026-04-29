@@ -3,6 +3,7 @@ import os from 'os'
 import path from 'path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SUORA_STORAGE_VERSION, getDatabasePath, openSuoraDatabase } from './database'
+import { safeParse, safeStringify } from '../src/utils/safeJson'
 
 const tempDirectories: string[] = []
 
@@ -13,7 +14,7 @@ async function makeWorkspace(): Promise<string> {
 }
 
 async function readJson<T>(filePath: string): Promise<T> {
-  return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T
+  return safeParse<T>(await fs.readFile(filePath, 'utf-8'))
 }
 
 afterEach(async () => {
@@ -62,7 +63,7 @@ describe('SuoraDatabase', () => {
   it('splits Zustand app state into workspace files and rebuilds it on load', async () => {
     const workspace = await makeWorkspace()
     const appDatabase = await openSuoraDatabase(workspace)
-    const payload = JSON.stringify({
+    const payload = safeStringify({
       state: {
         sessions: [{ id: 'session-1', title: 'Chat', createdAt: 1, updatedAt: 2, messages: [{ id: 'msg-1', role: 'user', content: 'Hi', timestamp: 3 }] }],
         activeSessionId: 'session-1',
@@ -94,7 +95,7 @@ describe('SuoraDatabase', () => {
     expect(await readJson(path.join(workspace, 'models.json'))).toMatchObject({ providerConfigs: [{ id: 'openai', models: [] }] })
 
     const reopened = await openSuoraDatabase(workspace)
-    const restored = JSON.parse((await reopened.getPersistedStore('suora-store')) ?? '{}') as { state: Record<string, unknown>; version: number }
+    const restored = safeParse<{ state: Record<string, unknown>; version: number }>((await reopened.getPersistedStore('suora-store')) ?? '{}')
 
     expect(restored.version).toBe(18)
     expect(restored.state.sessions).toEqual([{ id: 'session-1', title: 'Chat', createdAt: 1, updatedAt: 2, messages: [{ id: 'msg-1', role: 'user', content: 'Hi', timestamp: 3 }] }])
@@ -107,7 +108,7 @@ describe('SuoraDatabase', () => {
   it('persists generic store payloads in settings metadata', async () => {
     const workspace = await makeWorkspace()
     const appDatabase = await openSuoraDatabase(workspace)
-    const payload = JSON.stringify({ state: { value: true }, version: 1 })
+    const payload = safeStringify({ state: { value: true }, version: 1 })
 
     await appDatabase.savePersistedStore('other-store', payload, 1)
     await appDatabase.close()
@@ -144,6 +145,56 @@ describe('SuoraDatabase', () => {
     expect((await appDatabase.listJsonTable('timer_executions')).map((entry) => (entry as { id: string }).id)).toEqual(['tx-2'])
 
     await appDatabase.close()
+  })
+
+  it('round-trips rich JSON values through split store and entity files', async () => {
+    const workspace = await makeWorkspace()
+    const appDatabase = await openSuoraDatabase(workspace)
+    const createdAt = new Date('2026-04-29T03:30:00.000Z')
+    const payload = safeStringify({
+      state: {
+        sessions: [{
+          id: 'session-rich',
+          title: 'Rich',
+          createdAt: createdAt.getTime(),
+          updatedAt: createdAt.getTime(),
+          messages: [{
+            id: 'msg-rich',
+            role: 'tool',
+            content: 'done',
+            timestamp: createdAt.getTime(),
+            runtime: { startedAt: createdAt, flags: new Set(['a', 'b']) },
+          }],
+        }],
+        agents: [],
+        globalMemories: [{ id: 'memory-rich', createdAt, metadata: new Map([['kind', 'test']]) }],
+      },
+      version: 18,
+    })
+
+    await appDatabase.savePersistedStore('suora-store', payload, 18)
+    await appDatabase.saveJsonEntity('timer_executions', 'tx-rich', {
+      id: 'tx-rich',
+      firedAt: createdAt,
+      payload: new Map([['attempt', 1]]),
+    })
+
+    const reopened = await openSuoraDatabase(workspace)
+    const restored = safeParse<{ state: Record<string, unknown> }>((await reopened.getPersistedStore('suora-store')) ?? '{}')
+    const sessions = restored.state.sessions as Array<{ messages: Array<{ runtime: { startedAt: Date; flags: Set<string> } }> }>
+    const memories = restored.state.globalMemories as Array<{ createdAt: Date; metadata: Map<string, string> }>
+    const executions = await reopened.listJsonTable('timer_executions') as Array<{ id: string; firedAt: Date; payload: Map<string, number> }>
+
+    expect(sessions[0].messages[0].runtime.startedAt).toBeInstanceOf(Date)
+    expect(sessions[0].messages[0].runtime.flags).toBeInstanceOf(Set)
+    expect(Array.from(sessions[0].messages[0].runtime.flags)).toEqual(['a', 'b'])
+    expect(memories[0].createdAt).toBeInstanceOf(Date)
+    expect(memories[0].metadata).toBeInstanceOf(Map)
+    expect(memories[0].metadata.get('kind')).toBe('test')
+    expect(executions.find((entry) => entry.id === 'tx-rich')?.firedAt).toBeInstanceOf(Date)
+    expect(executions.find((entry) => entry.id === 'tx-rich')?.payload).toBeInstanceOf(Map)
+
+    await reopened.close()
   })
 
   it('stores MCP server configs in a dedicated mcp folder', async () => {
