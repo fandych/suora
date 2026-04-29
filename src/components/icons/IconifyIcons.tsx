@@ -219,6 +219,78 @@ export function parseIconValue(value: string): { name: string; color?: string } 
   return { name: value }
 }
 
+/**
+ * Validate that a colour string is a safe CSS colour (hex, rgb/rgba/hsl/hsla,
+ * or a known keyword) before splicing it into raw SVG markup. Without this,
+ * a crafted value such as `"/><script>…</script>` would XSS the renderer
+ * since the SVG body is injected via dangerouslySetInnerHTML.
+ *
+ * Keyword colours are matched against an explicit allowlist (CSS Level 4
+ * named colours plus a couple of CSS-wide keywords) rather than a generic
+ * `[a-zA-Z]+` pattern, to avoid accepting arbitrary identifiers.
+ */
+const SAFE_CSS_COLOR_KEYWORDS = new Set<string>([
+  'currentcolor', 'transparent', 'inherit', 'initial', 'unset', 'revert',
+  'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure',
+  'beige', 'bisque', 'black', 'blanchedalmond', 'blue', 'blueviolet', 'brown', 'burlywood',
+  'cadetblue', 'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'cyan',
+  'darkblue', 'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgreen', 'darkgrey', 'darkkhaki',
+  'darkmagenta', 'darkolivegreen', 'darkorange', 'darkorchid', 'darkred', 'darksalmon',
+  'darkseagreen', 'darkslateblue', 'darkslategray', 'darkslategrey', 'darkturquoise', 'darkviolet',
+  'deeppink', 'deepskyblue', 'dimgray', 'dimgrey', 'dodgerblue',
+  'firebrick', 'floralwhite', 'forestgreen', 'fuchsia',
+  'gainsboro', 'ghostwhite', 'gold', 'goldenrod', 'gray', 'green', 'greenyellow', 'grey',
+  'honeydew', 'hotpink',
+  'indianred', 'indigo', 'ivory',
+  'khaki',
+  'lavender', 'lavenderblush', 'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan',
+  'lightgoldenrodyellow', 'lightgray', 'lightgreen', 'lightgrey', 'lightpink', 'lightsalmon',
+  'lightseagreen', 'lightskyblue', 'lightslategray', 'lightslategrey', 'lightsteelblue',
+  'lightyellow', 'lime', 'limegreen', 'linen',
+  'magenta', 'maroon', 'mediumaquamarine', 'mediumblue', 'mediumorchid', 'mediumpurple',
+  'mediumseagreen', 'mediumslateblue', 'mediumspringgreen', 'mediumturquoise', 'mediumvioletred',
+  'midnightblue', 'mintcream', 'mistyrose', 'moccasin',
+  'navajowhite', 'navy',
+  'oldlace', 'olive', 'olivedrab', 'orange', 'orangered', 'orchid',
+  'palegoldenrod', 'palegreen', 'paleturquoise', 'palevioletred', 'papayawhip', 'peachpuff',
+  'peru', 'pink', 'plum', 'powderblue', 'purple',
+  'rebeccapurple', 'red', 'rosybrown', 'royalblue',
+  'saddlebrown', 'salmon', 'sandybrown', 'seagreen', 'seashell', 'sienna', 'silver', 'skyblue',
+  'slateblue', 'slategray', 'slategrey', 'snow', 'springgreen', 'steelblue',
+  'tan', 'teal', 'thistle', 'tomato', 'turquoise',
+  'violet',
+  'wheat', 'white', 'whitesmoke',
+  'yellow', 'yellowgreen',
+])
+
+// Per-component CSS number / percentage / alpha sub-patterns used to
+// build the rgb()/rgba()/hsl()/hsla() validators below. Keeping these
+// strict is important — the sanitised value is spliced verbatim into raw
+// SVG markup, so an overly permissive regex (e.g. one that admits
+// `rgba(0.0.0.0)` or stray characters) would re-open the XSS vector that
+// `dangerouslySetInnerHTML` exposes.
+const NUM = String.raw`-?\d+(?:\.\d+)?`
+const PCT = String.raw`-?\d+(?:\.\d+)?%`
+const NUM_OR_PCT = `(?:${NUM}|${PCT})`
+const ALPHA = `(?:${NUM}|${PCT})`
+const SAFE_RGB_RE = new RegExp(
+  `^rgba?\\(\\s*${NUM_OR_PCT}\\s*,\\s*${NUM_OR_PCT}\\s*,\\s*${NUM_OR_PCT}(?:\\s*,\\s*${ALPHA})?\\s*\\)$`,
+)
+const SAFE_HSL_RE = new RegExp(
+  `^hsla?\\(\\s*${NUM}(?:deg|rad|grad|turn)?\\s*,\\s*${PCT}\\s*,\\s*${PCT}(?:\\s*,\\s*${ALPHA})?\\s*\\)$`,
+)
+const SAFE_HEX_RE = /^#[0-9a-fA-F]{3,8}$/
+
+function safeCssColor(input: string | undefined, fallback: string): string {
+  if (!input) return fallback
+  const trimmed = input.trim()
+  if (SAFE_HEX_RE.test(trimmed)) return trimmed
+  if (SAFE_RGB_RE.test(trimmed)) return trimmed
+  if (SAFE_HSL_RE.test(trimmed)) return trimmed
+  if (SAFE_CSS_COLOR_KEYWORDS.has(trimmed.toLowerCase())) return trimmed
+  return fallback
+}
+
 interface IconifyIconProps {
   /** Icon name: preset ("agent-robot") or iconify ("mdi:home") */
   name: string
@@ -264,7 +336,7 @@ export function IconifyIcon({ name: rawName, size = 20, className, color }: Icon
     )
   }
 
-  const fillColor = resolvedColor ?? data.color
+  const fillColor = safeCssColor(resolvedColor ?? data.color, 'currentColor')
 
   return (
     <svg

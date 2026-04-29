@@ -9,6 +9,7 @@ import { execFile } from 'child_process'
 import crypto from 'crypto'
 import https from 'https'
 import net from 'net'
+import dns from 'dns'
 import { CronExpressionParser } from 'cron-parser'
 import { MAX_IPC_TEXT_FILE_BYTES, atomicWriteFile, canonicalizePathSync, isWithinRoot, readTextFileRange, readTextFileWithLimit, resolveUserPath } from './fsUtils.js'
 import { initLogger, getLogger, closeLogger, type LogLevel } from './logger.js'
@@ -29,6 +30,69 @@ function isPrivateIPv4(hostname: string): boolean {
   return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
 }
 
+function isBlockedIp(ip: string): boolean {
+  const family = net.isIP(ip)
+  if (family === 4) return isPrivateIPv4(ip)
+  if (family === 6) {
+    const lower = ip.toLowerCase()
+    if (lower === '::1' || lower === '0:0:0:0:0:0:0:1') return true
+    if (lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80:')) return true
+    const v4Mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
+    if (v4Mapped) return isPrivateIPv4(v4Mapped[1])
+  }
+  return false
+}
+
+/**
+ * Custom DNS lookup that rejects resolved private/loopback addresses.
+ * Used as the `lookup` option for http(s) requests to prevent DNS-rebinding
+ * SSRF where a hostname passes string-level checks but resolves at connect
+ * time to 127.0.0.1, 169.254.169.254, etc.
+ */
+function safeDnsLookup(
+  hostname: string,
+  options: dns.LookupOptions | number,
+  callback: (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family: number) => void,
+): void {
+  const opts: dns.LookupOptions = typeof options === 'number' ? { family: options } : (options ?? {})
+  const wantAll = opts.all === true
+  if (wantAll) {
+    dns.lookup(hostname, { ...opts, all: true }, (err, addresses) => {
+      if (err) {
+        ;(callback as (e: NodeJS.ErrnoException | null, a: dns.LookupAddress[], f: number) => void)(err, addresses, 0)
+        return
+      }
+      for (const entry of addresses) {
+        if (isBlockedIp(entry.address)) {
+          ;(callback as (e: NodeJS.ErrnoException | null, a: dns.LookupAddress[], f: number) => void)(
+            new Error(`Blocked private/local network IP for ${hostname}: ${entry.address}`),
+            addresses,
+            0,
+          )
+          return
+        }
+      }
+      ;(callback as (e: NodeJS.ErrnoException | null, a: dns.LookupAddress[], f: number) => void)(null, addresses, 0)
+    })
+    return
+  }
+  dns.lookup(hostname, { ...opts, all: false }, (err, address, family) => {
+    if (err) {
+      ;(callback as (e: NodeJS.ErrnoException | null, a: string, f: number) => void)(err, address, family)
+      return
+    }
+    if (isBlockedIp(address)) {
+      ;(callback as (e: NodeJS.ErrnoException | null, a: string, f: number) => void)(
+        new Error(`Blocked private/local network IP for ${hostname}: ${address}`),
+        address,
+        family,
+      )
+      return
+    }
+    ;(callback as (e: NodeJS.ErrnoException | null, a: string, f: number) => void)(null, address, family)
+  })
+}
+
 function isBlockedNetworkHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '')
   if (normalized === 'localhost' || normalized.endsWith('.localhost')) return true
@@ -47,6 +111,26 @@ function validatePublicHttpUrl(rawUrl: string, allowedHosts?: ReadonlySet<string
   }
   if (isBlockedNetworkHost(parsed.hostname)) {
     throw new Error(`Blocked private or local network host: ${parsed.hostname}`)
+  }
+  return parsed
+}
+
+/**
+ * Like {@link validatePublicHttpUrl}, but additionally resolves the hostname
+ * via DNS and rejects responses that would point at a private/loopback IP.
+ * This catches DNS-rebinding tricks where a public-looking hostname has a
+ * private A record (e.g. attacker.example.com → 127.0.0.1).
+ */
+async function validatePublicHttpUrlWithDns(rawUrl: string, allowedHosts?: ReadonlySet<string>): Promise<URL> {
+  const parsed = validatePublicHttpUrl(rawUrl, allowedHosts)
+  // If the hostname is already a literal IP, validatePublicHttpUrl handled it.
+  if (net.isIP(parsed.hostname) === 0) {
+    const records = await dns.promises.lookup(parsed.hostname, { all: true })
+    for (const record of records) {
+      if (isBlockedIp(record.address)) {
+        throw new Error(`Blocked private/local network IP for ${parsed.hostname}: ${record.address}`)
+      }
+    }
   }
   return parsed
 }
@@ -175,6 +259,30 @@ async function createWindow() {
   }
 
   mainWindow.setMenuBarVisibility(false)
+
+  // Security: deny popups and external navigations from the renderer.
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        shell.openExternal(url)
+      }
+    } catch {
+      // Ignore malformed URLs
+    }
+    return { action: 'deny' }
+  })
+  mainWindow.webContents.on('will-navigate', (event, navUrl) => {
+    // Allow the dev server URL and the local renderer file. Block everything
+    // else (deep links go through `deep-link` IPC, not navigation).
+    const devUrl = process.env['ELECTRON_RENDERER_URL']
+    if (devUrl && navUrl.startsWith(devUrl)) return
+    if (navUrl.startsWith('file://')) return
+    event.preventDefault()
+  })
+  mainWindow.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault()
+  })
 
   if (isDev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -336,6 +444,12 @@ ipcMain.handle('db:savePersistedStore', async (_event, key: unknown, value: unkn
     const keyError = validateDatabaseKey(key, 'Persisted store key')
     if (keyError) return { error: keyError }
     if (typeof value !== 'string' || !value.trim()) return { error: 'Persisted store value is required' }
+    // Reject pathologically large payloads so a buggy/compromised renderer
+    // can't blow up the workspace database.
+    const MAX_PERSISTED_STORE_BYTES = 32 * 1024 * 1024
+    if (value.length > MAX_PERSISTED_STORE_BYTES) {
+      return { error: `Persisted store value exceeds ${MAX_PERSISTED_STORE_BYTES} bytes (${value.length})` }
+    }
     const parsedVersion = typeof version === 'number' && Number.isFinite(version) ? Math.trunc(version) : 0
     const database = await getSuoraDatabase()
     await database.savePersistedStore(key as string, value, parsedVersion)
@@ -848,6 +962,19 @@ ipcMain.handle('shell:exec', async (_event, command: unknown): Promise<ShellExec
   }
 
   return new Promise<ShellExecResult>((resolve) => {
+    // Minimal env — never inherit `process.env`, which contains API keys
+    // (ANTHROPIC_API_KEY, OPENAI_API_KEY, etc.) loaded by the renderer.
+    const minimalEnv: NodeJS.ProcessEnv = {
+      PATH: process.env.PATH ?? '',
+      HOME: process.env.HOME ?? '',
+      LANG: process.env.LANG ?? 'C.UTF-8',
+    }
+    if (process.platform === 'win32') {
+      minimalEnv.SYSTEMROOT = process.env.SYSTEMROOT ?? ''
+      minimalEnv.USERPROFILE = process.env.USERPROFILE ?? ''
+      minimalEnv.TEMP = process.env.TEMP ?? ''
+      minimalEnv.TMP = process.env.TMP ?? ''
+    }
     execFile(
       bin,
       args,
@@ -856,6 +983,7 @@ ipcMain.handle('shell:exec', async (_event, command: unknown): Promise<ShellExec
         maxBuffer: 1024 * 1024,
         cwd: currentWorkspacePath,
         windowsHide: true,
+        env: minimalEnv,
       },
       (error, stdout, stderr) => {
         resolve({
@@ -1244,6 +1372,7 @@ function httpsRequest(
     const reqOptions: https.RequestOptions = {
       method,
       headers: options.headers ?? {},
+      lookup: safeDnsLookup,
     }
 
     const req = reqModule.request(url, reqOptions, (res: IncomingMessage) => {
@@ -1345,7 +1474,7 @@ interface FetchRequest {
 
 type HttpGetFn = (url: string, options: Record<string, unknown>, callback: (res: FetchResponse) => void) => FetchRequest
 
-function fetchUrl(url: string, redirectsLeft = 5): Promise<string> {
+function fetchUrl(url: string, redirectsLeft = 5): Promise<{ body: string; rawTruncated: boolean }> {
   return new Promise((resolve, reject) => {
     if (redirectsLeft <= 0) return reject(new Error('Too many redirects'))
     try {
@@ -1357,7 +1486,7 @@ function fetchUrl(url: string, redirectsLeft = 5): Promise<string> {
     const mod = url.startsWith('https:') ? https : http
     const req = (mod.get as unknown as HttpGetFn)(
       url,
-      { headers: { 'User-Agent': 'Mozilla/5.0 Suora/1.0', Accept: 'text/html' } },
+      { headers: { 'User-Agent': 'Mozilla/5.0 Suora/1.0', Accept: 'text/html' }, lookup: safeDnsLookup },
       (res: FetchResponse) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           const next = new URL(res.headers.location as string, url).toString()
@@ -1371,14 +1500,20 @@ function fetchUrl(url: string, redirectsLeft = 5): Promise<string> {
           reject(new Error(`Unsupported content type: ${ct}`))
           return
         }
+        const RAW_LIMIT = 512 * 1024
         let raw = ''
         let totalLen = 0
+        let rawTruncated = false
         res.on('data', (chunk: unknown) => {
           const s = String(chunk)
           totalLen += s.length
-          if (totalLen <= 512 * 1024) raw += s
+          if (totalLen <= RAW_LIMIT) {
+            raw += s
+          } else {
+            rawTruncated = true
+          }
         })
-        res.on('end', () => resolve(raw))
+        res.on('end', () => resolve({ body: raw, rawTruncated }))
       }
     )
     req.on('error', reject)
@@ -1392,9 +1527,10 @@ function fetchUrl(url: string, redirectsLeft = 5): Promise<string> {
 ipcMain.handle('web:fetch', async (_event, url: string) => {
   try {
     validatePublicHttpUrl(url)
-    const raw = await fetchUrl(url)
+    const { body: raw, rawTruncated } = await fetchUrl(url)
     const text = stripHtml(raw)
-    return { content: text.slice(0, 8000), url, truncated: text.length > 8000 }
+    const truncated = rawTruncated || text.length > 8000
+    return { content: text.slice(0, 8000), url, truncated, rawTruncated }
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
   }
@@ -1403,11 +1539,11 @@ ipcMain.handle('web:fetch', async (_event, url: string) => {
 ipcMain.handle('web:fetchText', async (_event, url: string) => {
   try {
     validatePublicHttpUrl(url)
-    const raw = await fetchUrl(url)
+    const { body: raw, rawTruncated } = await fetchUrl(url)
     if (raw.length > MAX_IPC_TEXT_FILE_BYTES) {
       return { error: `Response is too large (${raw.length} bytes)` }
     }
-    return { content: raw, url }
+    return { content: raw, url, truncated: rawTruncated, rawTruncated }
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
   }
@@ -1438,7 +1574,22 @@ function getAutomationWindow(): BrowserWindow {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      // Isolate cookies/storage from the main app session and from prior
+      // automation runs — prevents accumulating cross-site state.
+      partition: 'automation',
     },
+  })
+  // Block any popups, new windows, and unwanted navigations the page might attempt.
+  automationWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  automationWindow.webContents.on('will-navigate', (event, navUrl) => {
+    try {
+      validatePublicHttpUrl(navUrl)
+    } catch {
+      event.preventDefault()
+    }
+  })
+  automationWindow.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault()
   })
   return automationWindow
 }
@@ -1452,6 +1603,9 @@ function validateBrowserUrl(url: string): void {
 
 async function navigateAutomationWindow(url: string): Promise<BrowserWindow> {
   validateBrowserUrl(url)
+  // Best-effort DNS rebinding protection for browser navigation: resolve
+  // the hostname and reject if any A/AAAA points at a private/loopback IP.
+  await validatePublicHttpUrlWithDns(url)
   const win = getAutomationWindow()
   await Promise.race([
     win.loadURL(url),
@@ -2040,6 +2194,12 @@ ipcMain.handle('channel:streamStatus', (_event, channelId: string) => {
 })
 
 ipcMain.handle('channel:debugSend', async (_event, channelId: string, mockMessage: string) => {
+  // Restrict simulated inbound messages to development. In production a XSS
+  // in the renderer could otherwise forge platform messages and trigger the
+  // agent pipeline.
+  if (!isDev) {
+    return { error: 'channel:debugSend is only available in development builds' }
+  }
   try {
     const channelService = getChannelService()
     await channelService.simulateIncomingMessage(channelId, mockMessage)
@@ -2545,24 +2705,47 @@ ipcMain.handle('perf:getMetrics', () => {
 
 // ─── App Lifecycle ─────────────────────────────────────────────────
 
-app.whenReady().then(() => {
-  createWindow()
+let updateCheckTimeout: ReturnType<typeof setTimeout> | null = null
+
+app.whenReady().then(async () => {
+  await createWindow()
   createTray()
   registerGlobalShortcuts()
   startTimerEngine()
   // Check for updates after 10s delay (non-blocking)
   if (!isDev) {
-    setTimeout(() => checkForUpdates().then((update) => {
-      if (update && mainWindow) {
-        mainWindow.webContents.send('updater:available', update)
-      }
-    }).catch(() => {}), 10000)
+    updateCheckTimeout = setTimeout(() => {
+      updateCheckTimeout = null
+      checkForUpdates().then((update) => {
+        if (update && mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('updater:available', update)
+        }
+      }).catch(() => {})
+    }, 10000)
+  }
+})
+
+app.on('before-quit', () => {
+  if (updateCheckTimeout) {
+    clearTimeout(updateCheckTimeout)
+    updateCheckTimeout = null
   }
 })
 
 app.on('window-all-closed', async () => {
+  if (updateCheckTimeout) {
+    clearTimeout(updateCheckTimeout)
+    updateCheckTimeout = null
+  }
   stopTimerEngine()
   globalShortcut.unregisterAll()
+  // Stop the channel webhook server so it doesn't keep listening when the
+  // app is fully closed (especially on macOS where the process lingers).
+  try {
+    await channelService.stop()
+  } catch (err) {
+    logger.error('Failed to stop channel service', { error: err instanceof Error ? err.message : String(err) })
+  }
   await closeSuoraDatabase()
   // Close file watchers
   for (const [, watcher] of activeWatchers) {

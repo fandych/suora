@@ -715,8 +715,9 @@ export class ChannelService {
 
     // Verify Telegram secret token if configured
     if (channel.webhookSecret) {
-      const secretToken = req.headers['x-telegram-bot-api-secret-token'] as string
-      if (secretToken !== channel.webhookSecret) {
+      const headerValue = req.headers['x-telegram-bot-api-secret-token']
+      const secretToken = typeof headerValue === 'string' ? headerValue : ''
+      if (!secretToken || !this.timingSafeCompare(secretToken, channel.webhookSecret)) {
         getLogger().warn('Telegram secret token verification failed', { channelId: channel.id })
         return res.status(403).json({ error: 'Invalid secret token' })
       }
@@ -927,9 +928,17 @@ export class ChannelService {
   }
 
   /**
-   * Verify DingTalk signature
+   * Verify DingTalk signature with replay protection.
+   * DingTalk signs `{timestamp}\n{appSecret}` — to prevent indefinite replay
+   * we additionally enforce that the timestamp is within a short window of
+   * the current server time (matching DingTalk's official 1-hour guidance).
    */
   private verifyDingTalkSignature(timestamp: string, appSecret: string, receivedSign: string): boolean {
+    const tsMs = Number.parseInt(timestamp, 10)
+    if (!Number.isFinite(tsMs) || tsMs <= 0) return false
+    const DINGTALK_REQUEST_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
+    if (Math.abs(Date.now() - tsMs) > DINGTALK_REQUEST_MAX_AGE_MS) return false
+
     const stringToSign = timestamp + '\n' + appSecret
     const sign = crypto
       .createHmac('sha256', appSecret)
@@ -1069,8 +1078,12 @@ export class ChannelService {
 
     return new Promise((resolve) => {
       this.server = createServer(this.app)
-      this.server.listen(this.port, () => {
-        getLogger().info('Channel service started', { port: this.port })
+      // Bind to loopback only — webhooks are reached via the configurable
+      // public URL the user sets per-channel (typically a tunnel/reverse
+      // proxy). Listening on 0.0.0.0 by default would expose the bot to
+      // every device on the local network.
+      this.server.listen(this.port, '127.0.0.1', () => {
+        getLogger().info('Channel service started', { port: this.port, host: '127.0.0.1' })
         resolve()
       })
     })

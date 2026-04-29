@@ -9,10 +9,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     strategy:
       matrix:
-        node-version: [20.x, 22.x]
+        # @electron/rebuild requires node >= 22.12, so we drop 20.x.
+        node-version: [22.x]
 
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +71,13 @@ jobs:
           retention-days: 30
 
   build:
+    # Only run the (slow) cross-platform packaging job for pushes to main —
+    # PRs run the lighter `test` job above. This avoids invoking
+    # electron-builder with publish:github on every PR.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
 
     strategy:
       matrix:

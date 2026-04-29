@@ -159,7 +159,50 @@ export type AppStreamEvent =
 
 // ─── Provider management ───────────────────────────────────────────
 
-const providerInstances: Record<string, ReturnType<typeof createOpenAI> | ReturnType<typeof createAnthropic> | ReturnType<typeof createOpenAICompatible>> = {}
+type ProviderInstance =
+  | ReturnType<typeof createOpenAI>
+  | ReturnType<typeof createAnthropic>
+  | ReturnType<typeof createOpenAICompatible>
+
+/**
+ * LRU-bounded cache of provider instances. The cache key encodes
+ * `providerId:apiKey:baseUrl`, so rotating an API key or changing the base
+ * URL produces a new entry. Without a bound, every key rotation kept the
+ * old credentials live in memory until process exit.
+ */
+const MAX_PROVIDER_INSTANCES = 32
+const providerInstances = new Map<string, ProviderInstance>()
+
+function setProviderInstance(key: string, instance: ProviderInstance): void {
+  // Evict any prior instance for the same providerId so renames/key changes
+  // don't accumulate stale entries.
+  const colonIdx = key.indexOf(':')
+  if (colonIdx >= 0) {
+    const providerPrefix = key.slice(0, colonIdx + 1)
+    for (const existing of Array.from(providerInstances.keys())) {
+      if (existing !== key && existing.startsWith(providerPrefix)) {
+        providerInstances.delete(existing)
+      }
+    }
+  }
+  providerInstances.delete(key)
+  providerInstances.set(key, instance)
+  while (providerInstances.size > MAX_PROVIDER_INSTANCES) {
+    const oldest = providerInstances.keys().next().value
+    if (oldest === undefined) break
+    providerInstances.delete(oldest)
+  }
+}
+
+function getProviderInstance(key: string): ProviderInstance | undefined {
+  const value = providerInstances.get(key)
+  if (value !== undefined) {
+    // Refresh LRU position
+    providerInstances.delete(key)
+    providerInstances.set(key, value)
+  }
+  return value
+}
 
 /**
  * Validate model configuration completeness
@@ -219,78 +262,83 @@ export function initializeProvider(
   }
 
   const key = `${providerId ?? providerType}:${apiKey}:${baseUrl ?? ''}`
-  if (providerInstances[key]) return
+  if (providerInstances.has(key)) {
+    // Refresh LRU position
+    getProviderInstance(key)
+    return
+  }
 
+  let instance: ProviderInstance
   switch (providerType) {
     case 'anthropic':
-      providerInstances[key] = createAnthropic({ apiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
+      instance = createAnthropic({ apiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
       break
     case 'openai':
-      providerInstances[key] = createOpenAI({ apiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
+      instance = createOpenAI({ apiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
       break
     case 'google':
-      providerInstances[key] = createOpenAI({
+      instance = createOpenAI({
         apiKey,
         baseURL: baseUrl || 'https://generativelanguage.googleapis.com/v1beta/openai',
       })
       break
     case 'ollama':
-      providerInstances[key] = createOpenAI({
+      instance = createOpenAI({
         apiKey: apiKey || 'ollama',
         baseURL: baseUrl || 'http://localhost:11434/v1',
       })
       break
     case 'deepseek':
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'deepseek',
         apiKey,
         baseURL: baseUrl || 'https://api.deepseek.com/v1',
       })
       break
     case 'zhipu':
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'zhipu',
         apiKey,
         baseURL: baseUrl || 'https://open.bigmodel.cn/api/paas/v4',
       })
       break
     case 'minimax':
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'minimax',
         apiKey,
         baseURL: baseUrl || 'https://api.minimax.chat/v1',
       })
       break
     case 'groq':
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'groq',
         apiKey,
         baseURL: baseUrl || 'https://api.groq.com/openai/v1',
       })
       break
     case 'together':
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'together',
         apiKey,
         baseURL: baseUrl || 'https://api.together.xyz/v1',
       })
       break
     case 'fireworks':
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'fireworks',
         apiKey,
         baseURL: baseUrl || 'https://api.fireworks.ai/inference/v1',
       })
       break
     case 'perplexity':
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'perplexity',
         apiKey,
         baseURL: baseUrl || 'https://api.perplexity.ai',
       })
       break
     case 'cohere':
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'cohere',
         apiKey,
         baseURL: baseUrl || 'https://api.cohere.ai/v1',
@@ -298,24 +346,24 @@ export function initializeProvider(
       break
     case 'openai-compatible':
     default:
-      providerInstances[key] = createOpenAICompatible({
+      instance = createOpenAICompatible({
         name: providerId || 'custom-provider',
         apiKey: apiKey || '',
         baseURL: baseUrl || '',
       })
       break
   }
+  setProviderInstance(key, instance)
 }
 
 function getProvider(provider: string, apiKey?: string, baseUrl?: string) {
   const searchKey = `${provider}:${apiKey ?? ''}:${baseUrl ?? ''}`
-  if (providerInstances[searchKey]) {
-    return providerInstances[searchKey]
-  }
+  const direct = getProviderInstance(searchKey)
+  if (direct) return direct
   if (apiKey !== undefined || baseUrl !== undefined) {
     return null
   }
-  for (const [key, instance] of Object.entries(providerInstances)) {
+  for (const [key, instance] of providerInstances) {
     if (key.startsWith(provider + ':')) return instance
   }
   return null
