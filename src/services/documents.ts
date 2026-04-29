@@ -48,6 +48,7 @@ export function extractMarkdownReferences(markdown: string): string[] {
   }
   while ((match = markdownPattern.exec(markdown)) !== null) {
     refs.add(match[1].trim())
+    refs.add(match[2].trim())
   }
 
   return Array.from(refs).filter(Boolean)

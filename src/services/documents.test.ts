@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { DocumentItem, DocumentNode } from '@/types'
+import { buildDocumentGraph, extractDocumentReferenceTargets, extractDocumentTags } from './documentGraph'
+import { toGraphifyExport } from './graphifyAdapter'
 import { createDocument, createDocumentGroup, extractMarkdownReferences, findReferencedDocuments, searchDocuments } from './documents'
 
 describe('documents service', () => {
@@ -28,6 +30,7 @@ describe('documents service', () => {
     expect(extractMarkdownReferences('Read [[Architecture]] and [Roadmap](#doc:roadmap-id).')).toEqual([
       'Architecture',
       'Roadmap',
+      'roadmap-id',
     ])
   })
 
@@ -52,5 +55,54 @@ describe('documents service', () => {
 
     expect(results.map((result) => result.node.id)).toEqual(['a', 'b'])
     expect(results[1].excerpt).toContain('Architecture follow-up')
+  })
+
+  it('extracts graph reference targets and tags from markdown', () => {
+    const markdown = `---
+tags: [research, ai]
+---
+
+Read [[Architecture]] and [Plan](#doc:plan-id). #daily`
+
+    expect(extractDocumentReferenceTargets(markdown)).toEqual([
+      { label: 'Architecture', target: 'Architecture' },
+      { label: 'Plan', target: 'plan-id' },
+    ])
+    expect(extractDocumentTags(markdown)).toEqual(['ai', 'daily', 'research'])
+  })
+
+  it('builds a scoped knowledge graph with folders, references, tags, external links, and orphans', () => {
+    const groups = [{ id: 'g', name: 'Research', color: '#12A8A0', createdAt: 1, updatedAt: 1 }]
+    const nodes = [
+      { id: 'folder', type: 'folder', title: 'Folder', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
+      { id: 'a', type: 'document', title: 'Architecture', markdown: 'See [Plan](#doc:plan-id). #systems https://example.com', groupId: 'g', parentId: 'folder', createdAt: 1, updatedAt: 3 },
+      { id: 'plan-id', type: 'document', title: 'Plan', markdown: 'Next steps', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 2 },
+      { id: 'orphan', type: 'document', title: 'Orphan', markdown: 'Standalone note', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 2 },
+    ] satisfies DocumentNode[]
+
+    const graph = buildDocumentGraph(groups, nodes, { groupId: 'g' })
+
+    expect(graph.nodes.some((node) => node.type === 'folder' && node.folderId === 'folder')).toBe(true)
+    expect(graph.edges.some((edge) => edge.type === 'contains' && edge.source === 'doc-graph:folder' && edge.target === 'doc-graph:a')).toBe(true)
+    expect(graph.edges.some((edge) => edge.type === 'references' && edge.source === 'doc-graph:a' && edge.target === 'doc-graph:plan-id')).toBe(true)
+    expect(graph.edges.some((edge) => edge.type === 'tagged' && edge.label === '#systems')).toBe(true)
+    expect(graph.edges.some((edge) => edge.type === 'external-link' && edge.metadata.url === 'https://example.com')).toBe(true)
+    expect(graph.backlinksByDocumentId['plan-id']).toEqual(['a'])
+    expect(graph.orphanDocumentIds).toEqual(['orphan'])
+  })
+
+  it('exports document graph data through a graphify-compatible adapter', () => {
+    const graph = buildDocumentGraph(
+      [{ id: 'g', name: 'Research', color: '#12A8A0', createdAt: 1, updatedAt: 1 }],
+      [{ id: 'a', type: 'document', title: 'Architecture', markdown: '#systems', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 }],
+      { groupId: 'g' },
+    )
+
+    const exported = toGraphifyExport(graph, '2026-04-29T00:00:00.000Z')
+
+    expect(exported.graphifyCompatible).toBe(true)
+    expect(exported.metadata.source).toBe('suora-documents')
+    expect(exported.nodes.find((node) => node.id === 'doc-graph:a')?.attributes.documentId).toBe('a')
+    expect(exported.edges.some((edge) => edge.type === 'tagged')).toBe(true)
   })
 })

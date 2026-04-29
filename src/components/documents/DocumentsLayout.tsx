@@ -9,8 +9,10 @@ import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
 import { confirm } from '@/services/confirmDialog'
 import { createDocument, createDocumentGroup, createDocumentId, findReferencedDocuments, searchDocuments } from '@/services/documents'
+import { buildDocumentGraph, buildDocumentPath } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentItem, DocumentNode } from '@/types'
 
 function escapeHtml(value: string) {
@@ -132,19 +134,6 @@ function DocumentPreview({ markdown }: { markdown: string }) {
   return <EditorContent editor={editor} className="document-tiptap-preview h-full" />
 }
 
-function buildPath(node: DocumentNode, nodes: DocumentNode[]) {
-  const byId = new Map(nodes.map((item) => [item.id, item]))
-  const parts = [node.title]
-  let parentId = node.parentId
-  while (parentId) {
-    const parent = byId.get(parentId)
-    if (!parent) break
-    parts.unshift(parent.title)
-    parentId = parent.parentId
-  }
-  return parts.join(' / ')
-}
-
 function TreeNode({
   node,
   nodes,
@@ -228,7 +217,7 @@ export function DocumentsLayout() {
   const deferredQuery = useDeferredValue(query)
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [mode, setMode] = useState<'markdown' | 'preview'>('markdown')
+  const [mode, setMode] = useState<'markdown' | 'preview' | 'graph'>('markdown')
   const {
     documentGroups,
     documentNodes,
@@ -251,6 +240,7 @@ export function DocumentsLayout() {
   const groupDocuments = useMemo(() => groupNodes.filter((node): node is DocumentItem => node.type === 'document'), [groupNodes])
   const searchResults = useMemo(() => searchDocuments(documentNodes, activeGroup?.id ?? null, deferredQuery), [documentNodes, activeGroup?.id, deferredQuery])
   const referencedDocuments = useMemo(() => activeDocument ? findReferencedDocuments(activeDocument.markdown, groupDocuments).filter((doc) => doc.id !== activeDocument.id) : [], [activeDocument, groupDocuments])
+  const documentGraph = useMemo(() => buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroup?.id ?? null }), [documentGroups, documentNodes, activeGroup?.id])
 
   useEffect(() => {
     if (!selectedDocumentGroupId && documentGroups[0]) setSelectedDocumentGroup(documentGroups[0].id)
@@ -389,7 +379,7 @@ export function DocumentsLayout() {
                   {searchResults.map(({ node, excerpt }) => (
                     <button key={node.id} type="button" onClick={() => setSelectedDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
                       <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
-                      <div className="mt-1 truncate text-[10px] text-text-muted">{buildPath(node, documentNodes)}</div>
+                      <div className="mt-1 truncate text-[10px] text-text-muted">{buildDocumentPath(node, documentNodes)}</div>
                       <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
                     </button>
                   ))}
@@ -436,18 +426,18 @@ export function DocumentsLayout() {
                   onChange={(event) => updateDocumentNode(activeDocument.id, { title: event.target.value })}
                   className="w-full bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary outline-none placeholder:text-text-muted"
                 />
-                <p className="mt-1 truncate text-[11px] text-text-muted">{activeGroup?.name} / {buildPath(activeDocument, documentNodes)}</p>
+                 <p className="mt-1 truncate text-[11px] text-text-muted">{activeGroup?.name} / {buildDocumentPath(activeDocument, documentNodes)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="flex rounded-2xl border border-border-subtle/55 bg-surface-0/45 p-1">
-                  {(['markdown', 'preview'] as const).map((value) => (
+                  {(['markdown', 'preview', 'graph'] as const).map((value) => (
                     <button
                       key={value}
                       type="button"
                       onClick={() => setMode(value)}
                       className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
                     >
-                      {value === 'markdown' ? t('documents.markdown', 'Markdown') : t('documents.tiptapPreview', 'Tiptap Preview')}
+                      {value === 'markdown' ? t('documents.markdown', 'Markdown') : value === 'preview' ? t('documents.tiptapPreview', 'Tiptap Preview') : t('documents.graph', 'Graph')}
                     </button>
                   ))}
                 </div>
@@ -456,7 +446,7 @@ export function DocumentsLayout() {
                 </button>
               </div>
             </header>
-            <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_280px] overflow-hidden">
+            <div className={`grid min-h-0 flex-1 overflow-hidden ${mode === 'graph' ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_280px]'}`}>
               <div className="min-h-0 overflow-hidden p-5">
                 {mode === 'markdown' ? (
                   <textarea
@@ -466,13 +456,15 @@ export function DocumentsLayout() {
                     className="h-full w-full resize-none rounded-[2rem] border border-border-subtle/70 bg-surface-0/62 p-5 font-[var(--font-code)] text-[13px] leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none placeholder:text-text-muted focus:border-accent/30 focus:ring-4 focus:ring-accent/10"
                     placeholder={t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.')}
                   />
-                ) : (
+                ) : mode === 'preview' ? (
                   <div className="h-full overflow-y-auto rounded-[2rem] border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     <DocumentPreview markdown={activeDocument.markdown} />
                   </div>
+                ) : (
+                  <DocumentGraphView graph={documentGraph} selectedDocumentId={activeDocument.id} onSelectDocument={setSelectedDocument} />
                 )}
               </div>
-              <aside className="min-h-0 overflow-y-auto border-l border-border-subtle/80 bg-surface-1/64 p-4">
+              {mode !== 'graph' && <aside className="min-h-0 overflow-y-auto border-l border-border-subtle/80 bg-surface-1/64 p-4">
                 <div className="rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                   <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.references', 'Markdown References')}</h3>
                   <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.referencesHint', 'Use [[Document Title]] or [Title](#doc:id) to connect notes in this group.')}</p>
@@ -482,7 +474,7 @@ export function DocumentsLayout() {
                     ) : referencedDocuments.map((doc) => (
                       <button key={doc.id} type="button" onClick={() => setSelectedDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
                         <span className="block truncate text-[12px] font-semibold text-text-primary">{doc.title}</span>
-                        <span className="mt-1 block truncate text-[10px] text-text-muted">{buildPath(doc, documentNodes)}</span>
+                        <span className="mt-1 block truncate text-[10px] text-text-muted">{buildDocumentPath(doc, documentNodes)}</span>
                       </button>
                     ))}
                   </div>
@@ -497,7 +489,7 @@ export function DocumentsLayout() {
                     ))}
                   </div>
                 </div>
-              </aside>
+              </aside>}
             </div>
           </>
         ) : (
