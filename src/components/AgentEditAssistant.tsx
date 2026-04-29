@@ -5,6 +5,16 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { runAgentEdit, type AgentEditTarget } from '@/services/agentEditing'
 import { toast } from '@/services/toast'
 
+function getInitialAgentId(
+  selectedAgentId: string | undefined,
+  enabledAgents: Array<{ id: string }>,
+): string {
+  if (selectedAgentId && enabledAgents.some((agent) => agent.id === selectedAgentId)) {
+    return selectedAgentId
+  }
+  return enabledAgents[0]?.id ?? ''
+}
+
 export function AgentEditAssistant({
   target,
   title,
@@ -19,9 +29,7 @@ export function AgentEditAssistant({
   const { t } = useI18n()
   const { agents, models, skills, selectedAgent, selectedModel } = useAppStore()
   const enabledAgents = useMemo(() => agents.filter((agent) => agent.enabled !== false), [agents])
-  const initialAgentId = selectedAgent && enabledAgents.some((agent) => agent.id === selectedAgent.id)
-    ? selectedAgent.id
-    : enabledAgents[0]?.id ?? ''
+  const initialAgentId = getInitialAgentId(selectedAgent?.id, enabledAgents)
   const [agentId, setAgentId] = useState(initialAgentId)
   const [instruction, setInstruction] = useState('')
   const [draft, setDraft] = useState('')

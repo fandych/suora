@@ -21,6 +21,16 @@ function stripMarkdownFence(value: string): string {
   return (match?.[1] ?? trimmed).trim()
 }
 
+function normalizeGeneratedContent(response: unknown): string {
+  if (typeof response === 'string') return response
+  if (response && typeof response === 'object') {
+    const candidate = response as { text?: unknown; content?: unknown }
+    if (typeof candidate.text === 'string') return candidate.text
+    if (typeof candidate.content === 'string') return candidate.content
+  }
+  throw new Error('Agent returned unsupported content.')
+}
+
 function targetLabel(target: AgentEditTarget): string {
   return target === 'skill' ? 'SKILL.md instruction body' : 'Markdown document'
 }
@@ -79,7 +89,7 @@ export async function runAgentEdit(request: AgentEditRequest): Promise<string> {
     request.model.apiKey,
     request.model.baseUrl,
   )
-  const result = stripMarkdownFence(typeof response === 'string' ? response : '')
+  const result = stripMarkdownFence(normalizeGeneratedContent(response))
 
   if (!result) {
     throw new Error('Agent returned empty content.')
