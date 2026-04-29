@@ -39,20 +39,6 @@ async function writeJsonFile(electron: ElectronBridge, filePath: string, value: 
   return !isIpcError(result)
 }
 
-async function loadLegacyProviderConfigs(electron: ElectronBridge): Promise<ProviderConfig[]> {
-  try {
-    const raw = await electron.invoke('store:load', 'providers')
-    if (typeof raw !== 'string') return []
-    const parsed = await restoreModelsDataAfterLoad(
-      electron,
-      JSON.parse(raw) as Record<string, unknown>,
-    )
-    return readProviderConfigs(parsed)
-  } catch {
-    return []
-  }
-}
-
 export async function loadWorkspaceSettings(workspacePath: string): Promise<WorkspaceSettings> {
   const electron = getElectron()
   if (!electron || !workspacePath) return DEFAULT_SETTINGS
@@ -95,14 +81,6 @@ export async function loadWorkspaceSettings(workspacePath: string): Promise<Work
       }
     }
   } catch { /* file may not exist yet */ }
-
-  if (result.providers.length === 0) {
-    const legacyProviders = await loadLegacyProviderConfigs(electron)
-    if (legacyProviders.length > 0) {
-      result.providers = legacyProviders
-      migratedLegacyProviders = true
-    }
-  }
 
   if (migratedLegacyProviders && result.providers.length > 0) {
     const nextModelsData = await prepareModelsDataForSave(electron, {

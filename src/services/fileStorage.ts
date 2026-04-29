@@ -1,7 +1,7 @@
 // Filesystem-backed storage adapter — persists Zustand state into workspace JSON files.
 //
 // The primary store is split across {workspace}/settings.json, models.json, and feature folders.
-// Legacy workspace JSON files are read only as a one-time migration fallback:
+// Legacy single-file workspace JSON layout is read only as a one-time migration fallback:
 //   {workspace}/models.json
 //   {workspace}/settings.json
 //   {workspace}/channels/config.json
@@ -11,8 +11,6 @@
 //
 // An in-memory cache provides synchronous reads (required by tools.ts
 // and other modules that avoid async circular dependencies).
-//
-// On first load the adapter auto-migrates from the legacy ~/.suora/data/ format.
 
 import {
   prepareModelsDataForSave,
@@ -332,33 +330,6 @@ async function loadFromFilesystem(electron: ElectronBridge, name: string): Promi
   }
 }
 
-// ─── Legacy migration ───────────────────────────────────────────────
-
-const LEGACY_CATEGORY_NAMES = ['settings', 'providers', 'agents', 'skills', 'channels', 'plugins', 'analytics', 'ui-state', 'other']
-const LEGACY_META_KEY = 'suora-meta'
-
-async function loadLegacySplitStore(electron: ElectronBridge): Promise<string | null> {
-  try {
-    const metaRaw = (await electron.invoke('store:load', LEGACY_META_KEY)) as string | null
-    if (!metaRaw) return null
-    const meta = JSON.parse(metaRaw) as { version?: number }
-    const results = await Promise.all(
-      LEGACY_CATEGORY_NAMES.map(async (cat) => {
-        try {
-          const raw = (await electron.invoke('store:load', cat)) as string | null
-          if (!raw) return {}
-          return JSON.parse(raw) as Record<string, unknown>
-        } catch { return {} }
-      }),
-    )
-    const merged: Record<string, unknown> = {}
-    for (const slice of results) Object.assign(merged, slice)
-    return JSON.stringify({ state: merged, version: meta.version ?? 0 })
-  } catch {
-    return null
-  }
-}
-
 // ─── Zustand-compatible StateStorage adapter ────────────────────────
 
 /**
@@ -391,30 +362,10 @@ export const fileStateStorage = {
         splitAndSave(restored, electron)
         return restored
       }
-
-      // 3. Migrate from legacy ~/.suora/data/ split format
-      const legacyData = await loadLegacySplitStore(electron)
-      if (legacyData) {
-        const restored = await restoreFilesystemStoreValue(await prepareFilesystemStoreValue(legacyData, electron), electron)
-        cache.set(name, restored)
-        splitAndSave(restored, electron)
-        return restored
-      }
-
-      // 4. Migrate from legacy single file
-      try {
-        const legacy = (await electron.invoke('store:load', name)) as string | null
-        if (legacy !== null) {
-          const restored = await restoreFilesystemStoreValue(await prepareFilesystemStoreValue(legacy, electron), electron)
-          cache.set(name, restored)
-          splitAndSave(restored, electron)
-          return restored
-        }
-      } catch { /* fall through */ }
     } else if (electron) {
       try {
         const result = (await electron.invoke('db:loadPersistedStore', name)) as { data?: unknown; error?: unknown }
-        const data = typeof result?.data === 'string' ? result.data : (await electron.invoke('store:load', name)) as string | null
+        const data = typeof result?.data === 'string' ? result.data : null
         if (data !== null) {
           cache.set(name, data)
           return data
@@ -422,7 +373,7 @@ export const fileStateStorage = {
       } catch { /* fall through */ }
     }
 
-    // 5. Migrate from localStorage (very legacy)
+    // 3. Migrate from localStorage (very legacy)
     try {
       const legacy = localStorage.getItem(name)
       if (legacy !== null) {

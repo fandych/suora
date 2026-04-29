@@ -96,38 +96,6 @@ describe('workspaceSettings', () => {
     )
   })
 
-  it('should migrate legacy providers from store data when workspace files do not contain them', async () => {
-    invoke.mockImplementation(async (channel: string, firstArg: string) => {
-      if (channel === 'fs:readFile' && firstArg === 'C:/workspace/models.json') {
-        return JSON.stringify({ providerConfigs: [] })
-      }
-      if (channel === 'fs:readFile' && firstArg === 'C:/workspace/settings.json') {
-        return JSON.stringify({ externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }] })
-      }
-      if (channel === 'store:load' && firstArg === 'providers') {
-        return JSON.stringify({ providerConfigs })
-      }
-      if (channel === 'safe-storage:isAvailable') {
-        return true
-      }
-      if (channel === 'safe-storage:encrypt') {
-        return { data: Buffer.from(String(firstArg ?? ''), 'utf-8').toString('base64') }
-      }
-      if (channel === 'fs:writeFile') {
-        return { firstArg }
-      }
-      return undefined
-    })
-
-    const result = await loadWorkspaceSettings('C:/workspace')
-
-    expect(result.providers).toEqual(providerConfigs)
-    expect(result.externalDirectories).toEqual([{ path: '~/.claude/skills', enabled: true, type: 'skills' }])
-    const modelsPayload = getWritePayload('C:/workspace/models.json')
-    expect(modelsPayload.providerConfigs).toEqual([{ ...providerConfigs[0], apiKey: '' }])
-    expect(modelsPayload.encryptedSecrets).toEqual(expect.any(String))
-  })
-
   it('should remove legacy provider keys when saving settings.json', async () => {
     invoke.mockImplementation(async (channel: string, filePath: string) => {
       if (channel === 'fs:readFile' && filePath === 'C:/workspace/models.json') {

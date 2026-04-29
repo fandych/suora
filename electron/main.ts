@@ -291,58 +291,6 @@ function enforceFsPathInWorkspace(targetPath: string): string | null {
   return `Path is outside the workspace: ${targetPath}`
 }
 
-// ─── IPC Handlers: File-based Store ─────────────────────────────────
-
-const storeDataDir = path.join(app.getPath('home'), '.suora', 'data')
-
-function storeFilePath(name: string): string {
-  // Sanitize the key to a safe filename (keep only alphanumerics, dashes, dots)
-  const safe = name.replace(/[^a-zA-Z0-9\-_.]/g, '_')
-  return path.join(storeDataDir, `${safe}.json`)
-}
-
-ipcMain.handle('store:load', async (_event, name: string) => {
-  try {
-    const filePath = storeFilePath(name)
-    const data = await fs.readFile(filePath, 'utf-8')
-    return data
-  } catch (err: unknown) {
-    // File doesn't exist yet — that's OK, return null
-    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return null
-    }
-    logger.warn('store:load failed', { name, error: err instanceof Error ? err.message : String(err) })
-    return null
-  }
-})
-
-ipcMain.handle('store:save', async (_event, name: string, value: string) => {
-  try {
-    const filePath = storeFilePath(name)
-    await atomicWriteFile(filePath, value)
-    return { success: true }
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    logger.error('store:save failed', { name, error: message })
-    return { error: message }
-  }
-})
-
-ipcMain.handle('store:remove', async (_event, name: string) => {
-  try {
-    const filePath = storeFilePath(name)
-    await fs.unlink(filePath)
-    return { success: true }
-  } catch (err: unknown) {
-    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT') {
-      return { success: true }
-    }
-    const message = err instanceof Error ? err.message : String(err)
-    logger.warn('store:remove failed', { name, error: message })
-    return { error: message }
-  }
-})
-
 // ─── IPC Handlers: Workspace JSON Store ────────────────────────────
 
 ipcMain.handle('db:getSnapshot', async () => {
