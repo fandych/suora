@@ -2364,7 +2364,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   list_documents: tool({
-    description: 'List editable Markdown documents stored in Suora. Use this from chat before read_document or update_document when the user asks to modify a document.',
+    description: 'List editable Markdown documents stored in Suora before reading or updating documents.',
     inputSchema: z.object({
       query: z.string().optional().describe('Optional title/content search query'),
       group_id: z.string().optional().describe('Optional document group ID to filter by'),
@@ -2421,7 +2421,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   update_document: tool({
-    description: 'Replace a Suora document with revised Markdown from the agent chat. Always read_document first and preserve user content unless asked to change it.',
+    description: 'Replace a Suora document with revised Markdown. Typically requires reading the document first and preserving user content unless asked to change it.',
     inputSchema: z.object({
       document_id: z.string().describe('Document ID or exact/partial title to update'),
       markdown: z.string().describe('Complete replacement Markdown content'),
@@ -2507,7 +2507,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   update_skill_content: tool({
-    description: 'Replace a Suora skill instruction body with revised Markdown from the agent chat. Always read_skill first and return the complete new instruction content.',
+    description: 'Replace a Suora skill instruction body with revised Markdown. Typically requires reading the skill first and returning the complete new instruction content.',
     inputSchema: z.object({
       skill_id: z.string().describe('Skill ID or exact/partial skill name to update'),
       content: z.string().describe('Complete replacement Markdown instruction body for the skill'),
