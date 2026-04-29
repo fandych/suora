@@ -75,6 +75,7 @@ const TABLE_FILES: Partial<Record<JsonTableName, string>> = {
   skills: 'skills/index.json',
   channels: 'channels/index.json',
   channel_messages: 'channels/messages.json',
+  // MCP does not have a requested top-level folder; keep it with other app settings.
   mcp_servers: 'settings.json',
   timers: 'timers/index.json',
   timer_executions: 'timers/executions.json',
@@ -252,10 +253,6 @@ export class SuoraDatabase {
 
   async close(): Promise<void> {
     await this.persist()
-  }
-
-  getStateSlices(): Record<string, unknown> {
-    throw new Error('getStateSlices is asynchronous for filesystem storage; use getSnapshot instead')
   }
 
   async saveStateSlice(key: string, value: unknown): Promise<void> {
@@ -441,9 +438,7 @@ export class SuoraDatabase {
     const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
     const models = await readJson<Record<string, unknown>>(this.file('models.json'), {})
     const sessionIndexRaw = await readJson<unknown>(this.file('sessions/index.json'), { sessions: [] })
-    // Accept a bare array for early filesystem prototypes; new writes always use
-    // the object form so tab/active-session metadata can live beside the index.
-    const sessionIndex = Array.isArray(sessionIndexRaw) ? { sessions: sessionIndexRaw } : asObject(sessionIndexRaw)
+    const sessionIndex = asObject(sessionIndexRaw)
     const sessionMetadata = asArray(sessionIndex.sessions).filter(isEntity) as SessionLike[]
     const sessions = await Promise.all(sessionMetadata.map(async (session) => {
       const sessionDir = this.file(path.join('sessions', safeSegment(session.id)))
