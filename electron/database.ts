@@ -441,6 +441,8 @@ export class SuoraDatabase {
     const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
     const models = await readJson<Record<string, unknown>>(this.file('models.json'), {})
     const sessionIndexRaw = await readJson<unknown>(this.file('sessions/index.json'), { sessions: [] })
+    // Accept a bare array for early filesystem prototypes; new writes always use
+    // the object form so tab/active-session metadata can live beside the index.
     const sessionIndex = Array.isArray(sessionIndexRaw) ? { sessions: sessionIndexRaw } : asObject(sessionIndexRaw)
     const sessionMetadata = asArray(sessionIndex.sessions).filter(isEntity) as SessionLike[]
     const sessions = await Promise.all(sessionMetadata.map(async (session) => {
@@ -450,7 +452,9 @@ export class SuoraDatabase {
       return { ...session, messages }
     }))
 
-    const agents = await Promise.all((asArray(await readJson<unknown>(this.file('agents/index.json'), [])) as AgentLike[]).filter(isEntity).map(async (agent) => {
+    const rawAgents = await readJson<unknown>(this.file('agents/index.json'), [])
+    const agentMetadata = asArray(rawAgents).filter(isEntity) as AgentLike[]
+    const agents = await Promise.all(agentMetadata.map(async (agent) => {
       const memories = await readJsonIfExists<unknown[]>(this.file(path.join('agents', safeSegment(agent.id), 'memories.json')))
       return Array.isArray(memories) ? { ...agent, memories } : agent
     }))
