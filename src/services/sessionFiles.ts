@@ -5,6 +5,7 @@
 import type { Session, AgentMemoryEntry } from '@/types'
 import { logger } from '@/services/logger'
 import { safePathSegment } from '@/utils/pathSegments'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -66,7 +67,7 @@ export async function loadSessionsFromDisk(workspacePath: string): Promise<Sessi
       if (typeof raw !== 'string') continue
       let parsed: unknown
       try {
-        parsed = JSON.parse(raw)
+        parsed = safeParse(raw)
       } catch (parseErr) {
         logger.error('[sessionFiles] Corrupted conversation file — skipping', {
           filePath,
@@ -97,7 +98,7 @@ export async function saveSessionToDisk(workspacePath: string, session: Session)
     const dir = sessionDir(workspacePath, session.id)
     const ensureResult = await electron.invoke('system:ensureDirectory', dir) as { error?: string }
     if (ensureResult?.error) return false
-    const json = JSON.stringify(session, null, 2)
+    const json = safeStringify(session, 2)
     const result = (await electron.invoke(
       'fs:writeFile',
       conversationPath(workspacePath, session.id),
@@ -144,7 +145,7 @@ export async function loadSessionMemories(workspacePath: string, sessionId: stri
   }
   if (typeof raw !== 'string') return []
   try {
-    const parsed = JSON.parse(raw)
+    const parsed = safeParse(raw)
     return Array.isArray(parsed) ? (parsed as AgentMemoryEntry[]) : []
   } catch (parseErr) {
     logger.error('[sessionFiles] Corrupted memories file — returning empty', {
@@ -164,7 +165,7 @@ export async function saveSessionMemories(workspacePath: string, sessionId: stri
     const dir = sessionDir(workspacePath, sessionId)
     const ensureResult = await electron.invoke('system:ensureDirectory', dir) as { error?: string }
     if (ensureResult?.error) return false
-    const json = JSON.stringify(memories, null, 2)
+    const json = safeStringify(memories, 2)
     const result = (await electron.invoke(
       'fs:writeFile',
       memoriesPath(workspacePath, sessionId),

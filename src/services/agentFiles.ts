@@ -3,6 +3,7 @@ import type { Agent } from '@/types'
 import { coerceAgent } from '@/utils/validators'
 import { logger } from '@/services/logger'
 import { safePathSegment } from '@/utils/pathSegments'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -36,7 +37,7 @@ export async function loadAgentsFromDisk(workspacePath: string): Promise<Agent[]
       try {
         const raw = await electron.invoke('fs:readFile', entry.path)
         if (typeof raw === 'string') {
-          const parsed = JSON.parse(raw)
+          const parsed = safeParse(raw)
           const agent = coerceAgent(parsed)
           if (agent) {
             agents.push(agent)
@@ -65,7 +66,7 @@ export async function saveAgentToDisk(workspacePath: string, agent: Agent): Prom
   try {
     const ensureResult = await electron.invoke('system:ensureDirectory', agentsDir(workspacePath)) as { error?: string }
     if (ensureResult?.error) return false
-    const json = JSON.stringify(agent, null, 2)
+    const json = safeStringify(agent, 2)
     const result = (await electron.invoke(
       'fs:writeFile',
       agentFilePath(workspacePath, agent.id),

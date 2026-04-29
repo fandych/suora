@@ -1,5 +1,6 @@
 import fs from 'fs/promises'
 import path from 'path'
+import { safeParse, safeStringify } from '../src/utils/safeJson'
 
 export const SUORA_STORAGE_VERSION = 2
 export const SPLIT_STORE_NAME = 'suora-store'
@@ -148,12 +149,12 @@ async function atomicWriteFile(filePath: string, data: string): Promise<void> {
 }
 
 async function writeJson(filePath: string, value: unknown): Promise<void> {
-  await atomicWriteFile(filePath, `${JSON.stringify(value, null, 2)}\n`)
+  await atomicWriteFile(filePath, `${safeStringify(value, 2)}\n`)
 }
 
 async function readJson<T>(filePath: string, fallback: T): Promise<T> {
   try {
-    return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T
+    return safeParse<T>(await fs.readFile(filePath, 'utf-8'))
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     if (code === 'ENOENT') return fallback
@@ -163,7 +164,7 @@ async function readJson<T>(filePath: string, fallback: T): Promise<T> {
 
 async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
   try {
-    return JSON.parse(await fs.readFile(filePath, 'utf-8')) as T
+    return safeParse<T>(await fs.readFile(filePath, 'utf-8'))
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     if (code === 'ENOENT') return null
@@ -212,7 +213,7 @@ function splitModelState(state: Record<string, unknown>): Record<string, unknown
 }
 
 function parsePersistedStore(value: string): PersistedPayload {
-  const parsed = JSON.parse(value) as PersistedPayload
+  const parsed = safeParse<PersistedPayload>(value)
   if (!isRecord(parsed.state)) return parsed
   return parsed
 }
@@ -284,11 +285,11 @@ export class SuoraDatabase {
     if (Object.keys(state).length === 0) return null
     const version = typeof state._storeVersion === 'number' ? state._storeVersion : 0
     delete state._storeVersion
-    return JSON.stringify({ state, version })
+    return safeStringify({ state, version })
   }
 
   async savePersistedStore(key: string, serializedValue: string, version: number): Promise<void> {
-    JSON.parse(serializedValue)
+    safeParse(serializedValue)
     if (key !== SPLIT_STORE_NAME) {
       const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
       const stores = asObject(settings._persistedStores)
@@ -405,7 +406,7 @@ export class SuoraDatabase {
     const files = entries.filter((name) => name.endsWith('.json'))
     const records = await Promise.all(files.map(async (name) => {
       try {
-        return JSON.parse(await fs.readFile(path.join(dirPath, name), 'utf-8')) as unknown
+        return safeParse(await fs.readFile(path.join(dirPath, name), 'utf-8')) as unknown
       } catch {
         return null
       }

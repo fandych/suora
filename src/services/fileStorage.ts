@@ -21,6 +21,7 @@ import {
 } from '@/services/secureState'
 import { toast } from '@/services/toast'
 import { logger } from '@/services/logger'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
@@ -112,7 +113,7 @@ function splitAndSave(fullValue: string, electron: ElectronBridge): void {
 
 function getPersistedVersion(fullValue: string): number {
   try {
-    const parsed = JSON.parse(fullValue) as { version?: unknown }
+    const parsed = safeParse<{ version?: unknown }>(fullValue)
     return typeof parsed.version === 'number' && Number.isFinite(parsed.version) ? Math.trunc(parsed.version) : 0
   } catch {
     return 0
@@ -120,7 +121,7 @@ function getPersistedVersion(fullValue: string): number {
 }
 
 async function prepareFilesystemStoreValue(fullValue: string, electron: ElectronBridge): Promise<string> {
-  const parsed = JSON.parse(fullValue) as { state?: Record<string, unknown>; version?: number }
+  const parsed = safeParse<{ state?: Record<string, unknown>; version?: number }>(fullValue)
   const state = parsed.state
   if (!state) return fullValue
 
@@ -130,11 +131,11 @@ async function prepareFilesystemStoreValue(fullValue: string, electron: Electron
   const modelsProtected = await prepareModelsDataForSave(electron, nextState)
   const fullyProtected = await prepareSensitiveDataForSave(electron, modelsProtected)
 
-  return JSON.stringify({ ...parsed, state: fullyProtected })
+  return safeStringify({ ...parsed, state: fullyProtected })
 }
 
 async function restoreFilesystemStoreValue(fullValue: string, electron: ElectronBridge): Promise<string> {
-  const parsed = JSON.parse(fullValue) as { state?: Record<string, unknown>; version?: number }
+  const parsed = safeParse<{ state?: Record<string, unknown>; version?: number }>(fullValue)
   const state = parsed.state
   if (!state) return fullValue
 
@@ -145,7 +146,7 @@ async function restoreFilesystemStoreValue(fullValue: string, electron: Electron
   const ws = await resolveWorkspacePath(electron)
   if (!restoredState.workspacePath) restoredState.workspacePath = ws
 
-  return JSON.stringify({ ...parsed, state: restoredState })
+  return safeStringify({ ...parsed, state: restoredState })
 }
 
 async function persistFilesystemStore(fullValue: string, electron: ElectronBridge): Promise<void> {
@@ -280,7 +281,7 @@ async function loadFromWorkspace(electron: ElectronBridge): Promise<string | nul
 
     let parsed: Record<string, unknown>
     try {
-      parsed = JSON.parse(raw) as Record<string, unknown>
+      parsed = safeParse<Record<string, unknown>>(raw)
     } catch (parseErr) {
       logger.error('[fileStorage] JSON parse failed — skipping and backing up', {
         filePath: fp,
@@ -311,7 +312,7 @@ async function loadFromWorkspace(electron: ElectronBridge): Promise<string | nul
   }
   delete restoredMerged.providers
   if (!restoredMerged.workspacePath) restoredMerged.workspacePath = ws
-  return JSON.stringify({ state: restoredMerged, version })
+  return safeStringify({ state: restoredMerged, version })
 }
 
 async function loadFromFilesystem(electron: ElectronBridge, name: string): Promise<string | null> {

@@ -10,6 +10,7 @@ import { fileStateStorage, flushPendingSplitStoreWrites } from '@/services/fileS
 import { createSessionSlice } from '@/store/slices/sessionSlice'
 import { createModelConfigSlice } from '@/store/slices/modelConfigSlice'
 import { createUIPreferencesSlice } from '@/store/slices/uiPreferencesSlice'
+import { safeJsonReplacer, safeJsonReviver } from '@/utils/safeJson'
 
 function normalizeAgentMaxTurns(maxTurns: number | undefined): number | undefined {
   if (typeof maxTurns !== 'number' || !Number.isFinite(maxTurns)) return undefined
@@ -633,7 +634,10 @@ export const useAppStore = create<AppStore>()(
     {
       name: 'suora-store',
       version: 18,
-      storage: createJSONStorage(() => fileStateStorage),
+      storage: createJSONStorage(() => fileStateStorage, {
+        replacer: safeJsonReplacer,
+        reviver: safeJsonReviver,
+      }),
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
         if (version < 2) {

@@ -8,6 +8,7 @@ import {
   restoreModelsDataAfterLoad,
   type ElectronBridge,
 } from '@/services/secureState'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
@@ -35,7 +36,7 @@ function isIpcError(value: unknown): value is { error: string } {
 }
 
 async function writeJsonFile(electron: ElectronBridge, filePath: string, value: unknown): Promise<boolean> {
-  const result = await electron.invoke('fs:writeFile', filePath, JSON.stringify(value, null, 2))
+  const result = await electron.invoke('fs:writeFile', filePath, safeStringify(value, 2))
   return !isIpcError(result)
 }
 
@@ -57,7 +58,7 @@ export async function loadWorkspaceSettings(workspacePath: string): Promise<Work
     if (typeof raw === 'string') {
       modelsData = await restoreModelsDataAfterLoad(
         electron,
-        JSON.parse(raw) as Record<string, unknown>,
+        safeParse<Record<string, unknown>>(raw),
       )
       result.providers = readProviderConfigs(modelsData)
     }
@@ -68,7 +69,7 @@ export async function loadWorkspaceSettings(workspacePath: string): Promise<Work
   try {
     const raw = await electron.invoke('fs:readFile', settingsPath)
     if (typeof raw === 'string') {
-      settingsData = JSON.parse(raw) as Record<string, unknown>
+      settingsData = safeParse<Record<string, unknown>>(raw)
       if (Array.isArray(settingsData.externalDirectories)) result.externalDirectories = settingsData.externalDirectories
 
       if (result.providers.length === 0) {
@@ -118,7 +119,7 @@ export async function saveWorkspaceSettings(
       if (typeof raw === 'string') {
         modelsData = await restoreModelsDataAfterLoad(
           electron,
-          JSON.parse(raw) as Record<string, unknown>,
+          safeParse<Record<string, unknown>>(raw),
         )
       }
     } catch { /* file may not exist */ }
@@ -133,7 +134,7 @@ export async function saveWorkspaceSettings(
       let settingsData: Record<string, unknown> = {}
       try {
         const raw = await electron.invoke('fs:readFile', settingsPath)
-        if (typeof raw === 'string') settingsData = JSON.parse(raw)
+        if (typeof raw === 'string') settingsData = safeParse<Record<string, unknown>>(raw)
       } catch { /* file may not exist */ }
       const nextSettingsData = {
         ...stripLegacyProviderKeys(settingsData),
