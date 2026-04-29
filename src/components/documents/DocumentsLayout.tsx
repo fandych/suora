@@ -31,7 +31,9 @@ function escapeAttr(value: string) {
 }
 
 function inlineMarkdown(value: string) {
-  // Extract inline math tokens before HTML escaping to preserve raw LaTeX
+  // Extract inline math tokens before HTML escaping to preserve raw LaTeX.
+  // The pattern intentionally excludes newlines ($\n) because inline math
+  // is single-line by convention; block math uses $$...$$.
   const mathTokens: string[] = []
   const tokenized = value.replace(/\$([^$\n]+)\$/g, (_, latex: string) => {
     mathTokens.push(latex)

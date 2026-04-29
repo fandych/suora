@@ -1,7 +1,8 @@
 import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useState, useRef } from 'react'
 import katex from 'katex'
+import { useAppStore } from '@/store/appStore'
 import type { NodeViewProps } from '@tiptap/react'
 import 'katex/dist/katex.min.css'
 
@@ -14,6 +15,7 @@ function MathBlockView({ node }: NodeViewProps) {
 
   useEffect(() => {
     try {
+      // KaTeX output is safe — it is a purpose-built, security-audited HTML renderer
       setHtml(katex.renderToString(content, { displayMode: true, throwOnError: false }))
       setError('')
     } catch (err) {
@@ -72,6 +74,7 @@ function InlineMathView({ node }: NodeViewProps) {
 
   useEffect(() => {
     try {
+      // KaTeX output is safe — purpose-built, security-audited LaTeX renderer
       setHtml(katex.renderToString(content, { displayMode: false, throwOnError: false }))
     } catch {
       setHtml(content)
@@ -117,14 +120,14 @@ export const InlineMath = Node.create({
 
 // ── Mermaid Block ─────────────────────────────────────────────────────────────
 
-let mermaidInitialized = false
-let mermaidCounter = 0
+let mermaidLastTheme: string | null = null
 
-async function renderMermaid(id: string, code: string): Promise<string> {
+async function renderMermaid(id: string, code: string, isDark: boolean): Promise<string> {
   const mermaidLib = (await import('mermaid')).default
-  if (!mermaidInitialized) {
-    mermaidLib.initialize({ startOnLoad: false, theme: 'dark' })
-    mermaidInitialized = true
+  const theme = isDark ? 'dark' : 'default'
+  if (mermaidLastTheme !== theme) {
+    mermaidLib.initialize({ startOnLoad: false, theme })
+    mermaidLastTheme = theme
   }
   try {
     const { svg } = await mermaidLib.render(id, code)
@@ -137,16 +140,20 @@ async function renderMermaid(id: string, code: string): Promise<string> {
 function MermaidBlockView({ node }: NodeViewProps) {
   const code = node.attrs.code as string
   const containerRef = useRef<HTMLDivElement>(null)
-  const idRef = useRef(`mermaid-${++mermaidCounter}`)
+  // useId() produces a stable React-managed ID that is safe across strict-mode double renders
+  const reactId = useId()
+  const mermaidId = `mermaid${reactId.replace(/:/g, '_')}`
+
+  const storeTheme = useAppStore((s) => s.theme)
+  const isDark = storeTheme !== 'light' && !(storeTheme === 'system' && document.documentElement.classList.contains('light'))
 
   useEffect(() => {
-    const id = idRef.current
-    renderMermaid(id, code).then((svg) => {
+    renderMermaid(mermaidId, code, isDark).then((svg) => {
       if (containerRef.current) containerRef.current.innerHTML = svg
     }).catch(() => {
       if (containerRef.current) containerRef.current.textContent = 'Mermaid render error'
     })
-  }, [code])
+  }, [code, isDark, mermaidId])
 
   return (
     <NodeViewWrapper>
