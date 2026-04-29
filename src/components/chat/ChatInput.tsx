@@ -15,6 +15,7 @@ import { useI18n } from '@/hooks/useI18n'
 import type { MessageAttachment } from '@/types'
 import { generateId } from '@/utils/helpers'
 import { toast } from '@/services/toast'
+import { buildAttachmentManifest } from '@/services/chatContext'
 import {
   isSpeechRecognitionAvailable,
   startListening,
@@ -26,6 +27,8 @@ import { formatFileSize } from './ChatMessages'
 
 const MAX_IMAGE_SIZE = 10 * 1024 * 1024
 const MAX_FILE_SIZE = 2 * 1024 * 1024
+const MAX_ATTACHMENT_CONTEXT_CHARS = 24_000
+const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024
 const MAX_AUDIO_SIZE = 25 * 1024 * 1024
 const ACCEPTED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
 const ACCEPTED_AUDIO_TYPES = ['audio/webm', 'audio/ogg', 'audio/mp3', 'audio/mpeg', 'audio/wav', 'audio/mp4']
@@ -35,12 +38,28 @@ const ACCEPTED_TEXT_EXTENSIONS = [
   '.html', '.css', '.scss', '.sql', '.sh', '.bat', '.ps1', '.log',
   '.c', '.cpp', '.h', '.swift', '.kt', '.dart', '.lua', '.r',
 ]
+const ACCEPTED_DOCUMENT_TYPES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+]
 
 function isTextFile(file: File): boolean {
   if (file.type.startsWith('text/')) return true
   if (file.type === 'application/json' || file.type === 'application/xml') return true
   const ext = '.' + file.name.split('.').pop()?.toLowerCase()
   return ACCEPTED_TEXT_EXTENSIONS.includes(ext)
+}
+
+function truncateTextForContext(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value
+  const candidate = value.slice(0, maxChars)
+  const boundary = Math.max(candidate.lastIndexOf('\n'), candidate.lastIndexOf(' '), candidate.lastIndexOf('\t'))
+  return candidate.slice(0, boundary > maxChars * 0.75 ? boundary : maxChars).trimEnd()
 }
 
 type AttachmentRejectReason =
@@ -56,7 +75,11 @@ function fileToAttachment(
     if (ACCEPTED_IMAGE_TYPES.includes(file.type)) {
       if (file.size > MAX_IMAGE_SIZE) { onReject?.(file, { kind: 'oversize', limitBytes: MAX_IMAGE_SIZE }); resolve(null); return }
       const reader = new FileReader()
-      reader.onload = () => { const dataUrl = reader.result as string; resolve({ id: generateId('att'), type: 'image', name: file.name, mimeType: file.type, data: dataUrl.split(',')[1], size: file.size }) }
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        const attachment: MessageAttachment = { id: generateId('att'), type: 'image', name: file.name, mimeType: file.type, data: dataUrl.split(',')[1], size: file.size }
+        resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
+      }
       reader.onerror = () => { onReject?.(file, { kind: 'read-failed' }); resolve(null) }
       reader.readAsDataURL(file)
       return
@@ -64,7 +87,11 @@ function fileToAttachment(
     if (ACCEPTED_AUDIO_TYPES.includes(file.type) || file.type.startsWith('audio/')) {
       if (file.size > MAX_AUDIO_SIZE) { onReject?.(file, { kind: 'oversize', limitBytes: MAX_AUDIO_SIZE }); resolve(null); return }
       const reader = new FileReader()
-      reader.onload = () => { const dataUrl = reader.result as string; resolve({ id: generateId('att'), type: 'audio', name: file.name, mimeType: file.type, data: dataUrl.split(',')[1], size: file.size }) }
+      reader.onload = () => {
+        const dataUrl = reader.result as string
+        const attachment: MessageAttachment = { id: generateId('att'), type: 'audio', name: file.name, mimeType: file.type, data: dataUrl.split(',')[1], size: file.size, summary: 'Audio attached. Use speech input for live transcription or pass the recording to a transcription-capable model/tool.' }
+        resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
+      }
       reader.onerror = () => { onReject?.(file, { kind: 'read-failed' }); resolve(null) }
       reader.readAsDataURL(file)
       return
@@ -72,9 +99,30 @@ function fileToAttachment(
     if (isTextFile(file)) {
       if (file.size > MAX_FILE_SIZE) { onReject?.(file, { kind: 'oversize', limitBytes: MAX_FILE_SIZE }); resolve(null); return }
       const reader = new FileReader()
-      reader.onload = () => { resolve({ id: generateId('att'), type: 'file', name: file.name, mimeType: file.type || 'text/plain', data: reader.result as string, size: file.size }) }
+      reader.onload = () => {
+        const data = reader.result as string
+        const truncated = data.length > MAX_ATTACHMENT_CONTEXT_CHARS
+        const storedData = truncated ? truncateTextForContext(data, MAX_ATTACHMENT_CONTEXT_CHARS) : data
+        const attachment: MessageAttachment = { id: generateId('att'), type: 'file', name: file.name, mimeType: file.type || 'text/plain', data: storedData, size: file.size, summary: data.slice(0, 500), truncated }
+        resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
+      }
       reader.onerror = () => { onReject?.(file, { kind: 'read-failed' }); resolve(null) }
       reader.readAsText(file)
+      return
+    }
+    if (ACCEPTED_DOCUMENT_TYPES.includes(file.type)) {
+      if (file.size > MAX_DOCUMENT_SIZE) { onReject?.(file, { kind: 'oversize', limitBytes: MAX_DOCUMENT_SIZE }); resolve(null); return }
+      const attachment: MessageAttachment = {
+        id: generateId('att'),
+        type: 'file',
+        name: file.name,
+        mimeType: file.type,
+        data: '',
+        size: file.size,
+        summary: 'Document metadata attached only; original byte size is preserved for review. Extract text before asking content-specific questions if the provider cannot read this format directly.',
+        truncated: true,
+      }
+      resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
       return
     }
     onReject?.(file, { kind: 'unsupported' })
@@ -272,7 +320,8 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
             const dataUrl = reader.result as string
             const ext = mimeType.includes('webm') ? 'webm' : 'mp4'
             const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -1)
-            setAttachments((prev) => [...prev, { id: generateId('att'), type: 'audio', name: `recording-${ts}.${ext}`, mimeType: mimeType.split(';')[0], data: dataUrl.split(',')[1], size: blob.size, duration }])
+            const attachment: MessageAttachment = { id: generateId('att'), type: 'audio', name: `recording-${ts}.${ext}`, mimeType: mimeType.split(';')[0], data: dataUrl.split(',')[1], size: blob.size, duration, summary: 'Recorded audio attached for transcription-capable workflows.' }
+            setAttachments((prev) => [...prev, { ...attachment, manifest: buildAttachmentManifest(attachment) }])
           }
           reader.readAsDataURL(blob)
         }

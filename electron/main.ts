@@ -1795,6 +1795,11 @@ interface StoredTimer {
   updatedAt: number
   lastRun?: number
   nextRun?: number
+  timezone?: string
+  missedRunPolicy?: 'skip' | 'run-once' | 'run-all'
+  maxRetries?: number
+  retryIntervalMinutes?: number
+  calendarRule?: 'all-days' | 'weekdays' | 'weekends'
 }
 
 interface TimerExecutionRecord {
@@ -1910,6 +1915,11 @@ ipcMain.handle('timer:create', async (_event, data: Omit<StoredTimer, 'id' | 'cr
       prompt: data.prompt,
       agentId: data.agentId,
       pipelineId: data.pipelineId,
+      timezone: data.timezone,
+      missedRunPolicy: data.missedRunPolicy,
+      maxRetries: data.maxRetries,
+      retryIntervalMinutes: data.retryIntervalMinutes,
+      calendarRule: data.calendarRule,
       enabled: data.enabled,
       createdAt: now,
       updatedAt: now,
@@ -1924,7 +1934,7 @@ ipcMain.handle('timer:create', async (_event, data: Omit<StoredTimer, 'id' | 'cr
 })
 
 // IPC: Update a timer
-ipcMain.handle('timer:update', async (_event, id: string, updates: Partial<Pick<StoredTimer, 'name' | 'type' | 'schedule' | 'action' | 'prompt' | 'enabled' | 'agentId' | 'pipelineId'>>) => {
+ipcMain.handle('timer:update', async (_event, id: string, updates: Partial<Pick<StoredTimer, 'name' | 'type' | 'schedule' | 'action' | 'prompt' | 'enabled' | 'agentId' | 'pipelineId' | 'timezone' | 'missedRunPolicy' | 'maxRetries' | 'retryIntervalMinutes' | 'calendarRule'>>) => {
   try {
     const timers = await readTimers()
     const idx = timers.findIndex((t) => t.id === id)

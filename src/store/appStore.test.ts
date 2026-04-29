@@ -100,6 +100,33 @@ describe('appStore', () => {
       expect(useAppStore.getState().agents[0].name).toBe('Updated')
     })
 
+    it('should restore an agent from version history without losing memories', () => {
+      const { addAgent, addAgentVersion, restoreAgentVersion } = useAppStore.getState()
+      addAgent({
+        id: 'agent-versioned', name: 'Current', systemPrompt: 'Current prompt',
+        modelId: 'test:model', skills: [], enabled: true, memories: [{ id: 'mem-1', content: 'Remember me', type: 'preference', scope: 'global', createdAt: 1, source: 'test' }], autoLearn: false,
+      })
+      addAgentVersion({
+        id: 'version-1',
+        agentId: 'agent-versioned',
+        version: 1,
+        snapshot: {
+          id: 'agent-versioned', name: 'Previous', systemPrompt: 'Previous prompt',
+          modelId: 'test:model', skills: [], enabled: true, autoLearn: false,
+        },
+        createdAt: 1,
+        source: 'manual',
+      })
+
+      restoreAgentVersion('version-1')
+
+      const restored = useAppStore.getState().agents.find((item) => item.id === 'agent-versioned')
+      expect(restored?.name).toBe('Previous')
+      expect(restored?.memories).toHaveLength(1)
+      const versions = useAppStore.getState().agentVersions
+      expect(versions[versions.length - 1]?.source).toBe('rollback')
+    })
+
     it('should keep selected agent in sync when updating agent settings', () => {
       const { addAgent, setSelectedAgent, updateAgent } = useAppStore.getState()
       addAgent({
@@ -194,6 +221,22 @@ describe('appStore', () => {
       const notif = useAppStore.getState().notifications[0]
       markNotificationRead(notif.id)
       expect(useAppStore.getState().notifications[0].read).toBe(true)
+    })
+  })
+
+  describe('Model Usage Stats', () => {
+    it('records latency and errors for model usage analytics', () => {
+      const { recordModelUsage } = useAppStore.getState()
+
+      recordModelUsage('provider:model', 10, 5, 100)
+      recordModelUsage('provider:model', 20, 10, 200, true, 'rate limited')
+
+      const stats = useAppStore.getState().modelUsageStats['provider:model']
+      expect(stats.callCount).toBe(2)
+      expect(stats.totalTokens).toBe(45)
+      expect(stats.avgLatencyMs).toBe(150)
+      expect(stats.errorCount).toBe(1)
+      expect(stats.lastError).toBe('rate limited')
     })
   })
 

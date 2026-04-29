@@ -5,6 +5,10 @@ import { useI18n } from '@/hooks/useI18n'
 import type { ScheduledTask, TimerType } from '@/types'
 import { toLocalDatetimeValue, getNextCronExecutions, type TimerFormData } from './timerHelpers'
 
+function getLocalTimezone() {
+  return Intl.DateTimeFormat().resolvedOptions().timeZone
+}
+
 export function TimerForm({ initial, onSave, onCancel }: {
   initial?: ScheduledTask
   onSave: (data: TimerFormData) => void
@@ -20,6 +24,11 @@ export function TimerForm({ initial, onSave, onCancel }: {
     prompt: initial?.prompt ?? '',
     agentId: initial?.agentId ?? '',
     pipelineId: initial?.pipelineId ?? '',
+    timezone: initial?.timezone ?? getLocalTimezone(),
+    missedRunPolicy: initial?.missedRunPolicy ?? 'skip',
+    maxRetries: initial?.maxRetries ?? 0,
+    retryIntervalMinutes: initial?.retryIntervalMinutes ?? 5,
+    calendarRule: initial?.calendarRule ?? 'all-days',
   })
 
   const [cronPreview, setCronPreview] = useState<Date[]>([])
@@ -287,6 +296,44 @@ export function TimerForm({ initial, onSave, onCancel }: {
                   {t('timer.reviewHint', 'Timers should be specific enough that the action can run without ambiguity. If you are scheduling a pipeline, confirm it has already been saved.')}
                 </div>
               </div>
+            </div>
+          </section>
+
+          <section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6 xl:col-span-2">
+            <div className="mb-5">
+              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.advanced', 'Advanced')}</div>
+              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('timer.reliabilityPolicy', 'Reliability Policy')}</h3>
+              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('timer.reliabilityPolicyHint', 'Control timezone, missed runs, retries, and calendar filters for unattended execution.')}</p>
+            </div>
+            <div className="grid gap-4 md:grid-cols-5">
+              <label className="block">
+                <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.timezone', 'Timezone')}</span>
+                <input className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.timezone ?? ''} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.missedRuns', 'Missed runs')}</span>
+                <select className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.missedRunPolicy} onChange={(e) => setForm({ ...form, missedRunPolicy: e.target.value as TimerFormData['missedRunPolicy'] })}>
+                  <option value="skip">{t('timer.skipMissed', 'Skip')}</option>
+                  <option value="run-once">{t('timer.runOnce', 'Run once')}</option>
+                  <option value="run-all">{t('timer.runAll', 'Run all')}</option>
+                </select>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.maxRetries', 'Max retries')}</span>
+                <input type="number" min={0} max={10} className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.maxRetries ?? 0} onChange={(e) => setForm({ ...form, maxRetries: Math.max(0, Number(e.target.value) || 0) })} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.retryInterval', 'Retry interval')}</span>
+                <input type="number" min={1} max={1440} className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.retryIntervalMinutes ?? 5} onChange={(e) => setForm({ ...form, retryIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })} />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.calendar', 'Calendar')}</span>
+                <select className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.calendarRule} onChange={(e) => setForm({ ...form, calendarRule: e.target.value as TimerFormData['calendarRule'] })}>
+                  <option value="all-days">{t('timer.allDays', 'All days')}</option>
+                  <option value="weekdays">{t('timer.weekdays', 'Weekdays')}</option>
+                  <option value="weekends">{t('timer.weekends', 'Weekends')}</option>
+                </select>
+              </label>
             </div>
           </section>
         </div>

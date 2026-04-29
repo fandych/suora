@@ -399,7 +399,7 @@ export async function testConnection(
   baseUrl: string | undefined,
   modelId: string,
   providerId?: string,
-): Promise<{ success: boolean; error?: string; latency?: number }> {
+): Promise<{ success: boolean; error?: string; latency?: number; category?: AppErrorCategory; hint?: string }> {
   const start = Date.now()
   try {
     initializeProvider(providerType, apiKey || 'ollama', baseUrl, providerId)
@@ -412,7 +412,13 @@ export async function testConnection(
     const latency = Date.now() - start
     return { success: !!result.text, latency }
   } catch (err) {
-    return { success: false, error: err instanceof Error ? err.message : String(err) }
+    const classification = classifyAppError(err)
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : String(err),
+      category: classification.category,
+      hint: classification.hint,
+    }
   }
 }
 

@@ -335,7 +335,7 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
 }
 
 export function ChatMain() {
-  const { sessions, activeSessionId, openSessionTabs, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, providerConfigs, addSession, openSessionTab } = useAppStore()
+  const { sessions, activeSessionId, openSessionTabs, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore()
   const { t, locale } = useI18n()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
@@ -472,9 +472,44 @@ export function ChatMain() {
     }
   }, [activeSession, models, setSelectedModel, updateSession])
 
+  const updateMessage = useCallback((messageId: string, patch: Partial<import('@/types').Message>) => {
+    if (!activeSession) return
+    updateSession(activeSession.id, {
+      messages: activeSession.messages.map((message) => message.id === messageId ? { ...message, ...patch } : message),
+      pinnedMessageIds: patch.pinned === undefined
+        ? activeSession.pinnedMessageIds
+        : patch.pinned
+          ? Array.from(new Set([...(activeSession.pinnedMessageIds ?? []), messageId]))
+          : (activeSession.pinnedMessageIds ?? []).filter((id) => id !== messageId),
+    })
+  }, [activeSession, updateSession])
+
+  const branchFromMessage = useCallback((messageId: string) => {
+    if (!activeSession) return
+    const index = activeSession.messages.findIndex((message) => message.id === messageId)
+    if (index < 0) return
+    const branchSession: Session = {
+      ...activeSession,
+      id: generateId('session'),
+      title: `${activeSession.title} · branch`,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      parentSessionId: activeSession.id,
+      branchOfMessageId: messageId,
+      messages: activeSession.messages.slice(0, index + 1).map((message) => ({
+        ...message,
+        branchRootSessionId: activeSession.id,
+      })),
+    }
+    addSession(branchSession)
+    openSessionTab(branchSession.id)
+  }, [activeSession, addSession, openSessionTab])
+
   const handleAgentSelect = useCallback((agent: Agent | null) => {
     setSelectedAgent(agent)
     if (!activeSession) return
+    const lastUserMessage = [...activeSession.messages].reverse().find((message) => message.role === 'user' && message.content.trim())
+    if (agent && lastUserMessage) recordAgentSelectionPreference(agent.id, lastUserMessage.content)
 
     const patch: Partial<Session> = { agentId: agent?.id }
     if (agent?.modelId) {
@@ -490,7 +525,7 @@ export function ChatMain() {
     }
 
     updateSession(activeSession.id, patch)
-  }, [activeSession, models, setSelectedAgent, setSelectedModel, updateSession])
+  }, [activeSession, models, recordAgentSelectionPreference, setSelectedAgent, setSelectedModel, updateSession])
 
   if (!activeSession) {
     return (
@@ -707,6 +742,9 @@ export function ChatMain() {
                           onRetry={msg.isError ? () => retryLastError() : undefined}
                           onDelete={() => deleteMessage(msg.id)}
                           onRegenerate={msg.role === 'assistant' && !msg.isStreaming ? () => regenerateMessage(msg.id) : undefined}
+                          onEdit={msg.role === 'user' && !msg.isStreaming ? (content) => updateMessage(msg.id, { content }) : undefined}
+                          onTogglePin={!msg.isStreaming ? () => updateMessage(msg.id, { pinned: !msg.pinned }) : undefined}
+                          onBranch={!msg.isStreaming ? () => branchFromMessage(msg.id) : undefined}
                           onFeedback={msg.role === 'assistant' ? (fb) => {
                             const session = sessions.find((item) => item.id === activeSessionId)
                             if (!session) return

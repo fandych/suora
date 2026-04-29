@@ -15,11 +15,12 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function TimerDetail({ timer, onEdit, onDelete, onToggle }: {
+export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
   timer: ScheduledTask
   onEdit: () => void
   onDelete: () => void
   onToggle: () => void
+  onRunNow?: () => void
 }) {
   const { agents, agentPipelines, setActiveModule } = useAppStore()
   const { t } = useI18n()
@@ -84,6 +85,12 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle }: {
                 {timer.enabled ? t('timer.enabled', '● Enabled') : t('timer.disabled', '○ Disabled')}
               </button>
               <button
+                onClick={onRunNow}
+                className="px-4 py-2.5 rounded-2xl bg-accent/15 text-accent text-sm font-semibold hover:bg-accent/25 transition-colors"
+              >
+                {t('timer.runNow', 'Run now')}
+              </button>
+              <button
                 onClick={onEdit}
                 className="px-4 py-2.5 rounded-2xl bg-surface-2 text-text-muted text-sm font-semibold hover:text-text-secondary transition-colors"
               >
@@ -113,6 +120,10 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle }: {
                 <InfoCard label={t('timer.nextRun', 'Next Run')} value={timer.nextRun ? `${formatDateTime(timer.nextRun)} (${formatRelative(timer.nextRun)})` : t('timer.notScheduled', 'Not scheduled')} />
                 <InfoCard label={t('timer.lastRun', 'Last Run')} value={timer.lastRun ? formatDateTime(timer.lastRun) : t('timer.never', 'Never')} />
                 <InfoCard label={t('timer.created', 'Created')} value={formatDateTime(timer.createdAt)} />
+                <InfoCard label={t('timer.timezone', 'Timezone')} value={timer.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone} />
+                <InfoCard label={t('timer.retries', 'Retries')} value={`${t('timer.max', 'Max')}: ${timer.maxRetries ?? 0}, ${t('timer.interval', 'Interval')}: ${timer.retryIntervalMinutes ?? 5}m`} />
+                <InfoCard label={t('timer.missedRuns', 'Missed runs')} value={timer.missedRunPolicy ?? 'skip'} />
+                <InfoCard label={t('timer.calendar', 'Calendar')} value={timer.calendarRule ?? 'all-days'} />
               </div>
             </section>
 

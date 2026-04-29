@@ -12,6 +12,7 @@ import { ModelParamEditor } from './ModelParamEditor'
 import { ModelComparisonPanel } from './ModelComparisonPanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
+import { PROVIDER_PRESETS } from '@/store/slices/modelConfigSlice'
 
 type ModelsViewMode = 'providers' | 'models' | 'compare'
 
@@ -101,14 +102,17 @@ export function ModelsLayout() {
     }))
     .filter((entry) => entry.models.length > 0), [filteredProviderConfigs])
 
-  const handleAddProvider = () => {
+  const handleAddProvider = (presetId?: string) => {
+    const preset = presetId ? PROVIDER_PRESETS.find((item) => item.id === presetId) : undefined
     const newConfig: ProviderConfig = {
       id: generateId(),
-      name: t('models.newProvider', 'New Provider'),
+      name: preset?.name ?? t('models.newProvider', 'New Provider'),
       apiKey: '',
-      baseUrl: '',
-      providerType: 'openai-compatible',
-      models: [],
+      baseUrl: preset?.baseUrl ?? '',
+      providerType: preset?.providerType ?? 'openai-compatible',
+      models: preset?.defaultModels ?? [],
+      presetId: preset?.id,
+      description: preset?.description,
     }
     addProviderConfig(newConfig)
     setSelectedId(newConfig.id)
@@ -164,7 +168,7 @@ export function ModelsLayout() {
           viewMode !== 'compare' ? (
             <button
               type="button"
-              onClick={handleAddProvider}
+              onClick={() => handleAddProvider()}
               className="rounded-xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/25"
               title={t('models.addProvider', 'Add provider')}
             >
@@ -206,6 +210,26 @@ export function ModelsLayout() {
               {searchQuery && <span>{providerConfigs.length} {t('common.total', 'total')}</span>}
             </div>
           </div>
+
+          {viewMode === 'providers' && (
+            <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('models.providerPresets', 'Provider presets')}</div>
+              <div className="grid grid-cols-2 gap-2">
+                {PROVIDER_PRESETS.map((preset) => (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    onClick={() => handleAddProvider(preset.id)}
+                    title={preset.description}
+                    className="rounded-2xl border border-border-subtle/45 bg-surface-2/60 px-2.5 py-2 text-left text-[11px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
+                  >
+                    <span className="block truncate">{preset.name}</span>
+                    <span className="mt-0.5 block truncate text-[9px] font-normal text-text-muted">{preset.requiresApiKey ? t('models.apiKeyRequired', 'API key') : t('models.local', 'Local')}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {viewMode === 'compare' ? (
             <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
@@ -422,7 +446,7 @@ export function ModelsLayout() {
               {providerConfigs.length === 0 && (
                 <button
                   type="button"
-                  onClick={handleAddProvider}
+                  onClick={() => handleAddProvider()}
                   className="mt-6 rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
                 >
                   {t('models.addProvider', '+ Provider')}

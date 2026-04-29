@@ -42,4 +42,15 @@ describe('agentSelection', () => {
     expect(scores[0].agent.id).toBe('b')
     expect(scores[0].reasons).toContain('100% historical success')
   })
+
+  it('uses previous manual routing choices for similar tasks', () => {
+    const agents = [agent('writer', 'Writer', 'Draft clean prose'), agent('coder', 'Coder', 'Fix TypeScript React bugs')]
+
+    const scores = scoreAgentsForTask('Please fix this React TypeScript bug', agents, [], {}, [
+      { agentId: 'writer', taskFingerprint: 'please fix this react typescript bug', selectedAt: Date.now(), count: 3 },
+    ])
+
+    expect(scores[0].agent.id).toBe('writer')
+    expect(scores[0].reasons).toContain('matches your previous routing choice')
+  })
 })

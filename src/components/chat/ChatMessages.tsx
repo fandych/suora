@@ -477,11 +477,31 @@ function FileCard({ attachment }: { attachment: MessageAttachment }) {
 
 // ─── Message Bubble ────────────────────────────────────────────────
 
-export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeedback }: { message: Message; onRetry?: () => void; onDelete?: () => void; onRegenerate?: () => void; onFeedback?: (feedback: 'positive' | 'negative' | undefined) => void }) {
+export function MessageBubble({
+  message,
+  onRetry,
+  onDelete,
+  onRegenerate,
+  onFeedback,
+  onEdit,
+  onTogglePin,
+  onBranch,
+}: {
+  message: Message
+  onRetry?: () => void
+  onDelete?: () => void
+  onRegenerate?: () => void
+  onFeedback?: (feedback: 'positive' | 'negative' | undefined) => void
+  onEdit?: (content: string) => void
+  onTogglePin?: () => void
+  onBranch?: () => void
+}) {
   const { t, locale } = useI18n()
   const isUser = message.role === 'user'
   const bubbleStyle = useAppStore((s) => s.bubbleStyle)
   const [lightboxSrc, setLightboxSrc] = useState<{ src: string; alt: string } | null>(null)
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(message.content)
 
   if (message.isError) return <ErrorBubble message={message} onRetry={onRetry} />
 
@@ -589,7 +609,21 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
                 <ThinkingIndicator />
               ) : isUser ? (
                 <div className="space-y-3 text-[14.5px] leading-7">
-                  {message.content && <div className="whitespace-pre-wrap">{message.content}</div>}
+                  {editing ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={draft}
+                        onChange={(event) => setDraft(event.target.value)}
+                        className="min-h-28 w-full resize-y rounded-2xl border border-accent/20 bg-surface-0/80 px-3 py-2 text-[13px] leading-6 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                      />
+                      <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => { setDraft(message.content); setEditing(false) }} className="rounded-full border border-border-subtle/50 px-3 py-1 text-[11px] text-text-muted">{t('common.cancel', 'Cancel')}</button>
+                        <button type="button" onClick={() => { onEdit?.(draft); setEditing(false) }} className="rounded-full bg-accent px-3 py-1 text-[11px] font-semibold text-white">{t('common.save', 'Save')}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    message.content && <div className="whitespace-pre-wrap">{message.content}</div>
+                  )}
                   {renderAttachments()}
                 </div>
               ) : (
@@ -614,10 +648,37 @@ export function MessageBubble({ message, onRetry, onDelete, onRegenerate, onFeed
                   {message.contextSummary && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-300">context pruned</span>}
                 </div>
               )}
+              {message.citations?.length ? (
+                <div className="mt-3 space-y-2 border-t border-border-subtle/45 pt-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.sources', 'Sources')}</div>
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {message.citations.map((citation) => (
+                      <a
+                        key={citation.id}
+                        href={citation.uri || undefined}
+                        target={citation.uri?.startsWith('http') ? '_blank' : undefined}
+                        rel="noreferrer"
+                        className="rounded-2xl border border-border-subtle/50 bg-surface-0/55 px-3 py-2 text-[11px] text-text-secondary hover:border-accent/18 hover:bg-accent/8"
+                      >
+                        <span className="block font-semibold text-text-primary">{citation.title}</span>
+                        <span className="mt-1 block line-clamp-2 text-text-muted">{citation.snippet || citation.kind}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </div>
 
           <div className={`mt-2 flex min-h-8 flex-wrap items-center gap-1.5 px-1 text-[11px] opacity-80 transition-opacity group-hover:opacity-100 ${isUser ? 'justify-end' : 'justify-start'}`}>
+            {isUser && message.content && !message.isStreaming && (
+              <>
+                <CopyButton text={message.content} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent" />
+                {onEdit && <button type="button" onClick={() => setEditing(true)} title={t('common.edit', 'Edit')} aria-label={t('common.edit', 'Edit')} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent">✎</button>}
+              </>
+            )}
+            {onTogglePin && !message.isStreaming && <button type="button" onClick={onTogglePin} title={message.pinned ? t('chat.unpinMessage', 'Unpin message') : t('chat.pinMessage', 'Pin message')} aria-label={message.pinned ? t('chat.unpinMessage', 'Unpin message') : t('chat.pinMessage', 'Pin message')} className={`rounded-full border px-3 py-1.5 text-[11px] transition-colors ${message.pinned ? 'border-amber-500/20 bg-amber-500/10 text-amber-300' : 'border-border-subtle/50 bg-surface-0/55 text-text-muted hover:border-amber-500/20 hover:bg-amber-500/10 hover:text-amber-300'}`}>★</button>}
+            {onBranch && !message.isStreaming && <button type="button" onClick={onBranch} title={t('chat.branchConversation', 'Branch conversation')} aria-label={t('chat.branchConversation', 'Branch conversation')} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent">⑂</button>}
             {!isUser && message.content && !message.isStreaming && (
               <>
                 <CopyButton text={message.content} className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-1.5 text-[11px] text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent" />

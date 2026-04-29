@@ -503,7 +503,7 @@ export function useAIChat() {
     const { models, agents, skills, selectedModel, selectedAgent } = store
     const defaultAgent = agents.find((a) => a.id === 'default-assistant')
     const recommendedAgent = !activeSession.agentId && !selectedAgent
-      ? selectBestAgentForTask(userMessage, agents, skills, store.agentPerformance)
+      ? selectBestAgentForTask(userMessage, agents, skills, store.agentPerformance, store.agentSelectionPreferences)
       : null
     const sessionAgent = activeSession.agentId
       ? agents.find((a) => a.id === activeSession.agentId)
@@ -886,20 +886,25 @@ export function useAIChat() {
         inactivityTimer = null
       }
       setIsLoading(false)
+      const elapsed = Math.round(performance.now() - perfStart)
       // Record model usage statistics (always, even on cancel/error)
       if (tokenUsage) {
         useAppStore.getState().recordModelUsage(
           model.id,
           tokenUsage.promptTokens,
           tokenUsage.completionTokens,
+          elapsed,
+          hasError,
+          hasError ? (error ?? undefined) : undefined,
         )
       } else if (!hasError) {
         // Only record zero-token call if not an error (API was actually reached)
-        useAppStore.getState().recordModelUsage(model.id, 0, 0)
+        useAppStore.getState().recordModelUsage(model.id, 0, 0, elapsed)
+      } else {
+        useAppStore.getState().recordModelUsage(model.id, 0, 0, elapsed, true, error ?? undefined)
       }
       // Record agent performance stats
       if (sessionAgent) {
-        const elapsed = performance.now() - perfStart
         useAppStore.getState().recordAgentPerformance(sessionAgent.id, elapsed, tokenUsage?.totalTokens ?? 0, hasError)
       }
     }

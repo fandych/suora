@@ -1,7 +1,7 @@
 // Global state management using Zustand
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, ToolSecuritySettings, MarketplaceSettings, ThemeMode, FontSize, CodeFont, BubbleStyle, ProviderConfig, ExternalDirectoryConfig, ChannelConfig, AppNotification, ModelUsageStats, ChannelHistoryMessage, ChannelAccessToken, ChannelHealthStatus, ChannelUser, PluginInfo, AgentVersion, AgentPerformanceStats, AgentPipeline, AgentPipelineStep, AppLocale, ProxySettings, OnboardingState, SkillVersion, EmailConfig, EnvVariable, MCPServerConfig, MCPServerStatus, DocumentGroup, DocumentFolder, DocumentItem, DocumentNode } from '@/types'
+import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, ToolSecuritySettings, MarketplaceSettings, ThemeMode, FontSize, CodeFont, BubbleStyle, ProviderConfig, ExternalDirectoryConfig, ChannelConfig, AppNotification, ModelUsageStats, ChannelHistoryMessage, ChannelAccessToken, ChannelHealthStatus, ChannelUser, PluginInfo, AgentVersion, AgentPerformanceStats, AgentPipeline, AgentPipelineStep, AppLocale, ProxySettings, OnboardingState, SkillVersion, EmailConfig, EnvVariable, MCPServerConfig, MCPServerStatus, DocumentGroup, DocumentFolder, DocumentItem, DocumentNode, AgentSelectionPreference } from '@/types'
 import { setLiveStoreAccessor, setLiveStoreWriter } from '@/services/tools'
 import { loadExternalResources, syncExternalDirectoryAccess } from '@/services/externalDirectories'
 import { loadAllSkills } from '@/services/skillRegistry'
@@ -11,6 +11,7 @@ import { createSessionSlice } from '@/store/slices/sessionSlice'
 import { createModelConfigSlice } from '@/store/slices/modelConfigSlice'
 import { createUIPreferencesSlice } from '@/store/slices/uiPreferencesSlice'
 import { createSafePersistStorage } from '@/services/safePersistStorage'
+import { taskFingerprint } from '@/utils/taskFingerprint'
 
 function normalizeAgentMaxTurns(maxTurns: number | undefined): number | undefined {
   if (typeof maxTurns !== 'number' || !Number.isFinite(maxTurns)) return undefined
@@ -92,11 +93,119 @@ function localizeBuiltinAgent(agent: Agent): Agent {
 
 const DEFAULT_AGENT: Agent = buildDefaultAgent()
 
+function buildProfessionalAgent(
+  id: string,
+  name: string,
+  avatar: string,
+  color: string,
+  whenToUse: string,
+  systemPrompt: string,
+  skills: string[],
+  permissionMode: Agent['permissionMode'] = 'default',
+  temperature = 0.5,
+): Agent {
+  return {
+    id,
+    name,
+    avatar,
+    color,
+    whenToUse,
+    systemPrompt,
+    modelId: '',
+    skills,
+    temperature,
+    maxTokens: 4096,
+    maxTurns: permissionMode === 'plan' ? 12 : 24,
+    enabled: true,
+    greeting: `Ready for ${name.toLowerCase()} work.`,
+    responseStyle: 'balanced',
+    allowedTools: [],
+    disallowedTools: [],
+    permissionMode,
+    memories: [],
+    autoLearn: true,
+  }
+}
+
 // ─── All builtin agents ────────────────────────────────────────────
 
 const BUILTIN_AGENTS: Agent[] = [
   DEFAULT_AGENT,
+  buildProfessionalAgent(
+    'builtin-code-expert',
+    'Code Expert',
+    'agent-developer',
+    '#22C55E',
+    'Use for coding, debugging, refactoring, TypeScript, React, Electron, tests, builds, and pull-request implementation work.',
+    'You are a senior software engineer. Diagnose code precisely, prefer minimal safe changes, keep tests meaningful, and explain tradeoffs clearly.',
+    ['builtin-filesystem', 'builtin-shell', 'builtin-git', 'builtin-code-analysis'],
+    'acceptEdits',
+    0.35,
+  ),
+  buildProfessionalAgent(
+    'builtin-writer',
+    'Writing Strategist',
+    'agent-writer',
+    '#F59E0B',
+    'Use for drafting, rewriting, summarizing, documentation, email, product copy, and narrative structure.',
+    'You are an expert writing strategist. Produce clear, audience-aware writing with strong structure, concise edits, and a polished voice.',
+    ['builtin-filesystem', 'builtin-web', 'builtin-utilities'],
+    'default',
+    0.65,
+  ),
+  buildProfessionalAgent(
+    'builtin-researcher',
+    'Research Analyst',
+    'agent-research',
+    '#38BDF8',
+    'Use for research, source comparison, market analysis, literature review, synthesis, and citation-heavy answers.',
+    'You are a rigorous research analyst. Break questions into sub-questions, compare sources, cite provenance, and flag uncertainty.',
+    ['builtin-web', 'builtin-memory', 'builtin-utilities'],
+    'default',
+    0.45,
+  ),
+  buildProfessionalAgent(
+    'builtin-security-auditor',
+    'Security Auditor',
+    'agent-security',
+    '#EF4444',
+    'Use for threat modeling, vulnerability review, dependency risk, secrets, permissions, and secure implementation guidance.',
+    'You are a pragmatic security auditor. Identify realistic risks, prioritize exploitability, recommend minimal mitigations, and avoid unsafe instructions.',
+    ['builtin-filesystem', 'builtin-code-analysis', 'builtin-web'],
+    'plan',
+    0.25,
+  ),
+  buildProfessionalAgent(
+    'builtin-data-analyst',
+    'Data Analyst',
+    'agent-database',
+    '#A855F7',
+    'Use for data analysis, SQL, spreadsheets, metrics, dashboards, experiment analysis, and statistical interpretation.',
+    'You are a data analyst. Validate assumptions, explain methods, write clear queries, summarize findings, and call out data quality issues.',
+    ['builtin-filesystem', 'builtin-shell', 'builtin-utilities', 'builtin-memory'],
+    'default',
+    0.4,
+  ),
+  buildProfessionalAgent(
+    'builtin-devops-expert',
+    'DevOps Expert',
+    'agent-devops',
+    '#14B8A6',
+    'Use for CI/CD, deployment, Docker, infrastructure, observability, release automation, and operational troubleshooting.',
+    'You are a DevOps expert. Design reliable automation, inspect failures from logs, minimize blast radius, and document rollback paths.',
+    ['builtin-shell', 'builtin-filesystem', 'builtin-git', 'builtin-event-automation'],
+    'acceptEdits',
+    0.35,
+  ),
 ]
+
+function mergeBuiltinAgents(existingAgents: Agent[]): Agent[] {
+  const existingIds = new Set(existingAgents.map((agent) => agent.id))
+  return [
+    ...existingAgents.map((agent) => localizeBuiltinAgent(normalizeAgent(agent))),
+    ...BUILTIN_AGENTS.filter((agent) => !existingIds.has(agent.id)),
+  ]
+}
 
 export interface AppStore {
   // Navigation
@@ -144,6 +253,7 @@ export interface AppStore {
   updateAgent: (id: string, agent: Partial<Agent>) => void
   removeAgent: (id: string) => void
   setSelectedAgent: (agent: Agent | null) => void
+  restoreAgentVersion: (versionId: string) => void
   addAgentMemory: (agentId: string, memory: AgentMemoryEntry) => void
   removeAgentMemory: (agentId: string, memoryId: string) => void
   clearAgentMemories: (agentId: string) => void
@@ -219,7 +329,7 @@ export interface AppStore {
 
   // Model Usage Stats
   modelUsageStats: Record<string, ModelUsageStats>
-  recordModelUsage: (modelId: string, promptTokens: number, completionTokens: number) => void
+  recordModelUsage: (modelId: string, promptTokens: number, completionTokens: number, latencyMs?: number, isError?: boolean, error?: string) => void
   clearModelUsageStats: () => void
 
   // Channel Message History
@@ -272,6 +382,8 @@ export interface AppStore {
   agentPerformance: Record<string, AgentPerformanceStats>
   recordAgentPerformance: (agentId: string, responseTimeMs: number, tokens: number, isError?: boolean) => void
   clearAgentPerformance: () => void
+  agentSelectionPreferences: AgentSelectionPreference[]
+  recordAgentSelectionPreference: (agentId: string, taskText: string) => void
 
   // Agent Orchestration Pipeline Draft
   agentPipeline: AgentPipelineStep[]
@@ -395,6 +507,31 @@ export const useAppStore = create<AppStore>()(
             : state.selectedAgent,
         }
       }),
+      restoreAgentVersion: (versionId) => set((state) => {
+        const version = state.agentVersions.find((item) => item.id === versionId)
+        if (!version) return state
+        const current = state.agents.find((agent) => agent.id === version.agentId)
+        const restored = normalizeAgent({ ...version.snapshot, memories: current?.memories ?? [] })
+        const agents = current
+          ? state.agents.map((agent) => agent.id === version.agentId ? restored : agent)
+          : [...state.agents, restored]
+        return {
+          agents,
+          selectedAgent: state.selectedAgent?.id === version.agentId ? restored : state.selectedAgent,
+          agentVersions: [
+            ...state.agentVersions,
+            {
+              id: `aver-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+              agentId: version.agentId,
+              version: state.agentVersions.filter((item) => item.agentId === version.agentId).length + 1,
+              snapshot: version.snapshot,
+              createdAt: Date.now(),
+              label: `Rollback to v${version.version}`,
+              source: 'rollback' as const,
+            },
+          ].slice(-200),
+        }
+      }),
       removeAgent: (id) => {
         set((state) => ({
           agents: state.agents.filter((a) => a.id !== id),
@@ -487,8 +624,11 @@ export const useAppStore = create<AppStore>()(
 
       // Model Usage Stats
       modelUsageStats: {},
-      recordModelUsage: (modelId, promptTokens, completionTokens) => set((state) => {
-        const existing = state.modelUsageStats[modelId] ?? { modelId, callCount: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0, lastUsed: 0 }
+      recordModelUsage: (modelId, promptTokens, completionTokens, latencyMs, isError, error) => set((state) => {
+        const existing = state.modelUsageStats[modelId] ?? { modelId, callCount: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0, lastUsed: 0, errorCount: 0, latencies: [] }
+        const latencies = Number.isFinite(latencyMs) ? [...(existing.latencies ?? []), latencyMs as number] : (existing.latencies ?? [])
+        const retainedLatencies = latencies.length > 60 ? latencies.slice(-50) : latencies
+        const avgLatencyMs = retainedLatencies.length ? Math.round(retainedLatencies.reduce((sum, value) => sum + value, 0) / retainedLatencies.length) : existing.avgLatencyMs
         return {
           modelUsageStats: {
             ...state.modelUsageStats,
@@ -499,6 +639,10 @@ export const useAppStore = create<AppStore>()(
               totalCompletionTokens: existing.totalCompletionTokens + completionTokens,
               totalTokens: existing.totalTokens + promptTokens + completionTokens,
               lastUsed: Date.now(),
+              avgLatencyMs,
+              latencies: retainedLatencies,
+              errorCount: (existing.errorCount ?? 0) + (isError ? 1 : 0),
+              lastError: error || existing.lastError,
             },
           },
         }
@@ -631,6 +775,16 @@ export const useAppStore = create<AppStore>()(
         }
       }),
       clearAgentPerformance: () => set({ agentPerformance: {} }),
+      agentSelectionPreferences: [],
+      recordAgentSelectionPreference: (agentId, taskText) => set((state) => {
+        const fingerprint = taskFingerprint(taskText)
+        if (!fingerprint) return state
+        const existing = state.agentSelectionPreferences.find((item) => item.agentId === agentId && item.taskFingerprint === fingerprint)
+        const next = existing
+          ? state.agentSelectionPreferences.map((item) => item === existing ? { ...item, selectedAt: Date.now(), count: item.count + 1 } : item)
+          : [{ agentId, taskFingerprint: fingerprint, selectedAt: Date.now(), count: 1 }, ...state.agentSelectionPreferences]
+        return { agentSelectionPreferences: next.slice(0, 200) }
+      }),
 
       // Agent Orchestration Pipeline Draft
       agentPipeline: [],
@@ -711,7 +865,7 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'suora-store',
-      version: 19,
+      version: 20,
       storage: createSafePersistStorage<Record<string, unknown>>(fileStateStorage),
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
@@ -848,6 +1002,10 @@ export const useAppStore = create<AppStore>()(
           if (!('selectedDocumentGroupId' in state)) state.selectedDocumentGroupId = null
           if (!('selectedDocumentId' in state)) state.selectedDocumentId = null
         }
+        if (version < 20) {
+          state.agents = mergeBuiltinAgents((state.agents || []) as Agent[])
+          if (!state.agentSelectionPreferences) state.agentSelectionPreferences = []
+        }
         return state as Record<string, unknown>
       },
       merge: (persisted, current) => {
@@ -855,7 +1013,7 @@ export const useAppStore = create<AppStore>()(
         setI18nLocale(merged.locale ?? current.locale)
         // Filter out legacy builtin skills from persisted state
         merged.skills = merged.skills.filter((s) => s.type !== 'builtin')
-        merged.agents = merged.agents.map((agent) => localizeBuiltinAgent(normalizeAgent(agent)))
+        merged.agents = mergeBuiltinAgents(merged.agents)
         const localizedDefaultAgent = buildDefaultAgent()
 
         // Ensure default agent always present
@@ -880,6 +1038,9 @@ export const useAppStore = create<AppStore>()(
         }
         if (!merged.documentNodes) {
           merged.documentNodes = []
+        }
+        if (!merged.agentSelectionPreferences) {
+          merged.agentSelectionPreferences = []
         }
 
         return merged
@@ -912,6 +1073,7 @@ export const useAppStore = create<AppStore>()(
         installedPlugins: state.installedPlugins,
         agentVersions: state.agentVersions,
         agentPerformance: state.agentPerformance,
+        agentSelectionPreferences: state.agentSelectionPreferences,
         agentPipeline: state.agentPipeline,
         agentPipelineName: state.agentPipelineName,
         selectedAgentPipelineId: state.selectedAgentPipelineId,

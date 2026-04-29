@@ -84,7 +84,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
   onTest?: (agent: Agent) => void
 }) {
   const { t } = useI18n()
-  const { models, skills, providerConfigs, removeAgentMemory, clearAgentMemories, updateAgent, addNotification } = useAppStore()
+  const { models, skills, providerConfigs, agentVersions, restoreAgentVersion, removeAgentMemory, clearAgentMemories, updateAgent, addNotification } = useAppStore()
   const [memoryFilter, setMemoryFilter] = useState<'all' | 'insight' | 'preference' | 'correction' | 'knowledge'>('all')
   const [memoryQuery, setMemoryQuery] = useState('')
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null)
@@ -212,6 +212,11 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
     || form.greeting?.trim()
     || t('agents.heroFallback', 'Design the agent voice, choose the right skills, and set guardrails before sending it into active use.')
   const promptLength = form.systemPrompt.trim().length
+  const versionHistory = agentVersions
+    .filter((version) => version.agentId === form.id)
+    .slice()
+    .sort((left, right) => right.version - left.version)
+    .slice(0, 8)
 
   const copyAgentMermaidSource = async () => {
     try {
@@ -740,6 +745,40 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
                   </label>
                 </div>
               </div>
+            </EditorSection>
+
+            <EditorSection
+              eyebrow={t('agents.versions', 'Versions')}
+              title={t('agents.versionHistory', 'Version History')}
+              description={t('agents.versionHistoryHint', 'Restore earlier agent definitions without losing learned memories.')}
+            >
+              {versionHistory.length === 0 ? (
+                <p className="rounded-2xl border border-dashed border-border-subtle/55 bg-surface-2/40 px-4 py-6 text-[12px] text-text-muted">
+                  {t('agents.noVersionsYet', 'Save this agent to create its first version snapshot.')}
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {versionHistory.map((version) => (
+                    <div key={version.id} className="flex items-start justify-between gap-3 rounded-2xl border border-border-subtle/45 bg-surface-2/60 p-3">
+                      <div className="min-w-0">
+                        <div className="text-[12px] font-semibold text-text-primary">v{version.version} · {version.snapshot.name}</div>
+                        <div className="mt-1 text-[10px] text-text-muted">{new Date(version.createdAt).toLocaleString()} {version.source ? `· ${version.source}` : ''}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          restoreAgentVersion(version.id)
+                          setForm({ ...version.snapshot, memories: form.memories })
+                          setDirty(false)
+                        }}
+                        className="shrink-0 rounded-full border border-border-subtle/50 bg-surface-0/55 px-3 py-1.5 text-[11px] font-medium text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
+                      >
+                        {t('agents.restore', 'Restore')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </EditorSection>
 
             <EditorSection
