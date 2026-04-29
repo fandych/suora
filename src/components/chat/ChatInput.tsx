@@ -55,6 +55,13 @@ function isTextFile(file: File): boolean {
   return ACCEPTED_TEXT_EXTENSIONS.includes(ext)
 }
 
+function truncateTextForContext(value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value
+  const candidate = value.slice(0, maxChars)
+  const boundary = Math.max(candidate.lastIndexOf('\n'), candidate.lastIndexOf(' '), candidate.lastIndexOf('\t'))
+  return candidate.slice(0, boundary > maxChars * 0.75 ? boundary : maxChars).trimEnd()
+}
+
 type AttachmentRejectReason =
   | { kind: 'oversize'; limitBytes: number }
   | { kind: 'read-failed' }
@@ -95,7 +102,7 @@ function fileToAttachment(
       reader.onload = () => {
         const data = reader.result as string
         const truncated = data.length > MAX_ATTACHMENT_CONTEXT_CHARS
-        const storedData = truncated ? data.slice(0, MAX_ATTACHMENT_CONTEXT_CHARS) : data
+        const storedData = truncated ? truncateTextForContext(data, MAX_ATTACHMENT_CONTEXT_CHARS) : data
         const attachment: MessageAttachment = { id: generateId('att'), type: 'file', name: file.name, mimeType: file.type || 'text/plain', data: storedData, size: file.size, summary: data.slice(0, 500), truncated }
         resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
       }

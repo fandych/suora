@@ -626,8 +626,9 @@ export const useAppStore = create<AppStore>()(
       modelUsageStats: {},
       recordModelUsage: (modelId, promptTokens, completionTokens, latencyMs, isError, error) => set((state) => {
         const existing = state.modelUsageStats[modelId] ?? { modelId, callCount: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0, lastUsed: 0, errorCount: 0, latencies: [] }
-        const latencies = Number.isFinite(latencyMs) ? [...(existing.latencies ?? []), latencyMs as number].slice(-50) : (existing.latencies ?? [])
-        const avgLatencyMs = latencies.length ? Math.round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length) : existing.avgLatencyMs
+        const latencies = Number.isFinite(latencyMs) ? [...(existing.latencies ?? []), latencyMs as number] : (existing.latencies ?? [])
+        const retainedLatencies = latencies.length > 60 ? latencies.slice(-50) : latencies
+        const avgLatencyMs = retainedLatencies.length ? Math.round(retainedLatencies.reduce((sum, value) => sum + value, 0) / retainedLatencies.length) : existing.avgLatencyMs
         return {
           modelUsageStats: {
             ...state.modelUsageStats,
@@ -639,7 +640,7 @@ export const useAppStore = create<AppStore>()(
               totalTokens: existing.totalTokens + promptTokens + completionTokens,
               lastUsed: Date.now(),
               avgLatencyMs,
-              latencies,
+              latencies: retainedLatencies,
               errorCount: (existing.errorCount ?? 0) + (isError ? 1 : 0),
               lastError: error || existing.lastError,
             },
