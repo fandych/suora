@@ -10,6 +10,7 @@ import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
+import { AgentEditAssistant } from '@/components/AgentEditAssistant'
 import { confirm } from '@/services/confirmDialog'
 import { createDocument, createDocumentGroup, createDocumentId, findReferencedDocuments, searchDocuments } from '@/services/documents'
 import { buildDocumentGraph, buildDocumentPath } from '@/services/documentGraph'
@@ -481,6 +482,14 @@ export function DocumentsLayout() {
                       </button>
                     ))}
                   </div>
+                </div>
+                <div className="mt-4">
+                  <AgentEditAssistant
+                    target="document"
+                    title={activeDocument.title}
+                    currentContent={activeDocument.markdown}
+                    onApply={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}
+                  />
                 </div>
                 <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                   <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.outline', 'Outline')}</h3>
