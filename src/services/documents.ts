@@ -60,6 +60,88 @@ export function findReferencedDocuments(markdown: string, documents: DocumentIte
   return documents.filter((doc) => refs.includes(doc.title.toLowerCase()) || refs.includes(doc.id.toLowerCase()))
 }
 
+// ── Tiptap JSON → Markdown serializer ──────────────────────────────────────
+
+type TiptapMark = { type: string; attrs?: Record<string, string> }
+type TiptapNode = { type: string; text?: string; attrs?: Record<string, unknown>; marks?: TiptapMark[]; content?: TiptapNode[] }
+
+function serializeMarks(text: string, marks: TiptapMark[]): string {
+  let out = text
+  for (const mark of marks) {
+    if (mark.type === 'code') out = `\`${out}\``
+    else if (mark.type === 'bold') out = `**${out}**`
+    else if (mark.type === 'italic') out = `*${out}*`
+    else if (mark.type === 'strike') out = `~~${out}~~`
+    else if (mark.type === 'link') out = `[${out}](${mark.attrs?.href ?? ''})`
+  }
+  return out
+}
+
+function serializeNode(node: TiptapNode, listPrefix = ''): string {
+  if (node.type === 'text') {
+    const raw = node.text ?? ''
+    return node.marks?.length ? serializeMarks(raw, node.marks) : raw
+  }
+
+  const children = node.content ?? []
+
+  switch (node.type) {
+    case 'doc':
+      return children.map((child) => serializeNode(child)).join('').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n'
+
+    case 'paragraph': {
+      const text = children.map((child) => serializeNode(child)).join('')
+      return listPrefix ? `${listPrefix}${text}\n` : (text ? `${text}\n\n` : '\n')
+    }
+
+    case 'heading': {
+      const level = (node.attrs?.level as number) ?? 1
+      const text = children.map((child) => serializeNode(child)).join('')
+      return `${'#'.repeat(level)} ${text}\n\n`
+    }
+
+    case 'bulletList':
+      return children.map((child) => serializeNode(child, '- ')).join('') + '\n'
+
+    case 'orderedList':
+      return children.map((child, i) => serializeNode(child, `${i + 1}. `)).join('') + '\n'
+
+    case 'listItem': {
+      const first = children[0]
+      const rest = children.slice(1)
+      const firstText = first ? serializeNode(first, listPrefix) : ''
+      const restText = rest.map((child) => serializeNode(child)).join('')
+      return firstText + restText
+    }
+
+    case 'blockquote': {
+      const text = children.map((child) => serializeNode(child)).join('')
+      return text.split('\n').filter(Boolean).map((line) => `> ${line}`).join('\n') + '\n\n'
+    }
+
+    case 'codeBlock': {
+      const lang = (node.attrs?.language as string) ?? ''
+      const code = children.map((child) => (child.type === 'text' ? (child.text ?? '') : '')).join('')
+      return `\`\`\`${lang}\n${code}\n\`\`\`\n\n`
+    }
+
+    case 'horizontalRule':
+      return '---\n\n'
+
+    case 'hardBreak':
+      return '\n'
+
+    default:
+      return children.map((child) => serializeNode(child)).join('')
+  }
+}
+
+export function tiptapJsonToMarkdown(json: TiptapNode): string {
+  return serializeNode(json)
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+
 export function searchDocuments(nodes: DocumentNode[], groupId: string | null, query: string): DocumentSearchResult[] {
   const q = query.trim().toLowerCase()
   const docs = nodes.filter((node): node is DocumentItem => node.type === 'document' && (!groupId || node.groupId === groupId))
