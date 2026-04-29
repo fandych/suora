@@ -54,20 +54,42 @@ function safeDnsLookup(
   options: dns.LookupOptions | number,
   callback: (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family: number) => void,
 ): void {
-  const opts = typeof options === 'number' ? { family: options } : options
-  dns.lookup(hostname, opts, (err: NodeJS.ErrnoException | null, address: string | dns.LookupAddress[], family: number) => {
-    if (err) {
-      callback(err, address, family)
-      return
-    }
-    const ips = Array.isArray(address) ? address.map((entry) => entry.address) : [address as string]
-    for (const ip of ips) {
-      if (isBlockedIp(ip)) {
-        callback(new Error(`Blocked private/local network IP for ${hostname}: ${ip}`), address, family)
+  const opts: dns.LookupOptions = typeof options === 'number' ? { family: options } : (options ?? {})
+  const wantAll = opts.all === true
+  if (wantAll) {
+    dns.lookup(hostname, { ...opts, all: true }, (err, addresses) => {
+      if (err) {
+        ;(callback as (e: NodeJS.ErrnoException | null, a: dns.LookupAddress[], f: number) => void)(err, addresses, 0)
         return
       }
+      for (const entry of addresses) {
+        if (isBlockedIp(entry.address)) {
+          ;(callback as (e: NodeJS.ErrnoException | null, a: dns.LookupAddress[], f: number) => void)(
+            new Error(`Blocked private/local network IP for ${hostname}: ${entry.address}`),
+            addresses,
+            0,
+          )
+          return
+        }
+      }
+      ;(callback as (e: NodeJS.ErrnoException | null, a: dns.LookupAddress[], f: number) => void)(null, addresses, 0)
+    })
+    return
+  }
+  dns.lookup(hostname, { ...opts, all: false }, (err, address, family) => {
+    if (err) {
+      ;(callback as (e: NodeJS.ErrnoException | null, a: string, f: number) => void)(err, address, family)
+      return
     }
-    callback(null, address, family)
+    if (isBlockedIp(address)) {
+      ;(callback as (e: NodeJS.ErrnoException | null, a: string, f: number) => void)(
+        new Error(`Blocked private/local network IP for ${hostname}: ${address}`),
+        address,
+        family,
+      )
+      return
+    }
+    ;(callback as (e: NodeJS.ErrnoException | null, a: string, f: number) => void)(null, address, family)
   })
 }
 
@@ -1487,7 +1509,7 @@ function fetchUrl(url: string, redirectsLeft = 5): Promise<{ body: string; rawTr
           totalLen += s.length
           if (totalLen <= RAW_LIMIT) {
             raw += s
-          } else if (!rawTruncated) {
+          } else {
             rawTruncated = true
           }
         })

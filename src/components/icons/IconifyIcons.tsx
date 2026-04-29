@@ -224,12 +224,53 @@ export function parseIconValue(value: string): { name: string; color?: string } 
  * or a known keyword) before splicing it into raw SVG markup. Without this,
  * a crafted value such as `"/><script>…</script>` would XSS the renderer
  * since the SVG body is injected via dangerouslySetInnerHTML.
+ *
+ * Keyword colours are matched against an explicit allowlist (CSS Level 4
+ * named colours plus a couple of CSS-wide keywords) rather than a generic
+ * `[a-zA-Z]+` pattern, to avoid accepting arbitrary identifiers.
  */
-const SAFE_CSS_COLOR_RE = /^(?:#[0-9a-fA-F]{3,8}|currentColor|transparent|inherit|initial|unset|[a-zA-Z]{3,32}|rgba?\(\s*[\d.,%\s/]+\)|hsla?\(\s*[\d.,%\s/]+\))$/
+const SAFE_CSS_COLOR_KEYWORDS = new Set<string>([
+  'currentcolor', 'transparent', 'inherit', 'initial', 'unset', 'revert',
+  'aliceblue', 'antiquewhite', 'aqua', 'aquamarine', 'azure',
+  'beige', 'bisque', 'black', 'blanchedalmond', 'blue', 'blueviolet', 'brown', 'burlywood',
+  'cadetblue', 'chartreuse', 'chocolate', 'coral', 'cornflowerblue', 'cornsilk', 'crimson', 'cyan',
+  'darkblue', 'darkcyan', 'darkgoldenrod', 'darkgray', 'darkgreen', 'darkgrey', 'darkkhaki',
+  'darkmagenta', 'darkolivegreen', 'darkorange', 'darkorchid', 'darkred', 'darksalmon',
+  'darkseagreen', 'darkslateblue', 'darkslategray', 'darkslategrey', 'darkturquoise', 'darkviolet',
+  'deeppink', 'deepskyblue', 'dimgray', 'dimgrey', 'dodgerblue',
+  'firebrick', 'floralwhite', 'forestgreen', 'fuchsia',
+  'gainsboro', 'ghostwhite', 'gold', 'goldenrod', 'gray', 'green', 'greenyellow', 'grey',
+  'honeydew', 'hotpink',
+  'indianred', 'indigo', 'ivory',
+  'khaki',
+  'lavender', 'lavenderblush', 'lawngreen', 'lemonchiffon', 'lightblue', 'lightcoral', 'lightcyan',
+  'lightgoldenrodyellow', 'lightgray', 'lightgreen', 'lightgrey', 'lightpink', 'lightsalmon',
+  'lightseagreen', 'lightskyblue', 'lightslategray', 'lightslategrey', 'lightsteelblue',
+  'lightyellow', 'lime', 'limegreen', 'linen',
+  'magenta', 'maroon', 'mediumaquamarine', 'mediumblue', 'mediumorchid', 'mediumpurple',
+  'mediumseagreen', 'mediumslateblue', 'mediumspringgreen', 'mediumturquoise', 'mediumvioletred',
+  'midnightblue', 'mintcream', 'mistyrose', 'moccasin',
+  'navajowhite', 'navy',
+  'oldlace', 'olive', 'olivedrab', 'orange', 'orangered', 'orchid',
+  'palegoldenrod', 'palegreen', 'paleturquoise', 'palevioletred', 'papayawhip', 'peachpuff',
+  'peru', 'pink', 'plum', 'powderblue', 'purple',
+  'rebeccapurple', 'red', 'rosybrown', 'royalblue',
+  'saddlebrown', 'salmon', 'sandybrown', 'seagreen', 'seashell', 'sienna', 'silver', 'skyblue',
+  'slateblue', 'slategray', 'slategrey', 'snow', 'springgreen', 'steelblue',
+  'tan', 'teal', 'thistle', 'tomato', 'turquoise',
+  'violet',
+  'wheat', 'white', 'whitesmoke',
+  'yellow', 'yellowgreen',
+])
+
+const SAFE_CSS_COLOR_RE = /^(?:#[0-9a-fA-F]{3,8}|rgba?\(\s*[\d.,%\s/]+\)|hsla?\(\s*[\d.,%\s/]+\))$/
 
 function safeCssColor(input: string | undefined, fallback: string): string {
   if (!input) return fallback
-  return SAFE_CSS_COLOR_RE.test(input) ? input : fallback
+  const trimmed = input.trim()
+  if (SAFE_CSS_COLOR_RE.test(trimmed)) return trimmed
+  if (SAFE_CSS_COLOR_KEYWORDS.has(trimmed.toLowerCase())) return trimmed
+  return fallback
 }
 
 interface IconifyIconProps {

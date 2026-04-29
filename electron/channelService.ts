@@ -715,8 +715,9 @@ export class ChannelService {
 
     // Verify Telegram secret token if configured
     if (channel.webhookSecret) {
-      const secretToken = (req.headers['x-telegram-bot-api-secret-token'] as string | undefined) ?? ''
-      if (!this.timingSafeCompare(secretToken, channel.webhookSecret)) {
+      const headerValue = req.headers['x-telegram-bot-api-secret-token']
+      const secretToken = typeof headerValue === 'string' ? headerValue : ''
+      if (!secretToken || !this.timingSafeCompare(secretToken, channel.webhookSecret)) {
         getLogger().warn('Telegram secret token verification failed', { channelId: channel.id })
         return res.status(403).json({ error: 'Invalid secret token' })
       }
@@ -934,7 +935,7 @@ export class ChannelService {
    */
   private verifyDingTalkSignature(timestamp: string, appSecret: string, receivedSign: string): boolean {
     const tsMs = Number.parseInt(timestamp, 10)
-    if (!Number.isFinite(tsMs)) return false
+    if (!Number.isFinite(tsMs) || Number.isNaN(tsMs) || tsMs <= 0) return false
     const DINGTALK_REQUEST_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
     if (Math.abs(Date.now() - tsMs) > DINGTALK_REQUEST_MAX_AGE_MS) return false
 
