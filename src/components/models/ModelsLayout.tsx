@@ -115,6 +115,7 @@ export function ModelsLayout() {
       description: preset?.description,
     }
     addProviderConfig(newConfig)
+    syncModelsFromConfigs()
     setSelectedId(newConfig.id)
   }
 
@@ -142,7 +143,7 @@ export function ModelsLayout() {
   const handleProviderSaved = () => {
     // Re-check connection status for the saved provider
     if (selectedId) {
-      const config = providerConfigs.find((p) => p.id === selectedId)
+      const config = useAppStore.getState().providerConfigs.find((p) => p.id === selectedId)
       if (config) {
         const firstModel = config.models.find((m) => m.enabled) || config.models[0]
         if (firstModel && (config.apiKey || config.providerType === 'ollama')) {

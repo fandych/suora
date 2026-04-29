@@ -205,6 +205,7 @@ export function useAIChat() {
 
   const streamingRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
+  const activeStreamMessageRef = useRef<{ sessionId: string; messageId: string } | null>(null)
 
   useEffect(() => {
     return () => { abortRef.current?.abort() }
@@ -218,9 +219,14 @@ export function useAIChat() {
     setIsLoading(false)
 
     const store = useAppStore.getState()
-    const session = store.sessions.find((s) => s.id === store.activeSessionId)
+    const activeStreamMessage = activeStreamMessageRef.current
+    const session = activeStreamMessage
+      ? store.sessions.find((s) => s.id === activeStreamMessage.sessionId)
+      : store.sessions.find((s) => s.id === store.activeSessionId)
     if (!session) return
-    const lastMsg = session.messages[session.messages.length - 1]
+    const lastMsg = activeStreamMessage
+      ? session.messages.find((message) => message.id === activeStreamMessage.messageId)
+      : session.messages[session.messages.length - 1]
     if (!lastMsg || lastMsg.role !== 'assistant') return
 
     const updatedToolCalls = lastMsg.toolCalls?.map((t) =>
@@ -228,18 +234,19 @@ export function useAIChat() {
         ? { ...t, status: 'error' as const, output: 'Cancelled by user', completedAt: Date.now() }
         : t
     )
-    const baseMessages = session.messages.slice(0, -1)
     store.updateSession(session.id, {
-      messages: [...baseMessages, {
-        ...lastMsg,
-        toolCalls: updatedToolCalls,
-        isStreaming: false,
-        cancellation: {
-          cancelledAt: Date.now(),
-          cancelReason: 'Cancelled by user',
-          partialContentLength: lastMsg.content.length,
-        },
-      }],
+      messages: session.messages.map((message) => message.id === lastMsg.id
+        ? {
+            ...lastMsg,
+            toolCalls: updatedToolCalls,
+            isStreaming: false,
+            cancellation: {
+              cancelledAt: Date.now(),
+              cancelReason: 'Cancelled by user',
+              partialContentLength: lastMsg.content.length,
+            },
+          }
+        : message),
     })
   }, [])
 
@@ -573,6 +580,7 @@ export function useAIChat() {
       messages: [...prevMessages, userMsg, assistantMsg],
       title: prevMessages.length === 0 ? userMessage.slice(0, 30) : activeSession.title,
     })
+    activeStreamMessageRef.current = { sessionId: activeSession.id, messageId: assistantMsg.id }
 
     const perfStart = performance.now()
     let tokenUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
@@ -630,19 +638,21 @@ export function useAIChat() {
       const flushToStore = (isFinal: boolean) => {
         const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
         if (!latest) return
-        const baseMessages = latest.messages.slice(0, -1)
+        if (!latest.messages.some((message) => message.id === assistantMsg.id)) return
         useAppStore.getState().updateSession(activeSession.id, {
-          messages: [...baseMessages, {
-            ...assistantMsg,
-            content: fullContent,
-            toolCalls: currentToolCalls.length ? currentToolCalls : undefined,
-            contentParts: contentParts.length ? contentParts : undefined,
-            tokenUsage,
-            runtime: runtimeSnapshot,
-            contextSummary,
-            isError: hasError || undefined,
-            isStreaming: !isFinal,
-          }],
+          messages: latest.messages.map((message) => message.id === assistantMsg.id
+            ? {
+                ...message,
+                content: fullContent,
+                toolCalls: currentToolCalls.length ? currentToolCalls : undefined,
+                contentParts: contentParts.length ? contentParts : undefined,
+                tokenUsage,
+                runtime: runtimeSnapshot,
+                contextSummary,
+                isError: hasError || undefined,
+                isStreaming: !isFinal,
+              }
+            : message),
         })
       }
 
@@ -665,6 +675,7 @@ export function useAIChat() {
         abortSignal: abortController.signal,
         apiKey: model.apiKey,
         baseUrl: model.baseUrl,
+        providerType: model.providerType,
       })) {
         if (abortController.signal.aborted) break
         resetInactivityTimer()
@@ -840,11 +851,10 @@ export function useAIChat() {
         try {
           const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
           if (latest) {
-            const base = latest.messages.slice(0, -1)
-            const last = latest.messages[latest.messages.length - 1]
+            const last = latest.messages.find((message) => message.id === assistantMsg.id)
             if (last?.isStreaming) {
               useAppStore.getState().updateSession(activeSession.id, {
-                messages: [...base, { ...last, isStreaming: false }],
+                messages: latest.messages.map((message) => message.id === assistantMsg.id ? { ...last, isStreaming: false } : message),
               })
             }
           }
@@ -857,21 +867,22 @@ export function useAIChat() {
         try {
           const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
           if (latest) {
-            const base = latest.messages.slice(0, -1)
             useAppStore.getState().updateSession(activeSession.id, {
-              messages: [...base, {
-                ...assistantMsg,
-                content: errorContent,
-                isStreaming: false,
-                isError: true,
-                errorInfo: {
-                  category: 'provider',
-                  retryable: true,
-                  hint: 'Retry the message, switch model, or check provider settings.',
-                  rawSanitized: sanitizeToolError(errorContent),
-                  source: model.providerType,
-                },
-              }],
+              messages: latest.messages.map((message) => message.id === assistantMsg.id
+                ? {
+                    ...message,
+                    content: errorContent,
+                    isStreaming: false,
+                    isError: true,
+                    errorInfo: {
+                      category: 'provider',
+                      retryable: true,
+                      hint: 'Retry the message, switch model, or check provider settings.',
+                      rawSanitized: sanitizeToolError(errorContent),
+                      source: model.providerType,
+                    },
+                  }
+                : message),
             })
           }
         } catch (cleanupErr) {
@@ -881,6 +892,7 @@ export function useAIChat() {
     } finally {
       streamingRef.current = false
       abortRef.current = null
+      activeStreamMessageRef.current = null
       if (inactivityTimer) {
         clearTimeout(inactivityTimer)
         inactivityTimer = null

@@ -25,7 +25,7 @@ import {
 } from '@/services/voiceInteraction'
 import { formatFileSize } from './ChatMessages'
 
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 const MAX_FILE_SIZE = 2 * 1024 * 1024
 const MAX_ATTACHMENT_CONTEXT_CHARS = 24_000
 const MAX_DOCUMENT_SIZE = 10 * 1024 * 1024
@@ -315,6 +315,15 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
         const blob = new Blob(audioChunksRef.current, { type: mimeType })
         const duration = Math.round((Date.now() - recordingStartRef.current) / 1000)
         if (blob.size > 0) {
+          if (blob.size > MAX_AUDIO_SIZE) {
+            toast.warning(
+              t('chat.attachTooLarge', 'File too large'),
+              `${t('chat.recordedAudio', 'Recorded audio')} — ${formatFileSize(blob.size)} exceeds ${formatFileSize(MAX_AUDIO_SIZE)} limit`,
+            )
+            setIsRecording(false); setRecordingDuration(0)
+            if (recordingTimerRef.current) clearInterval(recordingTimerRef.current)
+            return
+          }
           const reader = new FileReader()
           reader.onload = () => {
             const dataUrl = reader.result as string
@@ -479,13 +488,14 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
                             setInput((prev) => (prev ? prev + ' ' + text : text))
                             setInterimText('')
                             setVoiceState('idle')
-                            if (settings.autoSend && text.trim()) {
-                              setTimeout(() => {
+                          if (settings.autoSend && text.trim()) {
+                            setTimeout(() => {
                                 const currentInput = (textareaRef.current?.value || '').trim()
-                                if (currentInput) onSend(currentInput)
+                                const finalInput = currentInput || text.trim()
+                                if (finalInput) onSend(finalInput)
                                 setInput('')
                               }, 100)
-                            }
+                          }
                           } else {
                             setInterimText(text)
                           }

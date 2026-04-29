@@ -173,6 +173,10 @@ type ProviderInstance =
 const MAX_PROVIDER_INSTANCES = 32
 const providerInstances = new Map<string, ProviderInstance>()
 
+function normalizeProviderApiKey(providerType: string | undefined, apiKey: string | undefined): string {
+  return providerType === 'ollama' ? (apiKey || 'ollama') : (apiKey ?? '')
+}
+
 function setProviderInstance(key: string, instance: ProviderInstance): void {
   // Evict any prior instance for the same providerId so renames/key changes
   // don't accumulate stale entries.
@@ -261,7 +265,8 @@ export function initializeProvider(
     }
   }
 
-  const key = `${providerId ?? providerType}:${apiKey}:${baseUrl ?? ''}`
+  const effectiveApiKey = normalizeProviderApiKey(providerType, apiKey)
+  const key = `${providerId ?? providerType}:${providerType}:${effectiveApiKey}:${baseUrl ?? ''}`
   if (providerInstances.has(key)) {
     // Refresh LRU position
     getProviderInstance(key)
@@ -271,76 +276,76 @@ export function initializeProvider(
   let instance: ProviderInstance
   switch (providerType) {
     case 'anthropic':
-      instance = createAnthropic({ apiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
+      instance = createAnthropic({ apiKey: effectiveApiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
       break
     case 'openai':
-      instance = createOpenAI({ apiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
+      instance = createOpenAI({ apiKey: effectiveApiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
       break
     case 'google':
       instance = createOpenAI({
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://generativelanguage.googleapis.com/v1beta/openai',
       })
       break
     case 'ollama':
       instance = createOpenAI({
-        apiKey: apiKey || 'ollama',
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'http://localhost:11434/v1',
       })
       break
     case 'deepseek':
       instance = createOpenAICompatible({
         name: providerId || 'deepseek',
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.deepseek.com/v1',
       })
       break
     case 'zhipu':
       instance = createOpenAICompatible({
         name: providerId || 'zhipu',
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://open.bigmodel.cn/api/paas/v4',
       })
       break
     case 'minimax':
       instance = createOpenAICompatible({
         name: providerId || 'minimax',
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.minimax.chat/v1',
       })
       break
     case 'groq':
       instance = createOpenAICompatible({
         name: providerId || 'groq',
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.groq.com/openai/v1',
       })
       break
     case 'together':
       instance = createOpenAICompatible({
         name: providerId || 'together',
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.together.xyz/v1',
       })
       break
     case 'fireworks':
       instance = createOpenAICompatible({
         name: providerId || 'fireworks',
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.fireworks.ai/inference/v1',
       })
       break
     case 'perplexity':
       instance = createOpenAICompatible({
         name: providerId || 'perplexity',
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.perplexity.ai',
       })
       break
     case 'cohere':
       instance = createOpenAICompatible({
         name: providerId || 'cohere',
-        apiKey,
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.cohere.ai/v1',
       })
       break
@@ -348,7 +353,7 @@ export function initializeProvider(
     default:
       instance = createOpenAICompatible({
         name: providerId || 'custom-provider',
-        apiKey: apiKey || '',
+        apiKey: effectiveApiKey,
         baseURL: baseUrl || '',
       })
       break
@@ -356,20 +361,23 @@ export function initializeProvider(
   setProviderInstance(key, instance)
 }
 
-function getProvider(provider: string, apiKey?: string, baseUrl?: string) {
-  const searchKey = `${provider}:${apiKey ?? ''}:${baseUrl ?? ''}`
+function getProvider(provider: string, apiKey?: string, baseUrl?: string, providerType?: string) {
+  const effectiveApiKey = normalizeProviderApiKey(providerType, apiKey)
+  const searchKey = providerType
+    ? `${provider}:${providerType}:${effectiveApiKey}:${baseUrl ?? ''}`
+    : `${provider}:${apiKey ?? ''}:${baseUrl ?? ''}`
   const direct = getProviderInstance(searchKey)
   if (direct) return direct
-  if (apiKey !== undefined || baseUrl !== undefined) {
-    return null
-  }
   for (const [key, instance] of providerInstances) {
-    if (key.startsWith(provider + ':')) return instance
+    if (!key.startsWith(provider + ':')) continue
+    if (providerType && !key.startsWith(`${provider}:${providerType}:`)) continue
+    if (baseUrl !== undefined && !key.endsWith(`:${baseUrl ?? ''}`)) continue
+    return instance
   }
   return null
 }
 
-function resolveModel(modelId: string, apiKey?: string, baseUrl?: string) {
+function resolveModel(modelId: string, apiKey?: string, baseUrl?: string, providerType?: string) {
   const [provider, ...modelParts] = modelId.split(':')
   const modelName = modelParts.join(':')
 
@@ -377,7 +385,7 @@ function resolveModel(modelId: string, apiKey?: string, baseUrl?: string) {
     throw new Error(`Invalid model ID format: "${modelId}". Expected format: "provider:modelName"`)
   }
 
-  const providerInstance = getProvider(provider, apiKey, baseUrl)
+  const providerInstance = getProvider(provider, apiKey, baseUrl, providerType)
 
   if (!providerInstance) {
     throw new Error(`Provider "${getProviderTypeName(provider)}" not initialized. Please configure API key in Models settings.`)
@@ -404,7 +412,7 @@ export async function testConnection(
   try {
     initializeProvider(providerType, apiKey || 'ollama', baseUrl, providerId)
     const fullModelId = `${providerId || providerType}:${modelId}`
-    const model = resolveModel(fullModelId, apiKey, baseUrl)
+    const model = resolveModel(fullModelId, apiKey, baseUrl, providerType)
     const result = await generateText({
       model,
       messages: [{ role: 'user', content: 'Hi' }],
@@ -427,9 +435,10 @@ export async function generateResponse(
   messages: ModelMessage[],
   systemPrompt?: string,
   apiKey?: string,
-  baseUrl?: string
+  baseUrl?: string,
+  providerType?: string,
 ) {
-  const model = resolveModel(modelId, apiKey, baseUrl)
+  const model = resolveModel(modelId, apiKey, baseUrl, providerType)
 
   const result = await generateText({
     model,
@@ -460,9 +469,10 @@ export async function* streamResponseWithTools(
     abortSignal?: AbortSignal
     apiKey?: string
     baseUrl?: string
+    providerType?: string
   }
 ): AsyncGenerator<AppStreamEvent> {
-  const model = resolveModel(modelId, options?.apiKey, options?.baseUrl)
+  const model = resolveModel(modelId, options?.apiKey, options?.baseUrl, options?.providerType)
 
   const hasTools = !!options?.tools && Object.keys(options.tools).length > 0
   const requestedStepLimit = Math.max(1, options?.maxSteps ?? 20)

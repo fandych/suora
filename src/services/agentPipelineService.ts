@@ -294,7 +294,8 @@ function resolvePipelineModel(
     // so the run does not silently break when a model is removed later.
   }
   if (agent.modelId) {
-    return models.find((model) => model.id === agent.modelId)
+    const agentModel = models.find((model) => model.id === agent.modelId)
+    if (agentModel && agentModel.enabled !== false) return agentModel
   }
 
   return models.find((model) => model.isDefault) ?? models[0]
@@ -917,6 +918,7 @@ export async function executeAgentPipeline(
               maxSteps: Math.max(2, Math.min(agent.maxTurns ?? 5, 30)),
               apiKey: model.apiKey,
               baseUrl: model.baseUrl,
+              providerType: model.providerType,
               abortSignal: stepAbort.signal,
             })) {
               if (stepAbort.timedOut()) throw new Error(`Step timed out after ${stepTimeoutMs}ms`)
@@ -949,7 +951,7 @@ export async function executeAgentPipeline(
               throw new Error(streamError)
             }
           } else {
-            output = await generateResponse(modelIdentifier, messages, systemPrompt, model.apiKey, model.baseUrl)
+            output = await generateResponse(modelIdentifier, messages, systemPrompt, model.apiKey, model.baseUrl, model.providerType)
           }
 
           lastError = undefined
