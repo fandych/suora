@@ -24,6 +24,10 @@ const PROVIDER_TYPES = new Set<ProviderConfig['providerType']>([
 ])
 const MAX_IMPORTED_PROVIDER_MODELS = 500
 
+function isProviderType(value: string): value is ProviderConfig['providerType'] {
+  return PROVIDER_TYPES.has(value as ProviderConfig['providerType'])
+}
+
 function coerceProviderConfig(value: unknown): ProviderConfig | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   const config = value as Partial<ProviderConfig>
@@ -33,7 +37,7 @@ function coerceProviderConfig(value: unknown): ProviderConfig | null {
     || typeof config.apiKey !== 'string'
     || typeof config.baseUrl !== 'string'
     || typeof config.providerType !== 'string'
-    || !PROVIDER_TYPES.has(config.providerType as ProviderConfig['providerType'])
+    || !isProviderType(config.providerType)
     || !Array.isArray(config.models)
     || config.models.length > MAX_IMPORTED_PROVIDER_MODELS
   ) return null
@@ -64,7 +68,7 @@ function coerceProviderConfig(value: unknown): ProviderConfig | null {
     name: config.name,
     apiKey: config.apiKey,
     baseUrl: config.baseUrl,
-    providerType: config.providerType as ProviderConfig['providerType'],
+    providerType: config.providerType,
     models,
   }
 }

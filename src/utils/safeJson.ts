@@ -83,7 +83,8 @@ export function safeJsonReplacer(this: unknown, key: string, value: unknown): un
     return { [TAG]: 'Undefined' }
   }
   if (typeof value === 'number' && !Number.isFinite(value)) {
-    return { [TAG]: 'Number', value: String(value) }
+    const serializedNumber = String(value)
+    return { [TAG]: 'Number', value: serializedNumber }
   }
   if (original instanceof Date) {
     return { [TAG]: 'Date', value: original.toISOString() }
@@ -91,8 +92,8 @@ export function safeJsonReplacer(this: unknown, key: string, value: unknown): un
   if (original instanceof URL) {
     return { [TAG]: 'URL', value: original.toString() }
   }
-  if (value instanceof RegExp) {
-    return { [TAG]: 'RegExp', source: value.source, flags: value.flags }
+  if (original instanceof RegExp) {
+    return { [TAG]: 'RegExp', source: original.source, flags: original.flags }
   }
   if (value instanceof Map) {
     return { [TAG]: 'Map', entries: Array.from(value.entries()) }

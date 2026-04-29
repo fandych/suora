@@ -289,6 +289,8 @@ export class SuoraDatabase {
   }
 
   async savePersistedStore(key: string, serializedValue: string, version: number): Promise<void> {
+    // Renderer persistence writes this value via safeStringify; split-store
+    // payloads are parsed below when they are decomposed into workspace files.
     if (key !== SPLIT_STORE_NAME) {
       const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
       const stores = asObject(settings._persistedStores)
