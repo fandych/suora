@@ -935,7 +935,7 @@ export class ChannelService {
    */
   private verifyDingTalkSignature(timestamp: string, appSecret: string, receivedSign: string): boolean {
     const tsMs = Number.parseInt(timestamp, 10)
-    if (!Number.isFinite(tsMs) || Number.isNaN(tsMs) || tsMs <= 0) return false
+    if (!Number.isFinite(tsMs) || tsMs <= 0) return false
     const DINGTALK_REQUEST_MAX_AGE_MS = 60 * 60 * 1000 // 1 hour
     if (Math.abs(Date.now() - tsMs) > DINGTALK_REQUEST_MAX_AGE_MS) return false
 

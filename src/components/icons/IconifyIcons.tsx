@@ -263,12 +263,30 @@ const SAFE_CSS_COLOR_KEYWORDS = new Set<string>([
   'yellow', 'yellowgreen',
 ])
 
-const SAFE_CSS_COLOR_RE = /^(?:#[0-9a-fA-F]{3,8}|rgba?\(\s*[\d.,%\s/]+\)|hsla?\(\s*[\d.,%\s/]+\))$/
+// Per-component CSS number / percentage / alpha sub-patterns used to
+// build the rgb()/rgba()/hsl()/hsla() validators below. Keeping these
+// strict is important — the sanitised value is spliced verbatim into raw
+// SVG markup, so an overly permissive regex (e.g. one that admits
+// `rgba(0.0.0.0)` or stray characters) would re-open the XSS vector that
+// `dangerouslySetInnerHTML` exposes.
+const NUM = String.raw`-?\d+(?:\.\d+)?`
+const PCT = String.raw`-?\d+(?:\.\d+)?%`
+const NUM_OR_PCT = `(?:${NUM}|${PCT})`
+const ALPHA = `(?:${NUM}|${PCT})`
+const SAFE_RGB_RE = new RegExp(
+  `^rgba?\\(\\s*${NUM_OR_PCT}\\s*,\\s*${NUM_OR_PCT}\\s*,\\s*${NUM_OR_PCT}(?:\\s*,\\s*${ALPHA})?\\s*\\)$`,
+)
+const SAFE_HSL_RE = new RegExp(
+  `^hsla?\\(\\s*${NUM}(?:deg|rad|grad|turn)?\\s*,\\s*${PCT}\\s*,\\s*${PCT}(?:\\s*,\\s*${ALPHA})?\\s*\\)$`,
+)
+const SAFE_HEX_RE = /^#[0-9a-fA-F]{3,8}$/
 
 function safeCssColor(input: string | undefined, fallback: string): string {
   if (!input) return fallback
   const trimmed = input.trim()
-  if (SAFE_CSS_COLOR_RE.test(trimmed)) return trimmed
+  if (SAFE_HEX_RE.test(trimmed)) return trimmed
+  if (SAFE_RGB_RE.test(trimmed)) return trimmed
+  if (SAFE_HSL_RE.test(trimmed)) return trimmed
   if (SAFE_CSS_COLOR_KEYWORDS.has(trimmed.toLowerCase())) return trimmed
   return fallback
 }
