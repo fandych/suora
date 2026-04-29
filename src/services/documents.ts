@@ -137,6 +137,28 @@ function serializeNode(node: TiptapNode, listPrefix = ''): string {
     case 'hardBreak':
       return '\n'
 
+    case 'image': {
+      const src = (node.attrs?.src as string) ?? ''
+      const alt = (node.attrs?.alt as string) ?? ''
+      const title = (node.attrs?.title as string) ?? ''
+      return title ? `![${alt}](${src} "${title}")` : `![${alt}](${src})`
+    }
+
+    case 'mathBlock': {
+      const content = (node.attrs?.content as string) ?? ''
+      return `$$\n${content}\n$$\n\n`
+    }
+
+    case 'inlineMath': {
+      const content = (node.attrs?.content as string) ?? ''
+      return `$${content}$`
+    }
+
+    case 'mermaidBlock': {
+      const code = (node.attrs?.code as string) ?? ''
+      return `\`\`\`mermaid\n${code}\n\`\`\`\n\n`
+    }
+
     default:
       return children.map((child) => serializeNode(child)).join('')
   }

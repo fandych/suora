@@ -3,6 +3,7 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
+import Image from '@tiptap/extension-image'
 import { useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
@@ -10,6 +11,7 @@ import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
+import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions'
 import { confirm } from '@/services/confirmDialog'
 import { createDocument, createDocumentGroup, createDocumentId, findReferencedDocuments, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
 import { buildDocumentGraph, buildDocumentPath } from '@/services/documentGraph'
@@ -24,13 +26,32 @@ function escapeHtml(value: string) {
     .replace(/'/g, '&#039;')
 }
 
+function escapeAttr(value: string) {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+}
+
 function inlineMarkdown(value: string) {
-  return escapeHtml(value)
+  // Extract inline math tokens before HTML escaping to preserve raw LaTeX
+  const mathTokens: string[] = []
+  const tokenized = value.replace(/\$([^$\n]+)\$/g, (_, latex: string) => {
+    mathTokens.push(latex)
+    return `\x01M${mathTokens.length - 1}\x01`
+  })
+
+  let result = escapeHtml(tokenized)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${src}" alt="${alt}">`)
     .replace(/\[\[([^\]\n]+)\]\]/g, '<a href="#doc:$1">$1</a>')
     .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+
+  result = result.replace(/\x01M(\d+)\x01/g, (_, i: string) => {
+    const latex = mathTokens[parseInt(i)]
+    return `<span data-math-inline="${escapeAttr(latex)}"></span>`
+  })
+
+  return result
 }
 
 function markdownToTiptapHtml(markdown: string) {
@@ -38,7 +59,10 @@ function markdownToTiptapHtml(markdown: string) {
   const html: string[] = []
   let list: 'ul' | 'ol' | null = null
   let inCode = false
+  let codeLang = ''
   let code: string[] = []
+  let inMath = false
+  let math: string[] = []
 
   const closeList = () => {
     if (list) {
@@ -48,13 +72,20 @@ function markdownToTiptapHtml(markdown: string) {
   }
 
   lines.forEach((line) => {
+    // ── Code / mermaid fence ──────────────────────────────────────────────
     if (line.trim().startsWith('```')) {
       if (inCode) {
-        html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+        if (codeLang === 'mermaid') {
+          html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`)
+        } else {
+          html.push(`<pre><code class="language-${escapeHtml(codeLang)}">${escapeHtml(code.join('\n'))}</code></pre>`)
+        }
         code = []
+        codeLang = ''
         inCode = false
       } else {
         closeList()
+        codeLang = line.trim().slice(3).trim()
         inCode = true
       }
       return
@@ -65,6 +96,25 @@ function markdownToTiptapHtml(markdown: string) {
       return
     }
 
+    // ── Block math ($$...$$) ───────────────────────────────────────────────
+    if (line.trim() === '$$') {
+      if (inMath) {
+        html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`)
+        math = []
+        inMath = false
+      } else {
+        closeList()
+        inMath = true
+      }
+      return
+    }
+
+    if (inMath) {
+      math.push(line)
+      return
+    }
+
+    // ── Normal inline content ──────────────────────────────────────────────
     const heading = /^(#{1,3})\s+(.*)$/.exec(line)
     if (heading) {
       closeList()
@@ -105,7 +155,14 @@ function markdownToTiptapHtml(markdown: string) {
   })
 
   closeList()
-  if (inCode) html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+  if (inCode) {
+    if (codeLang === 'mermaid') {
+      html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`)
+    } else {
+      html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
+    }
+  }
+  if (inMath) html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`)
   return html.join('\n') || '<p></p>'
 }
 
@@ -119,6 +176,10 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
       StarterKit,
       Placeholder.configure({ placeholder: 'Start writing…' }),
       Link.configure({ openOnClick: false }),
+      Image.configure({ inline: true }),
+      MathBlock,
+      InlineMath,
+      MermaidBlock,
     ],
     content: markdownToTiptapHtml(document.markdown),
     editable: true,
