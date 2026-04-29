@@ -7,6 +7,7 @@ import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
+import { safeStringify } from '@/utils/safeJson'
 
 function formatSessionRelativeTime(ts: number, locale = 'en'): string {
   const diffSeconds = Math.round((ts - Date.now()) / 1000)
@@ -320,7 +321,7 @@ export function SessionList({ width }: { width?: number }) {
             onClick={() => {
               const session = sessions.find((s) => s.id === contextMenu.sessionId)
               if (session) {
-                const blob = new Blob([JSON.stringify(session, null, 2)], { type: 'application/json' })
+                const blob = new Blob([safeStringify(session, 2)], { type: 'application/json' })
                 const url = URL.createObjectURL(blob)
                 const a = document.createElement('a')
                 a.href = url

@@ -1,6 +1,7 @@
 // External directory loading for skills and agents
 import type { Skill, Agent, ExternalDirectoryConfig, SkillSource } from '@/types'
 import { parseSkillMarkdown } from '@/services/skillRegistry'
+import { safeParse } from '@/utils/safeJson'
 
 interface DirEntry {
   name: string
@@ -19,6 +20,19 @@ function getSkillSource(dirPath: string): SkillSource {
   if (normalizedPath.includes('/.agents/')) return 'agent-dir'
   if (normalizedPath.includes('/.claude/')) return 'claude-dir'
   return 'workspace'
+}
+
+function isLegacySkillTools(value: unknown): boolean {
+  return Array.isArray(value) && value.every((tool) => {
+    if (!tool || typeof tool !== 'object' || Array.isArray(tool)) return false
+    const candidate = tool as Record<string, unknown>
+    return (
+      typeof candidate.id === 'string'
+      && typeof candidate.name === 'string'
+      && typeof candidate.description === 'string'
+      && Array.isArray(candidate.params)
+    )
+  })
 }
 
 function isElectronError(value: unknown): value is { error: string } {
@@ -94,20 +108,43 @@ export async function loadSkillsFromDirectory(dirPath: string): Promise<Skill[]>
           console.warn(`Failed to read ${entry.name}:`, (content as { error: string }).error)
           continue
         }
-        const skillData = JSON.parse(content)
+        const skillData = safeParse<Partial<Skill>>(content)
 
         // Validate required fields
-        if (!skillData.id || !skillData.name || !skillData.tools) {
+        if (typeof skillData.id !== 'string' || typeof skillData.name !== 'string' || !isLegacySkillTools(skillData.tools)) {
           console.warn(`Invalid skill file ${entry.name}: missing required fields`)
           continue
         }
 
         // Determine source based on directory path
         const skill: Skill = {
-          ...skillData,
-          type: 'custom',
-          source,
+          id: skillData.id,
+          name: skillData.name,
+          description: skillData.description ?? '',
           enabled: skillData.enabled ?? true,
+          source,
+          content: skillData.content ?? skillData.prompt ?? '',
+          frontmatter: skillData.frontmatter ?? {
+            name: skillData.name,
+            description: skillData.description ?? '',
+          },
+          allowedTools: skillData.allowedTools,
+          whenToUse: skillData.whenToUse,
+          context: skillData.context ?? 'inline',
+          referenceFiles: skillData.referenceFiles,
+          filePath: skillData.filePath,
+          skillRoot: skillData.skillRoot,
+          icon: skillData.icon,
+          category: skillData.category,
+          author: skillData.author,
+          version: skillData.version,
+          type: skillData.type ?? 'custom',
+          prompt: skillData.prompt,
+          tools: skillData.tools,
+          customCode: skillData.customCode,
+          config: skillData.config,
+          dependencies: skillData.dependencies,
+          changelog: skillData.changelog,
         }
 
         skills.push(skill)
@@ -147,10 +184,10 @@ export async function loadAgentsFromDirectory(dirPath: string): Promise<Agent[]>
           console.warn(`Failed to read ${entry.name}:`, (content as { error: string }).error)
           continue
         }
-        const agentData = JSON.parse(content)
+        const agentData = safeParse<Partial<Agent>>(content)
 
         // Validate required fields
-        if (!agentData.id || !agentData.name || !agentData.systemPrompt) {
+        if (typeof agentData.id !== 'string' || typeof agentData.name !== 'string' || typeof agentData.systemPrompt !== 'string') {
           console.warn(`Invalid agent file ${entry.name}: missing required fields`)
           continue
         }

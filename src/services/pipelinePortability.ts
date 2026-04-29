@@ -1,5 +1,6 @@
 import type { AgentPipeline, AgentPipelineBudget, AgentPipelineStep, AgentPipelineVariable } from '@/types'
 import { generateId } from '@/utils/helpers'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 /**
  * Stable schema version for exported pipelines. Increment when the export
@@ -69,7 +70,7 @@ export function buildPipelineExport(pipeline: AgentPipeline): PipelineExportEnve
 }
 
 export function serializePipelineExport(pipeline: AgentPipeline): string {
-  return JSON.stringify(buildPipelineExport(pipeline), null, 2)
+  return safeStringify(buildPipelineExport(pipeline), 2)
 }
 
 /**
@@ -82,7 +83,7 @@ export function serializePipelineExport(pipeline: AgentPipeline): string {
 export function parsePipelineImport(rawJson: string, options: ImportPipelineOptions = {}): ImportPipelineResult {
   let parsed: unknown
   try {
-    parsed = JSON.parse(rawJson)
+    parsed = safeParse(rawJson)
   } catch (error) {
     throw new PipelineImportError(`Invalid JSON: ${(error as Error).message}`)
   }

@@ -2,6 +2,7 @@
 // No external dependencies required.
 
 import { readCached, writeCached } from '@/services/fileStorage'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -211,12 +212,12 @@ export function loadVoiceSettings(): VoiceSettings {
   try {
     const raw = readCached(VOICE_SETTINGS_KEY)
     if (!raw) return { ...DEFAULT_VOICE_SETTINGS }
-    return { ...DEFAULT_VOICE_SETTINGS, ...JSON.parse(raw) }
+    return { ...DEFAULT_VOICE_SETTINGS, ...safeParse<Partial<VoiceSettings>>(raw) }
   } catch {
     return { ...DEFAULT_VOICE_SETTINGS }
   }
 }
 
 export function saveVoiceSettings(settings: VoiceSettings): void {
-  writeCached(VOICE_SETTINGS_KEY, JSON.stringify(settings))
+  writeCached(VOICE_SETTINGS_KEY, safeStringify(settings))
 }

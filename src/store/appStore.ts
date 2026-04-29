@@ -1,6 +1,6 @@
 // Global state management using Zustand
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
+import { persist } from 'zustand/middleware'
 import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, ToolSecuritySettings, MarketplaceSettings, ThemeMode, FontSize, CodeFont, BubbleStyle, ProviderConfig, ExternalDirectoryConfig, ChannelConfig, AppNotification, ModelUsageStats, ChannelHistoryMessage, ChannelAccessToken, ChannelHealthStatus, ChannelUser, PluginInfo, AgentVersion, AgentPerformanceStats, AgentPipeline, AgentPipelineStep, AppLocale, ProxySettings, OnboardingState, SkillVersion, EmailConfig, EnvVariable, MCPServerConfig, MCPServerStatus } from '@/types'
 import { setLiveStoreAccessor } from '@/services/tools'
 import { loadExternalResources, syncExternalDirectoryAccess } from '@/services/externalDirectories'
@@ -10,6 +10,7 @@ import { fileStateStorage, flushPendingSplitStoreWrites } from '@/services/fileS
 import { createSessionSlice } from '@/store/slices/sessionSlice'
 import { createModelConfigSlice } from '@/store/slices/modelConfigSlice'
 import { createUIPreferencesSlice } from '@/store/slices/uiPreferencesSlice'
+import { createSafePersistStorage } from '@/services/safePersistStorage'
 
 function normalizeAgentMaxTurns(maxTurns: number | undefined): number | undefined {
   if (typeof maxTurns !== 'number' || !Number.isFinite(maxTurns)) return undefined
@@ -633,7 +634,7 @@ export const useAppStore = create<AppStore>()(
     {
       name: 'suora-store',
       version: 18,
-      storage: createJSONStorage(() => fileStateStorage),
+      storage: createSafePersistStorage<Record<string, unknown>>(fileStateStorage),
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
         if (version < 2) {

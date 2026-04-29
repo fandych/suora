@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { safeParse } from '@/utils/safeJson'
 
 interface TodoItem {
   id: string
@@ -29,7 +30,7 @@ export function TodoProgress() {
     try {
       const result = await electronInvoke('db:loadPersistedStore', key) as { data?: unknown; error?: string }
       if (typeof result?.data === 'string' && result.data.trim()) {
-        setTodos(JSON.parse(result.data) as TodoItem[])
+        setTodos(safeParse<TodoItem[]>(result.data))
       } else {
         setTodos([])
       }

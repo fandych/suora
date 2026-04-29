@@ -2,6 +2,7 @@
 // Supports CJK text, cosine similarity, and incremental index updates.
 
 import { readCached } from '@/services/fileStorage'
+import { safeParse } from '@/utils/safeJson'
 
 // ─── Types ──────────────────────────────────────────────────────────
 
@@ -256,12 +257,12 @@ function loadAllMemoriesFromStore(): MemoryEntry[] {
     const raw = readCached('suora-store')
     if (!raw) return []
 
-    const parsed = JSON.parse(raw) as {
+    const parsed = safeParse<{
       state?: {
         agents?: Array<{ memories?: Array<{ id: string; content: string }> }>
         globalMemories?: Array<{ id: string; content: string }>
       }
-    }
+    }>(raw)
 
     const entries: MemoryEntry[] = []
     const seen = new Set<string>()

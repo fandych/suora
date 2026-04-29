@@ -1,10 +1,77 @@
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
-import type { Agent, Skill, Session } from '@/types'
+import type { Agent, ProviderConfig, Skill, Session } from '@/types'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
+
+const PROVIDER_TYPES = new Set<ProviderConfig['providerType']>([
+  'anthropic',
+  'openai',
+  'google',
+  'ollama',
+  'deepseek',
+  'zhipu',
+  'minimax',
+  'groq',
+  'together',
+  'fireworks',
+  'perplexity',
+  'cohere',
+  'openai-compatible',
+])
+const MAX_IMPORTED_PROVIDER_MODELS = 500
+
+function isProviderType(value: string): value is ProviderConfig['providerType'] {
+  return PROVIDER_TYPES.has(value as ProviderConfig['providerType'])
+}
+
+function coerceProviderConfig(value: unknown): ProviderConfig | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const config = value as Partial<ProviderConfig>
+  if (
+    typeof config.id !== 'string'
+    || typeof config.name !== 'string'
+    || typeof config.apiKey !== 'string'
+    || typeof config.baseUrl !== 'string'
+    || typeof config.providerType !== 'string'
+    || !isProviderType(config.providerType)
+    || !Array.isArray(config.models)
+    || config.models.length > MAX_IMPORTED_PROVIDER_MODELS
+  ) return null
+
+  const models: ProviderConfig['models'] = []
+  for (const model of config.models) {
+    if (
+      !model
+      || typeof model !== 'object'
+      || typeof model.modelId !== 'string'
+      || typeof model.name !== 'string'
+      || typeof model.enabled !== 'boolean'
+      || (model.temperature !== undefined && typeof model.temperature !== 'number')
+      || (model.maxTokens !== undefined && typeof model.maxTokens !== 'number')
+    ) return null
+
+    models.push({
+      modelId: model.modelId,
+      name: model.name,
+      enabled: model.enabled,
+      ...(model.temperature === undefined ? {} : { temperature: model.temperature }),
+      ...(model.maxTokens === undefined ? {} : { maxTokens: model.maxTokens }),
+    })
+  }
+
+  return {
+    id: config.id,
+    name: config.name,
+    apiKey: config.apiKey,
+    baseUrl: config.baseUrl,
+    providerType: config.providerType,
+    models,
+  }
+}
 
 export function DataSettings() {
   const { t } = useI18n()
@@ -23,7 +90,7 @@ export function DataSettings() {
       providerConfigs,
       externalDirectories,
     }
-    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+    const blob = new Blob([safeStringify(exportData, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const anchor = document.createElement('a')
     anchor.href = url
@@ -39,14 +106,17 @@ export function DataSettings() {
     const reader = new FileReader()
     reader.onload = async () => {
       try {
-        const data = JSON.parse(reader.result as string)
+        const data = safeParse<Record<string, unknown>>(reader.result as string)
         if (!data || typeof data !== 'object' || Array.isArray(data)) {
           throw new Error('Invalid file format — expected a JSON object')
         }
         const importAgents = Array.isArray(data.agents) ? data.agents : []
         const importSkills = Array.isArray(data.skills) ? data.skills : []
         const importSessions = Array.isArray(data.sessions) ? data.sessions : []
-        const hasProviders = data.providerConfigs && Array.isArray(data.providerConfigs)
+        const importProviderConfigs = Array.isArray(data.providerConfigs)
+          ? data.providerConfigs.map(coerceProviderConfig).filter((config): config is ProviderConfig => config !== null)
+          : []
+        const hasProviders = importProviderConfigs.length > 0
         const total = importAgents.length + importSkills.length + importSessions.length + (hasProviders ? 1 : 0)
         if (total === 0) {
           toast.warning(t('settings.importEmpty', 'Nothing to import from this file.'))
@@ -69,7 +139,7 @@ export function DataSettings() {
         importAgents.forEach((agent: Agent) => addAgent(agent))
         importSkills.forEach((skill: Skill) => addSkill(skill))
         importSessions.forEach((session: Session) => addSession(session))
-        if (hasProviders) { setProviderConfigs(data.providerConfigs); syncModelsFromConfigs() }
+        if (hasProviders) { setProviderConfigs(importProviderConfigs); syncModelsFromConfigs() }
         toast.success(t('settings.importSuccess', 'Data imported successfully!'), summary)
         input.value = ''
       } catch (err) {

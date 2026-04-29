@@ -5,6 +5,7 @@
 
 import type { Skill, SkillSignature } from '@/types'
 import { readCached, writeCached, removeCached } from '@/services/fileStorage'
+import { safeParse, safeStringify } from '@/utils/safeJson'
 
 // ─── SHA-256 hashing ────────────────────────────────────────────────
 
@@ -169,26 +170,43 @@ export interface AuditLogEntry {
 
 const MAX_AUDIT_LOG = 1000
 const AUDIT_STORAGE_KEY = 'suora-audit-log'
+let auditLogCache: AuditLogEntry[] | null = null
+let auditLogPersistTimer: ReturnType<typeof setTimeout> | null = null
+
+function scheduleAuditLogPersist(): void {
+  if (auditLogPersistTimer) return
+  auditLogPersistTimer = setTimeout(() => {
+    auditLogPersistTimer = null
+    writeCached(AUDIT_STORAGE_KEY, safeStringify(auditLogCache ?? []))
+  }, 0)
+}
 
 export function getAuditLog(): AuditLogEntry[] {
+  if (auditLogCache) return [...auditLogCache]
   try {
     const raw = readCached(AUDIT_STORAGE_KEY)
-    if (!raw) return []
-    return JSON.parse(raw) as AuditLogEntry[]
+    auditLogCache = raw ? safeParse<AuditLogEntry[]>(raw) : []
+    return [...auditLogCache]
   } catch {
+    auditLogCache = []
     return []
   }
 }
 
 export function addAuditEntry(entry: AuditLogEntry): void {
-  const log = getAuditLog()
+  const log = auditLogCache ?? getAuditLog()
   log.push(entry)
   // Keep only the most recent entries
-  while (log.length > MAX_AUDIT_LOG) log.shift()
-  writeCached(AUDIT_STORAGE_KEY, JSON.stringify(log))
+  auditLogCache = log.length > MAX_AUDIT_LOG ? log.slice(-MAX_AUDIT_LOG) : log
+  scheduleAuditLogPersist()
 }
 
 export function clearAuditLog(): void {
+  auditLogCache = null
+  if (auditLogPersistTimer) {
+    clearTimeout(auditLogPersistTimer)
+    auditLogPersistTimer = null
+  }
   removeCached(AUDIT_STORAGE_KEY)
 }
 
