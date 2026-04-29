@@ -10,6 +10,7 @@
 import type { PluginInfo, PluginHookType, PluginStatus, PluginPermission, PluginAPIContext, PluginManifestV2, PluginConfigField } from '@/types'
 import { readCached } from '@/services/fileStorage'
 import { safeParse } from '@/utils/safeJson'
+import { sha256Text } from '@/utils/hash'
 import type { ToolSet } from 'ai'
 import { z } from 'zod'
 
@@ -1715,11 +1716,7 @@ export interface PluginSignature {
 const pluginSignatures = new Map<string, PluginSignature>()
 
 async function computeHash(content: string): Promise<string> {
-  const encoder = new TextEncoder()
-  const data = encoder.encode(content)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  const hashArray = Array.from(new Uint8Array(hashBuffer))
-  return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('')
+  return sha256Text(content)
 }
 
 /**

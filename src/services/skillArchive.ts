@@ -18,6 +18,11 @@ function joinPath(root: string, relativePath: string): string {
   return `${root.replace(/[\\/]+$/, '')}/${normalizePath(relativePath)}`
 }
 
+/**
+ * Calculates the CRC-32 checksum required by ZIP local and central directory
+ * records. The returned unsigned 32-bit value verifies the uncompressed file
+ * bytes for the dependency-free skill archive writer.
+ */
 function crc32(bytes: Uint8Array): number {
   let crc = 0xffffffff
   for (const byte of bytes) {

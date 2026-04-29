@@ -388,6 +388,12 @@ function isAbsolutePath(pathValue: string): boolean {
   return pathValue.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(pathValue)
 }
 
+function resolveSkillReferencePath(refPath: string, skillRoot?: string): string {
+  if (isAbsolutePath(refPath)) return refPath
+  if (skillRoot) return joinSkillResourcePath(skillRoot, refPath)
+  return refPath
+}
+
 function getFileExtension(filePath: string): string {
   const name = filePath.split('/').pop() ?? ''
   const index = name.lastIndexOf('.')
@@ -829,11 +835,7 @@ export async function buildSkillPrompts(
       if (electron) {
         for (const ref of skill.referenceFiles) {
           try {
-            const refPath = isAbsolutePath(ref.path)
-              ? ref.path
-              : skill.skillRoot
-                ? joinSkillResourcePath(skill.skillRoot, ref.path)
-                : ref.path
+            const refPath = resolveSkillReferencePath(ref.path, skill.skillRoot)
             const resource = skill.bundledResources?.find((entry) => normalizeResourcePath(entry.path) === normalizeResourcePath(ref.path))
             if (resource?.size && resource.size > MAX_INLINE_REFERENCE_BYTES) {
               const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'

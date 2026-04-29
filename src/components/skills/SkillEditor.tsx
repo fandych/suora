@@ -304,14 +304,18 @@ function ResourceTreePanel({
                           autoFocus
                           className="min-w-0 flex-1 rounded-xl border border-accent/20 bg-surface-0 px-2 py-1 font-mono text-[11px] text-text-primary outline-none"
                         />
-                      ) : (
+                      ) : resource.path.toLowerCase().startsWith('references/') ? (
                         <button
                           type="button"
-                          onClick={() => resource.path.toLowerCase().startsWith('references/') && setSelectedPath(resource.path)}
+                          onClick={() => setSelectedPath(resource.path)}
                           className="min-w-0 flex-1 truncate text-left font-mono text-[11px] text-text-secondary hover:text-accent"
                         >
                           {resource.path}{resource.type === 'directory' ? '/' : ''}
                         </button>
+                      ) : (
+                        <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-text-secondary">
+                          {resource.path}{resource.type === 'directory' ? '/' : ''}
+                        </span>
                       )}
                       {resource.size !== undefined && <span className="text-[9px] tabular-nums text-text-muted">{resource.size}b</span>}
                       {resource.warning && <IconifyIcon name="lucide:triangle-alert" size={12} color="currentColor" className="text-warning" />}

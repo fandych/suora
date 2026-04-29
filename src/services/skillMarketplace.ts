@@ -17,6 +17,7 @@ import { t } from '@/services/i18n'
 import { parseSkillMarkdown } from '@/services/skillRegistry'
 import { logger } from '@/services/logger'
 import { safePathSegment, skillDirectorySegment } from '@/utils/pathSegments'
+import { sha256Text } from '@/utils/hash'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 type GitHubContentItem = {
@@ -723,12 +724,6 @@ async function computeResourceManifestHash(resources: SkillBundledResource[]): P
     .sort()
     .join('\n')
   return sha256Text(manifest)
-}
-
-async function sha256Text(text: string): Promise<string> {
-  const data = new TextEncoder().encode(text)
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(hashBuffer)).map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 function getFileExtension(filePath: string): string {
