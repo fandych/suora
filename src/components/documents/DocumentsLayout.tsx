@@ -665,6 +665,17 @@ function getIndentRemovalCount(line: string) {
   return 0
 }
 
+function splitSourceLines(block: string) {
+  const segments = block.match(/[^\r\n]*(?:\r\n|\n|\r|$)/g) ?? []
+  return segments.filter(Boolean).map((segment) => {
+    const separator = segment.endsWith('\r\n') ? '\r\n' : segment.endsWith('\n') ? '\n' : segment.endsWith('\r') ? '\r' : ''
+    return {
+      text: separator ? segment.slice(0, -separator.length) : segment,
+      separator,
+    }
+  })
+}
+
 function updateSourceIndentation(value: string, selectionStart: number, selectionEnd: number, outdent: boolean) {
   if (outdent) {
     const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
@@ -674,19 +685,19 @@ function updateSourceIndentation(value: string, selectionStart: number, selectio
     const before = value.slice(0, lineStart)
     const selectedBlock = value.slice(lineStart, lineEnd)
     const after = value.slice(lineEnd)
-    const lines = selectedBlock.split('\n')
+    const lines = splitSourceLines(selectedBlock)
     let removedBeforeSelection = 0
     let removedTotal = 0
     let offset = lineStart
     const nextBlock = lines.map((line) => {
-      const removeCount = getIndentRemovalCount(line)
+      const removeCount = getIndentRemovalCount(line.text)
       if (removeCount > 0) {
         if (offset < selectionStart) removedBeforeSelection += removeCount
         removedTotal += removeCount
       }
-      offset += line.length + 1
-      return removeCount > 0 ? line.slice(removeCount) : line
-    }).join('\n')
+      offset += line.text.length + line.separator.length
+      return `${removeCount > 0 ? line.text.slice(removeCount) : line.text}${line.separator}`
+    }).join('')
 
     const nextSelectionStart = Math.max(lineStart, selectionStart - removedBeforeSelection)
     const nextSelectionEnd = Math.max(nextSelectionStart, selectionEnd - removedTotal)
@@ -710,19 +721,19 @@ function updateSourceIndentation(value: string, selectionStart: number, selectio
   const before = value.slice(0, lineStart)
   const selectedBlock = value.slice(lineStart, lineEnd)
   const after = value.slice(lineEnd)
-  const lines = selectedBlock.split('\n')
+  const lines = splitSourceLines(selectedBlock)
   let addedBeforeSelection = 0
   let addedTotal = 0
   let offset = lineStart
   const nextBlock = lines.map((line) => {
-    const shouldIndent = line.trim().length > 0
+    const shouldIndent = line.text.trim().length > 0
     if (shouldIndent) {
       if (offset < selectionStart) addedBeforeSelection += SOURCE_EDITOR_INDENT.length
       addedTotal += SOURCE_EDITOR_INDENT.length
     }
-    offset += line.length + 1
-    return shouldIndent ? `${SOURCE_EDITOR_INDENT}${line}` : line
-  }).join('\n')
+    offset += line.text.length + line.separator.length
+    return `${shouldIndent ? SOURCE_EDITOR_INDENT : ''}${line.text}${line.separator}`
+  }).join('')
 
   return {
     value: before + nextBlock + after,
