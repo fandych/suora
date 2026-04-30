@@ -1,0 +1,21 @@
+node_modules
+dist
+dist-electron
+out
+release
+build
+*.log
+*.tsbuildinfo
+*.local
+.DS_Store
+.env
+.env.local
+.env*.local
+*.log
+dev-app-update.yml
+
+
+# Coverage
+coverage/
+temp/
+tmp/

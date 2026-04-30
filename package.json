@@ -1,0 +1,134 @@
+{
+  "name": "suora",
+  "version": "0.1.0",
+  "description": "Suora - AI desktop assistant with multi-model support, skills, agents, memory, and plugin system",
+  "author": {
+    "name": "fandych",
+    "email": "fandych@users.noreply.github.com"
+  },
+  "type": "module",
+  "main": "./out/main/main.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "package": "electron-vite build && electron-builder",
+    "package:win": "electron-vite build && electron-builder --win",
+    "lint": "eslint . --ext .ts,.tsx",
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^3.0.64",
+    "@ai-sdk/openai": "^3.0.48",
+    "@ai-sdk/openai-compatible": "^2.0.37",
+    "@iconify/json": "^2.2.456",
+    "@iconify/react": "^6.0.2",
+    "@iconify/utils": "^3.1.0",
+    "@tiptap/extension-image": "^3.22.5",
+    "@tiptap/extension-link": "^3.22.5",
+    "@tiptap/extension-placeholder": "^3.22.5",
+    "@tiptap/react": "^3.22.5",
+    "@tiptap/starter-kit": "^3.22.5",
+    "@types/crypto-js": "^4.2.2",
+    "@types/express": "^5.0.6",
+    "ai": "^6.0.137",
+    "cron-parser": "^5.5.0",
+    "crypto-js": "^4.2.0",
+    "express": "^5.2.1",
+    "katex": "^0.16.45",
+    "mermaid": "^11.14.0",
+    "nodemailer": "^8.0.6",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "react-markdown": "^10.1.0",
+    "react-router-dom": "^7.13.2",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "tailwindcss": "^4.2.2",
+    "ws": "^8.20.0",
+    "zod": "^4.3.6",
+    "zustand": "^5.0.12"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@tailwindcss/vite": "^4.2.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^25.5.0",
+    "@types/nodemailer": "^7.0.11",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.56.0",
+    "@typescript-eslint/parser": "^8.56.0",
+    "@vitejs/plugin-react": "^5.0.0",
+    "@vitest/coverage-v8": "^4.1.2",
+    "@vitest/ui": "^4.1.2",
+    "autoprefixer": "^10.4.27",
+    "electron": "^41.3.0",
+    "electron-builder": "^26.8.1",
+    "electron-vite": "^5.0.0",
+    "eslint": "^9.39.4",
+    "jsdom": "^29.0.1",
+    "postcss": "^8.5.10",
+    "sharp": "^0.34.5",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.2",
+    "vitest": "^4.1.2"
+  },
+  "overrides": {
+    "@xmldom/xmldom": "^0.9.10",
+    "lodash": "^4.18.1",
+    "plist": "^4.0.0",
+    "uuid": "^14.0.0"
+  },
+  "build": {
+    "appId": "com.suora.app",
+    "productName": "SUORA",
+    "files": [
+      "out/**/*"
+    ],
+    "directories": {
+      "buildResources": "resources"
+    },
+    "icon": "resources/icons/icon-1024x1024.png",
+    "publish": {
+      "provider": "github",
+      "owner": "fandych",
+      "repo": "suora"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb",
+        "rpm"
+      ],
+      "category": "Utility"
+    }
+  }
+}

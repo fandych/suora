@@ -1,0 +1,106 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { fileStateStorage, flushPendingSplitStoreWrites } from './fileStorage'
+
+describe('fileStateStorage', () => {
+  async function flushAsyncWork(): Promise<void> {
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+  }
+
+  beforeEach(() => {
+    vi.mocked(window.electron.invoke).mockReset()
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel: string, ...args: unknown[]) => {
+      const [value] = args as [string?]
+      if (channel === 'safe-storage:isAvailable') return true
+      if (channel === 'safe-storage:encrypt') {
+        return { data: Buffer.from(value ?? '', 'utf-8').toString('base64') }
+      }
+      return { success: true }
+    })
+  })
+
+  it('should persist non-skill app state into workspace files while keeping model secrets encrypted', async () => {
+    fileStateStorage.setItem('suora-store', JSON.stringify({
+      version: 16,
+      state: {
+        workspacePath: 'C:/workspace',
+        providerConfigs: [{
+          id: 'provider-1',
+          name: 'OpenAI',
+          apiKey: 'sk-provider',
+          baseUrl: 'https://api.example.com/v1',
+          providerType: 'openai',
+          models: [{ modelId: 'gpt-4.1', name: 'GPT 4.1', enabled: true }],
+        }],
+        models: [{
+          id: 'provider-1:gpt-4.1',
+          name: 'GPT 4.1',
+          provider: 'provider-1',
+          providerType: 'openai',
+          modelId: 'gpt-4.1',
+          apiKey: 'sk-provider',
+          enabled: true,
+        }],
+        selectedModel: {
+          id: 'provider-1:gpt-4.1',
+          name: 'GPT 4.1',
+          provider: 'provider-1',
+          providerType: 'openai',
+          modelId: 'gpt-4.1',
+          apiKey: 'sk-provider',
+          enabled: true,
+        },
+        apiKeys: { 'provider-1': 'sk-user' },
+        channels: [],
+        channelMessages: [],
+        channelTokens: {},
+        channelHealth: {},
+        channelUsers: {},
+        agents: [],
+        selectedAgent: null,
+        skills: [],
+        sessions: [],
+        agentVersions: [{ id: 'av-1', agentId: 'agent-1', version: 1, snapshot: { name: 'Agent 1' }, createdAt: 1 }],
+        agentPerformance: { 'agent-1': { agentId: 'agent-1', totalCalls: 2, totalTokens: 20, avgResponseTimeMs: 100, responseTimes: [100], lastUsed: 1, errorCount: 0 } },
+        agentPipeline: [{ agentId: 'agent-1', task: 'Draft task' }],
+        skillVersions: [{ id: 'sv-1', skillId: 'skill-1', version: 1, snapshot: { name: 'Skill 1' }, createdAt: 1 }],
+        pluginTools: { 'plugin-1': ['tool_a'] },
+      },
+    }))
+
+    await flushPendingSplitStoreWrites()
+    await flushAsyncWork()
+
+    const filesystemWrite = vi.mocked(window.electron.invoke).mock.calls.find(
+      ([channel, key]) => channel === 'db:savePersistedStore' && key === 'suora-store',
+    )
+
+    expect(filesystemWrite).toBeDefined()
+
+    const filesystemJson = filesystemWrite?.[2]
+    expect(typeof filesystemJson).toBe('string')
+
+    const parsed = JSON.parse(filesystemJson as string) as { state: Record<string, unknown> }
+    expect(parsed.state.agentVersions).toEqual([{ id: 'av-1', agentId: 'agent-1', version: 1, snapshot: { name: 'Agent 1' }, createdAt: 1 }])
+    expect(parsed.state.agentPerformance).toEqual({ 'agent-1': { agentId: 'agent-1', totalCalls: 2, totalTokens: 20, avgResponseTimeMs: 100, responseTimes: [100], lastUsed: 1, errorCount: 0 } })
+    expect(parsed.state.agentPipeline).toEqual([{ agentId: 'agent-1', task: 'Draft task' }])
+    expect(parsed.state.skills).toBeUndefined()
+    expect(parsed.state.skillVersions).toBeUndefined()
+    expect(parsed.state.pluginTools).toEqual({ 'plugin-1': ['tool_a'] })
+
+    expect(parsed.state.providerConfigs).toEqual([
+      expect.objectContaining({ id: 'provider-1', apiKey: '' }),
+    ])
+    expect(parsed.state.models).toEqual([
+      expect.not.objectContaining({ apiKey: 'sk-provider' }),
+    ])
+    expect(parsed.state.selectedModel).toEqual(
+      expect.not.objectContaining({ apiKey: 'sk-provider' }),
+    )
+    expect(parsed.state.apiKeys).toEqual({})
+    expect(parsed.state.encryptedSecrets).toEqual(expect.any(String))
+  })
+})
