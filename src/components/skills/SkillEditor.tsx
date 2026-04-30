@@ -343,8 +343,9 @@ function ResourceTreePanel({
       }),
       referenceFiles: (skill.referenceFiles ?? []).map((ref) => {
         const refPath = normalizeResourcePath(ref.path)
-        const resourceRelativePath = skill.skillRoot && refPath.startsWith(normalizeResourcePath(skill.skillRoot))
-          ? normalizeResourcePath(refPath.slice(normalizeResourcePath(skill.skillRoot).length))
+        const normalizedSkillRoot = skill.skillRoot ? normalizeResourcePath(skill.skillRoot) : ''
+        const resourceRelativePath = normalizedSkillRoot && refPath.startsWith(normalizedSkillRoot)
+          ? normalizeResourcePath(refPath.slice(normalizedSkillRoot.length))
           : refPath
         if (!isSameOrDescendantPath(resourceRelativePath, oldPath)) return ref
         const suffix = resourceRelativePath === oldPath ? '' : resourceRelativePath.slice(oldPath.length + 1)

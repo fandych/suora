@@ -91,8 +91,8 @@ function inlineMarkdown(value: string) {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`)
-    .replace(/\[\[([^\]\n]+)\]\]/g, (_, target: string) => `<a href="#doc:${escapeAttr(target)}">${target}</a>`)
-    .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, (_, label: string, href: string) => `<a href="${escapeAttr(href)}">${label}</a>`)
+    .replace(/\[\[([^\]\n]+)\]\]/g, (_, target: string) => `<a href="#doc:${escapeAttr(target)}">${escapeHtml(target)}</a>`)
+    .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, (_, label: string, href: string) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`)
 
   result = result.replace(/\x01M(\d+)\x01/g, (_, i: string) => {
     const latex = mathTokens[parseInt(i)]
