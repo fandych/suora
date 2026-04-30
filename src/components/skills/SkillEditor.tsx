@@ -174,7 +174,8 @@ function ResourceTreePanel({
       setEditorOriginal('')
       return
     }
-    const resource = resources.find((r) => normalizeResourcePath(r.path) === normalizeResourcePath(selectedPath))
+    const normalizedSelected = normalizeResourcePath(selectedPath)
+    const resource = resources.find((r) => normalizeResourcePath(r.path) === normalizedSelected)
     if (!resource || resource.type !== 'file') {
       setEditorContent('')
       setEditorOriginal('')
@@ -608,8 +609,9 @@ function ResourceTreePanel({
     return out
   }, [filteredResources])
 
-  const selectedResource = selectedPath
-    ? resources.find((r) => normalizeResourcePath(r.path) === normalizeResourcePath(selectedPath))
+  const normalizedSelectedPath = normalizeResourcePath(selectedPath)
+  const selectedResource = normalizedSelectedPath
+    ? resources.find((r) => normalizeResourcePath(r.path) === normalizedSelectedPath)
     : null
 
   // ── render ──────────────────────────────────────────────────────────
