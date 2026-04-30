@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DocumentItem, DocumentNode } from '@/types'
 import { buildDocumentGraph, extractDocumentReferenceTargets, extractDocumentTags } from './documentGraph'
 import { toGraphifyExport } from './graphifyAdapter'
-import { createDocument, createDocumentGroup, extractMarkdownReferences, findReferencedDocuments, searchDocuments } from './documents'
+import { createDocument, createDocumentGroup, extractMarkdownImageReferences, extractMarkdownReferences, getDocumentDisplayName, isMarkdownDocumentTitle, findReferencedDocuments, searchDocuments } from './documents'
 
 describe('documents service', () => {
   it('creates document groups and markdown documents with stable defaults', () => {
@@ -26,11 +26,34 @@ describe('documents service', () => {
     vi.restoreAllMocks()
   })
 
+  it('detects markdown and other text document names', () => {
+    expect(getDocumentDisplayName('Brief')).toBe('Brief.md')
+    expect(getDocumentDisplayName('script.py')).toBe('script.py')
+    expect(isMarkdownDocumentTitle('Brief')).toBe(true)
+    expect(isMarkdownDocumentTitle('notes.markdown')).toBe(true)
+    expect(isMarkdownDocumentTitle('deploy.sh')).toBe(false)
+  })
+
+  it('creates script documents without forcing a markdown template', () => {
+    const group = createDocumentGroup('Scripts')
+    const script = createDocument(group.id, null, 'deploy.sh')
+
+    expect(script.title).toBe('deploy.sh')
+    expect(script.markdown).toBe('')
+  })
+
   it('extracts wiki and markdown document references', () => {
     expect(extractMarkdownReferences('Read [[Architecture]] and [Roadmap](#doc:roadmap-id).')).toEqual([
       'Architecture',
       'Roadmap',
       'roadmap-id',
+    ])
+  })
+
+  it('extracts markdown image asset references', () => {
+    expect(extractMarkdownImageReferences('![Logo](./assets/logo.png "App Logo") and ![Remote](https://example.com/a.png).')).toEqual([
+      { type: 'image', alt: 'Logo', source: './assets/logo.png', title: 'App Logo' },
+      { type: 'image', alt: 'Remote', source: 'https://example.com/a.png', title: undefined },
     ])
   })
 

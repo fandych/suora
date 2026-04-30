@@ -12,7 +12,7 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
 import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions'
 import { confirm } from '@/services/confirmDialog'
-import { createDocument, createDocumentGroup, createDocumentId, findReferencedDocuments, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
+import { createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
 import { buildDocumentGraph, buildDocumentPath, type DocumentGraph } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
@@ -33,13 +33,9 @@ function getDocumentGroupColorClass(color: string) {
   return DOCUMENT_GROUP_COLOR_CLASS[color] ?? 'bg-accent'
 }
 
-function stripMarkdownExtension(value: string): string {
-  return value.replace(/\.md$/i, '')
-}
-
 function getDocumentNodeDisplayName(node: DocumentNode): string {
   if (node.type !== 'document') return node.title
-  return /\.md$/i.test(node.title) ? node.title : `${node.title}.md`
+  return getDocumentDisplayName(node.title)
 }
 
 const EMPTY_DOCUMENT_CHILDREN: DocumentNode[] = []
@@ -673,9 +669,13 @@ export function DocumentsLayout() {
   const activeGroupId = activeGroup?.id ?? null
   const groupNodes = useMemo(() => activeGroupId ? documentNodes.filter((node) => node.groupId === activeGroupId) : [], [documentNodes, activeGroupId])
   const activeDocument = useMemo(() => documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === selectedDocumentId) ?? null, [documentNodes, selectedDocumentId])
+  const activeDocumentIsMarkdown = activeDocument ? isMarkdownDocumentTitle(activeDocument.title) : false
+  const activeDocumentKindLabel = activeDocument ? getDocumentKindLabel(activeDocument.title) : ''
+  const activeDocumentExtension = activeDocument ? getDocumentExtension(activeDocument.title) || '.md' : ''
   const groupDocuments = useMemo(() => groupNodes.filter((node): node is DocumentItem => node.type === 'document'), [groupNodes])
   const searchResults = useMemo(() => searchDocuments(documentNodes, null, deferredQuery), [documentNodes, deferredQuery])
   const referencedDocuments = useMemo(() => activeDocument ? findReferencedDocuments(activeDocument.markdown, groupDocuments).filter((doc) => doc.id !== activeDocument.id) : [], [activeDocument, groupDocuments])
+  const imageReferences = useMemo(() => activeDocument && activeDocumentIsMarkdown ? extractMarkdownImageReferences(activeDocument.markdown) : [], [activeDocument, activeDocumentIsMarkdown])
   const shouldShowDocumentGraph = mode === 'graph' || !activeDocument
   const documentGraph = useMemo(
     () => shouldShowDocumentGraph ? buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroupId }) : EMPTY_DOCUMENT_GRAPH,
@@ -758,6 +758,9 @@ export function DocumentsLayout() {
   useEffect(() => {
     if (!activeDocument) return
     setSelectedFolderId(activeDocument.parentId)
+    if (!isMarkdownDocumentTitle(activeDocument.title) && mode === 'editor') {
+      setMode('source')
+    }
 
     const ancestorIds = activeDocumentAncestorKey.split('|').filter(Boolean)
     setExpanded((prev) => {
@@ -766,7 +769,7 @@ export function DocumentsLayout() {
       ancestorIds.forEach((id) => next.add(id))
       return next
     })
-  }, [activeDocument?.groupId, activeDocument?.id, activeDocument?.parentId, activeDocumentAncestorKey])
+  }, [activeDocument?.groupId, activeDocument?.id, activeDocument?.parentId, activeDocument?.title, activeDocumentAncestorKey, mode])
 
   const revealNode = (node: DocumentNode) => {
     const ancestorIds = collectAncestorFolderIds(node.parentId, documentNodes)
@@ -789,7 +792,7 @@ export function DocumentsLayout() {
     setSelectedDocument(doc.id)
     setSelectedFolderId(doc.parentId)
     revealNode(doc)
-    setMode('editor')
+    setMode(isMarkdownDocumentTitle(doc.title) ? 'editor' : 'source')
   }
 
   const selectGroup = (group: DocumentGroup) => {
@@ -914,10 +917,7 @@ export function DocumentsLayout() {
   const commitRenameNode = () => {
     if (!editingNodeId) return
 
-    const editingNode = documentNodes.find((node) => node.id === editingNodeId) ?? null
-    const nextTitle = editingNode?.type === 'document'
-      ? stripMarkdownExtension(editingTitle.trim()).trim()
-      : editingTitle.trim()
+    const nextTitle = editingTitle.trim()
     if (!nextTitle) {
       cancelRenameNode()
       return
@@ -1082,17 +1082,25 @@ export function DocumentsLayout() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2.5 py-1 text-[10px] font-semibold text-text-muted">
+                  {activeDocumentKindLabel}
+                </span>
                 <div className="flex rounded-2xl border border-border-subtle/55 bg-surface-0/45 p-1">
-                  {(['editor', 'source', 'graph'] as const).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setMode(value)}
-                      className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
-                    >
-                      {value === 'editor' ? t('documents.editor', 'Editor') : value === 'source' ? t('documents.source', 'Source') : t('documents.graph', 'Graph')}
-                    </button>
-                  ))}
+                  {(['editor', 'source', 'graph'] as const).map((value) => {
+                    const isEditorUnavailable = value === 'editor' && !activeDocumentIsMarkdown
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setMode(value)}
+                        disabled={isEditorUnavailable}
+                        title={isEditorUnavailable ? t('documents.markdownEditorOnly', 'Rich editor is available for Markdown files only.') : undefined}
+                        className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : isEditorUnavailable ? 'cursor-not-allowed text-text-muted/35' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
+                      >
+                        {value === 'editor' ? t('documents.editor', 'Editor') : value === 'source' ? t('documents.source', 'Source') : t('documents.graph', 'Graph')}
+                      </button>
+                    )
+                  })}
                 </div>
                 <button type="button" onClick={deleteActiveDocument} aria-label={t('documents.deleteCurrentDocument', 'Delete current document')} className="rounded-2xl border border-danger/20 bg-danger/10 px-3 py-2 text-[11px] font-semibold text-danger/90 hover:bg-danger/15">
                   {t('common.delete', 'Delete')}
@@ -1112,9 +1120,9 @@ export function DocumentsLayout() {
                   <textarea
                     value={activeDocument.markdown}
                     onChange={(event) => updateDocumentNode(activeDocument.id, { markdown: event.target.value })}
-                    spellCheck
+                    spellCheck={activeDocumentIsMarkdown || activeDocumentExtension === '.txt'}
                     className="h-full w-full resize-none rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-5 font-(--font-code) text-[13px] leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none placeholder:text-text-muted focus:border-accent/30 focus:ring-4 focus:ring-accent/10"
-                    placeholder={t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.')}
+                    placeholder={activeDocumentIsMarkdown ? t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.') : t('documents.textPlaceholder', 'Edit this text or script file.')}
                   />
                 ) : (
                   <DocumentGraphView graph={documentGraph} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument} />
@@ -1123,6 +1131,23 @@ export function DocumentsLayout() {
               {mode !== 'graph' && (
                 <aside className="min-h-0 overflow-y-auto border-l border-border-subtle/80 bg-surface-1/64 p-4">
                   <div className="rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.fileInfo', 'File')}</h3>
+                    <dl className="mt-3 space-y-2 text-[11px] text-text-secondary/80">
+                      <div className="flex items-center justify-between gap-3">
+                        <dt>{t('documents.fileType', 'Type')}</dt>
+                        <dd className="truncate font-semibold text-text-primary">{activeDocumentKindLabel}</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <dt>{t('documents.fileExtension', 'Extension')}</dt>
+                        <dd className="font-(--font-code) text-text-primary">{activeDocumentExtension}</dd>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <dt>{t('documents.fileContent', 'Content')}</dt>
+                        <dd className="font-(--font-code) text-text-primary">{activeDocument.markdown.length} chars</dd>
+                      </div>
+                    </dl>
+                  </div>
+                  <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.references', 'References')}</h3>
                     <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.referencesHint', 'Use [[Document Title]] or [Title](#doc:id) to connect notes in this group.')}</p>
                     <div className="mt-4 space-y-2">
@@ -1136,6 +1161,24 @@ export function DocumentsLayout() {
                       ))}
                     </div>
                   </div>
+                  {activeDocumentIsMarkdown && (
+                    <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.assets', 'Assets')}</h3>
+                      <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.assetsHint', 'Markdown image references are tracked here so linked local or remote images stay visible in the document context.')}</p>
+                      <div className="mt-4 space-y-2">
+                        {imageReferences.length === 0 ? (
+                          <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noAssets', 'No image references yet.')}</p>
+                        ) : imageReferences.map((asset) => (
+                          <div key={asset.source} className="rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2">
+                            <span className="block truncate font-(--font-code) text-[11px] text-text-primary">{asset.source}</span>
+                            {(asset.alt || asset.title) && (
+                              <span className="mt-1 block truncate text-[10px] text-text-muted">{asset.alt || asset.title}</span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.outline', 'Outline')}</h3>
                     <div className="mt-3 space-y-1">
