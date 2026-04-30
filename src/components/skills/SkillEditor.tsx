@@ -113,6 +113,12 @@ function sortResources(resources: SkillBundledResource[]): SkillBundledResource[
   })
 }
 
+function isSameOrDescendantPath(candidatePath: string, parentPath: string): boolean {
+  const candidate = normalizeResourcePath(candidatePath)
+  const parent = normalizeResourcePath(parentPath)
+  return candidate === parent || candidate.startsWith(`${parent}/`)
+}
+
 function topFolderOf(pathValue: string): SkillTopLevelFolder | null {
   const top = normalizeResourcePath(pathValue).split('/')[0]
   return isSkillTopLevelFolder(top) ? top : null
@@ -168,7 +174,8 @@ function ResourceTreePanel({
       setEditorOriginal('')
       return
     }
-    const resource = resources.find((r) => r.path === selectedPath)
+    const normalizedSelected = normalizeResourcePath(selectedPath)
+    const resource = resources.find((r) => normalizeResourcePath(r.path) === normalizedSelected)
     if (!resource || resource.type !== 'file') {
       setEditorContent('')
       setEditorOriginal('')
@@ -223,7 +230,12 @@ function ResourceTreePanel({
           (ref) => !normalizeResourcePath(ref.path).endsWith(normalized),
         ),
       })
-      if (selectedPath === normalized) setSelectedPath('')
+      if (isSameOrDescendantPath(selectedPath, normalized)) {
+        setSelectedPath('')
+        setEditorContent('')
+        setEditorOriginal('')
+        setEditorError('')
+      }
     },
     [onChange, skill.bundledResources, skill.referenceFiles, selectedPath],
   )
@@ -271,6 +283,29 @@ function ResourceTreePanel({
       return
     }
     const normalizedNext = normalizeResourcePath(nextPath)
+    const oldPath = normalizeResourcePath(resource.path)
+    if (normalizedNext === oldPath) {
+      cancelRename()
+      return
+    }
+    if (isSameOrDescendantPath(normalizedNext, oldPath)) {
+      toast.error(
+        t('skills.invalidResourcePath', 'Invalid resource path'),
+        t('skills.renameIntoSelf', 'A folder cannot be renamed into itself.'),
+      )
+      return
+    }
+    const pathExists = (skill.bundledResources ?? []).some((entry) => {
+      const entryPath = normalizeResourcePath(entry.path)
+      return entryPath !== oldPath && entryPath === normalizedNext
+    })
+    if (pathExists) {
+      toast.error(
+        t('skills.invalidResourcePath', 'Invalid resource path'),
+        t('skills.resourceAlreadyExists', 'A resource at this path already exists.'),
+      )
+      return
+    }
     if (skill.skillRoot) {
       const parent = normalizedNext.split('/').slice(0, -1).join('/')
       if (parent) {
@@ -297,7 +332,6 @@ function ResourceTreePanel({
       }
     }
 
-    const oldPath = normalizeResourcePath(resource.path)
     onChange({
       bundledResources: (skill.bundledResources ?? []).map((entry) => {
         const entryPath = normalizeResourcePath(entry.path)
@@ -309,16 +343,26 @@ function ResourceTreePanel({
       }),
       referenceFiles: (skill.referenceFiles ?? []).map((ref) => {
         const refPath = normalizeResourcePath(ref.path)
-        return refPath.endsWith(oldPath)
-          ? {
-              ...ref,
-              path: skill.skillRoot ? joinSkillPath(skill.skillRoot, normalizedNext) : normalizedNext,
-              label: normalizedNext,
-            }
-          : ref
+        const normalizedSkillRoot = skill.skillRoot ? normalizeResourcePath(skill.skillRoot) : ''
+        const resourceRelativePath = normalizedSkillRoot && refPath.startsWith(normalizedSkillRoot)
+          ? normalizeResourcePath(refPath.slice(normalizedSkillRoot.length))
+          : refPath
+        if (!isSameOrDescendantPath(resourceRelativePath, oldPath)) return ref
+        const suffix = resourceRelativePath === oldPath ? '' : resourceRelativePath.slice(oldPath.length + 1)
+        const nextRelativePath = suffix ? `${normalizedNext}/${suffix}` : normalizedNext
+        return {
+          ...ref,
+          path: skill.skillRoot ? joinSkillPath(skill.skillRoot, nextRelativePath) : nextRelativePath,
+          label: nextRelativePath,
+        }
       }),
     })
-    if (selectedPath === oldPath) setSelectedPath(normalizedNext)
+    if (isSameOrDescendantPath(selectedPath, oldPath)) {
+      const selectedSuffix = normalizeResourcePath(selectedPath) === oldPath
+        ? ''
+        : normalizeResourcePath(selectedPath).slice(oldPath.length + 1)
+      setSelectedPath(selectedSuffix ? `${normalizedNext}/${selectedSuffix}` : normalizedNext)
+    }
     cancelRename()
   }
 
@@ -464,28 +508,38 @@ function ResourceTreePanel({
       )
       return
     }
-    await window.electron.invoke(
-      'system:ensureDirectory',
-      joinSkillPath(skill.skillRoot, uploadFolder),
-    )
-    await window.electron.invoke(
-      'fs:writeFile',
-      joinSkillPath(skill.skillRoot, resourcePath),
-      await file.text(),
-    )
-    onChange({
-      bundledResources: [
-        ...(skill.bundledResources ?? []).filter(
-          (resource) => normalizeResourcePath(resource.path) !== resourcePath,
-        ),
-        {
-          path: resourcePath,
-          type: 'file',
-          size: file.size,
-          executable: isSkillResourceExecutable(resourcePath),
-        },
-      ],
-    })
+    try {
+      const ensure = await window.electron.invoke(
+        'system:ensureDirectory',
+        joinSkillPath(skill.skillRoot, uploadFolder),
+      ) as { success?: boolean; error?: string }
+      if (!ensure?.success) throw new Error(ensure?.error || t('skills.createResourceDirectoryFailed', 'Failed to create resource directory.'))
+      const write = await window.electron.invoke(
+        'fs:writeFile',
+        joinSkillPath(skill.skillRoot, resourcePath),
+        await file.text(),
+      ) as { success?: boolean; error?: string }
+      if (!write?.success) throw new Error(write?.error || t('skills.createResourceFailed', 'Failed to create file.'))
+      onChange({
+        bundledResources: [
+          ...(skill.bundledResources ?? []).filter(
+            (resource) => normalizeResourcePath(resource.path) !== resourcePath,
+          ),
+          {
+            path: resourcePath,
+            type: 'file',
+            size: file.size,
+            executable: isSkillResourceExecutable(resourcePath),
+          },
+        ],
+      })
+      setSelectedPath(resourcePath)
+    } catch (err: unknown) {
+      toast.error(
+        t('skills.uploadFailed', 'Failed to upload resource'),
+        err instanceof Error ? err.message : String(err),
+      )
+    }
   }
 
   // ── save edited file ────────────────────────────────────────────────
@@ -521,7 +575,8 @@ function ResourceTreePanel({
 
   const handleSelect = async (resource: SkillBundledResource) => {
     if (resource.type !== 'file') return
-    if (dirty && selectedPath !== resource.path) {
+    const nextPath = normalizeResourcePath(resource.path)
+    if (dirty && normalizeResourcePath(selectedPath) !== nextPath) {
       const ok = await confirm({
         title: t('common.unsavedChanges', 'Unsaved changes'),
         body: t('skills.unsavedFileBody', 'You have unsaved changes in the current file. Discard them?'),
@@ -530,7 +585,7 @@ function ResourceTreePanel({
       })
       if (!ok) return
     }
-    setSelectedPath(resource.path)
+    setSelectedPath(nextPath)
   }
 
   // ── tree grouping ───────────────────────────────────────────────────
@@ -555,8 +610,9 @@ function ResourceTreePanel({
     return out
   }, [filteredResources])
 
-  const selectedResource = selectedPath
-    ? resources.find((r) => normalizeResourcePath(r.path) === selectedPath)
+  const normalizedSelectedPath = normalizeResourcePath(selectedPath)
+  const selectedResource = normalizedSelectedPath
+    ? resources.find((r) => normalizeResourcePath(r.path) === normalizedSelectedPath)
     : null
 
   // ── render ──────────────────────────────────────────────────────────

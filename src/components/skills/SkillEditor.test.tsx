@@ -230,4 +230,77 @@ describe('SkillEditor — Resources tab', () => {
     })
     expect(toastMock.success).toHaveBeenCalled()
   })
+
+  it('renames a selected resource folder and keeps nested files and references in sync', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+    render(
+      <SkillEditor
+        skill={makeSkill({
+          bundledResources: [
+            { path: 'references', type: 'directory' },
+            { path: 'references/intro.md', type: 'file', size: 4 },
+          ],
+          referenceFiles: [
+            { path: '/workspace/skills/test-skill/references/intro.md', label: 'references/intro.md' },
+          ],
+        })}
+        onSave={onSave}
+        onCancel={vi.fn()}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'references/intro.md' }))
+    await screen.findByLabelText('File content')
+
+    const folderLabel = screen.getAllByText('references/').find((element) => element.tagName.toLowerCase() === 'span')
+    expect(folderLabel).toBeDefined()
+    const folderRow = folderLabel?.closest('div.group') as HTMLElement
+    await user.click(within(folderRow).getByRole('button', { name: 'Rename' }))
+    const renameInput = within(folderRow).getByDisplayValue('references')
+    await user.clear(renameInput)
+    await user.type(renameInput, 'other/docs')
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => {
+      expect(screen.getAllByText('other/docs/intro.md').length).toBeGreaterThanOrEqual(1)
+    })
+    expect(getElectronMock().invoke).toHaveBeenCalledWith(
+      'fs:moveFile',
+      '/workspace/skills/test-skill/references',
+      '/workspace/skills/test-skill/other/docs',
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Save Changes' }))
+    expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      bundledResources: expect.arrayContaining([
+        expect.objectContaining({ path: 'other/docs', type: 'directory' }),
+        expect.objectContaining({ path: 'other/docs/intro.md', type: 'file' }),
+      ]),
+      referenceFiles: [
+        { path: '/workspace/skills/test-skill/other/docs/intro.md', label: 'other/docs/intro.md' },
+      ],
+    }))
+  })
+
+  it('rejects renaming a resource over an existing path', async () => {
+    const user = userEvent.setup()
+    render(<SkillEditor skill={makeSkill()} onSave={vi.fn()} onCancel={vi.fn()} />)
+
+    const row = screen.getByText('references/intro.md').closest('div.group') as HTMLElement
+    await user.click(within(row).getByRole('button', { name: 'Rename' }))
+    const renameInput = within(row).getByDisplayValue('references/intro.md')
+    await user.clear(renameInput)
+    await user.type(renameInput, 'assets/logo.png')
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => {
+      expect(toastMock.error).toHaveBeenCalled()
+    })
+    expect(getElectronMock().invoke).not.toHaveBeenCalledWith(
+      'fs:moveFile',
+      '/workspace/skills/test-skill/references/intro.md',
+      '/workspace/skills/test-skill/assets/logo.png',
+    )
+  })
 })

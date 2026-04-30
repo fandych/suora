@@ -158,7 +158,10 @@ export function findReferencedDocuments(markdown: string, documents: DocumentIte
 
   for (const doc of documents) {
     if (matched.has(doc.id)) continue
-    if (refSet.has(doc.title.toLowerCase()) || refSet.has(doc.id.toLowerCase())) {
+    const title = doc.title.toLowerCase()
+    const displayName = getDocumentDisplayName(doc.title).toLowerCase()
+    const stemName = displayName.replace(/\.(md|markdown|mdx)$/i, '')
+    if (refSet.has(title) || refSet.has(displayName) || refSet.has(stemName) || refSet.has(doc.id.toLowerCase())) {
       matched.set(doc.id, doc)
     }
   }

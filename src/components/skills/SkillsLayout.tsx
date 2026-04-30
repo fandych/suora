@@ -5,7 +5,7 @@ import { SidePanel } from '@/components/layout/SidePanel'
 import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import type { Skill, RegistrySkillEntry, SkillRegistrySource, SkillBundledResource, SkillsLockfile } from '@/types'
-import { loadAllSkills, createBlankSkill, deleteSkillFromDisk, saveSkillToDisk, serializeSkillToMarkdown, parseSkillMarkdown, loadSkillsLockfile, getSkillLockStatus } from '@/services/skillRegistry'
+import { loadAllSkills, createBlankSkill, deleteSkillFromDisk, serializeSkillToMarkdown, parseSkillMarkdown, loadSkillsLockfile, getSkillLockStatus } from '@/services/skillRegistry'
 import { browseRegistrySkills, searchRegistrySkills, installSkillFromRegistry, uninstallSkill, getDefaultRegistrySources, previewSkillInstall } from '@/services/skillMarketplace'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
@@ -155,13 +155,32 @@ export function SkillsLayout() {
   }
 
   const handleSave = async (skill: Skill) => {
-    if (editingId) updateSkill(editingId, skill)
-    else addSkill(skill)
-    // Persist to disk for local/project/user skills
-    if (skill.source !== 'registry' && skill.skillRoot) {
-      await saveSkillToDisk(skill.skillRoot, skill)
+    let savedSkill = skill
+
+    // Persist to disk for local/project/user skills. Existing folder-backed
+    // skills must write back into their own root; new skills are created under
+    // the workspace skills directory.
+    if (skill.source !== 'registry') {
+      const skillRoot = skill.skillRoot || (workspacePath ? `${workspacePath}/.suora/skills/${skillDirectorySegment(skill.name)}` : '')
+      if (skillRoot) {
+        try {
+          const ensureResult = await window.electron.invoke('system:ensureDirectory', skillRoot) as { success?: boolean; error?: string }
+          if (!ensureResult?.success) throw new Error(ensureResult?.error || t('skills.saveFailed', 'Failed to save skill.'))
+          const writeResult = await window.electron.invoke('fs:writeFile', `${skillRoot}/SKILL.md`, serializeSkillToMarkdown(skill)) as { success?: boolean; error?: string }
+          if (!writeResult?.success) throw new Error(writeResult?.error || t('skills.saveFailed', 'Failed to save skill.'))
+          savedSkill = { ...skill, skillRoot, filePath: `${skillRoot}/SKILL.md` }
+        } catch (err) {
+          toast.error(t('skills.saveFailed', 'Failed to save skill'), err instanceof Error ? err.message : String(err))
+          return
+        }
+      } else {
+        toast.warning(t('skills.workspaceRequired', 'Please set a workspace path first.'))
+      }
     }
-    setEditingId(skill.id)
+
+    if (editingId) updateSkill(editingId, savedSkill)
+    else addSkill(savedSkill)
+    setEditingId(savedSkill.id)
     setIsAdding(false)
   }
 
