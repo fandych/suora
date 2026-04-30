@@ -1090,10 +1090,7 @@ export function DocumentsLayout() {
                     <button
                       key={value}
                       type="button"
-                      onClick={() => {
-                        if (value === 'editor' && !activeDocumentIsMarkdown) return
-                        setMode(value)
-                      }}
+                      onClick={() => setMode(value)}
                       disabled={value === 'editor' && !activeDocumentIsMarkdown}
                       title={value === 'editor' && !activeDocumentIsMarkdown ? t('documents.markdownEditorOnly', 'Rich editor is available for Markdown files only.') : undefined}
                       className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : value === 'editor' && !activeDocumentIsMarkdown ? 'cursor-not-allowed text-text-muted/35' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
@@ -1142,7 +1139,7 @@ export function DocumentsLayout() {
                         <dd className="font-(--font-code) text-text-primary">{activeDocumentExtension}</dd>
                       </div>
                       <div className="flex items-center justify-between gap-3">
-                        <dt>{t('documents.fileSize', 'Content')}</dt>
+                        <dt>{t('documents.fileContent', 'Content')}</dt>
                         <dd className="font-(--font-code) text-text-primary">{activeDocument.markdown.length} chars</dd>
                       </div>
                     </dl>

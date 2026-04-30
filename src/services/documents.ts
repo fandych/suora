@@ -68,7 +68,8 @@ const TEXT_DOCUMENT_EXTENSIONS = new Set([
 export function getDocumentExtension(title: string): string {
   const normalized = title.trim()
   const basename = normalized.split(/[\\/]/).pop() ?? normalized
-  if (!basename || basename.startsWith('.') && !basename.slice(1).includes('.')) return basename.startsWith('.') ? basename.toLowerCase() : ''
+  if (!basename) return ''
+  if (basename.startsWith('.') && !basename.slice(1).includes('.')) return basename.toLowerCase()
   const index = basename.lastIndexOf('.')
   return index > 0 ? basename.slice(index).toLowerCase() : ''
 }
@@ -90,7 +91,7 @@ export function getDocumentDisplayName(title: string): string {
 export function getDocumentKindLabel(title: string): string {
   const extension = getDocumentExtension(title)
   if (!extension || MARKDOWN_EXTENSIONS.has(extension)) return 'Markdown'
-  if (!TEXT_DOCUMENT_EXTENSIONS.has(extension)) return 'Text'
+  if (!TEXT_DOCUMENT_EXTENSIONS.has(extension)) return 'File'
   return extension.slice(1).toUpperCase()
 }
 
