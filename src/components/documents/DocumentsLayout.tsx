@@ -659,6 +659,12 @@ const EMPTY_SEARCH_RESULTS: ReturnType<typeof searchDocuments> = []
 const DOCUMENT_FIELD_DEBOUNCE_MS = 250
 const SOURCE_EDITOR_INDENT = '  '
 
+function getIndentRemovalCount(line: string) {
+  if (line.startsWith(SOURCE_EDITOR_INDENT)) return SOURCE_EDITOR_INDENT.length
+  if (line.startsWith('\t')) return 1
+  return 0
+}
+
 function updateSourceIndentation(value: string, selectionStart: number, selectionEnd: number, outdent: boolean) {
   if (outdent) {
     const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
@@ -673,7 +679,7 @@ function updateSourceIndentation(value: string, selectionStart: number, selectio
     let removedTotal = 0
     let offset = lineStart
     const nextBlock = lines.map((line) => {
-      const removeCount = line.startsWith(SOURCE_EDITOR_INDENT) ? SOURCE_EDITOR_INDENT.length : line.startsWith('\t') ? 1 : 0
+      const removeCount = getIndentRemovalCount(line)
       if (removeCount > 0) {
         if (offset < selectionStart) removedBeforeSelection += removeCount
         removedTotal += removeCount
@@ -705,12 +711,23 @@ function updateSourceIndentation(value: string, selectionStart: number, selectio
   const selectedBlock = value.slice(lineStart, lineEnd)
   const after = value.slice(lineEnd)
   const lines = selectedBlock.split('\n')
-  const nextBlock = lines.map((line) => `${SOURCE_EDITOR_INDENT}${line}`).join('\n')
+  let addedBeforeSelection = 0
+  let addedTotal = 0
+  let offset = lineStart
+  const nextBlock = lines.map((line) => {
+    const shouldIndent = line.trim().length > 0
+    if (shouldIndent) {
+      if (offset < selectionStart) addedBeforeSelection += SOURCE_EDITOR_INDENT.length
+      addedTotal += SOURCE_EDITOR_INDENT.length
+    }
+    offset += line.length + 1
+    return shouldIndent ? `${SOURCE_EDITOR_INDENT}${line}` : line
+  }).join('\n')
 
   return {
     value: before + nextBlock + after,
-    selectionStart: selectionStart + SOURCE_EDITOR_INDENT.length,
-    selectionEnd: selectionEnd + (SOURCE_EDITOR_INDENT.length * lines.length),
+    selectionStart: selectionStart + addedBeforeSelection,
+    selectionEnd: selectionEnd + addedTotal,
   }
 }
 

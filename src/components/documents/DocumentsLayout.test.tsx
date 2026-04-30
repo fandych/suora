@@ -189,15 +189,15 @@ describe('DocumentsLayout', () => {
 
     expect(sourceEditor).toHaveValue('echo hi  ')
 
-    sourceEditor.setSelectionRange(0, sourceEditor.value.length)
-    await user.keyboard('{Shift>}{Tab}{/Shift}')
-
-    expect(sourceEditor).toHaveValue('echo hi  ')
-
     sourceEditor.setSelectionRange(0, 0)
     await user.keyboard('{Tab}')
 
     expect(sourceEditor).toHaveValue('  echo hi  ')
+
+    sourceEditor.setSelectionRange(0, sourceEditor.value.length)
+    await user.keyboard('{Shift>}{Tab}{/Shift}')
+
+    expect(sourceEditor).toHaveValue('echo hi  ')
     expect(screen.getByText('1 line')).toBeInTheDocument()
     expect(screen.getByText('2 words')).toBeInTheDocument()
   })
