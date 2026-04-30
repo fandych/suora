@@ -1,4 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -657,6 +657,62 @@ const EMPTY_SEARCH_RESULTS: ReturnType<typeof searchDocuments> = []
 // truth while typing) without triggering whole-document-tree recomputation on
 // every keystroke.
 const DOCUMENT_FIELD_DEBOUNCE_MS = 250
+const SOURCE_EDITOR_INDENT = '  '
+
+function updateSourceIndentation(value: string, selectionStart: number, selectionEnd: number, outdent: boolean) {
+  if (outdent) {
+    const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
+    const lineEnd = selectionStart === selectionEnd
+      ? selectionEnd
+      : (value.indexOf('\n', selectionEnd) === -1 ? value.length : value.indexOf('\n', selectionEnd))
+    const before = value.slice(0, lineStart)
+    const selectedBlock = value.slice(lineStart, lineEnd)
+    const after = value.slice(lineEnd)
+    const lines = selectedBlock.split('\n')
+    let removedBeforeSelection = 0
+    let removedTotal = 0
+    let offset = lineStart
+    const nextBlock = lines.map((line) => {
+      const removeCount = line.startsWith(SOURCE_EDITOR_INDENT) ? SOURCE_EDITOR_INDENT.length : line.startsWith('\t') ? 1 : 0
+      if (removeCount > 0) {
+        if (offset < selectionStart) removedBeforeSelection += removeCount
+        removedTotal += removeCount
+      }
+      offset += line.length + 1
+      return removeCount > 0 ? line.slice(removeCount) : line
+    }).join('\n')
+
+    const nextSelectionStart = Math.max(lineStart, selectionStart - removedBeforeSelection)
+    const nextSelectionEnd = Math.max(nextSelectionStart, selectionEnd - removedTotal)
+    return {
+      value: before + nextBlock + after,
+      selectionStart: nextSelectionStart,
+      selectionEnd: nextSelectionEnd,
+    }
+  }
+
+  if (selectionStart === selectionEnd) {
+    return {
+      value: `${value.slice(0, selectionStart)}${SOURCE_EDITOR_INDENT}${value.slice(selectionEnd)}`,
+      selectionStart: selectionStart + SOURCE_EDITOR_INDENT.length,
+      selectionEnd: selectionStart + SOURCE_EDITOR_INDENT.length,
+    }
+  }
+
+  const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
+  const lineEnd = value.indexOf('\n', selectionEnd) === -1 ? value.length : value.indexOf('\n', selectionEnd)
+  const before = value.slice(0, lineStart)
+  const selectedBlock = value.slice(lineStart, lineEnd)
+  const after = value.slice(lineEnd)
+  const lines = selectedBlock.split('\n')
+  const nextBlock = lines.map((line) => `${SOURCE_EDITOR_INDENT}${line}`).join('\n')
+
+  return {
+    value: before + nextBlock + after,
+    selectionStart: selectionStart + SOURCE_EDITOR_INDENT.length,
+    selectionEnd: selectionEnd + (SOURCE_EDITOR_INDENT.length * lines.length),
+  }
+}
 
 function useDebouncedSync<T>(initialValue: T, identityKey: string, onFlush: (next: T) => void): [T, (next: T) => void, () => void] {
   const [value, setValue] = useState(initialValue)
@@ -727,18 +783,74 @@ function DocumentTitleInput({ document, onUpdate, ariaLabel }: { document: Docum
   )
 }
 
-function DocumentSourceTextarea({ document, onUpdate, spellCheck, placeholder }: { document: DocumentItem; onUpdate: (markdown: string) => void; spellCheck: boolean; placeholder: string }) {
+function DocumentSourceTextarea({
+  document,
+  onUpdate,
+  spellCheck,
+  placeholder,
+  kindLabel,
+  extension,
+}: {
+  document: DocumentItem
+  onUpdate: (markdown: string) => void
+  spellCheck: boolean
+  placeholder: string
+  kindLabel: string
+  extension: string
+}) {
+  const { t } = useI18n()
   const handleFlush = useCallback((next: string) => onUpdate(next), [onUpdate])
   const [value, setValue, flushNow] = useDebouncedSync(document.markdown, document.id, handleFlush)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const lineCount = Math.max(1, value.split('\n').length)
+  const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+      event.preventDefault()
+      flushNow()
+      return
+    }
+
+    if (event.key !== 'Tab') return
+
+    event.preventDefault()
+    const target = event.currentTarget
+    const next = updateSourceIndentation(value, target.selectionStart, target.selectionEnd, event.shiftKey)
+    setValue(next.value)
+    requestAnimationFrame(() => {
+      if (!textareaRef.current) return
+      textareaRef.current.selectionStart = next.selectionStart
+      textareaRef.current.selectionEnd = next.selectionEnd
+    })
+  }
+
   return (
-    <textarea
-      value={value}
-      onChange={(event) => setValue(event.target.value)}
-      onBlur={flushNow}
-      spellCheck={spellCheck}
-      className="h-full w-full resize-none rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-5 font-(--font-code) text-[13px] leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none placeholder:text-text-muted focus:border-accent/30 focus:ring-4 focus:ring-accent/10"
-      placeholder={placeholder}
-    />
+    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-4xl border border-border-subtle/70 bg-surface-0/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus-within:border-accent/30 focus-within:ring-4 focus-within:ring-accent/10">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-subtle/65 bg-surface-1/56 px-4 py-2 text-[10px] text-text-muted">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="rounded-lg border border-border-subtle/55 bg-surface-2/65 px-2 py-0.5 font-semibold text-text-secondary">{kindLabel}</span>
+          <span className="truncate font-(--font-code)">{extension}</span>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <span>{lineCount} {lineCount === 1 ? t('documents.line', 'line') : t('documents.lines', 'lines')}</span>
+          <span>{wordCount} {t('documents.words', 'words')}</span>
+          <span>{value.length} {t('documents.characters', 'chars')}</span>
+          <span className="hidden rounded-lg bg-surface-2/60 px-2 py-0.5 text-text-muted/80 sm:inline">{t('documents.sourceHint', 'Tab indents · Ctrl/Cmd+S saves')}</span>
+        </div>
+      </div>
+      <textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        onKeyDown={handleKeyDown}
+        onBlur={flushNow}
+        spellCheck={spellCheck}
+        aria-label={t('documents.sourceEditor', 'Source editor')}
+        className="min-h-0 flex-1 resize-none bg-transparent p-5 font-(--font-code) text-[13px] leading-7 text-text-primary outline-none placeholder:text-text-muted"
+        placeholder={placeholder}
+      />
+    </div>
   )
 }
 
@@ -1241,6 +1353,8 @@ export function DocumentsLayout() {
                     onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}
                     spellCheck={activeDocumentIsMarkdown || activeDocumentExtension === '.txt'}
                     placeholder={activeDocumentIsMarkdown ? t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.') : t('documents.textPlaceholder', 'Edit this text or script file.')}
+                    kindLabel={activeDocumentKindLabel}
+                    extension={activeDocumentExtension}
                   />
                 ) : (
                   <DocumentGraphView graph={documentGraph} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument} />

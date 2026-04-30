@@ -167,6 +167,41 @@ describe('DocumentsLayout', () => {
     expect(screen.getByPlaceholderText('Edit this text or script file.')).toBeInTheDocument()
   })
 
+  it('supports tab indentation in source editing for scripts', async () => {
+    const user = userEvent.setup()
+    const group = createDocumentGroup('Docs')
+    const script = createDocument(group.id, null, 'deploy.sh')
+
+    useAppStore.setState({
+      locale: 'en',
+      documentGroups: [group],
+      documentNodes: [script],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: script.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    const sourceEditor = screen.getByRole('textbox', { name: 'Source editor' }) as HTMLTextAreaElement
+    await user.click(sourceEditor)
+    await user.type(sourceEditor, 'echo hi')
+    await user.keyboard('{Tab}')
+
+    expect(sourceEditor).toHaveValue('echo hi  ')
+
+    sourceEditor.setSelectionRange(0, sourceEditor.value.length)
+    await user.keyboard('{Shift>}{Tab}{/Shift}')
+
+    expect(sourceEditor).toHaveValue('echo hi  ')
+
+    sourceEditor.setSelectionRange(0, 0)
+    await user.keyboard('{Tab}')
+
+    expect(sourceEditor).toHaveValue('  echo hi  ')
+    expect(screen.getByText('1 line')).toBeInTheDocument()
+    expect(screen.getByText('2 words')).toBeInTheDocument()
+  })
+
   it('surfaces markdown image references as document assets', () => {
     const group = createDocumentGroup('Docs')
     const rootDoc = {
