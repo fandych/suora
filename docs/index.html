@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Suora Docs</title>
+    <meta
+      name="description"
+      content="Suora documentation portal for product overview, technical docs, user guides, release notes, and implementation references."
+    />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root {
+        --bg: #f4efe7;
+        --panel: rgba(255, 252, 247, 0.82);
+        --panel-strong: #fffaf3;
+        --text: #201813;
+        --muted: #6f6056;
+        --line: rgba(62, 41, 27, 0.14);
+        --accent: #0f766e;
+        --accent-soft: rgba(15, 118, 110, 0.12);
+        --accent-warm: #c86a3a;
+        --shadow: 0 22px 60px rgba(56, 37, 26, 0.11);
+        --radius-xl: 28px;
+        --radius-lg: 20px;
+        --radius-md: 14px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: "IBM Plex Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(200, 106, 58, 0.18), transparent 32%),
+          radial-gradient(circle at 85% 12%, rgba(15, 118, 110, 0.16), transparent 24%),
+          linear-gradient(180deg, #fbf6ef 0%, #f4efe7 100%);
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        opacity: 0.35;
+        background-image:
+          linear-gradient(rgba(32, 24, 19, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(32, 24, 19, 0.03) 1px, transparent 1px);
+        background-size: 24px 24px;
+        -webkit-mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 88%);
+        mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.9), transparent 88%);
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      .shell {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 28px 0 72px;
+      }
+
+      .hero {
+        position: relative;
+        overflow: hidden;
+        padding: 34px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-xl);
+        background: linear-gradient(135deg, rgba(255, 250, 243, 0.96), rgba(246, 240, 232, 0.86));
+        box-shadow: var(--shadow);
+      }
+
+      .hero::after {
+        content: "DOCS";
+        position: absolute;
+        right: -18px;
+        top: -26px;
+        font-family: "Fraunces", serif;
+        font-size: clamp(4rem, 11vw, 8rem);
+        letter-spacing: 0.08em;
+        color: rgba(15, 118, 110, 0.08);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(32, 24, 19, 0.05);
+        color: var(--muted);
+        font-size: 0.82rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 0 6px rgba(15, 118, 110, 0.12);
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        font-family: "Fraunces", serif;
+        line-height: 1;
+      }
+
+      h1 {
+        margin-top: 20px;
+        font-size: clamp(2.8rem, 7vw, 5.4rem);
+        letter-spacing: -0.05em;
+      }
+
+      .lede {
+        width: min(760px, 100%);
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: 1.06rem;
+        line-height: 1.75;
+      }
+
+      .hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.8fr);
+        gap: 24px;
+        margin-top: 28px;
+      }
+
+      .stat-panel,
+      .links-panel,
+      .section-card,
+      .language-card {
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: var(--panel);
+        -webkit-backdrop-filter: blur(10px);
+        backdrop-filter: blur(10px);
+      }
+
+      .stat-panel {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+        padding: 16px;
+      }
+
+      .stat {
+        padding: 14px;
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.42);
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 1.55rem;
+        font-weight: 600;
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 0.92rem;
+      }
+
+      .links-panel {
+        padding: 18px;
+      }
+
+      .links-panel h2 {
+        font-size: 1.4rem;
+      }
+
+      .quick-links {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .quick-link,
+      .doc-link {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 14px 16px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.6);
+        transition:
+          transform 180ms ease,
+          border-color 180ms ease,
+          background 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .quick-link:hover,
+      .doc-link:hover,
+      .language-card a:hover {
+        transform: translateY(-2px);
+        border-color: rgba(15, 118, 110, 0.32);
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: 0 16px 28px rgba(34, 26, 22, 0.08);
+      }
+
+      .quick-link small,
+      .doc-link small {
+        display: block;
+        color: var(--muted);
+        margin-top: 4px;
+      }
+
+      .quick-link span:last-child,
+      .doc-link span:last-child {
+        color: var(--accent);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .content-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 22px;
+        margin-top: 24px;
+      }
+
+      .section-card {
+        padding: 20px;
+      }
+
+      .section-card h2 {
+        font-size: 1.65rem;
+      }
+
+      .section-copy {
+        margin: 10px 0 18px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .doc-stack {
+        display: grid;
+        gap: 12px;
+      }
+
+      .language-section {
+        margin-top: 24px;
+      }
+
+      .language-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 20px;
+        margin-bottom: 14px;
+      }
+
+      .language-header h2 {
+        font-size: clamp(2rem, 4vw, 2.6rem);
+      }
+
+      .language-header p {
+        max-width: 660px;
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .language-grid {
+        display: grid;
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .language-card a {
+        display: block;
+        height: 100%;
+        padding: 16px;
+        border-radius: var(--radius-lg);
+        transition:
+          transform 180ms ease,
+          border-color 180ms ease,
+          background 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .language-card strong {
+        display: block;
+        font-size: 1.06rem;
+      }
+
+      .language-card span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 0.92rem;
+        line-height: 1.55;
+      }
+
+      .footer-note {
+        margin-top: 26px;
+        padding: 18px 20px;
+        border: 1px dashed rgba(15, 118, 110, 0.28);
+        border-radius: var(--radius-lg);
+        background: var(--accent-soft);
+        color: #174740;
+        line-height: 1.7;
+      }
+
+      @media (max-width: 1080px) {
+        .hero-grid,
+        .content-grid,
+        .language-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .stat-panel {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          width: min(100% - 18px, 100%);
+          padding-top: 12px;
+        }
+
+        .hero,
+        .section-card {
+          padding: 18px;
+        }
+
+        .stat-panel {
+          grid-template-columns: 1fr;
+        }
+
+        h1 {
+          font-size: 2.8rem;
+        }
+
+        .language-header {
+          display: block;
+        }
+
+        .language-header p {
+          margin-top: 10px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="eyebrow">Suora documentation portal</div>
+        <h1>Docs for a local-first AI workbench.</h1>
+        <p class="lede">
+          Suora combines chat, documents, agents, skills, pipelines, timers, channels, and MCP
+          servers into one desktop workspace. This portal turns the existing repository docs into a
+          public entry point for product overview, implementation references, and multilingual user
+          guides.
+        </p>
+
+        <div class="hero-grid">
+          <div class="stat-panel">
+            <div class="stat">
+              <strong>10</strong>
+              <span>Technical docs languages</span>
+            </div>
+            <div class="stat">
+              <strong>10</strong>
+              <span>User guide languages</span>
+            </div>
+            <div class="stat">
+              <strong>9+</strong>
+              <span>Workbench modules documented</span>
+            </div>
+            <div class="stat">
+              <strong>1</strong>
+              <span>Pages entry for the whole repo</span>
+            </div>
+          </div>
+
+          <aside class="links-panel">
+            <h2>Quick start</h2>
+            <div class="quick-links">
+              <a class="quick-link" href="https://github.com/fandych/suora" target="_blank" rel="noopener noreferrer">
+                <span>
+                  <strong>Repository</strong>
+                  <small>Browse source, releases, issues, and project metadata.</small>
+                </span>
+                <span>Open repo</span>
+              </a>
+              <a class="quick-link" href="https://github.com/fandych/suora/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer">
+                <span>
+                  <strong>Latest release</strong>
+                  <small>Download Windows, macOS, and Linux builds from v0.1.0.</small>
+                </span>
+                <span>Open release</span>
+              </a>
+              <a class="quick-link" href="https://github.com/fandych/suora/tree/main/docs" target="_blank" rel="noopener noreferrer">
+                <span>
+                  <strong>Docs directory</strong>
+                  <small>See the full markdown set in the repository.</small>
+                </span>
+                <span>Open docs</span>
+              </a>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="content-grid" aria-label="Core documentation areas">
+        <article class="section-card">
+          <h2>Overview</h2>
+          <p class="section-copy">
+            Start here if you want the shortest path to understanding what Suora already ships and
+            how the desktop workbench is organized.
+          </p>
+          <div class="doc-stack">
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/README.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>README</strong>
+                <small>Project overview, module map, provider support, agents, skills, and setup.</small>
+              </span>
+              <span>Read now</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/FEATURES.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Feature reference</strong>
+                <small>Implementation-backed list of user-visible capabilities.</small>
+              </span>
+              <span>Read now</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/requirements.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Requirements</strong>
+                <small>Product framing and capability expectations for the workbench.</small>
+              </span>
+              <span>Read now</span>
+            </a>
+          </div>
+        </article>
+
+        <article class="section-card">
+          <h2>Project notes</h2>
+          <p class="section-copy">
+            These documents capture implementation milestones, optimizations, gaps, testing, and
+            integration notes around the current codebase.
+          </p>
+          <div class="doc-stack">
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/IMPLEMENTATION_COMPLETE.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Implementation complete</strong>
+                <small>Status summary for delivered work.</small>
+              </span>
+              <span>Open</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/TESTING.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Testing</strong>
+                <small>Testing approach, coverage context, and verification notes.</small>
+              </span>
+              <span>Open</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/CHANNEL_INTEGRATION.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Channel integration</strong>
+                <small>Messaging platform and channel runtime documentation.</small>
+              </span>
+              <span>Open</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/UNIMPLEMENTED_FEATURES.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Unimplemented features</strong>
+                <small>Known gaps and future-facing backlog notes.</small>
+              </span>
+              <span>Open</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/UPGRADE_REPORT.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Upgrade report</strong>
+                <small>Upgrade and migration notes for the project surface.</small>
+              </span>
+              <span>Open</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/comparison.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Comparison</strong>
+                <small>Comparative positioning and tradeoff notes.</small>
+              </span>
+              <span>Open</span>
+            </a>
+          </div>
+        </article>
+      </section>
+
+      <section class="content-grid" aria-label="Specialized documentation areas">
+        <article class="section-card">
+          <h2>Pipeline deep dives</h2>
+          <p class="section-copy">
+            Focused documents for the chat-driven pipeline experience and recent execution
+            optimizations.
+          </p>
+          <div class="doc-stack">
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/AGENT_PIPELINE_CHAT_EXECUTION_CAPABILITY_100_ZH.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Pipeline execution capability</strong>
+                <small>Chinese deep dive into chat pipeline execution behavior.</small>
+              </span>
+              <span>Open</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/blob/main/docs/AGENT_PIPELINE_CHAT_OPTIMIZATION_100.md" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Pipeline optimization</strong>
+                <small>Optimization notes for chat pipeline handling and execution flow.</small>
+              </span>
+              <span>Open</span>
+            </a>
+          </div>
+        </article>
+
+        <article class="section-card">
+          <h2>Primary entry points</h2>
+          <p class="section-copy">
+            If you want to send someone one link, start with the doc set below depending on whether
+            they need product orientation, implementation detail, or end-user instructions.
+          </p>
+          <div class="doc-stack">
+            <a class="doc-link" href="#technical-docs">
+              <span>
+                <strong>Technical docs</strong>
+                <small>Architecture-oriented documentation in 10 languages.</small>
+              </span>
+              <span>Jump</span>
+            </a>
+            <a class="doc-link" href="#user-guides">
+              <span>
+                <strong>User guides</strong>
+                <small>End-user guides in 10 languages.</small>
+              </span>
+              <span>Jump</span>
+            </a>
+            <a class="doc-link" href="https://github.com/fandych/suora/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer">
+              <span>
+                <strong>Release page</strong>
+                <small>Published binaries and release notes for installation.</small>
+              </span>
+              <span>Open</span>
+            </a>
+          </div>
+        </article>
+      </section>
+
+      <section class="language-section" id="technical-docs">
+        <div class="language-header">
+          <h2>Technical docs</h2>
+          <p>
+            Multilingual technical documentation for architecture, capabilities, and implementation
+            details. These links open the markdown files rendered on GitHub.
+          </p>
+        </div>
+        <div class="language-grid">
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md" target="_blank" rel="noopener noreferrer"><strong>English</strong><span>TECHNICAL_DOC_EN.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_ZH.md" target="_blank" rel="noopener noreferrer"><strong>中文</strong><span>TECHNICAL_DOC_ZH.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_JA.md" target="_blank" rel="noopener noreferrer"><strong>日本語</strong><span>TECHNICAL_DOC_JA.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_KO.md" target="_blank" rel="noopener noreferrer"><strong>한국어</strong><span>TECHNICAL_DOC_KO.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_FR.md" target="_blank" rel="noopener noreferrer"><strong>Français</strong><span>TECHNICAL_DOC_FR.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_DE.md" target="_blank" rel="noopener noreferrer"><strong>Deutsch</strong><span>TECHNICAL_DOC_DE.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_ES.md" target="_blank" rel="noopener noreferrer"><strong>Español</strong><span>TECHNICAL_DOC_ES.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_PT.md" target="_blank" rel="noopener noreferrer"><strong>Português</strong><span>TECHNICAL_DOC_PT.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_RU.md" target="_blank" rel="noopener noreferrer"><strong>Русский</strong><span>TECHNICAL_DOC_RU.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_AR.md" target="_blank" rel="noopener noreferrer"><strong>العربية</strong><span>TECHNICAL_DOC_AR.md</span></a></article>
+        </div>
+      </section>
+
+      <section class="language-section" id="user-guides">
+        <div class="language-header">
+          <h2>User guides</h2>
+          <p>
+            End-user guidance for installation, onboarding, and navigating the workbench modules in
+            the language that best matches the reader.
+          </p>
+        </div>
+        <div class="language-grid">
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_EN.md" target="_blank" rel="noopener noreferrer"><strong>English</strong><span>USER_GUIDE_EN.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_ZH.md" target="_blank" rel="noopener noreferrer"><strong>中文</strong><span>USER_GUIDE_ZH.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_JA.md" target="_blank" rel="noopener noreferrer"><strong>日本語</strong><span>USER_GUIDE_JA.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_KO.md" target="_blank" rel="noopener noreferrer"><strong>한국어</strong><span>USER_GUIDE_KO.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_FR.md" target="_blank" rel="noopener noreferrer"><strong>Français</strong><span>USER_GUIDE_FR.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_DE.md" target="_blank" rel="noopener noreferrer"><strong>Deutsch</strong><span>USER_GUIDE_DE.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_ES.md" target="_blank" rel="noopener noreferrer"><strong>Español</strong><span>USER_GUIDE_ES.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_PT.md" target="_blank" rel="noopener noreferrer"><strong>Português</strong><span>USER_GUIDE_PT.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_RU.md" target="_blank" rel="noopener noreferrer"><strong>Русский</strong><span>USER_GUIDE_RU.md</span></a></article>
+          <article class="language-card"><a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_AR.md" target="_blank" rel="noopener noreferrer"><strong>العربية</strong><span>USER_GUIDE_AR.md</span></a></article>
+        </div>
+      </section>
+
+      <p class="footer-note">
+        This site is published from the repository <code>/docs</code> folder via GitHub Pages. The
+        page acts as a curated front door, while each documentation link opens the corresponding
+        GitHub-rendered markdown for the latest content on <code>main</code>.
+      </p>
+    </main>
+  </body>
+</html>
