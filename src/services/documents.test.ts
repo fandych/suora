@@ -61,9 +61,10 @@ describe('documents service', () => {
     const docs = [
       { id: 'a', type: 'document', title: 'Architecture', markdown: '', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
       { id: 'roadmap-id', type: 'document', title: 'Roadmap', markdown: '', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
+      { id: 'brief-id', type: 'document', title: 'Brief.md', markdown: '', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
     ] satisfies DocumentItem[]
 
-    expect(findReferencedDocuments('[[Architecture]] and [Roadmap](#doc:roadmap-id)', docs).map((doc) => doc.id)).toEqual(['a', 'roadmap-id'])
+    expect(findReferencedDocuments('[[Architecture.md]], [[Brief]], and [Roadmap](#doc:roadmap-id)', docs).map((doc) => doc.id)).toEqual(['a', 'roadmap-id', 'brief-id'])
   })
 
   it('progressively searches title and markdown body scoped to a group', () => {

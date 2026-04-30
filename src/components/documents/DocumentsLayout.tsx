@@ -73,7 +73,7 @@ function escapeHtml(value: string) {
 }
 
 function escapeAttr(value: string) {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 }
 
 function inlineMarkdown(value: string) {
@@ -90,9 +90,9 @@ function inlineMarkdown(value: string) {
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${src}" alt="${alt}">`)
-    .replace(/\[\[([^\]\n]+)\]\]/g, '<a href="#doc:$1">$1</a>')
-    .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`)
+    .replace(/\[\[([^\]\n]+)\]\]/g, (_, target: string) => `<a href="#doc:${escapeAttr(target)}">${target}</a>`)
+    .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, (_, label: string, href: string) => `<a href="${escapeAttr(href)}">${label}</a>`)
 
   result = result.replace(/\x01M(\d+)\x01/g, (_, i: string) => {
     const latex = mathTokens[parseInt(i)]
@@ -662,6 +662,8 @@ function useDebouncedSync<T>(initialValue: T, identityKey: string, onFlush: (nex
   const [value, setValue] = useState(initialValue)
   const onFlushRef = useRef(onFlush)
   const lastFlushedRef = useRef(initialValue)
+  const identityRef = useRef(identityKey)
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     onFlushRef.current = onFlush
@@ -672,20 +674,37 @@ function useDebouncedSync<T>(initialValue: T, identityKey: string, onFlush: (nex
   // when the upstream value is updated externally to something we did not just
   // emit ourselves.
   useEffect(() => {
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current)
+      pendingTimerRef.current = null
+    }
+    identityRef.current = identityKey
     setValue(initialValue)
     lastFlushedRef.current = initialValue
   }, [identityKey, initialValue])
 
   useEffect(() => {
     if (Object.is(value, lastFlushedRef.current)) return
-    const handle = setTimeout(() => {
+    const scheduledIdentity = identityRef.current
+    pendingTimerRef.current = setTimeout(() => {
+      pendingTimerRef.current = null
+      if (identityRef.current !== scheduledIdentity) return
       lastFlushedRef.current = value
       onFlushRef.current(value)
     }, DOCUMENT_FIELD_DEBOUNCE_MS)
-    return () => clearTimeout(handle)
+    return () => {
+      if (pendingTimerRef.current) {
+        clearTimeout(pendingTimerRef.current)
+        pendingTimerRef.current = null
+      }
+    }
   }, [value])
 
   const flushNow = useCallback(() => {
+    if (pendingTimerRef.current) {
+      clearTimeout(pendingTimerRef.current)
+      pendingTimerRef.current = null
+    }
     if (Object.is(value, lastFlushedRef.current)) return
     lastFlushedRef.current = value
     onFlushRef.current(value)
