@@ -43,6 +43,7 @@ const TOP_LEVEL_DIRECTORIES = [
   'agents',
   'skills',
   'documents',
+  'documents/indexes',
   'channels',
   'memories',
   'mcp',
@@ -73,6 +74,10 @@ const SETTINGS_EXCLUDED_KEYS = new Set([
   'globalMemories',
   'agentPipelines',
   'mcpServers',
+  'documentGroups',
+  'documentNodes',
+  'selectedDocumentGroupId',
+  'selectedDocumentId',
 ])
 
 const TABLE_FILES: Partial<Record<JsonTableName, string>> = {
@@ -111,6 +116,41 @@ interface AgentLike {
   [key: string]: unknown
 }
 
+interface DocumentGroupLike {
+  id: string
+  name?: string
+  indexPath?: string
+  [key: string]: unknown
+}
+
+interface DocumentNodeLike {
+  id: string
+  groupId?: string
+  parentId?: string | null
+  type?: unknown
+  title?: string
+  markdown?: string
+  filePath?: string
+  path?: string
+  [key: string]: unknown
+}
+
+interface DocumentStoragePlan {
+  index: {
+    groups: unknown[]
+    selectedGroupId: string | null
+    selectedDocumentId: string | null
+  }
+  groupIndexes: Array<{ relativePath: string; content: { groupId: string; nodes: unknown[] } }>
+  directories: string[]
+  files: Array<{ relativePath: string; content: string }>
+}
+
+interface DocumentGroupPath {
+  documentDirectory: string
+  indexPath: string
+}
+
 function assertJsonTable(table: JsonTableName): void {
   if (!JSON_TABLES.has(table)) throw new Error(`Unsupported storage table: ${table}`)
 }
@@ -125,6 +165,38 @@ function isEntity(value: unknown): value is { id: string } {
 
 function safeSegment(value: string): string {
   return value.replace(/[^a-zA-Z0-9._-]/g, '_') || 'unknown'
+}
+
+function safeDocumentSegment(value: string, fallback: string): string {
+  const cleaned = value
+    .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+    .replace(/[. ]+$/g, '')
+    .trim()
+  const segment = cleaned || fallback
+  return /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i.test(segment) ? `${segment}_` : segment
+}
+
+function stripMarkdownExtension(value: string): string {
+  return value.replace(/\.md$/i, '')
+}
+
+function normalizeDocumentRelativePath(relativePath: string): string | null {
+  const normalized = path.posix.normalize(relativePath.replace(/\\/g, '/'))
+  if (path.posix.isAbsolute(normalized) || normalized === 'documents' || normalized.startsWith('../') || normalized.includes('/../')) return null
+  if (!normalized.startsWith('documents/')) return null
+  return normalized
+}
+
+function normalizeDocumentContentFilePath(relativePath: string): string | null {
+  const normalized = normalizeDocumentRelativePath(relativePath)
+  if (!normalized || !normalized.endsWith('.md') || normalized.startsWith('documents/indexes/')) return null
+  return normalized
+}
+
+function normalizeDocumentDirectoryPath(relativePath: string): string | null {
+  const normalized = normalizeDocumentRelativePath(relativePath)
+  if (!normalized || normalized === 'documents/indexes' || normalized.startsWith('documents/indexes/')) return null
+  return normalized
 }
 
 async function pathExists(filePath: string): Promise<boolean> {
@@ -172,6 +244,16 @@ async function readJsonIfExists<T>(filePath: string): Promise<T | null> {
   }
 }
 
+async function readTextIfExists(filePath: string): Promise<string | null> {
+  try {
+    return await fs.readFile(filePath, 'utf-8')
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') return null
+    throw error
+  }
+}
+
 function asArray(value: unknown): unknown[] {
   if (Array.isArray(value)) return value
   if (isRecord(value) && Array.isArray(value.items)) return value.items
@@ -190,6 +272,137 @@ function withoutMessages(session: SessionLike): Record<string, unknown> {
 function buildSessionMemories(sessionId: string, state: Record<string, unknown>): unknown[] {
   const globalMemories = Array.isArray(state.globalMemories) ? state.globalMemories : []
   return globalMemories.filter((entry) => isRecord(entry) && entry.scope === 'session' && entry.source === sessionId)
+}
+
+function reserveDocumentName(usedNamesByDirectory: Map<string, Set<string>>, directory: string, desiredName: string): string {
+  const usedNames = usedNamesByDirectory.get(directory) ?? new Set<string>()
+  usedNamesByDirectory.set(directory, usedNames)
+
+  const extensionIndex = desiredName.lastIndexOf('.')
+  const baseName = extensionIndex > 0 ? desiredName.slice(0, extensionIndex) : desiredName
+  const extension = extensionIndex > 0 ? desiredName.slice(extensionIndex) : ''
+  let nextName = desiredName
+  let counter = 2
+
+  while (usedNames.has(nextName.toLowerCase())) {
+    nextName = `${baseName}-${counter}${extension}`
+    counter += 1
+  }
+
+  usedNames.add(nextName.toLowerCase())
+  return nextName
+}
+
+function buildDocumentGroupPaths(groups: DocumentGroupLike[]): Map<string, DocumentGroupPath> {
+  const paths = new Map<string, DocumentGroupPath>()
+  const usedNamesByDirectory = new Map<string, Set<string>>()
+
+  for (const group of groups) {
+    const groupName = safeDocumentSegment(typeof group.name === 'string' ? group.name : group.id, safeSegment(group.id))
+    const groupDirectoryName = reserveDocumentName(usedNamesByDirectory, 'documents', groupName)
+    paths.set(group.id, {
+      documentDirectory: path.posix.join('documents', groupDirectoryName),
+      indexPath: path.posix.join('documents/indexes', `${groupDirectoryName}-index.json`),
+    })
+  }
+
+  return paths
+}
+
+function withoutDocumentGroupStorageFields(group: unknown): unknown {
+  if (!isRecord(group)) return group
+  const { indexPath: _indexPath, ...metadata } = group
+  return metadata
+}
+
+function buildDocumentStoragePlan(state: Record<string, unknown>): DocumentStoragePlan {
+  const groups = Array.isArray(state.documentGroups) ? state.documentGroups.filter(isEntity) as DocumentGroupLike[] : []
+  const nodes = Array.isArray(state.documentNodes) ? state.documentNodes.filter(isEntity) as DocumentNodeLike[] : []
+  const nodesByParent = new Map<string | null, DocumentNodeLike[]>()
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+
+  for (const node of nodes) {
+    const parentId = typeof node.parentId === 'string' && nodeById.has(node.parentId) ? node.parentId : null
+    const siblings = nodesByParent.get(parentId)
+    if (siblings) siblings.push(node)
+    else nodesByParent.set(parentId, [node])
+  }
+
+  const groupDirectoryById = new Map<string, string>()
+  const groupIndexPathById = new Map<string, string>()
+  const nodePathById = new Map<string, string>()
+  const usedNamesByDirectory = new Map<string, Set<string>>()
+  const indexNodesByGroupId = new Map<string, unknown[]>()
+  const directories = new Set<string>()
+  const files: DocumentStoragePlan['files'] = []
+  const visitedNodeIds = new Set<string>()
+  const groupPaths = buildDocumentGroupPaths(groups)
+
+  for (const group of groups) {
+    const groupPath = groupPaths.get(group.id)
+    if (!groupPath) continue
+    groupDirectoryById.set(group.id, groupPath.documentDirectory)
+    groupIndexPathById.set(group.id, typeof group.indexPath === 'string' ? group.indexPath : groupPath.indexPath)
+    indexNodesByGroupId.set(group.id, [])
+    directories.add(groupPath.documentDirectory)
+  }
+
+  const visitNode = (node: DocumentNodeLike, fallbackGroupId: string | null): void => {
+    if (visitedNodeIds.has(node.id)) return
+    visitedNodeIds.add(node.id)
+
+    const groupId = typeof node.groupId === 'string' ? node.groupId : fallbackGroupId
+    if (!groupId) return
+
+    const groupDirectory = groupDirectoryById.get(groupId) ?? path.posix.join('documents', safeDocumentSegment(groupId, safeSegment(groupId)))
+    const indexNodes = indexNodesByGroupId.get(groupId) ?? []
+    indexNodesByGroupId.set(groupId, indexNodes)
+    const parentId = typeof node.parentId === 'string' ? node.parentId : null
+    const parentNode = parentId ? nodeById.get(parentId) : null
+    const parentDirectory = parentNode && parentNode.groupId === groupId
+      ? (nodePathById.get(parentNode.id) ?? groupDirectory)
+      : groupDirectory
+    const title = typeof node.title === 'string' && node.title.trim() ? node.title : node.id
+    const baseName = safeDocumentSegment(stripMarkdownExtension(title), safeSegment(node.id))
+
+    if (node.type === 'folder') {
+      const directoryName = reserveDocumentName(usedNamesByDirectory, parentDirectory, baseName)
+      const relativePath = path.posix.join(parentDirectory, directoryName)
+      nodePathById.set(node.id, relativePath)
+      directories.add(relativePath)
+      indexNodes.push({ ...node, groupId, parentId: parentNode && parentNode.groupId === groupId ? parentId : null, path: relativePath })
+
+      for (const child of nodesByParent.get(node.id) ?? []) visitNode(child, groupId)
+      return
+    }
+
+    if (node.type === 'document') {
+      const fileName = reserveDocumentName(usedNamesByDirectory, parentDirectory, `${baseName}.md`)
+      const relativePath = path.posix.join(parentDirectory, fileName)
+      const { markdown: _markdown, ...metadata } = node
+      indexNodes.push({ ...metadata, groupId, parentId: parentNode && parentNode.groupId === groupId ? parentId : null, filePath: relativePath })
+      files.push({ relativePath, content: typeof node.markdown === 'string' ? node.markdown : '' })
+    }
+  }
+
+  for (const group of groups) {
+    for (const node of nodes.filter((item) => item.groupId === group.id && !item.parentId)) visitNode(node, group.id)
+  }
+  for (const node of nodes) visitNode(node, typeof node.groupId === 'string' ? node.groupId : null)
+
+  return {
+    index: {
+      groups: groups.map((group) => ({ ...group, indexPath: groupIndexPathById.get(group.id) ?? path.posix.join('documents/indexes', `${safeDocumentSegment(group.id, safeSegment(group.id))}-index.json`) })),
+      selectedGroupId: typeof state.selectedDocumentGroupId === 'string' ? state.selectedDocumentGroupId : null,
+      selectedDocumentId: typeof state.selectedDocumentId === 'string' ? state.selectedDocumentId : null,
+    },
+    groupIndexes: groups.map((group) => ({
+      relativePath: groupIndexPathById.get(group.id) ?? path.posix.join('documents/indexes', `${safeDocumentSegment(group.id, safeSegment(group.id))}-index.json`),
+      content: { groupId: group.id, nodes: indexNodesByGroupId.get(group.id) ?? [] },
+    })),
+    directories: Array.from(directories),
+    files,
+  }
 }
 
 function splitSettingsState(state: Record<string, unknown>, version: number): Record<string, unknown> {
@@ -243,7 +456,7 @@ export class SuoraDatabase {
     await this.ensureJsonFile('pipelines/index.json', [])
     await this.ensureJsonFile('agents/index.json', [])
     await this.ensureJsonFile('skills/index.json', [])
-    await this.ensureJsonFile('documents/index.json', [])
+    await this.ensureJsonFile('documents/index.json', { groups: [], selectedGroupId: null, selectedDocumentId: null })
     await this.ensureJsonFile('channels/index.json', [])
     await this.ensureJsonFile('memories/index.json', [])
     await this.ensureJsonFile('mcp/index.json', [])
@@ -321,6 +534,8 @@ export class SuoraDatabase {
       writeJson(this.file('sessions/index.json'), { sessions: [], activeSessionId: null, openSessionTabs: [] }),
       writeJson(this.file('agents/index.json'), []),
       writeJson(this.file('channels/index.json'), []),
+      writeJson(this.file('documents/index.json'), { groups: [], selectedGroupId: null, selectedDocumentId: null }),
+      this.clearEntityDirectory('documents/indexes'),
       writeJson(this.file('memories/index.json'), []),
       writeJson(this.file('mcp/index.json'), []),
       this.clearEntityDirectory('timers/executions'),
@@ -415,6 +630,69 @@ export class SuoraDatabase {
     return records.filter((entry) => entry !== null)
   }
 
+  private async readDocumentNodesFromGroupIndexes(documentIndex: Record<string, unknown>, groups: DocumentGroupLike[]): Promise<unknown[]> {
+    const groupPaths = buildDocumentGroupPaths(groups)
+    const groupNodes = await Promise.all(groups.map(async (group) => {
+      const indexPath = typeof group.indexPath === 'string' ? group.indexPath : groupPaths.get(group.id)?.indexPath
+      if (!indexPath) return []
+
+      const groupIndex = asObject(await readJson<unknown>(this.file(indexPath), {}))
+      return asArray(groupIndex.nodes)
+    }))
+    const nodes = groupNodes.flat()
+    if (nodes.length > 0) return nodes
+    return asArray(documentIndex.nodes)
+  }
+
+  private async readStoredDocumentPaths(): Promise<{ files: Set<string>; directories: Set<string> }> {
+    const documentIndex = asObject(await readJson<unknown>(this.file('documents/index.json'), {}))
+    const groups = asArray(documentIndex.groups).filter(isEntity) as DocumentGroupLike[]
+    const nodes = await this.readDocumentNodesFromGroupIndexes(documentIndex, groups)
+    const groupPaths = buildDocumentGroupPaths(groups)
+    const files = new Set<string>()
+    const directories = new Set<string>()
+
+    for (const group of groups) {
+      const groupDirectory = groupPaths.get(group.id)?.documentDirectory
+      const normalized = groupDirectory ? normalizeDocumentDirectoryPath(groupDirectory) : null
+      if (normalized) directories.add(normalized)
+    }
+
+    for (const node of nodes) {
+      if (!isRecord(node)) continue
+      if (node.type === 'document' && typeof node.filePath === 'string') {
+        const normalized = normalizeDocumentContentFilePath(node.filePath)
+        if (normalized) files.add(normalized)
+      }
+      if (node.type === 'folder' && typeof node.path === 'string') {
+        const normalized = normalizeDocumentDirectoryPath(node.path)
+        if (normalized) directories.add(normalized)
+      }
+    }
+
+    return { files, directories }
+  }
+
+  private async cleanupStaleDocumentPaths(previous: { files: Set<string>; directories: Set<string> }, current: DocumentStoragePlan): Promise<void> {
+    const currentFiles = new Set(current.files.map((file) => normalizeDocumentContentFilePath(file.relativePath)).filter((file): file is string => Boolean(file)))
+    const currentDirectories = new Set(current.directories.map((directory) => normalizeDocumentDirectoryPath(directory)).filter((directory): directory is string => Boolean(directory)))
+    const staleFiles = Array.from(previous.files).filter((file) => !currentFiles.has(file))
+    const staleDirectories = Array.from(previous.directories)
+      .filter((directory) => !currentDirectories.has(directory))
+      .sort((first, second) => second.length - first.length)
+
+    await Promise.all(staleFiles.map((file) => fs.unlink(this.file(file)).catch((error) => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    })))
+
+    for (const directory of staleDirectories) {
+      await fs.rmdir(this.file(directory)).catch((error) => {
+        const code = (error as NodeJS.ErrnoException).code
+        if (code !== 'ENOENT' && code !== 'ENOTEMPTY') throw error
+      })
+    }
+  }
+
   async getSnapshot(): Promise<Record<string, unknown>> {
     return {
       schemaVersion: this.schemaVersion,
@@ -425,6 +703,8 @@ export class SuoraDatabase {
       skills: await this.listJsonTable('skills'),
       channels: await this.listJsonTable('channels'),
       channelMessages: await this.listJsonTable('channel_messages'),
+      documents: await readJson<unknown>(this.file('documents/index.json'), { groups: [], selectedGroupId: null, selectedDocumentId: null }),
+      documentIndexes: await this.readEntityDirectory('documents/indexes'),
       mcpServers: await this.listJsonTable('mcp_servers'),
       timers: await this.listJsonTable('timers'),
       timerExecutions: await this.listJsonTable('timer_executions'),
@@ -436,6 +716,8 @@ export class SuoraDatabase {
 
   private async saveSplitState(state: Record<string, unknown>, version: number): Promise<void> {
     await this.initialize()
+    const previousDocumentPaths = await this.readStoredDocumentPaths()
+    const documentStoragePlan = buildDocumentStoragePlan(state)
 
     const sessions = Array.isArray(state.sessions) ? state.sessions.filter(isEntity) as SessionLike[] : []
     const sessionIndex = {
@@ -462,6 +744,9 @@ export class SuoraDatabase {
       await writeJson(path.join(agentDir, 'memories.json'), Array.isArray(agent.memories) ? agent.memories : [])
     }))
 
+    await this.pruneChildFiles('documents/indexes', new Set(documentStoragePlan.groupIndexes.map((index) => path.posix.basename(index.relativePath))))
+    await Promise.all(documentStoragePlan.directories.map((directory) => fs.mkdir(this.file(directory), { recursive: true })))
+
     await Promise.all([
       writeJson(this.file('models.json'), splitModelState(state)),
       writeJson(this.file('settings.json'), splitSettingsState(state, version)),
@@ -472,16 +757,34 @@ export class SuoraDatabase {
       writeJson(this.file('channels/tokens.json'), isRecord(state.channelTokens) ? state.channelTokens : {}),
       writeJson(this.file('channels/health.json'), isRecord(state.channelHealth) ? state.channelHealth : {}),
       writeJson(this.file('channels/users.json'), isRecord(state.channelUsers) ? state.channelUsers : {}),
+      writeJson(this.file('documents/index.json'), documentStoragePlan.index),
+      ...documentStoragePlan.groupIndexes.map((index) => writeJson(this.file(index.relativePath), index.content)),
+      ...documentStoragePlan.files.map((file) => atomicWriteFile(this.file(file.relativePath), file.content)),
       writeJson(this.file('memories/index.json'), Array.isArray(state.globalMemories) ? state.globalMemories : []),
       writeJson(this.file('pipelines/index.json'), Array.isArray(state.agentPipelines) ? state.agentPipelines : []),
       writeJson(this.file('mcp/index.json'), Array.isArray(state.mcpServers) ? state.mcpServers : []),
     ])
+    await this.cleanupStaleDocumentPaths(previousDocumentPaths, documentStoragePlan)
   }
 
   private async loadSplitState(): Promise<Record<string, unknown>> {
     await this.initialize()
     const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
     const models = await readJson<Record<string, unknown>>(this.file('models.json'), {})
+    const documentIndex = asObject(await readJson<unknown>(this.file('documents/index.json'), {}))
+    const rawDocumentGroups = asArray(documentIndex.groups)
+    const documentGroupRecords = rawDocumentGroups.filter(isEntity) as DocumentGroupLike[]
+    const indexedDocumentNodes = await this.readDocumentNodesFromGroupIndexes(documentIndex, documentGroupRecords)
+    const legacyDocumentNodes = asArray(documentIndex.nodes)
+    const rawDocumentNodes = indexedDocumentNodes.length > 0 ? indexedDocumentNodes : legacyDocumentNodes
+    const hasDocumentIndexState = rawDocumentGroups.length > 0 || rawDocumentNodes.length > 0 || typeof documentIndex.selectedGroupId === 'string' || typeof documentIndex.selectedDocumentId === 'string'
+    const documentGroups = hasDocumentIndexState ? rawDocumentGroups.map(withoutDocumentGroupStorageFields) : asArray(settings.documentGroups)
+    const documentNodes = await Promise.all((hasDocumentIndexState ? rawDocumentNodes : asArray(settings.documentNodes)).map(async (node) => {
+      if (!isRecord(node) || node.type !== 'document') return node
+      const filePath = typeof node.filePath === 'string' ? node.filePath : ''
+      const markdown = filePath ? await readTextIfExists(this.file(filePath)) : null
+      return { ...node, markdown: typeof markdown === 'string' ? markdown : (typeof node.markdown === 'string' ? node.markdown : '') }
+    }))
     const sessionIndexRaw = await readJson<unknown>(this.file('sessions/index.json'), { sessions: [] })
     const sessionIndex = asObject(sessionIndexRaw)
     const sessionMetadata = asArray(sessionIndex.sessions).filter(isEntity) as SessionLike[]
@@ -516,6 +819,14 @@ export class SuoraDatabase {
       channelTokens: await readJson<Record<string, unknown>>(this.file('channels/tokens.json'), {}),
       channelHealth: await readJson<Record<string, unknown>>(this.file('channels/health.json'), {}),
       channelUsers: await readJson<Record<string, unknown>>(this.file('channels/users.json'), {}),
+      documentGroups,
+      documentNodes,
+      selectedDocumentGroupId: typeof documentIndex.selectedGroupId === 'string'
+        ? documentIndex.selectedGroupId
+        : (typeof settings.selectedDocumentGroupId === 'string' ? settings.selectedDocumentGroupId : null),
+      selectedDocumentId: typeof documentIndex.selectedDocumentId === 'string'
+        ? documentIndex.selectedDocumentId
+        : (typeof settings.selectedDocumentId === 'string' ? settings.selectedDocumentId : null),
       globalMemories: asArray(await readJson<unknown>(this.file('memories/index.json'), [])),
       agentPipelines: asArray(await readJson<unknown>(this.file('pipelines/index.json'), [])),
       mcpServers: asArray(await readJson<unknown>(this.file('mcp/index.json'), [])),
@@ -552,6 +863,18 @@ export class SuoraDatabase {
     await Promise.all(entries
       .filter((name) => name.endsWith('.json'))
       .map((name) => fs.unlink(path.join(dirPath, name)).catch(() => {})))
+  }
+
+  private async pruneChildFiles(parent: string, keepNames: Set<string>): Promise<void> {
+    let entries: Array<{ name: string; isFile: () => boolean }>
+    try {
+      entries = await fs.readdir(this.file(parent), { withFileTypes: true })
+    } catch {
+      return
+    }
+    await Promise.all(entries
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.json') && !keepNames.has(entry.name))
+      .map((entry) => fs.unlink(this.file(path.join(parent, entry.name))).catch(() => {})))
   }
 
   private async migrateLegacyLayout(): Promise<void> {

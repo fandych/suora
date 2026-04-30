@@ -90,7 +90,9 @@ describe('DocumentsLayout', () => {
 
     render(<DocumentsLayout />)
 
-    await user.click(screen.getByRole('button', { name: 'New Folder' }))
+    expect(screen.getByText('Intro.md')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'New Folder: Docs' }))
     const nodeNameInput = screen.getByRole('textbox', { name: 'Document or folder name' })
     await user.clear(nodeNameInput)
     await user.type(nodeNameInput, 'Specs')
@@ -122,7 +124,7 @@ describe('DocumentsLayout', () => {
     await user.clear(searchInput)
     await user.type(searchInput, 'Road')
 
-    expect(screen.getByText('Specs / Roadmap')).toBeInTheDocument()
+    expect(screen.getAllByText('Docs / Specs / Roadmap.md')).toHaveLength(2)
 
     await user.click(screen.getByRole('button', { name: 'Delete current document' }))
 
@@ -132,6 +134,63 @@ describe('DocumentsLayout', () => {
 
     expect(confirmMock).toHaveBeenCalledTimes(1)
     expect(useAppStore.getState().documentNodes.filter((node) => node.type === 'document')).toHaveLength(1)
+  })
+
+  it('normalizes .md while renaming documents from the tree', async () => {
+    const user = userEvent.setup()
+    const group = createDocumentGroup('Docs')
+    const rootDoc = createDocument(group.id, null, 'Intro')
+
+    useAppStore.setState({
+      locale: 'en',
+      documentGroups: [group],
+      documentNodes: [rootDoc],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: rootDoc.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    await user.click(screen.getByRole('button', { name: 'Rename: Intro.md' }))
+    const nodeNameInput = screen.getByRole('textbox', { name: 'Document or folder name' })
+    await user.clear(nodeNameInput)
+    await user.type(nodeNameInput, 'Plan.md')
+    await user.keyboard('{Enter}')
+
+    await waitFor(() => {
+      expect(useAppStore.getState().documentNodes.some((node) => node.id === rootDoc.id && node.type === 'document' && node.title === 'Plan')).toBe(true)
+    })
+
+    expect(screen.getByText('Plan.md')).toBeInTheDocument()
+  })
+
+  it('clears document tree inputs when creating a new group', async () => {
+    const user = userEvent.setup()
+    const group = createDocumentGroup('Docs')
+    const rootDoc = createDocument(group.id, null, 'Intro')
+
+    useAppStore.setState({
+      locale: 'en',
+      documentGroups: [group],
+      documentNodes: [rootDoc],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: rootDoc.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    await user.click(screen.getByRole('button', { name: 'New Folder: Docs' }))
+    expect(screen.getByRole('textbox', { name: 'Document or folder name' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '+ Group' }))
+
+    await waitFor(() => {
+      expect(useAppStore.getState().documentGroups).toHaveLength(2)
+      expect(screen.queryByRole('textbox', { name: 'Document or folder name' })).not.toBeInTheDocument()
+    })
+
+    expect(screen.queryByRole('textbox', { name: 'Group name' })).not.toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('Welcome')
   })
 
   it('removes a folder together with its nested documents', async () => {
@@ -149,7 +208,7 @@ describe('DocumentsLayout', () => {
 
     render(<DocumentsLayout />)
 
-    await user.click(screen.getByRole('button', { name: 'New Folder' }))
+    await user.click(screen.getByRole('button', { name: 'New Folder: Docs' }))
     const nodeNameInput = screen.getByRole('textbox', { name: 'Document or folder name' })
     await user.clear(nodeNameInput)
     await user.type(nodeNameInput, 'Specs')

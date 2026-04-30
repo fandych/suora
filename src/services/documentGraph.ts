@@ -88,12 +88,13 @@ function edgeId(type: DocumentGraphEdgeType, source: string, target: string, suf
 
 export function buildDocumentPath(node: DocumentNode, nodes: DocumentNode[]): string {
   const byId = new Map(nodes.map((item) => [item.id, item]))
-  const parts = [node.title]
+  const displayTitle = (item: DocumentNode) => item.type === 'document' && !/\.md$/i.test(item.title) ? `${item.title}.md` : item.title
+  const parts = [displayTitle(node)]
   let parentId = node.parentId
   while (parentId) {
     const parent = byId.get(parentId)
     if (!parent) break
-    parts.unshift(parent.title)
+    parts.unshift(displayTitle(parent))
     parentId = parent.parentId
   }
   return parts.join(' / ')

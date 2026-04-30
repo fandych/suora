@@ -13,8 +13,8 @@ import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
 import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions'
 import { confirm } from '@/services/confirmDialog'
 import { createDocument, createDocumentGroup, createDocumentId, findReferencedDocuments, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
-import { buildDocumentGraph, buildDocumentPath } from '@/services/documentGraph'
-import type { DocumentFolder, DocumentItem, DocumentNode } from '@/types'
+import { buildDocumentGraph, buildDocumentPath, type DocumentGraph } from '@/services/documentGraph'
+import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
 const DOCUMENT_GROUP_COLOR_CLASS: Record<string, string> = {
   '#12A8A0': 'bg-[#12A8A0]',
@@ -31,6 +31,25 @@ function sortDocumentNodes(a: DocumentNode, b: DocumentNode) {
 
 function getDocumentGroupColorClass(color: string) {
   return DOCUMENT_GROUP_COLOR_CLASS[color] ?? 'bg-accent'
+}
+
+function stripMarkdownExtension(value: string): string {
+  return value.replace(/\.md$/i, '')
+}
+
+function getDocumentNodeDisplayName(node: DocumentNode): string {
+  if (node.type !== 'document') return node.title
+  return /\.md$/i.test(node.title) ? node.title : `${node.title}.md`
+}
+
+const EMPTY_DOCUMENT_CHILDREN: DocumentNode[] = []
+const EMPTY_DOCUMENT_GRAPH: DocumentGraph = {
+  nodes: [],
+  edges: [],
+  backlinksByDocumentId: {},
+  referencesByDocumentId: {},
+  orphanDocumentIds: [],
+  tags: [],
 }
 
 function collectAncestorFolderIds(parentId: string | null, nodes: DocumentNode[]) {
@@ -243,7 +262,7 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
 
 function TreeNode({
   node,
-  nodes,
+  childrenByParent,
   selectedDocumentId,
   selectedFolderId,
   editingNodeId,
@@ -261,7 +280,7 @@ function TreeNode({
   onDeleteNode,
 }: {
   node: DocumentNode
-  nodes: DocumentNode[]
+  childrenByParent: Map<string | null, DocumentNode[]>
   selectedDocumentId: string | null
   selectedFolderId: string | null
   editingNodeId: string | null
@@ -274,17 +293,16 @@ function TreeNode({
   onEditingTitleChange: (value: string) => void
   onCommitRename: () => void
   onCancelRename: () => void
-  onCreateDocument: (parentId: string | null) => void
-  onCreateFolder: (parentId: string | null) => void
+  onCreateDocument: (parentId: string | null, groupId?: string) => void
+  onCreateFolder: (parentId: string | null, groupId?: string) => void
   onDeleteNode: (node: DocumentNode) => void
 }) {
   const { t } = useI18n()
-  const children = nodes
-    .filter((child) => child.parentId === node.id)
-    .sort(sortDocumentNodes)
+  const children = childrenByParent.get(node.id) ?? EMPTY_DOCUMENT_CHILDREN
   const isExpanded = expanded.has(node.id)
   const isActive = node.type === 'document' ? selectedDocumentId === node.id : selectedFolderId === node.id
   const isEditing = editingNodeId === node.id
+  const nodeDisplayName = getDocumentNodeDisplayName(node)
 
   return (
     <div>
@@ -296,7 +314,7 @@ function TreeNode({
                 type="button"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onToggle(node.id)}
-                aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${node.title}` : `${t('documents.expandFolder', 'Expand folder')}: ${node.title}`}
+                aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${nodeDisplayName}` : `${t('documents.expandFolder', 'Expand folder')}: ${nodeDisplayName}`}
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
                 title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}
               >
@@ -366,7 +384,7 @@ function TreeNode({
               <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
                 <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={15} color="currentColor" />
               </span>
-              <span className="min-w-0 flex-1 truncate font-medium">{node.title}</span>
+              <span className="min-w-0 flex-1 truncate font-medium">{nodeDisplayName}</span>
             </button>
             <div className={`flex shrink-0 items-center gap-1 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
               {node.type === 'folder' && (
@@ -377,7 +395,7 @@ function TreeNode({
                     aria-label={`${t('documents.newDocInFolder', 'New child document')}: ${node.title}`}
                     onClick={(event) => {
                       event.stopPropagation()
-                      onCreateDocument(node.id)
+                      onCreateDocument(node.id, node.groupId)
                     }}
                     className="flex h-7 w-7 items-center justify-center rounded-xl bg-accent/15 text-accent transition-colors hover:bg-accent/25"
                   >
@@ -389,7 +407,7 @@ function TreeNode({
                     aria-label={`${t('documents.newSubfolder', 'New subfolder')}: ${node.title}`}
                     onClick={(event) => {
                       event.stopPropagation()
-                      onCreateFolder(node.id)
+                      onCreateFolder(node.id, node.groupId)
                     }}
                     className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
                   >
@@ -400,7 +418,7 @@ function TreeNode({
               <button
                 type="button"
                 title={t('common.rename', 'Rename')}
-                aria-label={`${t('common.rename', 'Rename')}: ${node.title}`}
+                aria-label={`${t('common.rename', 'Rename')}: ${nodeDisplayName}`}
                 onClick={(event) => {
                   event.stopPropagation()
                   onStartRename(node)
@@ -412,7 +430,7 @@ function TreeNode({
               <button
                 type="button"
                 title={t('common.delete', 'Delete')}
-                aria-label={`${t('common.delete', 'Delete')}: ${node.title}`}
+                aria-label={`${t('common.delete', 'Delete')}: ${nodeDisplayName}`}
                 onClick={(event) => {
                   event.stopPropagation()
                   onDeleteNode(node)
@@ -431,7 +449,7 @@ function TreeNode({
             <TreeNode
               key={child.id}
               node={child}
-              nodes={nodes}
+              childrenByParent={childrenByParent}
               selectedDocumentId={selectedDocumentId}
               selectedFolderId={selectedFolderId}
               editingNodeId={editingNodeId}
@@ -455,6 +473,174 @@ function TreeNode({
   )
 }
 
+function GroupTreeNode({
+  group,
+  children,
+  documentCount,
+  isActive,
+  isExpanded,
+  editingGroupId,
+  editingGroupName,
+  childrenByParent,
+  selectedDocumentId,
+  selectedFolderId,
+  editingNodeId,
+  editingTitle,
+  expanded,
+  onToggle,
+  onSelectGroup,
+  onStartRenameGroup,
+  onEditingGroupNameChange,
+  onCommitRenameGroup,
+  onCancelRenameGroup,
+  onSelectDocument,
+  onSelectFolder,
+  onStartRenameNode,
+  onEditingTitleChange,
+  onCommitRenameNode,
+  onCancelRenameNode,
+  onCreateDocument,
+  onCreateFolder,
+  onDeleteNode,
+  onDeleteGroup,
+}: {
+  group: DocumentGroup
+  children: DocumentNode[]
+  documentCount: number
+  isActive: boolean
+  isExpanded: boolean
+  editingGroupId: string | null
+  editingGroupName: string
+  childrenByParent: Map<string | null, DocumentNode[]>
+  selectedDocumentId: string | null
+  selectedFolderId: string | null
+  editingNodeId: string | null
+  editingTitle: string
+  expanded: Set<string>
+  onToggle: (id: string) => void
+  onSelectGroup: (group: DocumentGroup) => void
+  onStartRenameGroup: (group: DocumentGroup) => void
+  onEditingGroupNameChange: (value: string) => void
+  onCommitRenameGroup: () => void
+  onCancelRenameGroup: () => void
+  onSelectDocument: (id: string) => void
+  onSelectFolder: (id: string) => void
+  onStartRenameNode: (node: DocumentNode) => void
+  onEditingTitleChange: (value: string) => void
+  onCommitRenameNode: () => void
+  onCancelRenameNode: () => void
+  onCreateDocument: (parentId: string | null, groupId?: string) => void
+  onCreateFolder: (parentId: string | null, groupId?: string) => void
+  onDeleteNode: (node: DocumentNode) => void
+  onDeleteGroup: (group: DocumentGroup) => void
+}) {
+  const { t } = useI18n()
+  const isEditing = editingGroupId === group.id
+
+  return (
+    <div>
+      <div className={`group flex items-center gap-1 rounded-2xl px-1.5 py-1 transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
+        {isEditing ? (
+          <>
+            <button
+              type="button"
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onToggle(group.id)}
+              aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${group.name}` : `${t('documents.expandFolder', 'Expand folder')}: ${group.name}`}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
+              title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}
+            >
+              <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
+            </button>
+            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-white/95 ${getDocumentGroupColorClass(group.color)}`}>
+              <IconifyIcon name="skill-filesystem" size={15} color="currentColor" />
+            </span>
+            <input
+              autoFocus
+              value={editingGroupName}
+              onChange={(event) => onEditingGroupNameChange(event.target.value)}
+              onBlur={onCommitRenameGroup}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing) onCommitRenameGroup()
+                if (event.key === 'Escape') onCancelRenameGroup()
+              }}
+              className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-2 text-[12px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"
+              aria-label={t('documents.groupName', 'Group name')}
+            />
+            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCommitRenameGroup} title={t('common.save', 'Save')} aria-label={t('documents.saveGroupName', 'Save group name')} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success hover:bg-success/15">
+              <IconifyIcon name="ui-check" size={14} color="currentColor" />
+            </button>
+            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCancelRenameGroup} title={t('common.cancel', 'Cancel')} aria-label={t('documents.cancelGroupRename', 'Cancel group rename')} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted hover:text-text-primary">
+              <IconifyIcon name="ui-close" size={14} color="currentColor" />
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              type="button"
+              onClick={() => onSelectGroup(group)}
+              onDoubleClick={() => onStartRenameGroup(group)}
+              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left"
+            >
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center text-text-muted">
+                <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
+              </span>
+              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-white/95 ${getDocumentGroupColorClass(group.color)}`}>
+                <IconifyIcon name="skill-filesystem" size={15} color="currentColor" />
+              </span>
+              <span className="min-w-0 flex-1 truncate font-semibold">{group.name}</span>
+              <span className="shrink-0 rounded-lg bg-surface-2/60 px-1.5 py-0.5 text-[10px] text-text-muted">{documentCount}</span>
+            </button>
+            <div className={`flex shrink-0 items-center gap-1 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
+              <button type="button" title={t('documents.newDoc', 'New Document')} aria-label={`${t('documents.newDoc', 'New Document')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onCreateDocument(null, group.id) }} className="flex h-7 w-7 items-center justify-center rounded-xl bg-accent/15 text-accent transition-colors hover:bg-accent/25">
+                <IconifyIcon name="ui-plus" size={13} color="currentColor" />
+              </button>
+              <button type="button" title={t('documents.newFolderButton', 'New Folder')} aria-label={`${t('documents.newFolderButton', 'New Folder')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onCreateFolder(null, group.id) }} className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary">
+                <IconifyIcon name="skill-filesystem" size={13} color="currentColor" />
+              </button>
+              <button type="button" title={t('documents.groupGraph', 'Knowledge Graph')} aria-label={`${t('documents.groupGraph', 'Knowledge Graph')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onSelectGroup(group) }} className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary">
+                <IconifyIcon name="ui-chart" size={13} color="currentColor" />
+              </button>
+              <button type="button" title={t('common.rename', 'Rename')} aria-label={`${t('common.rename', 'Rename')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onStartRenameGroup(group) }} className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary">
+                <IconifyIcon name="ui-edit" size={13} color="currentColor" />
+              </button>
+              <button type="button" title={t('common.delete', 'Delete')} aria-label={`${t('common.delete', 'Delete')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onDeleteGroup(group) }} className="flex h-7 w-7 items-center justify-center rounded-xl border border-danger/20 bg-danger/10 text-danger transition-colors hover:bg-danger/15">
+                <IconifyIcon name="ui-trash" size={13} color="currentColor" />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+      {isExpanded && children.length > 0 && (
+        <div className="mt-1 space-y-1 pl-4">
+          {children.map((child) => (
+            <TreeNode
+              key={child.id}
+              node={child}
+              childrenByParent={childrenByParent}
+              selectedDocumentId={selectedDocumentId}
+              selectedFolderId={selectedFolderId}
+              editingNodeId={editingNodeId}
+              editingTitle={editingTitle}
+              expanded={expanded}
+              onToggle={onToggle}
+              onSelectDocument={onSelectDocument}
+              onSelectFolder={onSelectFolder}
+              onStartRename={onStartRenameNode}
+              onEditingTitleChange={onEditingTitleChange}
+              onCommitRename={onCommitRenameNode}
+              onCancelRename={onCancelRenameNode}
+              onCreateDocument={onCreateDocument}
+              onCreateFolder={onCreateFolder}
+              onDeleteNode={onDeleteNode}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function DocumentsLayout() {
   const { t } = useI18n()
   const [panelWidth, setPanelWidth] = useResizablePanel('documents', 310)
@@ -463,6 +649,8 @@ export function DocumentsLayout() {
   const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
   const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
   const [editingTitle, setEditingTitle] = useState('')
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
+  const [editingGroupName, setEditingGroupName] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [mode, setMode] = useState<'editor' | 'source' | 'graph'>('editor')
   const {
@@ -482,12 +670,62 @@ export function DocumentsLayout() {
   } = useAppStore()
 
   const activeGroup = documentGroups.find((group) => group.id === selectedDocumentGroupId) ?? documentGroups[0] ?? null
-  const groupNodes = useMemo(() => documentNodes.filter((node) => activeGroup && node.groupId === activeGroup.id), [documentNodes, activeGroup])
-  const activeDocument = documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === selectedDocumentId) ?? null
+  const activeGroupId = activeGroup?.id ?? null
+  const groupNodes = useMemo(() => activeGroupId ? documentNodes.filter((node) => node.groupId === activeGroupId) : [], [documentNodes, activeGroupId])
+  const activeDocument = useMemo(() => documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === selectedDocumentId) ?? null, [documentNodes, selectedDocumentId])
   const groupDocuments = useMemo(() => groupNodes.filter((node): node is DocumentItem => node.type === 'document'), [groupNodes])
-  const searchResults = useMemo(() => searchDocuments(documentNodes, activeGroup?.id ?? null, deferredQuery), [documentNodes, activeGroup?.id, deferredQuery])
+  const searchResults = useMemo(() => searchDocuments(documentNodes, null, deferredQuery), [documentNodes, deferredQuery])
   const referencedDocuments = useMemo(() => activeDocument ? findReferencedDocuments(activeDocument.markdown, groupDocuments).filter((doc) => doc.id !== activeDocument.id) : [], [activeDocument, groupDocuments])
-  const documentGraph = useMemo(() => buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroup?.id ?? null }), [documentGroups, documentNodes, activeGroup?.id])
+  const shouldShowDocumentGraph = mode === 'graph' || !activeDocument
+  const documentGraph = useMemo(
+    () => shouldShowDocumentGraph ? buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroupId }) : EMPTY_DOCUMENT_GRAPH,
+    [activeGroupId, documentGroups, documentNodes, shouldShowDocumentGraph],
+  )
+  const documentCountByGroupId = useMemo(() => {
+    const counts = new Map<string, number>()
+
+    for (const node of documentNodes) {
+      if (node.type !== 'document') continue
+      counts.set(node.groupId, (counts.get(node.groupId) ?? 0) + 1)
+    }
+
+    return counts
+  }, [documentNodes])
+  const totalDocumentCount = useMemo(() => Array.from(documentCountByGroupId.values()).reduce((total, count) => total + count, 0), [documentCountByGroupId])
+  const groupNameById = useMemo(() => new Map(documentGroups.map((group) => [group.id, group.name])), [documentGroups])
+  const childrenByParent = useMemo(() => {
+    const nextChildrenByParent = new Map<string | null, DocumentNode[]>()
+
+    for (const node of documentNodes) {
+      const siblings = nextChildrenByParent.get(node.parentId)
+      if (siblings) siblings.push(node)
+      else nextChildrenByParent.set(node.parentId, [node])
+    }
+
+    for (const children of nextChildrenByParent.values()) {
+      children.sort(sortDocumentNodes)
+    }
+
+    return nextChildrenByParent
+  }, [documentNodes])
+  const rootNodesByGroupId = useMemo(() => {
+    const nextRootNodesByGroupId = new Map<string, DocumentNode[]>()
+
+    for (const node of documentNodes) {
+      if (node.parentId !== null) continue
+      const roots = nextRootNodesByGroupId.get(node.groupId)
+      if (roots) roots.push(node)
+      else nextRootNodesByGroupId.set(node.groupId, [node])
+    }
+
+    for (const roots of nextRootNodesByGroupId.values()) {
+      roots.sort(sortDocumentNodes)
+    }
+
+    return nextRootNodesByGroupId
+  }, [documentNodes])
+  const documentNodeIds = useMemo(() => new Set(documentNodes.map((node) => node.id)), [documentNodes])
+  const documentFolderIds = useMemo(() => new Set(documentNodes.filter((node) => node.type === 'folder').map((node) => node.id)), [documentNodes])
   const activeDocumentAncestorKey = useMemo(
     () => activeDocument ? collectAncestorFolderIds(activeDocument.parentId, documentNodes).join('|') : '',
     [activeDocument?.id, activeDocument?.parentId, documentNodes],
@@ -498,34 +736,41 @@ export function DocumentsLayout() {
   }, [documentGroups, selectedDocumentGroupId, setSelectedDocumentGroup])
 
   useEffect(() => {
-    if (selectedFolderId && !groupNodes.some((node) => node.type === 'folder' && node.id === selectedFolderId)) {
+    if (selectedFolderId && !documentFolderIds.has(selectedFolderId)) {
       setSelectedFolderId(null)
     }
-  }, [groupNodes, selectedFolderId])
+  }, [documentFolderIds, selectedFolderId])
 
   useEffect(() => {
-    if (editingNodeId && !groupNodes.some((node) => node.id === editingNodeId)) {
+    if (editingNodeId && !documentNodeIds.has(editingNodeId)) {
       setEditingNodeId(null)
       setEditingTitle('')
     }
-  }, [editingNodeId, groupNodes])
+  }, [documentNodeIds, editingNodeId])
+
+  useEffect(() => {
+    if (editingGroupId && (!documentGroups.some((group) => group.id === editingGroupId) || editingGroupId !== activeGroupId)) {
+      setEditingGroupId(null)
+      setEditingGroupName('')
+    }
+  }, [activeGroupId, documentGroups, editingGroupId])
 
   useEffect(() => {
     if (!activeDocument) return
     setSelectedFolderId(activeDocument.parentId)
 
-    if (!activeDocumentAncestorKey) return
-
     const ancestorIds = activeDocumentAncestorKey.split('|').filter(Boolean)
     setExpanded((prev) => {
       const next = new Set(prev)
+      next.add(activeDocument.groupId)
       ancestorIds.forEach((id) => next.add(id))
       return next
     })
-  }, [activeDocument?.id, activeDocument?.parentId, activeDocumentAncestorKey])
+  }, [activeDocument?.groupId, activeDocument?.id, activeDocument?.parentId, activeDocumentAncestorKey])
 
   const revealNode = (node: DocumentNode) => {
     const ancestorIds = collectAncestorFolderIds(node.parentId, documentNodes)
+    ancestorIds.unshift(node.groupId)
     if (node.type === 'folder') ancestorIds.push(node.id)
     if (!ancestorIds.length) return
 
@@ -547,6 +792,19 @@ export function DocumentsLayout() {
     setMode('editor')
   }
 
+  const selectGroup = (group: DocumentGroup) => {
+    setSelectedDocumentGroup(group.id)
+    setSelectedDocument(null)
+    setSelectedFolderId(null)
+    setMode('graph')
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      if (next.has(group.id)) next.delete(group.id)
+      else next.add(group.id)
+      return next
+    })
+  }
+
   const focusFolder = (folderId: string) => {
     const folder = documentNodes.find((node): node is DocumentFolder => node.type === 'folder' && node.id === folderId)
     if (!folder) return
@@ -561,16 +819,22 @@ export function DocumentsLayout() {
     addDocumentGroup(group)
     const doc = createDocument(group.id, null, t('documents.welcomeDoc', 'Welcome'))
     addDocument(doc)
+    setEditingNodeId(null)
+    setEditingTitle('')
+    setEditingGroupId(null)
+    setEditingGroupName('')
     setSelectedFolderId(null)
+    setExpanded(new Set([group.id]))
+    setQuery('')
     setMode('editor')
   }
 
-  const createFolder = (parentId: string | null = selectedFolderId) => {
-    if (!activeGroup) return
+  const createFolder = (parentId: string | null = selectedFolderId, targetGroupId = activeGroupId) => {
+    if (!targetGroupId) return
     const now = Date.now()
     const folder: DocumentFolder = {
       id: createDocumentId('doc-folder'),
-      groupId: activeGroup.id,
+      groupId: targetGroupId,
       parentId,
       type: 'folder',
       title: t('documents.newFolder', 'New Folder'),
@@ -578,18 +842,29 @@ export function DocumentsLayout() {
       updatedAt: now,
     }
     addDocumentFolder(folder)
+    setSelectedDocumentGroup(targetGroupId)
     const nextParentId = folder.parentId
-    if (nextParentId) setExpanded((prev) => new Set(prev).add(nextParentId))
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.add(targetGroupId)
+      if (nextParentId) next.add(nextParentId)
+      return next
+    })
     setSelectedFolderId(folder.id)
     setEditingNodeId(folder.id)
     setEditingTitle(folder.title)
   }
 
-  const createDoc = (parentId: string | null = selectedFolderId) => {
-    if (!activeGroup) return
-    const doc = createDocument(activeGroup.id, parentId, t('documents.untitled', 'Untitled Document'))
+  const createDoc = (parentId: string | null = selectedFolderId, targetGroupId = activeGroupId) => {
+    if (!targetGroupId) return
+    const doc = createDocument(targetGroupId, parentId, t('documents.untitled', 'Untitled Document'))
     addDocument(doc)
-    if (parentId) setExpanded((prev) => new Set(prev).add(parentId))
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.add(targetGroupId)
+      if (parentId) next.add(parentId)
+      return next
+    })
     setSelectedFolderId(parentId)
     setMode('editor')
   }
@@ -611,10 +886,38 @@ export function DocumentsLayout() {
     setEditingTitle('')
   }
 
+  const startRenameGroup = (group: DocumentGroup) => {
+    cancelRenameNode()
+    setSelectedDocumentGroup(group.id)
+    setEditingGroupId(group.id)
+    setEditingGroupName(group.name)
+  }
+
+  const cancelRenameGroup = () => {
+    setEditingGroupId(null)
+    setEditingGroupName('')
+  }
+
+  const commitRenameGroup = () => {
+    if (!editingGroupId) return
+
+    const nextName = editingGroupName.trim()
+    if (!nextName) {
+      cancelRenameGroup()
+      return
+    }
+
+    updateDocumentGroup(editingGroupId, { name: nextName })
+    cancelRenameGroup()
+  }
+
   const commitRenameNode = () => {
     if (!editingNodeId) return
 
-    const nextTitle = editingTitle.trim()
+    const editingNode = documentNodes.find((node) => node.id === editingNodeId) ?? null
+    const nextTitle = editingNode?.type === 'document'
+      ? stripMarkdownExtension(editingTitle.trim()).trim()
+      : editingTitle.trim()
     if (!nextTitle) {
       cancelRenameNode()
       return
@@ -624,15 +927,18 @@ export function DocumentsLayout() {
     cancelRenameNode()
   }
 
-  const deleteGroup = async () => {
-    if (!activeGroup) return
+  const deleteGroup = async (group = activeGroup) => {
+    if (!group) return
     const ok = await confirm({
       title: t('documents.deleteGroupTitle', 'Delete document group?'),
-      body: t('documents.deleteGroupBody', '"{name}" and all nested documents will be removed. This cannot be undone.').replace('{name}', activeGroup.name),
+      body: t('documents.deleteGroupBody', '"{name}" and all nested documents will be removed. This cannot be undone.').replace('{name}', group.name),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })
-    if (ok) removeDocumentGroup(activeGroup.id)
+    if (!ok) return
+
+    if (editingGroupId === group.id) cancelRenameGroup()
+    removeDocumentGroup(group.id)
   }
 
   const deleteActiveDocument = async () => {
@@ -663,9 +969,12 @@ export function DocumentsLayout() {
     removeDocumentNode(node.id)
   }
 
-  const rootNodes = groupNodes
-    .filter((node) => node.parentId === null)
-    .sort(sortDocumentNodes)
+  const toggleExpanded = (id: string) => setExpanded((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    return next
+  })
 
   return (
     <>
@@ -692,123 +1001,68 @@ export function DocumentsLayout() {
             </div>
             <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
               <span>{searchResults.length} {t('common.results', 'results')}</span>
-              <span>{groupDocuments.length} {t('documents.docs', 'docs')}</span>
+              <span>{totalDocumentCount} {t('documents.docs', 'docs')}</span>
             </div>
           </div>
 
-          {/* Groups */}
-          <section className="mb-3">
-            <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.groups', 'Groups')}</h3>
-              {activeGroup && (
-                <button type="button" onClick={deleteGroup} className="text-[10px] font-semibold text-danger/80 hover:text-danger">{t('common.delete', 'Delete')}</button>
-              )}
-            </div>
+          <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
             {documentGroups.length === 0 ? (
               <button type="button" onClick={createGroup} className="w-full rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-8 text-center text-[12px] text-text-muted hover:border-accent/30 hover:text-accent">
                 {t('documents.emptyGroups', 'Create your first document group')}
               </button>
             ) : (
-              <div className="space-y-1.5">
-                {documentGroups.map((group) => {
-                  const isActive = activeGroup?.id === group.id
-                  return (
-                    <div
-                      key={group.id}
-                      className={`flex w-full items-center gap-2 rounded-2xl border px-2.5 py-2 transition-all ${isActive ? 'border-accent/20 bg-accent/10' : 'border-transparent bg-surface-1/20 hover:border-border-subtle/60 hover:bg-surface-3/55'}`}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setSelectedDocumentGroup(group.id)}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      >
-                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${getDocumentGroupColorClass(group.color)}`} />
-                        <span className={`min-w-0 flex-1 truncate text-[12px] font-semibold ${isActive ? 'text-text-primary' : 'text-text-secondary'}`}>{group.name}</span>
-                        <span className="shrink-0 text-[10px] text-text-muted">{documentNodes.filter((node) => node.groupId === group.id && node.type === 'document').length}</span>
-                      </button>
-                      <button
-                        type="button"
-                        title={t('documents.groupGraph', 'Knowledge Graph')}
-                        onClick={() => { setSelectedDocumentGroup(group.id); setSelectedDocument(null) }}
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl transition-all ${isActive ? 'text-accent hover:bg-accent/15' : 'text-text-muted/60 hover:bg-surface-3/70 hover:text-text-primary'}`}
-                      >
-                        <IconifyIcon name="ui-chart" size={12} color="currentColor" />
-                      </button>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
-          </section>
-
-          {/* File Tree */}
-          {activeGroup && (
-            <section className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-              <div className="flex items-center gap-1.5">
-                <div className={`h-2 w-2 rounded-full ${getDocumentGroupColorClass(activeGroup.color)}`} />
-                <input
-                  value={activeGroup.name}
-                  onChange={(event) => updateDocumentGroup(activeGroup.id, { name: event.target.value })}
-                  className="min-w-0 flex-1 rounded-xl border border-transparent bg-transparent px-1.5 py-1 text-[11px] font-semibold text-text-muted outline-none hover:border-border-subtle/55 focus:border-accent/30 focus:bg-surface-0/45 focus:text-text-primary"
-                  aria-label={t('documents.groupName', 'Group name')}
-                />
-                <button type="button" onClick={() => createDoc()} title={t('documents.newDoc', 'New Document')} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl bg-accent/15 text-accent hover:bg-accent/25">
-                  <IconifyIcon name="ui-plus" size={13} color="currentColor" />
-                </button>
-                <button type="button" onClick={() => createFolder()} title={t('documents.newFolderButton', 'New Folder')} className="flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/60 text-text-secondary hover:text-text-primary">
-                  <IconifyIcon name="skill-filesystem" size={13} color="currentColor" />
-                </button>
-              </div>
-
               <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
                 {query.trim() ? (
                   <div className="space-y-2">
                     {searchResults.map(({ node, excerpt }) => (
                       <button key={node.id} type="button" onClick={() => openDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
                         <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
-                        <div className="mt-1 truncate text-[10px] text-text-muted">{buildDocumentPath(node, documentNodes)}</div>
+                        <div className="mt-1 truncate text-[10px] text-text-muted">{groupNameById.get(node.groupId) ?? t('documents.groups', 'Groups')} / {buildDocumentPath(node, documentNodes)}</div>
                         <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
                       </button>
                     ))}
                   </div>
-                ) : rootNodes.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center text-[12px] leading-relaxed text-text-muted">
-                    {t('documents.emptyTree', 'Create nested folders and markdown documents in this group.')}
-                  </div>
                 ) : (
                   <div className="space-y-0.5">
-                    {rootNodes.map((node) => (
-                    <TreeNode
-                      key={node.id}
-                      node={node}
-                      nodes={groupNodes}
-                      selectedDocumentId={selectedDocumentId}
-                      selectedFolderId={selectedFolderId}
-                      editingNodeId={editingNodeId}
-                      editingTitle={editingTitle}
-                      expanded={expanded}
-                      onToggle={(id) => setExpanded((prev) => {
-                        const next = new Set(prev)
-                        if (next.has(id)) next.delete(id)
-                        else next.add(id)
-                        return next
-                      })}
-                      onSelectDocument={openDocument}
-                      onSelectFolder={focusFolder}
-                      onStartRename={startRenameNode}
-                      onEditingTitleChange={setEditingTitle}
-                      onCommitRename={commitRenameNode}
-                      onCancelRename={cancelRenameNode}
-                      onCreateDocument={createDoc}
-                      onCreateFolder={createFolder}
-                      onDeleteNode={deleteNode}
-                    />
-                  ))}
+                    {documentGroups.map((group) => (
+                      <GroupTreeNode
+                        key={group.id}
+                        group={group}
+                        children={rootNodesByGroupId.get(group.id) ?? EMPTY_DOCUMENT_CHILDREN}
+                        documentCount={documentCountByGroupId.get(group.id) ?? 0}
+                        isActive={activeGroupId === group.id}
+                        isExpanded={expanded.has(group.id)}
+                        editingGroupId={editingGroupId}
+                        editingGroupName={editingGroupName}
+                        childrenByParent={childrenByParent}
+                        selectedDocumentId={selectedDocumentId}
+                        selectedFolderId={selectedFolderId}
+                        editingNodeId={editingNodeId}
+                        editingTitle={editingTitle}
+                        expanded={expanded}
+                        onToggle={toggleExpanded}
+                        onSelectGroup={selectGroup}
+                        onStartRenameGroup={startRenameGroup}
+                        onEditingGroupNameChange={setEditingGroupName}
+                        onCommitRenameGroup={commitRenameGroup}
+                        onCancelRenameGroup={cancelRenameGroup}
+                        onSelectDocument={openDocument}
+                        onSelectFolder={focusFolder}
+                        onStartRenameNode={startRenameNode}
+                        onEditingTitleChange={setEditingTitle}
+                        onCommitRenameNode={commitRenameNode}
+                        onCancelRenameNode={cancelRenameNode}
+                        onCreateDocument={createDoc}
+                        onCreateFolder={createFolder}
+                        onDeleteNode={deleteNode}
+                        onDeleteGroup={deleteGroup}
+                      />
+                    ))}
                   </div>
                 )}
               </div>
-            </section>
-          )}
+            )}
+          </section>
         </div>
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} />

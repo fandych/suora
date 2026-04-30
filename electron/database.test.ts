@@ -35,6 +35,7 @@ describe('SuoraDatabase', () => {
     await expect(fs.stat(path.join(workspace, 'agents', 'index.json'))).resolves.toBeTruthy()
     await expect(fs.stat(path.join(workspace, 'skills', 'index.json'))).resolves.toBeTruthy()
     await expect(fs.stat(path.join(workspace, 'documents', 'index.json'))).resolves.toBeTruthy()
+    await expect(fs.stat(path.join(workspace, 'documents', 'indexes'))).resolves.toBeTruthy()
     await expect(fs.stat(path.join(workspace, 'channels', 'index.json'))).resolves.toBeTruthy()
     await expect(fs.stat(path.join(workspace, 'memories', 'index.json'))).resolves.toBeTruthy()
     await expect(fs.stat(path.join(workspace, 'settings.json'))).resolves.toBeTruthy()
@@ -75,6 +76,14 @@ describe('SuoraDatabase', () => {
         selectedModel: { id: 'openai:gpt-4.1', provider: 'openai' },
         globalMemories: [{ id: 'global-memory' }],
         channels: [{ id: 'channel-1' }],
+        documentGroups: [{ id: 'document-group-1', name: 'Docs', color: '#12A8A0', createdAt: 1, updatedAt: 1 }],
+        documentNodes: [
+          { id: 'document-1', groupId: 'document-group-1', parentId: null, type: 'document', title: 'Intro', markdown: '# Intro', createdAt: 1, updatedAt: 1 },
+          { id: 'folder-1', groupId: 'document-group-1', parentId: null, type: 'folder', title: 'Specs', createdAt: 2, updatedAt: 2 },
+          { id: 'document-2', groupId: 'document-group-1', parentId: 'folder-1', type: 'document', title: 'Roadmap', markdown: '# Roadmap', createdAt: 3, updatedAt: 3 },
+        ],
+        selectedDocumentGroupId: 'document-group-1',
+        selectedDocumentId: 'document-1',
         agentPipelines: [{ id: 'pipeline-1', updatedAt: 1 }],
         theme: 'dark',
       },
@@ -93,6 +102,29 @@ describe('SuoraDatabase', () => {
     })
     expect(await readJson(path.join(workspace, 'agents', 'agent-1', 'memories.json'))).toEqual([{ id: 'memory-1' }])
     expect(await readJson(path.join(workspace, 'models.json'))).toMatchObject({ providerConfigs: [{ id: 'openai', models: [] }] })
+    const documentIndex = await readJson<{ groups: Array<Record<string, unknown>>; nodes?: unknown[] }>(path.join(workspace, 'documents', 'index.json'))
+    expect(documentIndex).toMatchObject({
+      groups: [{ id: 'document-group-1', name: 'Docs', color: '#12A8A0', indexPath: 'documents/indexes/Docs-index.json', createdAt: 1, updatedAt: 1 }],
+      selectedGroupId: 'document-group-1',
+      selectedDocumentId: 'document-1',
+    })
+    expect(documentIndex.nodes).toBeUndefined()
+    const groupDocumentIndex = await readJson<{ groupId: string; nodes: Array<Record<string, unknown>> }>(path.join(workspace, 'documents', 'indexes', 'Docs-index.json'))
+    expect(groupDocumentIndex).toMatchObject({
+      groupId: 'document-group-1',
+      nodes: [
+        { id: 'document-1', groupId: 'document-group-1', parentId: null, type: 'document', title: 'Intro', filePath: 'documents/Docs/Intro.md', createdAt: 1, updatedAt: 1 },
+        { id: 'folder-1', groupId: 'document-group-1', parentId: null, type: 'folder', title: 'Specs', path: 'documents/Docs/Specs', createdAt: 2, updatedAt: 2 },
+        { id: 'document-2', groupId: 'document-group-1', parentId: 'folder-1', type: 'document', title: 'Roadmap', filePath: 'documents/Docs/Specs/Roadmap.md', createdAt: 3, updatedAt: 3 },
+      ],
+    })
+    expect(groupDocumentIndex.nodes.some((node) => 'markdown' in node)).toBe(false)
+    await expect(fs.readFile(path.join(workspace, 'documents', 'Docs', 'Intro.md'), 'utf-8')).resolves.toBe('# Intro')
+    await expect(fs.readFile(path.join(workspace, 'documents', 'Docs', 'Specs', 'Roadmap.md'), 'utf-8')).resolves.toBe('# Roadmap')
+
+    const settings = await readJson<Record<string, unknown>>(path.join(workspace, 'settings.json'))
+    expect(settings.documentGroups).toBeUndefined()
+    expect(settings.documentNodes).toBeUndefined()
 
     const reopened = await openSuoraDatabase(workspace)
     const restored = safeParse<{ state: Record<string, unknown>; version: number }>((await reopened.getPersistedStore('suora-store')) ?? '{}')
@@ -100,9 +132,80 @@ describe('SuoraDatabase', () => {
     expect(restored.version).toBe(18)
     expect(restored.state.sessions).toEqual([{ id: 'session-1', title: 'Chat', createdAt: 1, updatedAt: 2, messages: [{ id: 'msg-1', role: 'user', content: 'Hi', timestamp: 3 }] }])
     expect(restored.state.selectedAgent).toMatchObject({ id: 'agent-1', memories: [{ id: 'memory-1' }] })
+    expect(restored.state.documentGroups).toEqual([{ id: 'document-group-1', name: 'Docs', color: '#12A8A0', createdAt: 1, updatedAt: 1 }])
+    expect(restored.state.documentNodes).toEqual([
+      { id: 'document-1', groupId: 'document-group-1', parentId: null, type: 'document', title: 'Intro', filePath: 'documents/Docs/Intro.md', markdown: '# Intro', createdAt: 1, updatedAt: 1 },
+      { id: 'folder-1', groupId: 'document-group-1', parentId: null, type: 'folder', title: 'Specs', path: 'documents/Docs/Specs', createdAt: 2, updatedAt: 2 },
+      { id: 'document-2', groupId: 'document-group-1', parentId: 'folder-1', type: 'document', title: 'Roadmap', filePath: 'documents/Docs/Specs/Roadmap.md', markdown: '# Roadmap', createdAt: 3, updatedAt: 3 },
+    ])
+    expect(restored.state.selectedDocumentGroupId).toBe('document-group-1')
+    expect(restored.state.selectedDocumentId).toBe('document-1')
     expect(restored.state.agentPipelines).toEqual([{ id: 'pipeline-1', updatedAt: 1 }])
 
     await reopened.close()
+  })
+
+  it('loads legacy document state from settings when documents index is empty', async () => {
+    const workspace = await makeWorkspace()
+    await fs.mkdir(path.join(workspace, 'documents'), { recursive: true })
+    await fs.writeFile(path.join(workspace, 'documents', 'index.json'), JSON.stringify({ groups: [], nodes: [], selectedGroupId: null, selectedDocumentId: null }))
+    await fs.writeFile(path.join(workspace, 'settings.json'), JSON.stringify({
+      _storeVersion: 18,
+      documentGroups: [{ id: 'legacy-group', name: 'Legacy', color: '#12A8A0', createdAt: 1, updatedAt: 1 }],
+      documentNodes: [{ id: 'legacy-doc', groupId: 'legacy-group', parentId: null, type: 'document', title: 'Legacy Doc', markdown: '', createdAt: 1, updatedAt: 1 }],
+      selectedDocumentGroupId: 'legacy-group',
+      selectedDocumentId: 'legacy-doc',
+    }))
+
+    const appDatabase = await openSuoraDatabase(workspace)
+    const restored = safeParse<{ state: Record<string, unknown>; version: number }>((await appDatabase.getPersistedStore('suora-store')) ?? '{}')
+
+    expect(restored.state.documentGroups).toEqual([{ id: 'legacy-group', name: 'Legacy', color: '#12A8A0', createdAt: 1, updatedAt: 1 }])
+    expect(restored.state.documentNodes).toEqual([{ id: 'legacy-doc', groupId: 'legacy-group', parentId: null, type: 'document', title: 'Legacy Doc', markdown: '', createdAt: 1, updatedAt: 1 }])
+    expect(restored.state.selectedDocumentGroupId).toBe('legacy-group')
+    expect(restored.state.selectedDocumentId).toBe('legacy-doc')
+
+    await appDatabase.close()
+  })
+
+  it('creates empty document folders and removes stale renamed markdown files', async () => {
+    const workspace = await makeWorkspace()
+    const appDatabase = await openSuoraDatabase(workspace)
+    const baseState = {
+      documentGroups: [{ id: 'document-group-1', name: 'Docs', color: '#12A8A0', createdAt: 1, updatedAt: 1 }],
+      selectedDocumentGroupId: 'document-group-1',
+      selectedDocumentId: 'document-1',
+    }
+
+    await appDatabase.savePersistedStore('suora-store', safeStringify({
+      state: {
+        ...baseState,
+        documentNodes: [
+          { id: 'folder-empty', groupId: 'document-group-1', parentId: null, type: 'folder', title: 'Empty', createdAt: 1, updatedAt: 1 },
+          { id: 'document-1', groupId: 'document-group-1', parentId: null, type: 'document', title: 'Untitled Document', markdown: '# Draft', createdAt: 1, updatedAt: 1 },
+        ],
+      },
+      version: 18,
+    }), 18)
+
+    await expect(fs.stat(path.join(workspace, 'documents', 'Docs', 'Empty'))).resolves.toBeTruthy()
+    await expect(fs.readFile(path.join(workspace, 'documents', 'Docs', 'Untitled Document.md'), 'utf-8')).resolves.toBe('# Draft')
+
+    await appDatabase.savePersistedStore('suora-store', safeStringify({
+      state: {
+        ...baseState,
+        documentNodes: [
+          { id: 'folder-empty', groupId: 'document-group-1', parentId: null, type: 'folder', title: 'Empty', createdAt: 1, updatedAt: 2 },
+          { id: 'document-1', groupId: 'document-group-1', parentId: null, type: 'document', title: 'Roadmap', markdown: '# Roadmap', createdAt: 1, updatedAt: 2 },
+        ],
+      },
+      version: 18,
+    }), 18)
+
+    await expect(fs.stat(path.join(workspace, 'documents', 'Docs', 'Untitled Document.md'))).rejects.toThrow()
+    await expect(fs.readFile(path.join(workspace, 'documents', 'Docs', 'Roadmap.md'), 'utf-8')).resolves.toBe('# Roadmap')
+
+    await appDatabase.close()
   })
 
   it('persists generic store payloads in settings metadata', async () => {
