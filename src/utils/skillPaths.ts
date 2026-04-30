@@ -112,6 +112,14 @@ export function getSkillFileIcon(pathValue: string, executable = false): string 
 }
 
 /**
+ * Returns true when a file at this resource path should default to being marked
+ * executable (currently: anything under `scripts/`).
+ */
+export function isSkillResourceExecutable(pathValue: string): boolean {
+  return normalizeSkillResourcePath(pathValue).toLowerCase().startsWith('scripts/')
+}
+
+/**
  * Suggested default file name when the user creates a new file inside the
  * given parent folder. Returns the bare file name (no parent path).
  */

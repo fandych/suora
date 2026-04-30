@@ -15,6 +15,8 @@ import {
   getSkillFileIcon,
   isEditableSkillFile,
   isSafeSkillResourcePath,
+  isSkillResourceExecutable,
+  isSkillTopLevelFolder,
 } from '@/utils/skillPaths'
 import {
   settingsCheckboxClass,
@@ -113,7 +115,7 @@ function sortResources(resources: SkillBundledResource[]): SkillBundledResource[
 
 function topFolderOf(pathValue: string): SkillTopLevelFolder | null {
   const top = normalizeResourcePath(pathValue).split('/')[0]
-  return (SKILL_TOP_LEVEL_FOLDERS as readonly string[]).includes(top) ? (top as SkillTopLevelFolder) : null
+  return isSkillTopLevelFolder(top) ? top : null
 }
 
 
@@ -434,7 +436,7 @@ function ResourceTreePanel({
               path: newPath,
               type: 'file',
               size: 0,
-              executable: newPath.toLowerCase().startsWith('scripts/'),
+              executable: isSkillResourceExecutable(newPath),
             },
           ],
         })
@@ -480,7 +482,7 @@ function ResourceTreePanel({
           path: resourcePath,
           type: 'file',
           size: file.size,
-          executable: uploadFolder === 'scripts',
+          executable: isSkillResourceExecutable(resourcePath),
         },
       ],
     })

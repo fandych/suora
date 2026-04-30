@@ -7,6 +7,7 @@ import {
   getSkillResourceExtension,
   isEditableSkillFile,
   isSafeSkillResourcePath,
+  isSkillResourceExecutable,
   isSkillTopLevelFolder,
   normalizeSkillResourcePath,
 } from './skillPaths'
@@ -146,6 +147,17 @@ describe('skillPaths', () => {
       expect(getDefaultSkillFileName('other')).toBe('file.md')
       // sub-folders pick up their top-level parent's default
       expect(getDefaultSkillFileName('scripts/sub')).toBe('helper.sh')
+    })
+  })
+
+  describe('isSkillResourceExecutable', () => {
+    it('marks files under scripts/ as executable, others as not', () => {
+      expect(isSkillResourceExecutable('scripts/run.sh')).toBe(true)
+      expect(isSkillResourceExecutable('Scripts/run.sh')).toBe(true) // case-insensitive
+      expect(isSkillResourceExecutable('scripts/sub/run.py')).toBe(true)
+      expect(isSkillResourceExecutable('references/intro.md')).toBe(false)
+      expect(isSkillResourceExecutable('assets/logo.png')).toBe(false)
+      expect(isSkillResourceExecutable('other/data.json')).toBe(false)
     })
   })
 })
