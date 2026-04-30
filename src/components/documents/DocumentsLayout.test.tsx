@@ -136,7 +136,7 @@ describe('DocumentsLayout', () => {
     expect(useAppStore.getState().documentNodes.filter((node) => node.type === 'document')).toHaveLength(1)
   })
 
-  it('normalizes .md while renaming documents from the tree', async () => {
+  it('preserves script extensions and uses source editing for non-markdown documents', async () => {
     const user = userEvent.setup()
     const group = createDocumentGroup('Docs')
     const rootDoc = createDocument(group.id, null, 'Intro')
@@ -154,14 +154,39 @@ describe('DocumentsLayout', () => {
     await user.click(screen.getByRole('button', { name: 'Rename: Intro.md' }))
     const nodeNameInput = screen.getByRole('textbox', { name: 'Document or folder name' })
     await user.clear(nodeNameInput)
-    await user.type(nodeNameInput, 'Plan.md')
+    await user.type(nodeNameInput, 'deploy.sh')
     await user.keyboard('{Enter}')
 
     await waitFor(() => {
-      expect(useAppStore.getState().documentNodes.some((node) => node.id === rootDoc.id && node.type === 'document' && node.title === 'Plan')).toBe(true)
+      expect(useAppStore.getState().documentNodes.some((node) => node.id === rootDoc.id && node.type === 'document' && node.title === 'deploy.sh')).toBe(true)
     })
 
-    expect(screen.getByText('Plan.md')).toBeInTheDocument()
+    expect(screen.getByText('deploy.sh')).toBeInTheDocument()
+    expect(screen.getByText('SH')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Editor' })).toBeDisabled()
+    expect(screen.getByPlaceholderText('Edit this text or script file.')).toBeInTheDocument()
+  })
+
+  it('surfaces markdown image references as document assets', () => {
+    const group = createDocumentGroup('Docs')
+    const rootDoc = {
+      ...createDocument(group.id, null, 'Intro'),
+      markdown: '# Intro\n\n![Logo](./assets/logo.png "Logo")',
+    }
+
+    useAppStore.setState({
+      locale: 'en',
+      documentGroups: [group],
+      documentNodes: [rootDoc],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: rootDoc.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    expect(screen.getByText('Assets')).toBeInTheDocument()
+    expect(screen.getByText('./assets/logo.png')).toBeInTheDocument()
+    expect(screen.getByText('Logo')).toBeInTheDocument()
   })
 
   it('clears document tree inputs when creating a new group', async () => {

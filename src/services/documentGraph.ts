@@ -1,4 +1,5 @@
 import type { DocumentGroup, DocumentItem, DocumentNode } from '@/types'
+import { getDocumentDisplayName } from '@/services/documents'
 
 export type DocumentGraphNodeType = 'group' | 'folder' | 'document' | 'tag' | 'external-link'
 export type DocumentGraphEdgeType = 'contains' | 'references' | 'tagged' | 'external-link'
@@ -88,7 +89,7 @@ function edgeId(type: DocumentGraphEdgeType, source: string, target: string, suf
 
 export function buildDocumentPath(node: DocumentNode, nodes: DocumentNode[]): string {
   const byId = new Map(nodes.map((item) => [item.id, item]))
-  const displayTitle = (item: DocumentNode) => item.type === 'document' && !/\.md$/i.test(item.title) ? `${item.title}.md` : item.title
+  const displayTitle = (item: DocumentNode) => item.type === 'document' ? getDocumentDisplayName(item.title) : item.title
   const parts = [displayTitle(node)]
   let parentId = node.parentId
   while (parentId) {

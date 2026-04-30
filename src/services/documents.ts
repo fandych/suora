@@ -8,6 +8,92 @@ export interface DocumentSearchResult {
   excerpt: string
 }
 
+export interface DocumentAssetReference {
+  type: 'image'
+  alt: string
+  source: string
+  title?: string
+}
+
+const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdx'])
+const TEXT_DOCUMENT_EXTENSIONS = new Set([
+  ...MARKDOWN_EXTENSIONS,
+  '.txt',
+  '.text',
+  '.log',
+  '.csv',
+  '.tsv',
+  '.json',
+  '.jsonl',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.ini',
+  '.env',
+  '.gitignore',
+  '.sh',
+  '.bash',
+  '.zsh',
+  '.ps1',
+  '.bat',
+  '.cmd',
+  '.js',
+  '.jsx',
+  '.ts',
+  '.tsx',
+  '.mjs',
+  '.cjs',
+  '.py',
+  '.rb',
+  '.go',
+  '.rs',
+  '.java',
+  '.kt',
+  '.kts',
+  '.c',
+  '.h',
+  '.cpp',
+  '.hpp',
+  '.cs',
+  '.php',
+  '.swift',
+  '.sql',
+  '.html',
+  '.css',
+  '.scss',
+  '.xml',
+  '.svg',
+])
+
+export function getDocumentExtension(title: string): string {
+  const normalized = title.trim()
+  const basename = normalized.split(/[\\/]/).pop() ?? normalized
+  if (!basename || basename.startsWith('.') && !basename.slice(1).includes('.')) return basename.startsWith('.') ? basename.toLowerCase() : ''
+  const index = basename.lastIndexOf('.')
+  return index > 0 ? basename.slice(index).toLowerCase() : ''
+}
+
+export function isMarkdownDocumentTitle(title: string): boolean {
+  const extension = getDocumentExtension(title)
+  return extension === '' || MARKDOWN_EXTENSIONS.has(extension)
+}
+
+export function isSupportedTextDocumentTitle(title: string): boolean {
+  const extension = getDocumentExtension(title)
+  return extension === '' || TEXT_DOCUMENT_EXTENSIONS.has(extension)
+}
+
+export function getDocumentDisplayName(title: string): string {
+  return getDocumentExtension(title) ? title : `${title}.md`
+}
+
+export function getDocumentKindLabel(title: string): string {
+  const extension = getDocumentExtension(title)
+  if (!extension || MARKDOWN_EXTENSIONS.has(extension)) return 'Markdown'
+  if (!TEXT_DOCUMENT_EXTENSIONS.has(extension)) return 'Text'
+  return extension.slice(1).toUpperCase()
+}
+
 export function createDocumentId(prefix: string): string {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
@@ -25,13 +111,16 @@ export function createDocumentGroup(name = 'New Document Group'): DocumentGroup 
 
 export function createDocument(groupId: string, parentId: string | null, title = 'Untitled Document'): DocumentItem {
   const now = Date.now()
+  const isMarkdown = isMarkdownDocumentTitle(title)
   return {
     id: createDocumentId('doc'),
     groupId,
     parentId,
     type: 'document',
     title,
-    markdown: `# ${title}\n\nStart writing in Markdown. Use [[Document Title]] to reference another note.`,
+    markdown: isMarkdown
+      ? `# ${getDocumentDisplayName(title).replace(/\.(md|markdown|mdx)$/i, '')}\n\nStart writing in Markdown. Use [[Document Title]] to reference another note. Images can be referenced with ![alt](./image.png).`
+      : '',
     createdAt: now,
     updatedAt: now,
   }
@@ -58,6 +147,25 @@ export function findReferencedDocuments(markdown: string, documents: DocumentIte
   const refs = extractMarkdownReferences(markdown).map((ref) => ref.toLowerCase())
   if (refs.length === 0) return []
   return documents.filter((doc) => refs.includes(doc.title.toLowerCase()) || refs.includes(doc.id.toLowerCase()))
+}
+
+export function extractMarkdownImageReferences(markdown: string): DocumentAssetReference[] {
+  const refs = new Map<string, DocumentAssetReference>()
+  const imagePattern = /!\[([^\]\n]*)\]\(\s*([^\s)]+)(?:\s+["']([^"']+)["'])?\s*\)/g
+
+  let match: RegExpExecArray | null
+  while ((match = imagePattern.exec(markdown)) !== null) {
+    const source = match[2].trim()
+    if (!source) continue
+    refs.set(source, {
+      type: 'image',
+      alt: match[1].trim(),
+      source,
+      title: match[3]?.trim(),
+    })
+  }
+
+  return Array.from(refs.values())
 }
 
 // ── Tiptap JSON → Markdown serializer ──────────────────────────────────────
