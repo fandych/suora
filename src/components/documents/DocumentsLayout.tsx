@@ -1086,18 +1086,21 @@ export function DocumentsLayout() {
                   {activeDocumentKindLabel}
                 </span>
                 <div className="flex rounded-2xl border border-border-subtle/55 bg-surface-0/45 p-1">
-                  {(['editor', 'source', 'graph'] as const).map((value) => (
-                    <button
-                      key={value}
-                      type="button"
-                      onClick={() => setMode(value)}
-                      disabled={value === 'editor' && !activeDocumentIsMarkdown}
-                      title={value === 'editor' && !activeDocumentIsMarkdown ? t('documents.markdownEditorOnly', 'Rich editor is available for Markdown files only.') : undefined}
-                      className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : value === 'editor' && !activeDocumentIsMarkdown ? 'cursor-not-allowed text-text-muted/35' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
-                    >
-                      {value === 'editor' ? t('documents.editor', 'Editor') : value === 'source' ? t('documents.source', 'Source') : t('documents.graph', 'Graph')}
-                    </button>
-                  ))}
+                  {(['editor', 'source', 'graph'] as const).map((value) => {
+                    const isEditorUnavailable = value === 'editor' && !activeDocumentIsMarkdown
+                    return (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setMode(value)}
+                        disabled={isEditorUnavailable}
+                        title={isEditorUnavailable ? t('documents.markdownEditorOnly', 'Rich editor is available for Markdown files only.') : undefined}
+                        className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : isEditorUnavailable ? 'cursor-not-allowed text-text-muted/35' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
+                      >
+                        {value === 'editor' ? t('documents.editor', 'Editor') : value === 'source' ? t('documents.source', 'Source') : t('documents.graph', 'Graph')}
+                      </button>
+                    )
+                  })}
                 </div>
                 <button type="button" onClick={deleteActiveDocument} aria-label={t('documents.deleteCurrentDocument', 'Delete current document')} className="rounded-2xl border border-danger/20 bg-danger/10 px-3 py-2 text-[11px] font-semibold text-danger/90 hover:bg-danger/15">
                   {t('common.delete', 'Delete')}

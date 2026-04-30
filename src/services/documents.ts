@@ -69,7 +69,8 @@ export function getDocumentExtension(title: string): string {
   const normalized = title.trim()
   const basename = normalized.split(/[\\/]/).pop() ?? normalized
   if (!basename) return ''
-  if (basename.startsWith('.') && !basename.slice(1).includes('.')) return basename.toLowerCase()
+  const isDotfileWithoutExtension = basename.startsWith('.') && !basename.slice(1).includes('.')
+  if (isDotfileWithoutExtension) return basename.toLowerCase()
   const index = basename.lastIndexOf('.')
   return index > 0 ? basename.slice(index).toLowerCase() : ''
 }
@@ -93,6 +94,10 @@ export function getDocumentKindLabel(title: string): string {
   if (!extension || MARKDOWN_EXTENSIONS.has(extension)) return 'Markdown'
   if (!TEXT_DOCUMENT_EXTENSIONS.has(extension)) return 'File'
   return extension.slice(1).toUpperCase()
+}
+
+function getMarkdownHeadingTitle(title: string): string {
+  return getDocumentDisplayName(title).replace(/\.(md|markdown|mdx)$/i, '')
 }
 
 export function createDocumentId(prefix: string): string {
@@ -120,7 +125,7 @@ export function createDocument(groupId: string, parentId: string | null, title =
     type: 'document',
     title,
     markdown: isMarkdown
-      ? `# ${getDocumentDisplayName(title).replace(/\.(md|markdown|mdx)$/i, '')}\n\nStart writing in Markdown. Use [[Document Title]] to reference another note. Images can be referenced with ![alt](./image.png).`
+      ? `# ${getMarkdownHeadingTitle(title)}\n\nStart writing in Markdown. Use [[Document Title]] to reference another note. Images can be referenced with ![alt](./image.png).`
       : '',
     createdAt: now,
     updatedAt: now,
