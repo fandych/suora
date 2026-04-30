@@ -917,7 +917,6 @@ export function DocumentsLayout() {
   const commitRenameNode = () => {
     if (!editingNodeId) return
 
-    const editingNode = documentNodes.find((node) => node.id === editingNodeId) ?? null
     const nextTitle = editingTitle.trim()
     if (!nextTitle) {
       cancelRenameNode()

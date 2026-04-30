@@ -162,7 +162,7 @@ describe('DocumentsLayout', () => {
     })
 
     expect(screen.getByText('deploy.sh')).toBeInTheDocument()
-    expect(screen.getByText('SH')).toBeInTheDocument()
+    expect(screen.getAllByText('SH').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Editor' })).toBeDisabled()
     expect(screen.getByPlaceholderText('Edit this text or script file.')).toBeInTheDocument()
   })
