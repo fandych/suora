@@ -97,17 +97,31 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
         ...node,
         x: centerX + Math.cos(angle) * radius,
         y: centerY + Math.sin(angle) * radius,
-        active: node.documentId === selectedDocumentId || node.id === selectedNodeId,
-        related: relatedNodeIds.has(node.id),
+        // Selection-driven flags are derived in the render layer below so that
+        // changing the active node does not invalidate the layout memo.
+        active: false,
+        related: false,
       }
     })
-  }, [graph.nodes, query, relatedNodeIds, selectedDocumentId, selectedNodeId, visibleNodeIds])
+  }, [graph.nodes, query, visibleNodeIds])
 
   const positionedById = useMemo(() => new Map(positionedNodes.map((node) => [node.id, node])), [positionedNodes])
+  const decoratedNodes = useMemo<PositionedNode[]>(
+    () => positionedNodes.map((node) => ({
+      ...node,
+      active: node.documentId === selectedDocumentId || node.id === selectedNodeId,
+      related: relatedNodeIds.has(node.id),
+    })),
+    [positionedNodes, relatedNodeIds, selectedDocumentId, selectedNodeId],
+  )
+  const decoratedById = useMemo(() => new Map(decoratedNodes.map((node) => [node.id, node])), [decoratedNodes])
   const visibleEdges = filteredEdges.filter((edge) => positionedById.has(edge.source) && positionedById.has(edge.target))
   const selectedNode = (selectedNodeId && graph.nodes.find((node) => node.id === selectedNodeId)) || (selectedDocumentId && graph.nodes.find((node) => node.documentId === selectedDocumentId)) || null
   const backlinks = selectedDocumentId ? graph.backlinksByDocumentId[selectedDocumentId] ?? [] : []
-  const graphifyPreview = useMemo(() => JSON.stringify(toGraphifyExport(graph), null, 2).slice(0, GRAPHIFY_PREVIEW_MAX_CHARS), [graph])
+  const graphifyPreview = useMemo(
+    () => showExport ? JSON.stringify(toGraphifyExport(graph), null, 2).slice(0, GRAPHIFY_PREVIEW_MAX_CHARS) : '',
+    [graph, showExport],
+  )
 
   const toggleEdge = (edgeType: DocumentGraphEdgeType) => {
     setEnabledEdges((prev) => {
@@ -151,8 +165,8 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
             </filter>
           </defs>
           {visibleEdges.map((edge) => {
-            const source = positionedById.get(edge.source)
-            const target = positionedById.get(edge.target)
+            const source = decoratedById.get(edge.source)
+            const target = decoratedById.get(edge.target)
             if (!source || !target) return null
             const highlighted = source.related || target.related || source.active || target.active
             return (
@@ -170,7 +184,7 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
               </g>
             )
           })}
-          {positionedNodes.map((node) => {
+          {decoratedNodes.map((node) => {
             const style = NODE_STYLE[node.type]
             const documentId = node.documentId
             const radius = style.radius + Math.min(10, node.weight)

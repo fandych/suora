@@ -150,9 +150,20 @@ export function extractMarkdownReferences(markdown: string): string[] {
 }
 
 export function findReferencedDocuments(markdown: string, documents: DocumentItem[]): DocumentItem[] {
-  const refs = extractMarkdownReferences(markdown).map((ref) => ref.toLowerCase())
+  const refs = extractMarkdownReferences(markdown)
   if (refs.length === 0) return []
-  return documents.filter((doc) => refs.includes(doc.title.toLowerCase()) || refs.includes(doc.id.toLowerCase()))
+
+  const refSet = new Set(refs.map((ref) => ref.toLowerCase()))
+  const matched = new Map<string, DocumentItem>()
+
+  for (const doc of documents) {
+    if (matched.has(doc.id)) continue
+    if (refSet.has(doc.title.toLowerCase()) || refSet.has(doc.id.toLowerCase())) {
+      matched.set(doc.id, doc)
+    }
+  }
+
+  return Array.from(matched.values())
 }
 
 export function extractMarkdownImageReferences(markdown: string): DocumentAssetReference[] {
@@ -286,8 +297,9 @@ export function tiptapJsonToMarkdown(json: TiptapNode): string {
 
 export function searchDocuments(nodes: DocumentNode[], groupId: string | null, query: string): DocumentSearchResult[] {
   const q = query.trim().toLowerCase()
+  if (!q) return []
+
   const docs = nodes.filter((node): node is DocumentItem => node.type === 'document' && (!groupId || node.groupId === groupId))
-  if (!q) return docs.sort((a, b) => b.updatedAt - a.updatedAt).map((node) => ({ node, score: 0, excerpt: node.markdown.slice(0, 120) }))
 
   return docs
     .map((node) => {

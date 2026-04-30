@@ -53,11 +53,14 @@ interface DocumentReference {
   target: string
 }
 
-const TAG_PATTERN = /(?:^|\s)#([\p{L}\p{N}_/-]{2,})/gu
-const WIKI_REFERENCE_PATTERN = /\[\[([^\]\n]+)\]\]/g
-const DOC_LINK_PATTERN = /\[([^\]\n]+)\]\(#doc:([^)]+)\)/g
-const MARKDOWN_EXTERNAL_LINK_PATTERN = /\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g
-const RAW_EXTERNAL_LINK_PATTERN = /(^|[\s(])(https?:\/\/[^\s)]+)/g
+// Regex factories: each call returns a fresh /g regex so `lastIndex` state cannot
+// leak between invocations (which would happen if these were module-level constants
+// shared across concurrent or nested callers).
+const makeTagPattern = () => /(?:^|\s)#([\p{L}\p{N}_/-]{2,})/gu
+const makeWikiReferencePattern = () => /\[\[([^\]\n]+)\]\]/g
+const makeDocLinkPattern = () => /\[([^\]\n]+)\]\(#doc:([^)]+)\)/g
+const makeMarkdownExternalLinkPattern = () => /\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g
+const makeRawExternalLinkPattern = () => /(^|[\s(])(https?:\/\/[^\s)]+)/g
 
 function isDocument(node: DocumentNode): node is DocumentItem {
   return node.type === 'document'
@@ -87,8 +90,8 @@ function edgeId(type: DocumentGraphEdgeType, source: string, target: string, suf
   return `doc-graph-edge:${type}:${source}->${target}${suffix ? `:${suffix}` : ''}`
 }
 
-export function buildDocumentPath(node: DocumentNode, nodes: DocumentNode[]): string {
-  const byId = new Map(nodes.map((item) => [item.id, item]))
+export function buildDocumentPath(node: DocumentNode, nodes: DocumentNode[], nodeById?: Map<string, DocumentNode>): string {
+  const byId = nodeById ?? new Map(nodes.map((item) => [item.id, item]))
   const displayTitle = (item: DocumentNode) => item.type === 'document' ? getDocumentDisplayName(item.title) : item.title
   const parts = [displayTitle(node)]
   let parentId = node.parentId
@@ -103,14 +106,13 @@ export function buildDocumentPath(node: DocumentNode, nodes: DocumentNode[]): st
 
 export function extractDocumentReferenceTargets(markdown: string): DocumentReference[] {
   const refs = new Map<string, DocumentReference>()
-  let match: RegExpExecArray | null
 
-  while ((match = WIKI_REFERENCE_PATTERN.exec(markdown)) !== null) {
+  for (const match of markdown.matchAll(makeWikiReferencePattern())) {
     const target = match[1].trim()
     if (target) refs.set(`wiki:${target.toLowerCase()}`, { label: target, target })
   }
 
-  while ((match = DOC_LINK_PATTERN.exec(markdown)) !== null) {
+  for (const match of markdown.matchAll(makeDocLinkPattern())) {
     const label = match[1].trim()
     const target = match[2].trim()
     if (target) refs.set(`doc:${target.toLowerCase()}`, { label: label || target, target })
@@ -140,8 +142,7 @@ export function extractDocumentTags(markdown: string): string[] {
     }
   }
 
-  let match: RegExpExecArray | null
-  while ((match = TAG_PATTERN.exec(markdown)) !== null) {
+  for (const match of markdown.matchAll(makeTagPattern())) {
     tags.add(match[1])
   }
 
@@ -150,13 +151,12 @@ export function extractDocumentTags(markdown: string): string[] {
 
 export function extractExternalLinks(markdown: string): string[] {
   const links = new Set<string>()
-  let match: RegExpExecArray | null
 
-  while ((match = MARKDOWN_EXTERNAL_LINK_PATTERN.exec(markdown)) !== null) {
+  for (const match of markdown.matchAll(makeMarkdownExternalLinkPattern())) {
     links.add(match[2])
   }
 
-  while ((match = RAW_EXTERNAL_LINK_PATTERN.exec(markdown)) !== null) {
+  for (const match of markdown.matchAll(makeRawExternalLinkPattern())) {
     links.add(match[2])
   }
 
@@ -172,8 +172,11 @@ export function buildDocumentGraph(
   const scopedGroupIds = new Set(scopedGroups.map((group) => group.id))
   const scopedNodes = nodes.filter((node) => scopedGroupIds.has(node.groupId))
   const documents = scopedNodes.filter(isDocument)
-  const nodeById = new Map(scopedNodes.map((node) => [node.id, node]))
-  const documentByLookup = new Map<string, DocumentItem>()
+  const nodeById = new Map<string, DocumentNode>(scopedNodes.map((node) => [node.id, node]))
+  // Two distinct lookup maps so that a document whose title equals another
+  // document's id cannot accidentally hijack reference resolution.
+  const documentById = new Map<string, DocumentItem>()
+  const documentByTitle = new Map<string, DocumentItem>()
   const graphNodes = new Map<string, DocumentGraphNode>()
   const graphEdges = new Map<string, DocumentGraphEdge>()
   const backlinksByDocumentId: Record<string, string[]> = {}
@@ -181,11 +184,18 @@ export function buildDocumentGraph(
   const tags = new Set<string>()
 
   documents.forEach((doc) => {
-    documentByLookup.set(doc.id.toLowerCase(), doc)
-    documentByLookup.set(doc.title.toLowerCase(), doc)
+    documentById.set(doc.id.toLowerCase(), doc)
+    // Last-write wins for duplicate titles, matching the prior behavior; the
+    // unresolved/ambiguous case can be surfaced separately if needed.
+    documentByTitle.set(doc.title.toLowerCase(), doc)
     backlinksByDocumentId[doc.id] = []
     referencesByDocumentId[doc.id] = []
   })
+
+  const lookupDocument = (target: string): DocumentItem | undefined => {
+    const key = target.toLowerCase()
+    return documentById.get(key) ?? documentByTitle.get(key)
+  }
 
   const addNode = (node: DocumentGraphNode) => {
     graphNodes.set(node.id, node)
@@ -220,7 +230,7 @@ export function buildDocumentGraph(
       folderId: node.type === 'folder' ? node.id : undefined,
       weight: 1,
       metadata: {
-        path: buildDocumentPath(node, scopedNodes),
+        path: buildDocumentPath(node, scopedNodes, nodeById),
         excerpt: node.type === 'document' ? node.markdown.replace(/\s+/g, ' ').trim().slice(0, 180) : undefined,
       },
     })
@@ -245,7 +255,7 @@ export function buildDocumentGraph(
     const docNodeId = graphNodeId(doc)
 
     extractDocumentReferenceTargets(doc.markdown).forEach((reference) => {
-      const targetDoc = documentByLookup.get(reference.target.toLowerCase())
+      const targetDoc = lookupDocument(reference.target)
       if (!targetDoc || targetDoc.id === doc.id) return
 
       const targetNodeId = graphNodeId(targetDoc)

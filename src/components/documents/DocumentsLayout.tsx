@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -219,6 +219,9 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
   // that occur when switching between documents, avoiding a feedback loop where
   // the reset triggers onUpdate which would overwrite the incoming document's markdown.
   const isSyncingFromPropsRef = useRef(false)
+  // Track the last markdown emitted by this editor so we can distinguish between
+  // external updates (from the store, e.g. AI write) and our own debounced flushes.
+  const lastEmittedMarkdownRef = useRef(document.markdown)
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -239,19 +242,29 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
       if (isSyncingFromPropsRef.current) return
       const json = ed.getJSON()
       const markdown = tiptapJsonToMarkdown(json as Parameters<typeof tiptapJsonToMarkdown>[0])
+      lastEmittedMarkdownRef.current = markdown
       onUpdate(markdown)
     },
   })
 
+  const previousDocumentIdRef = useRef(document.id)
+
   useEffect(() => {
     if (!editor || editor.isDestroyed) return
-    // Only sync editor content when the document identity (id) changes, not on every
-    // markdown keystroke — this intentionally avoids overwriting in-flight user edits
-    // that haven't been flushed to the store yet.
+    const documentChanged = previousDocumentIdRef.current !== document.id
+    // Sync editor content when the document identity changes, or when the
+    // document's markdown is updated externally (e.g. AI generation, import)
+    // to a value the editor itself did not just emit. The lastEmittedMarkdownRef
+    // guard avoids overwriting in-flight user edits during the debounce window.
+    // We always force a sync on identity change so a new document whose
+    // markdown coincidentally equals the previous emission still loads.
+    if (!documentChanged && document.markdown === lastEmittedMarkdownRef.current) return
     isSyncingFromPropsRef.current = true
     editor.commands.setContent(markdownToTiptapHtml(document.markdown), { emitUpdate: false })
+    lastEmittedMarkdownRef.current = document.markdown
+    previousDocumentIdRef.current = document.id
     isSyncingFromPropsRef.current = false
-  }, [document.id])
+  }, [document.id, document.markdown, editor])
 
   return <EditorContent editor={editor} className="document-tiptap-wysiwyg h-full" />
 }
@@ -637,6 +650,79 @@ function GroupTreeNode({
   )
 }
 
+const EMPTY_SEARCH_RESULTS: ReturnType<typeof searchDocuments> = []
+
+// Debounce window for syncing the document title and source-mode markdown into
+// the global store. Keeps editing responsive (local state is the source of
+// truth while typing) without triggering whole-document-tree recomputation on
+// every keystroke.
+const DOCUMENT_FIELD_DEBOUNCE_MS = 250
+
+function useDebouncedSync<T>(initialValue: T, identityKey: string, onFlush: (next: T) => void): [T, (next: T) => void, () => void] {
+  const [value, setValue] = useState(initialValue)
+  const onFlushRef = useRef(onFlush)
+  const lastFlushedRef = useRef(initialValue)
+
+  useEffect(() => {
+    onFlushRef.current = onFlush
+  }, [onFlush])
+
+  // When the upstream identity (e.g. document id) changes, accept the new
+  // value as the local source of truth and skip flushing. The same applies
+  // when the upstream value is updated externally to something we did not just
+  // emit ourselves.
+  useEffect(() => {
+    setValue(initialValue)
+    lastFlushedRef.current = initialValue
+  }, [identityKey, initialValue])
+
+  useEffect(() => {
+    if (Object.is(value, lastFlushedRef.current)) return
+    const handle = setTimeout(() => {
+      lastFlushedRef.current = value
+      onFlushRef.current(value)
+    }, DOCUMENT_FIELD_DEBOUNCE_MS)
+    return () => clearTimeout(handle)
+  }, [value])
+
+  const flushNow = useCallback(() => {
+    if (Object.is(value, lastFlushedRef.current)) return
+    lastFlushedRef.current = value
+    onFlushRef.current(value)
+  }, [value])
+
+  return [value, setValue, flushNow]
+}
+
+function DocumentTitleInput({ document, onUpdate, ariaLabel }: { document: DocumentItem; onUpdate: (title: string) => void; ariaLabel: string }) {
+  const handleFlush = useCallback((next: string) => onUpdate(next), [onUpdate])
+  const [value, setValue, flushNow] = useDebouncedSync(document.title, document.id, handleFlush)
+  return (
+    <input
+      value={value}
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={flushNow}
+      aria-label={ariaLabel}
+      className="w-full bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary outline-none placeholder:text-text-muted"
+    />
+  )
+}
+
+function DocumentSourceTextarea({ document, onUpdate, spellCheck, placeholder }: { document: DocumentItem; onUpdate: (markdown: string) => void; spellCheck: boolean; placeholder: string }) {
+  const handleFlush = useCallback((next: string) => onUpdate(next), [onUpdate])
+  const [value, setValue, flushNow] = useDebouncedSync(document.markdown, document.id, handleFlush)
+  return (
+    <textarea
+      value={value}
+      onChange={(event) => setValue(event.target.value)}
+      onBlur={flushNow}
+      spellCheck={spellCheck}
+      className="h-full w-full resize-none rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-5 font-(--font-code) text-[13px] leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none placeholder:text-text-muted focus:border-accent/30 focus:ring-4 focus:ring-accent/10"
+      placeholder={placeholder}
+    />
+  )
+}
+
 export function DocumentsLayout() {
   const { t } = useI18n()
   const [panelWidth, setPanelWidth] = useResizablePanel('documents', 310)
@@ -673,9 +759,24 @@ export function DocumentsLayout() {
   const activeDocumentKindLabel = activeDocument ? getDocumentKindLabel(activeDocument.title) : ''
   const activeDocumentExtension = activeDocument ? getDocumentExtension(activeDocument.title) || '.md' : ''
   const groupDocuments = useMemo(() => groupNodes.filter((node): node is DocumentItem => node.type === 'document'), [groupNodes])
-  const searchResults = useMemo(() => searchDocuments(documentNodes, null, deferredQuery), [documentNodes, deferredQuery])
+  const documentNodeById = useMemo(() => new Map<string, DocumentNode>(documentNodes.map((node) => [node.id, node])), [documentNodes])
+  const searchResults = useMemo(
+    () => deferredQuery.trim() ? searchDocuments(documentNodes, null, deferredQuery) : EMPTY_SEARCH_RESULTS,
+    [documentNodes, deferredQuery],
+  )
   const referencedDocuments = useMemo(() => activeDocument ? findReferencedDocuments(activeDocument.markdown, groupDocuments).filter((doc) => doc.id !== activeDocument.id) : [], [activeDocument, groupDocuments])
   const imageReferences = useMemo(() => activeDocument && activeDocumentIsMarkdown ? extractMarkdownImageReferences(activeDocument.markdown) : [], [activeDocument, activeDocumentIsMarkdown])
+  const documentOutline = useMemo(() => {
+    if (!activeDocument) return [] as string[]
+    const headings: string[] = []
+    for (const line of activeDocument.markdown.split('\n')) {
+      if (/^#{1,3}\s+/.test(line)) {
+        headings.push(line.replace(/^#{1,3}\s+/, ''))
+        if (headings.length >= 12) break
+      }
+    }
+    return headings
+  }, [activeDocument?.id, activeDocument?.markdown])
   const shouldShowDocumentGraph = mode === 'graph' || !activeDocument
   const documentGraph = useMemo(
     () => shouldShowDocumentGraph ? buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroupId }) : EMPTY_DOCUMENT_GRAPH,
@@ -1017,7 +1118,7 @@ export function DocumentsLayout() {
                     {searchResults.map(({ node, excerpt }) => (
                       <button key={node.id} type="button" onClick={() => openDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
                         <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
-                        <div className="mt-1 truncate text-[10px] text-text-muted">{groupNameById.get(node.groupId) ?? t('documents.groups', 'Groups')} / {buildDocumentPath(node, documentNodes)}</div>
+                        <div className="mt-1 truncate text-[10px] text-text-muted">{groupNameById.get(node.groupId) ?? t('documents.groups', 'Groups')} / {buildDocumentPath(node, documentNodes, documentNodeById)}</div>
                         <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
                       </button>
                     ))}
@@ -1071,14 +1172,13 @@ export function DocumentsLayout() {
           <>
             <header className="flex min-h-0 shrink-0 items-center justify-between gap-4 border-b border-border-subtle/80 bg-surface-1/72 px-5 py-3">
               <div className="min-w-0 flex-1">
-                <input
-                  value={activeDocument.title}
-                  onChange={(event) => updateDocumentNode(activeDocument.id, { title: event.target.value })}
-                  aria-label={t('documents.documentTitle', 'Document title')}
-                  className="w-full bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary outline-none placeholder:text-text-muted"
+                <DocumentTitleInput
+                  document={activeDocument}
+                  onUpdate={(title) => updateDocumentNode(activeDocument.id, { title })}
+                  ariaLabel={t('documents.documentTitle', 'Document title')}
                 />
-                <p className="mt-1 truncate text-[11px] text-text-muted" aria-label={`${activeGroup?.name ?? ''} / ${buildDocumentPath(activeDocument, documentNodes)}`}>
-                  {activeGroup?.name} / {buildDocumentPath(activeDocument, documentNodes)}
+                <p className="mt-1 truncate text-[11px] text-text-muted" aria-label={`${activeGroup?.name ?? ''} / ${buildDocumentPath(activeDocument, documentNodes, documentNodeById)}`}>
+                  {activeGroup?.name} / {buildDocumentPath(activeDocument, documentNodes, documentNodeById)}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -1117,11 +1217,10 @@ export function DocumentsLayout() {
                     />
                   </div>
                 ) : mode === 'source' ? (
-                  <textarea
-                    value={activeDocument.markdown}
-                    onChange={(event) => updateDocumentNode(activeDocument.id, { markdown: event.target.value })}
+                  <DocumentSourceTextarea
+                    document={activeDocument}
+                    onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}
                     spellCheck={activeDocumentIsMarkdown || activeDocumentExtension === '.txt'}
-                    className="h-full w-full resize-none rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-5 font-(--font-code) text-[13px] leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] outline-none placeholder:text-text-muted focus:border-accent/30 focus:ring-4 focus:ring-accent/10"
                     placeholder={activeDocumentIsMarkdown ? t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.') : t('documents.textPlaceholder', 'Edit this text or script file.')}
                   />
                 ) : (
@@ -1156,7 +1255,7 @@ export function DocumentsLayout() {
                       ) : referencedDocuments.map((doc) => (
                         <button key={doc.id} type="button" onClick={() => openDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
                           <span className="block truncate text-[12px] font-semibold text-text-primary">{doc.title}</span>
-                          <span className="mt-1 block truncate text-[10px] text-text-muted">{buildDocumentPath(doc, documentNodes)}</span>
+                          <span className="mt-1 block truncate text-[10px] text-text-muted">{buildDocumentPath(doc, documentNodes, documentNodeById)}</span>
                         </button>
                       ))}
                     </div>
@@ -1182,9 +1281,9 @@ export function DocumentsLayout() {
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.outline', 'Outline')}</h3>
                     <div className="mt-3 space-y-1">
-                      {activeDocument.markdown.split('\n').filter((line) => /^#{1,3}\s+/.test(line)).slice(0, 12).map((line, index) => (
-                        <div key={`${line}-${index}`} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 text-[11px] text-text-secondary">
-                          {line.replace(/^#{1,3}\s+/, '')}
+                      {documentOutline.map((heading, index) => (
+                        <div key={`${heading}-${index}`} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 text-[11px] text-text-secondary">
+                          {heading}
                         </div>
                       ))}
                     </div>
