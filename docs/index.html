@@ -184,6 +184,29 @@
         box-shadow: 0 12px 24px rgba(34, 26, 22, 0.08);
       }
 
+      .path-section {
+        margin-top: 26px;
+      }
+
+      .path-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+      }
+
+      .path-header h2 {
+        font-size: clamp(2rem, 4vw, 2.6rem);
+      }
+
+      .path-header p {
+        max-width: 700px;
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.75;
+      }
+
       .hero-grid {
         display: grid;
         grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.8fr);
@@ -289,17 +312,60 @@
 
       .audience-grid {
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 16px;
-        margin-top: 24px;
       }
 
       .audience-card {
+        position: relative;
         padding: 18px;
         border: 1px solid var(--line);
         border-radius: var(--radius-lg);
         background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 248, 240, 0.66));
         box-shadow: 0 12px 28px rgba(56, 37, 26, 0.06);
+        overflow: hidden;
+      }
+
+      .audience-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 6px;
+        background: var(--accent);
+      }
+
+      .audience-card.install {
+        background: linear-gradient(180deg, rgba(223, 246, 243, 0.78), rgba(255, 252, 247, 0.88));
+      }
+
+      .audience-card.install::before {
+        background: #0f766e;
+      }
+
+      .audience-card.users {
+        background: linear-gradient(180deg, rgba(255, 240, 230, 0.84), rgba(255, 252, 247, 0.88));
+      }
+
+      .audience-card.users::before {
+        background: #c86a3a;
+      }
+
+      .audience-card.developers {
+        background: linear-gradient(180deg, rgba(236, 242, 255, 0.84), rgba(255, 252, 247, 0.88));
+      }
+
+      .audience-card.developers::before {
+        background: #315cbb;
+      }
+
+      .audience-card.chinese {
+        background: linear-gradient(180deg, rgba(249, 236, 224, 0.9), rgba(255, 252, 247, 0.88));
+      }
+
+      .audience-card.chinese::before {
+        background: #9a4d1d;
       }
 
       .audience-card h2 {
@@ -441,9 +507,12 @@
 
       @media (max-width: 1080px) {
         .hero-grid,
-        .audience-grid,
         .content-grid,
         .language-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .audience-grid {
           grid-template-columns: 1fr;
         }
 
@@ -475,7 +544,15 @@
           display: block;
         }
 
+        .path-header {
+          display: block;
+        }
+
         .language-header p {
+          margin-top: 10px;
+        }
+
+        .path-header p {
           margin-top: 10px;
         }
       }
@@ -556,57 +633,67 @@
         </div>
       </section>
 
-      <section class="audience-grid" id="choose-a-path" aria-label="Choose a path through the documentation portal">
-        <article class="audience-card">
-          <span class="section-kicker">For evaluators</span>
-          <h2>See what ships</h2>
+      <section class="path-section" id="choose-a-path" aria-label="Choose a path through the documentation portal">
+        <div class="path-header">
+          <h2>Choose a path / 选择入口</h2>
           <p>
-            Start here if you want the fastest product-facing overview before downloading or trying
-            the desktop app.
+            Pick the route that matches the reader: install the app, onboard end users, inspect the
+            implementation, or jump straight into the Chinese documentation set.
           </p>
-          <div class="audience-links">
-            <a href="https://github.com/fandych/suora/blob/main/FEATURES.md" target="_blank" rel="noopener noreferrer"><span>Feature reference</span><span>Open</span></a>
-            <a href="https://github.com/fandych/suora/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer"><span>Release downloads</span><span>Open</span></a>
-          </div>
-        </article>
+        </div>
+        <div class="audience-grid">
+          <article class="audience-card install">
+            <span class="section-kicker">Install / 安装</span>
+            <h2>Download the app</h2>
+            <p>
+              Start here if the goal is to install SUORA quickly on Windows, macOS, or Linux and
+              read the current release notes before trying the app.
+            </p>
+            <div class="audience-links">
+              <a href="https://github.com/fandych/suora/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer"><span>Latest release</span><span>Open</span></a>
+              <a href="https://github.com/fandych/suora/releases" target="_blank" rel="noopener noreferrer"><span>All releases</span><span>Open</span></a>
+            </div>
+          </article>
 
-        <article class="audience-card">
-          <span class="section-kicker">For developers</span>
-          <h2>Understand the implementation</h2>
-          <p>
-            Jump to architecture, capability, and integration details if you need to read or extend
-            the codebase.
-          </p>
-          <div class="audience-links">
-            <a href="#technical-docs"><span>Technical docs</span><span>Jump</span></a>
-            <a href="https://github.com/fandych/suora/blob/main/README.md" target="_blank" rel="noopener noreferrer"><span>README</span><span>Open</span></a>
-          </div>
-        </article>
+          <article class="audience-card users">
+            <span class="section-kicker">Users / 用户</span>
+            <h2>Learn the product flow</h2>
+            <p>
+              Use these links for onboarding, installation context, and learning the workbench from
+              the perspective of someone using the product day to day.
+            </p>
+            <div class="audience-links">
+              <a href="#user-guides"><span>User guides</span><span>Jump</span></a>
+              <a href="https://github.com/fandych/suora/blob/main/FEATURES.md" target="_blank" rel="noopener noreferrer"><span>Feature reference</span><span>Open</span></a>
+            </div>
+          </article>
 
-        <article class="audience-card">
-          <span class="section-kicker">For users</span>
-          <h2>Get started quickly</h2>
-          <p>
-            Use these paths for onboarding, installation, and learning the current workbench
-            modules from a user perspective.
-          </p>
-          <div class="audience-links">
-            <a href="#user-guides"><span>User guides</span><span>Jump</span></a>
-            <a href="https://github.com/fandych/suora/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer"><span>Install builds</span><span>Open</span></a>
-          </div>
-        </article>
+          <article class="audience-card developers">
+            <span class="section-kicker">Developers / 开发者</span>
+            <h2>Read the implementation</h2>
+            <p>
+              Jump to architecture, capability, and integration material if the reader needs to
+              inspect, extend, or contribute to the codebase.
+            </p>
+            <div class="audience-links">
+              <a href="#technical-docs"><span>Technical docs</span><span>Jump</span></a>
+              <a href="https://github.com/fandych/suora/blob/main/README.md" target="_blank" rel="noopener noreferrer"><span>README</span><span>Open</span></a>
+            </div>
+          </article>
 
-        <article class="audience-card">
-          <span class="section-kicker">中文入口</span>
-          <h2>直接进入中文文档</h2>
-          <p>
-            如果你主要面向中文读者，这里给出最短路径，直接跳到中文用户指南、中文技术文档和中文流水线专题。
-          </p>
-          <div class="audience-links">
-            <a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_ZH.md" target="_blank" rel="noopener noreferrer"><span>中文用户指南</span><span>打开</span></a>
-            <a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_ZH.md" target="_blank" rel="noopener noreferrer"><span>中文技术文档</span><span>打开</span></a>
-          </div>
-        </article>
+          <article class="audience-card chinese">
+            <span class="section-kicker">中文入口</span>
+            <h2>直接进入中文内容</h2>
+            <p>
+              面向中文读者时，这里提供最短路径，直接通往中文用户指南、中文技术文档和中文流水线专题说明。
+            </p>
+            <div class="audience-links">
+              <a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_ZH.md" target="_blank" rel="noopener noreferrer"><span>中文用户指南</span><span>打开</span></a>
+              <a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_ZH.md" target="_blank" rel="noopener noreferrer"><span>中文技术文档</span><span>打开</span></a>
+              <a href="https://github.com/fandych/suora/blob/main/docs/AGENT_PIPELINE_CHAT_EXECUTION_CAPABILITY_100_ZH.md" target="_blank" rel="noopener noreferrer"><span>中文流水线专题</span><span>打开</span></a>
+            </div>
+          </article>
+        </div>
       </section>
 
       <section class="content-grid" aria-label="Core documentation areas">

@@ -4,10 +4,12 @@
 
 在线文档首页：<https://fandych.github.io/suora/>
 
-快速入口：
-- 文档门户：<https://fandych.github.io/suora/>
-- GitHub Releases：<https://github.com/fandych/suora/releases>
-- 功能总览：<https://github.com/fandych/suora/blob/main/FEATURES.md>
+[![Docs](https://img.shields.io/badge/docs-homepage-0f766e?style=flat-square)](https://fandych.github.io/suora/)
+[![Release](https://img.shields.io/github/v/release/fandych/suora?display_name=tag&style=flat-square)](https://github.com/fandych/suora/releases)
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-c86a3a?style=flat-square)](https://github.com/fandych/suora/releases)
+[![GitHub Pages](https://img.shields.io/badge/github%20pages-live-201813?style=flat-square)](https://fandych.github.io/suora/)
+
+快速入口：[文档门户](https://fandych.github.io/suora/) · [下载发布版](https://github.com/fandych/suora/releases) · [功能总览](https://github.com/fandych/suora/blob/main/FEATURES.md) · [技术文档](https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md)
 
 ## 项目概览
 
