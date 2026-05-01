@@ -12,12 +12,14 @@ import https from 'https'
 import net from 'net'
 import dns from 'dns'
 import { CronExpressionParser } from 'cron-parser'
-import { autoUpdater } from 'electron-updater'
+import electronUpdater from 'electron-updater'
 import { MAX_IPC_TEXT_FILE_BYTES, atomicWriteFile, canonicalizePathSync, isWithinRoot, readTextFileRange, readTextFileWithLimit, resolveUserPath } from './fsUtils.js'
 import { initLogger, getLogger, closeLogger, type LogLevel } from './logger.js'
 import { getChannelService, type ChannelWebhookEvent } from './channelService.js'
 import { openSuoraDatabase, type JsonTableName, type SuoraDatabase } from './database.js'
 import type { ChannelConfig } from '../src/types/index.js'
+
+const { autoUpdater } = electronUpdater
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
