@@ -1,17 +1,35 @@
-# Suora 朔枢
+<p align="center">
+	<img src="resources/logo.svg" alt="Suora logo" width="104" />
+</p>
 
-> 基于 Electron、React 与 Vercel AI SDK 的本地 AI 工作台，围绕对话、文档、Agent、技能、流水线、定时任务、渠道接入与 MCP 集成构建。
+<h1 align="center">Suora 朔枢</h1>
 
-> A local-first AI desktop workbench for chat, documents, agents, skills, pipelines, timers, channels, and MCP servers.
+<p align="center">
+	<strong>基于 Electron、React 与 Vercel AI SDK 的本地 AI 工作台，围绕对话、文档、Agent、技能、流水线、定时任务、渠道接入与 MCP 集成构建。</strong>
+	<br />
+	<strong>A local-first AI desktop workbench for chat, documents, agents, skills, pipelines, timers, channels, and MCP servers.</strong>
+</p>
 
-在线文档首页：<https://fandych.github.io/suora/>
+<p align="center">
+	<a href="https://fandych.github.io/suora/"><img alt="Docs" src="https://img.shields.io/badge/docs-homepage-0f766e?style=flat-square" /></a>
+	<a href="https://github.com/fandych/suora/releases"><img alt="Release" src="https://img.shields.io/github/v/release/fandych/suora?display_name=tag&style=flat-square" /></a>
+	<a href="https://github.com/fandych/suora/releases"><img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-c86a3a?style=flat-square" /></a>
+	<a href="https://fandych.github.io/suora/"><img alt="GitHub Pages" src="https://img.shields.io/badge/github%20pages-live-201813?style=flat-square" /></a>
+</p>
 
-[![Docs](https://img.shields.io/badge/docs-homepage-0f766e?style=flat-square)](https://fandych.github.io/suora/)
-[![Release](https://img.shields.io/github/v/release/fandych/suora?display_name=tag&style=flat-square)](https://github.com/fandych/suora/releases)
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-c86a3a?style=flat-square)](https://github.com/fandych/suora/releases)
-[![GitHub Pages](https://img.shields.io/badge/github%20pages-live-201813?style=flat-square)](https://fandych.github.io/suora/)
+<p align="center">
+	<a href="https://fandych.github.io/suora/"><strong>Docs</strong></a>
+	·
+	<a href="https://github.com/fandych/suora/releases"><strong>Releases</strong></a>
+	·
+	<a href="https://github.com/fandych/suora/blob/main/FEATURES.md"><strong>Features</strong></a>
+	·
+	<a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md"><strong>Technical docs</strong></a>
+</p>
 
-快速入口：[文档门户](https://fandych.github.io/suora/) · [下载发布版](https://github.com/fandych/suora/releases) · [功能总览](https://github.com/fandych/suora/blob/main/FEATURES.md) · [技术文档](https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md)
+<p align="center">
+	Chat · Documents · Models · Agents · Skills · Pipeline · Timer · Channels · MCP · Settings
+</p>
 
 ## At A Glance / 快速了解
 

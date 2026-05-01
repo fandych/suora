@@ -184,6 +184,162 @@
         box-shadow: 0 12px 24px rgba(34, 26, 22, 0.08);
       }
 
+      .preview-section {
+        margin-top: 24px;
+      }
+
+      .preview-header {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 18px;
+        margin-bottom: 14px;
+      }
+
+      .preview-header h2 {
+        font-size: clamp(2rem, 4vw, 2.6rem);
+      }
+
+      .preview-header p {
+        max-width: 720px;
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.75;
+      }
+
+      .preview-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .preview-card {
+        padding: 18px;
+      }
+
+      .preview-media {
+        overflow: hidden;
+        border: 1px solid rgba(32, 24, 19, 0.08);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(244, 239, 231, 0.88));
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+      }
+
+      .preview-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        border-bottom: 1px solid rgba(32, 24, 19, 0.08);
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .preview-dots {
+        display: flex;
+        gap: 8px;
+      }
+
+      .preview-dots span {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: rgba(32, 24, 19, 0.18);
+      }
+
+      .preview-title {
+        color: var(--muted);
+        font-size: 0.88rem;
+      }
+
+      .preview-body {
+        display: grid;
+        gap: 12px;
+        padding: 16px;
+      }
+
+      .preview-bubble,
+      .preview-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid rgba(32, 24, 19, 0.08);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .preview-row.stack {
+        align-items: stretch;
+      }
+
+      .preview-avatar {
+        width: 34px;
+        height: 34px;
+        border-radius: 12px;
+        background: rgba(15, 118, 110, 0.12);
+        object-fit: contain;
+        padding: 6px;
+      }
+
+      .preview-copy {
+        flex: 1;
+        min-width: 0;
+      }
+
+      .preview-copy strong {
+        display: block;
+        font-size: 0.95rem;
+      }
+
+      .preview-copy span {
+        display: block;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.88rem;
+        line-height: 1.55;
+      }
+
+      .preview-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 8px;
+      }
+
+      .preview-tag {
+        display: inline-flex;
+        align-items: center;
+        padding: 8px 10px;
+        border-radius: 999px;
+        background: rgba(15, 118, 110, 0.12);
+        color: var(--accent);
+        font-size: 0.82rem;
+        font-weight: 600;
+      }
+
+      .preview-column {
+        flex: 1;
+        min-height: 92px;
+        padding: 12px;
+        border: 1px dashed rgba(32, 24, 19, 0.12);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.64);
+      }
+
+      .preview-column strong {
+        display: block;
+        font-size: 0.92rem;
+      }
+
+      .preview-column span {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.55;
+      }
+
       .path-section {
         margin-top: 26px;
       }
@@ -319,8 +475,76 @@
 
       .release-panel,
       .install-panel,
+      .platform-panel,
       .module-panel {
         padding: 20px;
+      }
+
+      .platform-panel {
+        grid-column: 1 / -1;
+      }
+
+      .platform-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 18px;
+      }
+
+      .platform-card {
+        padding: 16px;
+        border: 1px solid rgba(32, 24, 19, 0.08);
+        border-radius: var(--radius-lg);
+        background: rgba(255, 255, 255, 0.66);
+      }
+
+      .platform-card h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        font-family: "Fraunces", serif;
+      }
+
+      .platform-card p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .platform-download-list {
+        display: grid;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .platform-download {
+        display: block;
+        padding: 12px 14px;
+        border: 1px solid rgba(32, 24, 19, 0.1);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.88);
+        transition:
+          transform 180ms ease,
+          border-color 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .platform-download:hover {
+        transform: translateY(-2px);
+        border-color: rgba(15, 118, 110, 0.3);
+        box-shadow: 0 12px 24px rgba(34, 26, 22, 0.08);
+      }
+
+      .platform-download strong {
+        display: block;
+        font-size: 0.94rem;
+      }
+
+      .platform-download span {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+        font-size: 0.84rem;
+        line-height: 1.5;
       }
 
       .release-meta {
@@ -634,6 +858,7 @@
 
       @media (max-width: 1080px) {
         .hero-grid,
+        .preview-grid,
         .showcase-grid,
         .content-grid,
         .language-grid {
@@ -645,6 +870,7 @@
         }
 
         .release-meta,
+        .platform-grid,
         .module-flow {
           grid-template-columns: 1fr;
         }
@@ -677,6 +903,7 @@
           display: block;
         }
 
+        .preview-header,
         .path-header {
           display: block;
         }
@@ -685,12 +912,17 @@
           margin-top: 10px;
         }
 
+        .preview-header p,
         .path-header p {
           margin-top: 10px;
         }
 
         .step-item {
           grid-template-columns: 1fr;
+        }
+
+        .preview-row.stack {
+          display: grid;
         }
       }
     </style>
@@ -767,6 +999,129 @@
               </a>
             </div>
           </aside>
+        </div>
+      </section>
+
+      <section class="preview-section" aria-label="Feature preview gallery">
+        <div class="preview-header">
+          <h2>Feature previews / 功能预览</h2>
+          <p>
+            A visual snapshot of the current workbench surface. These cards are lightweight feature
+            previews for the modules already implemented in the product.
+          </p>
+        </div>
+        <div class="preview-grid">
+          <article class="section-card preview-card">
+            <span class="section-kicker">Chat + Agents</span>
+            <h2>Conversation cockpit</h2>
+            <p class="section-copy">Switch models, route to agents, and keep tool-aware conversations in one pane.</p>
+            <div class="preview-media">
+              <div class="preview-toolbar">
+                <div class="preview-dots"><span></span><span></span><span></span></div>
+                <div class="preview-title">Chat workspace</div>
+              </div>
+              <div class="preview-body">
+                <div class="preview-bubble">
+                  <img class="preview-avatar" src="https://raw.githubusercontent.com/fandych/suora/main/resources/icons/svg/agent-assistant.svg" alt="Assistant icon" loading="lazy" />
+                  <div class="preview-copy">
+                    <strong>Assistant + Code Expert</strong>
+                    <span>Model selection, attachments, tool calls, retries, and branching all stay close to the conversation.</span>
+                  </div>
+                </div>
+                <div class="preview-tags">
+                  <span class="preview-tag">Multi-session</span>
+                  <span class="preview-tag">Attachments</span>
+                  <span class="preview-tag">Tool timeline</span>
+                  <span class="preview-tag">Voice readout</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card preview-card">
+            <span class="section-kicker">Documents</span>
+            <h2>Knowledge workspace</h2>
+            <p class="section-copy">Markdown editing, backlinks, diagrams, and context attachment for downstream chats.</p>
+            <div class="preview-media">
+              <div class="preview-toolbar">
+                <div class="preview-dots"><span></span><span></span><span></span></div>
+                <div class="preview-title">Documents view</div>
+              </div>
+              <div class="preview-body">
+                <div class="preview-row stack">
+                  <div class="preview-column">
+                    <strong>Document graph</strong>
+                    <span>Backlinks, references, and graph-oriented navigation for linked notes.</span>
+                  </div>
+                  <div class="preview-column">
+                    <strong>Rich markdown</strong>
+                    <span>WYSIWYG editing, Mermaid, KaTeX, search, and folder hierarchies.</span>
+                  </div>
+                </div>
+                <div class="preview-bubble">
+                  <img class="preview-avatar" src="https://raw.githubusercontent.com/fandych/suora/main/resources/icons/svg/skill-file-manager.svg" alt="Documents icon" loading="lazy" />
+                  <div class="preview-copy">
+                    <strong>Context-ready knowledge base</strong>
+                    <span>Select documents and push them straight into chat context when an agent needs grounded material.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card preview-card">
+            <span class="section-kicker">Automation</span>
+            <h2>Pipeline orchestration</h2>
+            <p class="section-copy">Multi-step flows with conditions, retries, variables, budgets, and saved execution history.</p>
+            <div class="preview-media">
+              <div class="preview-toolbar">
+                <div class="preview-dots"><span></span><span></span><span></span></div>
+                <div class="preview-title">Pipeline + Timer</div>
+              </div>
+              <div class="preview-body">
+                <div class="preview-bubble">
+                  <img class="preview-avatar" src="https://raw.githubusercontent.com/fandych/suora/main/resources/icons/svg/skill-event-automation.svg" alt="Automation icon" loading="lazy" />
+                  <div class="preview-copy">
+                    <strong>Saved agent flows</strong>
+                    <span>Run pipelines from chat, schedule them with timers, and inspect step-level execution results afterwards.</span>
+                  </div>
+                </div>
+                <div class="preview-tags">
+                  <span class="preview-tag">runIf</span>
+                  <span class="preview-tag">Retry</span>
+                  <span class="preview-tag">Timeout</span>
+                  <span class="preview-tag">Export vars</span>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="section-card preview-card">
+            <span class="section-kicker">Channels + MCP</span>
+            <h2>External reach</h2>
+            <p class="section-copy">Connect channels, route replies through agents, and wire external tool ecosystems through MCP.</p>
+            <div class="preview-media">
+              <div class="preview-toolbar">
+                <div class="preview-dots"><span></span><span></span><span></span></div>
+                <div class="preview-title">Channels + MCP</div>
+              </div>
+              <div class="preview-body">
+                <div class="preview-bubble">
+                  <img class="preview-avatar" src="https://raw.githubusercontent.com/fandych/suora/main/resources/icons/svg/skill-channels.svg" alt="Channels icon" loading="lazy" />
+                  <div class="preview-copy">
+                    <strong>Messaging and tool connectivity</strong>
+                    <span>Slack, Telegram, Discord, Teams, Feishu, DingTalk and custom channels sit next to MCP server configuration.</span>
+                  </div>
+                </div>
+                <div class="preview-tags">
+                  <span class="preview-tag">Webhook</span>
+                  <span class="preview-tag">Stream</span>
+                  <span class="preview-tag">MCP</span>
+                  <span class="preview-tag">Health view</span>
+                </div>
+              </div>
+            </div>
+          </article>
         </div>
       </section>
 
@@ -890,6 +1245,62 @@
               </div>
             </li>
           </ol>
+        </article>
+
+        <article class="section-card platform-panel">
+          <span class="section-kicker">Downloads / 下载入口</span>
+          <h2>Platform packages</h2>
+          <p class="section-copy">
+            This list follows the latest GitHub release and points directly to the current installer or package for each platform.
+          </p>
+          <div class="platform-grid">
+            <section class="platform-card">
+              <h3>Windows</h3>
+              <p>Installer and portable executables for a fast desktop start.</p>
+              <div class="platform-download-list">
+                <a class="platform-download" id="download-windows-setup" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA.Setup.0.1.0.exe" target="_blank" rel="noopener noreferrer">
+                  <strong>Setup .exe</strong>
+                  <span id="download-windows-setup-name">SUORA.Setup.0.1.0.exe</span>
+                </a>
+                <a class="platform-download" id="download-windows-portable" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA.0.1.0.exe" target="_blank" rel="noopener noreferrer">
+                  <strong>Portable .exe</strong>
+                  <span id="download-windows-portable-name">SUORA.0.1.0.exe</span>
+                </a>
+              </div>
+            </section>
+            <section class="platform-card">
+              <h3>macOS</h3>
+              <p>Apple Silicon downloads for standard install flow or archive-based distribution.</p>
+              <div class="platform-download-list">
+                <a class="platform-download" id="download-macos-dmg" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA-0.1.0-arm64.dmg" target="_blank" rel="noopener noreferrer">
+                  <strong>DMG</strong>
+                  <span id="download-macos-dmg-name">SUORA-0.1.0-arm64.dmg</span>
+                </a>
+                <a class="platform-download" id="download-macos-zip" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA-0.1.0-arm64-mac.zip" target="_blank" rel="noopener noreferrer">
+                  <strong>ZIP</strong>
+                  <span id="download-macos-zip-name">SUORA-0.1.0-arm64-mac.zip</span>
+                </a>
+              </div>
+            </section>
+            <section class="platform-card">
+              <h3>Linux</h3>
+              <p>Portable, Debian, and RPM packages for common Linux install preferences.</p>
+              <div class="platform-download-list">
+                <a class="platform-download" id="download-linux-appimage" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA-0.1.0.AppImage" target="_blank" rel="noopener noreferrer">
+                  <strong>AppImage</strong>
+                  <span id="download-linux-appimage-name">SUORA-0.1.0.AppImage</span>
+                </a>
+                <a class="platform-download" id="download-linux-deb" href="https://github.com/fandych/suora/releases/download/v0.1.0/suora_0.1.0_amd64.deb" target="_blank" rel="noopener noreferrer">
+                  <strong>DEB</strong>
+                  <span id="download-linux-deb-name">suora_0.1.0_amd64.deb</span>
+                </a>
+                <a class="platform-download" id="download-linux-rpm" href="https://github.com/fandych/suora/releases/download/v0.1.0/suora-0.1.0.x86_64.rpm" target="_blank" rel="noopener noreferrer">
+                  <strong>RPM</strong>
+                  <span id="download-linux-rpm-name">suora-0.1.0.x86_64.rpm</span>
+                </a>
+              </div>
+            </section>
+          </div>
         </article>
 
         <article class="section-card module-panel">
@@ -1135,6 +1546,41 @@
         dateStyle: "medium",
       })
 
+      function assignPlatformAsset(slot, asset) {
+        if (!asset) {
+          return
+        }
+
+        const anchor = document.getElementById(`download-${slot}`)
+        const label = document.getElementById(`download-${slot}-name`)
+
+        if (anchor && asset.browser_download_url) {
+          anchor.href = asset.browser_download_url
+        }
+
+        if (label && asset.name) {
+          label.textContent = asset.name
+        }
+      }
+
+      function mapPlatformAssets(assets) {
+        const byMatch = (matcher) => assets.find(matcher)
+
+        assignPlatformAsset(
+          "windows-setup",
+          byMatch((asset) => asset.name.toLowerCase().endsWith(".exe") && asset.name.toLowerCase().includes("setup")),
+        )
+        assignPlatformAsset(
+          "windows-portable",
+          byMatch((asset) => asset.name.toLowerCase().endsWith(".exe") && !asset.name.toLowerCase().includes("setup")),
+        )
+        assignPlatformAsset("macos-dmg", byMatch((asset) => asset.name.toLowerCase().endsWith(".dmg")))
+        assignPlatformAsset("macos-zip", byMatch((asset) => asset.name.toLowerCase().endsWith(".zip")))
+        assignPlatformAsset("linux-appimage", byMatch((asset) => asset.name.toLowerCase().endsWith(".appimage")))
+        assignPlatformAsset("linux-deb", byMatch((asset) => asset.name.toLowerCase().endsWith(".deb")))
+        assignPlatformAsset("linux-rpm", byMatch((asset) => asset.name.toLowerCase().endsWith(".rpm")))
+      }
+
       async function hydrateLatestRelease() {
         const releaseStatus = document.getElementById("latest-release-status")
         const releaseTag = document.getElementById("latest-release-tag")
@@ -1173,6 +1619,10 @@
           releaseLinks.forEach((link) => {
             link.href = releaseUrl
           })
+
+          if (Array.isArray(latestRelease.assets)) {
+            mapPlatformAssets(latestRelease.assets)
+          }
         } catch (error) {
           releaseStatus.textContent = "Live release data is temporarily unavailable, so the page is showing the bundled snapshot."
           console.error(error)
