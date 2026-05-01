@@ -6,6 +6,13 @@ import { SkillsLayout } from './SkillsLayout'
 import { useAppStore } from '@/store/appStore'
 import type { Skill } from '@/types'
 
+vi.mock('@/components/icons/IconifyIcons', () => ({
+  SkillIcon: () => <span data-testid="mock-skill-icon" />,
+  IconifyIcon: () => <span data-testid="mock-iconify-icon" />,
+  getSkillIconName: () => 'mock-skill-icon',
+  useSkillIconsReady: () => true,
+}))
+
 vi.mock('./SkillEditor', () => ({
   SkillEditor: ({ skill, onSave }: { skill: Skill | null; onSave: (skill: Skill) => void }) => (
     <button
