@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocumentsLayout } from './DocumentsLayout'
@@ -190,18 +190,18 @@ describe('DocumentsLayout', () => {
     const sourceEditor = screen.getByRole('textbox', { name: 'Source editor' }) as HTMLTextAreaElement
     await user.click(sourceEditor)
     await user.type(sourceEditor, 'echo hi')
-    await user.keyboard('{Tab}')
+    fireEvent.keyDown(sourceEditor, { key: 'Tab' })
 
     expect(sourceEditor).toHaveValue('echo hi  ')
 
-    await user.click(sourceEditor)
+    sourceEditor.focus()
     sourceEditor.setSelectionRange(0, 0)
-    await user.keyboard('{Tab}')
+    fireEvent.keyDown(sourceEditor, { key: 'Tab' })
 
     expect(sourceEditor).toHaveValue('  echo hi  ')
 
     sourceEditor.setSelectionRange(0, sourceEditor.value.length)
-    await user.keyboard('{Shift>}{Tab}{/Shift}')
+    fireEvent.keyDown(sourceEditor, { key: 'Tab', shiftKey: true })
 
     expect(sourceEditor).toHaveValue('echo hi  ')
     expect(screen.getByText('1 line')).toBeInTheDocument()
