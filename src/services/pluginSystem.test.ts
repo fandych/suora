@@ -47,6 +47,7 @@ import {
   PLUGIN_TEMPLATES,
 } from './pluginSystem'
 import type { PluginInfo, PluginManifestV2 } from '@/types'
+import * as fileStorage from '@/services/fileStorage'
 
 function createTestToolSet(...names: string[]): ToolSet {
   const tools: ToolSet = {}
@@ -488,6 +489,80 @@ describe('pluginSystem', () => {
       expect(results[0].toolNames).toEqual(expect.arrayContaining(['email_send', 'email_check']))
 
       await deactivatePlugin(plugin.id)
+    })
+
+    it('should let the email assistant tool send using persisted email settings', async () => {
+      const plugin: PluginInfo = {
+        id: 'email-send-test',
+        name: 'Email Sender Wrapper',
+        version: '1.0.0',
+        author: 'Test',
+        description: 'Uses builtin email runtime via entryPoint',
+        status: 'enabled',
+        hooks: ['afterResponse', 'onAppStart'],
+        config: {},
+        installedAt: Date.now(),
+        permissions: ['messages:read', 'tools:register', 'settings:read', 'network:outbound'],
+        entryPoint: getBuiltinPluginEntryPoint('Email Assistant'),
+      }
+
+      const readCachedSpy = vi.spyOn(fileStorage, 'readCached').mockImplementation((key: string) => {
+        if (key !== 'suora-store') return null
+        return JSON.stringify({
+          state: {
+            emailConfig: {
+              smtpHost: 'smtp.example.com',
+              smtpPort: 465,
+              secure: true,
+              username: 'bot@example.com',
+              password: 'secret',
+              fromName: 'Suora Bot',
+              fromAddress: 'bot@example.com',
+              enabled: true,
+            },
+          },
+        })
+      })
+
+      const invoke = vi.fn().mockResolvedValue({ success: true, messageId: 'msg-123' })
+      Object.defineProperty(window, 'electron', {
+        configurable: true,
+        value: { invoke },
+      })
+
+      try {
+        await restoreInstalledPluginRuntime([plugin])
+
+        const toolSet = getPluginTools()
+        const emailTool = toolSet.email_send as { execute?: (input: { to: string; subject: string; body: string }) => Promise<string> }
+        const output = await emailTool.execute?.({
+          to: 'user@example.com',
+          subject: 'Hello',
+          body: 'World',
+        })
+
+        expect(output).toContain('Email sent successfully to user@example.com')
+        expect(invoke).toHaveBeenCalledWith('email:send', {
+          smtpHost: 'smtp.example.com',
+          smtpPort: 465,
+          secure: true,
+          username: 'bot@example.com',
+          password: 'secret',
+          fromName: 'Suora Bot',
+          fromAddress: 'bot@example.com',
+        }, {
+          to: 'user@example.com',
+          subject: 'Hello',
+          body: 'World',
+          cc: undefined,
+          bcc: undefined,
+          isHtml: false,
+        })
+      } finally {
+        readCachedSpy.mockRestore()
+        await deactivatePlugin(plugin.id)
+        Reflect.deleteProperty(window, 'electron')
+      }
     })
 
     it('should not reactivate plugins that are already loaded', async () => {

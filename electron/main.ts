@@ -12,6 +12,7 @@ import https from 'https'
 import net from 'net'
 import dns from 'dns'
 import { CronExpressionParser } from 'cron-parser'
+import { autoUpdater } from 'electron-updater'
 import { MAX_IPC_TEXT_FILE_BYTES, atomicWriteFile, canonicalizePathSync, isWithinRoot, readTextFileRange, readTextFileWithLimit, resolveUserPath } from './fsUtils.js'
 import { initLogger, getLogger, closeLogger, type LogLevel } from './logger.js'
 import { getChannelService, type ChannelWebhookEvent } from './channelService.js'
@@ -22,8 +23,6 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const require = createRequire(import.meta.url)
 const isDev = !app.isPackaged
-
-const GITHUB_RELEASES_URL = 'https://api.github.com/repos/fandych/suora/releases/latest'
 
 function isPrivateIPv4(hostname: string): boolean {
   const parts = hostname.split('.').map((part) => Number(part))
@@ -135,18 +134,6 @@ async function validatePublicHttpUrlWithDns(rawUrl: string, allowedHosts?: Reado
     }
   }
   return parsed
-}
-
-function compareSemverLike(a: string, b: string): number {
-  const parse = (value: string) => value.replace(/^v/i, '').split(/[.-]/).map((part) => Number.parseInt(part, 10)).map((part) => Number.isFinite(part) ? part : 0)
-  const left = parse(a)
-  const right = parse(b)
-  const len = Math.max(left.length, right.length)
-  for (let i = 0; i < len; i++) {
-    const diff = (left[i] ?? 0) - (right[i] ?? 0)
-    if (diff !== 0) return diff > 0 ? 1 : -1
-  }
-  return 0
 }
 
 function escapeRegExp(value: string): string {
@@ -706,6 +693,18 @@ ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string)
     const pathErr = enforceFsPathInWorkspace(filePath)
     if (pathErr) return { error: pathErr }
     await atomicWriteFile(filePath, content)
+    return { success: true }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('fs:appendFile', async (_event, filePath: string, content: string) => {
+  try {
+    const pathErr = enforceFsPathInWorkspace(filePath)
+    if (pathErr) return { error: pathErr }
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.appendFile(filePath, content, 'utf8')
     return { success: true }
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
@@ -2742,43 +2741,186 @@ interface UpdateInfo {
   downloadUrl: string
 }
 
-let updateCheckInProgress = false
+interface UpdaterState {
+  status: 'unsupported' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'no-update' | 'error'
+  currentVersion: string
+  latestVersion?: string
+  releaseDate?: string
+  releaseNotes?: string
+  downloadUrl?: string
+  downloadPercent?: number
+  downloaded: boolean
+  lastCheckedAt?: string
+  error?: string
+}
 
-async function checkForUpdates(feedUrl?: string): Promise<UpdateInfo | null> {
+let updateCheckInProgress = false
+let updaterInitialized = false
+let updaterState: UpdaterState = {
+  status: isDev ? 'unsupported' : 'idle',
+  currentVersion: app.getVersion(),
+  downloaded: false,
+  error: isDev ? 'Auto updates are disabled in development builds.' : undefined,
+}
+
+function normalizeReleaseNotes(value: unknown): string {
+  if (typeof value === 'string') return value.trim()
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (typeof entry === 'string') return entry
+        if (entry && typeof entry === 'object') {
+          const version = 'version' in entry && typeof entry.version === 'string' ? entry.version : ''
+          const note = 'note' in entry && typeof entry.note === 'string' ? entry.note : ''
+          return [version, note].filter(Boolean).join('\n')
+        }
+        return ''
+      })
+      .filter(Boolean)
+      .join('\n\n')
+      .trim()
+  }
+  return ''
+}
+
+function toUpdateInfo(info: {
+  version?: string
+  releaseDate?: string
+  releaseNotes?: unknown
+  files?: Array<{ url?: string }>
+}): UpdateInfo {
+  return {
+    version: info.version || '',
+    releaseDate: info.releaseDate || new Date().toISOString(),
+    releaseNotes: normalizeReleaseNotes(info.releaseNotes),
+    downloadUrl: info.files?.find((file) => typeof file.url === 'string' && file.url.trim().length > 0)?.url || '',
+  }
+}
+
+function broadcastUpdaterState() {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('updater:state', updaterState)
+}
+
+function setUpdaterState(patch: Partial<UpdaterState>) {
+  updaterState = {
+    ...updaterState,
+    currentVersion: app.getVersion(),
+    ...patch,
+  }
+  broadcastUpdaterState()
+}
+
+function initAutoUpdater() {
+  if (updaterInitialized || isDev) return
+  updaterInitialized = true
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+
+  autoUpdater.on('checking-for-update', () => {
+    setUpdaterState({
+      status: 'checking',
+      downloaded: false,
+      downloadPercent: undefined,
+      error: undefined,
+      lastCheckedAt: new Date().toISOString(),
+    })
+  })
+
+  autoUpdater.on('update-available', (info) => {
+    const next = toUpdateInfo(info)
+    setUpdaterState({
+      status: 'available',
+      latestVersion: next.version,
+      releaseDate: next.releaseDate,
+      releaseNotes: next.releaseNotes,
+      downloadUrl: next.downloadUrl,
+      downloaded: false,
+      downloadPercent: 0,
+      error: undefined,
+      lastCheckedAt: new Date().toISOString(),
+    })
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('updater:available', next)
+    }
+  })
+
+  autoUpdater.on('download-progress', (progress) => {
+    setUpdaterState({
+      status: 'downloading',
+      downloadPercent: Math.max(0, Math.min(100, Number(progress.percent) || 0)),
+      downloaded: false,
+      error: undefined,
+    })
+  })
+
+  autoUpdater.on('update-downloaded', (info) => {
+    const next = toUpdateInfo(info)
+    setUpdaterState({
+      status: 'downloaded',
+      latestVersion: next.version,
+      releaseDate: next.releaseDate,
+      releaseNotes: next.releaseNotes,
+      downloadUrl: next.downloadUrl,
+      downloaded: true,
+      downloadPercent: 100,
+      error: undefined,
+    })
+  })
+
+  autoUpdater.on('update-not-available', () => {
+    setUpdaterState({
+      status: 'no-update',
+      latestVersion: undefined,
+      releaseDate: undefined,
+      releaseNotes: undefined,
+      downloadUrl: undefined,
+      downloaded: false,
+      downloadPercent: undefined,
+      error: undefined,
+      lastCheckedAt: new Date().toISOString(),
+    })
+  })
+
+  autoUpdater.on('error', (error) => {
+    setUpdaterState({
+      status: 'error',
+      downloaded: false,
+      error: error instanceof Error ? error.message : String(error),
+      lastCheckedAt: new Date().toISOString(),
+    })
+  })
+}
+
+async function checkForUpdates(_feedUrl?: string): Promise<UpdateInfo | null> {
+  if (isDev) {
+    setUpdaterState({
+      status: 'unsupported',
+      downloaded: false,
+      error: 'Auto updates are disabled in development builds.',
+    })
+    return null
+  }
   if (updateCheckInProgress) return null
   updateCheckInProgress = true
   try {
-    const url = validatePublicHttpUrl(feedUrl || GITHUB_RELEASES_URL, new Set(['api.github.com'])).toString()
-    logger.info('Checking for updates', { url })
-    
-    return await new Promise<UpdateInfo | null>((resolve) => {
-      const proto = url.startsWith('https') ? https : http
-      const req = proto.get(url, { headers: { 'User-Agent': 'suora', Accept: 'application/json' } }, (res) => {
-        let data = ''
-        res.on('data', (chunk: Buffer) => { data += chunk.toString() })
-        res.on('end', () => {
-          try {
-            const json = JSON.parse(data)
-            const latestVersion = (json.tag_name || json.version || '').replace(/^v/, '')
-            const currentVersion = app.getVersion()
-            if (latestVersion && compareSemverLike(latestVersion, currentVersion) > 0) {
-              resolve({
-                version: latestVersion,
-                releaseDate: json.published_at || new Date().toISOString(),
-                releaseNotes: json.body || '',
-                downloadUrl: json.html_url || json.download_url || '',
-              })
-            } else {
-              resolve(null)
-            }
-          } catch {
-            resolve(null)
-          }
-        })
-      })
-      req.on('error', () => resolve(null))
-      req.setTimeout(15000, () => { req.destroy(); resolve(null) })
+    initAutoUpdater()
+    logger.info('Checking for updates via electron-updater', { currentVersion: app.getVersion() })
+    const result = await autoUpdater.checkForUpdates()
+    const info = result?.updateInfo
+    if (!info || !info.version || info.version === app.getVersion()) return null
+    return toUpdateInfo(info)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.error('Auto update check failed', { error: message })
+    setUpdaterState({
+      status: 'error',
+      downloaded: false,
+      error: message,
+      lastCheckedAt: new Date().toISOString(),
     })
+    return null
   } finally {
     updateCheckInProgress = false
   }
@@ -2786,13 +2928,21 @@ async function checkForUpdates(feedUrl?: string): Promise<UpdateInfo | null> {
 
 ipcMain.handle('updater:check', async (_event, feedUrl?: string) => {
   const update = await checkForUpdates(feedUrl ?? undefined)
-  if (update && mainWindow) {
-    mainWindow.webContents.send('updater:available', update)
-  }
   return update
 })
 
 ipcMain.handle('updater:getVersion', () => app.getVersion())
+ipcMain.handle('updater:getState', () => updaterState)
+ipcMain.handle('updater:install', async () => {
+  if (isDev) {
+    return { success: false, error: 'Auto updates are disabled in development builds.' }
+  }
+  if (!updaterState.downloaded) {
+    return { success: false, error: 'No downloaded update is ready to install.' }
+  }
+  setImmediate(() => autoUpdater.quitAndInstall(false, true))
+  return { success: true }
+})
 
 // ─── Email Sending ─────────────────────────────────────────────────
 

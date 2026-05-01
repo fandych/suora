@@ -22,6 +22,19 @@ interface PerfMetrics {
   versions: Record<string, string>
 }
 
+interface UpdaterSnapshot {
+  status: 'unsupported' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'no-update' | 'error'
+  currentVersion: string
+  latestVersion?: string
+  releaseDate?: string
+  releaseNotes?: string
+  downloadUrl?: string
+  downloadPercent?: number
+  downloaded: boolean
+  lastCheckedAt?: string
+  error?: string
+}
+
 function getUsageMeterTone(pct: number): string {
   if (pct > 80) return 'is-danger'
   if (pct > 60) return 'is-warning'
@@ -33,8 +46,13 @@ export function SystemSettings() {
   const navigate = useNavigate()
   const setOnboarding = useAppStore((state) => state.setOnboarding)
   const [metrics, setMetrics] = useState<PerfMetrics | null>(null)
+  const [appVersion, setAppVersion] = useState('—')
+  const [updaterState, setUpdaterState] = useState<UpdaterSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [autoRefresh, setAutoRefresh] = useState(false)
+  const [checkingUpdates, setCheckingUpdates] = useState(false)
+  const [installingUpdate, setInstallingUpdate] = useState(false)
+  const [updateNote, setUpdateNote] = useState<string | null>(null)
   const [crashLogs, setCrashLogs] = useState<Array<{ file: string; timestamp: string; error: string }>>([])
 
   const electron = getElectron()
@@ -61,10 +79,37 @@ export function SystemSettings() {
     }
   }, [electron])
 
+  const refreshUpdaterState = useCallback(async () => {
+    if (!electron) return
+    try {
+      const [version, snapshot] = await Promise.all([
+        electron.invoke('updater:getVersion'),
+        electron.invoke('updater:getState'),
+      ])
+      setAppVersion(typeof version === 'string' && version.trim().length > 0 ? version : '—')
+      setUpdaterState(snapshot as UpdaterSnapshot)
+    } catch {
+      // ignore
+    }
+  }, [electron])
+
   useEffect(() => {
     void fetchMetrics()
     void fetchCrashLogs()
-  }, [fetchMetrics, fetchCrashLogs])
+    void refreshUpdaterState()
+  }, [fetchMetrics, fetchCrashLogs, refreshUpdaterState])
+
+  useEffect(() => {
+    if (!electron?.on || !electron.off) return
+    const listener = (_event: unknown, snapshot: unknown) => {
+      const nextSnapshot = snapshot as UpdaterSnapshot | undefined
+      if (!nextSnapshot) return
+      setUpdaterState(nextSnapshot)
+      if (nextSnapshot.currentVersion) setAppVersion(nextSnapshot.currentVersion)
+    }
+    electron.on('updater:state', listener)
+    return () => electron.off?.('updater:state', listener)
+  }, [electron])
 
   useEffect(() => {
     if (!autoRefresh) return
@@ -89,6 +134,60 @@ export function SystemSettings() {
 
   const rssValue = metrics ? formatBytes(metrics.memory.rss) : '—'
   const uptimeValue = metrics ? formatUptime(metrics.uptime) : '—'
+  const displayVersion = electron ? (appVersion === '—' ? '…' : `v${appVersion}`) : 'browser-preview'
+
+  const updateStatusText = (() => {
+    switch (updaterState?.status) {
+      case 'unsupported':
+        return updaterState.error || t('settings.updateUnsupported', 'Auto updates are only available in packaged desktop builds.')
+      case 'checking':
+        return t('settings.checkingUpdates', 'Checking for updates…')
+      case 'available':
+        return t('settings.updateAvailableDesc', 'Update found. Download is starting in the background.')
+      case 'downloading':
+        return t('settings.downloadingUpdate', 'Downloading update in the background…')
+      case 'downloaded':
+        return t('settings.updateReady', 'Update downloaded. Restart and install when ready.')
+      case 'no-update':
+        return t('settings.noUpdates', 'You are already on the latest version.')
+      case 'error':
+        return updaterState.error || t('settings.updateFailed', 'Update check failed.')
+      default:
+        return t('settings.updateIdle', 'Check for updates manually or wait for the background check after startup.')
+    }
+  })()
+
+  const handleCheckForUpdates = async () => {
+    if (!electron) return
+    setCheckingUpdates(true)
+    setUpdateNote(null)
+    try {
+      await electron.invoke('updater:check')
+      await refreshUpdaterState()
+    } catch {
+      setUpdateNote(t('settings.updateFailed', 'Update check failed.'))
+    } finally {
+      setCheckingUpdates(false)
+    }
+  }
+
+  const handleInstallUpdate = async () => {
+    if (!electron) return
+    setInstallingUpdate(true)
+    setUpdateNote(null)
+    try {
+      const result = await electron.invoke('updater:install') as { success?: boolean; error?: string }
+      if (!result?.success) {
+        setUpdateNote(result?.error || t('settings.installUpdateFailed', 'Unable to install the downloaded update.'))
+        return
+      }
+      setUpdateNote(t('settings.restartingForUpdate', 'Restarting to apply the downloaded update…'))
+    } catch {
+      setUpdateNote(t('settings.installUpdateFailed', 'Unable to install the downloaded update.'))
+    } finally {
+      setInstallingUpdate(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -121,12 +220,103 @@ export function SystemSettings() {
             <IconifyIcon name="ui-sparkles" size={28} color="currentColor" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-text-primary">Suora <span className="font-normal text-text-muted">v0.1.0</span></p>
+            <p className="text-sm font-semibold text-text-primary">Suora <span className="font-normal text-text-muted">{displayVersion}</span></p>
             <p className="mt-1 text-[12px] text-text-muted">Electron + React + Vite + AI SDK</p>
             <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('settings.aboutDesc', 'Multi-model AI desktop application with agents, skills, and plugins.')}</p>
           </div>
         </div>
       </SettingsSection>
+
+      {electron && (
+        <SettingsSection
+          eyebrow={t('settings.updates', 'Updates')}
+          title={t('settings.appUpdates', 'Application Updates')}
+          description={t('settings.appUpdatesDesc', 'Check the packaged app version, monitor update progress, and install downloaded releases without leaving the workbench.')}
+        >
+          <div className={`${settingsFieldCardClass} space-y-4`}>
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-text-primary">
+                  {t('settings.currentVersion', 'Current Version')} <span className="font-mono">{displayVersion}</span>
+                </p>
+                <p className="mt-1 text-[12px] leading-relaxed text-text-muted">{updateStatusText}</p>
+                {updaterState?.latestVersion && updaterState.latestVersion !== appVersion && (
+                  <p className="mt-2 text-[12px] text-text-secondary">
+                    {t('settings.latestAvailableVersion', 'Latest available')}: <span className="font-mono text-text-primary">v{updaterState.latestVersion}</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => void handleCheckForUpdates()}
+                  disabled={checkingUpdates || installingUpdate}
+                  className={settingsPrimaryButtonClass}
+                >
+                  <IconifyIcon name={checkingUpdates ? 'ui-loading' : 'ui-refresh'} size={14} color="currentColor" />
+                  {checkingUpdates ? t('settings.checkingUpdates', 'Checking for updates…') : t('settings.checkForUpdates', 'Check for Updates')}
+                </button>
+                {updaterState?.status === 'downloaded' && (
+                  <button
+                    type="button"
+                    onClick={() => void handleInstallUpdate()}
+                    disabled={installingUpdate}
+                    className={settingsSecondaryButtonClass}
+                  >
+                    <IconifyIcon name={installingUpdate ? 'ui-loading' : 'ui-download'} size={14} color="currentColor" />
+                    {installingUpdate ? t('settings.installingUpdate', 'Installing…') : t('settings.installUpdate', 'Install Update')}
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {typeof updaterState?.downloadPercent === 'number' && updaterState.status === 'downloading' && (
+              <div className={settingsSurfaceCardClass}>
+                <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-text-muted">
+                  <span>{t('settings.downloadProgress', 'Download Progress')}</span>
+                  <span className="font-mono text-text-primary">{Math.round(updaterState.downloadPercent)}%</span>
+                </div>
+                <progress
+                  value={Math.max(0, Math.min(100, updaterState.downloadPercent))}
+                  max={100}
+                  className="memory-usage-meter is-success"
+                  aria-label={`${t('settings.downloadProgress', 'Download Progress')} ${Math.round(updaterState.downloadPercent)}%`}
+                />
+              </div>
+            )}
+
+            {(updaterState?.releaseDate || updaterState?.downloadUrl) && (
+              <div className="grid gap-3 md:grid-cols-2">
+                {updaterState.releaseDate && (
+                  <div className={settingsSurfaceCardClass}>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.releaseDate', 'Release Date')}</div>
+                    <div className="mt-2 text-[12px] font-mono text-text-primary">{new Date(updaterState.releaseDate).toLocaleString()}</div>
+                  </div>
+                )}
+                {updaterState.downloadUrl && (
+                  <div className={settingsSurfaceCardClass}>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.releaseSource', 'Release Source')}</div>
+                    <div className="mt-2 break-all text-[12px] font-mono text-text-primary">{updaterState.downloadUrl}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {updaterState?.releaseNotes && (
+              <div className={settingsSurfaceCardClass}>
+                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.releaseNotes', 'Release Notes')}</div>
+                <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-6 text-text-secondary">{updaterState.releaseNotes}</pre>
+              </div>
+            )}
+
+            {updateNote && (
+              <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/60 px-4 py-3 text-[12px] text-text-secondary">
+                {updateNote}
+              </div>
+            )}
+          </div>
+        </SettingsSection>
+      )}
 
       <SettingsSection
         eyebrow={t('settings.setup', 'Setup')}

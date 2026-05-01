@@ -271,6 +271,74 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
   return <EditorContent editor={editor} className="document-tiptap-wysiwyg h-full" />
 }
 
+function TreeActionMenu({
+  label,
+  actions,
+}: {
+  label: string
+  actions: Array<{ key: string; label: string; onSelect: () => void; tone?: 'default' | 'danger' }>
+}) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+
+    const handlePointerDown = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+
+    window.addEventListener('mousedown', handlePointerDown)
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      window.removeEventListener('mousedown', handlePointerDown)
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={menuRef} className="relative shrink-0">
+      <button
+        type="button"
+        aria-label={`More actions: ${label}`}
+        aria-haspopup="menu"
+        onClick={(event) => {
+          event.stopPropagation()
+          setOpen((current) => !current)
+        }}
+        className="flex h-6 min-w-6 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/72 px-1.5 text-[11px] font-semibold leading-none text-text-muted transition-colors hover:text-text-primary"
+      >
+        ...
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-[calc(100%+0.25rem)] z-30 min-w-40 overflow-hidden rounded-2xl border border-border-subtle/60 bg-surface-1/98 p-1 shadow-[0_18px_48px_rgba(15,23,42,0.24)]">
+          {actions.map((action) => (
+            <button
+              key={action.key}
+              type="button"
+              role="menuitem"
+              onClick={(event) => {
+                event.stopPropagation()
+                setOpen(false)
+                action.onSelect()
+              }}
+              className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-[12px] transition-colors ${action.tone === 'danger' ? 'text-danger hover:bg-danger/10' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function TreeNode({
   node,
   childrenByParent,
@@ -317,7 +385,7 @@ function TreeNode({
 
   return (
     <div>
-      <div className={`group flex items-center gap-1 rounded-2xl px-1.5 py-1 transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
+      <div className={`group relative flex items-center gap-0.5 rounded-xl px-1 py-0.5 text-[12px] transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
         {isEditing ? (
           <>
             {node.type === 'folder' ? (
@@ -326,16 +394,16 @@ function TreeNode({
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => onToggle(node.id)}
                 aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${nodeDisplayName}` : `${t('documents.expandFolder', 'Expand folder')}: ${nodeDisplayName}`}
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
                 title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}
               >
                 <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
               </button>
             ) : (
-              <span className="h-8 w-8 shrink-0" />
+              <span className="h-7 w-7 shrink-0" />
             )}
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
-              <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={15} color="currentColor" />
+            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
+              <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={14} color="currentColor" />
             </span>
             <input
               autoFocus
@@ -347,7 +415,7 @@ function TreeNode({
                 if (event.key === 'Escape') onCancelRename()
               }}
               aria-label={t('documents.nodeName', 'Document or folder name')}
-              className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-2 text-[12px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"
+              className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"
             />
             <button
               type="button"
@@ -355,7 +423,7 @@ function TreeNode({
               onClick={onCommitRename}
               aria-label={t('documents.saveNodeName', 'Save name')}
               title={t('common.save', 'Save')}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success transition-colors hover:bg-success/15"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success transition-colors hover:bg-success/15"
             >
               <IconifyIcon name="ui-check" size={14} color="currentColor" />
             </button>
@@ -365,7 +433,7 @@ function TreeNode({
               onClick={onCancelRename}
               aria-label={t('documents.cancelRename', 'Cancel rename')}
               title={t('common.cancel', 'Cancel')}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
             >
               <IconifyIcon name="ui-close" size={14} color="currentColor" />
             </button>
@@ -383,79 +451,57 @@ function TreeNode({
                 }
               }}
               onDoubleClick={() => onStartRename(node)}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left"
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-1 py-1 text-left text-[12px]"
             >
               {node.type === 'folder' ? (
-                <span className="flex h-5 w-5 shrink-0 items-center justify-center text-text-muted">
+                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-text-muted">
                   <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
                 </span>
               ) : (
-                <span className="h-5 w-5 shrink-0" />
+                <span className="h-4 w-4 shrink-0" />
               )}
-              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
-                <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={15} color="currentColor" />
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
+                <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={14} color="currentColor" />
               </span>
-              <span className="min-w-0 flex-1 truncate font-medium">{nodeDisplayName}</span>
+              <span className="min-w-0 flex-1 truncate font-medium leading-5">{nodeDisplayName}</span>
             </button>
-            <div className={`flex shrink-0 items-center gap-1 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
-              {node.type === 'folder' && (
-                <>
-                  <button
-                    type="button"
-                    title={t('documents.newDocInFolder', 'New child document')}
-                    aria-label={`${t('documents.newDocInFolder', 'New child document')}: ${node.title}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onCreateDocument(node.id, node.groupId)
-                    }}
-                    className="flex h-7 w-7 items-center justify-center rounded-xl bg-accent/15 text-accent transition-colors hover:bg-accent/25"
-                  >
-                    <IconifyIcon name="ui-plus" size={13} color="currentColor" />
-                  </button>
-                  <button
-                    type="button"
-                    title={t('documents.newSubfolder', 'New subfolder')}
-                    aria-label={`${t('documents.newSubfolder', 'New subfolder')}: ${node.title}`}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      onCreateFolder(node.id, node.groupId)
-                    }}
-                    className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
-                  >
-                    <IconifyIcon name="skill-filesystem" size={13} color="currentColor" />
-                  </button>
-                </>
-              )}
-              <button
-                type="button"
-                title={t('common.rename', 'Rename')}
-                aria-label={`${t('common.rename', 'Rename')}: ${nodeDisplayName}`}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onStartRename(node)
-                }}
-                className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
-              >
-                <IconifyIcon name="ui-edit" size={13} color="currentColor" />
-              </button>
-              <button
-                type="button"
-                title={t('common.delete', 'Delete')}
-                aria-label={`${t('common.delete', 'Delete')}: ${nodeDisplayName}`}
-                onClick={(event) => {
-                  event.stopPropagation()
-                  onDeleteNode(node)
-                }}
-                className="flex h-7 w-7 items-center justify-center rounded-xl border border-danger/20 bg-danger/10 text-danger transition-colors hover:bg-danger/15"
-              >
-                <IconifyIcon name="ui-trash" size={13} color="currentColor" />
-              </button>
+            <div className={`flex shrink-0 items-center transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
+              <TreeActionMenu
+                label={nodeDisplayName}
+                actions={[
+                  ...(node.type === 'folder'
+                    ? [
+                        {
+                          key: 'new-document',
+                          label: t('documents.newDocInFolder', 'New child document'),
+                          onSelect: () => onCreateDocument(node.id, node.groupId),
+                        },
+                        {
+                          key: 'new-folder',
+                          label: t('documents.newSubfolder', 'New subfolder'),
+                          onSelect: () => onCreateFolder(node.id, node.groupId),
+                        },
+                      ]
+                    : []),
+                  {
+                    key: 'rename',
+                    label: t('common.rename', 'Rename'),
+                    onSelect: () => onStartRename(node),
+                  },
+                  {
+                    key: 'delete',
+                    label: t('common.delete', 'Delete'),
+                    onSelect: () => onDeleteNode(node),
+                    tone: 'danger',
+                  },
+                ]}
+              />
             </div>
           </>
         )}
       </div>
       {node.type === 'folder' && isExpanded && children.length > 0 && (
-        <div className="mt-1 space-y-1 pl-4">
+        <div className="mt-1 space-y-1 pl-3">
           {children.map((child) => (
             <TreeNode
               key={child.id}
@@ -550,7 +596,7 @@ function GroupTreeNode({
 
   return (
     <div>
-      <div className={`group flex items-center gap-1 rounded-2xl px-1.5 py-1 transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
+      <div className={`group relative flex items-center gap-0.5 rounded-xl px-1 py-0.5 text-[12px] transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
         {isEditing ? (
           <>
             <button
@@ -558,13 +604,13 @@ function GroupTreeNode({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => onToggle(group.id)}
               aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${group.name}` : `${t('documents.expandFolder', 'Expand folder')}: ${group.name}`}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
               title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}
             >
               <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
             </button>
-            <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-white/95 ${getDocumentGroupColorClass(group.color)}`}>
-              <IconifyIcon name="skill-filesystem" size={15} color="currentColor" />
+            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl text-white/95 ${getDocumentGroupColorClass(group.color)}`}>
+              <IconifyIcon name="skill-filesystem" size={14} color="currentColor" />
             </span>
             <input
               autoFocus
@@ -575,13 +621,13 @@ function GroupTreeNode({
                 if (event.key === 'Enter' && !event.nativeEvent.isComposing) onCommitRenameGroup()
                 if (event.key === 'Escape') onCancelRenameGroup()
               }}
-              className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-2 text-[12px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"
+              className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"
               aria-label={t('documents.groupName', 'Group name')}
             />
-            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCommitRenameGroup} title={t('common.save', 'Save')} aria-label={t('documents.saveGroupName', 'Save group name')} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success hover:bg-success/15">
+            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCommitRenameGroup} title={t('common.save', 'Save')} aria-label={t('documents.saveGroupName', 'Save group name')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success hover:bg-success/15">
               <IconifyIcon name="ui-check" size={14} color="currentColor" />
             </button>
-            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCancelRenameGroup} title={t('common.cancel', 'Cancel')} aria-label={t('documents.cancelGroupRename', 'Cancel group rename')} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted hover:text-text-primary">
+            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCancelRenameGroup} title={t('common.cancel', 'Cancel')} aria-label={t('documents.cancelGroupRename', 'Cancel group rename')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted hover:text-text-primary">
               <IconifyIcon name="ui-close" size={14} color="currentColor" />
             </button>
           </>
@@ -591,39 +637,55 @@ function GroupTreeNode({
               type="button"
               onClick={() => onSelectGroup(group)}
               onDoubleClick={() => onStartRenameGroup(group)}
-              className="flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1.5 py-1.5 text-left"
+              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-1 py-1 text-left text-[12px]"
             >
-              <span className="flex h-5 w-5 shrink-0 items-center justify-center text-text-muted">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center text-text-muted">
                 <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
               </span>
-              <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-white/95 ${getDocumentGroupColorClass(group.color)}`}>
-                <IconifyIcon name="skill-filesystem" size={15} color="currentColor" />
+              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl text-white/95 ${getDocumentGroupColorClass(group.color)}`}>
+                <IconifyIcon name="skill-filesystem" size={14} color="currentColor" />
               </span>
-              <span className="min-w-0 flex-1 truncate font-semibold">{group.name}</span>
-              <span className="shrink-0 rounded-lg bg-surface-2/60 px-1.5 py-0.5 text-[10px] text-text-muted">{documentCount}</span>
+              <span className="min-w-0 flex-1 truncate font-semibold leading-5">{group.name}</span>
+              <span className="shrink-0 rounded-lg bg-surface-2/60 px-1.5 py-0.5 text-[9px] text-text-muted">{documentCount}</span>
             </button>
-            <div className={`flex shrink-0 items-center gap-1 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
-              <button type="button" title={t('documents.newDoc', 'New Document')} aria-label={`${t('documents.newDoc', 'New Document')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onCreateDocument(null, group.id) }} className="flex h-7 w-7 items-center justify-center rounded-xl bg-accent/15 text-accent transition-colors hover:bg-accent/25">
-                <IconifyIcon name="ui-plus" size={13} color="currentColor" />
-              </button>
-              <button type="button" title={t('documents.newFolderButton', 'New Folder')} aria-label={`${t('documents.newFolderButton', 'New Folder')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onCreateFolder(null, group.id) }} className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary">
-                <IconifyIcon name="skill-filesystem" size={13} color="currentColor" />
-              </button>
-              <button type="button" title={t('documents.groupGraph', 'Knowledge Graph')} aria-label={`${t('documents.groupGraph', 'Knowledge Graph')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onSelectGroup(group) }} className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary">
-                <IconifyIcon name="ui-chart" size={13} color="currentColor" />
-              </button>
-              <button type="button" title={t('common.rename', 'Rename')} aria-label={`${t('common.rename', 'Rename')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onStartRenameGroup(group) }} className="flex h-7 w-7 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary">
-                <IconifyIcon name="ui-edit" size={13} color="currentColor" />
-              </button>
-              <button type="button" title={t('common.delete', 'Delete')} aria-label={`${t('common.delete', 'Delete')}: ${group.name}`} onClick={(event) => { event.stopPropagation(); onDeleteGroup(group) }} className="flex h-7 w-7 items-center justify-center rounded-xl border border-danger/20 bg-danger/10 text-danger transition-colors hover:bg-danger/15">
-                <IconifyIcon name="ui-trash" size={13} color="currentColor" />
-              </button>
+            <div className={`flex shrink-0 items-center transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
+              <TreeActionMenu
+                label={group.name}
+                actions={[
+                  {
+                    key: 'new-document',
+                    label: t('documents.newDoc', 'New Document'),
+                    onSelect: () => onCreateDocument(null, group.id),
+                  },
+                  {
+                    key: 'new-folder',
+                    label: t('documents.newFolderButton', 'New Folder'),
+                    onSelect: () => onCreateFolder(null, group.id),
+                  },
+                  {
+                    key: 'graph',
+                    label: t('documents.groupGraph', 'Knowledge Graph'),
+                    onSelect: () => onSelectGroup(group),
+                  },
+                  {
+                    key: 'rename',
+                    label: t('common.rename', 'Rename'),
+                    onSelect: () => onStartRenameGroup(group),
+                  },
+                  {
+                    key: 'delete',
+                    label: t('common.delete', 'Delete'),
+                    onSelect: () => onDeleteGroup(group),
+                    tone: 'danger',
+                  },
+                ]}
+              />
             </div>
           </>
         )}
       </div>
       {isExpanded && children.length > 0 && (
-        <div className="mt-1 space-y-1 pl-4">
+        <div className="mt-1 space-y-1 pl-3">
           {children.map((child) => (
             <TreeNode
               key={child.id}

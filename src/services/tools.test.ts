@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { DocumentGroup, DocumentNode } from '@/types'
 import { buildToolHints, builtinToolDefs, setLiveStoreAccessor } from './tools'
 
-function getDescription(toolName: 'web_search' | 'list_documents' | 'query_document_graph' | 'read_document') {
+function getDescription(toolName: 'web_search' | 'list_documents' | 'query_document_graph' | 'read_document' | 'write_file' | 'append_file') {
   return (builtinToolDefs[toolName] as { description?: string }).description ?? ''
 }
 
@@ -77,5 +77,46 @@ describe('builtin tool guidance', () => {
     expect(parsed.relatedDocuments.map((doc) => doc.id)).toContain('budget')
     expect(parsed.relatedDocuments.find((doc) => doc.id === 'budget')?.reasons.join(' ')).toContain('references')
     expect(parsed.tags).toContain('amber')
+  })
+
+  it('guides large file writes toward chunking with append_file', () => {
+    expect(getDescription('write_file')).toContain('append_file')
+    expect(getDescription('append_file')).toContain('chunked writes')
+
+    const hints = buildToolHints(['write_file', 'append_file'])
+    expect(hints).toContain('Large file writes')
+    expect(hints).toContain('continue with append_file')
+  })
+
+  it('routes append_file through the append IPC channel', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.append_file.execute>>[1]
+    const invoke = vi.fn().mockResolvedValue({ success: true })
+
+    setLiveStoreAccessor(() => ({
+      workspacePath: '/workspace',
+      toolSecurity: {
+        allowedDirectories: [],
+        blockedCommands: [],
+        requireConfirmation: false,
+        sandboxMode: 'workspace',
+      },
+    }))
+
+    Object.defineProperty(window, 'electron', {
+      configurable: true,
+      value: { invoke },
+    })
+
+    try {
+      const output = await builtinToolDefs.append_file.execute?.({
+        path: '/workspace/notes/output.md',
+        content: 'chunk-2',
+      }, toolOptions)
+
+      expect(output).toContain('Successfully appended 7 characters')
+      expect(invoke).toHaveBeenCalledWith('fs:appendFile', '/workspace/notes/output.md', 'chunk-2')
+    } finally {
+      Reflect.deleteProperty(window, 'electron')
+    }
   })
 })

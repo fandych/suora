@@ -560,7 +560,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   write_file: tool({
-    description: 'Write text content to a file. Creates the file if it does not exist, overwrites if it does. Also creates missing parent directories.',
+    description: 'Write text content to a file. Creates the file if it does not exist, overwrites if it does, and creates missing parent directories. For long files, write the first chunk with write_file, then continue with append_file instead of sending the entire body in one call.',
     inputSchema: z.object({
       path: z.string().describe('Absolute path of the file to write'),
       content: z.string().describe('Text content to write to the file'),
@@ -574,6 +574,24 @@ export const builtinToolDefs: ToolSet = {
         return `Error: ${(result as { error: string }).error}`
       }
       return `Successfully wrote ${content.length} characters to ${path}`
+    },
+  }),
+
+  append_file: tool({
+    description: 'Append text content to the end of a file. Creates the file if it does not exist and also creates missing parent directories. Use this for chunked writes when a full file would be too large for one write_file call.',
+    inputSchema: z.object({
+      path: z.string().describe('Absolute path of the file to append to'),
+      content: z.string().describe('Text content to append'),
+    }),
+    execute: async ({ path, content }) => {
+      const blocked = ensureAllowedPath(path)
+      if (blocked) return blocked
+      if (!(await confirmIfNeeded(`append_file\n${path}`))) return 'Cancelled by user confirmation policy.'
+      const result = await electronInvoke('fs:appendFile', path, content)
+      if (typeof result === 'object' && result && 'error' in result) {
+        return `Error: ${(result as { error: string }).error}`
+      }
+      return `Successfully appended ${content.length} characters to ${path}`
     },
   }),
 
@@ -2862,6 +2880,7 @@ export const TOOL_META: Record<string, ToolMeta> = {
 
   // ── Write tools (not destructive) ──
   write_file:            { userFacingName: 'Write file', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true, searchHint: 'create write file' },
+  append_file:           { userFacingName: 'Append file', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true, searchHint: 'append chunk write file' },
   edit_file:             { userFacingName: 'Edit file', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true, searchHint: 'edit replace text' },
   create_directory:      { userFacingName: 'Create dir', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
   copy_file:             { userFacingName: 'Copy file', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
@@ -2960,6 +2979,8 @@ export function buildToolHints(toolNames: string[]): string {
   const hasDocumentGraph = toolNames.includes('query_document_graph')
   const hasDocumentRead = toolNames.includes('read_document')
   const hasWebSearch = toolNames.includes('web_search')
+  const hasWriteFile = toolNames.includes('write_file')
+  const hasAppendFile = toolNames.includes('append_file')
 
   for (const name of toolNames) {
     const meta = getToolMeta(name)
@@ -2988,6 +3009,9 @@ export function buildToolHints(toolNames: string[]): string {
   }
   if (hasWebSearch && (hasDocumentGraph || hasDocumentSearch)) {
     lines.push('Only use web_search after local document tools are insufficient or when the question is clearly about external/public information.')
+  }
+  if (hasWriteFile && hasAppendFile) {
+    lines.push('Large file writes: do not send a very large file body in one write_file call. Write the first chunk with write_file, then continue with append_file until the file is complete.')
   }
 
   if (lines.length === 0) return ''

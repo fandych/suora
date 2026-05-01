@@ -29,6 +29,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'fs:readFile',
   'fs:readFileRange',
   'fs:writeFile',
+  'fs:appendFile',
   'fs:deleteFile',
   'fs:deleteDir',
   'fs:editFile',
@@ -81,6 +82,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'channel:debugSend',
   'updater:check',
   'updater:getVersion',
+  'updater:getState',
+  'updater:install',
   'email:send',
   'email:test',
   'deep-link:getProtocol',
@@ -106,6 +109,7 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'channel:message',
   'ai:fetch:event',
   'updater:available',
+  'updater:state',
   'deep-link',
 ]
 

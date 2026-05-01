@@ -89,19 +89,23 @@ export function getPluginToolNames(pluginId: string): string[] {
   return tools ? Object.keys(tools) : []
 }
 
+function readPersistedStoreState(): Record<string, unknown> {
+  try {
+    const raw = readCached('suora-store')
+    return raw ? safeParse<{ state?: Record<string, unknown> }>(raw).state || {} : {}
+  } catch {
+    return {}
+  }
+}
+
+function getElectronBridge(): { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> } | null {
+  const electron = (window as unknown as { electron?: { invoke: (channel: string, ...args: unknown[]) => Promise<unknown> } }).electron
+  return electron?.invoke ? electron : null
+}
+
 // ─── Plugin API Context Factory ────────────────────────────────────
 
 export function createPluginAPIContext(pluginId: string, permissions: PluginPermission[]): PluginAPIContext {
-  // Lazy helpers that read store without circular dependency
-  function getStoreState(): Record<string, unknown> {
-    try {
-      const raw = readCached('suora-store')
-      return raw ? safeParse<{ state?: Record<string, unknown> }>(raw).state || {} : {}
-    } catch {
-      return {}
-    }
-  }
-
   return {
     pluginId,
     permissions,
@@ -109,7 +113,7 @@ export function createPluginAPIContext(pluginId: string, permissions: PluginPerm
       messages: {
         getHistory: (sessionId: string) => {
           requirePermission(pluginId, 'messages:read')
-          const state = getStoreState()
+          const state = readPersistedStoreState()
           const sessions = (state.sessions || []) as Array<{ id: string; messages: Array<{ role: string; content: string }> }>
           const session = sessions.find((s) => s.id === sessionId)
           return (session?.messages || []).map((m) => ({ role: m.role, content: m.content }))
@@ -124,12 +128,12 @@ export function createPluginAPIContext(pluginId: string, permissions: PluginPerm
       agents: {
         list: () => {
           requirePermission(pluginId, 'agents:read')
-          const state = getStoreState()
+            const state = readPersistedStoreState()
           return ((state.agents || []) as Array<{ id: string; name: string }>).map((a) => ({ id: a.id, name: a.name }))
         },
         getById: (id: string) => {
           requirePermission(pluginId, 'agents:read')
-          const state = getStoreState()
+            const state = readPersistedStoreState()
           const agents = (state.agents || []) as Array<{ id: string; name: string; systemPrompt: string }>
           const agent = agents.find((a) => a.id === id)
           return agent ? { id: agent.id, name: agent.name, systemPrompt: agent.systemPrompt } : null
@@ -138,7 +142,7 @@ export function createPluginAPIContext(pluginId: string, permissions: PluginPerm
       sessions: {
         getCurrent: () => {
           requirePermission(pluginId, 'sessions:read')
-          const state = getStoreState()
+            const state = readPersistedStoreState()
           const activeId = state.activeSessionId as string | null
           const sessions = (state.sessions || []) as Array<{ id: string; title: string }>
           const session = activeId ? sessions.find((s) => s.id === activeId) : null
@@ -155,13 +159,12 @@ export function createPluginAPIContext(pluginId: string, permissions: PluginPerm
       settings: {
         get: (key: string) => {
           requirePermission(pluginId, 'settings:read')
-          const state = getStoreState()
+          const state = readPersistedStoreState()
           return state[key]
         },
         set: (key: string, value: unknown) => {
           requirePermission(pluginId, 'settings:write')
-          // Settings mutation is done via store; plugins can only set their own config
-          const state = getStoreState()
+          const state = readPersistedStoreState()
           const plugins = (state.plugins || {}) as Record<string, unknown>
           plugins[`${pluginId}:${key}`] = value
         },
@@ -826,14 +829,61 @@ export const BUILTIN_PLUGIN_MODULES: Record<string, PluginModule> = {
     },
     tools: {
       email_send: {
-        description: 'Compose and send an email',
+        description: 'Send an email using the SMTP mailbox configured in Settings > Email.',
         inputSchema: z.object({
           to: z.string().describe('Recipient email address'),
           subject: z.string().describe('Email subject'),
           body: z.string().describe('Email body text'),
+          cc: z.string().optional().describe('CC recipients, comma-separated'),
+          bcc: z.string().optional().describe('BCC recipients, comma-separated'),
+          isHtml: z.boolean().optional().describe('Whether the body is HTML (default: false)'),
         }),
-        execute: async ({ to, subject }) => {
-          return `[Email] Draft created: To=${to}, Subject="${subject}"`
+        execute: async ({ to, subject, body, cc, bcc, isHtml }) => {
+          const state = readPersistedStoreState()
+          const cfg = (state.emailConfig || {}) as {
+            smtpHost?: string
+            smtpPort?: number
+            secure?: boolean
+            username?: string
+            password?: string
+            fromName?: string
+            fromAddress?: string
+            enabled?: boolean
+          }
+
+          if (!cfg.enabled || !cfg.smtpHost || !cfg.fromAddress) {
+            const reason = !cfg.enabled ? 'email is disabled' : !cfg.smtpHost ? 'SMTP host is empty' : 'from address is empty'
+            return `Error: Email not configured (${reason}). Please set up SMTP in Settings > Email.`
+          }
+
+          const electron = getElectronBridge()
+          if (!electron) {
+            return 'Error: Electron IPC not available — cannot send email from browser mode.'
+          }
+
+          const port = cfg.smtpPort || 587
+          const result = await electron.invoke('email:send', {
+            smtpHost: cfg.smtpHost,
+            smtpPort: port,
+            secure: cfg.secure || false,
+            username: cfg.username || '',
+            password: cfg.password || '',
+            fromName: cfg.fromName || '',
+            fromAddress: cfg.fromAddress,
+          }, {
+            to,
+            subject,
+            body,
+            cc,
+            bcc,
+            isHtml: isHtml || false,
+          }) as { success?: boolean; messageId?: string; error?: string }
+
+          if (!result?.success) {
+            return `Error sending email: ${result?.error || 'Unknown error'}`
+          }
+
+          return `Email sent successfully to ${to}. Message ID: ${result.messageId || 'N/A'}`
         },
       },
       email_check: {
