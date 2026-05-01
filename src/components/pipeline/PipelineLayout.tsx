@@ -1265,7 +1265,7 @@ export function PipelineLayout() {
                                     <select
                                       value={step.modelId ?? ''}
                                       onChange={(event) => updateStep(idx, { modelId: event.target.value || undefined })}
-                                      className="h-8 max-w-[10rem] rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                      className="h-8 max-w-40 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                                     >
                                       <option value="">{t('agents.pipelineStepModelDefault', 'Use agent default')}</option>
                                       {models.map((modelOption) => (
@@ -1287,7 +1287,7 @@ export function PipelineLayout() {
                                           ...(next !== 'json-path' ? { outputTransformPath: undefined } : {}),
                                         })
                                       }}
-                                      className="h-8 max-w-[10rem] rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
+                                      className="h-8 max-w-40 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                                     >
                                       <option value="">{t('agents.pipelineStepOutputTransformNone', 'None')}</option>
                                       <option value="trim">{t('agents.pipelineStepOutputTransformTrim', 'Trim whitespace')}</option>

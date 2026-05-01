@@ -1,5 +1,5 @@
 import type { DocumentGroup, DocumentItem, DocumentNode } from '@/types'
-import { getDocumentDisplayName } from '@/services/documents'
+import { getDocumentDisplayName, searchDocuments } from '@/services/documents'
 
 export type DocumentGraphNodeType = 'group' | 'folder' | 'document' | 'tag' | 'external-link'
 export type DocumentGraphEdgeType = 'contains' | 'references' | 'tagged' | 'external-link'
@@ -48,9 +48,42 @@ export interface BuildDocumentGraphOptions {
   groupId?: string | null
 }
 
+export interface QueryDocumentGraphOptions {
+  query?: string | null
+  documentIdOrTitle?: string | null
+  groupId?: string | null
+  seedLimit?: number
+  relatedLimit?: number
+}
+
+export interface DocumentGraphQueryDocument {
+  id: string
+  title: string
+  groupId: string
+  path?: string
+  excerpt: string
+  score: number
+  isSeed: boolean
+  reasons: string[]
+}
+
+export interface DocumentGraphQueryResult {
+  seeds: DocumentGraphQueryDocument[]
+  relatedDocuments: DocumentGraphQueryDocument[]
+  tags: string[]
+  externalLinks: string[]
+}
+
 interface DocumentReference {
   label: string
   target: string
+}
+
+interface GraphDocumentMatch {
+  doc: DocumentItem
+  score: number
+  reasons: Set<string>
+  isSeed: boolean
 }
 
 // Regex factories: each call returns a fresh /g regex so `lastIndex` state cannot
@@ -88,6 +121,46 @@ function externalLinkLabel(url: string) {
 
 function edgeId(type: DocumentGraphEdgeType, source: string, target: string, suffix = '') {
   return `doc-graph-edge:${type}:${source}->${target}${suffix ? `:${suffix}` : ''}`
+}
+
+function resolveGraphDocument(nodes: DocumentNode[], documentIdOrTitle: string, groupId?: string | null): DocumentItem | null {
+  const query = documentIdOrTitle.trim().toLowerCase()
+  const docs = nodes
+    .filter(isDocument)
+    .filter((doc) => !groupId || doc.groupId === groupId)
+
+  return docs.find((doc) => doc.id === documentIdOrTitle)
+    ?? docs.find((doc) => doc.title.toLowerCase() === query)
+    ?? docs.find((doc) => doc.title.toLowerCase().includes(query))
+    ?? null
+}
+
+function summarizeGraphDocument(markdown: string, maxLength = 180) {
+  const compact = markdown.replace(/\s+/g, ' ').trim()
+  return compact.length > maxLength ? `${compact.slice(0, maxLength)}...` : compact
+}
+
+function describeDocumentConnection(edge: DocumentGraphEdge, seedTitle: string, relatedTitle: string, seedNodeId: string) {
+  if (edge.type === 'references') {
+    return edge.source === seedNodeId
+      ? `${seedTitle} references ${relatedTitle}`
+      : `${relatedTitle} references ${seedTitle}`
+  }
+
+  return `${seedTitle} is connected to ${relatedTitle}`
+}
+
+function toQueryDocument(match: GraphDocumentMatch, graphNode?: DocumentGraphNode): DocumentGraphQueryDocument {
+  return {
+    id: match.doc.id,
+    title: match.doc.title,
+    groupId: match.doc.groupId,
+    path: graphNode?.metadata.path,
+    excerpt: graphNode?.metadata.excerpt ?? summarizeGraphDocument(match.doc.markdown),
+    score: match.score,
+    isSeed: match.isSeed,
+    reasons: Array.from(match.reasons).sort((a, b) => a.localeCompare(b)),
+  }
 }
 
 export function buildDocumentPath(node: DocumentNode, nodes: DocumentNode[], nodeById?: Map<string, DocumentNode>): string {
@@ -351,5 +424,146 @@ export function buildDocumentGraph(
     referencesByDocumentId,
     orphanDocumentIds,
     tags: Array.from(tags).sort((a, b) => a.localeCompare(b)),
+  }
+}
+
+export function queryDocumentGraph(
+  graph: DocumentGraph,
+  nodes: DocumentNode[],
+  options: QueryDocumentGraphOptions,
+): DocumentGraphQueryResult {
+  const nodeById = new Map(graph.nodes.map((node) => [node.id, node]))
+  const graphNodeByDocumentId = new Map(
+    graph.nodes
+      .filter((node): node is DocumentGraphNode & { documentId: string } => node.type === 'document' && !!node.documentId)
+      .map((node) => [node.documentId, node]),
+  )
+  const docsById = new Map(
+    nodes
+      .filter(isDocument)
+      .filter((doc) => !options.groupId || doc.groupId === options.groupId)
+      .map((doc) => [doc.id, doc]),
+  )
+  const edgesByNodeId = new Map<string, DocumentGraphEdge[]>()
+  const tags = new Set<string>()
+  const externalLinks = new Set<string>()
+  const matches = new Map<string, GraphDocumentMatch>()
+  const seeds: Array<{ doc: DocumentItem; score: number; reason: string }> = []
+  const seenSeedIds = new Set<string>()
+  const seedLimit = options.seedLimit ?? 4
+  const relatedLimit = options.relatedLimit ?? 8
+  const trimmedQuery = options.query?.trim()
+  const trimmedDocumentIdOrTitle = options.documentIdOrTitle?.trim()
+
+  const addSeed = (doc: DocumentItem, score: number, reason: string) => {
+    if (!graphNodeByDocumentId.has(doc.id) || seenSeedIds.has(doc.id)) return
+    seenSeedIds.add(doc.id)
+    seeds.push({ doc, score, reason })
+  }
+
+  const addDocumentMatch = (doc: DocumentItem, score: number, reason: string, isSeed = false) => {
+    const existing = matches.get(doc.id)
+    if (existing) {
+      existing.score = Math.max(existing.score, score)
+      existing.isSeed = existing.isSeed || isSeed
+      existing.reasons.add(reason)
+      return
+    }
+
+    matches.set(doc.id, {
+      doc,
+      score,
+      reasons: new Set([reason]),
+      isSeed,
+    })
+  }
+
+  graph.edges.forEach((edge) => {
+    const source = edgesByNodeId.get(edge.source) ?? []
+    source.push(edge)
+    edgesByNodeId.set(edge.source, source)
+
+    const target = edgesByNodeId.get(edge.target) ?? []
+    target.push(edge)
+    edgesByNodeId.set(edge.target, target)
+  })
+
+  if (trimmedQuery) {
+    searchDocuments(nodes, options.groupId ?? null, trimmedQuery)
+      .slice(0, seedLimit)
+      .forEach((result) => {
+        addSeed(result.node, result.score + 100, `Matches query "${trimmedQuery}"`)
+      })
+  }
+
+  if (trimmedDocumentIdOrTitle) {
+    const doc = resolveGraphDocument(nodes, trimmedDocumentIdOrTitle, options.groupId ?? null)
+    if (doc) {
+      addSeed(doc, 120, `Matched document "${doc.title}"`)
+    }
+  }
+
+  seeds.forEach((seed) => {
+    addDocumentMatch(seed.doc, seed.score, seed.reason, true)
+
+    const seedNode = graphNodeByDocumentId.get(seed.doc.id)
+    if (!seedNode) return
+
+    for (const edge of edgesByNodeId.get(seedNode.id) ?? []) {
+      const neighborId = edge.source === seedNode.id ? edge.target : edge.source
+      const neighborNode = nodeById.get(neighborId)
+      if (!neighborNode) continue
+
+      if (neighborNode.type === 'document' && neighborNode.documentId && neighborNode.documentId !== seed.doc.id) {
+        const relatedDoc = docsById.get(neighborNode.documentId)
+        if (!relatedDoc) continue
+        addDocumentMatch(
+          relatedDoc,
+          seed.score + edge.weight * 20,
+          describeDocumentConnection(edge, seed.doc.title, relatedDoc.title, seedNode.id),
+        )
+        continue
+      }
+
+      if (neighborNode.type === 'tag') {
+        const normalizedTag = neighborNode.label.replace(/^#/, '')
+        if (normalizedTag) tags.add(normalizedTag)
+
+        for (const tagEdge of edgesByNodeId.get(neighborNode.id) ?? []) {
+          const tagNeighborId = tagEdge.source === neighborNode.id ? tagEdge.target : tagEdge.source
+          const tagNeighborNode = nodeById.get(tagNeighborId)
+          if (!tagNeighborNode || tagNeighborNode.type !== 'document' || !tagNeighborNode.documentId || tagNeighborNode.documentId === seed.doc.id) {
+            continue
+          }
+
+          const relatedDoc = docsById.get(tagNeighborNode.documentId)
+          if (!relatedDoc) continue
+          addDocumentMatch(
+            relatedDoc,
+            seed.score + tagEdge.weight * 15,
+            `Shares tag ${neighborNode.label} with ${seed.doc.title}`,
+          )
+        }
+        continue
+      }
+
+      if (neighborNode.type === 'external-link' && neighborNode.metadata.url) {
+        externalLinks.add(neighborNode.metadata.url)
+      }
+    }
+  })
+
+  const rankedMatches = Array.from(matches.values()).sort((a, b) => b.score - a.score || b.doc.updatedAt - a.doc.updatedAt || a.doc.title.localeCompare(b.doc.title))
+
+  return {
+    seeds: rankedMatches
+      .filter((match) => match.isSeed)
+      .map((match) => toQueryDocument(match, graphNodeByDocumentId.get(match.doc.id))),
+    relatedDocuments: rankedMatches
+      .filter((match) => !match.isSeed)
+      .slice(0, relatedLimit)
+      .map((match) => toQueryDocument(match, graphNodeByDocumentId.get(match.doc.id))),
+    tags: Array.from(tags).sort((a, b) => a.localeCompare(b)),
+    externalLinks: Array.from(externalLinks).sort((a, b) => a.localeCompare(b)),
   }
 }

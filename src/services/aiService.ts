@@ -5,6 +5,46 @@ import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
 import { logger } from '@/services/logger'
 
+type ElectronBridge = {
+  invoke?: (channel: string, ...args: unknown[]) => Promise<unknown>
+  on?: (channel: string, listener: (...args: unknown[]) => void) => void
+  off?: (channel: string, listener: (...args: unknown[]) => void) => void
+}
+
+type AiFetchStartPayload = {
+  url: string
+  method?: string
+  headers?: Record<string, string>
+  bodyText?: string
+  bodyBase64?: string
+  timeoutMs?: number
+}
+
+type AiFetchStartResult = {
+  requestId?: string
+}
+
+type AiFetchEventPayload =
+  | { requestId: string; type: 'response'; status: number; statusText: string; headers: Record<string, string> }
+  | { requestId: string; type: 'data'; chunkBase64: string }
+  | { requestId: string; type: 'end' }
+  | { requestId: string; type: 'error'; error: string }
+
+type UsageLike = {
+  inputTokens?: number
+  outputTokens?: number
+  totalTokens?: number
+  raw?: unknown
+}
+
+type NormalizedUsage = {
+  promptTokens: number
+  completionTokens: number
+  totalTokens: number
+}
+
+let electronAiFetch: typeof fetch | null | undefined
+
 // ─── Provider type display names ──────────────────────────────────
 
 const PROVIDER_TYPE_NAMES: Record<string, string> = {
@@ -37,6 +77,204 @@ function isStreamDebugEnabled(): boolean {
 }
 
 const STREAM_DEBUG = isStreamDebugEnabled()
+
+function getElectronBridge(): ElectronBridge | undefined {
+  try {
+    if (typeof window === 'undefined') return undefined
+    return (window as unknown as { electron?: ElectronBridge }).electron
+  } catch {
+    return undefined
+  }
+}
+
+function createAbortError(): DOMException {
+  return new DOMException('The operation was aborted.', 'AbortError')
+}
+
+function encodeBase64(bytes: Uint8Array): string {
+  let binary = ''
+  const chunkSize = 0x8000
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize)
+    binary += String.fromCharCode(...chunk)
+  }
+  return btoa(binary)
+}
+
+function decodeBase64(base64: string): Uint8Array {
+  const binary = atob(base64)
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index)
+  }
+  return bytes
+}
+
+function finiteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+function getProviderTotalTokens(raw: unknown): number | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const rawRecord = raw as Record<string, unknown>
+  return finiteNumber(rawRecord.total_tokens) ?? finiteNumber(rawRecord.totalTokens)
+}
+
+function normalizeUsage(usage: UsageLike | undefined): NormalizedUsage | undefined {
+  if (!usage) return undefined
+  const promptTokens = finiteNumber(usage.inputTokens) ?? 0
+  const completionTokens = finiteNumber(usage.outputTokens) ?? 0
+  const providerTotalTokens = getProviderTotalTokens(usage.raw)
+  const totalTokens = providerTotalTokens ?? finiteNumber(usage.totalTokens) ?? (promptTokens + completionTokens)
+  return { promptTokens, completionTokens, totalTokens }
+}
+
+async function serializeRequestBody(request: Request): Promise<Pick<AiFetchStartPayload, 'bodyText' | 'bodyBase64'>> {
+  if (!request.body || request.method === 'GET' || request.method === 'HEAD') {
+    return {}
+  }
+
+  const contentType = request.headers.get('content-type')?.toLowerCase() ?? ''
+  if (
+    contentType.includes('application/json')
+    || contentType.startsWith('text/')
+    || contentType.includes('application/x-www-form-urlencoded')
+  ) {
+    return { bodyText: await request.text() }
+  }
+
+  const buffer = await request.arrayBuffer()
+  return { bodyBase64: encodeBase64(new Uint8Array(buffer)) }
+}
+
+function getProviderFetch(): typeof fetch | undefined {
+  const bridge = getElectronBridge()
+  if (!bridge?.invoke || !bridge.on || !bridge.off) {
+    electronAiFetch = undefined
+    return undefined
+  }
+  if (electronAiFetch) return electronAiFetch
+
+  electronAiFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const currentBridge = getElectronBridge()
+    if (!currentBridge?.invoke || !currentBridge.on || !currentBridge.off) {
+      return fetch(input, init)
+    }
+    const invoke = currentBridge.invoke
+    const on = currentBridge.on
+    const off = currentBridge.off
+
+    const request = new Request(input, init)
+    if (request.signal.aborted) {
+      throw createAbortError()
+    }
+
+    const headers = Object.fromEntries(request.headers.entries())
+    const bodyPayload = await serializeRequestBody(request.clone())
+    const payload: AiFetchStartPayload = {
+      url: request.url,
+      method: request.method,
+      headers,
+      ...bodyPayload,
+    }
+
+    return new Promise<Response>(async (resolve, reject) => {
+      let requestId: string | undefined
+      let responseResolved = false
+      let streamClosed = false
+
+      let streamController: ReadableStreamDefaultController<Uint8Array> | undefined
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          streamController = controller
+        },
+        cancel() {
+          if (requestId) {
+            void currentBridge.invoke?.('ai:fetch:abort', requestId).catch(() => {})
+          }
+        },
+      })
+
+      const cleanup = () => {
+        off('ai:fetch:event', handleEvent)
+        request.signal.removeEventListener('abort', handleAbort)
+      }
+
+      const fail = (error: Error) => {
+        cleanup()
+        if (!responseResolved) {
+          reject(error)
+          return
+        }
+        if (!streamClosed) {
+          streamClosed = true
+          streamController?.error(error)
+        }
+      }
+
+      const closeStream = () => {
+        cleanup()
+        if (!streamClosed) {
+          streamClosed = true
+          streamController?.close()
+        }
+      }
+
+      const handleAbort = () => {
+        if (requestId) {
+          void invoke('ai:fetch:abort', requestId).catch(() => {})
+        }
+        fail(createAbortError())
+      }
+
+      const handleEvent = (...args: unknown[]) => {
+        const payloadEvent = args[1] as AiFetchEventPayload | undefined
+        if (!payloadEvent || !requestId || payloadEvent.requestId !== requestId) return
+
+        switch (payloadEvent.type) {
+          case 'response': {
+            if (responseResolved) return
+            responseResolved = true
+            resolve(new Response(stream, {
+              status: payloadEvent.status,
+              statusText: payloadEvent.statusText,
+              headers: payloadEvent.headers,
+            }))
+            return
+          }
+          case 'data': {
+            if (streamClosed) return
+            streamController?.enqueue(decodeBase64(payloadEvent.chunkBase64))
+            return
+          }
+          case 'end': {
+            closeStream()
+            return
+          }
+          case 'error': {
+            fail(new Error(payloadEvent.error))
+            return
+          }
+        }
+      }
+
+      on('ai:fetch:event', handleEvent)
+      request.signal.addEventListener('abort', handleAbort, { once: true })
+
+      try {
+        const startResult = await invoke('ai:fetch:start', payload) as AiFetchStartResult
+        if (!startResult?.requestId) {
+          throw new Error('AI fetch proxy did not return a request ID')
+        }
+        requestId = startResult.requestId
+      } catch (error: unknown) {
+        fail(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+  }
+
+  return electronAiFetch
+}
 
 // ─── Error classification ──────────────────────────────────────────
 
@@ -266,6 +504,9 @@ export function initializeProvider(
   }
 
   const effectiveApiKey = normalizeProviderApiKey(providerType, apiKey)
+  const providerFetch = getProviderFetch()
+  const providerFetchOption = providerFetch ? { fetch: providerFetch } : {}
+  const openAICompatibleProviderOptions = { ...providerFetchOption, includeUsage: true }
   const key = `${providerId ?? providerType}:${providerType}:${effectiveApiKey}:${baseUrl ?? ''}`
   if (providerInstances.has(key)) {
     // Refresh LRU position
@@ -276,21 +517,23 @@ export function initializeProvider(
   let instance: ProviderInstance
   switch (providerType) {
     case 'anthropic':
-      instance = createAnthropic({ apiKey: effectiveApiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
+      instance = createAnthropic({ apiKey: effectiveApiKey, ...(baseUrl ? { baseURL: baseUrl } : {}), ...providerFetchOption })
       break
     case 'openai':
-      instance = createOpenAI({ apiKey: effectiveApiKey, ...(baseUrl ? { baseURL: baseUrl } : {}) })
+      instance = createOpenAI({ apiKey: effectiveApiKey, ...(baseUrl ? { baseURL: baseUrl } : {}), ...providerFetchOption })
       break
     case 'google':
       instance = createOpenAI({
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://generativelanguage.googleapis.com/v1beta/openai',
+        ...providerFetchOption,
       })
       break
     case 'ollama':
       instance = createOpenAI({
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'http://localhost:11434/v1',
+        ...providerFetchOption,
       })
       break
     case 'deepseek':
@@ -298,6 +541,7 @@ export function initializeProvider(
         name: providerId || 'deepseek',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.deepseek.com/v1',
+        ...openAICompatibleProviderOptions,
       })
       break
     case 'zhipu':
@@ -305,6 +549,7 @@ export function initializeProvider(
         name: providerId || 'zhipu',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://open.bigmodel.cn/api/paas/v4',
+        ...openAICompatibleProviderOptions,
       })
       break
     case 'minimax':
@@ -312,6 +557,7 @@ export function initializeProvider(
         name: providerId || 'minimax',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.minimax.chat/v1',
+        ...openAICompatibleProviderOptions,
       })
       break
     case 'groq':
@@ -319,6 +565,7 @@ export function initializeProvider(
         name: providerId || 'groq',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.groq.com/openai/v1',
+        ...openAICompatibleProviderOptions,
       })
       break
     case 'together':
@@ -326,6 +573,7 @@ export function initializeProvider(
         name: providerId || 'together',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.together.xyz/v1',
+        ...openAICompatibleProviderOptions,
       })
       break
     case 'fireworks':
@@ -333,6 +581,7 @@ export function initializeProvider(
         name: providerId || 'fireworks',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.fireworks.ai/inference/v1',
+        ...openAICompatibleProviderOptions,
       })
       break
     case 'perplexity':
@@ -340,6 +589,7 @@ export function initializeProvider(
         name: providerId || 'perplexity',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.perplexity.ai',
+        ...openAICompatibleProviderOptions,
       })
       break
     case 'cohere':
@@ -347,6 +597,7 @@ export function initializeProvider(
         name: providerId || 'cohere',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || 'https://api.cohere.ai/v1',
+        ...openAICompatibleProviderOptions,
       })
       break
     case 'openai-compatible':
@@ -355,6 +606,7 @@ export function initializeProvider(
         name: providerId || 'custom-provider',
         apiKey: effectiveApiKey,
         baseURL: baseUrl || '',
+        ...openAICompatibleProviderOptions,
       })
       break
   }
@@ -526,6 +778,7 @@ export async function* streamResponseWithTools(
   let stepCount = 0
   let accumulatedInputTokens = 0
   let accumulatedOutputTokens = 0
+  let accumulatedTotalTokens = 0
   const toolTimings: Record<string, number> = {} // toolCallId → start timestamp
   const streamStartTime = performance.now()
   let thrownStreamError: string | null = null
@@ -639,14 +892,12 @@ export async function* streamResponseWithTools(
 
         case 'finish-step': {
           stepCount++
-          accumulatedInputTokens += (part as Record<string, unknown>).usage
-            ? ((part as Record<string, unknown>).usage as { inputTokens?: number }).inputTokens ?? 0
-            : 0
-          accumulatedOutputTokens += (part as Record<string, unknown>).usage
-            ? ((part as Record<string, unknown>).usage as { outputTokens?: number }).outputTokens ?? 0
-            : 0
-          const stepTokens = (part as Record<string, unknown>).usage
-            ? `input=${((part as Record<string, unknown>).usage as { inputTokens?: number }).inputTokens ?? 0}, output=${((part as Record<string, unknown>).usage as { outputTokens?: number }).outputTokens ?? 0}`
+          const stepUsage = normalizeUsage((part as Record<string, unknown>).usage as UsageLike | undefined)
+          accumulatedInputTokens += stepUsage?.promptTokens ?? 0
+          accumulatedOutputTokens += stepUsage?.completionTokens ?? 0
+          accumulatedTotalTokens += stepUsage?.totalTokens ?? 0
+          const stepTokens = stepUsage
+            ? `input=${stepUsage.promptTokens}, output=${stepUsage.completionTokens}, total=${stepUsage.totalTokens}`
             : 'no usage data'
           logger.info(`[StepFinished] #${stepCount} | reason=${part.finishReason} | toolCalls=${toolCallCount} | text=${hasEmittedText ? 'yes' : 'no'} | tokens: ${stepTokens} | elapsed=${(performance.now() - streamStartTime).toFixed(0)}ms`)
           if (STREAM_DEBUG) {
@@ -686,12 +937,12 @@ export async function* streamResponseWithTools(
   }
 
   const totalDuration = (performance.now() - streamStartTime).toFixed(0)
-  logger.info(`[StreamComplete] duration=${totalDuration}ms | steps=${stepCount} | toolCalls=${toolCallCount} | text=${hasEmittedText} | tokens: in=${accumulatedInputTokens}, out=${accumulatedOutputTokens}`, {
+  logger.info(`[StreamComplete] duration=${totalDuration}ms | steps=${stepCount} | toolCalls=${toolCallCount} | text=${hasEmittedText} | tokens: in=${accumulatedInputTokens}, out=${accumulatedOutputTokens}, total=${accumulatedTotalTokens}`, {
     durationMs: totalDuration,
     steps: stepCount,
     toolCalls: toolCallCount,
     hasText: hasEmittedText,
-    tokens: { input: accumulatedInputTokens, output: accumulatedOutputTokens },
+    tokens: { input: accumulatedInputTokens, output: accumulatedOutputTokens, total: accumulatedTotalTokens },
     toolTimings: Object.entries(toolTimings).map(([id, start]) => ({ id, elapsed: `${(performance.now() - start).toFixed(0)}ms` })),
   })
   if (STREAM_DEBUG) {
@@ -699,7 +950,7 @@ export async function* streamResponseWithTools(
       console.group(`%c[AI SDK] 🏁 Stream Complete`, 'color: #9C27B0; font-weight: bold')
       console.log(`Total duration: ${totalDuration}ms`)
       console.log(`Steps: ${stepCount}, Tool calls: ${toolCallCount}, Has text: ${hasEmittedText}`)
-      console.log(`Accumulated tokens: input=${accumulatedInputTokens}, output=${accumulatedOutputTokens}`)
+      console.log(`Accumulated tokens: input=${accumulatedInputTokens}, output=${accumulatedOutputTokens}, total=${accumulatedTotalTokens}`)
       if (toolCallCount > 0) {
         console.log(`Tool call timings:`, Object.entries(toolTimings).map(([id, start]) => ({ id: id.slice(0, 12) + '...', elapsed: `${(performance.now() - start).toFixed(0)}ms` })))
       }
@@ -711,31 +962,31 @@ export async function* streamResponseWithTools(
 
   // Emit usage info BEFORE error checks so token stats are always tracked
   try {
-    const usage = await result.totalUsage
+    const usage = normalizeUsage(await result.totalUsage)
     if (usage) {
       yield {
         type: 'usage',
-        promptTokens: usage.inputTokens ?? 0,
-        completionTokens: usage.outputTokens ?? 0,
-        totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        totalTokens: usage.totalTokens,
       }
-    } else if (accumulatedInputTokens > 0 || accumulatedOutputTokens > 0) {
+    } else if (accumulatedInputTokens > 0 || accumulatedOutputTokens > 0 || accumulatedTotalTokens > 0) {
       // Fallback: use accumulated per-step usage
       yield {
         type: 'usage',
         promptTokens: accumulatedInputTokens,
         completionTokens: accumulatedOutputTokens,
-        totalTokens: accumulatedInputTokens + accumulatedOutputTokens,
+        totalTokens: accumulatedTotalTokens || (accumulatedInputTokens + accumulatedOutputTokens),
       }
     }
   } catch {
     // totalUsage promise failed — use accumulated per-step usage as fallback
-    if (accumulatedInputTokens > 0 || accumulatedOutputTokens > 0) {
+    if (accumulatedInputTokens > 0 || accumulatedOutputTokens > 0 || accumulatedTotalTokens > 0) {
       yield {
         type: 'usage',
         promptTokens: accumulatedInputTokens,
         completionTokens: accumulatedOutputTokens,
-        totalTokens: accumulatedInputTokens + accumulatedOutputTokens,
+        totalTokens: accumulatedTotalTokens || (accumulatedInputTokens + accumulatedOutputTokens),
       }
     }
   }

@@ -3,7 +3,7 @@ import tsParser from '@typescript-eslint/parser'
 
 export default [
   {
-    ignores: ['out/**', 'dist/**', 'coverage/**', 'playwright-report/**', 'test-results/**', 'node_modules/**', '*.config.js', '*.config.cjs', '*.config.mjs'],
+    ignores: ['out/**', 'dist/**', 'coverage/**', 'playwright-report/**', 'test-results/**', 'node_modules/**', 'tmp/graphify-5/**', '*.config.js', '*.config.cjs', '*.config.mjs'],
   },
   {
     files: ['**/*.ts', '**/*.tsx'],

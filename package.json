@@ -1,7 +1,21 @@
 {
   "name": "suora",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Suora - AI desktop assistant with multi-model support, skills, agents, memory, and plugin system",
+  "keywords": [
+    "suora",
+    "electron",
+    "react",
+    "typescript",
+    "desktop-app",
+    "ai-workbench",
+    "ai-assistant",
+    "llm",
+    "agents",
+    "skills",
+    "model-context-protocol",
+    "automation"
+  ],
   "author": {
     "name": "fandych",
     "email": "fandych@users.noreply.github.com"

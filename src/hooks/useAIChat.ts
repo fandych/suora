@@ -908,6 +908,7 @@ export function useAIChat() {
           elapsed,
           hasError,
           hasError ? (error ?? undefined) : undefined,
+          tokenUsage.totalTokens,
         )
       } else if (!hasError) {
         // Only record zero-token call if not an error (API was actually reached)

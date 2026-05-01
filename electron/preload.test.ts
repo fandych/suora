@@ -25,5 +25,7 @@ describe('preload IPC allowlist', () => {
     const { allowedInvokeChannels } = await import('./preload')
 
     expect(allowedInvokeChannels).toContain('web:fetchJson')
+    expect(allowedInvokeChannels).toContain('ai:fetch:start')
+    expect(allowedInvokeChannels).toContain('ai:fetch:abort')
   })
 })

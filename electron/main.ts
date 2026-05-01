@@ -5,7 +5,7 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs/promises'
 import { readFileSync, watch, type FSWatcher } from 'fs'
-import http, { type IncomingMessage } from 'http'
+import http, { type ClientRequest, type IncomingMessage } from 'http'
 import { execFile } from 'child_process'
 import crypto from 'crypto'
 import https from 'https'
@@ -1620,6 +1620,153 @@ interface FetchRequest {
   destroy(): void
 }
 
+interface AiFetchStartPayload {
+  url: string
+  method?: string
+  headers?: Record<string, string>
+  bodyText?: string
+  bodyBase64?: string
+  timeoutMs?: number
+}
+
+type AiFetchEventPayload =
+  | { requestId: string; type: 'response'; status: number; statusText: string; headers: Record<string, string> }
+  | { requestId: string; type: 'data'; chunkBase64: string }
+  | { requestId: string; type: 'end' }
+  | { requestId: string; type: 'error'; error: string }
+
+const activeAiFetchRequests = new Map<string, ClientRequest>()
+
+function serializeResponseHeaders(headers: IncomingMessage['headers']): Record<string, string> {
+  const result: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (value == null) continue
+    result[key] = Array.isArray(value) ? value.join(', ') : value
+  }
+  return result
+}
+
+function sendAiFetchEvent(target: Electron.WebContents, payload: AiFetchEventPayload): void {
+  if (target.isDestroyed()) return
+  target.send('ai:fetch:event', payload)
+}
+
+function beginAiFetch(
+  target: Electron.WebContents,
+  requestId: string,
+  payload: AiFetchStartPayload,
+  redirectsLeft = 5,
+): void {
+  void (async () => {
+    try {
+      const parsed = await validatePublicHttpUrlWithDns(payload.url)
+      startAiFetchRequest(target, requestId, parsed.toString(), payload, redirectsLeft)
+    } catch (err: unknown) {
+      activeAiFetchRequests.delete(requestId)
+      sendAiFetchEvent(target, {
+        requestId,
+        type: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  })()
+}
+
+function startAiFetchRequest(
+  target: Electron.WebContents,
+  requestId: string,
+  url: string,
+  payload: AiFetchStartPayload,
+  redirectsLeft: number,
+): void {
+  const method = (payload.method ?? 'GET').toUpperCase()
+  const reqModule = url.startsWith('https:') ? https : http
+  const body = payload.bodyBase64
+    ? Buffer.from(payload.bodyBase64, 'base64')
+    : payload.bodyText !== undefined
+      ? Buffer.from(payload.bodyText, 'utf-8')
+      : undefined
+
+  const req = reqModule.request(
+    url,
+    {
+      method,
+      headers: payload.headers ?? {},
+      lookup: safeDnsLookup,
+    },
+    (res: IncomingMessage) => {
+      const redirectLocation = Array.isArray(res.headers.location) ? res.headers.location[0] : res.headers.location
+      const statusCode = res.statusCode ?? 0
+
+      if ([301, 302, 303, 307, 308].includes(statusCode) && redirectLocation && redirectsLeft > 0) {
+        const redirectUrl = new URL(redirectLocation, url).toString()
+        const nextMethod = statusCode === 303 ? 'GET' : method
+        res.resume()
+        activeAiFetchRequests.delete(requestId)
+        beginAiFetch(target, requestId, {
+          ...payload,
+          url: redirectUrl,
+          method: nextMethod,
+          ...(nextMethod === 'GET' ? { bodyText: undefined, bodyBase64: undefined } : {}),
+        }, redirectsLeft - 1)
+        return
+      }
+
+      sendAiFetchEvent(target, {
+        requestId,
+        type: 'response',
+        status: statusCode,
+        statusText: res.statusMessage ?? '',
+        headers: serializeResponseHeaders(res.headers),
+      })
+
+      res.on('data', (chunk: Buffer | string) => {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        sendAiFetchEvent(target, {
+          requestId,
+          type: 'data',
+          chunkBase64: buffer.toString('base64'),
+        })
+      })
+
+      res.on('end', () => {
+        activeAiFetchRequests.delete(requestId)
+        sendAiFetchEvent(target, { requestId, type: 'end' })
+      })
+
+      res.on('error', (err: Error) => {
+        activeAiFetchRequests.delete(requestId)
+        sendAiFetchEvent(target, {
+          requestId,
+          type: 'error',
+          error: err.message,
+        })
+      })
+    },
+  )
+
+  activeAiFetchRequests.set(requestId, req)
+
+  req.on('error', (err: Error) => {
+    activeAiFetchRequests.delete(requestId)
+    sendAiFetchEvent(target, {
+      requestId,
+      type: 'error',
+      error: err.message,
+    })
+  })
+
+  req.setTimeout(payload.timeoutMs ?? 120_000, () => {
+    req.destroy(new Error('AI request timed out'))
+  })
+
+  if (body && method !== 'GET' && method !== 'HEAD') {
+    req.write(body)
+  }
+
+  req.end()
+}
+
 type HttpGetFn = (url: string, options: Record<string, unknown>, callback: (res: FetchResponse) => void) => FetchRequest
 
 function fetchUrl(url: string, redirectsLeft = 5, accept = 'text/html'): Promise<{ body: string; rawTruncated: boolean }> {
@@ -1708,6 +1855,30 @@ ipcMain.handle('web:fetchText', async (_event, url: string) => {
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
   }
+})
+
+ipcMain.handle('ai:fetch:start', (event, payload: AiFetchStartPayload) => {
+  if (!payload || typeof payload.url !== 'string' || !payload.url.trim()) {
+    throw new Error('AI fetch URL is required')
+  }
+
+  const requestId = crypto.randomUUID()
+  setTimeout(() => beginAiFetch(event.sender, requestId, payload), 0)
+  return { requestId }
+})
+
+ipcMain.handle('ai:fetch:abort', (_event, requestId: string) => {
+  if (typeof requestId !== 'string' || !requestId) {
+    throw new Error('AI fetch request ID is required')
+  }
+
+  const request = activeAiFetchRequests.get(requestId)
+  if (request) {
+    activeAiFetchRequests.delete(requestId)
+    request.destroy(new Error('Request aborted'))
+  }
+
+  return { success: true }
 })
 
 // ─── IPC Handlers: Browser Automation ──────────────────────────────

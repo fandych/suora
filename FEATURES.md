@@ -9,7 +9,7 @@ Suora currently ships with these primary modules:
 | Module | What users can do |
 | --- | --- |
 | Chat | Run multi-turn conversations with selectable agents and models, send attachments, review tool calls, branch conversations, pin messages, retry failures, and trigger pipelines from chat |
-| Documents | Organize markdown documents into groups and folders, edit with WYSIWYG tools, render Mermaid and math, search notes, inspect backlinks, and view a relationship graph |
+| Documents | Organize markdown documents into groups and folders, edit with WYSIWYG tools, render Mermaid and math, search notes, inspect backlinks, expand related notes through the local graph, and export a Graphify-ready corpus bundle |
 | Pipeline | Design saved multi-step agent pipelines with variables, budgets, retries, conditions, history, and Mermaid previews |
 | Models | Configure providers, test connectivity, enable models, tune per-model parameters, and compare available models |
 | Agents | Create, duplicate, test, export, import, and version agents with custom prompts, tool policy, memory, and model routing |
@@ -96,6 +96,8 @@ The document workbench currently supports:
 - Search and filtering
 - Backlinks and references
 - Document graph visualization
+- Graph summary and related-note expansion from references and shared tags
+- Exporting a document group as a local Graphify-ready corpus bundle with `docs/`, `manifest.json`, and a Suora graph preview
 - Attaching document context to chats
 
 ## Automation

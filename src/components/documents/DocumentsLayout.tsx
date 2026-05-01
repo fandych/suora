@@ -13,8 +13,9 @@ import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
 import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions'
 import { WorkbenchEmptyState } from '@/components/ui/Primitives'
 import { confirm } from '@/services/confirmDialog'
+import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus'
 import { createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
-import { buildDocumentGraph, buildDocumentPath, type DocumentGraph } from '@/services/documentGraph'
+import { buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
 const DOCUMENT_GROUP_COLOR_CLASS: Record<string, string> = {
@@ -895,11 +896,14 @@ export function DocumentsLayout() {
   const [editingGroupName, setEditingGroupName] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [mode, setMode] = useState<'editor' | 'source' | 'graph'>('editor')
+  const [isExportingCorpus, setIsExportingCorpus] = useState(false)
+  const [exportStatus, setExportStatus] = useState<{ type: 'success' | 'error'; message: string; rootDir?: string } | null>(null)
   const {
     documentGroups,
     documentNodes,
     selectedDocumentGroupId,
     selectedDocumentId,
+    workspacePath,
     addDocumentGroup,
     updateDocumentGroup,
     removeDocumentGroup,
@@ -937,10 +941,27 @@ export function DocumentsLayout() {
     }
     return headings
   }, [activeDocument?.id, activeDocument?.markdown])
-  const shouldShowDocumentGraph = mode === 'graph' || !activeDocument
   const documentGraph = useMemo(
-    () => shouldShowDocumentGraph ? buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroupId }) : EMPTY_DOCUMENT_GRAPH,
-    [activeGroupId, documentGroups, documentNodes, shouldShowDocumentGraph],
+    () => activeGroupId ? buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroupId }) : EMPTY_DOCUMENT_GRAPH,
+    [activeGroupId, documentGroups, documentNodes],
+  )
+  const graphInsights = useMemo(
+    () => activeDocument && activeGroupId
+      ? queryDocumentGraph(documentGraph, groupNodes, {
+          documentIdOrTitle: activeDocument.id,
+          groupId: activeGroupId,
+          relatedLimit: 6,
+        })
+      : null,
+    [activeDocument, activeGroupId, documentGraph, groupNodes],
+  )
+  const graphBacklinks = useMemo(
+    () => activeDocument
+      ? (documentGraph.backlinksByDocumentId[activeDocument.id] ?? [])
+        .map((documentId) => groupDocuments.find((doc) => doc.id === documentId) ?? null)
+        .filter((doc): doc is DocumentItem => Boolean(doc))
+      : [],
+    [activeDocument, documentGraph.backlinksByDocumentId, groupDocuments],
   )
   const documentCountByGroupId = useMemo(() => {
     const counts = new Map<string, number>()
@@ -1237,6 +1258,33 @@ export function DocumentsLayout() {
     return next
   })
 
+  const exportActiveGroupCorpus = async () => {
+    if (!activeGroup) return
+    if (!workspacePath) {
+      setExportStatus({ type: 'error', message: t('documents.exportCorpusNoWorkspace', 'Set a workspace path before exporting a graph corpus.') })
+      return
+    }
+
+    setIsExportingCorpus(true)
+    setExportStatus(null)
+    const result = await exportDocumentGroupToGraphifyCorpus(workspacePath, activeGroup, documentNodes)
+    setIsExportingCorpus(false)
+
+    if (!result.success) {
+      setExportStatus({
+        type: 'error',
+        message: `${t('documents.exportCorpusError', 'Graphify corpus export failed.')} ${result.error}`,
+      })
+      return
+    }
+
+    setExportStatus({
+      type: 'success',
+      message: `${t('documents.exportCorpusSuccess', 'Graphify corpus exported successfully.')} ${result.documentCount} docs · ${result.fileCount} files`,
+      rootDir: result.rootDir,
+    })
+  }
+
   return (
     <>
       <SidePanel
@@ -1362,6 +1410,9 @@ export function DocumentsLayout() {
                     )
                   })}
                 </div>
+                <button type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
+                </button>
                 <button type="button" onClick={deleteActiveDocument} aria-label={t('documents.deleteCurrentDocument', 'Delete current document')} className="rounded-2xl border border-danger/20 bg-danger/10 px-3 py-2 text-[11px] font-semibold text-danger/90 hover:bg-danger/15">
                   {t('common.delete', 'Delete')}
                 </button>
@@ -1409,6 +1460,70 @@ export function DocumentsLayout() {
                     </dl>
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.graphSummary', 'Graph Summary')}</h3>
+                      <span className="rounded-xl border border-border-subtle/55 bg-surface-2/55 px-2 py-0.5 text-[10px] text-text-muted">{graphInsights?.relatedDocuments.length ?? 0} {t('documents.connectedNotes', 'related')}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.connectedNotes', 'Connected')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{graphInsights?.relatedDocuments.length ?? 0}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.backlinks', 'Backlinks')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{graphBacklinks.length}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.tags', 'Tags')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{graphInsights?.tags.length ?? 0}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.externalLinks', 'Links')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{graphInsights?.externalLinks.length ?? 0}</div>
+                      </div>
+                    </div>
+                    {graphInsights && (graphInsights.tags.length > 0 || graphInsights.externalLinks.length > 0) && (
+                      <>
+                        {graphInsights.tags.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {graphInsights.tags.slice(0, 8).map((tag) => (
+                              <span key={tag} className="rounded-full border border-accent/18 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent">#{tag}</span>
+                            ))}
+                          </div>
+                        )}
+                        {graphInsights.externalLinks.length > 0 && (
+                          <div className="mt-3 space-y-1">
+                            {graphInsights.externalLinks.slice(0, 3).map((link) => (
+                              <div key={link} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 font-(--font-code) text-[10px] text-text-secondary">{link}</div>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.relatedNotes', 'Related Notes')}</h3>
+                    <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.relatedNotesHint', 'Suora expands from the current note through references and shared tags so large note collections remain navigable.')}</p>
+                    <div className="mt-4 space-y-2">
+                      {graphInsights?.relatedDocuments.length ? graphInsights.relatedDocuments.map((doc) => {
+                        const relatedNode = documentNodeById.get(doc.id)
+                        const fallbackPath = relatedNode && relatedNode.type === 'document'
+                          ? buildDocumentPath(relatedNode, documentNodes, documentNodeById)
+                          : undefined
+
+                        return (
+                          <button key={doc.id} type="button" onClick={() => openDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
+                            <span className="block truncate text-[12px] font-semibold text-text-primary">{doc.title}</span>
+                            <span className="mt-1 block truncate text-[10px] text-text-muted">{doc.path || fallbackPath}</span>
+                            <span className="mt-2 block line-clamp-2 text-[10px] leading-relaxed text-text-secondary/80">{doc.reasons[0]}</span>
+                          </button>
+                        )
+                      }) : (
+                        <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noRelatedNotes', 'No graph-related notes yet.')}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.references', 'References')}</h3>
                     <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.referencesHint', 'Use [[Document Title]] or [Title](#doc:id) to connect notes in this group.')}</p>
                     <div className="mt-4 space-y-2">
@@ -1421,6 +1536,25 @@ export function DocumentsLayout() {
                         </button>
                       ))}
                     </div>
+                  </div>
+                  <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.exportCorpus', 'Export Corpus')}</h3>
+                        <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.exportCorpusHint', 'Write this group into a local corpus folder for later Graphify CLI and MCP use. No Python is required for this export.')}</p>
+                      </div>
+                      <button type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
+                        {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
+                      </button>
+                    </div>
+                    {exportStatus ? (
+                      <div className={`mt-3 rounded-2xl border px-3 py-3 text-[11px] ${exportStatus.type === 'success' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700' : 'border-danger/20 bg-danger/10 text-danger/95'}`}>
+                        <p className="font-semibold">{exportStatus.message}</p>
+                        {exportStatus.rootDir && <p className="mt-2 break-all font-(--font-code) text-[10px] text-text-secondary">{exportStatus.rootDir}</p>}
+                      </div>
+                    ) : (
+                      <p className="mt-3 rounded-2xl border border-dashed border-border-subtle/55 px-3 py-4 text-center text-[11px] text-text-muted">{t('documents.exportCorpusReady', 'The exported folder will include docs/, manifest.json, and a Suora graph preview for future Graphify upgrades.')}</p>
+                    )}
                   </div>
                   {activeDocumentIsMarkdown && (
                     <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
@@ -1464,6 +1598,9 @@ export function DocumentsLayout() {
                 {t('documents.knowledgeGraph', 'Knowledge Graph')}
               </span>
               <div className="ml-auto flex gap-2">
+                <button type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
+                  {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
+                </button>
                 <button type="button" onClick={() => createDoc()} className="rounded-2xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/25">
                   {t('documents.addDocument', '+ Document')}
                 </button>

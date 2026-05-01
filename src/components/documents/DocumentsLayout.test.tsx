@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocumentsLayout } from './DocumentsLayout'
@@ -51,6 +51,8 @@ describe('DocumentsLayout', () => {
   beforeEach(() => {
     localStorage.clear()
     confirmMock.mockClear()
+    vi.mocked(window.electron.invoke).mockReset()
+    vi.mocked(window.electron.invoke).mockResolvedValue(undefined)
     useAppStore.setState({
       locale: 'en',
       documentGroups: [],
@@ -189,6 +191,7 @@ describe('DocumentsLayout', () => {
 
     expect(sourceEditor).toHaveValue('echo hi  ')
 
+    await user.click(sourceEditor)
     sourceEditor.setSelectionRange(0, 0)
     await user.keyboard('{Tab}')
 
@@ -222,6 +225,56 @@ describe('DocumentsLayout', () => {
     expect(screen.getByText('Assets')).toBeInTheDocument()
     expect(screen.getByText('./assets/logo.png')).toBeInTheDocument()
     expect(screen.getByText('Logo')).toBeInTheDocument()
+  })
+
+  it('shows graph-related notes and exports the active group as a graphify corpus', async () => {
+    const user = userEvent.setup()
+    const group = createDocumentGroup('Knowledge Base')
+    const overview = {
+      ...createDocument(group.id, null, 'Project Overview'),
+      markdown: 'Read [Budget](#doc:budget). #amber',
+    }
+    const budget = {
+      ...createDocument(group.id, null, 'Budget'),
+      id: 'budget',
+      markdown: 'Total budget: 42000. #amber',
+    }
+    const release = {
+      ...createDocument(group.id, null, 'Release Plan'),
+      markdown: 'Desktop app launch. #amber',
+    }
+
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'system:ensureDirectory' || channel === 'fs:writeFile') return { success: true }
+      return undefined
+    })
+
+    useAppStore.setState({
+      locale: 'en',
+      workspacePath: '/workspace',
+      documentGroups: [group],
+      documentNodes: [overview, budget, release],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: overview.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    const relatedNotesCard = screen.getByText('Related Notes').closest('div.rounded-3xl') as HTMLElement
+    expect(relatedNotesCard).toBeTruthy()
+    expect(within(relatedNotesCard).getByRole('button', { name: /Budget/i })).toBeInTheDocument()
+    expect(within(relatedNotesCard).getByRole('button', { name: /Release Plan/i })).toBeInTheDocument()
+
+    await user.click(screen.getAllByRole('button', { name: 'Export Corpus' })[0])
+
+    await waitFor(() => {
+      expect(screen.getByText(/Graphify corpus exported successfully/i)).toBeInTheDocument()
+    })
+
+    expect(window.electron.invoke).toHaveBeenCalledWith('system:ensureDirectory', expect.stringContaining('/workspace/.suora/exports/graphify/Knowledge-Base-'))
+    expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/README.md'), expect.any(String))
+    expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/manifest.json'), expect.any(String))
+    expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/docs/Project-Overview.md'), expect.stringContaining('Read [Budget]'))
   })
 
   it('clears document tree inputs when creating a new group', async () => {

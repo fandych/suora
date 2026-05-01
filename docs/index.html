@@ -1041,7 +1041,7 @@
           <article class="section-card preview-card">
             <span class="section-kicker">Documents</span>
             <h2>Knowledge workspace</h2>
-            <p class="section-copy">Markdown editing, backlinks, diagrams, and context attachment for downstream chats.</p>
+            <p class="section-copy">Markdown editing, graph summaries, related-note expansion, and context attachment for downstream chats.</p>
             <div class="preview-media">
               <div class="preview-toolbar">
                 <div class="preview-dots"><span></span><span></span><span></span></div>
@@ -1051,18 +1051,18 @@
                 <div class="preview-row stack">
                   <div class="preview-column">
                     <strong>Document graph</strong>
-                    <span>Backlinks, references, and graph-oriented navigation for linked notes.</span>
+                    <span>Backlinks, references, related-note expansion, and graph-oriented navigation for linked notes.</span>
                   </div>
                   <div class="preview-column">
                     <strong>Rich markdown</strong>
-                    <span>WYSIWYG editing, Mermaid, KaTeX, search, and folder hierarchies.</span>
+                    <span>WYSIWYG editing, Mermaid, KaTeX, search, folder hierarchies, and Graphify-ready corpus export.</span>
                   </div>
                 </div>
                 <div class="preview-bubble">
                   <img class="preview-avatar" src="https://raw.githubusercontent.com/fandych/suora/main/resources/icons/svg/skill-file-manager.svg" alt="Documents icon" loading="lazy" />
                   <div class="preview-copy">
                     <strong>Context-ready knowledge base</strong>
-                    <span>Select documents and push them straight into chat context when an agent needs grounded material.</span>
+                    <span>Open related notes, export a whole group as a local graph corpus, and push grounded material into chat.</span>
                   </div>
                 </div>
               </div>
@@ -1194,24 +1194,26 @@
           <h2>Latest release auto-sync</h2>
           <p class="section-copy">
             This panel reads GitHub Releases at runtime and refreshes the visible version, publish
-            date, asset count, and download link without editing this page again.
+            date, asset count, and download link automatically. GitHub Pages still serves this
+            homepage from the repository <code>/docs</code> folder, so the bundled fallback snapshot
+            should be updated when a new version is shipped.
           </p>
           <div class="release-meta">
             <div class="release-metric">
               <span>Current tag</span>
-              <strong id="latest-release-tag">v0.1.0</strong>
+              <strong id="latest-release-tag">v0.1.1</strong>
             </div>
             <div class="release-metric">
               <span>Published</span>
-              <strong id="latest-release-date">Apr 30, 2026</strong>
+              <strong id="latest-release-date">May 1, 2026</strong>
             </div>
             <div class="release-metric">
               <span>Assets</span>
-              <strong id="latest-release-assets">9 files</strong>
+              <strong id="latest-release-assets">10 files</strong>
             </div>
           </div>
           <p class="release-status" id="latest-release-status">
-            Auto-sync is enabled. If the live query fails, this page falls back to the bundled release snapshot.
+            Auto-sync is enabled. If the live query fails, this page falls back to the bundled snapshot committed alongside this Pages site.
           </p>
           <div class="audience-links">
             <a href="https://github.com/fandych/suora/releases/latest" target="_blank" rel="noopener noreferrer" data-latest-release-link="true"><span id="latest-release-link-label">Open latest release</span><span>Open</span></a>
@@ -1258,13 +1260,13 @@
               <h3>Windows</h3>
               <p>Installer and portable executables for a fast desktop start.</p>
               <div class="platform-download-list">
-                <a class="platform-download" id="download-windows-setup" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA.Setup.0.1.0.exe" target="_blank" rel="noopener noreferrer">
+                <a class="platform-download" id="download-windows-setup" href="https://github.com/fandych/suora/releases/download/v0.1.1/SUORA.Setup.0.1.1.exe" target="_blank" rel="noopener noreferrer">
                   <strong>Setup .exe</strong>
-                  <span id="download-windows-setup-name">SUORA.Setup.0.1.0.exe</span>
+                  <span id="download-windows-setup-name">SUORA.Setup.0.1.1.exe</span>
                 </a>
-                <a class="platform-download" id="download-windows-portable" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA.0.1.0.exe" target="_blank" rel="noopener noreferrer">
+                <a class="platform-download" id="download-windows-portable" href="https://github.com/fandych/suora/releases/download/v0.1.1/SUORA.0.1.1.exe" target="_blank" rel="noopener noreferrer">
                   <strong>Portable .exe</strong>
-                  <span id="download-windows-portable-name">SUORA.0.1.0.exe</span>
+                  <span id="download-windows-portable-name">SUORA.0.1.1.exe</span>
                 </a>
               </div>
             </section>
@@ -1272,13 +1274,13 @@
               <h3>macOS</h3>
               <p>Apple Silicon downloads for standard install flow or archive-based distribution.</p>
               <div class="platform-download-list">
-                <a class="platform-download" id="download-macos-dmg" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA-0.1.0-arm64.dmg" target="_blank" rel="noopener noreferrer">
+                <a class="platform-download" id="download-macos-dmg" href="https://github.com/fandych/suora/releases/download/v0.1.1/SUORA-0.1.1-arm64.dmg" target="_blank" rel="noopener noreferrer">
                   <strong>DMG</strong>
-                  <span id="download-macos-dmg-name">SUORA-0.1.0-arm64.dmg</span>
+                  <span id="download-macos-dmg-name">SUORA-0.1.1-arm64.dmg</span>
                 </a>
-                <a class="platform-download" id="download-macos-zip" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA-0.1.0-arm64-mac.zip" target="_blank" rel="noopener noreferrer">
+                <a class="platform-download" id="download-macos-zip" href="https://github.com/fandych/suora/releases/download/v0.1.1/SUORA-0.1.1-arm64-mac.zip" target="_blank" rel="noopener noreferrer">
                   <strong>ZIP</strong>
-                  <span id="download-macos-zip-name">SUORA-0.1.0-arm64-mac.zip</span>
+                  <span id="download-macos-zip-name">SUORA-0.1.1-arm64-mac.zip</span>
                 </a>
               </div>
             </section>
@@ -1286,17 +1288,17 @@
               <h3>Linux</h3>
               <p>Portable, Debian, and RPM packages for common Linux install preferences.</p>
               <div class="platform-download-list">
-                <a class="platform-download" id="download-linux-appimage" href="https://github.com/fandych/suora/releases/download/v0.1.0/SUORA-0.1.0.AppImage" target="_blank" rel="noopener noreferrer">
+                <a class="platform-download" id="download-linux-appimage" href="https://github.com/fandych/suora/releases/download/v0.1.1/SUORA-0.1.1.AppImage" target="_blank" rel="noopener noreferrer">
                   <strong>AppImage</strong>
-                  <span id="download-linux-appimage-name">SUORA-0.1.0.AppImage</span>
+                  <span id="download-linux-appimage-name">SUORA-0.1.1.AppImage</span>
                 </a>
-                <a class="platform-download" id="download-linux-deb" href="https://github.com/fandych/suora/releases/download/v0.1.0/suora_0.1.0_amd64.deb" target="_blank" rel="noopener noreferrer">
+                <a class="platform-download" id="download-linux-deb" href="https://github.com/fandych/suora/releases/download/v0.1.1/suora_0.1.1_amd64.deb" target="_blank" rel="noopener noreferrer">
                   <strong>DEB</strong>
-                  <span id="download-linux-deb-name">suora_0.1.0_amd64.deb</span>
+                  <span id="download-linux-deb-name">suora_0.1.1_amd64.deb</span>
                 </a>
-                <a class="platform-download" id="download-linux-rpm" href="https://github.com/fandych/suora/releases/download/v0.1.0/suora-0.1.0.x86_64.rpm" target="_blank" rel="noopener noreferrer">
+                <a class="platform-download" id="download-linux-rpm" href="https://github.com/fandych/suora/releases/download/v0.1.1/suora-0.1.1.x86_64.rpm" target="_blank" rel="noopener noreferrer">
                   <strong>RPM</strong>
-                  <span id="download-linux-rpm-name">suora-0.1.0.x86_64.rpm</span>
+                  <span id="download-linux-rpm-name">suora-0.1.1.x86_64.rpm</span>
                 </a>
               </div>
             </section>
@@ -1535,7 +1537,9 @@
       </section>
 
       <p class="footer-note">
-        This site is published from the repository <code>/docs</code> folder via GitHub Pages. The
+        This site is published from the repository <code>/docs</code> folder via GitHub Pages, so
+        pushing docs updates to <code>main</code> refreshes the public homepage. Desktop installers
+        are published separately through GitHub Releases and the repository release workflow. The
         page acts as a curated front door, while each documentation link opens the corresponding
         GitHub-rendered markdown for the latest content on <code>main</code>. 当前首页已经同步作为仓库
         homepage，适合直接对外分享。

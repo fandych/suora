@@ -134,6 +134,7 @@ Agent 支持：
 - 附件发送：图片、文件、音频
 - Markdown、数学公式、代码块渲染
 - 工具调用状态展示
+- 桌面端通过 Electron 主进程代理模型 HTTP 请求，兼容受限网络或浏览器侧不可直连的 provider
 - 失败重试
 - 消息编辑、删除、置顶、分支对话
 - 回复反馈（赞/踩）
@@ -153,6 +154,8 @@ Agent 支持：
 - 文档搜索
 - 反向链接与引用分析
 - 图谱视图
+- 图谱摘要与 Related Notes 侧栏，从引用和共享标签继续展开关联文档
+- 将当前分组导出为 Graphify-ready 本地语料目录，包含 `docs/`、`manifest.json` 与 Suora 图谱预览
 - 选中文档作为聊天上下文
 
 ### Pipeline 与自动化
@@ -272,6 +275,20 @@ npm run type-check
 npm run test:run
 npm run test:e2e
 ```
+
+### 发布与 Pages
+
+当前仓库的发布路径分成两条：
+
+- GitHub Pages 直接从仓库 `docs/` 目录发布，推送到 `main` 后会刷新文档首页。
+- GitHub Release 发布后会触发 [`.github/workflows/release.yml`](./.github/workflows/release.yml)，自动构建并上传 Windows、macOS、Linux 安装包。
+
+建议发布顺序：
+
+1. 更新 `package.json` 版本号，并同步 `docs/index.html` 中的回退版本快照。
+2. 运行 `npm run lint`、`npm run type-check`、`npm run test:run`，必要时补跑 Electron 真窗验证。
+3. 提交并推送到 `main`，让 GitHub Pages 更新 `docs/` 首页。
+4. 基于同一提交创建并发布 GitHub Release，让 release workflow 构建并上传桌面安装包。
 
 ## 安全与数据
 

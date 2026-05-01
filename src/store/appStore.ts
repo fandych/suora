@@ -329,7 +329,7 @@ export interface AppStore {
 
   // Model Usage Stats
   modelUsageStats: Record<string, ModelUsageStats>
-  recordModelUsage: (modelId: string, promptTokens: number, completionTokens: number, latencyMs?: number, isError?: boolean, error?: string) => void
+  recordModelUsage: (modelId: string, promptTokens: number, completionTokens: number, latencyMs?: number, isError?: boolean, error?: string, totalTokens?: number) => void
   clearModelUsageStats: () => void
 
   // Channel Message History
@@ -624,11 +624,12 @@ export const useAppStore = create<AppStore>()(
 
       // Model Usage Stats
       modelUsageStats: {},
-      recordModelUsage: (modelId, promptTokens, completionTokens, latencyMs, isError, error) => set((state) => {
+      recordModelUsage: (modelId, promptTokens, completionTokens, latencyMs, isError, error, totalTokens) => set((state) => {
         const existing = state.modelUsageStats[modelId] ?? { modelId, callCount: 0, totalPromptTokens: 0, totalCompletionTokens: 0, totalTokens: 0, lastUsed: 0, errorCount: 0, latencies: [] }
         const latencies = Number.isFinite(latencyMs) ? [...(existing.latencies ?? []), latencyMs as number] : (existing.latencies ?? [])
         const retainedLatencies = latencies.length > 60 ? latencies.slice(-50) : latencies
         const avgLatencyMs = retainedLatencies.length ? Math.round(retainedLatencies.reduce((sum, value) => sum + value, 0) / retainedLatencies.length) : existing.avgLatencyMs
+        const usageTotalTokens = Number.isFinite(totalTokens) ? totalTokens as number : promptTokens + completionTokens
         return {
           modelUsageStats: {
             ...state.modelUsageStats,
@@ -637,7 +638,7 @@ export const useAppStore = create<AppStore>()(
               callCount: existing.callCount + 1,
               totalPromptTokens: existing.totalPromptTokens + promptTokens,
               totalCompletionTokens: existing.totalCompletionTokens + completionTokens,
-              totalTokens: existing.totalTokens + promptTokens + completionTokens,
+              totalTokens: existing.totalTokens + usageTotalTokens,
               lastUsed: Date.now(),
               avgLatencyMs,
               latencies: retainedLatencies,

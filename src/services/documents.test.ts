@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { DocumentItem, DocumentNode } from '@/types'
-import { buildDocumentGraph, extractDocumentReferenceTargets, extractDocumentTags } from './documentGraph'
+import { buildDocumentGraph, extractDocumentReferenceTargets, extractDocumentTags, queryDocumentGraph } from './documentGraph'
 import { toGraphifyExport } from './graphifyAdapter'
 import { createDocument, createDocumentGroup, extractMarkdownImageReferences, extractMarkdownReferences, getDocumentDisplayName, isMarkdownDocumentTitle, findReferencedDocuments, searchDocuments } from './documents'
 
@@ -81,6 +81,28 @@ describe('documents service', () => {
     expect(results[1].excerpt).toContain('Architecture follow-up')
   })
 
+  it('keeps exact title matches ahead of fresher noise in large document corpora', () => {
+    const nodes = [
+      { id: 'exact', type: 'document', title: '琥珀计划总览', markdown: '验收日期：2026-06-15', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 10 },
+      { id: 'body-hit', type: 'document', title: '周报', markdown: '这里顺带提到琥珀计划，但正文重点不是它。', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 999 },
+      ...Array.from({ length: 120 }, (_, index) => ({
+        id: `noise-${index}`,
+        type: 'document' as const,
+        title: `噪音文档 ${index}`,
+        markdown: `无关内容 ${index}`,
+        groupId: 'g',
+        parentId: null,
+        createdAt: 1,
+        updatedAt: 500 + index,
+      })),
+    ] satisfies DocumentNode[]
+
+    const results = searchDocuments(nodes, 'g', '琥珀计划')
+
+    expect(results.map((result) => result.node.id)).toEqual(['exact', 'body-hit'])
+    expect(results[0].excerpt).toContain('验收日期')
+  })
+
   it('extracts graph reference targets and tags from markdown', () => {
     const markdown = `---
 tags: [research, ai]
@@ -128,5 +150,24 @@ Read [[Architecture]] and [Plan](#doc:plan-id). #daily`
     expect(exported.metadata.source).toBe('suora-documents')
     expect(exported.nodes.find((node) => node.id === 'doc-graph:a')?.attributes.documentId).toBe('a')
     expect(exported.edges.some((edge) => edge.type === 'tagged')).toBe(true)
+  })
+
+  it('expands graph queries through references and shared tags', () => {
+    const groups = [{ id: 'g', name: 'Research', color: '#12A8A0', createdAt: 1, updatedAt: 1 }]
+    const nodes = [
+      { id: 'overview', type: 'document', title: '琥珀计划总览', markdown: '见 [预算](#doc:budget)。 #amber', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 3 },
+      { id: 'budget', type: 'document', title: '预算明细', markdown: '预算 42000 元。 #amber', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 2 },
+      { id: 'release', type: 'document', title: '发布计划', markdown: '桌面应用上线杭州。 #amber', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 4 },
+      { id: 'noise', type: 'document', title: '无关说明', markdown: '纯噪音内容', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 5 },
+    ] satisfies DocumentNode[]
+
+    const graph = buildDocumentGraph(groups, nodes, { groupId: 'g' })
+    const result = queryDocumentGraph(graph, nodes, { query: '琥珀计划', groupId: 'g' })
+
+    expect(result.seeds.map((doc) => doc.id)).toContain('overview')
+    expect(result.relatedDocuments.map((doc) => doc.id)).toContain('budget')
+    expect(result.relatedDocuments.map((doc) => doc.id)).toContain('release')
+    expect(result.relatedDocuments.find((doc) => doc.id === 'budget')?.reasons.join(' ')).toContain('references')
+    expect(result.tags).toContain('amber')
   })
 })

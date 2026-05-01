@@ -22,6 +22,8 @@ import {
 import { readCached, writeCached } from '@/services/fileStorage'
 import { delegateToAgent } from '@/services/agentCommunication'
 import { confirmChoice } from '@/services/confirmDialog'
+import { buildDocumentGraph, queryDocumentGraph } from '@/services/documentGraph'
+import { searchDocuments } from '@/services/documents'
 import { safePathSegment } from '@/utils/pathSegments'
 import { safeParse, safeStringify } from '@/utils/safeJson'
 
@@ -597,7 +599,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   web_search: tool({
-    description: 'Search the web using DuckDuckGo. Returns an instant answer (if any) plus up to 8 search results with titles, URLs, and snippets. Use fetch_webpage to read the full content of a specific result.',
+    description: 'Search the public web using DuckDuckGo for external, current, or public internet information. Do not use this for facts likely stored in the user\'s Suora documents, workspace files, or notes until you have checked those local sources. Returns an instant answer (if any) plus up to 8 search results with titles, URLs, and snippets. Use fetch_webpage to read the full content of a specific result.',
     inputSchema: z.object({
       query: z.string().describe('The search query'),
     }),
@@ -2432,7 +2434,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   list_documents: tool({
-    description: 'List editable Markdown documents stored in Suora before reading or updating documents.',
+    description: 'Search and list editable Markdown documents stored in Suora. Use this first for questions about local notes, project plans, specs, budgets, schedules, people, or any knowledge likely stored in the user\'s documents before using web_search.',
     inputSchema: z.object({
       query: z.string().optional().describe('Optional title/content search query'),
       group_id: z.string().optional().describe('Optional document group ID to filter by'),
@@ -2443,18 +2445,29 @@ export const builtinToolDefs: ToolSet = {
         if (!state) return 'Error: Store not available'
         const groups = (state.documentGroups || []) as DocumentGroup[]
         const nodes = (state.documentNodes || []) as DocumentNode[]
-        const q = query?.trim().toLowerCase()
-        const docs = nodes
-          .filter((node): node is DocumentItem => node.type === 'document')
-          .filter((doc) => !group_id || doc.groupId === group_id)
-          .filter((doc) => !q || doc.title.toLowerCase().includes(q) || doc.markdown.toLowerCase().includes(q))
-          .sort((a, b) => b.updatedAt - a.updatedAt)
+        const groupNameById = new Map(groups.map((group) => [group.id, group.name]))
+        const q = query?.trim()
+
+        const docs = q
+          ? searchDocuments(nodes, group_id ?? null, q).slice(0, 30).map((result) => ({
+            doc: result.node,
+            preview: result.excerpt || summarizeMarkdown(result.node.markdown),
+          }))
+          : nodes
+            .filter((node): node is DocumentItem => node.type === 'document')
+            .filter((doc) => !group_id || doc.groupId === group_id)
+            .sort((a, b) => b.updatedAt - a.updatedAt)
+            .slice(0, 30)
+            .map((doc) => ({
+              doc,
+              preview: summarizeMarkdown(doc.markdown),
+            }))
 
         if (!docs.length) return query ? `No documents matching "${query}".` : 'No documents found.'
-        return docs.slice(0, 30).map((doc) => {
-          const groupName = groups.find((group) => group.id === doc.groupId)?.name || doc.groupId
+        return docs.map(({ doc, preview }) => {
+          const groupName = groupNameById.get(doc.groupId) || doc.groupId
           const selected = state.selectedDocumentId === doc.id ? '> ' : '  '
-          return `${selected}${doc.title} (id: ${doc.id}, group: ${groupName}, updated: ${new Date(doc.updatedAt).toLocaleString()})\n  ${summarizeMarkdown(doc.markdown)}`
+          return `${selected}${doc.title} (id: ${doc.id}, group: ${groupName}, updated: ${new Date(doc.updatedAt).toLocaleString()})\n  ${preview}`
         }).join('\n\n')
       } catch (err) {
         return `Error listing documents: ${err instanceof Error ? err.message : String(err)}`
@@ -2462,8 +2475,56 @@ export const builtinToolDefs: ToolSet = {
     },
   }),
 
+  query_document_graph: tool({
+    description: 'Traverse Suora\'s built-in local document knowledge graph to expand from a matched document into referenced or tag-related documents. Use this when many local documents may be involved and the answer could span multiple connected notes, even without any external graph CLI or MCP server.',
+    inputSchema: z.object({
+      query: z.string().optional().describe('Optional search query used to find graph seed documents'),
+      document_id: z.string().optional().describe('Optional document ID or title to use as the graph seed'),
+      group_id: z.string().optional().describe('Optional document group ID to scope the graph'),
+    }).refine((value) => Boolean(value.query?.trim() || value.document_id?.trim()), {
+      message: 'Provide query or document_id',
+    }),
+    execute: async ({ query, document_id, group_id }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const groups = (state.documentGroups || []) as DocumentGroup[]
+        const nodes = (state.documentNodes || []) as DocumentNode[]
+        const graph = buildDocumentGraph(groups, nodes, { groupId: group_id ?? null })
+        const result = queryDocumentGraph(graph, nodes, {
+          query,
+          documentIdOrTitle: document_id,
+          groupId: group_id ?? null,
+        })
+
+        if (!result.seeds.length) {
+          const target = query?.trim() || document_id?.trim() || 'request'
+          return `No document graph matches for ${target}. Use list_documents for direct keyword results.`
+        }
+
+        return JSON.stringify({
+          query: query?.trim() || null,
+          documentId: document_id?.trim() || null,
+          groupId: group_id ?? null,
+          stats: {
+            documents: graph.nodes.filter((node) => node.type === 'document').length,
+            tags: graph.tags.length,
+            edges: graph.edges.length,
+            orphans: graph.orphanDocumentIds.length,
+          },
+          seeds: result.seeds,
+          relatedDocuments: result.relatedDocuments,
+          tags: result.tags,
+          externalLinks: result.externalLinks.slice(0, 10),
+        }, null, 2)
+      } catch (err) {
+        return `Error querying document graph: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
   read_document: tool({
-    description: 'Read the full Markdown content of a Suora document by ID or title so an agent can inspect it before editing.',
+    description: 'Read the full Markdown content of a Suora document by ID or title. Use this after list_documents when answering from local document knowledge, and prefer it over web_search for facts that may exist in the user\'s notes.',
     inputSchema: z.object({
       document_id: z.string().describe('Document ID or exact/partial title'),
     }),
@@ -2792,6 +2853,7 @@ export const TOOL_META: Record<string, ToolMeta> = {
   list_providers:        { userFacingName: 'List providers', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   list_plugins:          { userFacingName: 'List plugins', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   list_documents:        { userFacingName: 'List documents', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'document markdown notes' },
+  query_document_graph:  { userFacingName: 'Query document graph', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'document graph references tags related notes' },
   read_document:         { userFacingName: 'Read document', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'document markdown content' },
   list_skills:           { userFacingName: 'List skills', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   read_skill:            { userFacingName: 'Read skill', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'skill instructions content' },
@@ -2894,6 +2956,10 @@ export function buildToolHints(toolNames: string[]): string {
   const destructive: string[] = []
   const readOnly: string[] = []
   const confirmRequired: string[] = []
+  const hasDocumentSearch = toolNames.includes('list_documents')
+  const hasDocumentGraph = toolNames.includes('query_document_graph')
+  const hasDocumentRead = toolNames.includes('read_document')
+  const hasWebSearch = toolNames.includes('web_search')
 
   for (const name of toolNames) {
     const meta = getToolMeta(name)
@@ -2911,6 +2977,17 @@ export function buildToolHints(toolNames: string[]): string {
   }
   if (confirmRequired.length > 0) {
     lines.push(`Tools that may be gated by confirmation policy: ${confirmRequired.join(', ')}`)
+  }
+  if (hasDocumentGraph || hasDocumentSearch || hasDocumentRead) {
+    lines.push('Local document routing: for questions about notes, plans, specs, budgets, schedules, project knowledge, or people likely stored in Suora documents, use local document tools before web_search.')
+    if (hasDocumentGraph) {
+      lines.push('When the answer may span multiple connected documents or the document corpus is large, start with query_document_graph, then use read_document on the most relevant documents.')
+    } else if (hasDocumentSearch && hasDocumentRead) {
+      lines.push('When answering from local documents, start with list_documents, then use read_document for the strongest matches before replying.')
+    }
+  }
+  if (hasWebSearch && (hasDocumentGraph || hasDocumentSearch)) {
+    lines.push('Only use web_search after local document tools are insufficient or when the question is clearly about external/public information.')
   }
 
   if (lines.length === 0) return ''

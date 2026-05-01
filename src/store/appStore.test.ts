@@ -238,6 +238,17 @@ describe('appStore', () => {
       expect(stats.errorCount).toBe(1)
       expect(stats.lastError).toBe('rate limited')
     })
+
+    it('preserves provider-reported total tokens when they differ from prompt plus completion', () => {
+      const { recordModelUsage } = useAppStore.getState()
+
+      recordModelUsage('provider:reasoning-model', 10, 5, 100, false, undefined, 77)
+
+      const stats = useAppStore.getState().modelUsageStats['provider:reasoning-model']
+      expect(stats.totalPromptTokens).toBe(10)
+      expect(stats.totalCompletionTokens).toBe(5)
+      expect(stats.totalTokens).toBe(77)
+    })
   })
 
   describe('Navigation', () => {

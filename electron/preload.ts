@@ -48,6 +48,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'web:fetch',
   'web:fetchJson',
   'web:fetchText',
+  'ai:fetch:start',
+  'ai:fetch:abort',
   'clipboard:read',
   'clipboard:write',
   'timer:list',
@@ -102,6 +104,7 @@ const ALLOWED_RECEIVE_CHANNELS = [
   'timer:fired',
   'fs:watch:changed',
   'channel:message',
+  'ai:fetch:event',
   'updater:available',
   'deep-link',
 ]

@@ -159,6 +159,24 @@ npx vitest run -t "pipeline"
 npx playwright test e2e/basic.spec.ts
 ```
 
+## Manual Electron Validation
+
+The repository now also includes a repo-local helper for validating real Electron-window document recall flows outside the browser-only Playwright harness.
+
+### Start the desktop app with a CDP port
+
+```bash
+npx electron-vite dev -- --remote-debugging-port=9222
+```
+
+### Run the live Electron document recall check
+
+```bash
+node tmp/electron_documents_chat_check.mjs
+```
+
+This helper drives the already-running Electron app through Chrome DevTools Protocol, creates test documents in the Documents module, then asks Chat to recall the inserted facts from local notes. Treat it as a manual regression tool for the real desktop runtime, not as the current CI-backed E2E layer.
+
 ## Test Writing Guidance
 
 ### Unit and service tests
@@ -197,6 +215,7 @@ The Playwright config expects the Vite E2E server defined in `vite.e2e.config.ts
 
 - No dedicated Electron-window E2E harness is configured yet.
 - The current E2E layer does not fully validate main-process IPC flows inside a packaged desktop runtime.
+- The CDP helper in `tmp/electron_documents_chat_check.mjs` is useful for manual regression checks, but it is not yet wired into CI or packaged-app automation.
 - Documentation should avoid hard-coding total test counts unless they are freshly measured.
 
 ## Maintenance Notes
