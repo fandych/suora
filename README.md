@@ -2,6 +2,13 @@
 
 > 基于 Electron、React 与 Vercel AI SDK 的本地 AI 工作台，围绕对话、文档、Agent、技能、流水线、定时任务、渠道接入与 MCP 集成构建。
 
+在线文档首页：<https://fandych.github.io/suora/>
+
+快速入口：
+- 文档门户：<https://fandych.github.io/suora/>
+- GitHub Releases：<https://github.com/fandych/suora/releases>
+- 功能总览：<https://github.com/fandych/suora/blob/main/FEATURES.md>
+
 ## 项目概览
 
 Suora 当前代码实现的是一个桌面端 AI 工作台，而不是单一聊天窗口。应用采用多页面工作台结构，用户可以在同一套本地数据与安全策略下完成以下工作：

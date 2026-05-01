@@ -139,6 +139,51 @@
         line-height: 1.75;
       }
 
+      .lede-dual {
+        display: grid;
+        gap: 10px;
+        width: min(860px, 100%);
+        margin-top: 18px;
+      }
+
+      .lede-dual p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .lede-dual strong {
+        color: var(--text);
+      }
+
+      .hero-nav {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 22px;
+      }
+
+      .hero-pill {
+        padding: 10px 14px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.64);
+        color: var(--text);
+        font-size: 0.94rem;
+        transition:
+          transform 180ms ease,
+          border-color 180ms ease,
+          background 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .hero-pill:hover {
+        transform: translateY(-2px);
+        border-color: rgba(15, 118, 110, 0.3);
+        background: rgba(255, 255, 255, 0.92);
+        box-shadow: 0 12px 24px rgba(34, 26, 22, 0.08);
+      }
+
       .hero-grid {
         display: grid;
         grid-template-columns: minmax(0, 1.45fr) minmax(280px, 0.8fr);
@@ -242,6 +287,75 @@
         margin-top: 24px;
       }
 
+      .audience-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+        margin-top: 24px;
+      }
+
+      .audience-card {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-lg);
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 248, 240, 0.66));
+        box-shadow: 0 12px 28px rgba(56, 37, 26, 0.06);
+      }
+
+      .audience-card h2 {
+        font-size: 1.35rem;
+      }
+
+      .audience-card p {
+        margin: 10px 0 14px;
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .audience-links {
+        display: grid;
+        gap: 10px;
+      }
+
+      .audience-links a {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: var(--radius-md);
+        background: rgba(255, 255, 255, 0.72);
+        transition:
+          transform 180ms ease,
+          border-color 180ms ease,
+          background 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .audience-links a:hover {
+        transform: translateY(-2px);
+        border-color: rgba(15, 118, 110, 0.3);
+        background: rgba(255, 255, 255, 0.95);
+        box-shadow: 0 12px 24px rgba(34, 26, 22, 0.08);
+      }
+
+      .audience-links span:last-child {
+        color: var(--accent);
+        font-weight: 600;
+        white-space: nowrap;
+      }
+
+      .section-kicker {
+        display: inline-block;
+        margin-bottom: 10px;
+        color: var(--accent-warm);
+        font-size: 0.82rem;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
       .section-card {
         padding: 20px;
       }
@@ -327,6 +441,7 @@
 
       @media (max-width: 1080px) {
         .hero-grid,
+        .audience-grid,
         .content-grid,
         .language-grid {
           grid-template-columns: 1fr;
@@ -371,12 +486,26 @@
       <section class="hero">
         <div class="eyebrow">Suora documentation portal</div>
         <h1>Docs for a local-first AI workbench.</h1>
-        <p class="lede">
-          Suora combines chat, documents, agents, skills, pipelines, timers, channels, and MCP
-          servers into one desktop workspace. This portal turns the existing repository docs into a
-          public entry point for product overview, implementation references, and multilingual user
-          guides.
-        </p>
+        <p class="lede">Suora documentation portal / Suora 文档入口</p>
+        <div class="lede-dual">
+          <p>
+            <strong>EN:</strong> Suora combines chat, documents, agents, skills, pipelines, timers,
+            channels, and MCP servers into one desktop workspace. This page is the public front
+            door for product overview, implementation references, downloads, and multilingual docs.
+          </p>
+          <p>
+            <strong>中文：</strong>Suora 把聊天、文档、Agent、技能、流水线、定时任务、渠道接入与 MCP
+            服务器整合到同一个桌面工作台。这一页是对外统一入口，用来承接产品概览、下载、实现说明与多语言文档导航。
+          </p>
+        </div>
+
+        <nav class="hero-nav" aria-label="Primary portal navigation">
+          <a class="hero-pill" href="#choose-a-path">Choose a path / 选择入口</a>
+          <a class="hero-pill" href="#technical-docs">Technical docs / 技术文档</a>
+          <a class="hero-pill" href="#user-guides">User guides / 用户指南</a>
+          <a class="hero-pill" href="https://github.com/fandych/suora/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer">Downloads / 下载</a>
+          <a class="hero-pill" href="https://github.com/fandych/suora" target="_blank" rel="noopener noreferrer">GitHub repo</a>
+        </nav>
 
         <div class="hero-grid">
           <div class="stat-panel">
@@ -427,8 +556,62 @@
         </div>
       </section>
 
+      <section class="audience-grid" id="choose-a-path" aria-label="Choose a path through the documentation portal">
+        <article class="audience-card">
+          <span class="section-kicker">For evaluators</span>
+          <h2>See what ships</h2>
+          <p>
+            Start here if you want the fastest product-facing overview before downloading or trying
+            the desktop app.
+          </p>
+          <div class="audience-links">
+            <a href="https://github.com/fandych/suora/blob/main/FEATURES.md" target="_blank" rel="noopener noreferrer"><span>Feature reference</span><span>Open</span></a>
+            <a href="https://github.com/fandych/suora/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer"><span>Release downloads</span><span>Open</span></a>
+          </div>
+        </article>
+
+        <article class="audience-card">
+          <span class="section-kicker">For developers</span>
+          <h2>Understand the implementation</h2>
+          <p>
+            Jump to architecture, capability, and integration details if you need to read or extend
+            the codebase.
+          </p>
+          <div class="audience-links">
+            <a href="#technical-docs"><span>Technical docs</span><span>Jump</span></a>
+            <a href="https://github.com/fandych/suora/blob/main/README.md" target="_blank" rel="noopener noreferrer"><span>README</span><span>Open</span></a>
+          </div>
+        </article>
+
+        <article class="audience-card">
+          <span class="section-kicker">For users</span>
+          <h2>Get started quickly</h2>
+          <p>
+            Use these paths for onboarding, installation, and learning the current workbench
+            modules from a user perspective.
+          </p>
+          <div class="audience-links">
+            <a href="#user-guides"><span>User guides</span><span>Jump</span></a>
+            <a href="https://github.com/fandych/suora/releases/tag/v0.1.0" target="_blank" rel="noopener noreferrer"><span>Install builds</span><span>Open</span></a>
+          </div>
+        </article>
+
+        <article class="audience-card">
+          <span class="section-kicker">中文入口</span>
+          <h2>直接进入中文文档</h2>
+          <p>
+            如果你主要面向中文读者，这里给出最短路径，直接跳到中文用户指南、中文技术文档和中文流水线专题。
+          </p>
+          <div class="audience-links">
+            <a href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_ZH.md" target="_blank" rel="noopener noreferrer"><span>中文用户指南</span><span>打开</span></a>
+            <a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_ZH.md" target="_blank" rel="noopener noreferrer"><span>中文技术文档</span><span>打开</span></a>
+          </div>
+        </article>
+      </section>
+
       <section class="content-grid" aria-label="Core documentation areas">
         <article class="section-card">
+          <span class="section-kicker">Overview / 概览</span>
           <h2>Overview</h2>
           <p class="section-copy">
             Start here if you want the shortest path to understanding what Suora already ships and
@@ -460,6 +643,7 @@
         </article>
 
         <article class="section-card">
+          <span class="section-kicker">Notes / 说明</span>
           <h2>Project notes</h2>
           <p class="section-copy">
             These documents capture implementation milestones, optimizations, gaps, testing, and
@@ -514,6 +698,7 @@
 
       <section class="content-grid" aria-label="Specialized documentation areas">
         <article class="section-card">
+          <span class="section-kicker">Deep dives / 深入专题</span>
           <h2>Pipeline deep dives</h2>
           <p class="section-copy">
             Focused documents for the chat-driven pipeline experience and recent execution
@@ -538,6 +723,7 @@
         </article>
 
         <article class="section-card">
+          <span class="section-kicker">Entrypoints / 入口</span>
           <h2>Primary entry points</h2>
           <p class="section-copy">
             If you want to send someone one link, start with the doc set below depending on whether
@@ -571,7 +757,7 @@
 
       <section class="language-section" id="technical-docs">
         <div class="language-header">
-          <h2>Technical docs</h2>
+          <h2>Technical docs / 技术文档</h2>
           <p>
             Multilingual technical documentation for architecture, capabilities, and implementation
             details. These links open the markdown files rendered on GitHub.
@@ -593,7 +779,7 @@
 
       <section class="language-section" id="user-guides">
         <div class="language-header">
-          <h2>User guides</h2>
+          <h2>User guides / 用户指南</h2>
           <p>
             End-user guidance for installation, onboarding, and navigating the workbench modules in
             the language that best matches the reader.
@@ -616,7 +802,8 @@
       <p class="footer-note">
         This site is published from the repository <code>/docs</code> folder via GitHub Pages. The
         page acts as a curated front door, while each documentation link opens the corresponding
-        GitHub-rendered markdown for the latest content on <code>main</code>.
+        GitHub-rendered markdown for the latest content on <code>main</code>. 当前首页已经同步作为仓库
+        homepage，适合直接对外分享。
       </p>
     </main>
   </body>
