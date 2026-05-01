@@ -2,6 +2,8 @@
 
 > 基于 Electron、React 与 Vercel AI SDK 的本地 AI 工作台，围绕对话、文档、Agent、技能、流水线、定时任务、渠道接入与 MCP 集成构建。
 
+> A local-first AI desktop workbench for chat, documents, agents, skills, pipelines, timers, channels, and MCP servers.
+
 在线文档首页：<https://fandych.github.io/suora/>
 
 [![Docs](https://img.shields.io/badge/docs-homepage-0f766e?style=flat-square)](https://fandych.github.io/suora/)
@@ -10,6 +12,20 @@
 [![GitHub Pages](https://img.shields.io/badge/github%20pages-live-201813?style=flat-square)](https://fandych.github.io/suora/)
 
 快速入口：[文档门户](https://fandych.github.io/suora/) · [下载发布版](https://github.com/fandych/suora/releases) · [功能总览](https://github.com/fandych/suora/blob/main/FEATURES.md) · [技术文档](https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md)
+
+## At A Glance / 快速了解
+
+| Topic | Summary |
+| --- | --- |
+| What It Is | Suora is a desktop AI workbench that combines chat, knowledge work, automation, integrations, and MCP connectivity in one local-first application. |
+| Current Surface | Chat, Documents, Models, Agents, Skills, Pipeline, Timer, Channels, MCP, and Settings are already implemented as first-class modules. |
+| Start Here | Open the [docs homepage](https://fandych.github.io/suora/), download the latest build from [Releases](https://github.com/fandych/suora/releases), then configure at least one model provider in the app. |
+
+| 主题 | 说明 |
+| --- | --- |
+| 它是什么 | Suora 是一个本地优先的桌面 AI 工作台，把对话、知识管理、自动化、渠道接入和 MCP 连接整合在同一个应用里。 |
+| 当前模块 | Chat、Documents、Models、Agents、Skills、Pipeline、Timer、Channels、MCP、Settings 都已经是实际可用的一等模块。 |
+| 如何开始 | 先看 [文档首页](https://fandych.github.io/suora/)，再从 [Releases](https://github.com/fandych/suora/releases) 下载最新版本，安装后先配置至少一个模型提供商。 |
 
 ## 项目概览
 
