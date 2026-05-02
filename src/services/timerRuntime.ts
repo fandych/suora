@@ -1,5 +1,5 @@
 import type { Agent, Message, Model, ScheduledTask, Session, Skill } from '@/types'
-import type { AssistantModelMessage, ModelMessage, UserModelMessage } from 'ai'
+import type { ModelMessage, UserModelMessage } from 'ai'
 import { initializeProvider, streamResponseWithTools, validateModelConfig } from '@/services/aiService'
 import { executePipelineById } from '@/services/agentPipelineService'
 import { buildSystemPrompt, getSkillSystemPrompts, getToolsForAgent, mergeSkillsWithBuiltins } from '@/services/tools'
