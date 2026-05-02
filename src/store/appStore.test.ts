@@ -43,6 +43,7 @@ describe('appStore', () => {
       notifications: [],
       installedPlugins: [],
       agentPipeline: [],
+      agentPipelines: [],
     })
   })
 
@@ -168,6 +169,25 @@ describe('appStore', () => {
       clearAgentPipeline()
 
       expect(useAppStore.getState().agentPipeline).toEqual([])
+    })
+
+    it('should persist saved pipelines in the filesystem-backed store payload', () => {
+      const partialize = useAppStore.persist.getOptions().partialize
+      expect(partialize).toBeTypeOf('function')
+
+      useAppStore.getState().setAgentPipelines([
+        {
+          id: 'pipeline-1',
+          name: 'Saved Pipeline',
+          steps: [{ agentId: 'agent-1', task: 'Run task' }],
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ])
+
+      const persistedState = partialize?.(useAppStore.getState()) as { agentPipelines?: unknown[] }
+      expect(persistedState.agentPipelines).toHaveLength(1)
+      expect(persistedState.agentPipelines?.[0]).toMatchObject({ id: 'pipeline-1', name: 'Saved Pipeline' })
     })
   })
 

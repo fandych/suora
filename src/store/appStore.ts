@@ -1086,6 +1086,7 @@ export const useAppStore = create<AppStore>()(
         agentPipeline: state.agentPipeline,
         agentPipelineName: state.agentPipelineName,
         selectedAgentPipelineId: state.selectedAgentPipelineId,
+        agentPipelines: state.agentPipelines,
         locale: state.locale,
         proxySettings: state.proxySettings,
         onboarding: state.onboarding,

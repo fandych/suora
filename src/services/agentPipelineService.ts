@@ -1,7 +1,8 @@
 import type { Agent, AgentPipeline, AgentPipelineExecution, AgentPipelineExecutionStep, Model, PipelineRecoveryAction, PipelineStepUsage, Skill } from '@/types'
 import type { ModelMessage } from 'ai'
 import { generateResponse, initializeProvider, streamResponseWithTools } from '@/services/aiService'
-import { appendPipelineExecutionToDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
+import { flushPendingSplitStoreWrites } from '@/services/fileStorage'
+import { appendPipelineExecutionToDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
 import { buildSystemPrompt, getSkillSystemPrompts, getToolsForAgent, mergeSkillsWithBuiltins } from '@/services/tools'
 import { sanitizeSensitiveText } from '@/services/sanitization'
 import { buildPipelineRecoveryActions, validateAgentPipeline } from '@/services/pipelineValidation'
@@ -318,7 +319,7 @@ async function persistPipelineRunMetadata(pipelineId: string, completedAt: numbe
   })
 
   if (state.workspacePath) {
-    await savePipelineToDisk(state.workspacePath, updatedPipeline)
+    await flushPendingSplitStoreWrites().catch(() => {})
   }
 }
 

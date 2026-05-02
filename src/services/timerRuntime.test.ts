@@ -2,10 +2,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/appStore'
 import type { ScheduledTask } from '@/types'
 
+vi.mock('@/services/aiService', () => ({
+  initializeProvider: vi.fn(),
+  streamResponseWithTools: vi.fn(),
+  validateModelConfig: vi.fn(() => ({ valid: true })),
+}))
+
 vi.mock('@/services/agentPipelineService', () => ({
   executePipelineById: vi.fn(),
 }))
 
+vi.mock('@/services/tools', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/services/tools')>()
+  return {
+    ...actual,
+    buildSystemPrompt: vi.fn(() => 'system prompt'),
+    getSkillSystemPrompts: vi.fn().mockResolvedValue([]),
+    getToolsForAgent: vi.fn(() => ({})),
+    mergeSkillsWithBuiltins: vi.fn((skills) => skills),
+  }
+})
+
+import { initializeProvider, streamResponseWithTools, validateModelConfig } from '@/services/aiService'
 import { executePipelineById } from '@/services/agentPipelineService'
 import { handleTimerFired, initTimerRuntimeListener } from './timerRuntime'
 
@@ -20,6 +38,7 @@ const promptTimer: ScheduledTask = {
   enabled: true,
   createdAt: 1,
   updatedAt: 1,
+  lastRun: 55,
 }
 
 const pipelineTimer: ScheduledTask = {
@@ -37,6 +56,10 @@ const pipelineTimer: ScheduledTask = {
 
 describe('timerRuntime', () => {
   beforeEach(() => {
+    vi.mocked(initializeProvider).mockReset()
+    vi.mocked(streamResponseWithTools).mockReset()
+    vi.mocked(validateModelConfig).mockReset()
+    vi.mocked(validateModelConfig).mockReturnValue({ valid: true })
     vi.mocked(executePipelineById).mockReset()
     vi.mocked(window.electron.invoke).mockReset()
     vi.mocked(window.electron.on).mockReset()
@@ -48,6 +71,20 @@ describe('timerRuntime', () => {
       activeModule: 'timer',
       selectedAgent: null,
       notifications: [],
+      selectedModel: null,
+      skills: [],
+      models: [
+        {
+          id: 'model-1',
+          name: 'GPT',
+          provider: 'provider-1',
+          providerType: 'openai',
+          modelId: 'gpt-4.1',
+          enabled: true,
+          isDefault: true,
+          apiKey: 'test-key',
+        },
+      ],
       agents: [
         {
           id: 'agent-1',
@@ -63,17 +100,37 @@ describe('timerRuntime', () => {
     })
   })
 
-  it('creates a chat session for prompt timers', async () => {
+  it('executes prompt timers and records the resulting chat session', async () => {
+    vi.mocked(streamResponseWithTools).mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'Scheduled summary ready.' }
+    })
+
     await handleTimerFired(promptTimer)
 
     const state = useAppStore.getState()
     expect(state.sessions).toHaveLength(1)
     expect(state.sessions[0].title).toBe('Timer: Daily Prompt')
     expect(state.sessions[0].messages[0].content).toBe('Summarize today')
+    expect(state.sessions[0].messages[1]).toMatchObject({
+      role: 'assistant',
+      content: 'Scheduled summary ready.',
+      isStreaming: false,
+    })
     expect(state.activeSessionId).toBe(state.sessions[0].id)
     expect(state.activeModule).toBe('chat')
     expect(state.selectedAgent?.id).toBe('agent-1')
-    expect(state.notifications).toHaveLength(1)
+    expect(initializeProvider).toHaveBeenCalledTimes(1)
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+    expect(window.electron.invoke).toHaveBeenCalledWith('timer:updateExecution', {
+      timerId: 'timer-prompt',
+      firedAt: 55,
+      status: 'success',
+      error: undefined,
+      sessionId: state.sessions[0].id,
+    })
+    expect(state.notifications).toHaveLength(2)
+    expect(state.notifications[0].title).toBe('Prompt completed: Daily Prompt')
+    expect(state.notifications[1].title).toBe('Timer fired: Daily Prompt')
   })
 
   it('runs saved pipelines for pipeline timers and posts completion notifications', async () => {

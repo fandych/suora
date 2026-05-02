@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { PipelineFlowDiagram } from '@/components/pipeline/PipelineFlowDiagram'
+import { flushPendingSplitStoreWrites } from '@/services/fileStorage'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
 import { useAppStore } from '@/store/appStore'
@@ -10,7 +11,7 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { executeAgentPipeline, dryRunAgentPipeline, type AgentPipelineProgressStep, type DryRunResult } from '@/services/agentPipelineService'
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
-import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
+import { loadPipelineExecutionsFromDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
 import { PipelineImportError, parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability'
 import { confirm } from '@/services/confirmDialog'
 import type { AgentPipeline, AgentPipelineBudget, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep, AgentPipelineVariable, PipelineStepUsage } from '@/types'
@@ -64,6 +65,34 @@ function buildDefaultVariableValues(variables: AgentPipelineVariable[] | undefin
     next[variable.name] = variable.defaultValue ?? ''
   }
   return next
+}
+
+function reconcilePipelineVariableValues(
+  currentValues: Record<string, string>,
+  previousVariables: AgentPipelineVariable[],
+  nextVariables: AgentPipelineVariable[],
+): Record<string, string> {
+  const nextValues: Record<string, string> = {}
+
+  nextVariables.forEach((variable, index) => {
+    const nextName = variable.name.trim()
+    if (!nextName) return
+
+    const previousName = previousVariables[index]?.name.trim() ?? ''
+    if (currentValues[nextName] !== undefined) {
+      nextValues[nextName] = currentValues[nextName]
+      return
+    }
+
+    if (previousName && previousName !== nextName && currentValues[previousName] !== undefined) {
+      nextValues[nextName] = currentValues[previousName]
+      return
+    }
+
+    nextValues[nextName] = variable.defaultValue ?? ''
+  })
+
+  return nextValues
 }
 
 function mapExecutionStep(step: AgentPipelineExecutionStep, agentNameMap: Record<string, string>): AgentPipelineProgressStep {
@@ -135,6 +164,9 @@ export function PipelineLayout() {
   const [activeExecution, setActiveExecution] = useState<AgentPipelineExecution | null>(null)
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null)
   const runAbortControllerRef = useRef<AbortController | null>(null)
+  const hydratedRequestedPipelineIdRef = useRef<string | null>(null)
+  const hydratedSelectedPipelineIdRef = useRef<string | null>(null)
+  const variableNameMemoryRef = useRef<Record<number, string>>({})
   const {
     workspacePath,
     agents,
@@ -148,9 +180,6 @@ export function PipelineLayout() {
     setSelectedAgentPipelineId,
     agentPipelines,
     setAgentPipelines,
-    addAgentPipeline,
-    updateAgentPipeline,
-    removeAgentPipeline,
     addNotification,
   } = useAppStore()
   const deferredSearchQuery = useDeferredValue(searchQuery)
@@ -173,10 +202,65 @@ export function PipelineLayout() {
   const selectedSavedPipeline = selectedAgentPipelineId
     ? agentPipelines.find((item) => item.id === selectedAgentPipelineId) ?? null
     : null
+  const resetPipelineExecutionState = () => {
+    setLiveSteps([])
+    setActiveExecution(null)
+  }
+
+  const hydratePipelineEditor = (savedPipeline: AgentPipeline) => {
+    setAgentPipelineName(savedPipeline.name)
+    setPipelineDescription(savedPipeline.description ?? '')
+    setPipelineVariables(savedPipeline.variables ?? [])
+    setVariableValues(buildDefaultVariableValues(savedPipeline.variables))
+    setPipelineBudget(savedPipeline.budget)
+    setAgentPipeline(savedPipeline.steps)
+    resetPipelineExecutionState()
+  }
+
+  const updatePipelineVariables = (updater: (current: AgentPipelineVariable[]) => AgentPipelineVariable[]) => {
+    setPipelineVariables((current) => {
+      const next = updater(current)
+      setVariableValues((values) => reconcilePipelineVariableValues(values, current, next))
+      return next
+    })
+  }
+
+  const renamePipelineVariable = (index: number, nextName: string) => {
+    const trimmedNextName = nextName.trim()
+    const rememberedName = variableNameMemoryRef.current[index]?.trim() ?? ''
+    const currentName = pipelineVariables[index]?.name.trim() ?? ''
+    const sourceName = currentName || rememberedName
+
+    setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: nextName } : item))
+    if (!sourceName || !trimmedNextName || sourceName === trimmedNextName) return
+
+    setVariableValues((current) => {
+      if (current[sourceName] === undefined) return current
+      const nextValues = { ...current, [trimmedNextName]: current[sourceName] }
+      delete nextValues[sourceName]
+      return nextValues
+    })
+  }
+
   const enabledPipelineSteps = useMemo(
     () => pipeline.filter((step) => step.enabled !== false),
     [pipeline],
   )
+
+  useEffect(() => {
+    const nextMemory: Record<number, string> = {}
+    pipelineVariables.forEach((variable, index) => {
+      const trimmedName = variable.name.trim()
+      if (trimmedName) {
+        nextMemory[index] = trimmedName
+        return
+      }
+
+      const rememberedName = variableNameMemoryRef.current[index]?.trim()
+      if (rememberedName) nextMemory[index] = rememberedName
+    })
+    variableNameMemoryRef.current = nextMemory
+  }, [pipelineVariables])
   const invalidEnabledSteps = useMemo(
     () => enabledPipelineSteps.filter((step) => !step.task.trim()).length,
     [enabledPipelineSteps],
@@ -191,32 +275,32 @@ export function PipelineLayout() {
   }, [workspacePath, setAgentPipelines])
 
   useEffect(() => {
-    if (!requestedPipelineId) return
+    if (!requestedPipelineId) {
+      hydratedRequestedPipelineIdRef.current = null
+      return
+    }
     const requestedPipeline = agentPipelines.find((item) => item.id === requestedPipelineId)
     if (!requestedPipeline) return
+    if (hydratedRequestedPipelineIdRef.current === requestedPipeline.id) return
 
+    hydratedRequestedPipelineIdRef.current = requestedPipeline.id
+    hydratedSelectedPipelineIdRef.current = requestedPipeline.id
     setSelectedAgentPipelineId(requestedPipeline.id)
-    setAgentPipelineName(requestedPipeline.name)
-    setPipelineDescription(requestedPipeline.description ?? '')
-    setPipelineVariables(requestedPipeline.variables ?? [])
-    setVariableValues(buildDefaultVariableValues(requestedPipeline.variables))
-    setPipelineBudget(requestedPipeline.budget)
-    setAgentPipeline(requestedPipeline.steps)
-    setLiveSteps([])
-    setActiveExecution(null)
-  }, [requestedPipelineId, agentPipelines, setSelectedAgentPipelineId, setAgentPipelineName, setAgentPipeline])
+    hydratePipelineEditor(requestedPipeline)
+  }, [requestedPipelineId, agentPipelines, setSelectedAgentPipelineId])
 
   useEffect(() => {
-    if (!selectedAgentPipelineId || pipeline.length > 0 || agentPipelineName.trim()) return
+    if (!selectedAgentPipelineId) {
+      hydratedSelectedPipelineIdRef.current = null
+      return
+    }
     const selectedPipeline = agentPipelines.find((item) => item.id === selectedAgentPipelineId)
     if (!selectedPipeline) return
-    setAgentPipeline(selectedPipeline.steps)
-    setAgentPipelineName(selectedPipeline.name)
-    setPipelineDescription(selectedPipeline.description ?? '')
-    setPipelineVariables(selectedPipeline.variables ?? [])
-    setVariableValues(buildDefaultVariableValues(selectedPipeline.variables))
-    setPipelineBudget(selectedPipeline.budget)
-  }, [selectedAgentPipelineId, agentPipelines, pipeline.length, agentPipelineName, setAgentPipeline, setAgentPipelineName])
+    if (hydratedSelectedPipelineIdRef.current === selectedAgentPipelineId) return
+
+    hydratedSelectedPipelineIdRef.current = selectedAgentPipelineId
+    hydratePipelineEditor(selectedPipeline)
+  }, [selectedAgentPipelineId, agentPipelines])
 
   useEffect(() => {
     if (!workspacePath || !selectedAgentPipelineId) {
@@ -303,6 +387,9 @@ export function PipelineLayout() {
   )
 
   const resetPipelineEditor = () => {
+    hydratedRequestedPipelineIdRef.current = null
+    hydratedSelectedPipelineIdRef.current = null
+    variableNameMemoryRef.current = {}
     setSelectedAgentPipelineId(null)
     setAgentPipelineName('')
     setPipelineDescription('')
@@ -311,29 +398,22 @@ export function PipelineLayout() {
     setPipelineBudget(undefined)
     clearAgentPipeline()
     setPipelineHistory([])
-    setLiveSteps([])
-    setActiveExecution(null)
+    resetPipelineExecutionState()
     setSelectedExecutionId(null)
   }
 
   const loadSavedPipeline = (pipelineId: string) => {
     const selectedPipeline = agentPipelines.find((item) => item.id === pipelineId)
     if (!selectedPipeline) return
+    hydratedRequestedPipelineIdRef.current = null
+    hydratedSelectedPipelineIdRef.current = selectedPipeline.id
     setSelectedAgentPipelineId(selectedPipeline.id)
-    setAgentPipelineName(selectedPipeline.name)
-    setPipelineDescription(selectedPipeline.description ?? '')
-    setPipelineVariables(selectedPipeline.variables ?? [])
-    setVariableValues(buildDefaultVariableValues(selectedPipeline.variables))
-    setPipelineBudget(selectedPipeline.budget)
-    setAgentPipeline(selectedPipeline.steps)
-    setLiveSteps([])
-    setActiveExecution(null)
+    hydratePipelineEditor(selectedPipeline)
   }
 
   const replacePipelineDraft = (nextPipeline: AgentPipelineStep[]) => {
     setAgentPipeline(nextPipeline)
-    setLiveSteps([])
-    setActiveExecution(null)
+    resetPipelineExecutionState()
   }
 
   const exportCurrentPipeline = async () => {
@@ -558,8 +638,20 @@ export function PipelineLayout() {
       lastRunAt: savedPipeline?.lastRunAt,
     }
 
-    const success = await savePipelineToDisk(workspacePath, nextPipeline)
-    if (!success) {
+    const previousPipelines = agentPipelines
+    const previousSelectedPipelineId = selectedAgentPipelineId
+    const nextPipelines = [nextPipeline, ...agentPipelines.filter((item) => item.id !== nextPipeline.id)]
+
+    hydratedSelectedPipelineIdRef.current = nextPipeline.id
+    setAgentPipelines(nextPipelines)
+    setSelectedAgentPipelineId(nextPipeline.id)
+
+    try {
+      await flushPendingSplitStoreWrites()
+    } catch {
+      hydratedSelectedPipelineIdRef.current = previousSelectedPipelineId
+      setAgentPipelines(previousPipelines)
+      setSelectedAgentPipelineId(previousSelectedPipelineId)
       addNotification({
         id: generateId('notif'),
         type: 'error',
@@ -571,13 +663,6 @@ export function PipelineLayout() {
       return
     }
 
-    if (savedPipeline) {
-      updateAgentPipeline(savedPipeline.id, nextPipeline)
-    } else {
-      addAgentPipeline(nextPipeline)
-    }
-
-    setSelectedAgentPipelineId(nextPipeline.id)
     addNotification({
       id: generateId('notif'),
       type: 'success',
@@ -598,8 +683,19 @@ export function PipelineLayout() {
     })
     if (!confirmed) return
 
-    const success = await deletePipelineFromDisk(workspacePath, selectedSavedPipeline.id)
-    if (!success) {
+    const nextPipelines = agentPipelines.filter((item) => item.id !== selectedSavedPipeline.id)
+    const previousSelectedPipelineId = selectedAgentPipelineId
+
+    hydratedSelectedPipelineIdRef.current = null
+    setAgentPipelines(nextPipelines)
+    setSelectedAgentPipelineId(null)
+
+    try {
+      await flushPendingSplitStoreWrites()
+    } catch {
+      hydratedSelectedPipelineIdRef.current = previousSelectedPipelineId
+      setAgentPipelines(agentPipelines)
+      setSelectedAgentPipelineId(previousSelectedPipelineId)
       addNotification({
         id: generateId('notif'),
         type: 'error',
@@ -975,7 +1071,7 @@ export function PipelineLayout() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => setPipelineVariables((current) => [...current, { name: '' }])}
+                        onClick={() => updatePipelineVariables((current) => [...current, { name: '' }])}
                         className="rounded-xl border border-border-subtle bg-surface-1/80 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent"
                       >
                         {t('agents.pipelineAddVariable', '+ Add variable')}
@@ -991,8 +1087,7 @@ export function PipelineLayout() {
                             <input
                               value={variable.name}
                               onChange={(event) => {
-                                const next = event.target.value
-                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, name: next } : item))
+                                renamePipelineVariable(index, event.target.value)
                               }}
                               placeholder={t('agents.pipelineVariableName', 'name')}
                               className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
@@ -1001,7 +1096,7 @@ export function PipelineLayout() {
                               value={variable.label ?? ''}
                               onChange={(event) => {
                                 const next = event.target.value
-                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: next } : item))
+                                updatePipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: next } : item))
                               }}
                               placeholder={t('agents.pipelineVariableLabel', 'Label (optional)')}
                               className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
@@ -1010,12 +1105,7 @@ export function PipelineLayout() {
                               value={variable.defaultValue ?? ''}
                               onChange={(event) => {
                                 const next = event.target.value
-                                setPipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, defaultValue: next } : item))
-                                if (!variable.name) return
-                                setVariableValues((current) => {
-                                  if (current[variable.name] !== undefined && current[variable.name] !== '') return current
-                                  return { ...current, [variable.name]: next }
-                                })
+                                updatePipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, defaultValue: next } : item))
                               }}
                               placeholder={t('agents.pipelineVariableDefault', 'Default value')}
                               className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
@@ -1023,7 +1113,7 @@ export function PipelineLayout() {
                             <button
                               type="button"
                               onClick={() => {
-                                setPipelineVariables((current) => current.filter((_, itemIndex) => itemIndex !== index))
+                                updatePipelineVariables((current) => current.filter((_, itemIndex) => itemIndex !== index))
                               }}
                               className="rounded-xl border border-border-subtle bg-surface-1/80 px-2 py-1 text-[11px] font-medium text-text-muted transition-colors hover:border-red-500/30 hover:text-red-300"
                             >

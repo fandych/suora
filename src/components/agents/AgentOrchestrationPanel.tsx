@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/hooks/useI18n'
 import { getMessageLog } from '@/services/agentCommunication'
 import { executeAgentPipeline } from '@/services/agentPipelineService'
-import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
+import { flushPendingSplitStoreWrites } from '@/services/fileStorage'
+import { loadPipelineExecutionsFromDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
 import { confirm } from '@/services/confirmDialog'
 import { ICON_DATA, AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import type { Agent, AgentMessage, AgentPipelineExecution } from '@/types'
@@ -50,6 +51,7 @@ export function AgentOrchestrationPanel({
   const [pipelineResult, setPipelineResult] = useState<string[]>([])
   const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([])
   const [running, setRunning] = useState(false)
+  const hydratedSelectedPipelineIdRef = useRef<string | null>(null)
   // Communications
   const [msgLog, setMsgLog] = useState<readonly AgentMessage[]>([])
   // Versions
@@ -67,9 +69,6 @@ export function AgentOrchestrationPanel({
     setSelectedAgentPipelineId,
     agentPipelines,
     setAgentPipelines,
-    addAgentPipeline,
-    updateAgentPipeline,
-    removeAgentPipeline,
     addNotification,
   } = useAppStore()
 
@@ -98,13 +97,18 @@ export function AgentOrchestrationPanel({
   }, [supportsPipeline, workspacePath, setAgentPipelines])
 
   useEffect(() => {
-    if (!supportsPipeline) return
-    if (!selectedAgentPipelineId || pipeline.length > 0 || agentPipelineName.trim()) return
+    if (!supportsPipeline || !selectedAgentPipelineId) {
+      hydratedSelectedPipelineIdRef.current = null
+      return
+    }
     const selectedPipeline = agentPipelines.find((item) => item.id === selectedAgentPipelineId)
     if (!selectedPipeline) return
+    if (hydratedSelectedPipelineIdRef.current === selectedAgentPipelineId) return
+
+    hydratedSelectedPipelineIdRef.current = selectedAgentPipelineId
     setAgentPipeline(selectedPipeline.steps)
     setAgentPipelineName(selectedPipeline.name)
-  }, [supportsPipeline, selectedAgentPipelineId, agentPipelines, pipeline.length, agentPipelineName, setAgentPipeline, setAgentPipelineName])
+  }, [supportsPipeline, selectedAgentPipelineId, agentPipelines, setAgentPipeline, setAgentPipelineName])
 
   useEffect(() => {
     if (!supportsPipeline) {
@@ -126,7 +130,14 @@ export function AgentOrchestrationPanel({
     ? agentPipelines.find((item) => item.id === selectedAgentPipelineId) ?? null
     : null
 
+  const hydratePipelineDraft = (savedPipeline: { id: string; name: string; steps: typeof pipeline }) => {
+    setAgentPipelineName(savedPipeline.name)
+    setAgentPipeline(savedPipeline.steps)
+    setPipelineResult([])
+  }
+
   const resetPipelineEditor = () => {
+    hydratedSelectedPipelineIdRef.current = null
     setSelectedAgentPipelineId(null)
     setAgentPipelineName('')
     clearAgentPipeline()
@@ -137,10 +148,9 @@ export function AgentOrchestrationPanel({
   const loadSavedPipeline = (pipelineId: string) => {
     const selectedPipeline = agentPipelines.find((item) => item.id === pipelineId)
     if (!selectedPipeline) return
+    hydratedSelectedPipelineIdRef.current = selectedPipeline.id
     setSelectedAgentPipelineId(selectedPipeline.id)
-    setAgentPipelineName(selectedPipeline.name)
-    setAgentPipeline(selectedPipeline.steps)
-    setPipelineResult([])
+    hydratePipelineDraft(selectedPipeline)
   }
 
   const addStep = () => {
@@ -180,8 +190,20 @@ export function AgentOrchestrationPanel({
       lastRunAt: savedPipeline?.lastRunAt,
     }
 
-    const success = await savePipelineToDisk(workspacePath, nextPipeline)
-    if (!success) {
+    const previousPipelines = agentPipelines
+    const previousSelectedPipelineId = selectedAgentPipelineId
+    const nextPipelines = [nextPipeline, ...agentPipelines.filter((item) => item.id !== nextPipeline.id)]
+
+    hydratedSelectedPipelineIdRef.current = nextPipeline.id
+    setAgentPipelines(nextPipelines)
+    setSelectedAgentPipelineId(nextPipeline.id)
+
+    try {
+      await flushPendingSplitStoreWrites()
+    } catch {
+      hydratedSelectedPipelineIdRef.current = previousSelectedPipelineId
+      setAgentPipelines(previousPipelines)
+      setSelectedAgentPipelineId(previousSelectedPipelineId)
       addNotification({
         id: generateId('notif'),
         type: 'error',
@@ -193,13 +215,6 @@ export function AgentOrchestrationPanel({
       return
     }
 
-    if (savedPipeline) {
-      updateAgentPipeline(savedPipeline.id, nextPipeline)
-    } else {
-      addAgentPipeline(nextPipeline)
-    }
-
-    setSelectedAgentPipelineId(nextPipeline.id)
     addNotification({
       id: generateId('notif'),
       type: 'success',
@@ -220,8 +235,19 @@ export function AgentOrchestrationPanel({
     })
     if (!confirmed) return
 
-    const success = await deletePipelineFromDisk(workspacePath, selectedSavedPipeline.id)
-    if (!success) {
+    const nextPipelines = agentPipelines.filter((item) => item.id !== selectedSavedPipeline.id)
+    const previousSelectedPipelineId = selectedAgentPipelineId
+
+    hydratedSelectedPipelineIdRef.current = null
+    setAgentPipelines(nextPipelines)
+    setSelectedAgentPipelineId(null)
+
+    try {
+      await flushPendingSplitStoreWrites()
+    } catch {
+      hydratedSelectedPipelineIdRef.current = previousSelectedPipelineId
+      setAgentPipelines(agentPipelines)
+      setSelectedAgentPipelineId(previousSelectedPipelineId)
       addNotification({
         id: generateId('notif'),
         type: 'error',

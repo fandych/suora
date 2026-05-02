@@ -11,11 +11,19 @@ vi.mock('@/services/aiService', () => ({
 vi.mock('@/services/pipelineFiles', () => ({
   appendPipelineExecutionToDisk: vi.fn().mockResolvedValue(true),
   loadPipelinesFromDisk: vi.fn().mockResolvedValue([]),
-  savePipelineToDisk: vi.fn().mockResolvedValue(true),
 }))
 
+vi.mock('@/services/fileStorage', async () => {
+  const actual = await vi.importActual<typeof import('@/services/fileStorage')>('@/services/fileStorage')
+  return {
+    ...actual,
+    flushPendingSplitStoreWrites: vi.fn().mockResolvedValue(undefined),
+  }
+})
+
 import { generateResponse, initializeProvider, streamResponseWithTools } from '@/services/aiService'
-import { appendPipelineExecutionToDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
+import { flushPendingSplitStoreWrites } from '@/services/fileStorage'
+import { appendPipelineExecutionToDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
 import { dryRunAgentPipeline, executeAgentPipeline, executePipelineById, executePipelineByReference } from './agentPipelineService'
 
 const savedPipeline: AgentPipeline = {
@@ -35,8 +43,8 @@ describe('agentPipelineService', () => {
     vi.mocked(initializeProvider).mockReset()
     vi.mocked(streamResponseWithTools).mockReset()
     vi.mocked(appendPipelineExecutionToDisk).mockClear()
-    vi.mocked(savePipelineToDisk).mockClear()
     vi.mocked(loadPipelinesFromDisk).mockReset()
+    vi.mocked(flushPendingSplitStoreWrites).mockClear()
 
     useAppStore.setState({
       workspacePath: 'C:/workspace',
@@ -70,7 +78,7 @@ describe('agentPipelineService', () => {
     expect(execution.steps[1].input).toContain('draft-ready')
     expect(initializeProvider).toHaveBeenCalledTimes(1)
     expect(appendPipelineExecutionToDisk).toHaveBeenCalledTimes(1)
-    expect(savePipelineToDisk).toHaveBeenCalledTimes(1)
+    expect(flushPendingSplitStoreWrites).toHaveBeenCalledTimes(1)
     expect(useAppStore.getState().agentPipelines[0].lastRunAt).toBeDefined()
   })
 
