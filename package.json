@@ -1,6 +1,6 @@
 {
   "name": "suora",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Suora - AI desktop assistant with multi-model support, skills, agents, memory, and plugin system",
   "keywords": [
     "suora",

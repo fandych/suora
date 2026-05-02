@@ -135,6 +135,16 @@ export function SystemSettings() {
   const rssValue = metrics ? formatBytes(metrics.memory.rss) : '—'
   const uptimeValue = metrics ? formatUptime(metrics.uptime) : '—'
   const displayVersion = electron ? (appVersion === '—' ? '…' : `v${appVersion}`) : 'browser-preview'
+  const hasNewerVersion = Boolean(updaterState?.latestVersion && updaterState.latestVersion !== appVersion)
+  const releaseTag = updaterState?.latestVersion ? `v${updaterState.latestVersion}` : null
+  const releasePageUrl = releaseTag ? `https://github.com/fandych/suora/releases/tag/${releaseTag}` : null
+  const resolvedDownloadUrl = (() => {
+    const downloadUrl = updaterState?.downloadUrl?.trim()
+    if (!downloadUrl) return null
+    if (/^https?:\/\//i.test(downloadUrl)) return downloadUrl
+    if (!releaseTag) return null
+    return `https://github.com/fandych/suora/releases/download/${releaseTag}/${downloadUrl.replace(/^\/+/, '')}`
+  })()
 
   const updateStatusText = (() => {
     switch (updaterState?.status) {
@@ -186,6 +196,16 @@ export function SystemSettings() {
       setUpdateNote(t('settings.installUpdateFailed', 'Unable to install the downloaded update.'))
     } finally {
       setInstallingUpdate(false)
+    }
+  }
+
+  const handleOpenUpdateUrl = async (url: string | null) => {
+    if (!electron || !url) return
+    setUpdateNote(null)
+    try {
+      await electron.invoke('shell:openUrl', url)
+    } catch {
+      setUpdateNote(t('settings.openReleaseFailed', 'Unable to open the update link.'))
     }
   }
 
@@ -267,6 +287,19 @@ export function SystemSettings() {
                     {installingUpdate ? t('settings.installingUpdate', 'Installing…') : t('settings.installUpdate', 'Install Update')}
                   </button>
                 )}
+                {hasNewerVersion && updaterState?.status !== 'downloaded' && (resolvedDownloadUrl || releasePageUrl) && (
+                  <button
+                    type="button"
+                    onClick={() => void handleOpenUpdateUrl(resolvedDownloadUrl || releasePageUrl)}
+                    disabled={checkingUpdates || installingUpdate}
+                    className={settingsSecondaryButtonClass}
+                  >
+                    <IconifyIcon name="ui-download" size={14} color="currentColor" />
+                    {resolvedDownloadUrl
+                      ? t('settings.downloadUpdate', 'Download Update')
+                      : t('settings.openReleasePage', 'Open Release Page')}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -285,7 +318,7 @@ export function SystemSettings() {
               </div>
             )}
 
-            {(updaterState?.releaseDate || updaterState?.downloadUrl) && (
+            {(updaterState?.releaseDate || resolvedDownloadUrl || releasePageUrl) && (
               <div className="grid gap-3 md:grid-cols-2">
                 {updaterState.releaseDate && (
                   <div className={settingsSurfaceCardClass}>
@@ -293,10 +326,12 @@ export function SystemSettings() {
                     <div className="mt-2 text-[12px] font-mono text-text-primary">{new Date(updaterState.releaseDate).toLocaleString()}</div>
                   </div>
                 )}
-                {updaterState.downloadUrl && (
+                {(resolvedDownloadUrl || releasePageUrl) && (
                   <div className={settingsSurfaceCardClass}>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.releaseSource', 'Release Source')}</div>
-                    <div className="mt-2 break-all text-[12px] font-mono text-text-primary">{updaterState.downloadUrl}</div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">
+                      {resolvedDownloadUrl ? t('settings.downloadUrl', 'Download URL') : t('settings.releaseSource', 'Release Source')}
+                    </div>
+                    <div className="mt-2 break-all text-[12px] font-mono text-text-primary">{resolvedDownloadUrl || releasePageUrl}</div>
                   </div>
                 )}
               </div>
