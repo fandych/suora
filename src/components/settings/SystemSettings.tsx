@@ -137,6 +137,7 @@ export function SystemSettings() {
   const displayVersion = electron ? (appVersion === '—' ? '…' : `v${appVersion}`) : 'browser-preview'
   const hasNewerVersion = Boolean(updaterState?.latestVersion && updaterState.latestVersion !== appVersion)
   const releaseTag = updaterState?.latestVersion ? `v${updaterState.latestVersion}` : null
+  const releaseDate = updaterState?.releaseDate
   const releasePageUrl = releaseTag ? `https://github.com/fandych/suora/releases/tag/${releaseTag}` : null
   const resolvedDownloadUrl = (() => {
     const downloadUrl = updaterState?.downloadUrl?.trim()
@@ -318,12 +319,12 @@ export function SystemSettings() {
               </div>
             )}
 
-            {(updaterState?.releaseDate || resolvedDownloadUrl || releasePageUrl) && (
+            {(releaseDate || resolvedDownloadUrl || releasePageUrl) && (
               <div className="grid gap-3 md:grid-cols-2">
-                {updaterState.releaseDate && (
+                {releaseDate && (
                   <div className={settingsSurfaceCardClass}>
                     <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.releaseDate', 'Release Date')}</div>
-                    <div className="mt-2 text-[12px] font-mono text-text-primary">{new Date(updaterState.releaseDate).toLocaleString()}</div>
+                    <div className="mt-2 text-[12px] font-mono text-text-primary">{new Date(releaseDate).toLocaleString()}</div>
                   </div>
                 )}
                 {(resolvedDownloadUrl || releasePageUrl) && (

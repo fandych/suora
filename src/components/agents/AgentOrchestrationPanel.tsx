@@ -259,7 +259,6 @@ export function AgentOrchestrationPanel({
       return
     }
 
-    removeAgentPipeline(selectedSavedPipeline.id)
     resetPipelineEditor()
   }
 

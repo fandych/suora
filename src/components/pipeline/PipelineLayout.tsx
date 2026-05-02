@@ -707,7 +707,6 @@ export function PipelineLayout() {
       return
     }
 
-    removeAgentPipeline(selectedSavedPipeline.id)
     resetPipelineEditor()
   }
 
