@@ -100,7 +100,7 @@ describe('timerRuntime', () => {
     })
   })
 
-  it('executes prompt timers and records the resulting chat session', async () => {
+  it('executes prompt timers in the background and records the result', async () => {
     vi.mocked(streamResponseWithTools).mockImplementation(async function* () {
       yield { type: 'text-delta', text: 'Scheduled summary ready.' }
     })
@@ -108,25 +108,26 @@ describe('timerRuntime', () => {
     await handleTimerFired(promptTimer)
 
     const state = useAppStore.getState()
-    expect(state.sessions).toHaveLength(1)
-    expect(state.sessions[0].title).toBe('Timer: Daily Prompt')
-    expect(state.sessions[0].messages[0].content).toBe('Summarize today')
-    expect(state.sessions[0].messages[1]).toMatchObject({
-      role: 'assistant',
-      content: 'Scheduled summary ready.',
-      isStreaming: false,
-    })
-    expect(state.activeSessionId).toBe(state.sessions[0].id)
-    expect(state.activeModule).toBe('chat')
-    expect(state.selectedAgent?.id).toBe('agent-1')
+    expect(state.sessions).toHaveLength(0)
+    expect(state.activeSessionId).toBeNull()
+    expect(state.activeModule).toBe('timer')
+    expect(state.selectedAgent).toBeNull()
     expect(initializeProvider).toHaveBeenCalledTimes(1)
     expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
-    expect(window.electron.invoke).toHaveBeenCalledWith('timer:updateExecution', {
+    expect(window.electron.invoke).toHaveBeenNthCalledWith(1, 'timer:startExecution', {
+      timerId: 'timer-prompt',
+      firedAt: 55,
+      action: 'prompt',
+      prompt: 'Summarize today',
+      agentId: 'agent-1',
+      pipelineId: undefined,
+    })
+    expect(window.electron.invoke).toHaveBeenNthCalledWith(2, 'timer:updateExecution', {
       timerId: 'timer-prompt',
       firedAt: 55,
       status: 'success',
       error: undefined,
-      sessionId: state.sessions[0].id,
+      result: 'Scheduled summary ready.',
     })
     expect(state.notifications).toHaveLength(2)
     expect(state.notifications[0].title).toBe('Prompt completed: Daily Prompt')
@@ -155,11 +156,20 @@ describe('timerRuntime', () => {
       persistExecution: true,
       persistLastRun: true,
     })
-    expect(window.electron.invoke).toHaveBeenCalledWith('timer:updateExecution', {
+    expect(window.electron.invoke).toHaveBeenNthCalledWith(1, 'timer:startExecution', {
+      timerId: 'timer-pipeline',
+      firedAt: 101,
+      action: 'pipeline',
+      prompt: undefined,
+      agentId: undefined,
+      pipelineId: 'pipeline-1',
+    })
+    expect(window.electron.invoke).toHaveBeenNthCalledWith(2, 'timer:updateExecution', {
       timerId: 'timer-pipeline',
       firedAt: 101,
       status: 'success',
       error: undefined,
+      result: 'done',
       pipelineExecutionId: 'exec-1',
     })
 

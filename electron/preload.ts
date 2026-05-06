@@ -58,6 +58,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'timer:update',
   'timer:delete',
   'timer:history',
+  'timer:startExecution',
   'timer:updateExecution',
   'browser:navigate',
   'browser:screenshot',
