@@ -161,46 +161,59 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
                   history.map((exec) => {
                     const savedPipeline = exec.pipelineId ? agentPipelines.find((item) => item.id === exec.pipelineId) : null
                     const canOpenPipeline = Boolean(exec.pipelineId)
+                    const statusClassName = exec.status === 'success'
+                      ? 'bg-green-500/15 text-green-400'
+                      : exec.status === 'error'
+                        ? 'bg-red-500/15 text-red-400'
+                        : 'bg-amber-500/15 text-amber-300'
+                    const statusDotClassName = exec.status === 'success'
+                      ? 'bg-green-400'
+                      : exec.status === 'error'
+                        ? 'bg-red-400'
+                        : 'bg-amber-300'
 
                     return (
-                    <button
-                      key={exec.id}
-                      type="button"
-                      onClick={() => canOpenPipeline && openPipelineExecution(exec)}
-                      disabled={!canOpenPipeline}
-                      className={`w-full rounded-[22px] border px-3.5 py-3 text-left text-xs transition-colors ${canOpenPipeline ? 'bg-surface-1 hover:border-accent/30 hover:bg-accent/5' : 'bg-surface-1 border-border-subtle'} border-border-subtle disabled:cursor-default`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${exec.status === 'success' ? 'bg-green-400' : 'bg-red-400'}`} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex flex-wrap items-center gap-2 text-text-muted">
-                            <span>{formatDateTime(exec.firedAt)}</span>
-                            <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${exec.status === 'success' ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'}`}>{exec.status}</span>
+                      <button
+                        key={exec.id}
+                        type="button"
+                        onClick={() => canOpenPipeline && openPipelineExecution(exec)}
+                        disabled={!canOpenPipeline}
+                        className={`w-full rounded-[22px] border px-3.5 py-3 text-left text-xs transition-colors ${canOpenPipeline ? 'bg-surface-1 hover:border-accent/30 hover:bg-accent/5' : 'bg-surface-1 border-border-subtle'} border-border-subtle disabled:cursor-default`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${statusDotClassName}`} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex flex-wrap items-center gap-2 text-text-muted">
+                              <span>{formatDateTime(exec.firedAt)}</span>
+                              <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${statusClassName}`}>{exec.status}</span>
+                              {exec.completedAt && <span>→ {formatDateTime(exec.completedAt)}</span>}
+                            </div>
+                            <div className="mt-1 text-text-secondary">
+                              {exec.action === 'notify'
+                                ? <IconifyIcon name="ui-notification" size={12} />
+                                : exec.action === 'pipeline'
+                                  ? <IconifyIcon name="skill-agent-comm" size={12} />
+                                  : <IconifyIcon name="agent-robot" size={12} />}
+                              {exec.agentId && (() => {
+                                const a = agents.find((ag) => ag.id === exec.agentId)
+                                return a ? ` ${a.name}` : ''
+                              })()}
+                              {exec.pipelineId && (() => {
+                                return savedPipeline ? ` ${savedPipeline.name}` : ''
+                              })()}
+                            </div>
+                            {exec.result && <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-text-secondary/85">{exec.result}</div>}
+                            {exec.error && <div className="mt-2 truncate text-[10px] text-red-400">{exec.error}</div>}
                           </div>
-                          <div className="mt-1 text-text-secondary">
-                            {exec.action === 'notify'
-                              ? <IconifyIcon name="ui-notification" size={12} />
-                              : exec.action === 'pipeline'
-                                ? <IconifyIcon name="skill-agent-comm" size={12} />
-                                : <IconifyIcon name="agent-robot" size={12} />}
-                            {exec.agentId && (() => {
-                              const a = agents.find((ag) => ag.id === exec.agentId)
-                              return a ? ` ${a.name}` : ''
-                            })()}
-                            {exec.pipelineId && (() => {
-                              return savedPipeline ? ` ${savedPipeline.name}` : ''
-                            })()}
-                          </div>
-                          {exec.error && <div className="mt-2 truncate text-[10px] text-red-400">{exec.error}</div>}
+                          {canOpenPipeline && (
+                            <span className="shrink-0 rounded-full bg-accent/10 px-2 py-1 text-[10px] font-medium text-accent">
+                              {t('timer.viewPipelineRun', 'View run')}
+                            </span>
+                          )}
                         </div>
-                        {canOpenPipeline && (
-                          <span className="shrink-0 rounded-full bg-accent/10 px-2 py-1 text-[10px] font-medium text-accent">
-                            {t('timer.viewPipelineRun', 'View run')}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  )})
+                      </button>
+                    )
+                  })
                 )}
               </div>
             )}

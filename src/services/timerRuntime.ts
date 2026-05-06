@@ -1,4 +1,4 @@
-import type { Agent, Message, Model, ScheduledTask, Session, Skill } from '@/types'
+import type { Agent, Model, ScheduledTask, Skill } from '@/types'
 import type { ModelMessage, UserModelMessage } from 'ai'
 import { initializeProvider, streamResponseWithTools, validateModelConfig } from '@/services/aiService'
 import { executePipelineById } from '@/services/agentPipelineService'
@@ -30,8 +30,9 @@ function extractTimerPayload(args: unknown[]): ScheduledTask | null {
 async function updateTimerExecutionRecord(data: {
   timerId: string
   firedAt: number
-  status: 'success' | 'error'
+  status: 'running' | 'success' | 'error'
   error?: string
+  result?: string
   pipelineExecutionId?: string
   sessionId?: string
 }): Promise<void> {
@@ -45,14 +46,22 @@ async function updateTimerExecutionRecord(data: {
   }
 }
 
-function updateSessionMessage(sessionId: string, messageId: string, patch: Partial<Message>): void {
-  const state = useAppStore.getState()
-  const session = state.sessions.find((item) => item.id === sessionId)
-  if (!session) return
+async function startTimerExecutionRecord(timerData: ScheduledTask, firedAt: number): Promise<void> {
+  const electron = getElectron()
+  if (!electron?.invoke) return
 
-  state.updateSession(sessionId, {
-    messages: session.messages.map((message) => message.id === messageId ? { ...message, ...patch } : message),
-  })
+  try {
+    await electron.invoke('timer:startExecution', {
+      timerId: timerData.id,
+      firedAt,
+      action: timerData.action,
+      prompt: timerData.prompt,
+      agentId: timerData.agentId,
+      pipelineId: timerData.pipelineId,
+    })
+  } catch {
+    // Ignore timer history creation failures so the main task still completes.
+  }
 }
 
 function resolveTimerAgent(timerData: ScheduledTask): Agent {
@@ -98,42 +107,6 @@ async function executePromptTimer(timerData: ScheduledTask, firedAt: number): Pr
 
   initializeProvider(model.providerType, model.apiKey || 'ollama', model.baseUrl, model.provider)
 
-  const now = Date.now()
-  const userMessage: Message = {
-    id: generateId('msg'),
-    role: 'user',
-    content: timerData.prompt,
-    timestamp: now,
-    agentId: agent.id,
-  }
-  const assistantMessageId = generateId('msg')
-  const sessionId = generateId('session')
-  const session: Session = {
-    id: sessionId,
-    title: `Timer: ${timerData.name}`,
-    createdAt: now,
-    updatedAt: now,
-    agentId: agent.id,
-    modelId: model.id,
-    messages: [
-      userMessage,
-      {
-        id: assistantMessageId,
-        role: 'assistant',
-        content: '',
-        timestamp: now,
-        agentId: agent.id,
-        modelUsed: model.id,
-        isStreaming: true,
-      },
-    ],
-  }
-
-  state.addSession(session)
-  state.setSelectedAgent(agent)
-  state.setActiveSession(sessionId)
-  state.setActiveModule('chat')
-
   const mergedSkills = mergeSkillsWithBuiltins((state.skills ?? []) as Skill[])
   const tools = getToolsForAgent(agent.skills, mergedSkills, {
     allowedTools: agent.allowedTools,
@@ -168,14 +141,9 @@ async function executePromptTimer(timerData: ScheduledTask, firedAt: number): Pr
     })) {
       if (event.type === 'text-delta') {
         fullContent += event.text
-        updateSessionMessage(sessionId, assistantMessageId, { content: fullContent })
       } else if (event.type === 'error') {
         runError = event.error
         fullContent = fullContent ? `${fullContent}\n${event.error}` : event.error
-        updateSessionMessage(sessionId, assistantMessageId, {
-          content: fullContent,
-          isError: true,
-        })
       }
     }
   } catch (error) {
@@ -184,18 +152,12 @@ async function executePromptTimer(timerData: ScheduledTask, firedAt: number): Pr
   }
 
   const finalContent = fullContent || '(empty response)'
-  updateSessionMessage(sessionId, assistantMessageId, {
-    content: finalContent,
-    isStreaming: false,
-    ...(runError ? { isError: true } : {}),
-  })
-
   await updateTimerExecutionRecord({
     timerId: timerData.id,
     firedAt,
     status: runError ? 'error' : 'success',
     error: runError,
-    sessionId,
+    result: finalContent,
   })
 
   state.addNotification({
@@ -205,12 +167,15 @@ async function executePromptTimer(timerData: ScheduledTask, firedAt: number): Pr
     message: runError || finalContent.slice(0, 120) || undefined,
     timestamp: Date.now(),
     read: false,
-    action: { module: 'chat', label: 'Open chat' },
+    action: { module: 'timer', label: 'Execution History' },
   })
 }
 
 export async function handleTimerFired(timerData: ScheduledTask): Promise<void> {
   const state = useAppStore.getState()
+  const firedAt = timerData.lastRun ?? Date.now()
+
+  await startTimerExecutionRecord(timerData, firedAt)
 
   state.addNotification({
     id: generateId('notif'),
@@ -225,22 +190,24 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
     timestamp: Date.now(),
     read: false,
     action:
-      timerData.action === 'prompt'
-        ? { module: 'chat', label: 'Open chat' }
-        : timerData.action === 'pipeline'
-          ? { module: 'pipeline', label: 'Open pipelines' }
-          : undefined,
+      timerData.action === 'pipeline'
+        ? { module: 'pipeline', label: 'Open pipelines' }
+        : { module: 'timer', label: 'Execution History' },
   })
 
-  if (timerData.action === 'prompt' && timerData.prompt) {
-    await executePromptTimer(timerData, timerData.lastRun ?? Date.now())
-    return
-  }
+  try {
+    if (timerData.action === 'prompt') {
+      if (!timerData.prompt?.trim()) {
+        throw new Error('Prompt timers require non-empty prompt content.')
+      }
+      await executePromptTimer(timerData, firedAt)
+      return
+    }
 
-  if (timerData.action === 'pipeline' && timerData.pipelineId) {
-    const firedAt = timerData.lastRun ?? Date.now()
-
-    try {
+    if (timerData.action === 'pipeline') {
+      if (!timerData.pipelineId) {
+        throw new Error('Pipeline timers require a saved pipeline.')
+      }
       const execution = await executePipelineById(timerData.pipelineId, {
         trigger: 'timer',
         timerId: timerData.id,
@@ -253,6 +220,7 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
         firedAt,
         status: execution.status,
         error: execution.error,
+        result: execution.finalOutput,
         pipelineExecutionId: execution.id,
       })
 
@@ -265,16 +233,24 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
         read: false,
         action: { module: 'pipeline', label: 'View pipeline history' },
       })
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      await updateTimerExecutionRecord({
-        timerId: timerData.id,
-        firedAt,
-        status: 'error',
-        error: message,
-      })
-      throw error
+      return
     }
+
+    await updateTimerExecutionRecord({
+      timerId: timerData.id,
+      firedAt,
+      status: 'success',
+      result: timerData.prompt?.trim() || timerData.name,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    await updateTimerExecutionRecord({
+      timerId: timerData.id,
+      firedAt,
+      status: 'error',
+      error: message,
+    })
+    throw error
   }
 }
 

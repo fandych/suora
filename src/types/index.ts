@@ -649,6 +649,7 @@ export interface TimerExecution {
   id: string
   timerId: string
   firedAt: number
+  completedAt?: number
   action: 'notify' | 'prompt' | 'pipeline'
   prompt?: string
   agentId?: string
@@ -656,7 +657,8 @@ export interface TimerExecution {
   pipelineExecutionId?: string
   /** Session ID created for agent prompt executions */
   sessionId?: string
-  status: 'success' | 'error'
+  result?: string
+  status: 'running' | 'success' | 'error'
   error?: string
 }
 

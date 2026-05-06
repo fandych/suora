@@ -2139,13 +2139,15 @@ interface TimerExecutionRecord {
   id: string
   timerId: string
   firedAt: number
+  completedAt?: number
   action: 'notify' | 'prompt' | 'pipeline'
   prompt?: string
   agentId?: string
   pipelineId?: string
   pipelineExecutionId?: string
   sessionId?: string
-  status: 'success' | 'error'
+  result?: string
+  status: 'running' | 'success' | 'error'
   error?: string
 }
 
@@ -2307,11 +2309,38 @@ ipcMain.handle('timer:history', async (_event, timerId?: string) => {
   }
 })
 
+ipcMain.handle('timer:startExecution', async (_event, data: {
+  timerId: string
+  firedAt: number
+  action: 'notify' | 'prompt' | 'pipeline'
+  prompt?: string
+  agentId?: string
+  pipelineId?: string
+}) => {
+  try {
+    const execution: TimerExecutionRecord = {
+      id: `exec-${crypto.randomUUID()}`,
+      timerId: data.timerId,
+      firedAt: data.firedAt,
+      action: data.action,
+      prompt: data.prompt,
+      agentId: data.agentId,
+      pipelineId: data.pipelineId,
+      status: 'running',
+    }
+    await appendTimerExecution(execution)
+    return { execution }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
 ipcMain.handle('timer:updateExecution', async (_event, data: {
   timerId: string
   firedAt: number
-  status: 'success' | 'error'
+  status: 'running' | 'success' | 'error'
   error?: string
+  result?: string
   sessionId?: string
   pipelineExecutionId?: string
 }) => {
@@ -2326,7 +2355,9 @@ ipcMain.handle('timer:updateExecution', async (_event, data: {
       updatedRecord = {
         ...record,
         status: data.status,
+        completedAt: data.status === 'running' ? record.completedAt : Date.now(),
         error: data.status === 'error' ? data.error : undefined,
+        result: data.result ?? record.result,
         sessionId: data.sessionId ?? record.sessionId,
         pipelineExecutionId: data.pipelineExecutionId ?? record.pipelineExecutionId,
       }
@@ -2380,19 +2411,6 @@ function startTimerEngine() {
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('timer:fired', timer)
           }
-
-          // Record execution history
-          const execution: TimerExecutionRecord = {
-            id: `exec-${crypto.randomUUID()}`,
-            timerId: timer.id,
-            firedAt: now,
-            action: timer.action,
-            prompt: timer.prompt,
-            agentId: timer.agentId,
-            pipelineId: timer.pipelineId,
-            status: 'success',
-          }
-          appendTimerExecution(execution).catch(() => { /* ignore */ })
 
           // Compute next run (for interval timers) or disable (for once timers)
           if (timer.type === 'once') {
