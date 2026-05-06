@@ -36,12 +36,18 @@ describe('workflowPipelineExecutor', () => {
   const previousManualEngine = process.env.PIPELINE_EXECUTION_ENGINE_MANUAL
   const previousChatEngine = process.env.PIPELINE_EXECUTION_ENGINE_CHAT
   const previousTimerEngine = process.env.PIPELINE_EXECUTION_ENGINE_TIMER
+  const previousViteManualEngine = process.env.VITE_PIPELINE_EXECUTION_ENGINE_MANUAL
+  const previousViteChatEngine = process.env.VITE_PIPELINE_EXECUTION_ENGINE_CHAT
+  const previousViteTimerEngine = process.env.VITE_PIPELINE_EXECUTION_ENGINE_TIMER
 
   beforeEach(() => {
     delete process.env.PIPELINE_EXECUTION_ENGINE
     delete process.env.PIPELINE_EXECUTION_ENGINE_MANUAL
     delete process.env.PIPELINE_EXECUTION_ENGINE_CHAT
     delete process.env.PIPELINE_EXECUTION_ENGINE_TIMER
+    delete process.env.VITE_PIPELINE_EXECUTION_ENGINE_MANUAL
+    delete process.env.VITE_PIPELINE_EXECUTION_ENGINE_CHAT
+    delete process.env.VITE_PIPELINE_EXECUTION_ENGINE_TIMER
   })
 
   afterEach(() => {
@@ -49,6 +55,9 @@ describe('workflowPipelineExecutor', () => {
     process.env.PIPELINE_EXECUTION_ENGINE_MANUAL = previousManualEngine
     process.env.PIPELINE_EXECUTION_ENGINE_CHAT = previousChatEngine
     process.env.PIPELINE_EXECUTION_ENGINE_TIMER = previousTimerEngine
+    process.env.VITE_PIPELINE_EXECUTION_ENGINE_MANUAL = previousViteManualEngine
+    process.env.VITE_PIPELINE_EXECUTION_ENGINE_CHAT = previousViteChatEngine
+    process.env.VITE_PIPELINE_EXECUTION_ENGINE_TIMER = previousViteTimerEngine
   })
 
   it('defaults to legacy execution engine', () => {
@@ -69,6 +78,11 @@ describe('workflowPipelineExecutor', () => {
   it('lets explicit option override trigger-scoped env', () => {
     process.env.PIPELINE_EXECUTION_ENGINE_CHAT = 'workflow'
     expect(getResolvedPipelineExecutionEngine('legacy', 'chat')).toBe('legacy')
+  })
+
+  it('supports VITE trigger-scoped env keys', () => {
+    process.env.VITE_PIPELINE_EXECUTION_ENGINE_TIMER = 'workflow'
+    expect(getResolvedPipelineExecutionEngine(undefined, 'timer')).toBe('workflow')
   })
 
   it('uses legacy executor without warning when forced to legacy', async () => {

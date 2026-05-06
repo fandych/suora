@@ -23,12 +23,13 @@ function readConfiguredDefaultEngine(): PipelineExecutionEngine {
 
 function readConfiguredTriggerEngine(trigger: AgentPipelineExecution['trigger']): PipelineExecutionEngine {
   if (typeof process === 'undefined') return 'auto'
-  const keyByTrigger: Record<AgentPipelineExecution['trigger'], string> = {
-    manual: 'PIPELINE_EXECUTION_ENGINE_MANUAL',
-    chat: 'PIPELINE_EXECUTION_ENGINE_CHAT',
-    timer: 'PIPELINE_EXECUTION_ENGINE_TIMER',
+  const keyByTrigger: Record<AgentPipelineExecution['trigger'], [string, string]> = {
+    manual: ['PIPELINE_EXECUTION_ENGINE_MANUAL', 'VITE_PIPELINE_EXECUTION_ENGINE_MANUAL'],
+    chat: ['PIPELINE_EXECUTION_ENGINE_CHAT', 'VITE_PIPELINE_EXECUTION_ENGINE_CHAT'],
+    timer: ['PIPELINE_EXECUTION_ENGINE_TIMER', 'VITE_PIPELINE_EXECUTION_ENGINE_TIMER'],
   }
-  const triggerScoped = normalizeEngine(process.env[keyByTrigger[trigger]])
+  const [primary, fallback] = keyByTrigger[trigger]
+  const triggerScoped = normalizeEngine(process.env[primary] ?? process.env[fallback])
   if (triggerScoped !== 'auto') return triggerScoped
   return 'auto'
 }
