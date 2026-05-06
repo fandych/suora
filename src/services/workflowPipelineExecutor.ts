@@ -15,10 +15,8 @@ function normalizeEngine(value: string | undefined): PipelineExecutionEngine {
 }
 
 function readConfiguredDefaultEngine(): PipelineExecutionEngine {
-  const viteValue = normalizeEngine(import.meta.env.VITE_PIPELINE_EXECUTION_ENGINE)
-  if (viteValue !== 'auto') return viteValue
   const processValue = typeof process !== 'undefined'
-    ? normalizeEngine(process.env.PIPELINE_EXECUTION_ENGINE)
+    ? normalizeEngine(process.env.PIPELINE_EXECUTION_ENGINE ?? process.env.VITE_PIPELINE_EXECUTION_ENGINE)
     : 'auto'
   return processValue
 }
@@ -52,16 +50,6 @@ export async function executePipelineWithEngineRouting({
   const engine = resolveExecutionEngine(options.executionEngine)
   if (engine === 'legacy') {
     return executeLegacy(pipeline, options)
-  }
-
-  try {
-    await import('workflow/api')
-  } catch {
-    const execution = await executeLegacy(pipeline, options)
-    return appendRuntimeWarning(
-      execution,
-      'Workflow SDK package is unavailable at runtime; execution fell back to the legacy pipeline executor.',
-    )
   }
 
   // Suora currently runs the pipeline executor in Electron renderer/runtime
