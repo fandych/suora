@@ -8,6 +8,7 @@ import { sanitizeSensitiveText } from '@/services/sanitization'
 import { buildPipelineRecoveryActions, validateAgentPipeline } from '@/services/pipelineValidation'
 import { evaluateRunIf } from '@/services/pipelineRunIf'
 import { applyOutputTransform } from '@/services/pipelineOutputTransforms'
+import { executePipelineWithEngineRouting, type PipelineExecutionEngine } from '@/services/workflowPipelineExecutor'
 import { useAppStore } from '@/store/appStore'
 import { generateId } from '@/utils/helpers'
 
@@ -26,6 +27,14 @@ const PIPELINE_ERROR_MAX_CHARS = 1_000
 const DEFAULT_STEP_TIMEOUT_MS = 5 * 60 * 1000
 
 export interface ExecuteAgentPipelineOptions {
+  /**
+   * Optional execution engine selector.
+   * - `auto` (default): follow configured default and fall back to legacy.
+   * - `legacy`: force the in-process executor.
+   * - `workflow`: prefer Workflow SDK path, with safe fallback when runtime
+   *   integration is unavailable.
+   */
+  executionEngine?: PipelineExecutionEngine
   trigger?: AgentPipelineExecution['trigger']
   timerId?: string
   persistExecution?: boolean
@@ -409,7 +418,7 @@ export async function resolvePipelineByReference(reference: string): Promise<Pip
   return { status: 'missing', reference: normalizedReference }
 }
 
-export async function executeAgentPipeline(
+async function executeAgentPipelineLegacy(
   pipeline: AgentPipeline,
   options: ExecuteAgentPipelineOptions = {},
 ): Promise<AgentPipelineExecution> {
@@ -1117,6 +1126,17 @@ export async function executeAgentPipeline(
   }
 
   return execution
+}
+
+export async function executeAgentPipeline(
+  pipeline: AgentPipeline,
+  options: ExecuteAgentPipelineOptions = {},
+): Promise<AgentPipelineExecution> {
+  return executePipelineWithEngineRouting({
+    pipeline,
+    options,
+    executeLegacy: executeAgentPipelineLegacy,
+  })
 }
 
 /**
