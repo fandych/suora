@@ -2,6 +2,7 @@ import type { Agent, Model, ScheduledTask, Skill } from '@/types'
 import type { ModelMessage, UserModelMessage } from 'ai'
 import { initializeProvider, streamResponseWithTools, validateModelConfig } from '@/services/aiService'
 import { executePipelineById } from '@/services/agentPipelineService'
+import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineExecutionPresentation'
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import { buildSystemPrompt, getSkillSystemPrompts, getToolsForAgent, mergeSkillsWithBuiltins } from '@/services/tools'
 import { useAppStore } from '@/store/appStore'
@@ -239,7 +240,7 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
         id: generateId('notif'),
         type: execution.status === 'success' ? 'success' : 'error',
         title: execution.status === 'success' ? `Pipeline completed: ${execution.pipelineName}` : `Pipeline failed: ${execution.pipelineName}`,
-        message: execution.error || execution.finalOutput?.slice(0, 120) || undefined,
+        message: buildPipelineExecutionNotificationMessage(execution),
         timestamp: Date.now(),
         read: false,
         action: {

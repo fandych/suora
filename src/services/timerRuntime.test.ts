@@ -146,6 +146,15 @@ describe('timerRuntime', () => {
       status: 'success',
       steps: [],
       finalOutput: 'done',
+      runtime: {
+        runId: 'run-1',
+        agentIds: [],
+        modelIds: [],
+        startedAt: 10,
+        trigger: 'timer',
+        executionEngine: 'legacy',
+        executionFallbackReason: 'workflow_executor_error',
+      },
     })
 
     await handleTimerFired(pipelineTimer)
@@ -176,6 +185,7 @@ describe('timerRuntime', () => {
     const state = useAppStore.getState()
     expect(state.notifications).toHaveLength(2)
     expect(state.notifications[0].title).toBe('Pipeline completed: Morning Run')
+    expect(state.notifications[0].message).toBe('done • Execution engine: Legacy • Workflow executor failed and fell back to legacy')
     expect(state.notifications[0].action).toEqual({
       module: 'pipeline',
       label: 'View pipeline run',
@@ -201,6 +211,15 @@ describe('timerRuntime', () => {
       status: 'success',
       steps: [],
       finalOutput: 'done',
+      runtime: {
+        runId: 'run-2',
+        agentIds: [],
+        modelIds: [],
+        startedAt: 10,
+        trigger: 'timer',
+        executionEngine: 'legacy',
+        executionFallbackReason: 'workflow_executor_error',
+      },
     })
 
     let handler: ((...args: unknown[]) => void) | undefined

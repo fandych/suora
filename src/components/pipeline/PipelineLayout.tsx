@@ -11,6 +11,7 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { executeAgentPipeline, dryRunAgentPipeline, type AgentPipelineProgressStep, type DryRunResult } from '@/services/agentPipelineService'
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
+import { formatPipelineExecutionEngineLabel, formatPipelineExecutionFallbackReason } from '@/services/pipelineExecutionPresentation'
 import { loadPipelineExecutionsFromDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
 import { PipelineImportError, parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability'
 import { confirm } from '@/services/confirmDialog'
@@ -34,28 +35,6 @@ function formatTriggerLabel(trigger: AgentPipelineExecution['trigger'], t: (key:
   if (trigger === 'timer') return t('agents.pipelineTriggeredByTimer', 'Triggered by timer')
   if (trigger === 'chat') return t('agents.pipelineTriggeredByChat', 'Triggered from chat')
   return t('agents.pipelineTriggeredManually', 'Triggered manually')
-}
-
-function formatExecutionEngineLabel(
-  engine: 'legacy' | 'workflow' | undefined,
-  t: (key: string, defaultValue?: string) => string,
-): string | null {
-  if (engine === 'workflow') return t('agents.pipelineExecutionEngineWorkflow', 'Workflow')
-  if (engine === 'legacy') return t('agents.pipelineExecutionEngineLegacy', 'Legacy')
-  return null
-}
-
-function formatExecutionFallbackReason(
-  reason: 'workflow_executor_unavailable' | 'workflow_executor_error' | undefined,
-  t: (key: string, defaultValue?: string) => string,
-): string | null {
-  if (reason === 'workflow_executor_unavailable') {
-    return t('agents.pipelineFallbackReasonUnavailable', 'Workflow executor unavailable')
-  }
-  if (reason === 'workflow_executor_error') {
-    return t('agents.pipelineFallbackReasonError', 'Workflow executor failed and fell back to legacy')
-  }
-  return null
 }
 
 function statusStyles(status: AgentPipelineProgressStep['status'] | AgentPipelineExecution['status']) {
@@ -394,11 +373,11 @@ export function PipelineLayout() {
     [executionDetail, agentNameMap],
   )
   const executionDetailEngineLabel = useMemo(
-    () => formatExecutionEngineLabel(executionDetail?.runtime?.executionEngine, t),
+    () => formatPipelineExecutionEngineLabel(executionDetail?.runtime?.executionEngine, t),
     [executionDetail?.runtime?.executionEngine, t],
   )
   const executionDetailFallbackLabel = useMemo(
-    () => formatExecutionFallbackReason(executionDetail?.runtime?.executionFallbackReason, t),
+    () => formatPipelineExecutionFallbackReason(executionDetail?.runtime?.executionFallbackReason, t),
     [executionDetail?.runtime?.executionFallbackReason, t],
   )
   const executionDetailWarnings = executionDetail?.runtime?.validationWarnings ?? []
@@ -1668,8 +1647,8 @@ export function PipelineLayout() {
                   ) : (
                     <div className="mt-4 space-y-3">
                       {pipelineHistory.slice(0, 20).map((execution) => {
-                        const engineLabel = formatExecutionEngineLabel(execution.runtime?.executionEngine, t)
-                        const fallbackLabel = formatExecutionFallbackReason(execution.runtime?.executionFallbackReason, t)
+                        const engineLabel = formatPipelineExecutionEngineLabel(execution.runtime?.executionEngine, t)
+                        const fallbackLabel = formatPipelineExecutionFallbackReason(execution.runtime?.executionFallbackReason, t)
                         return (
                           <button
                             key={execution.id}

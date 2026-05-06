@@ -10,6 +10,7 @@ import { streamResponseWithTools, initializeProvider, validateModelConfig } from
 import { executeAgentPipeline, listSavedPipelines, resolvePipelineByReference, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
 import { loadPipelineExecutionsFromDisk } from '@/services/pipelineFiles'
 import { detectNaturalPipelineChatCommand, looksLikePipelineChatCommand, parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
+import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineExecutionPresentation'
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt } from '@/services/tools'
 import { logger } from '@/services/logger'
@@ -485,7 +486,7 @@ export function useAIChat() {
             title: execution.status === 'success'
               ? `Pipeline completed: ${execution.pipelineName}`
               : `Pipeline failed: ${execution.pipelineName}`,
-            message: execution.error || execution.finalOutput?.slice(0, 120) || undefined,
+            message: buildPipelineExecutionNotificationMessage(execution),
             timestamp: Date.now(),
             read: false,
             action: {
