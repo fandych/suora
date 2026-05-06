@@ -240,7 +240,7 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
       timerId: timerData.id,
       firedAt,
       status: 'success',
-      result: timerData.prompt?.trim() || 'Notification sent',
+      result: timerData.prompt?.trim() || timerData.name,
     })
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
