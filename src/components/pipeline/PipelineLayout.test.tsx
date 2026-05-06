@@ -6,7 +6,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PipelineLayout } from './PipelineLayout'
 import { useAppStore } from '@/store/appStore'
-import type { Agent, AgentPipeline, Model } from '@/types'
+import { loadPipelineExecutionsFromDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
+import type { Agent, AgentPipeline, AgentPipelineExecution, Model } from '@/types'
 
 vi.mock('@/components/icons/IconifyIcons', () => ({
   IconifyIcon: () => <span data-testid="mock-icon" />,
@@ -81,6 +82,41 @@ const savedPipeline: AgentPipeline = {
   updatedAt: 2,
 }
 
+const savedExecution: AgentPipelineExecution = {
+  id: 'execution-1',
+  pipelineId: savedPipeline.id,
+  pipelineName: savedPipeline.name,
+  trigger: 'manual',
+  startedAt: 1000,
+  completedAt: 3000,
+  status: 'success',
+  steps: [
+    {
+      id: 'step-exec-1',
+      stepIndex: 0,
+      agentId: agent.id,
+      task: 'Draft launch brief',
+      input: 'Draft launch brief',
+      output: 'Done',
+      status: 'success',
+      startedAt: 1000,
+      completedAt: 3000,
+      durationMs: 2000,
+    },
+  ],
+  finalOutput: 'Done',
+  runtime: {
+    runId: 'run-1',
+    agentIds: [agent.id],
+    modelIds: [model.id],
+    startedAt: 1000,
+    trigger: 'manual',
+    executionEngine: 'legacy',
+    executionFallbackReason: 'workflow_executor_error',
+    validationWarnings: ['Workflow SDK path is enabled but the Workflow executor is not configured; execution used the legacy pipeline executor.'],
+  },
+}
+
 function renderPipelineLayout() {
   return render(
     <MemoryRouter initialEntries={['/pipeline']}>
@@ -95,6 +131,8 @@ describe('PipelineLayout', () => {
   beforeEach(() => {
     vi.mocked(window.electron.invoke).mockReset()
     vi.mocked(window.electron.invoke).mockResolvedValue(undefined)
+    vi.mocked(loadPipelinesFromDisk).mockResolvedValue([])
+    vi.mocked(loadPipelineExecutionsFromDisk).mockResolvedValue([])
     localStorage.clear()
 
     useAppStore.setState({
@@ -155,5 +193,22 @@ describe('PipelineLayout', () => {
       expect(screen.getByRole('textbox', { name: 'subject' })).toHaveValue('custom value')
       expect(screen.getByDisplayValue('subject')).toBeInTheDocument()
     })
+  })
+
+  it('shows execution engine and fallback diagnostics in history details', async () => {
+    vi.mocked(loadPipelinesFromDisk).mockResolvedValue([savedPipeline])
+    vi.mocked(loadPipelineExecutionsFromDisk).mockResolvedValue([savedExecution])
+    useAppStore.setState({
+      workspacePath: '/workspace',
+      selectedAgentPipelineId: savedPipeline.id,
+      agentPipelines: [savedPipeline],
+    })
+
+    renderPipelineLayout()
+
+    expect(await screen.findByText('Execution engine: Legacy')).toBeInTheDocument()
+    expect(await screen.findAllByText('Workflow executor failed and fell back to legacy')).not.toHaveLength(0)
+    expect(await screen.findByText('Routing diagnostics')).toBeInTheDocument()
+    expect(await screen.findByText('Workflow SDK path is enabled but the Workflow executor is not configured; execution used the legacy pipeline executor.')).toBeInTheDocument()
   })
 })
