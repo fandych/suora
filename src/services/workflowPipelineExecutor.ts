@@ -9,6 +9,7 @@ interface ExecutePipelineWithRoutingArgs {
   pipeline: AgentPipeline
   options: ExecuteAgentPipelineOptions
   executeLegacy: (pipeline: AgentPipeline, options: ExecuteAgentPipelineOptions) => Promise<AgentPipelineExecution>
+  executeWorkflow?: (pipeline: AgentPipeline, options: ExecuteAgentPipelineOptions) => Promise<AgentPipelineExecution>
 }
 
 function normalizeEngine(value: string | undefined): PipelineExecutionEngine {
@@ -67,6 +68,7 @@ export async function executePipelineWithEngineRouting({
   pipeline,
   options,
   executeLegacy,
+  executeWorkflow,
 }: ExecutePipelineWithRoutingArgs): Promise<AgentPipelineExecution> {
   const trigger = options.trigger ?? 'manual'
   const engine = resolveExecutionEngine(options.executionEngine, trigger)
@@ -74,11 +76,17 @@ export async function executePipelineWithEngineRouting({
     return executeLegacy(pipeline, options)
   }
 
-  // TODO(workflow-runtime): Switch this route to native Workflow SDK execution
-  // once Electron-side world/bootstrap integration is available.
-  // Suora currently runs the pipeline executor in Electron renderer/runtime
-  // without Workflow SDK world/bootstrap integration, so we keep behavior
-  // stable by routing through the existing executor.
+  if (executeWorkflow) {
+    try {
+      return await executeWorkflow(pipeline, options)
+    } catch {
+      const execution = await executeLegacy(pipeline, options)
+      return appendRuntimeWarning(execution, WORKFLOW_ENGINE_FALLBACK_WARNING)
+    }
+  }
+
+  // TODO(workflow-runtime): Wire executeWorkflow with native Workflow SDK
+  // world/bootstrap integration in Electron runtime.
   const execution = await executeLegacy(pipeline, options)
   return appendRuntimeWarning(execution, WORKFLOW_ENGINE_FALLBACK_WARNING)
 }

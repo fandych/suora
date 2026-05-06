@@ -111,6 +111,45 @@ describe('workflowPipelineExecutor', () => {
     expect(result.runtime?.validationWarnings).toContain(WORKFLOW_ENGINE_FALLBACK_WARNING)
   })
 
+  it('uses workflow executor when provided and workflow engine is requested', async () => {
+    const executeLegacy = vi.fn().mockResolvedValue(baseExecution())
+    const workflowExecution = baseExecution()
+    const executeWorkflow = vi.fn().mockResolvedValue({
+      ...workflowExecution,
+      id: 'exec-workflow',
+      runtime: workflowExecution.runtime
+        ? {
+          ...workflowExecution.runtime,
+          validationWarnings: [],
+        }
+        : undefined,
+    })
+    const result = await executePipelineWithEngineRouting({
+      pipeline,
+      options: { executionEngine: 'workflow' },
+      executeLegacy,
+      executeWorkflow,
+    })
+    expect(executeWorkflow).toHaveBeenCalledTimes(1)
+    expect(executeLegacy).not.toHaveBeenCalled()
+    expect(result.id).toBe('exec-workflow')
+    expect(result.runtime?.validationWarnings).toEqual([])
+  })
+
+  it('falls back to legacy when workflow executor throws', async () => {
+    const executeLegacy = vi.fn().mockResolvedValue(baseExecution())
+    const executeWorkflow = vi.fn().mockRejectedValue(new Error('workflow runtime unavailable'))
+    const result = await executePipelineWithEngineRouting({
+      pipeline,
+      options: { executionEngine: 'workflow' },
+      executeLegacy,
+      executeWorkflow,
+    })
+    expect(executeWorkflow).toHaveBeenCalledTimes(1)
+    expect(executeLegacy).toHaveBeenCalledTimes(1)
+    expect(result.runtime?.validationWarnings).toContain(WORKFLOW_ENGINE_FALLBACK_WARNING)
+  })
+
   it('routes to workflow path when trigger-scoped env enables workflow', async () => {
     process.env.PIPELINE_EXECUTION_ENGINE_TIMER = 'workflow'
     const executeLegacy = vi.fn().mockResolvedValue(baseExecution())
