@@ -211,4 +211,13 @@ describe('PipelineLayout', () => {
     expect(await screen.findByText('Routing diagnostics')).toBeInTheDocument()
     expect(await screen.findByText('Workflow SDK path is enabled but the Workflow executor is not configured; execution used the legacy pipeline executor.')).toBeInTheDocument()
   })
+
+  it('shows only saved pipelines in the sidebar list', async () => {
+    renderPipelineLayout()
+
+    expect(await screen.findByText('Saved pipelines')).toBeInTheDocument()
+    expect(screen.queryByText('Current draft')).not.toBeInTheDocument()
+    expect(screen.queryByText('Loaded from Launch Flow')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /Launch Flow/i })).toHaveLength(1)
+  })
 })

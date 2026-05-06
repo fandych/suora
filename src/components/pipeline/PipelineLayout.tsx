@@ -382,11 +382,6 @@ export function PipelineLayout() {
   )
   const executionDetailWarnings = executionDetail?.runtime?.validationWarnings ?? []
 
-  const completedMonitorSteps = useMemo(
-    () => monitorSteps.filter((step) => step.status === 'success' || step.status === 'error' || step.status === 'skipped').length,
-    [monitorSteps],
-  )
-
   const pipelineValidation = useMemo(
     () => validateAgentPipeline(
       { name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline, variables: pipelineVariables, budget: pipelineBudget },
@@ -869,32 +864,11 @@ export function PipelineLayout() {
           </div>
 
           <div className="space-y-2">
-            <button
-              type="button"
-              onClick={resetPipelineEditor}
-              className={`w-full rounded-3xl border px-3.5 py-3.5 text-left transition-all ${
-                !selectedSavedPipeline
-                  ? 'border-accent/30 bg-accent/10 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]'
-                  : 'border-border-subtle bg-surface-1/70 text-text-secondary hover:border-border hover:bg-surface-2/70'
-              }`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-start gap-2.5 min-w-0">
-                  <span className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-3 text-accent">
-                    <IconifyIcon name="ui-edit" size={16} color="currentColor" />
-                  </span>
-                  <div className="min-w-0">
-                    <div className="truncate text-[13px] font-medium">{agentPipelineName.trim() || t('agents.pipelineDraft', 'Draft pipeline')}</div>
-                    <div className="mt-1 text-[11px] text-text-muted">{enabledPipelineSteps.length}/{pipeline.length} {t('agents.pipelineActiveSteps', 'active steps')} · {running ? t('agents.pipelineStatusRunning', 'Running') : t('common.ready', 'Ready')}</div>
-                    <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-text-muted">
-                      <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{selectedSavedPipeline ? t('agents.loaded', 'Loaded') : t('agents.editing', 'Editing')}</span>
-                      <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{completedMonitorSteps}/{pipeline.length || 0} {t('agents.pipelineProgress', 'progress')}</span>
-                    </div>
-                  </div>
-                </div>
-                {!selectedSavedPipeline && <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] text-accent">{t('agents.editing', 'Editing')}</span>}
+            {filteredPipelines.length > 0 && (
+              <div className="px-1 pt-1 text-[10px] uppercase tracking-[0.16em] text-text-muted">
+                {t('agents.pipelineSavedList', 'Saved pipelines')}
               </div>
-            </button>
+            )}
 
             {filteredPipelines.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">

@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code when working in this repository.
 
+Keep this file aligned with `AGENTS.md` on implementation-backed facts such as routes, providers, built-in agents, settings sections, and supported commands.
+
 ## Project Overview
 
 **Suora (朔枢)** is an Electron-based AI workbench. The current codebase is centered on a desktop workbench with dedicated modules for chat, documents, pipelines, models, agents, skills, timers, channel integrations, MCP servers, and settings.
@@ -11,7 +13,7 @@ It is not just a single chat shell. When you make changes, assume the user-facin
 ### Technology Stack
 
 - **Desktop**: Electron 41 + electron-vite 5
-- **Frontend**: React 19 + Vite 6 + React Router
+- **Frontend**: React 19 + Vite 6 + React Router 7
 - **Styling**: Tailwind CSS 4
 - **State Management**: Zustand 5
 - **AI Runtime**: Vercel AI SDK 6
@@ -34,6 +36,13 @@ Top-level routes are defined in `src/App.tsx` and currently include:
 - `/mcp`
 - `/settings/:section`
 
+Current redirect defaults are:
+
+- `/ -> /chat`
+- `/models -> /models/providers`
+- `/skills -> /skills/installed`
+- `/settings -> /settings/general`
+
 Current settings sections are:
 
 - `general`
@@ -43,6 +52,11 @@ Current settings sections are:
 - `data`
 - `logs`
 - `system`
+
+Current module subviews that often matter in navigation and docs are:
+
+- Models: `providers`, `models`, `compare`
+- Skills: `installed`, `browse`, `sources`
 
 ## Repository Layout
 
@@ -89,6 +103,7 @@ Use these files as the most reliable implementation anchors when updating code o
 | --- | --- |
 | `src/App.tsx` | Real route surface, startup listeners, secure-storage warning wiring |
 | `src/store/appStore.ts` | Canonical persisted app state, built-in agents, import/export scope |
+| `src/store/slices/modelConfigSlice.ts` | Provider presets, tool-security defaults, model syncing |
 | `src/services/aiService.ts` | Provider support, validation, client caching, streaming events |
 | `src/services/agentPipelineService.ts` | Pipeline execution behavior and step lifecycle |
 | `src/services/pipelineChatCommands.ts` | Chat-driven pipeline command parsing |
@@ -109,7 +124,7 @@ The app uses a single persisted Zustand store rooted in `src/store/appStore.ts`,
 Important state domains include:
 
 - chat sessions and tabs
-- documents, folders, and document groups
+- documents, folders, document groups, and graph-like document nodes
 - provider configs and enabled models
 - agents, agent memories, versions, and performance stats
 - skills, registry sources, and imported bundles
@@ -123,7 +138,7 @@ Important state domains include:
 
 ### 2. AI Integration
 
-`src/services/aiService.ts` is the provider abstraction layer. It currently supports:
+`src/services/aiService.ts` is the provider abstraction layer. Runtime initialization currently supports:
 
 - Anthropic
 - OpenAI
@@ -140,6 +155,13 @@ Important state domains include:
 - OpenAI-compatible endpoints
 
 The service is responsible for validation, provider/client caching, error classification, and streaming tool-aware responses.
+
+Keep runtime support distinct from current UI exposure:
+
+- `src/store/slices/modelConfigSlice.ts` currently seeds presets for OpenAI, Anthropic, Google Gemini, Ollama, DashScope, Kimi, and generic OpenAI-compatible providers.
+- `src/components/models/ProviderEditor.tsx` currently exposes provider type selection for `openai`, `anthropic`, `google`, `ollama`, and `openai-compatible`.
+
+Document these as separate facts rather than flattening them into one provider list.
 
 ### 3. Agents
 
@@ -163,7 +185,7 @@ Important rules:
 
 - skills are not the same thing as the built-in tool registry
 - `SKILL.md` content is treated as capability instructions and resources
-- registry browsing, local import/export, and directory loading are all first-class flows
+- registry browsing, local/project/user import flows, and directory loading are all first-class flows
 
 When changing the skills system, keep it aligned with `skillRegistry.ts`, `skillMarketplace.ts`, the `Skill` types, and the current skills UI rather than older “tool-per-skill” documentation.
 
@@ -233,9 +255,12 @@ npm run package
 ```bash
 npm run lint
 npm run type-check
+npm run test
+npm run test:ui
 npm run test:run
 npm run test:coverage
 npm run test:e2e
+npm run test:e2e:ui
 ```
 
 ## Testing Notes
