@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
+import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import type { ScheduledTask, TimerExecution } from '@/types'
 import { electronInvoke, formatRelative, formatDateTime } from './timerHelpers'
 
@@ -44,15 +45,13 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
   const openPipelineExecution = (execution: TimerExecution) => {
     if (!execution.pipelineId) return
 
-    const query = new URLSearchParams({ pipelineId: execution.pipelineId })
-    query.set('timerId', execution.timerId)
-    query.set('firedAt', String(execution.firedAt))
-    if (execution.pipelineExecutionId) {
-      query.set('executionId', execution.pipelineExecutionId)
-    }
-
     setActiveModule('pipeline')
-    navigate(`/pipeline?${query.toString()}`)
+    navigate(buildPipelineExecutionPath({
+      pipelineId: execution.pipelineId,
+      timerId: execution.timerId,
+      firedAt: execution.firedAt,
+      executionId: execution.pipelineExecutionId,
+    }))
   }
 
   return (

@@ -11,6 +11,7 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { executeAgentPipeline, dryRunAgentPipeline, type AgentPipelineProgressStep, type DryRunResult } from '@/services/agentPipelineService'
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
+import { formatPipelineExecutionEngineLabel, formatPipelineExecutionFallbackReason } from '@/services/pipelineExecutionPresentation'
 import { loadPipelineExecutionsFromDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
 import { PipelineImportError, parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability'
 import { confirm } from '@/services/confirmDialog'
@@ -371,6 +372,15 @@ export function PipelineLayout() {
     () => executionDetail?.steps.map((step) => mapExecutionStep(step, agentNameMap)) ?? [],
     [executionDetail, agentNameMap],
   )
+  const executionDetailEngineLabel = useMemo(
+    () => formatPipelineExecutionEngineLabel(executionDetail?.runtime?.executionEngine, t),
+    [executionDetail?.runtime?.executionEngine, t],
+  )
+  const executionDetailFallbackLabel = useMemo(
+    () => formatPipelineExecutionFallbackReason(executionDetail?.runtime?.executionFallbackReason, t),
+    [executionDetail?.runtime?.executionFallbackReason, t],
+  )
+  const executionDetailWarnings = executionDetail?.runtime?.validationWarnings ?? []
 
   const completedMonitorSteps = useMemo(
     () => monitorSteps.filter((step) => step.status === 'success' || step.status === 'error' || step.status === 'skipped').length,
@@ -1636,23 +1646,41 @@ export function PipelineLayout() {
                     <div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('agents.noPipelineHistory', 'No pipeline executions recorded yet.')}</div>
                   ) : (
                     <div className="mt-4 space-y-3">
-                      {pipelineHistory.slice(0, 20).map((execution) => (
-                        <button
-                          key={execution.id}
-                          type="button"
-                          onClick={() => setSelectedExecutionId(execution.id)}
-                          className={`w-full rounded-[22px] border p-4 text-left transition-all ${selectedExecutionId === execution.id ? 'border-accent/30 bg-accent/8 shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]' : 'border-border bg-surface-0/40 hover:border-border-subtle hover:bg-surface-2/50'}`}
-                        >
-                          <div className="flex items-center justify-between gap-3 text-xs">
-                            <span className={`rounded-full border px-2 py-0.5 font-medium ${statusStyles(execution.status)}`}>{t(`agents.pipelineStatus.${execution.status}`, execution.status)}</span>
-                            <span className="text-text-muted">{new Date(execution.startedAt).toLocaleString()}</span>
-                          </div>
-                          <div className="mt-3 text-[11px] text-text-muted">{formatTriggerLabel(execution.trigger, t)} · {execution.steps.length} {t('agents.pipelineSteps', 'steps')} · {formatDuration(execution.completedAt - execution.startedAt, t)}</div>
-                          {(execution.error || execution.finalOutput) && (
-                            <div className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm text-text-secondary">{execution.error || execution.finalOutput}</div>
-                          )}
-                        </button>
-                      ))}
+                      {pipelineHistory.slice(0, 20).map((execution) => {
+                        const engineLabel = formatPipelineExecutionEngineLabel(execution.runtime?.executionEngine, t)
+                        const fallbackLabel = formatPipelineExecutionFallbackReason(execution.runtime?.executionFallbackReason, t)
+                        return (
+                          <button
+                            key={execution.id}
+                            type="button"
+                            onClick={() => setSelectedExecutionId(execution.id)}
+                            className={`w-full rounded-[22px] border p-4 text-left transition-all ${selectedExecutionId === execution.id ? 'border-accent/30 bg-accent/8 shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]' : 'border-border bg-surface-0/40 hover:border-border-subtle hover:bg-surface-2/50'}`}
+                          >
+                            <div className="flex items-center justify-between gap-3 text-xs">
+                              <span className={`rounded-full border px-2 py-0.5 font-medium ${statusStyles(execution.status)}`}>{t(`agents.pipelineStatus.${execution.status}`, execution.status)}</span>
+                              <span className="text-text-muted">{new Date(execution.startedAt).toLocaleString()}</span>
+                            </div>
+                            <div className="mt-3 text-[11px] text-text-muted">{formatTriggerLabel(execution.trigger, t)} · {execution.steps.length} {t('agents.pipelineSteps', 'steps')} · {formatDuration(execution.completedAt - execution.startedAt, t)}</div>
+                            {(engineLabel || fallbackLabel) && (
+                              <div className="mt-2 flex flex-wrap gap-1.5 text-[10px]">
+                                {engineLabel && (
+                                  <span className="rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-text-secondary">
+                                    {t('agents.pipelineExecutionEngine', 'Execution engine')}: {engineLabel}
+                                  </span>
+                                )}
+                                {fallbackLabel && (
+                                  <span className="rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-warning">
+                                    {fallbackLabel}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            {(execution.error || execution.finalOutput) && (
+                              <div className="mt-3 line-clamp-3 whitespace-pre-wrap text-sm text-text-secondary">{execution.error || execution.finalOutput}</div>
+                            )}
+                          </button>
+                        )
+                      })}
                     </div>
                   )}
                 </section>
@@ -1670,7 +1698,7 @@ export function PipelineLayout() {
                     <div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{selectedSavedPipeline ? t('agents.pipelineSelectRunHint', 'Select a saved run to inspect the full handoff between steps.') : t('agents.pipelineRunDraftHint', 'Run the draft pipeline to review each step handoff here.')}</div>
                   ) : (
                     <div className="mt-4 space-y-4">
-                      <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineTrigger', 'Trigger')}</div>
                           <div className="mt-2 text-sm font-medium text-text-primary">{formatTriggerLabel(executionDetail.trigger, t)}</div>
@@ -1683,7 +1711,26 @@ export function PipelineLayout() {
                           <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineErrors', 'Errors')}</div>
                           <div className="mt-2 text-sm font-medium text-text-primary">{executionDetail.steps.filter((step) => step.status === 'error').length}</div>
                         </div>
+                        <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineExecutionEngine', 'Execution engine')}</div>
+                          <div className="mt-2 text-sm font-medium text-text-primary">{executionDetailEngineLabel ?? '—'}</div>
+                          {executionDetailFallbackLabel && (
+                            <div className="mt-1 text-xs text-warning">{executionDetailFallbackLabel}</div>
+                          )}
+                        </div>
                       </div>
+
+                      {(executionDetailFallbackLabel || executionDetailWarnings.length > 0) && (
+                        <div className="rounded-2xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+                          <div className="font-medium">{t('agents.pipelineRoutingDiagnostics', 'Routing diagnostics')}</div>
+                          <div className="mt-2 space-y-1">
+                            {executionDetailFallbackLabel && <div>{executionDetailFallbackLabel}</div>}
+                            {executionDetailWarnings.map((warning) => (
+                              <div key={warning}>{warning}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
