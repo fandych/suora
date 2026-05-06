@@ -1159,6 +1159,13 @@ export interface PipelineRuntimeSnapshot {
   modelIds: string[]
   startedAt: number
   trigger: AgentPipelineTrigger
+  /** The execution engine that actually ran this pipeline. */
+  executionEngine?: 'legacy' | 'workflow'
+  /**
+   * Optional reason when `workflow` selection fell back to `legacy`.
+   * Enables observability during gradual Workflow SDK rollout.
+   */
+  executionFallbackReason?: 'workflow_executor_unavailable' | 'workflow_executor_error'
   validationWarnings?: string[]
   /** Variable values supplied to this run; surfaced for debugging and replay. */
   variables?: Record<string, string>

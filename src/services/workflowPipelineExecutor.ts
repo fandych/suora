@@ -2,6 +2,7 @@ import type { AgentPipeline, AgentPipelineExecution } from '@/types'
 import type { ExecuteAgentPipelineOptions } from '@/services/agentPipelineService'
 
 export type PipelineExecutionEngine = 'auto' | 'legacy' | 'workflow'
+type PipelineExecutionFallbackReason = 'workflow_executor_unavailable' | 'workflow_executor_error'
 export const WORKFLOW_ENGINE_FALLBACK_WARNING =
   'Workflow SDK path is enabled but the Workflow executor is not configured; execution used the legacy pipeline executor.'
 
@@ -64,6 +65,23 @@ function appendRuntimeWarning(execution: AgentPipelineExecution, warning: string
   }
 }
 
+function appendRuntimeExecutionMetadata(
+  execution: AgentPipelineExecution,
+  engine: Exclude<PipelineExecutionEngine, 'auto'>,
+  fallbackReason?: PipelineExecutionFallbackReason,
+): AgentPipelineExecution {
+  const runtime = execution.runtime
+  if (!runtime) return execution
+  return {
+    ...execution,
+    runtime: {
+      ...runtime,
+      executionEngine: engine,
+      ...(fallbackReason ? { executionFallbackReason: fallbackReason } : {}),
+    },
+  }
+}
+
 export async function executePipelineWithEngineRouting({
   pipeline,
   options,
@@ -73,22 +91,32 @@ export async function executePipelineWithEngineRouting({
   const trigger = options.trigger ?? 'manual'
   const engine = resolveExecutionEngine(options.executionEngine, trigger)
   if (engine === 'legacy') {
-    return executeLegacy(pipeline, options)
+    const execution = await executeLegacy(pipeline, options)
+    return appendRuntimeExecutionMetadata(execution, 'legacy')
   }
 
   if (executeWorkflow) {
     try {
-      return await executeWorkflow(pipeline, options)
+      const execution = await executeWorkflow(pipeline, options)
+      return appendRuntimeExecutionMetadata(execution, 'workflow')
     } catch {
       const execution = await executeLegacy(pipeline, options)
-      return appendRuntimeWarning(execution, WORKFLOW_ENGINE_FALLBACK_WARNING)
+      return appendRuntimeExecutionMetadata(
+        appendRuntimeWarning(execution, WORKFLOW_ENGINE_FALLBACK_WARNING),
+        'legacy',
+        'workflow_executor_error',
+      )
     }
   }
 
   // TODO(workflow-runtime): Wire executeWorkflow with native Workflow SDK
   // world/bootstrap integration in Electron runtime.
   const execution = await executeLegacy(pipeline, options)
-  return appendRuntimeWarning(execution, WORKFLOW_ENGINE_FALLBACK_WARNING)
+  return appendRuntimeExecutionMetadata(
+    appendRuntimeWarning(execution, WORKFLOW_ENGINE_FALLBACK_WARNING),
+    'legacy',
+    'workflow_executor_unavailable',
+  )
 }
 
 export function getResolvedPipelineExecutionEngine(

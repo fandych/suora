@@ -98,6 +98,8 @@ describe('workflowPipelineExecutor', () => {
     })
     expect(executeLegacy).toHaveBeenCalledTimes(1)
     expect(result.runtime?.validationWarnings).toEqual([])
+    expect(result.runtime?.executionEngine).toBe('legacy')
+    expect(result.runtime?.executionFallbackReason).toBeUndefined()
   })
 
   it('falls back to legacy and records warning when workflow engine is requested', async () => {
@@ -109,6 +111,8 @@ describe('workflowPipelineExecutor', () => {
     })
     expect(executeLegacy).toHaveBeenCalledTimes(1)
     expect(result.runtime?.validationWarnings).toContain(WORKFLOW_ENGINE_FALLBACK_WARNING)
+    expect(result.runtime?.executionEngine).toBe('legacy')
+    expect(result.runtime?.executionFallbackReason).toBe('workflow_executor_unavailable')
   })
 
   it('uses workflow executor when provided and workflow engine is requested', async () => {
@@ -134,6 +138,8 @@ describe('workflowPipelineExecutor', () => {
     expect(executeLegacy).not.toHaveBeenCalled()
     expect(result.id).toBe('exec-workflow')
     expect(result.runtime?.validationWarnings).toEqual([])
+    expect(result.runtime?.executionEngine).toBe('workflow')
+    expect(result.runtime?.executionFallbackReason).toBeUndefined()
   })
 
   it('falls back to legacy when workflow executor throws', async () => {
@@ -148,6 +154,8 @@ describe('workflowPipelineExecutor', () => {
     expect(executeWorkflow).toHaveBeenCalledTimes(1)
     expect(executeLegacy).toHaveBeenCalledTimes(1)
     expect(result.runtime?.validationWarnings).toContain(WORKFLOW_ENGINE_FALLBACK_WARNING)
+    expect(result.runtime?.executionEngine).toBe('legacy')
+    expect(result.runtime?.executionFallbackReason).toBe('workflow_executor_error')
   })
 
   it('routes to workflow path when trigger-scoped env enables workflow', async () => {
@@ -160,5 +168,7 @@ describe('workflowPipelineExecutor', () => {
     })
     expect(executeLegacy).toHaveBeenCalledTimes(1)
     expect(result.runtime?.validationWarnings).toContain(WORKFLOW_ENGINE_FALLBACK_WARNING)
+    expect(result.runtime?.executionEngine).toBe('legacy')
+    expect(result.runtime?.executionFallbackReason).toBe('workflow_executor_unavailable')
   })
 })
