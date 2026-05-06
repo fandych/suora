@@ -52,9 +52,11 @@ export async function executePipelineWithEngineRouting({
     return executeLegacy(pipeline, options)
   }
 
+  // TODO(workflow-runtime): Switch this route to native Workflow SDK execution
+  // once Electron-side world/bootstrap integration is available.
   // Suora currently runs the pipeline executor in Electron renderer/runtime
-  // without Workflow SDK world/bootstrap integration. Keep behavior stable by
-  // routing through the existing executor until runtime wiring lands.
+  // without Workflow SDK world/bootstrap integration, so we keep behavior
+  // stable by routing through the existing executor.
   const execution = await executeLegacy(pipeline, options)
   return appendRuntimeWarning(
     execution,
