@@ -2,6 +2,8 @@ import type { AgentPipeline, AgentPipelineExecution } from '@/types'
 import type { ExecuteAgentPipelineOptions } from '@/services/agentPipelineService'
 
 export type PipelineExecutionEngine = 'auto' | 'legacy' | 'workflow'
+export const WORKFLOW_ENGINE_FALLBACK_WARNING =
+  'Workflow SDK path is enabled but runtime world integration is not configured; execution used the legacy pipeline executor.'
 
 interface ExecutePipelineWithRoutingArgs {
   pipeline: AgentPipeline
@@ -15,10 +17,10 @@ function normalizeEngine(value: string | undefined): PipelineExecutionEngine {
 }
 
 function readConfiguredDefaultEngine(): PipelineExecutionEngine {
-  const processValue = typeof process !== 'undefined'
+  const configuredEngine = typeof process !== 'undefined'
     ? normalizeEngine(process.env.PIPELINE_EXECUTION_ENGINE ?? process.env.VITE_PIPELINE_EXECUTION_ENGINE)
     : 'auto'
-  return processValue
+  return configuredEngine
 }
 
 function readConfiguredTriggerEngine(trigger: AgentPipelineExecution['trigger']): PipelineExecutionEngine {
@@ -78,10 +80,7 @@ export async function executePipelineWithEngineRouting({
   // without Workflow SDK world/bootstrap integration, so we keep behavior
   // stable by routing through the existing executor.
   const execution = await executeLegacy(pipeline, options)
-  return appendRuntimeWarning(
-    execution,
-    'Workflow SDK path is enabled but runtime world integration is not configured; execution used the legacy pipeline executor.',
-  )
+  return appendRuntimeWarning(execution, WORKFLOW_ENGINE_FALLBACK_WARNING)
 }
 
 export function getResolvedPipelineExecutionEngine(

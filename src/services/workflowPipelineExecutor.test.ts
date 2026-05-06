@@ -1,6 +1,10 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type { AgentPipeline, AgentPipelineExecution } from '@/types'
-import { executePipelineWithEngineRouting, getResolvedPipelineExecutionEngine } from './workflowPipelineExecutor'
+import {
+  executePipelineWithEngineRouting,
+  getResolvedPipelineExecutionEngine,
+  WORKFLOW_ENGINE_FALLBACK_WARNING,
+} from './workflowPipelineExecutor'
 
 const pipeline: AgentPipeline = {
   id: 'pipe-1',
@@ -104,7 +108,7 @@ describe('workflowPipelineExecutor', () => {
       executeLegacy,
     })
     expect(executeLegacy).toHaveBeenCalledTimes(1)
-    expect(result.runtime?.validationWarnings?.some((warning) => warning.includes('legacy pipeline executor'))).toBe(true)
+    expect(result.runtime?.validationWarnings).toContain(WORKFLOW_ENGINE_FALLBACK_WARNING)
   })
 
   it('routes to workflow path when trigger-scoped env enables workflow', async () => {
@@ -116,6 +120,6 @@ describe('workflowPipelineExecutor', () => {
       executeLegacy,
     })
     expect(executeLegacy).toHaveBeenCalledTimes(1)
-    expect(result.runtime?.validationWarnings?.some((warning) => warning.includes('runtime world integration'))).toBe(true)
+    expect(result.runtime?.validationWarnings).toContain(WORKFLOW_ENGINE_FALLBACK_WARNING)
   })
 })
