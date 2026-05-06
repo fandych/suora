@@ -33,13 +33,22 @@ function baseExecution(): AgentPipelineExecution {
 
 describe('workflowPipelineExecutor', () => {
   const previousEngine = process.env.PIPELINE_EXECUTION_ENGINE
+  const previousManualEngine = process.env.PIPELINE_EXECUTION_ENGINE_MANUAL
+  const previousChatEngine = process.env.PIPELINE_EXECUTION_ENGINE_CHAT
+  const previousTimerEngine = process.env.PIPELINE_EXECUTION_ENGINE_TIMER
 
   beforeEach(() => {
     delete process.env.PIPELINE_EXECUTION_ENGINE
+    delete process.env.PIPELINE_EXECUTION_ENGINE_MANUAL
+    delete process.env.PIPELINE_EXECUTION_ENGINE_CHAT
+    delete process.env.PIPELINE_EXECUTION_ENGINE_TIMER
   })
 
   afterEach(() => {
     process.env.PIPELINE_EXECUTION_ENGINE = previousEngine
+    process.env.PIPELINE_EXECUTION_ENGINE_MANUAL = previousManualEngine
+    process.env.PIPELINE_EXECUTION_ENGINE_CHAT = previousChatEngine
+    process.env.PIPELINE_EXECUTION_ENGINE_TIMER = previousTimerEngine
   })
 
   it('defaults to legacy execution engine', () => {
@@ -49,6 +58,17 @@ describe('workflowPipelineExecutor', () => {
   it('respects process env workflow default', () => {
     process.env.PIPELINE_EXECUTION_ENGINE = 'workflow'
     expect(getResolvedPipelineExecutionEngine()).toBe('workflow')
+  })
+
+  it('respects trigger-scoped env before global default', () => {
+    process.env.PIPELINE_EXECUTION_ENGINE = 'legacy'
+    process.env.PIPELINE_EXECUTION_ENGINE_CHAT = 'workflow'
+    expect(getResolvedPipelineExecutionEngine(undefined, 'chat')).toBe('workflow')
+  })
+
+  it('lets explicit option override trigger-scoped env', () => {
+    process.env.PIPELINE_EXECUTION_ENGINE_CHAT = 'workflow'
+    expect(getResolvedPipelineExecutionEngine('legacy', 'chat')).toBe('legacy')
   })
 
   it('uses legacy executor without warning when forced to legacy', async () => {
@@ -71,5 +91,17 @@ describe('workflowPipelineExecutor', () => {
     })
     expect(executeLegacy).toHaveBeenCalledTimes(1)
     expect(result.runtime?.validationWarnings?.some((warning) => warning.includes('legacy pipeline executor'))).toBe(true)
+  })
+
+  it('routes to workflow path when trigger-scoped env enables workflow', async () => {
+    process.env.PIPELINE_EXECUTION_ENGINE_TIMER = 'workflow'
+    const executeLegacy = vi.fn().mockResolvedValue(baseExecution())
+    const result = await executePipelineWithEngineRouting({
+      pipeline,
+      options: { trigger: 'timer' },
+      executeLegacy,
+    })
+    expect(executeLegacy).toHaveBeenCalledTimes(1)
+    expect(result.runtime?.validationWarnings?.some((warning) => warning.includes('runtime world integration'))).toBe(true)
   })
 })

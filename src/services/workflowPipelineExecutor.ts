@@ -21,9 +21,27 @@ function readConfiguredDefaultEngine(): PipelineExecutionEngine {
   return processValue
 }
 
-function resolveExecutionEngine(requested: PipelineExecutionEngine | undefined): 'legacy' | 'workflow' {
+function readConfiguredTriggerEngine(trigger: AgentPipelineExecution['trigger']): PipelineExecutionEngine {
+  if (typeof process === 'undefined') return 'auto'
+  const keyByTrigger: Record<AgentPipelineExecution['trigger'], string> = {
+    manual: 'PIPELINE_EXECUTION_ENGINE_MANUAL',
+    chat: 'PIPELINE_EXECUTION_ENGINE_CHAT',
+    timer: 'PIPELINE_EXECUTION_ENGINE_TIMER',
+  }
+  const triggerScoped = normalizeEngine(process.env[keyByTrigger[trigger]])
+  if (triggerScoped !== 'auto') return triggerScoped
+  return 'auto'
+}
+
+function resolveExecutionEngine(
+  requested: PipelineExecutionEngine | undefined,
+  trigger: AgentPipelineExecution['trigger'],
+): 'legacy' | 'workflow' {
   const target = requested ?? 'auto'
   if (target === 'legacy' || target === 'workflow') return target
+  const triggerScoped = readConfiguredTriggerEngine(trigger)
+  if (triggerScoped === 'workflow') return 'workflow'
+  if (triggerScoped === 'legacy') return 'legacy'
   const configured = readConfiguredDefaultEngine()
   return configured === 'workflow' ? 'workflow' : 'legacy'
 }
@@ -47,7 +65,8 @@ export async function executePipelineWithEngineRouting({
   options,
   executeLegacy,
 }: ExecutePipelineWithRoutingArgs): Promise<AgentPipelineExecution> {
-  const engine = resolveExecutionEngine(options.executionEngine)
+  const trigger = options.trigger ?? 'manual'
+  const engine = resolveExecutionEngine(options.executionEngine, trigger)
   if (engine === 'legacy') {
     return executeLegacy(pipeline, options)
   }
@@ -64,6 +83,9 @@ export async function executePipelineWithEngineRouting({
   )
 }
 
-export function getResolvedPipelineExecutionEngine(requested?: PipelineExecutionEngine): 'legacy' | 'workflow' {
-  return resolveExecutionEngine(requested)
+export function getResolvedPipelineExecutionEngine(
+  requested?: PipelineExecutionEngine,
+  trigger: AgentPipelineExecution['trigger'] = 'manual',
+): 'legacy' | 'workflow' {
+  return resolveExecutionEngine(requested, trigger)
 }
