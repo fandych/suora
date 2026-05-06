@@ -1719,7 +1719,7 @@ export function PipelineLayout() {
                     <div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{selectedSavedPipeline ? t('agents.pipelineSelectRunHint', 'Select a saved run to inspect the full handoff between steps.') : t('agents.pipelineRunDraftHint', 'Run the draft pipeline to review each step handoff here.')}</div>
                   ) : (
                     <div className="mt-4 space-y-4">
-                      <div className="grid gap-3 sm:grid-cols-4">
+                      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                         <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
                           <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineTrigger', 'Trigger')}</div>
                           <div className="mt-2 text-sm font-medium text-text-primary">{formatTriggerLabel(executionDetail.trigger, t)}</div>
