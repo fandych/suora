@@ -176,7 +176,17 @@ describe('timerRuntime', () => {
     const state = useAppStore.getState()
     expect(state.notifications).toHaveLength(2)
     expect(state.notifications[0].title).toBe('Pipeline completed: Morning Run')
+    expect(state.notifications[0].action).toEqual({
+      module: 'pipeline',
+      label: 'View pipeline run',
+      path: '/pipeline?pipelineId=pipeline-1&timerId=timer-pipeline&firedAt=101&executionId=exec-1',
+    })
     expect(state.notifications[1].title).toBe('Timer fired: Pipeline Trigger')
+    expect(state.notifications[1].action).toEqual({
+      module: 'pipeline',
+      label: 'Open pipeline run',
+      path: '/pipeline?pipelineId=pipeline-1&timerId=timer-pipeline&firedAt=101',
+    })
   })
 
   it('registers and disposes the global timer listener', async () => {

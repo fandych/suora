@@ -2,6 +2,7 @@ import type { Agent, Model, ScheduledTask, Skill } from '@/types'
 import type { ModelMessage, UserModelMessage } from 'ai'
 import { initializeProvider, streamResponseWithTools, validateModelConfig } from '@/services/aiService'
 import { executePipelineById } from '@/services/agentPipelineService'
+import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import { buildSystemPrompt, getSkillSystemPrompts, getToolsForAgent, mergeSkillsWithBuiltins } from '@/services/tools'
 import { useAppStore } from '@/store/appStore'
 import { generateId } from '@/utils/helpers'
@@ -191,7 +192,17 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
     read: false,
     action:
       timerData.action === 'pipeline'
-        ? { module: 'pipeline', label: 'Open pipelines' }
+        ? {
+            module: 'pipeline',
+            label: 'Open pipeline run',
+            path: timerData.pipelineId
+              ? buildPipelineExecutionPath({
+                  pipelineId: timerData.pipelineId,
+                  timerId: timerData.id,
+                  firedAt,
+                })
+              : '/pipeline',
+          }
         : { module: 'timer', label: 'Execution History' },
   })
 
@@ -231,7 +242,16 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
         message: execution.error || execution.finalOutput?.slice(0, 120) || undefined,
         timestamp: Date.now(),
         read: false,
-        action: { module: 'pipeline', label: 'View pipeline history' },
+        action: {
+          module: 'pipeline',
+          label: 'View pipeline run',
+          path: buildPipelineExecutionPath({
+            pipelineId: execution.pipelineId,
+            executionId: execution.id,
+            timerId: timerData.id,
+            firedAt,
+          }),
+        },
       })
       return
     }

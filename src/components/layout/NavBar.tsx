@@ -168,7 +168,7 @@ function NotificationBell() {
     markNotificationRead(notification.id)
     if (notification.action) {
       setActiveModule(notification.action.module)
-      navigate(`/${notification.action.module}`)
+      navigate(notification.action.path ?? `/${notification.action.module}`)
       setOpen(false)
     }
   }

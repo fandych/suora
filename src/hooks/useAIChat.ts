@@ -10,6 +10,7 @@ import { streamResponseWithTools, initializeProvider, validateModelConfig } from
 import { executeAgentPipeline, listSavedPipelines, resolvePipelineByReference, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
 import { loadPipelineExecutionsFromDisk } from '@/services/pipelineFiles'
 import { detectNaturalPipelineChatCommand, looksLikePipelineChatCommand, parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
+import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt } from '@/services/tools'
 import { logger } from '@/services/logger'
 import { sanitizeToolError } from '@/services/sanitization'
@@ -487,7 +488,14 @@ export function useAIChat() {
             message: execution.error || execution.finalOutput?.slice(0, 120) || undefined,
             timestamp: Date.now(),
             read: false,
-            action: { module: 'pipeline', label: 'Open pipeline history' },
+            action: {
+              module: 'pipeline',
+              label: 'Open pipeline run',
+              path: buildPipelineExecutionPath({
+                pipelineId: resolution.pipeline.id,
+                executionId: execution.id,
+              }),
+            },
           })
         }
       } catch (err) {

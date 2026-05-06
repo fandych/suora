@@ -21,7 +21,7 @@ export interface AppNotification {
   timestamp: number
   read: boolean
   /** Optional action: module to navigate to */
-  action?: { module: ActiveModule; label?: string }
+  action?: { module: ActiveModule; label?: string; path?: string }
 }
 
 // ─── Model Usage Statistics ────────────────────────────────────────
