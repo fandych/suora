@@ -3,7 +3,7 @@ import type { ExecuteAgentPipelineOptions } from '@/services/agentPipelineServic
 
 export type PipelineExecutionEngine = 'auto' | 'legacy' | 'workflow'
 export const WORKFLOW_ENGINE_FALLBACK_WARNING =
-  'Workflow SDK path is enabled but runtime world integration is not configured; execution used the legacy pipeline executor.'
+  'Workflow SDK path is enabled but the Workflow executor is not configured; execution used the legacy pipeline executor.'
 
 interface ExecutePipelineWithRoutingArgs {
   pipeline: AgentPipeline
