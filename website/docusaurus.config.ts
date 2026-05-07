@@ -25,9 +25,6 @@ const config: Config = {
   organizationName: 'fandych',
   projectName: 'suora',
   onBrokenLinks: 'throw',
-  future: {
-    v4: true,
-  },
   markdown: {
     hooks: {
       onBrokenMarkdownLinks: 'warn',

@@ -292,7 +292,9 @@ function HomePageReleaseCard({copy, version, latestReleaseUrl}: {copy: LocaleCon
         });
 
         if (!response.ok) {
-          throw new Error(`GitHub release request failed with ${response.status}`);
+          throw new Error(
+            `GitHub release request failed with ${response.status} ${response.statusText}`,
+          );
         }
 
         const latestRelease = (await response.json()) as {
@@ -314,10 +316,11 @@ function HomePageReleaseCard({copy, version, latestReleaseUrl}: {copy: LocaleCon
           url: latestRelease.html_url || latestReleaseUrl,
           live: true,
         });
-      } catch {
+      } catch (error) {
         if (!cancelled) {
           setRelease((current) => ({...current, live: false}));
         }
+        console.error(error);
       }
     }
 
