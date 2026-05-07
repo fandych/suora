@@ -2,11 +2,9 @@
 	<img src="resources/logo.svg" alt="Suora logo" width="104" />
 </p>
 
-<h1 align="center">Suora 朔枢</h1>
+<h1 align="center">Suora</h1>
 
 <p align="center">
-	<strong>本地优先的桌面 AI 工作台。</strong>
-	<br />
 	<strong>A local-first desktop AI workbench.</strong>
 </p>
 
@@ -30,11 +28,9 @@
 	<a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md"><strong>Technical Docs</strong></a>
 </p>
 
-## What Suora Is / 它是什么
+## What Suora Is
 
 Suora is an Electron-based AI workbench for local knowledge work, automation, and integrations.
-
-Suora 不是单一聊天窗口，而是一个把对话、文档、Agent、技能、流水线、定时任务、渠道接入和 MCP 集成放在同一个桌面应用中的工作台。
 
 ## Current Product Surface
 
