@@ -25,9 +25,13 @@ const config: Config = {
   organizationName: 'fandych',
   projectName: 'suora',
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
   future: {
     v4: true,
+  },
+  markdown: {
+    hooks: {
+      onBrokenMarkdownLinks: 'warn',
+    },
   },
   i18n: {
     defaultLocale: 'en',
