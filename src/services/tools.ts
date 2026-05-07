@@ -3476,6 +3476,18 @@ export function mergeSkillsWithBuiltins(storeSkills: Skill[]): Skill[] {
   return storeSkills
 }
 
+function resolveRuntimeSkillIds(agentSkillIds: string[], allSkills: Skill[]): string[] {
+  const runtimeSkillIds = new Set(agentSkillIds)
+
+  for (const skill of allSkills) {
+    if (!skill?.enabled) continue
+    if (skill.source !== 'claude-dir' && skill.source !== 'agent-dir') continue
+    runtimeSkillIds.add(skill.id)
+  }
+
+  return Array.from(runtimeSkillIds)
+}
+
 /**
  * Resolve the set of AI SDK tools available to an agent.
  *
@@ -3504,6 +3516,7 @@ export function getToolsForAgent(
 ): ToolSet {
   const { includePluginTools = false, allowedTools, disallowedTools, permissionMode } = options
   let result: ToolSet = {}
+  const runtimeSkillIds = resolveRuntimeSkillIds(agentSkillIds, allSkills)
 
   // Always include ALL built-in tools — agents decide which to use
   for (const [name, def] of Object.entries(builtinToolDefs)) {
@@ -3523,7 +3536,7 @@ export function getToolsForAgent(
   // --- Permission filtering (Claude Code pattern) ---
   // Collect allowed tools from skills (advisory) and agent config (restrictive)
   const skillAllowedTools = new Set<string>()
-  for (const skillId of agentSkillIds) {
+  for (const skillId of runtimeSkillIds) {
     const skill = allSkills.find((s) => s.id === skillId)
     if (skill?.enabled && skill.allowedTools?.length) {
       for (const t of skill.allowedTools) skillAllowedTools.add(t)
@@ -3563,8 +3576,9 @@ export async function getSkillSystemPrompts(
   allSkills: Skill[],
 ): Promise<string> {
   const parts: string[] = []
+  const runtimeSkillIds = resolveRuntimeSkillIds(agentSkillIds, allSkills)
 
-  for (const skillId of agentSkillIds) {
+  for (const skillId of runtimeSkillIds) {
     const skill = allSkills.find((s) => s.id === skillId)
     if (!skill?.enabled) continue
 

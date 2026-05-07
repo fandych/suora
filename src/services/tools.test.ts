@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { DocumentGroup, DocumentNode } from '@/types'
-import { buildToolHints, builtinToolDefs, setLiveStoreAccessor } from './tools'
+import type { DocumentGroup, DocumentNode, Skill } from '@/types'
+import { buildToolHints, builtinToolDefs, getSkillSystemPrompts, setLiveStoreAccessor } from './tools'
 
 function getDescription(toolName: 'web_search' | 'list_documents' | 'query_document_graph' | 'read_document' | 'write_file' | 'append_file') {
   return (builtinToolDefs[toolName] as { description?: string }).description ?? ''
@@ -118,5 +118,40 @@ describe('builtin tool guidance', () => {
     } finally {
       Reflect.deleteProperty(window, 'electron')
     }
+  })
+
+  it('includes enabled Claude-style shared local skills in runtime prompts even when not assigned to the agent', async () => {
+    const sharedSkill: Skill = {
+      id: 'claude-shared-skill',
+      name: 'Shared Claude Skill',
+      description: 'Shared local skill',
+      enabled: true,
+      source: 'claude-dir',
+      content: 'Use the shared Claude skill instructions.',
+      frontmatter: { name: 'Shared Claude Skill', description: 'Shared local skill' },
+      context: 'inline',
+    }
+
+    const prompts = await getSkillSystemPrompts([], [sharedSkill])
+
+    expect(prompts).toContain('Shared Claude Skill')
+    expect(prompts).toContain('Use the shared Claude skill instructions.')
+  })
+
+  it('does not auto-include regular unassigned local skills in runtime prompts', async () => {
+    const localSkill: Skill = {
+      id: 'local-skill',
+      name: 'Workspace Local Skill',
+      description: 'Regular local skill',
+      enabled: true,
+      source: 'local',
+      content: 'This should require explicit agent assignment.',
+      frontmatter: { name: 'Workspace Local Skill', description: 'Regular local skill' },
+      context: 'inline',
+    }
+
+    const prompts = await getSkillSystemPrompts([], [localSkill])
+
+    expect(prompts).toBe('')
   })
 })

@@ -71,4 +71,33 @@ describe('SkillsLayout', () => {
       })
     })
   })
+
+  it('toggles the Claude Code local skill source from the installed sidebar', async () => {
+    const user = userEvent.setup()
+    renderSkillsLayout()
+
+    await user.click(screen.getByRole('checkbox', { name: 'Enable Claude Code' }))
+
+    await waitFor(() => {
+      expect(useAppStore.getState().externalDirectories).toContainEqual({
+        path: '~/.claude/skills',
+        enabled: true,
+        type: 'skills',
+      })
+    })
+
+    await waitFor(() => {
+      expect(window.electron.invoke).toHaveBeenCalledWith('workspace:setExternalDirectories', ['~/.claude/skills', '~/.suora/skills'])
+    })
+
+    await user.click(screen.getByRole('checkbox', { name: 'Disable Claude Code' }))
+
+    await waitFor(() => {
+      expect(useAppStore.getState().externalDirectories).toContainEqual({
+        path: '~/.claude/skills',
+        enabled: false,
+        type: 'skills',
+      })
+    })
+  })
 })

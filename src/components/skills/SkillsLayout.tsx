@@ -1,11 +1,11 @@
 ﻿import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useAppStore } from '@/store/appStore'
+import { loadExternalSkillsAndAgents, saveSettingsToWorkspace, useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import type { Skill, RegistrySkillEntry, SkillRegistrySource, SkillBundledResource, SkillsLockfile } from '@/types'
-import { loadAllSkills, createBlankSkill, deleteSkillFromDisk, serializeSkillToMarkdown, parseSkillMarkdown, loadSkillsLockfile, getSkillLockStatus } from '@/services/skillRegistry'
+import { createBlankSkill, deleteSkillFromDisk, serializeSkillToMarkdown, parseSkillMarkdown, loadSkillsLockfile, getSkillLockStatus } from '@/services/skillRegistry'
 import { browseRegistrySkills, searchRegistrySkills, installSkillFromRegistry, uninstallSkill, getDefaultRegistrySources, previewSkillInstall, getFeaturedRegistrySkills } from '@/services/skillMarketplace'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
@@ -22,6 +22,8 @@ type ViewMode = 'installed' | 'browse' | 'sources'
 const SKILL_VIEW_MODES = new Set<ViewMode>(['installed', 'browse', 'sources'])
 
 const ALL_CATEGORY = 'All'
+const CLAUDE_CODE_SKILLS_PATH = '~/.claude/skills'
+const OTHER_AGENTS_SKILLS_PATH = '~/.agents/skills'
 
 function buildImportedResourceManifest(resources: Array<{ path: string; size: number }>): SkillBundledResource[] {
   const manifest = new Map<string, SkillBundledResource>()
@@ -46,7 +48,18 @@ export function SkillsLayout() {
   const [panelWidth, setPanelWidth] = useResizablePanel('skills', 280)
   const navigate = useNavigate()
   const { view } = useParams<{ view: string }>()
-  const { skills, addSkill, updateSkill, removeSkill, workspacePath, marketplace, setMarketplace } = useAppStore()
+  const {
+    skills,
+    addSkill,
+    updateSkill,
+    removeSkill,
+    workspacePath,
+    marketplace,
+    setMarketplace,
+    externalDirectories,
+    addExternalDirectory,
+    updateExternalDirectory,
+  } = useAppStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
   const viewMode: ViewMode = view && SKILL_VIEW_MODES.has(view as ViewMode) ? view as ViewMode : 'installed'
@@ -58,6 +71,7 @@ export function SkillsLayout() {
   const folderInputRef = useRef<HTMLInputElement>(null)
   const [previewingEntryId, setPreviewingEntryId] = useState<string | null>(null)
   const [skillsLockfile, setSkillsLockfile] = useState<SkillsLockfile | null>(null)
+  const [togglingLocalSourcePath, setTogglingLocalSourcePath] = useState<string | null>(null)
   const { t } = useI18n()
   useSkillIconsReady()
 
@@ -72,6 +86,9 @@ export function SkillsLayout() {
     project: t('skills.project', 'Project'),
     user: t('skills.user', 'User'),
     registry: t('skills.registry', 'Registry'),
+    workspace: t('skills.sharedFolder', 'Shared Folder'),
+    'agent-dir': t('skills.otherAgents', 'Other Agents'),
+    'claude-dir': t('skills.claudeCode', 'Claude Code'),
   }), [t])
 
   // Registry sources (merged: built-in defaults + user-added)
@@ -86,21 +103,46 @@ export function SkillsLayout() {
 
   const editingSkill = editingId ? skills.find((s) => s.id === editingId) ?? null : null
 
+  const localSkillSources = useMemo(() => {
+    const skillDirectories = new Map(
+      externalDirectories
+        .filter((directory) => directory.type === 'skills')
+        .map((directory) => [directory.path, directory] as const),
+    )
+
+    return [
+      {
+        id: 'claude-code',
+        path: CLAUDE_CODE_SKILLS_PATH,
+        label: t('skills.claudeCode', 'Claude Code'),
+        icon: 'lucide:sparkles',
+        description: t('skills.claudeCodeDesc', 'Load skills from the local .claude/skills folder.'),
+        enabled: skillDirectories.get(CLAUDE_CODE_SKILLS_PATH)?.enabled ?? false,
+        skillCount: skills.filter((skill) => skill.source === 'claude-dir').length,
+      },
+      {
+        id: 'other-agents',
+        path: OTHER_AGENTS_SKILLS_PATH,
+        label: t('skills.otherAgents', 'Other Agents'),
+        icon: 'lucide:folder-open',
+        description: t('skills.otherAgentsDesc', 'Load skills from the shared .agents/skills folder.'),
+        enabled: skillDirectories.get(OTHER_AGENTS_SKILLS_PATH)?.enabled ?? false,
+        skillCount: skills.filter((skill) => skill.source === 'agent-dir').length,
+      },
+    ]
+  }, [externalDirectories, skills, t])
+  const enabledLocalSkillSourcesCount = localSkillSources.filter((source) => source.enabled).length
+
   // Load skills from disk on mount
   useEffect(() => {
     if (!workspacePath) return
-    loadAllSkills(workspacePath).then((incoming) => {
-      const storeIds = new Set(useAppStore.getState().skills.map((s) => s.id))
-      for (const skill of incoming) {
-        if (!storeIds.has(skill.id)) addSkill(skill)
-      }
-    }).catch(() => {
+    loadExternalSkillsAndAgents().catch(() => {
       // Ignore skill loading errors - user will see empty list
     })
     loadSkillsLockfile(workspacePath).then(setSkillsLockfile).catch(() => {
       // Ignore lockfile errors
     })
-  }, [workspacePath, addSkill])
+  }, [workspacePath])
 
   // Fetch registry skills when switching to browse
   const fetchRegistry = useCallback(async () => {
@@ -207,6 +249,38 @@ export function SkillsLayout() {
     const skill = skills.find((s) => s.id === id)
     if (skill) updateSkill(id, { enabled: !skill.enabled })
   }
+
+  const handleToggleLocalSkillSource = useCallback(async (path: string, enabled: boolean) => {
+    if (!workspacePath) {
+      toast.warning(t('skills.workspaceRequired', 'Please set a workspace path first.'))
+      return
+    }
+
+    const existing = externalDirectories.find((directory) => directory.path === path && directory.type === 'skills')
+
+    if (existing) {
+      updateExternalDirectory(path, { enabled })
+    } else {
+      addExternalDirectory({ path, enabled, type: 'skills' })
+    }
+
+    setTogglingLocalSourcePath(path)
+
+    try {
+      const saved = await saveSettingsToWorkspace()
+      if (!saved) {
+        toast.warning(t('skills.saveFailed', 'Failed to save skill.'))
+      }
+      await loadExternalSkillsAndAgents()
+    } catch (err) {
+      toast.error(
+        t('skills.toggleLocalSourceFailed', 'Failed to update local skill sources'),
+        err instanceof Error ? err.message : String(err),
+      )
+    } finally {
+      setTogglingLocalSourcePath(null)
+    }
+  }, [addExternalDirectory, externalDirectories, t, updateExternalDirectory, workspacePath])
 
   const handleExportMarkdown = async (skill: Skill) => {
     if (skill.bundledResources?.length) {
@@ -555,6 +629,89 @@ export function SkillsLayout() {
         {/* ── Installed Tab ───────────────────────────────────── */}
         {viewMode === 'installed' && (
           <div className="module-sidebar-stack flex-1 overflow-y-auto px-3 pb-3 space-y-2">
+            <div className="rounded-[22px] border border-border-subtle/60 bg-linear-to-br from-surface-1/92 to-surface-2/55 p-3.5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11px] font-semibold text-text-primary">{t('skills.localSources', 'Local Skill Sources')}</div>
+                  <p className="mt-1 text-[10px] leading-relaxed text-text-muted">
+                    {t('skills.localSourcesDesc', 'Toggle shared local skill folders for Claude Code and other agent runtimes without leaving this sidebar.')}
+                  </p>
+                </div>
+                <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[9px] font-semibold text-accent tabular-nums">
+                  {enabledLocalSkillSourcesCount}/{localSkillSources.length}
+                </span>
+              </div>
+              <div className="mt-3 space-y-2">
+                {localSkillSources.map((source) => {
+                  const isBusy = togglingLocalSourcePath === source.path
+                  return (
+                    <div
+                      key={source.id}
+                      className={`relative overflow-hidden rounded-3xl border px-3.5 py-3 transition-all duration-200 ${
+                        source.enabled
+                          ? 'border-accent/20 bg-linear-to-br from-accent/10 via-surface-1/96 to-surface-2/72 shadow-[0_14px_32px_rgba(var(--t-accent-rgb),0.10)]'
+                          : 'border-border-subtle/55 bg-linear-to-br from-surface-1/92 to-surface-2/50 hover:border-border-subtle/75 hover:from-surface-1 hover:to-surface-2/70'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-3">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-colors ${
+                              source.enabled
+                                ? 'border-accent-hover/35 bg-accent-hover text-white shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.26)]'
+                                : 'border-border/40 bg-surface-0/75 text-text-muted'
+                            }`}>
+                              <IconifyIcon name={source.icon} size={16} color="currentColor" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className="text-[11px] font-semibold text-text-primary">{source.label}</span>
+                                <span className={`h-2 w-2 rounded-full ${
+                                  source.enabled
+                                    ? 'bg-accent-hover shadow-[0_0_0_5px_rgba(var(--t-accent-rgb),0.22)]'
+                                    : 'bg-zinc-500 shadow-[0_0_0_4px_rgba(113,113,122,0.18)]'
+                                }`} />
+                                <span className="rounded-full bg-surface-3/80 px-1.5 py-0.5 text-[9px] text-text-muted tabular-nums">
+                                  {source.skillCount} {t('skills.loaded', 'loaded')}
+                                </span>
+                              </div>
+                              <p className="mt-1 text-[10px] leading-relaxed text-text-muted/85">{source.description}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <label
+                          aria-label={`${source.enabled ? t('skills.disable', 'Disable') : t('skills.enable', 'Enable')} ${source.label}`}
+                          title={source.enabled ? t('skills.disable', 'Disable') : t('skills.enable', 'Enable')}
+                          className={`group relative inline-flex w-11 shrink-0 rounded-full p-0.5 outline-offset-2 transition-colors duration-200 ease-in-out ${
+                            source.enabled
+                              ? 'bg-accent-hover inset-ring inset-ring-white/16 shadow-[0_8px_18px_rgba(var(--t-accent-rgb),0.30)]'
+                              : 'bg-zinc-500/75 inset-ring inset-ring-black/10 shadow-[inset_0_1px_2px_rgba(15,23,42,0.18)]'
+                          } ${isBusy ? 'cursor-wait opacity-75' : 'cursor-pointer'} has-focus-visible:outline-2 has-focus-visible:outline-accent`}
+                        >
+                          <span className={`pointer-events-none flex size-5 items-center justify-center rounded-full bg-white ring-1 transition-transform duration-200 ease-in-out ${source.enabled ? 'translate-x-5 ring-white/20 shadow-[0_4px_12px_rgba(15,23,42,0.22)]' : 'translate-x-0 ring-black/10 shadow-[0_3px_8px_rgba(15,23,42,0.14)]'}`}>
+                            {isBusy ? <IconifyIcon name="lucide:loader-circle" size={10} color="currentColor" className="animate-spin text-text-muted" /> : null}
+                          </span>
+                          <input
+                            name={`local-skill-source-${source.id}`}
+                            type="checkbox"
+                            checked={source.enabled}
+                            onChange={(event) => handleToggleLocalSkillSource(source.path, event.target.checked)}
+                            aria-label={`${source.enabled ? t('skills.disable', 'Disable') : t('skills.enable', 'Enable')} ${source.label}`}
+                            disabled={isBusy}
+                            className="absolute inset-0 h-full w-full cursor-inherit appearance-none focus:outline-none"
+                          />
+                        </label>
+                      </div>
+                      <div className="mt-3">
+                        <span className="inline-flex max-w-full items-center rounded-2xl border border-border-subtle/55 bg-surface-0/55 px-2.5 py-1 text-[10px] font-mono text-text-muted/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                          {source.path}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
             {filteredInstalled.length === 0 && (
               <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3 border border-border-subtle">
