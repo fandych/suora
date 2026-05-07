@@ -2,6 +2,8 @@
 
 本指南基于当前代码实现编写，重点说明 Suora 现在已经具备的用户功能，而不是历史规划或旧版设计稿中的能力。
 
+文档清理后，`docs/user/USER_GUIDE_ZH.md` 与 `docs/user/USER_GUIDE_EN.md` 是仓库里长期维护的主用户文档；更细分的测试、渠道与产品边界说明分别放在 `docs/TESTING.md`、`docs/CHANNEL_INTEGRATION.md` 与 `docs/requirements.md`。
+
 ## 1. 产品定位
 
 Suora 是一个本地 AI 工作台。当前版本不是只有聊天窗口，而是由多个协作模块组成：聊天、文档、模型、Agent、技能、流水线、定时器、渠道、MCP 和设置。
@@ -29,17 +31,39 @@ npm install
 npm run dev
 ```
 
+### 从发布包安装
+
+如果你不是开发者，优先使用 GitHub Releases 中的桌面安装包：
+
+1. 打开 <https://github.com/fandych/suora/releases/latest>
+2. 根据操作系统选择安装包：
+   - Windows：安装版或便携版
+   - macOS：DMG 或 ZIP
+   - Linux：AppImage、DEB 或 RPM
+3. 安装后首次启动，先进入 Models 配置至少一个可用模型
+
 ### 首次引导
 
 首次打开应用时会看到 5 步引导：
 
-1. Welcome
-2. Configure a Model Provider
-3. Meet Your Agents
-4. Explore Skills
-5. You're All Set
+1. 欢迎
+2. 配置模型提供商
+3. 认识你的 Agent
+4. 浏览技能
+5. 准备完成
 
 如果跳过引导，可以在 `设置 -> System` 里重新运行。
+
+### 推荐首次配置顺序
+
+为了尽快进入稳定可用状态，建议按下面顺序完成首次配置：
+
+1. 在 **Models** 中添加一个提供商或本地 Ollama 端点
+2. 在 **Chat** 中选择默认模型与默认 Agent
+3. 在 **Skills** 中确认已启用需要的技能
+4. 在 **Documents** 中创建至少一个文档组，建立你的本地知识区
+5. 如果要做自动化，再去 **Pipeline** 和 **Timer**
+6. 如果要接入外部消息平台，再配置 **Channels**
 
 ## 3. 工作台总览
 
@@ -97,9 +121,9 @@ npm run dev
 - MCP
 - Pipeline
 
-## 5. 模型与 Provider
+## 5. 模型与提供商
 
-当前支持的 provider 类型有：
+当前支持的提供商类型有：
 
 - Anthropic
 - OpenAI
@@ -113,18 +137,18 @@ npm run dev
 - Fireworks
 - Perplexity
 - Cohere
-- OpenAI-compatible
+- OpenAI 兼容端点
 
 ### 模型页当前支持的操作
 
-- 新建 provider 配置
-- 选择 provider preset
+- 新建提供商配置
+- 选择提供商预设
 - 输入 API Key 和 Base URL
 - 测试连接
 - 启用或禁用具体模型
 - 为每个模型设置 `temperature` 与 `maxTokens`
 - 查看已启用模型清单
-- 在 Compare 视图对比模型
+- 在比较视图中对比模型
 
 如果使用 Ollama，本地端点默认走 `http://localhost:11434/v1`。
 
@@ -182,6 +206,13 @@ npm run dev
 - 图谱视图
 - 把文档选为聊天上下文
 
+推荐使用方式：
+
+1. 先按主题创建文档组
+2. 在组内用文件夹拆分项目、知识域或时间线
+3. 用回链和标签维护关联
+4. 在 Chat 中选择相关文档作为上下文，再发起问答或任务
+
 ### Pipeline 模块
 
 流水线页当前支持：
@@ -218,7 +249,7 @@ npm run dev
 - 触发 Agent Prompt
 - 触发已保存流水线
 
-## 8. 渠道与 MCP
+## 8. 渠道、MCP 与设置
 
 ### 当前支持的渠道平台
 
@@ -253,7 +284,7 @@ MCP 页当前用于：
 - 查看连接状态
 - 把 MCP 服务纳入 Agent 可用能力范围
 
-## 9. 设置、安全与数据
+### 设置、安全与数据
 
 当前设置页包含 7 个分区：
 
@@ -265,7 +296,7 @@ MCP 页当前用于：
 - Logs
 - System
 
-### 当前重要设置能力
+当前重要设置能力包括：
 
 - 主题、语言、字体、强调色
 - 自动启动
@@ -284,76 +315,60 @@ MCP 页当前用于：
 - 运行时性能指标
 - 重新运行首次引导
 
-### API Key 与安全存储
+API Key 会优先写入系统安全存储；如果系统 Keyring 不可用或加密失败，应用会提示这些 Key 只保存在内存中，重启后需要重新输入。
 
-当前实现会优先使用系统安全存储保存 API Key。
+## 9. 常见使用路径
 
-如果系统 Keyring 不可用或加密失败，应用会提示：
+### 场景 1：把文档知识带入对话
 
-- Key 仅保存在内存中
-- 重启应用后需要重新输入
+1. 在 Documents 中整理笔记
+2. 打开 Chat，选择当前会话的 Agent 与模型
+3. 选中相关文档作为上下文
+4. 提问、总结、改写或继续执行任务
 
-这一点是当前行为，不建议在用户文档中写成“永远安全落盘”。
+### 场景 2：把重复任务做成流水线
 
-### 数据页导出内容
+1. 在 Pipeline 中创建多步骤流程
+2. 为每一步选择合适的 Agent
+3. 设置 `runIf`、超时、重试和输出变量
+4. 保存后可以从聊天 `/pipeline run` 触发，或交给 Timer 定时执行
 
-当前导出会包含：
+### 场景 3：接入外部消息渠道
 
-- 自定义 Agent
-- 自定义技能
-- 全部会话
-- Provider 配置
-- 外部目录配置
+1. 在 Channels 中创建渠道
+2. 绑定负责回复的 Agent
+3. 填写平台密钥、Webhook 或 Stream 参数
+4. 在 Health / Debug 面板里检查运行状态
 
-## 10. 排障建议
+## 10. 常见问题排查
 
-### 模型无法连接
+### 模型没有回复或报连接错误
 
-依次检查：
+- 先检查提供商的 API Key、Base URL 和网络连通性
+- 如果是 Ollama，确认本地端点是否在运行
+- 在 Models 中重新做连接测试
 
-1. API Key 是否填写正确
-2. Base URL 是否匹配 provider
-3. 至少有一个模型被启用
-4. 代理设置是否拦截了请求
-5. 使用 `Models` 页的连接测试确认状态
+### 重启后 API Key 丢失
 
-### 渠道没有收到消息
+- 这通常说明系统 Secure Storage / Keyring 不可用
+- Suora 会在这种情况下只把密钥保存在内存里，重启后需要重新输入
 
-依次检查：
+### 渠道收不到消息
 
-1. 渠道是否启用
-2. 回复 Agent 是否存在且可用
-3. Webhook 模式下本地 channel server 是否已启动
-4. 平台后台填写的 URL 是否与 Suora 显示一致
-5. `allowedChats` 是否拦截了当前聊天
-6. Health / Debug 面板里是否出现错误
+- 检查渠道是否启用
+- 检查 reply agent 是否仍然存在
+- 检查 Webhook 地址、签名密钥和白名单聊天对象
 
-### 技能没有生效
+### 看不到某个功能入口
 
-依次检查：
+- 先确认当前路由是否存在于主导航
+- `Models`、`Skills`、`Settings` 里有子视图与默认跳转，不是所有入口都在顶层按钮直接展开
 
-1. 技能是否已启用
-2. Agent 是否分配了需要的技能
-3. 技能文件是否成功导入到当前工作区或外部目录
-4. 技能内容是否是合法的 `SKILL.md`
+## 11. 相关文档
 
-### 定时器没有执行
+如果你已经熟悉基础用法，建议继续阅读：
 
-依次检查：
-
-1. 定时器是否启用
-2. Cron 表达式是否合法
-3. 目标 Agent 或 Pipeline 是否仍然存在
-4. 应用是否处于运行状态
-
-## 11. 建议的上手顺序
-
-如果你是第一次使用当前版本，推荐按下面顺序体验：
-
-1. 在 `Models` 添加一个 provider 并启用模型
-2. 在 `Agents` 看一遍内置 Agent，再决定是否新建自定义 Agent
-3. 在 `Chat` 发起第一轮对话
-4. 在 `Documents` 建立一个知识文档组
-5. 在 `Pipeline` 保存一个两到三步的自动化流程
-6. 在 `Timer` 定时触发这个流程
-7. 最后再配置 `Channels` 或 `MCP`
+- [技术文档](../technical/TECHNICAL_DOC_ZH.md)
+- [测试说明](../TESTING.md)
+- [渠道集成说明](../CHANNEL_INTEGRATION.md)
+- [产品范围与需求基线](../requirements.md)

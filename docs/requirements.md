@@ -22,15 +22,15 @@ Suora 是一款基于 Electron 的本地优先 AI 工作台。当前代码体现
 
 ## 2. 产品原则
 
-### 2.1 Local-first
+### 2.1 本地优先
 
 用户的会话、文档树、agent、skill、pipeline、渠道配置和大部分运行元数据都应默认保存在本地，而不是要求云端后端才能使用。
 
-### 2.2 BYOK 与多模型自由切换
+### 2.2 自带密钥与多模型自由切换
 
 用户应能够自行配置 API Key、Base URL 和默认模型，并在同一工作台中切换不同 provider。
 
-### 2.3 Agent-first 执行体验
+### 2.3 以 Agent 为中心的执行体验
 
 聊天、pipeline、timer 和渠道回复都应围绕 agent 配置运行，而不是把模型调用写死在单一路径上。
 
@@ -64,7 +64,7 @@ Suora 是一款基于 Electron 的本地优先 AI 工作台。当前代码体现
 | Chat | `/chat` | 支持会话管理、流式回复、附件、模型与 agent 选择、工具事件显示、失败重试与 pipeline 命令 |
 | Documents | `/documents` | 支持文档组、嵌套目录、Markdown、图谱、回链、Mermaid、数学公式与聊天上下文选择 |
 | Pipeline | `/pipeline` | 支持多步 agent 工作流、重试、超时、`runIf`、变量导出、可视化预览、执行历史与导入导出 |
-| Models | `/models/:view` | 支持 provider 配置、模型管理、比较视图与默认模型管理 |
+| Models | `/models/:view` | 支持提供商配置、模型管理、比较视图与默认模型管理 |
 | Agents | `/agents` | 支持内置与自定义 agent、prompt、skills、工具限制、记忆、版本与统计 |
 | Skills | `/skills/:view` | 支持已安装 skills、注册表浏览、来源管理、`SKILL.md` 编辑、资源树、导入与导出 |
 | Timer | `/timer` | 支持 Once、Interval、Cron 三类任务，以及通知、agent prompt、pipeline 执行三类动作 |
@@ -90,9 +90,9 @@ Suora 是一款基于 Electron 的本地优先 AI 工作台。当前代码体现
 - 必须支持回链、引用、搜索与图谱浏览。
 - 必须支持把文档作为聊天上下文提供给当前会话或当前任务。
 
-### 5.3 Models 与 Providers
+### 5.3 模型与提供商
 
-- 必须支持多个 provider 共存。
+- 必须支持多个提供商共存。
 - 必须支持自定义 API Key 与 Base URL。
 - 必须对模型配置进行校验，并在连接失败时反馈可理解的错误。
 - 必须在统一模型层之上支持文本生成与流式响应。
@@ -171,7 +171,7 @@ Suora 是一款基于 Electron 的本地优先 AI 工作台。当前代码体现
 - 作为 IDE 内联补全插件运行
 - 作为 Web SaaS 提供多人协作后端
 - 提供移动端原生客户端
-- 对所有 provider 暴露完全一致的能力矩阵
+- 对所有提供商暴露完全一致的能力矩阵
 - 用单一文档替代代码中的真实实现细节
 
 ## 8. 维护说明

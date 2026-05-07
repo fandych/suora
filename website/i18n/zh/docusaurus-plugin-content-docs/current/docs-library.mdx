@@ -1,0 +1,61 @@
+---
+id: docs-library
+title: 文档库
+---
+
+# 文档库
+
+Docusaurus 这一层刻意保持轻量。它负责改善 GitHub Pages 的阅读体验，同时继续把读者引导到仓库里已经存在的长篇 Markdown 文档。
+
+<div className="doc-link-grid">
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/README.md" target="_blank" rel="noopener noreferrer">
+    <strong>README</strong>
+    <span>项目概览、路由、提供商支持、主文档入口和发布流程。</span>
+  </a>
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/FEATURES.md" target="_blank" rel="noopener noreferrer">
+    <strong>FEATURES.md</strong>
+    <span>根据实现整理的功能清单。</span>
+  </a>
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_ZH.md" target="_blank" rel="noopener noreferrer">
+    <strong>中文技术文档</strong>
+    <span>架构边界、服务职责和实现细节。</span>
+  </a>
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_ZH.md" target="_blank" rel="noopener noreferrer">
+    <strong>中文用户指南</strong>
+    <span>安装流程、首次使用和模块说明。</span>
+  </a>
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md" target="_blank" rel="noopener noreferrer">
+    <strong>英文技术文档</strong>
+    <span>面向英文读者的同一套实现说明。</span>
+  </a>
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_EN.md" target="_blank" rel="noopener noreferrer">
+    <strong>英文用户指南</strong>
+    <span>面向英文读者的安装与使用说明。</span>
+  </a>
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/docs/TESTING.md" target="_blank" rel="noopener noreferrer">
+    <strong>测试说明</strong>
+    <span>当前测试命令、覆盖范围，以及 Electron 与 renderer 的边界说明。</span>
+  </a>
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/docs/CHANNEL_INTEGRATION.md" target="_blank" rel="noopener noreferrer">
+    <strong>渠道集成说明</strong>
+    <span>支持的平台、Webhook/Stream 模式和运行面板说明。</span>
+  </a>
+  <a className="doc-link-card" href="https://github.com/fandych/suora/blob/main/docs/requirements.md" target="_blank" rel="noopener noreferrer">
+    <strong>需求基线</strong>
+    <span>以当前实现为准的产品范围和能力边界。</span>
+  </a>
+</div>
+
+## 语言策略
+
+每一个渲染出来的 Pages 页面只保留一种语言，需要切换时通过页头按钮进入对应语言版本。
+
+## 维护策略
+
+现在仓库只保留一套更收敛的主文档：
+
+- 中文 / 英文各一份主用户指南
+- 中文 / 英文各一份主技术文档
+- 少量仍在被引用、且明确有维护价值的专题文档
+
+一次性升级报告、历史专项审计文档，以及无人维护的平行语言副本都已经移除，目的是让剩余文档更容易长期保持可信。

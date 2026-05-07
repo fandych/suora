@@ -1,0 +1,470 @@
+.page {
+  background:
+    radial-gradient(circle at top right, rgba(236, 93, 44, 0.2), transparent 24%),
+    radial-gradient(circle at left 18%, rgba(110, 96, 255, 0.18), transparent 22%),
+    linear-gradient(180deg, #090d15 0%, #0f1726 46%, #121d31 100%);
+}
+
+.shell {
+  width: min(1360px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: 2rem 0 4rem;
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.sidebar {
+  position: sticky;
+  top: calc(var(--ifm-navbar-height) + 1.25rem);
+  height: fit-content;
+  display: grid;
+  gap: 1rem;
+}
+
+.sidebarCard,
+.heroCard,
+.contentCard,
+.downloadCard,
+.releasePanel {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 1.6rem;
+  background: linear-gradient(180deg, rgba(11, 18, 31, 0.92), rgba(15, 24, 40, 0.82));
+  box-shadow: 0 24px 70px rgba(4, 8, 16, 0.34);
+  backdrop-filter: blur(18px);
+}
+
+.sidebarCard {
+  padding: 1.2rem;
+}
+
+.panelTag,
+.heroEyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4caa4;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sidebarCard h2,
+.sectionHeader h2,
+.heroCopy h1,
+.contentCard h3,
+.downloadCard h3,
+.releasePanel h2,
+.docCard h3 {
+  font-family: "Bitter", "Times New Roman", serif;
+}
+
+.sidebarCard h2 {
+  margin: 1rem 0 0.35rem;
+  font-size: 1.08rem;
+}
+
+.sidebarCard p,
+.heroCopy p,
+.sectionHeader p,
+.contentCard p,
+.downloadCard p,
+.releaseCopy,
+.releaseStatus {
+  color: rgba(226, 233, 245, 0.76);
+  line-height: 1.75;
+}
+
+.anchorNav {
+  display: grid;
+  gap: 0.7rem;
+  margin-top: 1rem;
+}
+
+.anchorNav a,
+.sidebarActions a,
+.libraryGrid a,
+.docCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.9rem 1rem;
+  border-radius: 1rem;
+  color: #eef4ff;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid transparent;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.anchorNav a:hover,
+.sidebarActions a:hover,
+.libraryGrid a:hover,
+.docCard:hover,
+.primaryAction:hover,
+.secondaryAction:hover,
+.ghostAction:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  text-decoration: none;
+}
+
+.repoBlock {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.repoLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.repoLabel svg,
+.ghostAction svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.repoBlock code {
+  display: inline-flex;
+  width: fit-content;
+  padding: 0.45rem 0.7rem;
+  border-radius: 0.9rem;
+  background: rgba(255, 255, 255, 0.08);
+  color: #f4f6fb;
+  font-size: 0.84rem;
+}
+
+.sidebarActions {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.content {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.heroCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.85fr);
+  gap: 1.2rem;
+  padding: 1.4rem;
+}
+
+.heroCopy h1 {
+  margin: 1rem 0 0.8rem;
+  font-size: clamp(2.7rem, 5vw, 4.7rem);
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+  color: #f7fbff;
+  max-width: 11ch;
+}
+
+.heroActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.85rem;
+  margin-top: 1.4rem;
+}
+
+.primaryAction,
+.secondaryAction,
+.ghostAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  min-height: 2.9rem;
+  padding: 0.85rem 1.15rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+  text-decoration: none;
+}
+
+.primaryAction {
+  color: #09111f;
+  background: linear-gradient(135deg, #f4caa4, #ee7d4c);
+  font-weight: 700;
+}
+
+.secondaryAction,
+.ghostAction {
+  color: #f4f8ff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1.6rem;
+}
+
+.statCard {
+  padding: 1rem;
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.statCard strong {
+  display: block;
+  color: #ffffff;
+  font-size: 1.05rem;
+}
+
+.statCard span {
+  display: block;
+  margin-top: 0.4rem;
+  color: rgba(226, 233, 245, 0.72);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.releasePanel {
+  padding: 1.2rem;
+}
+
+.releasePanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+}
+
+.releasePanel h2 {
+  margin: 0.8rem 0 0;
+  color: #f7fbff;
+  font-size: 1.45rem;
+}
+
+.releaseCopy {
+  margin: 0.85rem 0 0;
+}
+
+.releaseMetrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1.1rem;
+}
+
+.releaseMetrics div {
+  padding: 0.95rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.releaseMetrics span {
+  display: block;
+  color: rgba(226, 233, 245, 0.7);
+  font-size: 0.77rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.releaseMetrics strong {
+  display: block;
+  margin-top: 0.55rem;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.releaseStatus {
+  margin-top: 1rem;
+}
+
+.releaseActions {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1rem;
+}
+
+.releaseSummary {
+  color: rgba(244, 248, 255, 0.7);
+  font-size: 0.9rem;
+}
+
+.sectionBlock {
+  display: grid;
+  gap: 1rem;
+}
+
+.sectionHeader {
+  padding: 0 0.35rem;
+}
+
+.sectionHeader h2 {
+  margin: 0.8rem 0 0.35rem;
+  color: #f7fbff;
+  font-size: clamp(1.8rem, 2.4vw, 2.5rem);
+}
+
+.gridTwo,
+.docCardGrid,
+.downloadGrid {
+  display: grid;
+  gap: 1rem;
+}
+
+.gridTwo {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.docCardGrid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.downloadGrid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contentCard,
+.downloadCard {
+  padding: 1.25rem;
+}
+
+.contentCard h3,
+.downloadCard h3,
+.docCard h3 {
+  margin: 0;
+  color: #ffffff;
+  font-size: 1.25rem;
+}
+
+.contentCard p,
+.downloadCard p,
+.docCard p {
+  margin-top: 0.75rem;
+}
+
+.stepList {
+  margin: 1rem 0 0;
+  padding-left: 1.1rem;
+  color: #f0f5ff;
+}
+
+.stepList li + li {
+  margin-top: 0.75rem;
+}
+
+.routeGroups {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.routeGroup {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.routeGroup strong {
+  color: #ffffff;
+}
+
+.routeChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.routeChips span {
+  padding: 0.45rem 0.7rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: #f7fbff;
+  font-size: 0.84rem;
+}
+
+.docCard {
+  min-height: 100%;
+}
+
+.docCard span:last-child {
+  color: #f4caa4;
+  font-weight: 700;
+}
+
+.libraryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.downloadCard {
+  position: relative;
+  overflow: hidden;
+}
+
+.downloadCard::after {
+  content: "";
+  position: absolute;
+  inset: auto -20% -55% auto;
+  width: 10rem;
+  height: 10rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(244, 202, 164, 0.24), transparent 66%);
+}
+
+@media (max-width: 1100px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    position: static;
+    order: 2;
+  }
+
+  .heroCard,
+  .gridTwo,
+  .docCardGrid,
+  .downloadGrid,
+  .libraryGrid,
+  .releaseMetrics,
+  .statRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .shell {
+    width: min(100% - 1rem, 1360px);
+    padding: 1rem 0 3rem;
+  }
+
+  .heroCard,
+  .sidebarCard,
+  .contentCard,
+  .downloadCard,
+  .releasePanel {
+    border-radius: 1.2rem;
+  }
+
+  .heroCopy h1 {
+    max-width: none;
+  }
+
+  .heroActions {
+    flex-direction: column;
+  }
+
+  .primaryAction,
+  .secondaryAction,
+  .ghostAction {
+    width: 100%;
+  }
+}

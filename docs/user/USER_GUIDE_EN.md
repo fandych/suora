@@ -2,6 +2,8 @@
 
 This guide is based on the current implementation in the codebase. It focuses on what Suora can do today, not on older plans or historical documentation.
 
+After the documentation cleanup, `docs/user/USER_GUIDE_EN.md` and `docs/user/USER_GUIDE_ZH.md` are the long-lived primary user manuals. Focused references for testing, channels, and product scope live in `docs/TESTING.md`, `docs/CHANNEL_INTEGRATION.md`, and `docs/requirements.md`.
+
 ## 1. What Suora Is
 
 Suora is a local AI workbench. The current app is not just a chat window; it is a multi-module desktop workspace built around chat, documents, models, agents, skills, pipelines, timers, channels, MCP servers, and settings.
@@ -29,6 +31,14 @@ npm install
 npm run dev
 ```
 
+### Install from packaged releases
+
+If you are not running from source, start from the latest GitHub release:
+
+1. Open <https://github.com/fandych/suora/releases/latest>
+2. Pick the right package for your OS
+3. Launch the app and configure at least one model provider in Models before using the rest of the workbench
+
 ### Onboarding
 
 On first launch, Suora shows a 5-step onboarding flow:
@@ -40,6 +50,15 @@ On first launch, Suora shows a 5-step onboarding flow:
 5. You're All Set
 
 If you skip it, you can replay it later from `Settings -> System`.
+
+### Recommended first-time setup order
+
+1. Configure one cloud provider or local Ollama endpoint in **Models**
+2. Choose a default model and agent in **Chat**
+3. Enable the skills you actually need in **Skills**
+4. Create at least one document group in **Documents**
+5. Add automation later in **Pipeline** and **Timer**
+6. Connect external messaging platforms only when you need them in **Channels**
 
 ## 3. Workbench Map
 
@@ -186,6 +205,13 @@ The Documents module currently supports:
 - graph view
 - using selected documents as chat context
 
+Recommended flow:
+
+1. group notes by project or domain
+2. build folder structure under each group
+3. use backlinks and references to keep related material connected
+4. select the right documents as chat context before asking for help
+
 ### Pipelines
 
 The Pipeline module currently supports:
@@ -222,7 +248,7 @@ The current timer actions are:
 - run an agent prompt
 - run a saved pipeline
 
-## 8. Channels and MCP
+## 8. Channels, MCP, and Settings
 
 ### Supported channel platforms
 
@@ -257,7 +283,7 @@ The MCP module is currently used to:
 - inspect connection state
 - expose MCP-backed capability to agents
 
-## 9. Settings, Security, and Data
+### Settings, Security, and Data
 
 The current settings sections are:
 
@@ -269,7 +295,7 @@ The current settings sections are:
 - Logs
 - System
 
-### Important settings capabilities
+Important settings capabilities include:
 
 - theme, locale, fonts, and accent color
 - auto-start
@@ -288,76 +314,52 @@ The current settings sections are:
 - runtime metrics
 - replay onboarding
 
-### API keys and secure storage
+The current implementation tries to store API keys in OS-backed secure storage first. If the system keyring is unavailable or encryption fails, Suora warns that keys remain in memory only and must be re-entered after restart.
 
-The current implementation tries to store API keys in OS-backed secure storage first.
+## 9. Common workflows
 
-If the system keyring is unavailable or encryption fails, Suora warns that:
+### Bring local notes into chat
 
-- keys remain in memory only
-- keys must be re-entered after restart
+1. organise notes in Documents
+2. open Chat and pick the model and agent for the task
+3. attach the relevant documents as context
+4. ask for summaries, drafting, analysis, or execution help
 
-Do not document the current behavior as guaranteed encrypted disk persistence in every environment.
+### Turn repeated work into a pipeline
 
-### What data export currently includes
+1. create a pipeline with multiple agent steps
+2. configure retries, `runIf`, timeouts, and exported variables
+3. save it and run it from the UI, from chat, or from a timer
 
-Current exports include:
+### Connect an external channel
 
-- custom agents
-- custom skills
-- all sessions
-- provider configurations
-- external directory settings
+1. create a channel in Channels
+2. assign the reply agent
+3. fill in credentials and webhook or stream settings
+4. validate the runtime in the Health and Debug panels
 
 ## 10. Troubleshooting
 
-### Model connection fails
+### Model calls fail or return nothing
 
-Check these in order:
+- check API key, base URL, and connectivity in Models
+- if you use Ollama, confirm the local endpoint is running
+- retry the provider test before debugging the chat flow
 
-1. the API key is valid
-2. the base URL matches the provider
-3. at least one model is enabled
-4. proxy settings are not blocking the request
-5. the Models view connection test passes
+### API keys disappear after restart
 
-### A channel receives no messages
+- Secure Storage / OS keyring may be unavailable
+- in that case Suora keeps keys in memory only and asks you to re-enter them after restart
 
-Check these in order:
+### Channels do not receive messages
 
-1. the channel is enabled
-2. the reply agent still exists and is enabled
-3. the local channel server is running for webhook channels
-4. the platform callback URL exactly matches the Suora URL
-5. the current chat is not blocked by `allowedChats`
-6. the Health or Debug panel shows no credential error
+- confirm the channel is enabled
+- confirm the reply agent still exists
+- re-check webhook URL, signing keys, and allowed chats
 
-### A skill does not seem active
+## 11. Related references
 
-Check these in order:
-
-1. the skill is enabled
-2. the required skill is assigned to the agent
-3. the skill was imported into the current workspace or external directory
-4. the skill content is valid `SKILL.md`
-
-### A timer does not fire
-
-Check these in order:
-
-1. the timer is enabled
-2. the cron expression is valid
-3. the target agent or pipeline still exists
-4. the desktop app is running
-
-## 11. Recommended First Session
-
-If you are new to the current build, this order works well:
-
-1. add a provider and enable a model in `Models`
-2. review the built-in agents in `Agents`
-3. start your first conversation in `Chat`
-4. create a document group in `Documents`
-5. save a two-step or three-step workflow in `Pipeline`
-6. schedule it from `Timer`
-7. configure `Channels` or `MCP` only after the local workflow feels stable
+- [Technical documentation](../technical/TECHNICAL_DOC_EN.md)
+- [Testing guide](../TESTING.md)
+- [Channel integration guide](../CHANNEL_INTEGRATION.md)
+- [Product scope and requirements baseline](../requirements.md)
