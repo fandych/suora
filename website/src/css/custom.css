@@ -1,0 +1,191 @@
+@import url('https://fonts.googleapis.com/css2?family=Bitter:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --ifm-color-primary: #ec7d4c;
+  --ifm-color-primary-dark: #e56b36;
+  --ifm-color-primary-darker: #dd622b;
+  --ifm-color-primary-darkest: #c34f1f;
+  --ifm-color-primary-light: #f08b61;
+  --ifm-color-primary-lighter: #f29671;
+  --ifm-color-primary-lightest: #f7b08f;
+  --ifm-background-color: #0f1726;
+  --ifm-background-surface-color: rgba(17, 26, 43, 0.96);
+  --ifm-navbar-background-color: rgba(8, 12, 21, 0.88);
+  --ifm-footer-background-color: #080d14;
+  --ifm-heading-color: #f7fbff;
+  --ifm-font-color-base: rgba(233, 240, 249, 0.88);
+  --ifm-code-font-size: 95%;
+  --ifm-font-family-base: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --ifm-font-family-monospace: 'IBM Plex Sans', 'SFMono-Regular', monospace;
+  --ifm-navbar-height: 4.5rem;
+  --ifm-global-radius: 1.15rem;
+  --docusaurus-highlighted-code-line-bg: rgba(255, 255, 255, 0.08);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: #0f1726;
+}
+
+.navbar {
+  backdrop-filter: blur(18px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: 0 18px 42px rgba(4, 8, 16, 0.2);
+}
+
+.navbar__title {
+  font-family: 'Bitter', 'Times New Roman', serif;
+  letter-spacing: -0.03em;
+}
+
+.navbar__logo img {
+  height: 2rem;
+}
+
+.repo-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.repo-pill svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.locale-switch {
+  display: inline-flex;
+  gap: 0.4rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.locale-switch__button {
+  padding: 0.45rem 0.75rem;
+  border-radius: 999px;
+  color: rgba(240, 245, 255, 0.88);
+  line-height: 1;
+}
+
+html[lang='en'] .locale-switch__button[href='/suora/'],
+html[lang='zh-CN'] .locale-switch__button[href='/suora/zh/'] {
+  background: #ffffff;
+  color: #09111f;
+}
+
+.footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.footer__title,
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.theme-doc-sidebar-item-link-level-1 > .menu__link {
+  font-family: 'Bitter', 'Times New Roman', serif;
+}
+
+.theme-doc-markdown {
+  max-width: 58rem;
+}
+
+.theme-doc-sidebar-container {
+  border-right-color: rgba(255, 255, 255, 0.08);
+  background: rgba(8, 12, 21, 0.72);
+}
+
+.menu__link {
+  border-radius: 0.9rem;
+}
+
+.menu__link:hover,
+.menu__link--active {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.doc-card-grid,
+.doc-link-grid,
+.doc-chip-row,
+.doc-platform-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.doc-card-grid,
+.doc-link-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.doc-platform-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.doc-card,
+.doc-link-card,
+.doc-platform-card,
+.doc-callout {
+  display: block;
+  padding: 1.1rem;
+  border-radius: 1.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(11, 18, 31, 0.92), rgba(15, 24, 40, 0.82));
+  color: inherit;
+  text-decoration: none;
+  box-shadow: 0 18px 46px rgba(4, 8, 16, 0.25);
+}
+
+.doc-card:hover,
+.doc-link-card:hover,
+.doc-platform-card:hover {
+  text-decoration: none;
+  border-color: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.doc-card strong,
+.doc-link-card strong,
+.doc-platform-card strong,
+.doc-callout strong {
+  display: block;
+  margin-bottom: 0.45rem;
+  color: #ffffff;
+}
+
+.doc-chip-row {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.doc-chip {
+  padding: 0.9rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.doc-chip span {
+  display: block;
+  margin-top: 0.25rem;
+  color: rgba(233, 240, 249, 0.72);
+  font-size: 0.92rem;
+}
+
+.doc-callout {
+  margin-top: 1.5rem;
+}
+
+@media (max-width: 996px) {
+  .repo-pill span {
+    display: none;
+  }
+}
