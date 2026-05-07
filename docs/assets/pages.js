@@ -1,4 +1,8 @@
-const releaseDateFormatter = new Intl.DateTimeFormat(document.documentElement.lang || 'en', {
+const pageLanguage = document.documentElement.lang && document.documentElement.lang.trim()
+  ? document.documentElement.lang.trim()
+  : 'en'
+
+const releaseDateFormatter = new Intl.DateTimeFormat(pageLanguage, {
   dateStyle: 'medium',
 })
 
@@ -44,6 +48,7 @@ async function hydrateLatestRelease() {
   const releaseSummaryPrefix = document.body.dataset.releaseSummaryPrefix || 'Download the latest packages from'
   const assetSingular = document.body.dataset.assetSingular || 'file'
   const assetPlural = document.body.dataset.assetPlural || 'files'
+  const releaseDateFallback = document.body.dataset.releaseDateFallback || 'Unknown'
 
   try {
     const response = await fetch('https://api.github.com/repos/fandych/suora/releases/latest', {
@@ -63,7 +68,7 @@ async function hydrateLatestRelease() {
     const tagName = latestRelease.tag_name || 'latest'
 
     text('latest-release-tag', tagName)
-    text('latest-release-date', publishedAt ? releaseDateFormatter.format(new Date(publishedAt)) : '—')
+    text('latest-release-date', publishedAt ? releaseDateFormatter.format(new Date(publishedAt)) : releaseDateFallback)
     text('latest-release-assets', `${assetCount} ${assetCount === 1 ? assetSingular : assetPlural}`)
     text('latest-release-link-label', `${releaseLabelPrefix} ${tagName}`)
     text('release-summary-copy', `${releaseSummaryPrefix} ${tagName}.`)
