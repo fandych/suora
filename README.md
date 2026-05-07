@@ -5,16 +5,19 @@
 <h1 align="center">Suora 朔枢</h1>
 
 <p align="center">
-	<strong>基于 Electron、React 与 Vercel AI SDK 的本地 AI 工作台，围绕对话、文档、Agent、技能、流水线、定时任务、渠道接入与 MCP 集成构建。</strong>
+	<strong>本地优先的桌面 AI 工作台。</strong>
 	<br />
-	<strong>A local-first AI desktop workbench for chat, documents, agents, skills, pipelines, timers, channels, and MCP servers.</strong>
+	<strong>A local-first desktop AI workbench.</strong>
+</p>
+
+<p align="center">
+	Chat · Documents · Models · Agents · Skills · Pipeline · Timer · Channels · MCP · Settings
 </p>
 
 <p align="center">
 	<a href="https://fandych.github.io/suora/"><img alt="Docs" src="https://img.shields.io/badge/docs-homepage-0f766e?style=flat-square" /></a>
 	<a href="https://github.com/fandych/suora/releases"><img alt="Release" src="https://img.shields.io/github/v/release/fandych/suora?display_name=tag&style=flat-square" /></a>
 	<a href="https://github.com/fandych/suora/releases"><img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-c86a3a?style=flat-square" /></a>
-	<a href="https://fandych.github.io/suora/"><img alt="GitHub Pages" src="https://img.shields.io/badge/github%20pages-live-201813?style=flat-square" /></a>
 </p>
 
 <p align="center">
@@ -24,307 +27,99 @@
 	·
 	<a href="https://github.com/fandych/suora/blob/main/FEATURES.md"><strong>Features</strong></a>
 	·
-	<a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md"><strong>Technical docs</strong></a>
+	<a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md"><strong>Technical Docs</strong></a>
 </p>
 
-<p align="center">
-	Chat · Documents · Models · Agents · Skills · Pipeline · Timer · Channels · MCP · Settings
-</p>
+## What Suora Is / 它是什么
 
-## At A Glance / 快速了解
+Suora is an Electron-based AI workbench for local knowledge work, automation, and integrations.
 
-| Topic | Summary |
+Suora 不是单一聊天窗口，而是一个把对话、文档、Agent、技能、流水线、定时任务、渠道接入和 MCP 集成放在同一个桌面应用中的工作台。
+
+## Current Product Surface
+
+| Module | Current role |
 | --- | --- |
-| What It Is | Suora is a desktop AI workbench that combines chat, knowledge work, automation, integrations, and MCP connectivity in one local-first application. |
-| Current Surface | Chat, Documents, Models, Agents, Skills, Pipeline, Timer, Channels, MCP, and Settings are already implemented as first-class modules. |
-| Start Here | Open the [docs homepage](https://fandych.github.io/suora/), download the latest build from [Releases](https://github.com/fandych/suora/releases), then configure at least one model provider in the app. |
+| Chat | Conversations, attachments, tool calls, and pipeline commands |
+| Documents | Local notes, folders, backlinks, graph, and chat context |
+| Models | Provider setup, model enablement, testing, and compare |
+| Agents | Built-in and custom agents with testing and versioning |
+| Skills | Installed skills, registry browsing, `SKILL.md` editing, and import/export |
+| Pipeline | Multi-step agent workflows with history and Mermaid preview |
+| Timer | Once / interval / cron schedules |
+| Channels | External messaging integrations and reply routing |
+| MCP | MCP server configuration |
+| Settings | Preferences, security, data, logs, and system diagnostics |
 
-| 主题 | 说明 |
-| --- | --- |
-| 它是什么 | Suora 是一个本地优先的桌面 AI 工作台，把对话、知识管理、自动化、渠道接入和 MCP 连接整合在同一个应用里。 |
-| 当前模块 | Chat、Documents、Models、Agents、Skills、Pipeline、Timer、Channels、MCP、Settings 都已经是实际可用的一等模块。 |
-| 如何开始 | 先看 [文档首页](https://fandych.github.io/suora/)，再从 [Releases](https://github.com/fandych/suora/releases) 下载最新版本，安装后先配置至少一个模型提供商。 |
+## Why It Feels Different
 
-## 项目概览
+- local-first desktop workspace instead of a browser-only shell
+- chat, documents, automation, and integrations in one app
+- multi-provider model strategy with BYOK and local-model support
+- built-in agents, skills, pipelines, timers, channels, and MCP as real product modules
 
-Suora 当前代码实现的是一个桌面端 AI 工作台，而不是单一聊天窗口。应用采用多页面工作台结构，用户可以在同一套本地数据与安全策略下完成以下工作：
+## Get Started
 
-- 在聊天页与不同模型、Agent 进行多轮对话
-- 在文档页维护分组文档、文件夹层级、反向链接与图谱视图
-- 在流水线页编排多步骤 Agent Pipeline，并保存执行历史
-- 在模型页管理多家 LLM 提供商、模型参数与连通性测试
-- 在 Agent 页创建自定义 Agent、测试 Agent、导入导出与版本快照
-- 在技能页管理已安装技能、浏览注册表技能、配置技能源
-- 在定时器页创建单次、间隔、Cron 任务，并触发通知、Agent 提示词或流水线
-- 在渠道页接入企业微信、公众号、小程序、飞书、钉钉、Slack、Telegram、Discord、Teams 与自定义 Webhook
-- 在 MCP 页配置 Model Context Protocol 服务器
-- 在设置页统一管理主题、语言、安全、语音、数据、日志与系统诊断
+### Download
 
-## 当前实现的核心能力
+Get the latest build from:
 
-### 多模型与提供商
+- <https://github.com/fandych/suora/releases/latest>
 
-当前代码内置支持以下 provider 类型：
-
-- `anthropic`
-- `openai`
-- `google`
-- `ollama`
-- `deepseek`
-- `zhipu`
-- `minimax`
-- `groq`
-- `together`
-- `fireworks`
-- `perplexity`
-- `cohere`
-- `openai-compatible`
-
-模型配置按“提供商配置 -> 启用模型 -> 每模型参数”组织，支持：
-
-- API Key 与 Base URL 配置
-- 连接测试
-- 每个模型单独设置 `temperature` 与 `maxTokens`
-- 比较视图查看启用模型
-- Ollama 本地模式默认走本机端点
-
-### 内置 Agent
-
-当前内置 1 个默认助手和 6 个专业 Agent：
-
-| Agent | 定位 | 典型技能 |
-| --- | --- | --- |
-| Assistant | 通用问答与日常任务 | 自动继承可用工具 |
-| Code Expert | 代码实现、调试、重构 | filesystem, shell, git, code-analysis |
-| Writing Strategist | 文档、内容、改写 | filesystem, web, utilities |
-| Research Analyst | 调研、比较、总结 | web, memory, utilities |
-| Security Auditor | 安全审计、风险分析 | filesystem, code-analysis, web |
-| Data Analyst | 数据分析、SQL、指标 | filesystem, shell, utilities, memory |
-| DevOps Expert | 部署、自动化、运维 | shell, filesystem, git, event-automation |
-
-Agent 支持：
-
-- 自定义系统提示词、颜色、头像、回复风格
-- 模型绑定与最大轮次限制
-- 技能分配
-- `allowedTools` / `disallowedTools`
-- 自动学习与 Agent 私有记忆
-- 版本快照与回滚
-- JSON 导入导出
-
-### 技能系统
-
-当前技能系统以 `SKILL.md` 为中心，支持：
-
-- 已安装技能列表
-- 注册表浏览与安装预览
-- 自定义技能编辑器
-- 本地导入单个 `SKILL.md` 或整个技能目录
-- 技能打包导出
-- 技能源管理
-- 从工作区与外部目录自动加载技能
-
-技能内容与 Claude Code 风格对齐，重点是“提示词能力层”，而不是在文档里重复声明工具白名单。
-
-### 聊天工作台
-
-聊天页当前支持的用户可见能力包括：
-
-- 多会话标签与会话列表
-- 附件发送：图片、文件、音频
-- Markdown、数学公式、代码块渲染
-- 工具调用状态展示
-- 桌面端通过 Electron 主进程代理模型 HTTP 请求，兼容受限网络或浏览器侧不可直连的 provider
-- 失败重试
-- 消息编辑、删除、置顶、分支对话
-- 回复反馈（赞/踩）
-- 语音朗读
-- 命令面板
-- 会话级模型与 Agent 选择
-- 聊天内触发 Pipeline 命令
-
-### 文档工作台
-
-文档页当前不是占位页面，而是完整的本地文档区，支持：
-
-- 文档组
-- 嵌套文件夹与文档
-- Markdown 所见即所得编辑
-- 数学公式与 Mermaid
-- 文档搜索
-- 反向链接与引用分析
-- 图谱视图
-- 图谱摘要与 Related Notes 侧栏，从引用和共享标签继续展开关联文档
-- 将当前分组导出为 Graphify-ready 本地语料目录，包含 `docs/`、`manifest.json` 与 Suora 图谱预览
-- 选中文档作为聊天上下文
-
-### Pipeline 与自动化
-
-流水线页支持：
-
-- 多步骤 Agent Pipeline 编排
-- 步骤级重试、超时、条件执行
-- 输出裁剪与变量导出
-- 预算限制：总耗时、总 Token、最大步数
-- Mermaid 预览与源码
-- 执行历史与详情回放
-- JSON 导入导出
-- 在聊天中通过 `/pipeline` 命令运行已保存流水线
-
-定时器页支持：
-
-- `once`
-- `interval`
-- `cron`
-
-定时器动作支持：
-
-- 桌面通知
-- 触发 Agent Prompt
-- 触发已保存 Pipeline
-
-### 渠道接入
-
-当前代码中的渠道平台枚举为：
-
-- 企业微信 `wechat`
-- 微信公众号 `wechat_official`
-- 微信小程序 `wechat_miniprogram`
-- 飞书 `feishu`
-- 钉钉 `dingtalk`
-- Slack `slack`
-- Telegram `telegram`
-- Discord `discord`
-- Microsoft Teams `teams`
-- 自定义渠道 `custom`
-
-渠道能力包括：
-
-- Webhook 与 Stream 两种接入模式
-- 渠道级 Agent 绑定
-- 自动回复开关
-- 白名单聊天对象
-- 消息历史、用户列表、健康状态、调试视图
-- 本地 Webhook 服务地址展示
-
-### MCP 与扩展
-
-当前实现已包含 MCP 服务器配置面板，支持：
-
-- 添加与编辑 MCP 服务器配置
-- 状态跟踪
-- 与 Agent 工具体系集成
-
-此外，应用还支持：
-
-- 外部技能 / Agent 目录自动加载
-- 已安装插件运行时恢复
-- 环境变量管理
-- SMTP 邮件配置
-- 网络代理设置
-
-## 首次使用
-
-应用首次启动会显示 5 步引导：
-
-1. Welcome
-2. Configure a Model Provider
-3. Meet Your Agents
-4. Explore Skills
-5. You're All Set
-
-如果跳过引导，可在 `Settings -> System` 中重新运行。
-
-推荐上手顺序：
-
-1. 在 Models 页面添加 provider 配置并启用至少一个模型
-2. 在 Chat 页面选择默认 Agent 与模型
-3. 在 Skills 页面确认需要的技能已启用
-4. 在 Documents 页面建立你的本地知识区
-5. 在 Pipeline 与 Timer 页面配置自动化流程
-6. 如果需要跨端使用，再到 Channels 页面接入消息平台
-
-## 安装与开发
-
-### 环境要求
-
-- Node.js 18+
-- npm
-- Windows、macOS 或 Linux 桌面环境
-
-### 本地开发
+### Run from source
 
 ```bash
 npm install
 npm run dev
 ```
 
-### 构建与打包
+### First useful setup order
+
+1. Configure at least one model in `Models`
+2. Start a conversation in `Chat`
+3. Create a local knowledge area in `Documents`
+4. Add automation in `Pipeline` and `Timer`
+5. Connect external channels only when needed
+
+## Documentation Map
+
+The repo now keeps a smaller maintained documentation set:
+
+| Doc | Purpose |
+| --- | --- |
+| [FEATURES.md](./FEATURES.md) | Short capability index |
+| [docs/user/USER_GUIDE_ZH.md](./docs/user/USER_GUIDE_ZH.md) | Primary Chinese user guide |
+| [docs/user/USER_GUIDE_EN.md](./docs/user/USER_GUIDE_EN.md) | Primary English user guide |
+| [docs/technical/TECHNICAL_DOC_ZH.md](./docs/technical/TECHNICAL_DOC_ZH.md) | Primary Chinese technical reference |
+| [docs/technical/TECHNICAL_DOC_EN.md](./docs/technical/TECHNICAL_DOC_EN.md) | Primary English technical reference |
+| [docs/TESTING.md](./docs/TESTING.md) | Testing and validation notes |
+| [docs/CHANNEL_INTEGRATION.md](./docs/CHANNEL_INTEGRATION.md) | Channel setup and runtime notes |
+| [docs/requirements.md](./docs/requirements.md) | Scope and requirements baseline |
+
+GitHub Pages is built from `website/` with Docusaurus and publishes `website/build`.
+
+## Development
+
+### Common commands
 
 ```bash
+npm install
+npm run dev
 npm run build
 npm run preview
 npm run package
-```
-
-### 质量检查
-
-```bash
 npm run lint
 npm run type-check
 npm run test:run
 npm run test:e2e
 ```
 
-### 发布与 Pages
+## Security Notes
 
-当前仓库的发布路径分成两条：
-
-- GitHub Pages 通过 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) 构建 `website/` 下的 Docusaurus 站点，并发布 `website/build`。
-- GitHub Release 发布后会触发 [`.github/workflows/release.yml`](./.github/workflows/release.yml)，自动构建并上传 Windows、macOS、Linux 安装包。
-
-建议发布顺序：
-
-1. 更新 `package.json` 版本号，并确认需要公开的文档内容已经同步到 `README.md`、`docs/user/`、`docs/technical/` 或 `website/docs/`。
-2. 运行 `npm run lint`、`npm run type-check`、`npm run test:run`，必要时补跑 Electron 真窗验证。
-3. 如果改动了文档站，进入 `website/` 运行 `npm run build`，确认 Docusaurus 能正常构建。
-4. 提交并推送到 `main`，让 Pages workflow 自动刷新文档站。
-5. 基于同一提交创建并发布 GitHub Release，让 release workflow 构建并上传桌面安装包。
-
-## 安全与数据
-
-当前代码中的安全与数据行为有几个关键点：
-
-- API Key 优先写入系统安全存储
-- 如果系统 Keyring 不可用，API Key 只保存在内存中，重启后需要重新输入
-- 文件系统访问可切换为工作区沙箱或放宽模式
-- 支持允许目录列表与危险命令 denylist
-- 可要求每次工具执行前进行确认
-- 数据页支持导出和导入 `agents`、`skills`、`sessions`、`providerConfigs`、`externalDirectories`
-- 可设置会话历史保留天数，也可清空全部聊天历史
-
-## 文档索引
-
-当前文档已经收敛为“主文档 + 专题补充”两层，建议按下面顺序阅读：
-
-| 类别 | 入口文档 | 说明 |
-| --- | --- | --- |
-| 功能总览 | [FEATURES.md](./FEATURES.md) | 当前代码对应的模块清单与用户可见能力 |
-| 用户文档 | [docs/user/USER_GUIDE_ZH.md](./docs/user/USER_GUIDE_ZH.md) | 中文主用户指南；英文版位于 `docs/user/USER_GUIDE_EN.md` |
-| 技术文档 | [docs/technical/TECHNICAL_DOC_ZH.md](./docs/technical/TECHNICAL_DOC_ZH.md) | 中文主技术参考；英文版位于 `docs/technical/TECHNICAL_DOC_EN.md` |
-| 渠道专题 | [docs/CHANNEL_INTEGRATION.md](./docs/CHANNEL_INTEGRATION.md) | 渠道平台、Webhook/Stream 配置与运行面板说明 |
-| 测试与质量 | [docs/TESTING.md](./docs/TESTING.md) | 当前测试命令、覆盖面与 E2E 边界 |
-| 范围与状态 | [docs/requirements.md](./docs/requirements.md) | 当前产品范围基线与关键需求 |
-| 文档站入口 | [website/docs/intro.mdx](./website/docs/intro.mdx) | GitHub Pages / Docusaurus 的公开入口页源文件 |
-
-已删除的旧文档类型包括：
-
-- 一次性升级报告
-- 旧的实现完成总结
-- 历史专项审计文档
-- 未接入站点或 README 的多语言副本
-
-后续请优先维护上表中的主文档，避免再次扩散出大量平行、重复、难同步的 Markdown 文件。
+- API keys prefer OS-backed secure storage
+- if secure storage is unavailable, keys remain in memory only
+- filesystem access can be sandboxed
+- tool execution can require confirmation
 
 ## License
 

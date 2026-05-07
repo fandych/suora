@@ -1,27 +1,40 @@
-# Suora Feature Reference
+# Suora Feature Index
 
-This document summarizes the end-user visible capabilities that are implemented in the current codebase.
+This file is the shortest implementation-backed capability map for the current product. For detailed usage and architecture, continue to the primary manuals in `docs/`.
 
-## Workbench Modules
+## Product Shape
 
-Suora currently ships with these primary modules:
+Suora is a local-first desktop AI workbench, not a single-chat shell. The current app ships these first-class modules:
 
-| Module | What users can do |
+- Chat
+- Documents
+- Pipeline
+- Models
+- Agents
+- Skills
+- Timer
+- Channels
+- MCP
+- Settings
+
+## Core Workbench Capabilities
+
+| Area | Current capability surface |
 | --- | --- |
-| Chat | Run multi-turn conversations with selectable agents and models, send attachments, review tool calls, branch conversations, pin messages, retry failures, and trigger pipelines from chat |
-| Documents | Organize markdown documents into groups and folders, edit with WYSIWYG tools, render Mermaid and math, search notes, inspect backlinks, expand related notes through the local graph, and export a Graphify-ready corpus bundle |
-| Pipeline | Design saved multi-step agent pipelines with variables, budgets, retries, conditions, history, and Mermaid previews |
-| Models | Configure providers, test connectivity, enable models, tune per-model parameters, and compare available models |
-| Agents | Create, duplicate, test, export, import, and version agents with custom prompts, tool policy, memory, and model routing |
-| Skills | Manage installed skills, browse registry skills, edit SKILL.md-based skills, add registry sources, and import/export skill bundles |
-| Timer | Schedule one-time, interval, or cron jobs that notify, prompt an agent, or run a saved pipeline |
-| Channels | Connect chat platforms, assign reply agents, choose webhook or stream transport, and inspect runtime status, messages, users, health, and debug data |
-| MCP | Configure Model Context Protocol servers and track their connection state |
-| Settings | Manage appearance, security, voice, shortcuts, data, logs, onboarding, runtime metrics, and crash logs |
+| Chat | Multi-session conversations, attachments, model/agent switching, tool-call visibility, branching, retry, citations, read-aloud, and command-palette entry points |
+| Documents | Local document groups, nested folders, markdown editing, Mermaid, math, search, backlinks, graph view, related-note expansion, and chat context attachment |
+| Pipeline | Saved multi-step agent workflows with retries, timeouts, budgets, `runIf`, output transforms, exported variables, history, and Mermaid preview |
+| Models | Provider configuration, connectivity testing, enabled model lists, per-model parameters, and compare view |
+| Agents | Built-in and custom agents with prompts, model binding, tool policy, skills, memories, testing, import/export, duplication, and version snapshots |
+| Skills | Installed-skill management, registry browsing, `SKILL.md` editing, source management, import/export, and auto-loading from workspace or external directories |
+| Timer | Once, interval, and cron schedules that can notify, prompt an agent, or run a saved pipeline |
+| Channels | Messaging-channel configuration with webhook/stream transport, reply-agent routing, allowlists, history, users, health, and debug panels |
+| MCP | MCP server configuration and connection-state tracking |
+| Settings | General, security, voice, shortcuts, data, logs, and system sections |
 
-## AI Provider Support
+## Providers and Agents
 
-The current model configuration layer supports these provider types:
+### Runtime provider support
 
 - Anthropic
 - OpenAI
@@ -35,101 +48,27 @@ The current model configuration layer supports these provider types:
 - Fireworks
 - Perplexity
 - Cohere
-- Generic OpenAI-compatible endpoints
+- OpenAI-compatible endpoints
 
-Provider configurations support API keys, custom base URLs, connectivity tests, enabled model lists, and per-model `temperature` / `maxTokens` settings.
+### Built-in agents
 
-## Built-in Agents
+- Assistant
+- Code Expert
+- Writing Strategist
+- Research Analyst
+- Security Auditor
+- Data Analyst
+- DevOps Expert
 
-The current store initializes these built-in agents:
+## Automation and Integration
 
-| Agent | Positioning |
-| --- | --- |
-| Assistant | General-purpose default assistant |
-| Code Expert | Implementation, debugging, refactoring, builds, tests, and code review |
-| Writing Strategist | Drafting, rewriting, structure, summaries, and polished copy |
-| Research Analyst | Research, source comparison, synthesis, and uncertainty tracking |
-| Security Auditor | Threat review, permissions, secrets, and safe implementation guidance |
-| Data Analyst | Data interpretation, SQL, metrics, and experiment analysis |
-| DevOps Expert | CI/CD, deployment, infrastructure, automation, and operational troubleshooting |
+### Pipelines and timers
 
-Agents support custom prompts, model binding, temperature, max turns, permissions mode, allow/deny tool lists, auto-learn, local memories, testing, duplication, import/export, and version snapshots.
+- Chat can trigger saved pipelines with `/pipeline` commands
+- Timers support once / interval / cron scheduling
+- Timer actions include desktop notifications, agent prompts, and saved pipelines
 
-## Skills and Extensibility
-
-The implemented skill workflow includes:
-
-- Installed skill management
-- Registry browsing and install previews
-- Source management for skill registries
-- `SKILL.md` editing with metadata, content, and preview tabs
-- Import from a single markdown file or a complete skill folder
-- Export as markdown or zip archive
-- Auto-loading from workspace and external directories
-
-External directory loading supports both `skills` and `agents` directories.
-
-## Chat Experience
-
-The current chat UI supports:
-
-- Multi-session chat with tabs and session list
-- Session-level model and agent overrides
-- Image, file, and audio attachments
-- Streaming responses
-- Tool-call timelines and output previews
-- Markdown rendering with KaTeX and fenced code blocks
-- Inline citations
-- Message edit, delete, pin, feedback, branch, and retry flows
-- Read-aloud for assistant answers when speech synthesis is available
-- A command palette for quick navigation and opening entities
-- Chat commands for saved pipelines such as `/pipeline list` and `/pipeline run`
-
-## Documents and Knowledge Work
-
-The document workbench currently supports:
-
-- Document groups
-- Nested folders and documents
-- Rich markdown editing
-- Mermaid diagrams and math blocks
-- Search and filtering
-- Backlinks and references
-- Document graph visualization
-- Graph summary and related-note expansion from references and shared tags
-- Exporting a document group as a local Graphify-ready corpus bundle with `docs/`, `manifest.json`, and a Suora graph preview
-- Attaching document context to chats
-
-## Automation
-
-### Pipelines
-
-Saved pipelines support:
-
-- Multiple agent steps
-- Retry count and backoff strategy
-- Timeout per step
-- Output transforms
-- Named exported variables
-- `runIf` conditions
-- Run budgets for time, tokens, and step count
-- Execution history with step-level usage and status
-
-### Timers
-
-Timers support:
-
-- Once schedules
-- Interval schedules
-- Cron schedules
-- Notify actions
-- Agent prompt actions
-- Saved pipeline actions
-- Retry and missed-run policy metadata
-
-## Channel Integrations
-
-The `ChannelPlatform` type currently includes:
+### Channel platforms
 
 - WeChat Work
 - WeChat Official Account
@@ -142,34 +81,20 @@ The `ChannelPlatform` type currently includes:
 - Microsoft Teams
 - Custom channels
 
-Channel configuration supports webhook and stream transport modes, auto-reply, per-channel agent routing, chat allowlists, message history, user tracking, health status, and debug views.
+## Security and Data
 
-## Settings, Security, and Data
+- API keys prefer OS-backed secure storage
+- If secure storage is unavailable, keys stay in memory only
+- Filesystem access can be sandboxed
+- Allowed directories and blocked shell patterns are configurable
+- Tool execution can require confirmation
+- Data import/export covers agents, skills, sessions, provider configs, and external directories
 
-Implemented settings sections are:
+## Read Next
 
-- General
-- Security
-- Voice
-- Shortcuts
-- Data
-- Logs
-- System
-
-Key user-visible security and operations features:
-
-- Secure OS-backed API key storage with in-memory fallback when secure storage is unavailable
-- Filesystem sandbox modes
-- Allowed directory allowlist
-- Blocked shell command patterns
-- Optional confirmation before every tool call
-- Environment variable manager with secret masking
-- Proxy configuration
-- SMTP email configuration and test connection
-- Data export/import for agents, skills, sessions, provider configs, and external directories
-- History retention and destructive cleanup actions
-- Runtime metrics and crash log viewer
-
-## Notes on Scope
-
-This document intentionally tracks what is visible in the current implementation. Older docs that mention unsupported agent lists, legacy settings paths, or fewer channel platforms should be considered outdated.
+- [User guide (ZH)](./docs/user/USER_GUIDE_ZH.md)
+- [User guide (EN)](./docs/user/USER_GUIDE_EN.md)
+- [Technical docs (ZH)](./docs/technical/TECHNICAL_DOC_ZH.md)
+- [Technical docs (EN)](./docs/technical/TECHNICAL_DOC_EN.md)
+- [Testing guide](./docs/TESTING.md)
+- [Channel guide](./docs/CHANNEL_INTEGRATION.md)
