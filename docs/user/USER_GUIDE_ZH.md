@@ -46,11 +46,11 @@ npm run dev
 
 首次打开应用时会看到 5 步引导：
 
-1. Welcome
-2. Configure a Model Provider
-3. Meet Your Agents
-4. Explore Skills
-5. You're All Set
+1. 欢迎
+2. 配置模型提供商
+3. 认识你的 Agent
+4. 浏览技能
+5. 准备完成
 
 如果跳过引导，可以在 `设置 -> System` 里重新运行。
 
@@ -58,7 +58,7 @@ npm run dev
 
 为了尽快进入稳定可用状态，建议按下面顺序完成首次配置：
 
-1. 在 **Models** 中添加一个 provider 或本地 Ollama 端点
+1. 在 **Models** 中添加一个提供商或本地 Ollama 端点
 2. 在 **Chat** 中选择默认模型与默认 Agent
 3. 在 **Skills** 中确认已启用需要的技能
 4. 在 **Documents** 中创建至少一个文档组，建立你的本地知识区
@@ -121,9 +121,9 @@ npm run dev
 - MCP
 - Pipeline
 
-## 5. 模型与 Provider
+## 5. 模型与提供商
 
-当前支持的 provider 类型有：
+当前支持的提供商类型有：
 
 - Anthropic
 - OpenAI
@@ -137,18 +137,18 @@ npm run dev
 - Fireworks
 - Perplexity
 - Cohere
-- OpenAI-compatible
+- OpenAI 兼容端点
 
 ### 模型页当前支持的操作
 
-- 新建 provider 配置
-- 选择 provider preset
+- 新建提供商配置
+- 选择提供商预设
 - 输入 API Key 和 Base URL
 - 测试连接
 - 启用或禁用具体模型
 - 为每个模型设置 `temperature` 与 `maxTokens`
 - 查看已启用模型清单
-- 在 Compare 视图对比模型
+- 在比较视图中对比模型
 
 如果使用 Ollama，本地端点默认走 `http://localhost:11434/v1`。
 
@@ -344,7 +344,7 @@ API Key 会优先写入系统安全存储；如果系统 Keyring 不可用或加
 
 ### 模型没有回复或报连接错误
 
-- 先检查 provider 的 API Key、Base URL 和网络连通性
+- 先检查提供商的 API Key、Base URL 和网络连通性
 - 如果是 Ollama，确认本地端点是否在运行
 - 在 Models 中重新做连接测试
 
