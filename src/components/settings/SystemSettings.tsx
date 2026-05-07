@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { sanitizeReleaseNotesHtml } from '@/services/releaseNotes'
 import { useAppStore } from '@/store/appStore'
 import { getElectron } from './shared'
 import {
@@ -139,6 +140,7 @@ export function SystemSettings() {
   const releaseTag = updaterState?.latestVersion ? `v${updaterState.latestVersion}` : null
   const releaseDate = updaterState?.releaseDate
   const releasePageUrl = releaseTag ? `https://github.com/fandych/suora/releases/tag/${releaseTag}` : null
+  const releaseNotesHtml = updaterState?.releaseNotes ? sanitizeReleaseNotesHtml(updaterState.releaseNotes) : ''
   const resolvedDownloadUrl = (() => {
     const downloadUrl = updaterState?.downloadUrl?.trim()
     if (!downloadUrl) return null
@@ -146,6 +148,18 @@ export function SystemSettings() {
     if (!releaseTag) return null
     return `https://github.com/fandych/suora/releases/download/${releaseTag}/${downloadUrl.replace(/^\/+/, '')}`
   })()
+  const releaseAssetMissing = Boolean(
+    resolvedDownloadUrl
+      && updaterState?.status === 'error'
+      && /status\s+404/i.test(updaterState.error || ''),
+  )
+  const manualUpdateUrl = releaseAssetMissing ? releasePageUrl : (resolvedDownloadUrl || releasePageUrl)
+  const manualUpdateLabel = releaseAssetMissing || !resolvedDownloadUrl
+    ? t('settings.openReleasePage', 'Open Release Page')
+    : t('settings.downloadUpdate', 'Download Update')
+  const releaseLinkTitle = releaseAssetMissing || !resolvedDownloadUrl
+    ? t('settings.releaseSource', 'Release Source')
+    : t('settings.downloadUrl', 'Download URL')
 
   const updateStatusText = (() => {
     switch (updaterState?.status) {
@@ -288,17 +302,15 @@ export function SystemSettings() {
                     {installingUpdate ? t('settings.installingUpdate', 'Installing…') : t('settings.installUpdate', 'Install Update')}
                   </button>
                 )}
-                {hasNewerVersion && updaterState?.status !== 'downloaded' && (resolvedDownloadUrl || releasePageUrl) && (
+                {hasNewerVersion && updaterState?.status !== 'downloaded' && manualUpdateUrl && (
                   <button
                     type="button"
-                    onClick={() => void handleOpenUpdateUrl(resolvedDownloadUrl || releasePageUrl)}
+                    onClick={() => void handleOpenUpdateUrl(manualUpdateUrl)}
                     disabled={checkingUpdates || installingUpdate}
                     className={settingsSecondaryButtonClass}
                   >
                     <IconifyIcon name="ui-download" size={14} color="currentColor" />
-                    {resolvedDownloadUrl
-                      ? t('settings.downloadUpdate', 'Download Update')
-                      : t('settings.openReleasePage', 'Open Release Page')}
+                    {manualUpdateLabel}
                   </button>
                 )}
               </div>
@@ -319,7 +331,7 @@ export function SystemSettings() {
               </div>
             )}
 
-            {(releaseDate || resolvedDownloadUrl || releasePageUrl) && (
+            {(releaseDate || manualUpdateUrl) && (
               <div className="grid gap-3 md:grid-cols-2">
                 {releaseDate && (
                   <div className={settingsSurfaceCardClass}>
@@ -327,21 +339,22 @@ export function SystemSettings() {
                     <div className="mt-2 text-[12px] font-mono text-text-primary">{new Date(releaseDate).toLocaleString()}</div>
                   </div>
                 )}
-                {(resolvedDownloadUrl || releasePageUrl) && (
+                {manualUpdateUrl && (
                   <div className={settingsSurfaceCardClass}>
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">
-                      {resolvedDownloadUrl ? t('settings.downloadUrl', 'Download URL') : t('settings.releaseSource', 'Release Source')}
-                    </div>
-                    <div className="mt-2 break-all text-[12px] font-mono text-text-primary">{resolvedDownloadUrl || releasePageUrl}</div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{releaseLinkTitle}</div>
+                    <div className="mt-2 break-all text-[12px] font-mono text-text-primary">{manualUpdateUrl}</div>
                   </div>
                 )}
               </div>
             )}
 
-            {updaterState?.releaseNotes && (
+            {releaseNotesHtml && (
               <div className={settingsSurfaceCardClass}>
                 <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.releaseNotes', 'Release Notes')}</div>
-                <pre className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-6 text-text-secondary">{updaterState.releaseNotes}</pre>
+                <div
+                  className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-6 text-text-secondary [&_a]:font-medium [&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:border-accent/20 [&_blockquote]:pl-3 [&_code]:rounded-md [&_code]:bg-surface-2/75 [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:text-sm [&_h1]:font-semibold [&_h1]:text-text-primary [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-text-primary [&_h3]:text-[12px] [&_h3]:font-semibold [&_h3]:text-text-primary [&_li]:ml-4 [&_ol]:list-decimal [&_p+p]:mt-2 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-surface-2/75 [&_pre]:p-3 [&_ul]:list-disc"
+                  dangerouslySetInnerHTML={{ __html: releaseNotesHtml }}
+                />
               </div>
             )}
 
