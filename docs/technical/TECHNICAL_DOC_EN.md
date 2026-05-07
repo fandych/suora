@@ -2,6 +2,8 @@
 
 This document describes the current implementation in the repository. It is intended as a code-backed architecture reference for contributors and maintainers.
 
+After the documentation cleanup, this file and `docs/technical/TECHNICAL_DOC_ZH.md` are the long-lived primary technical manuals. Focused topics such as testing, channel setup, and scope boundaries remain in `docs/TESTING.md`, `docs/CHANNEL_INTEGRATION.md`, and `docs/requirements.md`.
+
 ## 1. System Overview
 
 Suora is an Electron desktop workbench built around a React renderer and a privileged Electron main process. The current product surface is organized into these major workbench areas:
@@ -85,6 +87,23 @@ e2e/
   Playwright end-to-end tests
 ```
 
+### Documentation layout kept after cleanup
+
+```text
+README.md                         repository entry and release notes
+docs/
+  user/USER_GUIDE_ZH.md          primary Chinese user guide
+  user/USER_GUIDE_EN.md          primary English user guide
+  technical/TECHNICAL_DOC_ZH.md  primary Chinese technical doc
+  technical/TECHNICAL_DOC_EN.md  primary English technical doc
+  CHANNEL_INTEGRATION.md         focused channel guide
+  TESTING.md                     focused testing guide
+  requirements.md                product scope baseline
+website/docs/                    GitHub Pages / Docusaurus public pages
+```
+
+The cleanup goal is to keep a small number of durable entry points instead of accumulating one-off reports, historical audits, and unmaintained language copies.
+
 ## 4. Technology Stack
 
 | Area | Technology |
@@ -94,7 +113,7 @@ e2e/
 | Build tooling | Vite 6 + electron-vite 5 |
 | Styling | Tailwind CSS 4 |
 | State | Zustand 5 |
-| Language | TypeScript 5.8 |
+| Language | TypeScript 5.9 |
 | AI runtime | Vercel AI SDK 6 |
 | Unit testing | Vitest |
 | End-to-end testing | Playwright |
@@ -146,6 +165,16 @@ The AI integration lives in `src/services/aiService.ts`.
 - Perplexity
 - Cohere
 - OpenAI-compatible endpoints
+
+### Keep runtime support separate from UI exposure
+
+When updating provider docs, distinguish among:
+
+1. runtime support in `src/services/aiService.ts`
+2. store-level provider presets and model-sync behavior
+3. the narrower set of options exposed in the model settings UI
+
+Do not flatten all three into one list.
 
 ### Key responsibilities of the AI service
 
@@ -212,6 +241,15 @@ Skills are prompt-based capability packages rather than low-level tool registrat
 - bundled resource trees next to `SKILL.md`
 
 The current code comments and UI behavior make an important distinction: built-in tools remain available through the tool system, while skills add domain-specific instructions and packaged resources.
+
+### Important implementation anchors
+
+For agent and skill documentation, verify against:
+
+- `src/store/appStore.ts`
+- `src/services/skillRegistry.ts`
+- `src/services/skillMarketplace.ts`
+- `src/components/skills/SkillsLayout.tsx`
 
 ## 8. Documents, Pipelines, and Timers
 
@@ -296,6 +334,15 @@ The integrations module currently exposes MCP server management, including:
 - connection status tracking
 - integration of MCP capability into agent execution
 
+### Electron security boundaries
+
+When documenting Electron-facing behavior, keep these facts intact:
+
+- `contextIsolation` stays enabled
+- renderer code does not directly expose privileged Node.js APIs
+- privileged operations flow through `electron/preload.ts` and `electron/main.ts`
+- secure-storage failures must surface a clear user warning
+
 ## 10. IPC and Security Model
 
 Suora keeps Electron context isolation enabled and routes privileged operations through the preload bridge.
@@ -376,6 +423,12 @@ The repository contains both unit and UI-oriented tests. Based on the present wo
 - database helpers
 - Playwright end-to-end smoke coverage
 
+### Documentation and site validation notes
+
+- when you change repository markdown, verify links and cross-references
+- when you change `website/` docs, validate the Docusaurus build as well
+- Playwright currently covers renderer-focused smoke paths, not full Electron-window automation
+
 ## 14. Contributor Notes
 
 If you update architecture documentation in this repository, prefer code-backed statements over aspirational wording. In particular:
@@ -387,3 +440,9 @@ If you update architecture documentation in this repository, prefer code-backed 
 - avoid hard-coding counts for IPC channels or tools unless they are freshly verified
 
 That keeps the technical documentation aligned with the implementation rather than with historical drafts.
+
+The current primary-doc maintenance policy is:
+
+- keep only Chinese and English primary user guides
+- keep only Chinese and English primary technical guides
+- keep only a small number of focused supporting docs that are still referenced and maintained

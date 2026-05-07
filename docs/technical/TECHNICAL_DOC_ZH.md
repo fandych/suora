@@ -2,6 +2,8 @@
 
 本文档基于当前仓库实现编写，用作贡献者和维护者的代码对齐型架构参考。
 
+文档清理后，本文件与 `docs/technical/TECHNICAL_DOC_EN.md` 是长期维护的主技术文档；测试、渠道与产品范围等专题内容分别放在 `docs/TESTING.md`、`docs/CHANNEL_INTEGRATION.md` 与 `docs/requirements.md`。
+
 ## 1. 系统概览
 
 Suora 是一个基于 Electron 的本地 AI 工作台。当前版本由以下工作模块组成：
@@ -85,6 +87,23 @@ e2e/
   Playwright 端到端测试
 ```
 
+### 当前保留的文档结构
+
+```text
+README.md                         仓库入口与发布说明
+docs/
+  user/USER_GUIDE_ZH.md          中文主用户文档
+  user/USER_GUIDE_EN.md          英文主用户文档
+  technical/TECHNICAL_DOC_ZH.md  中文主技术文档
+  technical/TECHNICAL_DOC_EN.md  英文主技术文档
+  CHANNEL_INTEGRATION.md         渠道专题
+  TESTING.md                     测试专题
+  requirements.md                产品范围与需求基线
+website/docs/                    GitHub Pages / Docusaurus 公开文档页
+```
+
+这次清理的目标是把长期维护入口收敛到少数几个明确文档，避免继续积累一次性报告、历史专项审计和无人维护的多语言副本。
+
 ## 4. 技术栈
 
 | 领域 | 技术 |
@@ -94,7 +113,7 @@ e2e/
 | 构建工具 | Vite 6 + electron-vite 5 |
 | 样式系统 | Tailwind CSS 4 |
 | 状态管理 | Zustand 5 |
-| 语言 | TypeScript 5.8 |
+| 语言 | TypeScript 5.9 |
 | AI 运行时 | Vercel AI SDK 6 |
 | 单元测试 | Vitest |
 | 端到端测试 | Playwright |
@@ -146,6 +165,16 @@ AI 集成位于 `src/services/aiService.ts`。
 - Perplexity
 - Cohere
 - OpenAI-compatible
+
+### 运行时支持与 UI 暴露要分开理解
+
+维护 provider 相关文档时，要把三件事区分开：
+
+1. `src/services/aiService.ts` 中的运行时支持面
+2. store 中的 provider preset 与模型同步逻辑
+3. 模型设置 UI 中真正暴露给用户的编辑类型
+
+不要把这三层直接合并成同一张“provider 列表”。
 
 ### AI 服务职责
 
@@ -210,6 +239,15 @@ AI 集成位于 `src/services/aiService.ts`。
 - 管理与 `SKILL.md` 同目录的资源树
 
 当前代码注释和界面行为强调了一点：内置工具仍由工具系统提供，技能则负责增加领域知识、提示词和打包资源。
+
+### 关键实现锚点
+
+维护 Agent / Skill 相关说明时，优先核对：
+
+- `src/store/appStore.ts`
+- `src/services/skillRegistry.ts`
+- `src/services/skillMarketplace.ts`
+- `src/components/skills/SkillsLayout.tsx`
 
 ## 8. 文档、流水线与定时器
 
@@ -295,6 +333,15 @@ AI 集成位于 `src/services/aiService.ts`。
 - 连接状态追踪
 - 将 MCP 能力接入 Agent 执行链路
 
+### Electron 安全边界
+
+维护 Electron 相关说明时，要保留这些事实：
+
+- `contextIsolation` 保持启用
+- renderer 不直接暴露 Node.js 特权接口
+- 特权能力通过 `electron/preload.ts` 与 `electron/main.ts` 暴露
+- Secure Storage 不可用时必须向 UI 明确提示
+
 ## 10. IPC 与安全模型
 
 Suora 保持 Electron 的 context isolation，并通过 preload bridge 转发特权操作。
@@ -367,6 +414,12 @@ npm run test:e2e
 - 数据库辅助函数
 - Playwright 冒烟链路
 
+### 文档与站点验证建议
+
+- 如果修改的是仓库 Markdown，至少要检查链接和交叉引用是否仍然成立
+- 如果修改了 `website/` 下的 Docusaurus 页面，应该额外验证站点构建
+- Playwright 目前主要验证 renderer 冒烟路径，不应把它写成完整 Electron 窗口自动化
+
 ## 12. 维护建议
 
 如果你在这个仓库里更新技术文档，请优先写“代码已经实现的事实”，不要沿用历史方案描述。尤其建议直接对照：
@@ -377,3 +430,9 @@ npm run test:e2e
 - `src/components/settings/SettingsLayout.tsx` 中的真实设置分区
 
 除非刚刚核对过代码，否则不要在文档里写死 IPC 通道数、工具总数这类容易漂移的数字。
+
+另外，当前主文档维护策略是：
+
+- 主用户文档只保留中英文两份
+- 主技术文档只保留中英文两份
+- 专题文档只保留仍在被引用、且确有维护价值的少量文件

@@ -280,15 +280,16 @@ npm run test:e2e
 
 当前仓库的发布路径分成两条：
 
-- GitHub Pages 直接从仓库 `docs/` 目录发布，推送到 `main` 后会刷新文档首页。
+- GitHub Pages 通过 [`.github/workflows/pages.yml`](./.github/workflows/pages.yml) 构建 `website/` 下的 Docusaurus 站点，并发布 `website/build`。
 - GitHub Release 发布后会触发 [`.github/workflows/release.yml`](./.github/workflows/release.yml)，自动构建并上传 Windows、macOS、Linux 安装包。
 
 建议发布顺序：
 
-1. 更新 `package.json` 版本号，并同步 `docs/index.html` 中的回退版本快照。
+1. 更新 `package.json` 版本号，并确认需要公开的文档内容已经同步到 `README.md`、`docs/user/`、`docs/technical/` 或 `website/docs/`。
 2. 运行 `npm run lint`、`npm run type-check`、`npm run test:run`，必要时补跑 Electron 真窗验证。
-3. 提交并推送到 `main`，让 GitHub Pages 更新 `docs/` 首页。
-4. 基于同一提交创建并发布 GitHub Release，让 release workflow 构建并上传桌面安装包。
+3. 如果改动了文档站，进入 `website/` 运行 `npm run build`，确认 Docusaurus 能正常构建。
+4. 提交并推送到 `main`，让 Pages workflow 自动刷新文档站。
+5. 基于同一提交创建并发布 GitHub Release，让 release workflow 构建并上传桌面安装包。
 
 ## 安全与数据
 
@@ -304,21 +305,26 @@ npm run test:e2e
 
 ## 文档索引
 
-当前建议按下面顺序阅读：
+当前文档已经收敛为“主文档 + 专题补充”两层，建议按下面顺序阅读：
 
 | 类别 | 入口文档 | 说明 |
 | --- | --- | --- |
 | 功能总览 | [FEATURES.md](./FEATURES.md) | 当前代码对应的模块清单与用户可见能力 |
-| 用户文档 | [docs/user/USER_GUIDE_ZH.md](./docs/user/USER_GUIDE_ZH.md) | 中文用户指南；其他语言版本位于 `docs/user/` |
-| 技术文档 | [docs/technical/TECHNICAL_DOC_ZH.md](./docs/technical/TECHNICAL_DOC_ZH.md) | 中文技术参考；英文与其他语言版本位于 `docs/technical/` |
+| 用户文档 | [docs/user/USER_GUIDE_ZH.md](./docs/user/USER_GUIDE_ZH.md) | 中文主用户指南；英文版位于 `docs/user/USER_GUIDE_EN.md` |
+| 技术文档 | [docs/technical/TECHNICAL_DOC_ZH.md](./docs/technical/TECHNICAL_DOC_ZH.md) | 中文主技术参考；英文版位于 `docs/technical/TECHNICAL_DOC_EN.md` |
 | 渠道专题 | [docs/CHANNEL_INTEGRATION.md](./docs/CHANNEL_INTEGRATION.md) | 渠道平台、Webhook/Stream 配置与运行面板说明 |
 | 测试与质量 | [docs/TESTING.md](./docs/TESTING.md) | 当前测试命令、覆盖面与 E2E 边界 |
 | 范围与状态 | [docs/requirements.md](./docs/requirements.md) | 当前产品范围基线与关键需求 |
-| 实现总览 | [docs/IMPLEMENTATION_COMPLETE.md](./docs/IMPLEMENTATION_COMPLETE.md) | 当前实现状态与模块完成面概览 |
-| 差异与缺口 | [docs/comparison.md](./docs/comparison.md) | 与同类产品的形态对比 |
-| 差异与缺口 | [docs/UNIMPLEMENTED_FEATURES.md](./docs/UNIMPLEMENTED_FEATURES.md) | 当前仍待补强的能力边界 |
-| 升级记录 | [docs/UPGRADE_REPORT.md](./docs/UPGRADE_REPORT.md) | 测试、安全与发布侧的升级记录 |
-| 仓库说明 | [CLAUDE.md](./CLAUDE.md) | 面向贡献者与代码代理的仓库结构说明 |
+| 文档站入口 | [website/docs/intro.mdx](./website/docs/intro.mdx) | GitHub Pages / Docusaurus 的公开入口页源文件 |
+
+已删除的旧文档类型包括：
+
+- 一次性升级报告
+- 旧的实现完成总结
+- 历史专项审计文档
+- 未接入站点或 README 的多语言副本
+
+后续请优先维护上表中的主文档，避免再次扩散出大量平行、重复、难同步的 Markdown 文件。
 
 ## License
 
