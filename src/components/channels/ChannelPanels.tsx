@@ -2,8 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
-import { ChannelPlatformIcon } from './ChannelIcons'
-import { ChannelMessageBubble, normalizeChannelDirection } from './ChannelComponents'
+import { ChannelPlatformIcon, getPlatformDisplayName } from './ChannelIcons'
+import { ChannelMessageBubble, formatChannelRelativeTime, normalizeChannelDirection } from './ChannelComponents'
 
 function PanelShell({
   eyebrow,
@@ -66,16 +66,6 @@ function StatusPill({ children, tone = 'neutral' }: { children: ReactNode; tone?
           : 'bg-surface-3 text-text-muted'
 
   return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${toneClass}`}>{children}</span>
-}
-
-function formatRelativeTime(value?: number) {
-  if (!value) return 'No activity yet'
-  const diff = Date.now() - value
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.max(1, Math.floor(diff / 60_000))}m ago`
-  if (diff < 86_400_000) return `${Math.max(1, Math.floor(diff / 3_600_000))}h ago`
-  if (diff < 604_800_000) return `${Math.max(1, Math.floor(diff / 86_400_000))}d ago`
-  return new Date(value).toLocaleDateString()
 }
 
 // ─── Channel Message History Panel ─────────────────────────────────
@@ -234,7 +224,7 @@ export function ChannelHealthMonitor({ singleChannelId }: { singleChannelId?: st
           isHealthy: false,
           lastCheckAt: Date.now(),
           errorCount: (channelHealth[channel.id]?.errorCount || 0) + 1,
-          lastError: 'Health check failed',
+          lastError: t('channels.healthCheckFailed', 'Health check failed'),
         })
       }
     }
@@ -299,7 +289,7 @@ export function ChannelHealthMonitor({ singleChannelId }: { singleChannelId?: st
                           <h4 className="text-[14px] font-semibold text-text-primary">{channel.name}</h4>
                           <StatusPill tone={tone}>{health ? (health.isHealthy ? t('channels.healthy', 'Healthy') : t('channels.unhealthy', 'Unhealthy')) : t('channels.notChecked', 'Not checked')}</StatusPill>
                         </div>
-                        <p className="mt-1 text-[11px] text-text-muted/75">{channel.platform}</p>
+                        <p className="mt-1 text-[11px] text-text-muted/75">{getPlatformDisplayName(channel.platform)}</p>
                       </div>
                     </div>
                     {health?.latencyMs !== undefined && <span className="text-[11px] font-medium text-text-secondary">{health.latencyMs}ms</span>}
@@ -339,7 +329,7 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
   const { channels } = useAppStore()
   const [selectedChannelId, setSelectedChannelId] = useState(defaultChannelId || channels[0]?.id || '')
   const [mockMessage, setMockMessage] = useState('')
-  const [debugLog, setDebugLog] = useState<Array<{ time: string; text: string }>>([])
+  const [debugLog, setDebugLog] = useState<Array<{ time: string; text: string; tone: 'info' | 'success' | 'error' }>>([])
   const [sending, setSending] = useState(false)
 
   useEffect(() => {
@@ -352,7 +342,7 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
   )
 
   const errorCount = useMemo(
-    () => debugLog.filter((entry) => entry.text.startsWith('Error') || entry.text.includes('failed')).length,
+    () => debugLog.filter((entry) => entry.tone === 'error').length,
     [debugLog],
   )
 
@@ -360,16 +350,34 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
     if (!selectedChannelId || !mockMessage.trim()) return
     setSending(true)
     const time = new Date().toLocaleTimeString()
-    setDebugLog((prev) => [...prev, { time, text: `→ Sending mock: "${mockMessage}"` }])
+    setDebugLog((prev) => [...prev, {
+      time,
+      text: t('channels.debugSendingMock', 'Sending mock: "{message}"').replace('{message}', mockMessage),
+      tone: 'info',
+    }])
     try {
       const result = await window.electron.invoke('channel:debugSend', selectedChannelId, mockMessage) as { success?: boolean; error?: string }
       if (result.success) {
-        setDebugLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: 'Mock message processed successfully' }])
+        setDebugLog((prev) => [...prev, {
+          time: new Date().toLocaleTimeString(),
+          text: t('channels.debugMockSuccess', 'Mock message processed successfully'),
+          tone: 'success',
+        }])
       } else {
-        setDebugLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `Error: ${result.error}` }])
+        setDebugLog((prev) => [...prev, {
+          time: new Date().toLocaleTimeString(),
+          text: result.error
+            ? t('channels.debugError', 'Error: {message}').replace('{message}', result.error)
+            : t('channels.statusFailed', 'Failed'),
+          tone: 'error',
+        }])
       }
     } catch (err) {
-      setDebugLog((prev) => [...prev, { time: new Date().toLocaleTimeString(), text: `${err instanceof Error ? err.message : String(err)}` }])
+      setDebugLog((prev) => [...prev, {
+        time: new Date().toLocaleTimeString(),
+        text: t('channels.debugError', 'Error: {message}').replace('{message}', err instanceof Error ? err.message : String(err)),
+        tone: 'error',
+      }])
     }
     setMockMessage('')
     setSending(false)
@@ -404,7 +412,7 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
             aria-label={t('channels.selectChannel', 'Select channel')}
             className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
           >
-            {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name} ({channel.platform})</option>)}
+            {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name} ({getPlatformDisplayName(channel.platform)})</option>)}
           </select>
           <input
             value={mockMessage}
@@ -437,7 +445,7 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
               <div key={`${entry.time}-${index}`} className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-4 py-3">
                 <div className="flex gap-3">
                   <span className="shrink-0 text-text-muted">[{entry.time}]</span>
-                  <span className={entry.text.startsWith('Error') ? 'text-red-400' : entry.text.startsWith('Mock message processed') ? 'text-green-400' : 'text-text-secondary'}>
+                  <span className={entry.tone === 'error' ? 'text-red-400' : entry.tone === 'success' ? 'text-green-400' : 'text-text-secondary'}>
                     {entry.text}
                   </span>
                 </div>
@@ -453,7 +461,7 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
 // ─── Channel Users Panel (multi-user tracking) ────────────────────
 
 export function ChannelUsersPanel({ channelId }: { channelId: string }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { channelUsers, clearChannelUsers } = useAppStore()
 
   const users = useMemo(
@@ -519,7 +527,7 @@ export function ChannelUsersPanel({ channelId }: { channelId: string }) {
                   </div>
                   <div className="text-right text-[11px] text-text-secondary">
                     <div className="font-semibold text-accent">{user.messageCount} {t('channels.messages', 'messages')}</div>
-                    <div className="mt-1 text-text-muted/75">{formatRelativeTime(user.lastActiveAt)}</div>
+                    <div className="mt-1 text-text-muted/75">{formatChannelRelativeTime(user.lastActiveAt, locale, t('channels.noActivityYet', 'No activity yet'))}</div>
                   </div>
                 </div>
 

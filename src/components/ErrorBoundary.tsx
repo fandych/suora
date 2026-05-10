@@ -1,4 +1,5 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react'
+import { t as translate } from '@/services/i18n'
 
 interface Props {
   children: ReactNode
@@ -42,17 +43,17 @@ export class ErrorBoundary extends Component<Props, State> {
   private handleCopy = async () => {
     const { error, errorInfo, errorId } = this.state
     const payload = [
-      `Error ID: ${errorId}`,
-      `Time: ${new Date().toISOString()}`,
-      `Message: ${error?.message ?? 'unknown'}`,
+      `${translate('errorBoundary.errorId', 'Error ID')}: ${errorId}`,
+      `${translate('errorBoundary.time', 'Time')}: ${new Date().toISOString()}`,
+      `${translate('errorBoundary.message', 'Message')}: ${error?.message ?? translate('errorBoundary.unknownError', 'Unknown error')}`,
       '',
-      'Stack:',
+      `${translate('errorBoundary.stackTrace', 'Stack trace')}:`,
       error?.stack ?? 'n/a',
       '',
-      'Component Stack:',
+      `${translate('errorBoundary.componentStack', 'Component stack')}:`,
       errorInfo?.componentStack ?? 'n/a',
       '',
-      `UA: ${navigator.userAgent}`,
+      `${translate('errorBoundary.userAgent', 'User agent')}: ${navigator.userAgent}`,
     ].join('\n')
     try {
       await navigator.clipboard.writeText(payload)
@@ -68,6 +69,17 @@ export class ErrorBoundary extends Component<Props, State> {
 
     const { error, errorInfo, errorId, copied } = this.state
     const shortStack = error?.stack?.split('\n').slice(0, 6).join('\n')
+    const title = translate('errorBoundary.title', 'Something went wrong')
+    const description = translate('errorBoundary.description', 'The app hit an unexpected error. Your data is safe - try one of the options below.')
+    const messageLabel = translate('errorBoundary.message', 'Message')
+    const unknownErrorLabel = translate('errorBoundary.unknownError', 'Unknown error')
+    const stackTraceLabel = translate('errorBoundary.stackTrace', 'Stack trace')
+    const componentStackLabel = translate('errorBoundary.componentStack', 'Component stack')
+    const errorIdLabel = translate('errorBoundary.errorId', 'Error ID')
+    const reloadAppLabel = translate('errorBoundary.reloadApp', 'Reload app')
+    const copyDetailsLabel = translate('errorBoundary.copyDetails', 'Copy error details')
+    const copiedLabel = translate('errorBoundary.copied', 'Copied')
+    const supportHint = translate('errorBoundary.supportHint', 'If the problem keeps happening, copy the error details above and share them with support.')
 
     return (
       <div
@@ -81,24 +93,24 @@ export class ErrorBoundary extends Component<Props, State> {
               !
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-text-primary">Something went wrong</h1>
+              <h1 className="text-xl font-semibold text-text-primary">{title}</h1>
               <p className="text-sm text-text-muted mt-1">
-                The app hit an unexpected error. Your data is safe — try one of the options below.
+                {description}
               </p>
             </div>
           </div>
 
           <div className="bg-surface-1/80 border border-border-subtle rounded-lg p-4 space-y-3 text-sm">
             <div>
-              <span className="text-text-muted text-xs uppercase tracking-wide">Message</span>
+              <span className="text-text-muted text-xs uppercase tracking-wide">{messageLabel}</span>
               <p className="font-mono text-danger content-wrap-anywhere mt-1">
-                {error?.message || 'Unknown error'}
+                {error?.message || unknownErrorLabel}
               </p>
             </div>
             {shortStack && (
               <details>
                 <summary className="cursor-pointer text-text-muted hover:text-text-primary text-xs uppercase tracking-wide select-none">
-                  Stack trace
+                  {stackTraceLabel}
                 </summary>
                 <pre className="mt-2 p-2 bg-surface-0 rounded text-[11px] leading-relaxed text-text-secondary overflow-auto max-h-48 whitespace-pre-wrap">
                   {shortStack}
@@ -108,7 +120,7 @@ export class ErrorBoundary extends Component<Props, State> {
             {errorInfo?.componentStack && (
               <details>
                 <summary className="cursor-pointer text-text-muted hover:text-text-primary text-xs uppercase tracking-wide select-none">
-                  Component stack
+                  {componentStackLabel}
                 </summary>
                 <pre className="mt-2 p-2 bg-surface-0 rounded text-[11px] leading-relaxed text-text-secondary overflow-auto max-h-48 whitespace-pre-wrap">
                   {errorInfo.componentStack.trim()}
@@ -116,7 +128,7 @@ export class ErrorBoundary extends Component<Props, State> {
               </details>
             )}
             <p className="text-xs text-text-muted">
-              Error ID: <code className="bg-surface-2 px-1.5 py-0.5 rounded">{errorId}</code>
+              {errorIdLabel}: <code className="bg-surface-2 px-1.5 py-0.5 rounded">{errorId}</code>
             </p>
           </div>
 
@@ -126,14 +138,14 @@ export class ErrorBoundary extends Component<Props, State> {
               onClick={this.handleReset}
               className="px-4 py-2 bg-text-primary text-surface-0 hover:opacity-90 rounded-md text-sm font-medium transition-colors"
             >
-              Try again
+              {translate('common.retry', 'Retry')}
             </button>
             <button
               type="button"
               onClick={this.handleReload}
               className="px-4 py-2 bg-surface-2 hover:bg-surface-3 rounded-md text-sm transition-colors"
             >
-              Reload app
+              {reloadAppLabel}
             </button>
             <button
               type="button"
@@ -141,12 +153,12 @@ export class ErrorBoundary extends Component<Props, State> {
               className="px-4 py-2 bg-surface-2 hover:bg-surface-3 rounded-md text-sm transition-colors"
               aria-live="polite"
             >
-              {copied ? 'Copied ✓' : 'Copy error details'}
+              {copied ? `${copiedLabel} ✓` : copyDetailsLabel}
             </button>
           </div>
 
           <p className="text-xs text-text-muted">
-            If the problem keeps happening, copy the error details above and share them with support.
+            {supportHint}
           </p>
         </div>
       </div>

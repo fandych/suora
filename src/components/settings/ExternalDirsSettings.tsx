@@ -65,7 +65,7 @@ export function ExternalDirsSettings() {
             type="text"
             value={extDirPath}
             onChange={(event) => setExtDirPath(event.target.value)}
-            placeholder="e.g., ~/.agents/skills"
+            placeholder={t('settings.externalDirectoryPlaceholder', 'e.g., ~/.agents/skills')}
             aria-label={t('settings.externalDirectoryPath', 'External directory path')}
             className={settingsInputClass}
           />
@@ -101,7 +101,7 @@ export function ExternalDirsSettings() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <code className="rounded-xl bg-surface-2/80 px-3 py-1.5 text-[12px] text-text-primary">{dir.path}</code>
-                      <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[10px] font-medium text-accent">{dir.type}</span>
+                      <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[10px] font-medium text-accent">{dir.type === 'skills' ? t('skills.title', 'Skills') : t('agents.title', 'Agents')}</span>
                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${dir.enabled ? 'bg-green-500/12 text-green-400' : 'bg-surface-3 text-text-muted'}`}>{dir.enabled ? t('settings.enabled', 'Enabled') : t('settings.disabled', 'Disabled')}</span>
                     </div>
                   </div>
@@ -158,7 +158,7 @@ export function ExternalDirsSettings() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-[13px] font-semibold">{path}</div>
-                    <div className="mt-1 text-[11px] text-text-muted/80">{type}</div>
+                    <div className="mt-1 text-[11px] text-text-muted/80">{type === 'skills' ? t('skills.title', 'Skills') : t('agents.title', 'Agents')}</div>
                   </div>
                   {exists ? <IconifyIcon name="ui-check" size={14} color="currentColor" /> : <IconifyIcon name="ui-download" size={14} color="currentColor" />}
                 </div>

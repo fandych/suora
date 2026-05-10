@@ -6,7 +6,9 @@ import { useAppStore } from '@/store/appStore'
 
 describe('OnboardingWizard', () => {
   beforeEach(() => {
+    localStorage.clear()
     useAppStore.setState({
+      locale: 'en',
       onboarding: { completed: false, currentStep: 0, skipped: false },
     })
   })
@@ -29,5 +31,15 @@ describe('OnboardingWizard', () => {
 
     expect(useAppStore.getState().onboarding.completed).toBe(true)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('localizes onboarding controls in Chinese', () => {
+    useAppStore.setState({ locale: 'zh' })
+
+    render(<OnboardingWizard />)
+
+    expect(screen.getByRole('dialog', { name: '欢迎使用 Suora' })).toBeVisible()
+    expect(screen.getByRole('progressbar', { name: '引导进度' })).toBeVisible()
+    expect(screen.getByRole('button', { name: '下一步' })).toBeVisible()
   })
 })

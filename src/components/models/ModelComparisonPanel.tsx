@@ -60,6 +60,7 @@ export function ModelComparisonPanel({ onClose }: { onClose: () => void }) {
     if (times.length === 0) return 0
     return times.length > 0 ? Math.min(...times) : 0
   }, [results])
+  const secondsUnit = t('common.secondsUnitShort', 's')
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-linear-to-b from-surface-1/96 via-surface-1/88 to-surface-0">
@@ -86,7 +87,7 @@ export function ModelComparisonPanel({ onClose }: { onClose: () => void }) {
           <div className="grid gap-3 sm:grid-cols-3">
             <ComparisonStat label={t('models.available', 'Available')} value={String(enabledModels.length)} accent />
             <ComparisonStat label={t('models.selected', 'Selected')} value={String(selectedModels.length)} />
-            <ComparisonStat label={t('models.fastest', 'Fastest')} value={fastestTime > 0 ? `${(fastestTime / 1000).toFixed(1)}s` : '—'} />
+            <ComparisonStat label={t('models.fastest', 'Fastest')} value={fastestTime > 0 ? `${(fastestTime / 1000).toFixed(1)}${secondsUnit}` : '—'} />
           </div>
 
           <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)]">
@@ -191,7 +192,7 @@ export function ModelComparisonPanel({ onClose }: { onClose: () => void }) {
                           <div className="truncate text-[13px] font-semibold text-text-primary">{model?.name || modelId}</div>
                           <div className="mt-1 text-[11px] text-text-muted/75">{model?.provider || t('common.unknown', 'Unknown')}</div>
                         </div>
-                        {result && <span className="shrink-0 rounded-full bg-accent/12 px-2.5 py-1 text-[10px] font-medium text-accent">{(result.time / 1000).toFixed(1)}s</span>}
+                        {result && <span className="shrink-0 rounded-full bg-accent/12 px-2.5 py-1 text-[10px] font-medium text-accent">{(result.time / 1000).toFixed(1)}{secondsUnit}</span>}
                       </div>
 
                       {!result ? (

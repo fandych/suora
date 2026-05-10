@@ -19,6 +19,7 @@ import {
   restoreSensitiveDataAfterLoad,
   type ElectronBridge,
 } from '@/services/secureState'
+import { t } from '@/services/i18n'
 import { toast } from '@/services/toast'
 import { logger } from '@/services/logger'
 import { safeParse, safeStringify } from '@/utils/safeJson'
@@ -227,18 +228,18 @@ async function backupCorruptFile(electron: ElectronBridge, filePath: string, raw
   try {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-')
     const backupPath = `${filePath}.corrupt-${stamp}.bak`
+    const shortPath = filePath.split(/[\\/]/).slice(-2).join('/')
+    const title = t('app.corruptedStateTitle', 'Corrupted state file detected')
+    const detail = t('app.corruptedStateBody', '{file} could not be parsed. A backup has been saved to .corrupt-*.bak.').replace('{file}', shortPath)
     await electron.invoke('fs:writeFile', backupPath, raw)
     logger.warn('[fileStorage] Corrupted state file backed up', { filePath, backupPath })
     try {
-      toast.warning(
-        'Corrupted state file detected',
-        `${filePath.split(/[\\/]/).slice(-2).join('/')} could not be parsed. A backup has been saved to .corrupt-*.bak.`,
-      )
+      toast.warning(title, detail)
     } catch {
       // Toast host not mounted yet — queue for later display.
       deferredWarnings.push({
-        title: 'Corrupted state file detected',
-        detail: `${filePath.split(/[\\/]/).slice(-2).join('/')} could not be parsed. A backup has been saved to .corrupt-*.bak.`,
+        title,
+        detail,
       })
     }
   } catch (backupErr) {

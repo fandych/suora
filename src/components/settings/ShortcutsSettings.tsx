@@ -25,12 +25,34 @@ function SummaryStat({ label, value, accent = false }: { label: string; value: s
 }
 
 function buildShortcutMonogram(action: string) {
-  return action
-    .split(/\s+/)
+  const parts = action.split(/\s+/).filter(Boolean)
+  if (parts.length <= 1) return action.slice(0, 2).toUpperCase()
+  return parts
     .map((part) => part[0])
     .join('')
     .slice(0, 2)
     .toUpperCase()
+}
+
+function getShortcutLabel(action: string, t: (key: string, defaultValue?: string) => string) {
+  switch (action) {
+    case 'New Chat':
+      return t('settings.shortcutNewChat', 'New Chat')
+    case 'Search':
+      return t('settings.shortcutSearch', 'Search')
+    case 'Send Message':
+      return t('settings.shortcutSendMessage', 'Send Message')
+    case 'New Line':
+      return t('settings.shortcutNewLine', 'New Line')
+    case 'Voice Input':
+      return t('settings.shortcutVoiceInput', 'Voice Input')
+    case 'Toggle Sidebar':
+      return t('settings.shortcutToggleSidebar', 'Toggle Sidebar')
+    case 'Close Panel':
+      return t('settings.shortcutClosePanel', 'Close Panel')
+    default:
+      return action
+  }
 }
 
 function getShortcutDescription(action: string, t: (key: string, defaultValue?: string) => string) {
@@ -60,6 +82,7 @@ export function ShortcutsSettings() {
   const [recording, setRecording] = useState<string | null>(null)
   const [recordedKeys, setRecordedKeys] = useState<string>('')
   const shortcutEntries = Object.entries(shortcuts)
+  const recordingLabel = recording ? getShortcutLabel(recording, t) : null
 
   useEffect(() => {
     if (!recording) return
@@ -95,12 +118,12 @@ export function ShortcutsSettings() {
             <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.shortcuts', 'Shortcuts')}</div>
             <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('settings.keyboardBindings', 'Keyboard Bindings')}</h3>
             <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('settings.shortcutsDesc', 'Click a shortcut to record a new key binding. Press Escape to cancel.')}</p>
-            {recording && <span className="mt-4 inline-flex rounded-full bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent">{t('settings.recordingShortcut', 'Recording')}: {recording}</span>}
+            {recordingLabel && <span className="mt-4 inline-flex rounded-full bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent">{t('settings.recordingShortcut', 'Recording')}: {recordingLabel}</span>}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3 xl:w-[24rem] xl:grid-cols-1">
             <SummaryStat label={t('settings.bindings', 'Bindings')} value={String(shortcutEntries.length)} accent />
-            <SummaryStat label={t('settings.recording', 'Recording')} value={recording || t('settings.idle', 'Idle')} />
+            <SummaryStat label={t('settings.recording', 'Recording')} value={recordingLabel || t('settings.idle', 'Idle')} />
             <button
               type="button"
               onClick={resetShortcuts}
@@ -125,15 +148,16 @@ export function ShortcutsSettings() {
         <div className="space-y-3">
           {shortcutEntries.map(([action, shortcut]) => {
             const isRecording = recording === action
+            const actionLabel = getShortcutLabel(action, t)
             return (
               <div key={action} className={`rounded-3xl border px-4 py-4 transition-all ${isRecording ? 'border-accent/20 bg-accent/10 shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.06)]' : 'border-border-subtle/55 bg-surface-0/60'}`}>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
                     <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${isRecording ? 'border-accent/22 bg-accent/12 text-accent' : 'border-border-subtle/45 bg-surface-2/80 text-text-secondary'} text-xs font-semibold`}>
-                      {buildShortcutMonogram(action)}
+                      {buildShortcutMonogram(actionLabel)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[14px] font-semibold text-text-primary">{action}</div>
+                      <div className="text-[14px] font-semibold text-text-primary">{actionLabel}</div>
                       <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/78">{getShortcutDescription(action, t)}</p>
                     </div>
                   </div>

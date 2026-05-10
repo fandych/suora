@@ -9,6 +9,7 @@ import { useEffect, useState } from 'react'
 import { Icon as OfflineIcon } from '@iconify/react'
 import { ICON_DATA, IconifyIcon as PresetIcon, parseIconValue } from '@/components/icons/IconifyIcons'
 import { loadIconCollection, isCollectionLoaded } from '@/services/iconService'
+import { t as translate } from '@/services/i18n'
 
 // ─── Platform → Iconify icon mapping ───────────────────────────────
 
@@ -120,16 +121,16 @@ export function ChannelPlatformIcon({ platform, size = 20, className, customIcon
  */
 export function getPlatformDisplayName(platform: string): string {
   switch (platform) {
-    case 'feishu': return 'Feishu (飞书)'
-    case 'dingtalk': return 'DingTalk (钉钉)'
-    case 'wechat': return 'WeChat Work (企业微信)'
-    case 'wechat_official': return 'WeChat Official (公众号)'
-    case 'wechat_miniprogram': return 'WeChat Mini (小程序)'
-    case 'slack': return 'Slack'
-    case 'telegram': return 'Telegram'
-    case 'discord': return 'Discord'
-    case 'teams': return 'Microsoft Teams'
-    case 'custom': return 'Custom'
+    case 'feishu': return translate('channels.platformFeishu', 'Feishu / Lark')
+    case 'dingtalk': return translate('channels.platformDingTalk', 'DingTalk')
+    case 'wechat': return translate('channels.platformWeChatWork', 'WeChat Work')
+    case 'wechat_official': return translate('channels.platformWeChatOfficial', 'WeChat Official Account')
+    case 'wechat_miniprogram': return translate('channels.platformWeChatMiniProgram', 'WeChat Mini Program')
+    case 'slack': return translate('channels.platformSlack', 'Slack')
+    case 'telegram': return translate('channels.platformTelegram', 'Telegram')
+    case 'discord': return translate('channels.platformDiscord', 'Discord')
+    case 'teams': return translate('channels.platformTeams', 'Microsoft Teams')
+    case 'custom': return translate('channels.customChannel', 'Custom Channel')
     default: return platform
   }
 }

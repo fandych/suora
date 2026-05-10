@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { useI18n } from '@/hooks/useI18n'
 import type { ProviderConfig, ProviderModelEntry } from '@/types'
 
 // ─── Model pricing data (USD per 1M tokens) ──────────────────────
@@ -52,6 +53,7 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
   onSave: (data: Partial<ProviderModelEntry>) => void
   onClose: () => void
 }) {
+  const { t, locale } = useI18n()
   const { modelUsageStats } = useAppStore()
   const [temperature, setTemperature] = useState<number | undefined>(model.temperature)
   const [maxTokens, setMaxTokens] = useState<number | undefined>(model.maxTokens)
@@ -60,7 +62,7 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
   const globalModelId = `${provider.id}:${model.modelId}`
   const stats = modelUsageStats[globalModelId]
   const estimatedCost = stats ? estimateCost(model.modelId, stats.totalPromptTokens, stats.totalCompletionTokens) : null
-  const lastUsedLabel = stats?.lastUsed ? new Date(stats.lastUsed).toLocaleString() : 'Not used yet'
+  const lastUsedLabel = stats?.lastUsed ? new Date(stats.lastUsed).toLocaleString(locale) : t('models.notUsedYet', 'Not used yet')
 
   return (
     <div className="flex-1 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
@@ -72,16 +74,16 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
                 <IconifyIcon name="ui-clipboard" size={30} color="currentColor" />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">Model Editor</div>
+                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.modelEditor', 'Model Editor')}</div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{model.name}</h2>
-                <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82"><span className="rounded-full border border-border-subtle/45 bg-surface-0/78 px-3 py-1 text-[11px] text-text-secondary">{model.modelId}</span> <span className="ml-2">via {provider.name}</span></p>
+                <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82"><span className="rounded-full border border-border-subtle/45 bg-surface-0/78 px-3 py-1 text-[11px] text-text-secondary">{model.modelId}</span> <span className="ml-2">{t('models.viaProvider', 'via {name}').replace('{name}', provider.name)}</span></p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 xl:max-w-100 xl:justify-end">
-              <SummaryStat label="Status" value={model.enabled ? 'Enabled' : 'Disabled'} accent={model.enabled} />
-              <SummaryStat label="Last used" value={lastUsedLabel} />
-              <button title="Close" onClick={onClose} className="rounded-2xl bg-surface-2 px-4 py-3 text-sm font-semibold text-text-muted transition-colors hover:text-text-secondary hover:bg-surface-3"><IconifyIcon name="ui-close" size={14} color="currentColor" /></button>
+              <SummaryStat label={t('common.status', 'Status')} value={model.enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')} accent={model.enabled} />
+              <SummaryStat label={t('models.lastUsed', 'Last used')} value={lastUsedLabel} />
+              <button title={t('common.close', 'Close')} onClick={onClose} className="rounded-2xl bg-surface-2 px-4 py-3 text-sm font-semibold text-text-muted transition-colors hover:text-text-secondary hover:bg-surface-3"><IconifyIcon name="ui-close" size={14} color="currentColor" /></button>
             </div>
           </div>
         </section>
@@ -89,18 +91,18 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
         <div className="grid gap-6 xl:grid-cols-2">
           <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
             <div className="mb-5">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">Generation</div>
-              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">Parameter Tuning</h3>
-              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">Adjust model creativity and response ceiling for this provider-specific entry without changing the global catalog.</p>
+              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.generation', 'Generation')}</div>
+              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('models.parameterTuning', 'Parameter Tuning')}</h3>
+              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('models.parameterTuningHint', 'Adjust model creativity and response ceiling for this provider-specific entry without changing the global catalog.')}</p>
             </div>
 
             <div className="space-y-5">
               <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">Temperature: {temperature != null ? temperature.toFixed(1) : 'Default'}</label>
+                <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.temperature', 'Temperature')}: {temperature != null ? temperature.toFixed(1) : t('settings.default', 'Default')}</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="range"
-                    aria-label="Temperature"
+                    aria-label={t('models.temperature', 'Temperature')}
                     min="0"
                     max="2"
                     step="0.1"
@@ -113,24 +115,24 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
                     onClick={() => { setTemperature(undefined); setSaved(false) }}
                     className="rounded-2xl bg-surface-2 px-3 py-2 text-[11px] font-semibold text-text-muted transition-colors hover:text-text-secondary"
                   >
-                    Reset
+                    {t('common.reset', 'Reset')}
                   </button>
                 </div>
                 <div className="mt-2 flex justify-between text-[10px] text-text-muted">
-                  <span>Precise (0)</span>
-                  <span>Creative (2)</span>
+                  <span>{t('models.precise', 'Precise')} (0)</span>
+                  <span>{t('models.creative', 'Creative')} (2)</span>
                 </div>
               </div>
 
               <div>
-                <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">Max Tokens</label>
+                <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.maxTokensLabel', 'Max Tokens')}</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="number"
-                    aria-label="Max tokens"
+                    aria-label={t('models.maxTokensLabel', 'Max Tokens')}
                     value={maxTokens ?? ''}
                     onChange={(e) => { setMaxTokens(e.target.value ? parseInt(e.target.value, 10) : undefined); setSaved(false) }}
-                    placeholder="Default (provider limit)"
+                    placeholder={t('models.defaultProviderLimit', 'Default (provider limit)')}
                     min={256}
                     max={128000}
                     className="flex-1 rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"
@@ -140,52 +142,52 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
                     onClick={() => { setMaxTokens(undefined); setSaved(false) }}
                     className="rounded-2xl bg-surface-2 px-3 py-2 text-[11px] font-semibold text-text-muted transition-colors hover:text-text-secondary"
                   >
-                    Reset
+                    {t('common.reset', 'Reset')}
                   </button>
                 </div>
-                <p className="mt-2 text-xs text-text-muted">Leave empty to use the provider default.</p>
+                <p className="mt-2 text-xs text-text-muted">{t('models.leaveEmptyProviderDefault', 'Leave empty to use the provider default.')}</p>
               </div>
 
               <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4 text-sm text-text-secondary">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">Runtime profile</div>
-                <div className="mt-2">Provider: <span className="font-medium text-text-primary">{provider.name}</span></div>
-                <div className="mt-1">Model state: <span className="font-medium text-text-primary">{model.enabled ? 'Enabled' : 'Disabled'}</span></div>
+                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">{t('models.runtimeProfile', 'Runtime profile')}</div>
+                <div className="mt-2">{t('models.providerLabel', 'Provider')}: <span className="font-medium text-text-primary">{provider.name}</span></div>
+                <div className="mt-1">{t('models.modelState', 'Model state')}: <span className="font-medium text-text-primary">{model.enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')}</span></div>
               </div>
             </div>
           </section>
 
           <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
             <div className="mb-5">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">Telemetry</div>
-              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">Usage Statistics</h3>
-              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">Inspect observed traffic, token volume, and cost estimates before you tighten or relax generation parameters.</p>
+              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.telemetry', 'Telemetry')}</div>
+              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('models.usageStatistics', 'Usage Statistics')}</h3>
+              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('models.usageStatisticsHint', 'Inspect observed traffic, token volume, and cost estimates before you tighten or relax generation parameters.')}</p>
             </div>
 
             {stats ? (
               <div className="space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <SummaryStat label="API Calls" value={String(stats.callCount)} />
-                  <SummaryStat label="Total Tokens" value={stats.totalTokens.toLocaleString()} />
-                  <SummaryStat label="Prompt Tokens" value={stats.totalPromptTokens.toLocaleString()} />
-                  <SummaryStat label="Completion Tokens" value={stats.totalCompletionTokens.toLocaleString()} />
+                  <SummaryStat label={t('models.apiCalls', 'API Calls')} value={String(stats.callCount)} />
+                  <SummaryStat label={t('models.totalTokens', 'Total Tokens')} value={stats.totalTokens.toLocaleString(locale)} />
+                  <SummaryStat label={t('models.promptTokens', 'Prompt Tokens')} value={stats.totalPromptTokens.toLocaleString(locale)} />
+                  <SummaryStat label={t('models.completionTokens', 'Completion Tokens')} value={stats.totalCompletionTokens.toLocaleString(locale)} />
                 </div>
 
                 {estimatedCost !== null ? (
                   <div className="rounded-3xl border border-accent/20 bg-accent/10 p-4 text-center">
-                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">Estimated Cost (USD)</div>
+                    <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">{t('models.estimatedCostUsd', 'Estimated Cost (USD)')}</div>
                     <div className="mt-2 text-2xl font-semibold text-accent">${estimatedCost < 0.01 ? estimatedCost.toFixed(4) : estimatedCost.toFixed(2)}</div>
                   </div>
                 ) : (
-                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4 text-sm text-text-muted">Cost estimation not available for this model.</div>
+                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4 text-sm text-text-muted">{t('models.costUnavailable', 'Cost estimation not available for this model.')}</div>
                 )}
 
                 <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4 text-sm text-text-secondary">
-                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">Last used</div>
+                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">{t('models.lastUsed', 'Last used')}</div>
                   <div className="mt-2 font-medium text-text-primary">{lastUsedLabel}</div>
                 </div>
               </div>
             ) : (
-              <div className="rounded-3xl border border-dashed border-border-subtle px-4 py-10 text-center text-sm text-text-muted">No usage data yet</div>
+              <div className="rounded-3xl border border-dashed border-border-subtle px-4 py-10 text-center text-sm text-text-muted">{t('models.noUsageData', 'No usage data yet')}</div>
             )}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -194,9 +196,9 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
                 onClick={() => { onSave({ temperature, maxTokens }); setSaved(true) }}
                 className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-accent-hover"
               >
-                Save Parameters
+                {t('models.saveParameters', 'Save Parameters')}
               </button>
-              {saved && <span className="inline-flex items-center gap-1 text-xs text-success animate-fade-in"><IconifyIcon name="ui-check" size={12} color="currentColor" /> Saved</span>}
+              {saved && <span className="inline-flex items-center gap-1 text-xs text-success animate-fade-in"><IconifyIcon name="ui-check" size={12} color="currentColor" /> {t('models.saved', 'Saved')}</span>}
             </div>
           </section>
         </div>

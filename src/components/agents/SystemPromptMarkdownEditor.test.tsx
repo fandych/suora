@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { SystemPromptMarkdownEditor } from './SystemPromptMarkdownEditor'
+import { useAppStore } from '@/store/appStore'
 
 function EditorHarness({ initialValue = '' }: { initialValue?: string }) {
   const [value, setValue] = useState(initialValue)
@@ -10,6 +11,11 @@ function EditorHarness({ initialValue = '' }: { initialValue?: string }) {
 }
 
 describe('SystemPromptMarkdownEditor', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    useAppStore.setState({ locale: 'en' })
+  })
+
   it('edits and previews Markdown system prompts', async () => {
     const user = userEvent.setup()
     render(<EditorHarness />)
@@ -28,5 +34,13 @@ describe('SystemPromptMarkdownEditor', () => {
     await user.click(screen.getByRole('button', { name: 'Heading' }))
 
     expect(screen.getByDisplayValue('## instruction')).toBeVisible()
+  })
+
+  it('localizes the write mode label in Chinese', () => {
+    useAppStore.setState({ locale: 'zh' })
+
+    render(<EditorHarness />)
+
+    expect(screen.getByRole('button', { name: '编写' })).toBeVisible()
   })
 })

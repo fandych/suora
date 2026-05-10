@@ -12,6 +12,7 @@ import {
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { TextArea } from '@/components/ui/FormControls'
 import { useI18n } from '@/hooks/useI18n'
+import { t as translate } from '@/services/i18n'
 import type { MessageAttachment } from '@/types'
 import { generateId } from '@/utils/helpers'
 import { toast } from '@/services/toast'
@@ -74,6 +75,10 @@ type AttachmentRejectReason =
 function fileToAttachment(
   file: File,
   onReject?: (file: File, reason: AttachmentRejectReason) => void,
+  summaryCopy?: {
+    audio: string
+    documentMetadata: string
+  },
 ): Promise<MessageAttachment | null> {
   return new Promise((resolve) => {
     if (ACCEPTED_IMAGE_TYPES.includes(file.type)) {
@@ -93,7 +98,15 @@ function fileToAttachment(
       const reader = new FileReader()
       reader.onload = () => {
         const dataUrl = reader.result as string
-        const attachment: MessageAttachment = { id: generateId('att'), type: 'audio', name: file.name, mimeType: file.type, data: dataUrl.split(',')[1], size: file.size, summary: 'Audio attached. Use speech input for live transcription or pass the recording to a transcription-capable model/tool.' }
+        const attachment: MessageAttachment = {
+          id: generateId('att'),
+          type: 'audio',
+          name: file.name,
+          mimeType: file.type,
+          data: dataUrl.split(',')[1],
+          size: file.size,
+          summary: summaryCopy?.audio ?? translate('chat.audioAttachmentSummary', 'Audio attached. Use speech input for live transcription or pass the recording to a transcription-capable model/tool.'),
+        }
         resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
       }
       reader.onerror = () => { onReject?.(file, { kind: 'read-failed' }); resolve(null) }
@@ -123,7 +136,7 @@ function fileToAttachment(
         mimeType: file.type,
         data: '',
         size: file.size,
-        summary: 'Document metadata attached only; original byte size is preserved for review. Extract text before asking content-specific questions if the provider cannot read this format directly.',
+        summary: summaryCopy?.documentMetadata ?? translate('chat.documentMetadataSummary', 'Document metadata attached only; original byte size is preserved for review. Extract text before asking content-specific questions if the provider cannot read this format directly.'),
         truncated: true,
       }
       resolve({ ...attachment, manifest: buildAttachmentManifest(attachment) })
@@ -257,9 +270,13 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
   const addFiles = useCallback(async (files: FileList | File[]) => {
     const list = Array.from(files)
     const rejections: Array<{ file: File; reason: AttachmentRejectReason }> = []
+    const summaryCopy = {
+      audio: t('chat.audioAttachmentSummary', 'Audio attached. Use speech input for live transcription or pass the recording to a transcription-capable model/tool.'),
+      documentMetadata: t('chat.documentMetadataSummary', 'Document metadata attached only; original byte size is preserved for review. Extract text before asking content-specific questions if the provider cannot read this format directly.'),
+    }
     const results = await Promise.all(
       list.map((f) =>
-        fileToAttachment(f, (file, reason) => rejections.push({ file, reason })),
+        fileToAttachment(f, (file, reason) => rejections.push({ file, reason }), summaryCopy),
       ),
     )
     const valid = results.filter((r): r is MessageAttachment => r !== null)
@@ -337,7 +354,16 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
             const dataUrl = reader.result as string
             const ext = mimeType.includes('webm') ? 'webm' : 'mp4'
             const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -1)
-            const attachment: MessageAttachment = { id: generateId('att'), type: 'audio', name: `recording-${ts}.${ext}`, mimeType: mimeType.split(';')[0], data: dataUrl.split(',')[1], size: blob.size, duration, summary: 'Recorded audio attached for transcription-capable workflows.' }
+            const attachment: MessageAttachment = {
+              id: generateId('att'),
+              type: 'audio',
+              name: `recording-${ts}.${ext}`,
+              mimeType: mimeType.split(';')[0],
+              data: dataUrl.split(',')[1],
+              size: blob.size,
+              duration,
+              summary: t('chat.recordedAudioSummary', 'Recorded audio attached for transcription-capable workflows.'),
+            }
             setAttachments((prev) => [...prev, { ...attachment, manifest: buildAttachmentManifest(attachment) }])
           }
           reader.readAsDataURL(blob)
@@ -410,7 +436,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
         )}
 
         <div className="relative z-10 px-3 py-2 sm:px-3.5 sm:py-2.5">
-          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,audio/webm,audio/ogg,audio/mp3,audio/mpeg,audio/wav,audio/mp4,.txt,.md,.json,.csv,.xml,.yaml,.yml,.toml,.js,.ts,.jsx,.tsx,.py,.java,.go,.rs,.rb,.html,.css,.scss,.sql,.sh,.bat,.ps1,.log,.c,.cpp,.h,.swift,.kt,.dart,.lua,.r" multiple className="hidden" onChange={handleFileSelect} aria-label="Attach file" />
+          <input ref={fileInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp,audio/webm,audio/ogg,audio/mp3,audio/mpeg,audio/wav,audio/mp4,.txt,.md,.json,.csv,.xml,.yaml,.yml,.toml,.js,.ts,.jsx,.tsx,.py,.java,.go,.rs,.rb,.html,.css,.scss,.sql,.sh,.bat,.ps1,.log,.c,.cpp,.h,.swift,.kt,.dart,.lua,.r" multiple className="hidden" onChange={handleFileSelect} aria-label={t('chat.attachFile', 'Attach file (image, audio, code, text)')} />
 
           {attachments.length > 0 && (
             <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -442,7 +468,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
               <div className="flex flex-wrap items-center gap-2 text-[10px] font-medium text-text-muted/62">
                 {voiceState === 'listening' && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-danger">{t('chat.listening', 'Listening…')}</span>}
                 {isRecording && <span className="rounded-full bg-danger/10 px-2 py-0.5 text-danger">{t('chat.recording', 'Recording…')}</span>}
-                {attachments.length > 0 && <span>{attachments.length} {t('chat.attachmentsReady', 'attachments ready')}</span>}
+                {attachments.length > 0 && <span>{t('chat.attachmentsReadyCount', '{count} attachments ready').replace('{count}', String(attachments.length))}</span>}
               </div>
             )}
 
@@ -454,7 +480,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 onPaste={handlePaste}
-                aria-label="Message input"
+                aria-label={t('chat.messageInputAria', 'Message input')}
                 placeholder={isRecording
                   ? t('chat.recordingAudio', 'Recording audio…')
                   : voiceState === 'listening'

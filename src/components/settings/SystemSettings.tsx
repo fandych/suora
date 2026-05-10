@@ -135,7 +135,7 @@ export function SystemSettings() {
 
   const rssValue = metrics ? formatBytes(metrics.memory.rss) : '—'
   const uptimeValue = metrics ? formatUptime(metrics.uptime) : '—'
-  const displayVersion = electron ? (appVersion === '—' ? '…' : `v${appVersion}`) : 'browser-preview'
+  const displayVersion = electron ? (appVersion === '—' ? '…' : `v${appVersion}`) : t('settings.browserPreview', 'browser-preview')
   const hasNewerVersion = Boolean(updaterState?.latestVersion && updaterState.latestVersion !== appVersion)
   const releaseTag = updaterState?.latestVersion ? `v${updaterState.latestVersion}` : null
   const releaseDate = updaterState?.releaseDate
@@ -237,7 +237,7 @@ export function SystemSettings() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
-            <SettingsStat label={t('settings.runtime', 'Runtime')} value={electron ? 'Electron' : 'Browser'} accent />
+            <SettingsStat label={t('settings.runtime', 'Runtime')} value={electron ? t('settings.runtimeElectron', 'Electron') : t('settings.runtimeBrowser', 'Browser')} accent />
             <SettingsStat label={t('settings.rss', 'RSS')} value={rssValue} />
             <SettingsStat label={t('settings.uptime', 'Uptime')} value={uptimeValue} />
             <SettingsStat label={t('settings.crashLogs', 'Crash Logs')} value={String(crashLogs.length)} />
@@ -256,7 +256,7 @@ export function SystemSettings() {
           </div>
           <div>
             <p className="text-sm font-semibold text-text-primary">Suora <span className="font-normal text-text-muted">{displayVersion}</span></p>
-            <p className="mt-1 text-[12px] text-text-muted">Electron + React + Vite + AI SDK</p>
+            <p className="mt-1 text-[12px] text-text-muted">{t('settings.stackSummary', 'Electron + React + Vite + AI SDK')}</p>
             <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('settings.aboutDesc', 'Multi-model AI desktop application with agents, skills, and plugins.')}</p>
           </div>
         </div>
@@ -424,17 +424,17 @@ export function SystemSettings() {
                   <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.memoryUsage', 'Memory')}</div>
                   <div className="grid gap-3 lg:grid-cols-4">
                     {([
-                      { label: 'Heap Used', value: metrics.memory.heapUsed, pct: Math.round((metrics.memory.heapUsed / metrics.memory.heapTotal) * 100) },
-                      { label: 'Heap Total', value: metrics.memory.heapTotal, pct: null },
-                      { label: 'RSS', value: metrics.memory.rss, pct: null },
-                      { label: 'External', value: metrics.memory.external, pct: null },
+                      { label: t('settings.heapUsed', 'Heap Used'), value: metrics.memory.heapUsed, pct: Math.round((metrics.memory.heapUsed / metrics.memory.heapTotal) * 100) },
+                      { label: t('settings.heapTotal', 'Heap Total'), value: metrics.memory.heapTotal, pct: null },
+                      { label: t('settings.rss', 'RSS'), value: metrics.memory.rss, pct: null },
+                      { label: t('settings.external', 'External'), value: metrics.memory.external, pct: null },
                     ] as const).map(({ label, value, pct }) => (
                       <div key={label} className={settingsSurfaceCardClass}>
                         <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</p>
                         <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{formatBytes(value)}</p>
                         {pct !== null && (
                           <div className="mt-3">
-                            <progress value={pct} max={100} className={`memory-usage-meter ${getUsageMeterTone(pct)}`} aria-label={`${label} usage ${pct}%`} />
+                            <progress value={pct} max={100} className={`memory-usage-meter ${getUsageMeterTone(pct)}`} aria-label={t('settings.metricUsageAria', '{label} usage {pct}%').replace('{label}', label).replace('{pct}', String(pct))} />
                             <p className="mt-1 text-[10px] text-text-muted">{pct}%</p>
                           </div>
                         )}
@@ -445,12 +445,12 @@ export function SystemSettings() {
 
                 <div className="grid gap-3 md:grid-cols-3">
                   <div className={settingsFieldCardClass}>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">CPU User</p>
-                    <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.user / 1000).toFixed(1)}ms</p>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.cpuUser', 'CPU User')}</p>
+                    <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.user / 1000).toFixed(1)} {t('settings.millisecondsUnit', 'ms')}</p>
                   </div>
                   <div className={settingsFieldCardClass}>
-                    <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">CPU System</p>
-                    <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.system / 1000).toFixed(1)}ms</p>
+                    <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.cpuSystem', 'CPU System')}</p>
+                    <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.system / 1000).toFixed(1)} {t('settings.millisecondsUnit', 'ms')}</p>
                   </div>
                   <div className={settingsFieldCardClass}>
                     <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.uptime', 'Uptime')}</p>
@@ -510,7 +510,7 @@ export function SystemSettings() {
                     <span className="font-mono text-[11px] text-text-muted">{log.file}</span>
                     <span className="text-[11px] text-text-muted">{log.timestamp ? new Date(log.timestamp).toLocaleString() : '—'}</span>
                   </div>
-                  <p className="mt-3 wrap-break-word font-mono text-[12px] leading-6 text-red-400">{log.error || 'Unknown error'}</p>
+                  <p className="mt-3 wrap-break-word font-mono text-[12px] leading-6 text-red-400">{log.error || t('settings.unknownError', 'Unknown error')}</p>
                 </div>
               ))}
             </div>

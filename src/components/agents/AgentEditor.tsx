@@ -405,7 +405,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
                   <div>
                     <label className={settingsLabelClass}>{t('agents.model', 'Model')}</label>
                     <select
-                      aria-label="Model"
+                      aria-label={t('agents.model', 'Model')}
                       value={form.modelId}
                       onChange={(e) => updateForm({ modelId: e.target.value })}
                       className={editorSelectClass}
@@ -441,7 +441,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
                   <div className="sm:col-span-2">
                     <label className={settingsLabelClass}>{t('agents.responseStyle', 'Response Style')}</label>
                     <select
-                      aria-label="Response style"
+                      aria-label={t('agents.responseStyle', 'Response Style')}
                       value={form.responseStyle ?? 'balanced'}
                       onChange={(e) => updateForm({ responseStyle: e.target.value as Agent['responseStyle'] })}
                       className={editorSelectClass}
@@ -663,7 +663,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
                   </label>
                   <input
                     type="range"
-                    aria-label="Temperature"
+                    aria-label={t('agents.temperature', 'Temperature')}
                     min="0"
                     max="2"
                     step="0.1"
@@ -682,7 +682,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
                     <label className={settingsLabelClass}>{t('agents.maxTokens', 'Max Tokens')}</label>
                     <input
                       type="number"
-                      aria-label="Max tokens"
+                      aria-label={t('agents.maxTokens', 'Max Tokens')}
                       value={form.maxTokens ?? 4096}
                       onChange={(e) => updateForm({ maxTokens: parseInt(e.target.value, 10) || 4096 })}
                       min={256}
@@ -694,7 +694,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
                     <label className={settingsLabelClass}>{t('agents.maxTurns', 'Max Turns')}</label>
                     <input
                       type="number"
-                      aria-label="Max turns"
+                      aria-label={t('agents.maxTurns', 'Max Turns')}
                       value={Math.max(2, form.maxTurns ?? 20)}
                       onChange={(e) => {
                         const parsed = parseInt(e.target.value, 10)
@@ -711,7 +711,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
                 <div>
                   <label className={settingsLabelClass}>{t('agents.permissionMode', 'Permission Mode')}</label>
                   <select
-                    aria-label="Permission mode"
+                    aria-label={t('agents.permissionMode', 'Permission Mode')}
                     value={form.permissionMode ?? 'default'}
                     onChange={(e) => updateForm({ permissionMode: e.target.value as Agent['permissionMode'] })}
                     className={editorSelectClass}

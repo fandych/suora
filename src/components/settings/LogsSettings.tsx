@@ -5,13 +5,20 @@ import { clearAuditLog, getAuditLog } from '@/services/skillSecurity'
 import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
 
 function StatusPill({ status }: { status: 'success' | 'error' | 'blocked' }) {
+  const { t } = useI18n()
   const className = status === 'success'
     ? 'bg-green-500/12 text-green-400'
     : status === 'blocked'
       ? 'bg-amber-500/12 text-amber-400'
       : 'bg-red-500/12 text-red-400'
 
-  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${className}`}>{status}</span>
+  const label = status === 'success'
+    ? t('settings.success', 'success')
+    : status === 'blocked'
+      ? t('settings.blocked', 'blocked')
+      : t('settings.error', 'error')
+
+  return <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${className}`}>{label}</span>
 }
 
 export function LogsSettings() {
@@ -210,7 +217,13 @@ export function LogsSettings() {
                   onClick={() => setFilter(status)}
                   className={`rounded-2xl border px-4 py-3 text-[11px] font-semibold capitalize transition-colors ${filter === status ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}
                 >
-                  {status}
+                  {status === 'all'
+                    ? t('settings.all', 'all')
+                    : status === 'success'
+                      ? t('settings.success', 'success')
+                      : status === 'error'
+                        ? t('settings.error', 'error')
+                        : t('settings.blocked', 'blocked')}
                 </button>
               ))}
             </div>

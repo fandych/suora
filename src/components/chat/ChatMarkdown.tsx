@@ -32,6 +32,7 @@ export function CopyButton({ text, className = '' }: { text: string; className?:
 }
 
 function CodeBlock({ children, className, ...rest }: ComponentPropsWithoutRef<'code'>) {
+  const { t } = useI18n()
   const isInline = !className
   const code = String(children).replace(/\n$/, '')
   const lang = className?.replace('language-', '') ?? ''
@@ -43,7 +44,7 @@ function CodeBlock({ children, className, ...rest }: ComponentPropsWithoutRef<'c
   return (
     <div className="relative group my-3 rounded-xl overflow-hidden border border-border-subtle/80 bg-surface-0/60 shadow-sm">
       <div className="flex items-center justify-between px-3 py-1.5 bg-surface-2/40 border-b border-border-subtle/60">
-        <span className="text-[10px] text-text-muted/70 uppercase tracking-wider font-semibold">{lang || 'code'}</span>
+        <span className="text-[10px] text-text-muted/70 uppercase tracking-wider font-semibold">{lang || t('chat.codeFallback', 'code')}</span>
         <CopyButton text={code} />
       </div>
       <pre className="overflow-x-auto p-3.5 text-[12px] leading-relaxed"><code className="font-[JetBrains_Mono,monospace] text-text-primary" {...rest}>{children}</code></pre>

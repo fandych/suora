@@ -22,15 +22,7 @@ import {
 import type { MarketplacePlugin } from '@/services/pluginSystem'
 import { SettingsSection, SettingsStat, settingsInputClass, settingsTextAreaClass } from './panelUi'
 
-const MARKETPLACE_CATEGORIES: Array<{ value: '' | MarketplacePlugin['category']; label: string }> = [
-  { value: '', label: 'All Categories' },
-  { value: 'communication', label: 'Communication' },
-  { value: 'productivity', label: 'Productivity' },
-  { value: 'developer', label: 'Developer' },
-  { value: 'ai', label: 'AI' },
-  { value: 'utility', label: 'Utility' },
-  { value: 'integration', label: 'Integration' },
-]
+const MARKETPLACE_CATEGORIES: Array<'' | MarketplacePlugin['category']> = ['', 'communication', 'productivity', 'developer', 'ai', 'utility', 'integration']
 
 const PANEL_CARD_CLASS = 'rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]'
 
@@ -87,6 +79,13 @@ function MetaPill({
 
 function RatingStars({ rating }: { rating: number }) {
   return <span>{'★'.repeat(Math.round(rating))}{'☆'.repeat(5 - Math.round(rating))}</span>
+}
+
+function getPluginStatusLabel(status: PluginInfo['status'], t: (key: string, fallback: string) => string) {
+  if (status === 'enabled') return t('settings.enabled', 'Enabled')
+  if (status === 'disabled') return t('settings.disabled', 'Disabled')
+  if (status === 'error') return t('common.error', 'Error')
+  return t('settings.installed', 'Installed')
 }
 
 function PluginIcon({ icon }: { icon?: string }) {
@@ -166,6 +165,15 @@ function ConfigFieldControl({
 
 export function PluginsSettings() {
   const { t } = useI18n()
+  const getMarketplaceCategoryLabel = (category: '' | MarketplacePlugin['category']) => {
+    if (!category) return t('settings.marketplaceCategoryAll')
+    if (category === 'communication') return t('settings.marketplaceCategoryCommunication')
+    if (category === 'productivity') return t('settings.marketplaceCategoryProductivity')
+    if (category === 'developer') return t('settings.marketplaceCategoryDeveloper')
+    if (category === 'ai') return t('settings.marketplaceCategoryAi')
+    if (category === 'utility') return t('settings.marketplaceCategoryUtility')
+    return t('settings.marketplaceCategoryIntegration')
+  }
   const {
     marketplace, setMarketplace,
     installedPlugins, addInstalledPlugin, updateInstalledPlugin, removeInstalledPlugin,
@@ -254,7 +262,7 @@ export function PluginsSettings() {
       addInstalledPlugin(plugin)
       setJsonInput('')
       setShowInstall(false)
-    } catch (e) { setJsonError(e instanceof Error ? e.message : 'Invalid JSON') }
+    } catch (e) { setJsonError(e instanceof Error ? e.message : t('settings.invalidJson', 'Invalid JSON')) }
   }
 
   const togglePlugin = async (plugin: PluginInfo) => {
@@ -497,7 +505,7 @@ export function PluginsSettings() {
                               <h4 className="text-[15px] font-semibold text-text-primary">{plugin.name}</h4>
                               {hasUpdate && <MetaPill tone="accent">{t('settings.updateAvailable', 'Update Available')}</MetaPill>}
                               {plugin.error && <MetaPill tone="danger">{t('common.error', 'Error')}</MetaPill>}
-                              <MetaPill tone={plugin.status === 'enabled' ? 'success' : plugin.status === 'disabled' ? 'neutral' : plugin.status === 'error' ? 'danger' : 'warning'}>{plugin.status}</MetaPill>
+                              <MetaPill tone={plugin.status === 'enabled' ? 'success' : plugin.status === 'disabled' ? 'neutral' : plugin.status === 'error' ? 'danger' : 'warning'}>{getPluginStatusLabel(plugin.status, t)}</MetaPill>
                             </div>
                             <p className="mt-2 text-[12px] leading-6 text-text-secondary/82">{plugin.description}</p>
                             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -559,8 +567,8 @@ export function PluginsSettings() {
                               title: t('settings.uninstallTitle', 'Uninstall plugin?'),
                               body: t(
                                 'settings.uninstallBody',
-                                `"${plugin.name}" and its registered tools will be removed. Any saved configuration will also be cleared.`,
-                              ),
+                                '"{name}" and its registered tools will be removed. Any saved configuration will also be cleared.',
+                              ).replace('{name}', plugin.name),
                               danger: true,
                               confirmText: t('settings.uninstall', 'Uninstall'),
                             })
@@ -604,7 +612,7 @@ export function PluginsSettings() {
                 className={settingsInputClass}
               >
                 {MARKETPLACE_CATEGORIES.map((category) => (
-                  <option key={category.label} value={category.value}>{t(`settings.${category.value || 'allCategories'}`, category.label)}</option>
+                  <option key={category || 'all'} value={category}>{getMarketplaceCategoryLabel(category)}</option>
                 ))}
               </select>
               <select
@@ -653,7 +661,7 @@ export function PluginsSettings() {
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2">
                               <h4 className="text-[15px] font-semibold text-text-primary">{plugin.name}</h4>
-                              <MetaPill>{plugin.category}</MetaPill>
+                              <MetaPill>{t(`settings.${plugin.category}`, plugin.category)}</MetaPill>
                               {isInstalled && <MetaPill tone="success">{t('settings.installed', 'Installed')}</MetaPill>}
                             </div>
                             <p className="mt-2 text-[12px] leading-6 text-text-secondary/82">{plugin.description}</p>
@@ -722,7 +730,7 @@ export function PluginsSettings() {
           }
         >
           <div className="grid gap-3 sm:grid-cols-3">
-            <SettingsStat label={t('settings.status', 'Status')} value={configPlugin.status} accent={configPlugin.status === 'enabled'} />
+            <SettingsStat label={t('settings.status', 'Status')} value={getPluginStatusLabel(configPlugin.status, t)} accent={configPlugin.status === 'enabled'} />
             <SettingsStat label={t('settings.fields', 'Fields')} value={String(Object.keys(configPlugin.configSchema).length)} />
             <SettingsStat label={t('settings.tools', 'Tools')} value={String((pluginTools[configPlugin.id] || []).length)} />
           </div>

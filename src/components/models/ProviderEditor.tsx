@@ -5,13 +5,7 @@ import { testConnection } from '@/services/aiService'
 import { useI18n } from '@/hooks/useI18n'
 import type { ProviderConfig, ProviderModelEntry } from '@/types'
 
-const PROVIDER_TYPES: { value: ProviderConfig['providerType']; label: string }[] = [
-  { value: 'openai', label: 'OpenAI' },
-  { value: 'anthropic', label: 'Anthropic' },
-  { value: 'google', label: 'Google' },
-  { value: 'ollama', label: 'Ollama' },
-  { value: 'openai-compatible', label: 'OpenAI Compatible' },
-]
+const PROVIDER_TYPES: ProviderConfig['providerType'][] = ['openai', 'anthropic', 'google', 'ollama', 'openai-compatible']
 
 const PRESET_MODELS: Partial<Record<ProviderConfig['providerType'], { modelId: string; name: string }[]>> = {
   anthropic: [
@@ -75,6 +69,19 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
   const { t } = useI18n()
   const { providerConfigs, updateProviderConfig, syncModelsFromConfigs, workspacePath, selectedModel, setSelectedModel, models: allModels } = useAppStore()
   const config = providerConfigs.find((p) => p.id === providerId)
+  const getProviderTypeLabel = (type: ProviderConfig['providerType']) => (
+    type === 'openai'
+      ? t('models.providerTypeOpenAi', 'OpenAI')
+      : type === 'anthropic'
+        ? t('models.providerTypeAnthropic', 'Anthropic')
+        : type === 'google'
+          ? t('models.providerTypeGoogle', 'Google')
+          : type === 'ollama'
+            ? t('models.providerTypeOllama', 'Ollama')
+            : type === 'openai-compatible'
+              ? t('models.openAiCompatible', 'OpenAI Compatible')
+              : type
+  )
 
   const [name, setName] = useState('')
   const [providerType, setProviderType] = useState<ProviderConfig['providerType']>('openai-compatible')
@@ -210,7 +217,7 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{name || t('models.newProvider', 'New Provider')}</h2>
                 <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">{t('models.providerWorkspaceHint', 'Configure the endpoint, shape the model catalog, and validate the connection before making this provider part of the default stack.')}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="rounded-full border border-border-subtle/45 bg-surface-0/78 px-3 py-1 text-[11px] text-text-secondary">{PROVIDER_TYPES.find((item) => item.value === providerType)?.label || providerType}</span>
+                  <span className="rounded-full border border-border-subtle/45 bg-surface-0/78 px-3 py-1 text-[11px] text-text-secondary">{getProviderTypeLabel(providerType)}</span>
                   <span className={`rounded-full px-3 py-1 text-[11px] ${connectionState === 'connected' ? 'bg-green-500/15 text-green-400' : connectionState === 'checking' ? 'bg-yellow-500/15 text-yellow-400' : connectionState === 'disconnected' ? 'bg-red-500/15 text-red-400' : 'bg-surface-3 text-text-muted'}`}>{connectionLabel}</span>
                 </div>
               </div>
@@ -251,7 +258,7 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
                     className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"
                   >
                     {PROVIDER_TYPES.map((item) => (
-                      <option key={item.value} value={item.value}>{item.label}</option>
+                        <option key={item} value={item}>{getProviderTypeLabel(item)}</option>
                     ))}
                   </select>
                 </div>
@@ -271,7 +278,7 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
                       type="password"
                       value={apiKey}
                       onChange={(e) => { setApiKey(e.target.value); markDirty() }}
-                      placeholder="sk-..."
+                      placeholder={t('models.apiKeyPlaceholder', 'sk-...')}
                       className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"
                     />
                   </div>
@@ -283,7 +290,7 @@ export function ProviderEditor({ providerId, onSaved }: { providerId: string; on
                     type="text"
                     value={baseUrl}
                     onChange={(e) => { setBaseUrl(e.target.value); markDirty() }}
-                    placeholder={isOllama ? 'http://localhost:11434/v1' : 'https://api.example.com/v1'}
+                    placeholder={isOllama ? t('models.ollamaBaseUrlPlaceholder', 'http://localhost:11434/v1') : t('models.baseUrlPlaceholder', 'https://api.example.com/v1')}
                     className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"
                   />
                   <p className="mt-2 text-[11px] text-text-muted">{isOllama ? t('models.ollamaDefaultHint', 'Default: http://localhost:11434/v1') : t('models.defaultEndpointHint', 'Leave empty to use default endpoint.')}</p>

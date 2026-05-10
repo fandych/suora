@@ -233,7 +233,7 @@ export function SkillsLayout() {
     if (!skill) return
     const ok = await confirm({
       title: t('skills.deleteTitle', 'Delete skill?'),
-      body: t('skills.deleteBody', `"${skill.name}" will be permanently removed. This cannot be undone.`),
+      body: t('skills.deleteBody', '"{name}" will be permanently removed. This cannot be undone.').replace('{name}', skill.name),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })
@@ -554,7 +554,7 @@ export function SkillsLayout() {
           accept=".md,.markdown"
           onChange={handleImportMarkdown}
           className="hidden"
-          aria-label="Import SKILL.md file"
+          aria-label={t('skills.importSkill', 'Import SKILL.md')}
         />
         <input
           ref={folderInputRef}
@@ -562,7 +562,7 @@ export function SkillsLayout() {
           multiple
           onChange={handleImportFolder}
           className="hidden"
-          aria-label="Import skill folder"
+          aria-label={t('skills.importSkillFolder', 'Import skill folder')}
           webkitdirectory=""
           directory=""
         />

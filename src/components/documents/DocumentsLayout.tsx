@@ -1517,7 +1517,7 @@ export function DocumentsLayout() {
                       </div>
                       <div className="flex items-center justify-between gap-3">
                         <dt>{t('documents.fileContent', 'Content')}</dt>
-                        <dd className="font-(--font-code) text-text-primary">{activeDocument.markdown.length} chars</dd>
+                        <dd className="font-(--font-code) text-text-primary">{activeDocument.markdown.length} {t('documents.characters', 'chars')}</dd>
                       </div>
                     </dl>
                   </div>

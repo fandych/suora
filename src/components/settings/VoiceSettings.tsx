@@ -34,6 +34,17 @@ export function VoiceSettings() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [testText, setTestText] = useState('')
   const [ttsError, setTtsError] = useState('')
+  const voiceLanguageOptions = [
+    { value: 'en-US', label: t('settings.voiceLanguageEnUs', 'English (US)') },
+    { value: 'en-GB', label: t('settings.voiceLanguageEnGb', 'English (UK)') },
+    { value: 'zh-CN', label: t('settings.voiceLanguageZhCn', 'Chinese (Simplified)') },
+    { value: 'zh-TW', label: t('settings.voiceLanguageZhTw', 'Chinese (Traditional)') },
+    { value: 'ja-JP', label: t('settings.voiceLanguageJaJp', 'Japanese') },
+    { value: 'ko-KR', label: t('settings.voiceLanguageKoKr', 'Korean') },
+    { value: 'es-ES', label: t('settings.voiceLanguageEsEs', 'Spanish') },
+    { value: 'fr-FR', label: t('settings.voiceLanguageFrFr', 'French') },
+    { value: 'de-DE', label: t('settings.voiceLanguageDeDe', 'German') },
+  ]
 
   useEffect(() => {
     setVoiceSettings(loadVoiceSettings())
@@ -57,6 +68,7 @@ export function VoiceSettings() {
   const voiceAvailable = isSpeechSynthesisAvailable()
   const recognitionAvailable = isSpeechRecognitionAvailable()
   const selectedVoiceLabel = voiceSettings.voiceName || t('settings.default', 'Default')
+  const selectedLanguageLabel = voiceLanguageOptions.find((option) => option.value === voiceSettings.language)?.label || voiceSettings.language
 
   return (
     <div className="space-y-6">
@@ -72,7 +84,7 @@ export function VoiceSettings() {
 
           <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
             <SettingsStat label={t('settings.voice', 'Voice')} value={voiceSettings.enabled ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} accent />
-            <SettingsStat label={t('settings.language', 'Language')} value={voiceSettings.language} />
+            <SettingsStat label={t('settings.language', 'Language')} value={selectedLanguageLabel} />
             <SettingsStat label={t('settings.voiceName', 'Voice')} value={selectedVoiceLabel} />
             <SettingsStat label={t('settings.availableVoices', 'Voices')} value={String(voices.length)} />
           </div>
@@ -99,18 +111,12 @@ export function VoiceSettings() {
                 <select
                   value={voiceSettings.language}
                   onChange={(e) => updateSettings({ language: e.target.value })}
-                  aria-label="Voice language"
+                  aria-label={t('settings.language', 'Language')}
                   className={settingsSelectClass}
                 >
-                  <option value="en-US">English (US)</option>
-                  <option value="en-GB">English (UK)</option>
-                  <option value="zh-CN">中文 (简体)</option>
-                  <option value="zh-TW">中文 (繁體)</option>
-                  <option value="ja-JP">日本語</option>
-                  <option value="ko-KR">한국어</option>
-                  <option value="es-ES">Español</option>
-                  <option value="fr-FR">Français</option>
-                  <option value="de-DE">Deutsch</option>
+                  {voiceLanguageOptions.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
 
@@ -119,7 +125,7 @@ export function VoiceSettings() {
                 <select
                   value={voiceSettings.voiceName || ''}
                   onChange={(e) => updateSettings({ voiceName: e.target.value || undefined })}
-                  aria-label="Voice name"
+                  aria-label={t('settings.voiceName', 'Voice')}
                   className={settingsSelectClass}
                 >
                   <option value="">{t('settings.default', 'Default')}</option>
@@ -151,7 +157,7 @@ export function VoiceSettings() {
                 step="0.1"
                 value={voiceSettings.rate}
                 onChange={(e) => updateSettings({ rate: parseFloat(e.target.value) })}
-                aria-label="Speech rate"
+                aria-label={t('settings.speechRate', 'Speech Rate')}
                 className={settingsRangeClass}
               />
               <div className="mt-2 flex justify-between text-[10px] text-text-muted">
@@ -169,7 +175,7 @@ export function VoiceSettings() {
                 step="0.1"
                 value={voiceSettings.pitch}
                 onChange={(e) => updateSettings({ pitch: parseFloat(e.target.value) })}
-                aria-label="Voice pitch"
+                aria-label={t('settings.pitch', 'Pitch')}
                 className={settingsRangeClass}
               />
               <div className="mt-2 flex justify-between text-[10px] text-text-muted">
@@ -240,7 +246,7 @@ export function VoiceSettings() {
                 if (!testText) return
                 setTtsError('')
                 speak(testText, voiceSettings).catch((err) => {
-                  setTtsError(err instanceof Error ? err.message : 'Speech synthesis failed')
+                  setTtsError(err instanceof Error ? err.message : t('settings.speechSynthesisFailed', 'Speech synthesis failed'))
                 })
               }}
               className={settingsPrimaryButtonClass}

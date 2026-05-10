@@ -171,8 +171,8 @@ export function AgentOrchestrationPanel({
       addNotification({
         id: generateId('notif'),
         type: 'warning',
-        title: 'Pipeline name required',
-        message: 'Name the pipeline before saving it.',
+        title: t('agents.pipelineNameRequiredTitle', 'Pipeline name required'),
+        message: t('agents.pipelineNameRequiredBody', 'Name the pipeline before saving it.'),
         timestamp: Date.now(),
         read: false,
       })
@@ -207,8 +207,8 @@ export function AgentOrchestrationPanel({
       addNotification({
         id: generateId('notif'),
         type: 'error',
-        title: 'Pipeline save failed',
-        message: 'Could not write the pipeline file to disk.',
+        title: t('agents.pipelineSaveFailedTitle', 'Pipeline save failed'),
+        message: t('agents.pipelineSaveFailedBody', 'Could not write the pipeline file to disk.'),
         timestamp: Date.now(),
         read: false,
       })
@@ -218,8 +218,8 @@ export function AgentOrchestrationPanel({
     addNotification({
       id: generateId('notif'),
       type: 'success',
-      title: 'Pipeline saved',
-      message: `${nextPipeline.name} is now available for timers and history tracking.`,
+      title: t('agents.pipelineSavedTitle', 'Pipeline saved'),
+      message: t('agents.pipelineSavedBody', '{name} is now available for timers and history tracking.').replace('{name}', nextPipeline.name),
       timestamp: Date.now(),
       read: false,
     })
@@ -228,10 +228,10 @@ export function AgentOrchestrationPanel({
   const deletePipeline = async () => {
     if (!workspacePath || !selectedSavedPipeline) return
     const confirmed = await confirm({
-      title: 'Delete pipeline?',
-      body: `"${selectedSavedPipeline.name}" will be permanently removed from disk.`,
+      title: t('agents.pipelineDeleteTitle', 'Delete pipeline?'),
+      body: t('agents.pipelineDeleteBody', '"{name}" will be permanently removed from disk.').replace('{name}', selectedSavedPipeline.name),
       danger: true,
-      confirmText: 'Delete',
+      confirmText: t('common.delete', 'Delete'),
     })
     if (!confirmed) return
 
@@ -251,8 +251,8 @@ export function AgentOrchestrationPanel({
       addNotification({
         id: generateId('notif'),
         type: 'error',
-        title: 'Pipeline delete failed',
-        message: 'Could not remove the pipeline file from disk.',
+        title: t('agents.pipelineDeleteFailedTitle', 'Pipeline delete failed'),
+        message: t('agents.pipelineDeleteFailedBody', 'Could not remove the pipeline file from disk.'),
         timestamp: Date.now(),
         read: false,
       })
@@ -270,7 +270,7 @@ export function AgentOrchestrationPanel({
       const now = Date.now()
       const execution = await executeAgentPipeline({
         id: selectedSavedPipeline?.id ?? generateId('pipeline-draft'),
-        name: agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline',
+        name: agentPipelineName.trim() || selectedSavedPipeline?.name || t('agents.pipelineDraft', 'Draft pipeline'),
         steps: pipeline,
         createdAt: selectedSavedPipeline?.createdAt ?? now,
         updatedAt: now,
@@ -281,7 +281,7 @@ export function AgentOrchestrationPanel({
         persistLastRun: Boolean(selectedSavedPipeline && workspacePath),
       })
 
-      setPipelineResult(execution.steps.map((step) => step.status === 'success' ? (step.output || '') : (step.error || 'Step failed')))
+      setPipelineResult(execution.steps.map((step) => step.status === 'success' ? (step.output || '') : (step.error || t('agents.stepFailed', 'Step failed'))))
 
       if (selectedSavedPipeline && workspacePath) {
         setPipelineHistory(await loadPipelineExecutionsFromDisk(workspacePath, selectedSavedPipeline.id))
@@ -372,7 +372,7 @@ export function AgentOrchestrationPanel({
                   <select
                     value={step.agentId}
                     onChange={(e) => updateStep(idx, { agentId: e.target.value })}
-                    aria-label="Pipeline agent"
+                    aria-label={t('agents.pipelineAgent', 'Pipeline agent')}
                     className={orchestrationSelectClass}
                   >
                     {enabledAgents.map((a) => <option key={a.id} value={a.id}>{ICON_DATA[a.avatar || ''] ? '●' : (a.avatar || '●')} {a.name}</option>)}
@@ -392,7 +392,7 @@ export function AgentOrchestrationPanel({
                 <h4 className="text-xs font-semibold text-text-primary">{t('agents.results', 'Results')}</h4>
                 {pipelineResult.map((r, i) => (
                   <div key={i} className="p-2 rounded-lg bg-surface-2 border border-border-subtle text-xs text-text-secondary whitespace-pre-wrap max-h-40 overflow-y-auto">
-                    <span className="text-text-muted">Step {i + 1}: </span>{r.slice(0, 500)}{r.length > 500 ? '...' : ''}
+                    <span className="text-text-muted">{t('agents.pipelineStepFallback', 'Step {number}').replace('{number}', String(i + 1))}: </span>{r.slice(0, 500)}{r.length > 500 ? '...' : ''}
                   </div>
                 ))}
               </div>
@@ -407,7 +407,7 @@ export function AgentOrchestrationPanel({
                 pipelineHistory.slice(0, 10).map((execution) => (
                   <div key={execution.id} className="p-3 rounded-xl border border-border bg-surface-0/30 space-y-1">
                     <div className="flex items-center justify-between text-xs">
-                      <span className={`font-medium ${execution.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>{execution.status}</span>
+                      <span className={`font-medium ${execution.status === 'success' ? 'text-green-400' : 'text-red-400'}`}>{execution.status === 'success' ? t('agents.statusSuccess', 'Success') : t('agents.statusFailed', 'Failed')}</span>
                       <span className="text-text-muted">{new Date(execution.startedAt).toLocaleString()}</span>
                     </div>
                     <div className="text-[10px] text-text-muted">{execution.trigger === 'timer' ? t('agents.pipelineTriggeredByTimer', 'Triggered by timer') : t('agents.pipelineTriggeredManually', 'Triggered manually')} · {execution.steps.length} {t('agents.pipelineSteps', 'steps')}</div>
@@ -437,11 +437,16 @@ export function AgentOrchestrationPanel({
           <div className={`${orchestrationCardClass} space-y-2`}>
             <p className="text-xs text-text-muted mb-3">{t('agents.agentMessagesHelp', 'Real-time log of agent-to-agent delegation messages.')}</p>
             {msgLog.length === 0 ? (
-              <p className="text-xs text-text-muted text-center py-8">{t('agents.noAgentMessages', 'No agent-to-agent messages yet.')}<br/>Messages appear when agents delegate to each other.</p>
+              <p className="text-xs text-text-muted text-center py-8">{t('agents.noAgentMessages', 'No agent-to-agent messages yet.')}<br/>{t('agents.agentMessagesAppear', 'Messages appear when agents delegate to each other.')}</p>
             ) : (
               [...msgLog].reverse().map((msg) => {
                 const from = agents.find((a) => a.id === msg.fromAgentId)
                 const to = agents.find((a) => a.id === msg.toAgentId)
+                const statusLabel = msg.status === 'completed'
+                  ? t('agents.statusCompleted', 'Completed')
+                  : msg.status === 'failed'
+                    ? t('agents.statusFailed', 'Failed')
+                    : t('agents.statusPending', 'Pending')
                 return (
                   <div key={msg.id} className="p-3 rounded-xl border border-border bg-surface-0/30">
                     <div className="flex items-center gap-2 text-xs text-text-muted mb-1">
@@ -456,7 +461,7 @@ export function AgentOrchestrationPanel({
                         msg.status === 'completed' ? 'bg-green-500/15 text-green-400' :
                         msg.status === 'failed' ? 'bg-red-500/15 text-red-400' :
                         'bg-yellow-500/15 text-yellow-400'
-                      }`}>{msg.status}</span>
+                      }`}>{statusLabel}</span>
                     </div>
                     <p className="text-xs text-text-secondary line-clamp-3">{msg.content}</p>
                     {msg.result && <p className="text-xs text-text-muted mt-1 line-clamp-2">↳ {msg.result}</p>}
@@ -485,8 +490,8 @@ export function AgentOrchestrationPanel({
                     <div className="flex items-center gap-2 text-[10px] text-text-muted">
                       <span>v{v.version}</span>
                       {v.label && <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded">{v.label}</span>}
-                      <span>Model: {v.snapshot.modelId || 'default'}</span>
-                      <span>{v.snapshot.skills?.length || 0} skills</span>
+                      <span>{t('agents.modelLabel', 'Model')}: {v.snapshot.modelId || t('common.default', 'Default')}</span>
+                      <span>{t('agents.skillsCount', '{count} skills').replace('{count}', String(v.snapshot.skills?.length || 0))}</span>
                     </div>
                   </div>
                 )
@@ -533,11 +538,11 @@ export function AgentOrchestrationPanel({
                     </div>
                     {stats.responseTimes.length > 1 && (
                       <div className="mt-2 flex h-6 items-end gap-0.5">
-                        {stats.responseTimes.slice(-30).map((t, i) => {
+                        {stats.responseTimes.slice(-30).map((responseTime, i) => {
                           const slicedTimes = stats.responseTimes.slice(-30)
                           const max = slicedTimes.length > 0 ? Math.max(...slicedTimes) : 0
-                          const h = max > 0 ? (t / max) * 100 : 0
-                          return <div key={i} className="flex-1 bg-accent/40 rounded-t" {...{ style: { height: `${Math.max(h, 5)}%` } }} title={`${t}ms`} role="img" aria-label={`Response time ${t}ms`} />
+                          const h = max > 0 ? (responseTime / max) * 100 : 0
+                          return <div key={i} className="flex-1 bg-accent/40 rounded-t" {...{ style: { height: `${Math.max(h, 5)}%` } }} title={`${responseTime}ms`} role="img" aria-label={t('agents.responseTimeMs', 'Response time {value}ms').replace('{value}', String(responseTime))} />
                         })}
                       </div>
                     )}

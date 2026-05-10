@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { safeParse } from '@/utils/safeJson'
+import { useI18n } from '@/hooks/useI18n'
 
 interface TodoItem {
   id: string
@@ -18,6 +19,7 @@ function electronInvoke(channel: string, ...args: unknown[]): Promise<unknown> {
 
 export function TodoProgress() {
   const { workspacePath, activeSessionId, sessions } = useAppStore()
+  const { t } = useI18n()
   const [todos, setTodos] = useState<TodoItem[]>([])
   const [expanded, setExpanded] = useState(false)
 
@@ -59,6 +61,11 @@ export function TodoProgress() {
   const priorityIcon = (p: string) => p === 'high' ? '🔴' : p === 'medium' ? '🟡' : '🟢'
   const statusIcon = (s: string) => s === 'done' ? 'ui-check' : s === 'in-progress' ? 'ui-sparkles' : 'ui-clock'
   const statusColor = (s: string) => s === 'done' ? 'text-success' : s === 'in-progress' ? 'text-accent' : 'text-text-muted'
+  const statusLabel = (s: TodoItem['status']) => s === 'done'
+    ? t('common.done', 'Done')
+    : s === 'in-progress'
+      ? t('chat.inProgress', 'In progress')
+      : t('chat.pending', 'Pending')
 
   return (
     <div className="mx-auto mb-4 w-full max-w-352 animate-fade-in">
@@ -73,19 +80,19 @@ export function TodoProgress() {
           <div className="flex-1 min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <span className="text-[12px] font-semibold uppercase tracking-[0.14em] text-text-muted/52">
-                Execution checklist
+                {t('chat.executionChecklist', 'Execution checklist')}
               </span>
               <span className="text-[12px] font-semibold text-text-primary">
-                {done}/{total} completed
+                {t('chat.todoCompletedSummary', '{done}/{total} completed').replace('{done}', String(done)).replace('{total}', String(total))}
               </span>
               {inProgress > 0 && (
                 <span className="rounded-full border border-accent/18 bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
-                  {inProgress} in progress
+                  {t('chat.todoInProgressCount', '{count} in progress').replace('{count}', String(inProgress))}
                 </span>
               )}
               {pending > 0 && (
                 <span className="rounded-full border border-border-subtle/55 bg-surface-2/65 px-2 py-0.5 text-[10px] font-medium text-text-muted">
-                  {pending} pending
+                  {t('chat.todoPendingCount', '{count} pending').replace('{count}', String(pending))}
                 </span>
               )}
             </div>
@@ -93,7 +100,7 @@ export function TodoProgress() {
               value={percent}
               max={100}
               className={`todo-progress-meter ${percent === 100 ? 'is-complete' : ''}`}
-              aria-label={`Todo progress ${percent}%`}
+              aria-label={t('chat.todoProgressAria', 'Todo progress {percent}%').replace('{percent}', String(percent))}
             />
           </div>
           <span className="text-[13px] font-bold tabular-nums text-accent">{percent}%</span>
@@ -129,7 +136,7 @@ export function TodoProgress() {
                   todo.status === 'in-progress' ? 'bg-accent/10 text-accent' :
                   'bg-surface-3/80 text-text-muted'
                 }`}>
-                  {todo.status}
+                  {statusLabel(todo.status)}
                 </span>
               </div>
             ))}

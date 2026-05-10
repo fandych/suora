@@ -401,7 +401,7 @@ export function AgentsLayout() {
     if (!agent) return
     const ok = await confirm({
       title: t('agents.deleteTitle', 'Delete agent?'),
-      body: t('agents.deleteBody', `"${agent.name}" will be permanently deleted. This cannot be undone.`),
+      body: t('agents.deleteBody', '"{name}" will be permanently deleted. This cannot be undone.').replace('{name}', agent.name),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })

@@ -34,32 +34,7 @@ const ACCENT_SWATCH_STYLES = {
   slate: { fill: 'bg-[#6B7B99]', ring: 'ring-[#6B7B99]/45' },
 } as const
 
-const ACCENT_OPTIONS = [
-  { value: 'default', label: 'Amber' },
-  { value: 'sapphire', label: 'Sapphire' },
-  { value: 'emerald', label: 'Emerald' },
-  { value: 'amethyst', label: 'Amethyst' },
-  { value: 'coral', label: 'Coral' },
-  { value: 'rose', label: 'Rose' },
-  { value: 'jade', label: 'Jade' },
-  { value: 'crimson', label: 'Crimson' },
-  { value: 'copper', label: 'Copper' },
-  { value: 'arctic', label: 'Arctic' },
-  { value: 'slate', label: 'Slate' },
-] as const
-
-const LOCALE_LABELS: Record<AppLocale, string> = {
-  en: 'English',
-  zh: '中文',
-  ja: '日本語',
-  ko: '한국어',
-  fr: 'Français',
-  de: 'Deutsch',
-  es: 'Español',
-  pt: 'Português',
-  ru: 'Русский',
-  ar: 'العربية',
-}
+const LOCALE_VALUES: AppLocale[] = ['en', 'zh']
 
 function AutoStartToggle() {
   const { t } = useI18n()
@@ -129,12 +104,12 @@ function ProxySection() {
                 <select
                   value={proxySettings.type}
                   onChange={(e) => setProxySettings({ type: e.target.value as 'http' | 'https' | 'socks5' })}
-                  aria-label="Proxy protocol"
+                  aria-label={t('settings.protocol', 'Protocol')}
                   className={settingsSelectClass}
                 >
-                  <option value="http">HTTP</option>
-                  <option value="https">HTTPS</option>
-                  <option value="socks5">SOCKS5</option>
+                  <option value="http">{t('settings.protocolHttp')}</option>
+                  <option value="https">{t('settings.protocolHttps')}</option>
+                  <option value="socks5">{t('settings.protocolSocks5')}</option>
                 </select>
               </div>
               <div className="md:col-span-2">
@@ -167,7 +142,7 @@ function ProxySection() {
                 <input
                   value={proxySettings.username || ''}
                   onChange={(e) => setProxySettings({ username: e.target.value })}
-                  aria-label="Proxy username"
+                  aria-label={t('settings.usernameOptional', 'Username (optional)')}
                   className={settingsInputClass}
                 />
               </div>
@@ -177,7 +152,7 @@ function ProxySection() {
                   type="password"
                   value={proxySettings.password || ''}
                   onChange={(e) => setProxySettings({ password: e.target.value })}
-                  aria-label="Proxy password"
+                  aria-label={t('settings.passwordOptional', 'Password (optional)')}
                   className={settingsInputClass}
                 />
               </div>
@@ -234,7 +209,7 @@ function EmailSection() {
                   type="number"
                   value={emailConfig.smtpPort}
                   onChange={(e) => setEmailConfig({ smtpPort: parseInt(e.target.value, 10) || 587 })}
-                  title="SMTP Port"
+                  title={t('settings.smtpPort', 'SMTP Port')}
                   className={settingsInputClass}
                 />
               </div>
@@ -244,7 +219,7 @@ function EmailSection() {
                   checked={emailConfig.secure}
                   onChange={(e) => setEmailConfig({ secure: e.target.checked })}
                   className={settingsCheckboxClass}
-                  title="Use TLS"
+                  title={t('settings.useTls', 'Use TLS')}
                 />
                 <span className="text-sm text-text-secondary">{t('settings.useTls', 'Use TLS')}</span>
               </label>
@@ -307,7 +282,7 @@ function EmailSection() {
                   setEmailTestError('')
                   try {
                     const electron = getElectron()
-                    if (!electron) throw new Error('Electron not available')
+                    if (!electron) throw new Error(t('settings.electronUnavailable', 'Electron not available'))
 
                     const result = await electron.invoke('email:test', {
                       smtpHost: emailConfig.smtpHost,
@@ -323,7 +298,7 @@ function EmailSection() {
                       setEmailTestStatus('success')
                     } else {
                       setEmailTestStatus('error')
-                      setEmailTestError(result.error || 'Connection failed')
+                      setEmailTestError(result.error || t('settings.connectionFailed', 'Connection failed'))
                     }
                   } catch (err) {
                     setEmailTestStatus('error')
@@ -380,6 +355,23 @@ export function GeneralSettings() {
     emailConfig,
   } = useAppStore()
   const [saved, setSaved] = useState(false)
+  const accentOptions = [
+    { value: 'default', label: t('settings.accentAmber', 'Amber') },
+    { value: 'sapphire', label: t('settings.accentSapphire', 'Sapphire') },
+    { value: 'emerald', label: t('settings.accentEmerald', 'Emerald') },
+    { value: 'amethyst', label: t('settings.accentAmethyst', 'Amethyst') },
+    { value: 'coral', label: t('settings.accentCoral', 'Coral') },
+    { value: 'rose', label: t('settings.accentRose', 'Rose') },
+    { value: 'jade', label: t('settings.accentJade', 'Jade') },
+    { value: 'crimson', label: t('settings.accentCrimson', 'Crimson') },
+    { value: 'copper', label: t('settings.accentCopper', 'Copper') },
+    { value: 'arctic', label: t('settings.accentArctic', 'Arctic') },
+    { value: 'slate', label: t('settings.accentSlate', 'Slate') },
+  ] as const
+  const localeLabels: Record<AppLocale, string> = {
+    en: t('settings.localeEnglish', 'English'),
+    zh: t('settings.localeChinese', '中文'),
+  }
 
   useEffect(() => {
     const electron = getElectron()
@@ -391,7 +383,7 @@ export function GeneralSettings() {
     }
   }, [workspacePath, setWorkspacePath])
 
-  const activeAccent = ACCENT_OPTIONS.find((option) => option.value === accentColor)?.label || 'Amber'
+  const activeAccent = accentOptions.find((option) => option.value === accentColor)?.label || t('settings.accentAmber', 'Amber')
   const themeLabel = theme === 'dark'
     ? t('settings.dark', 'Dark')
     : theme === 'light'
@@ -412,7 +404,7 @@ export function GeneralSettings() {
 
           <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
             <SettingsStat label={t('settings.theme', 'Theme')} value={themeLabel} accent />
-            <SettingsStat label={t('settings.language', 'Language')} value={LOCALE_LABELS[locale]} />
+            <SettingsStat label={t('settings.language', 'Language')} value={localeLabels[locale]} />
             <SettingsStat label={t('settings.accentColor', 'Accent')} value={activeAccent} />
             <SettingsStat label={t('settings.email', 'Email')} value={emailConfig.enabled ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} />
           </div>
@@ -445,14 +437,14 @@ export function GeneralSettings() {
           <div className={settingsFieldCardClass}>
             <label className={settingsLabelClass}>{t('settings.accentColor', 'Accent Color')}</label>
             <div className="flex flex-wrap gap-2.5">
-              {ACCENT_OPTIONS.map((option) => (
+              {accentOptions.map((option) => (
                 <button
                   key={option.value}
                   type="button"
                   onClick={() => setAccentColor(option.value)}
                   title={option.label}
                   className={`relative flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${accentColor === option.value ? `border-text-primary scale-110 shadow-lg ring-2 ring-offset-2 ring-offset-surface-0 ${ACCENT_SWATCH_STYLES[option.value].ring}` : 'border-transparent hover:scale-105'}`}
-                  aria-label={`Accent color: ${option.label}`}
+                  aria-label={t('settings.accentColorAria', 'Accent color: {name}').replace('{name}', option.label)}
                 >
                   <span className={`block h-full w-full rounded-full ${ACCENT_SWATCH_STYLES[option.value].fill}`} aria-hidden="true" />
                   {accentColor === option.value && (
@@ -471,7 +463,7 @@ export function GeneralSettings() {
           <div className={settingsFieldCardClass}>
             <label className={settingsLabelClass}>{t('settings.fontSize', 'Font Size')}</label>
             <select
-              aria-label="Font size"
+              aria-label={t('settings.fontSize', 'Font Size')}
               value={fontSize}
               onChange={(e) => setFontSize(e.target.value as FontSize)}
               className={settingsSelectClass}
@@ -485,7 +477,7 @@ export function GeneralSettings() {
           <div className={settingsFieldCardClass}>
             <label className={settingsLabelClass}>{t('settings.codeFont', 'Code Font')}</label>
             <select
-              aria-label="Code font"
+              aria-label={t('settings.codeFont', 'Code Font')}
               value={codeFont}
               onChange={(e) => setCodeFont(e.target.value as CodeFont)}
               className={settingsSelectClass}
@@ -502,7 +494,7 @@ export function GeneralSettings() {
           <div className={settingsFieldCardClass}>
             <label className={settingsLabelClass}>{t('settings.bubbleStyle', 'Bubble Style')}</label>
             <select
-              aria-label="Bubble style"
+              aria-label={t('settings.bubbleStyle', 'Bubble Style')}
               value={bubbleStyle}
               onChange={(e) => setBubbleStyle(e.target.value as BubbleStyle)}
               className={settingsSelectClass}
@@ -524,13 +516,13 @@ export function GeneralSettings() {
         <div className="max-w-md">
           <label className={settingsLabelClass}>{t('settings.language', 'Language')}</label>
           <select
-            aria-label="Language"
+            aria-label={t('settings.language', 'Language')}
             value={locale}
             onChange={(e) => setLocale(e.target.value as AppLocale)}
             className={settingsSelectClass}
           >
-            {Object.entries(LOCALE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
+            {LOCALE_VALUES.map((value) => (
+              <option key={value} value={value}>{localeLabels[value]}</option>
             ))}
           </select>
         </div>
@@ -581,7 +573,7 @@ export function GeneralSettings() {
 
           <div className={`${settingsFieldCardClass} grid gap-3 sm:grid-cols-2`}>
             <SettingsStat label={t('settings.theme', 'Theme')} value={themeLabel} accent />
-            <SettingsStat label={t('settings.language', 'Language')} value={LOCALE_LABELS[locale]} />
+            <SettingsStat label={t('settings.language', 'Language')} value={localeLabels[locale]} />
             <SettingsStat label={t('settings.proxy', 'Proxy')} value={proxySettings.enabled ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} />
             <SettingsStat label={t('settings.autoSave', 'Auto-save')} value={autoSave ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} />
           </div>

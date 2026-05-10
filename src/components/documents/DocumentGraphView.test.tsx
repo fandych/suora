@@ -175,6 +175,15 @@ describe('DocumentGraphView', () => {
     expect(container.querySelectorAll('svg line')).toHaveLength(5)
   })
 
+  it('localizes edge filter labels in Chinese', () => {
+    useAppStore.setState({ locale: 'zh' })
+
+    render(<DocumentGraphView graph={createGraph()} selectedDocumentId={null} onSelectDocument={vi.fn()} />)
+
+    expect(screen.getByRole('button', { name: '引用' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '包含' })).toBeInTheDocument()
+  })
+
   it('filters graph labels and selects document nodes from the canvas', async () => {
     const user = userEvent.setup()
     const onSelectDocument = vi.fn()

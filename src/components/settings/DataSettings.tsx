@@ -77,6 +77,14 @@ export function DataSettings() {
   const { t } = useI18n()
   const { historyRetentionDays, setHistoryRetentionDays, agents, skills, sessions, providerConfigs, externalDirectories } = useAppStore()
 
+  const translateTemplate = (key: string, fallback: string, values: Record<string, string | number> = {}) => {
+    let message = t(key, fallback)
+    for (const [name, value] of Object.entries(values)) {
+      message = message.replaceAll(`{${name}}`, String(value))
+    }
+    return message
+  }
+
   const customAgentCount = agents.filter((agent) => !agent.id.startsWith('builtin-') && agent.id !== 'default-assistant').length
   const customSkillCount = skills.filter((skill) => skill.type === 'custom').length
 
@@ -108,7 +116,7 @@ export function DataSettings() {
       try {
         const data = safeParse<Record<string, unknown>>(reader.result as string)
         if (!data || typeof data !== 'object' || Array.isArray(data)) {
-          throw new Error('Invalid file format — expected a JSON object')
+          throw new Error(t('settings.invalidImportFormat', 'Invalid file format — expected a JSON object'))
         }
         const importAgents = Array.isArray(data.agents) ? data.agents : []
         const importSkills = Array.isArray(data.skills) ? data.skills : []
@@ -124,14 +132,14 @@ export function DataSettings() {
           return
         }
         const summary = [
-          importAgents.length && `${importAgents.length} agent(s)`,
-          importSkills.length && `${importSkills.length} skill(s)`,
-          importSessions.length && `${importSessions.length} session(s)`,
-          hasProviders && 'provider configs (will overwrite current)',
+          importAgents.length && translateTemplate('settings.importAgentsCount', '{count} agent(s)', { count: importAgents.length }),
+          importSkills.length && translateTemplate('settings.importSkillsCount', '{count} skill(s)', { count: importSkills.length }),
+          importSessions.length && translateTemplate('settings.importSessionsCount', '{count} session(s)', { count: importSessions.length }),
+          hasProviders && t('settings.importProviderConfigsOverwrite', 'provider configs (will overwrite current)'),
         ].filter(Boolean).join(', ')
         const ok = await confirm({
           title: t('settings.importTitle', 'Import data?'),
-          body: t('settings.importBody', `About to import: ${summary}. Existing items with the same IDs may be duplicated or overwritten.`),
+          body: translateTemplate('settings.importBody', 'About to import: {summary}. Existing items with the same IDs may be duplicated or overwritten.', { summary }),
           confirmText: t('settings.importConfirm', 'Import'),
         })
         if (!ok) { input.value = ''; return }
@@ -153,7 +161,7 @@ export function DataSettings() {
     reader.onerror = () => {
       toast.error(
         t('settings.importFailed', 'Failed to import data'),
-        reader.error?.message ?? 'Could not read file',
+        reader.error?.message ?? t('settings.importReadFailed', 'Could not read file'),
       )
       input.value = ''
     }
@@ -170,13 +178,16 @@ export function DataSettings() {
     }
     const ok = await confirm({
       title: t('settings.cleanTitle', 'Delete old conversations?'),
-      body: t('settings.cleanBody', `${old.length} session(s) older than ${historyRetentionDays} days will be permanently deleted.`),
+      body: translateTemplate('settings.cleanBody', '{count} session(s) older than {days} days will be permanently deleted.', {
+        count: old.length,
+        days: historyRetentionDays,
+      }),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })
     if (!ok) return
     old.forEach((session) => removeSession(session.id))
-    toast.success(t('settings.cleanDone', `Deleted ${old.length} session(s).`))
+    toast.success(translateTemplate('settings.cleanDone', 'Deleted {count} session(s).', { count: old.length }))
   }
 
   const clearAllData = async () => {
@@ -269,7 +280,7 @@ export function DataSettings() {
               max={3650}
               value={historyRetentionDays}
               onChange={(e) => setHistoryRetentionDays(Math.max(0, parseInt(e.target.value, 10) || 0))}
-              aria-label="History retention days"
+              aria-label={t('settings.historyRetentionInput', 'History retention days')}
               className={`${settingsInputClass} w-32`}
             />
             <span className="text-sm text-text-muted">{t('settings.days', 'days')}</span>

@@ -22,13 +22,13 @@ function getTriggerTypeLabel(type: EventTrigger['type'], t: (key: string, fallba
   }
 }
 
-function formatRelativeTime(value?: number) {
-  if (!value) return 'Never'
+function formatRelativeTime(value: number | undefined, t: (key: string, fallback: string) => string) {
+  if (!value) return t('settings.relativeNever', 'Never')
   const diff = Date.now() - value
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.max(1, Math.floor(diff / 60_000))}m ago`
-  if (diff < 86_400_000) return `${Math.max(1, Math.floor(diff / 3_600_000))}h ago`
-  if (diff < 604_800_000) return `${Math.max(1, Math.floor(diff / 86_400_000))}d ago`
+  if (diff < 60_000) return t('settings.relativeJustNow', 'just now')
+  if (diff < 3_600_000) return t('settings.relativeMinutesAgo', '{count}m ago').replace('{count}', String(Math.max(1, Math.floor(diff / 60_000))))
+  if (diff < 86_400_000) return t('settings.relativeHoursAgo', '{count}h ago').replace('{count}', String(Math.max(1, Math.floor(diff / 3_600_000))))
+  if (diff < 604_800_000) return t('settings.relativeDaysAgo', '{count}d ago').replace('{count}', String(Math.max(1, Math.floor(diff / 86_400_000))))
   return new Date(value).toLocaleDateString()
 }
 
@@ -62,11 +62,11 @@ export function EventsSettings() {
   const agentNameMap = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.name])), [agents])
   const preview = triggerForm.promptTemplate
     ? resolvePromptTemplate(triggerForm.promptTemplate, {
-        content: '(sample content)',
-        file: '/path/to/file.ts',
-        previous: '(previous content)',
+        content: t('settings.sampleContent', '(sample content)'),
+        file: t('settings.sampleFilePath', '/path/to/file.ts'),
+        previous: t('settings.samplePreviousContent', '(previous content)'),
       })
-    : '—'
+    : t('common.empty', 'Empty')
 
   const createTrigger = () => {
     if (!triggerForm.name || !triggerForm.agentId || !triggerForm.promptTemplate) return
@@ -155,7 +155,7 @@ export function EventsSettings() {
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-text-muted/70">
                     <span>{t('settings.created', 'Created')}: {new Date(trigger.createdAt).toLocaleString()}</span>
-                    <span>{t('settings.lastTriggered', 'Last triggered')}: {formatRelativeTime(trigger.lastTriggered)}</span>
+                    <span>{t('settings.lastTriggered', 'Last triggered')}: {formatRelativeTime(trigger.lastTriggered, t)}</span>
                   </div>
                 </div>
               )
@@ -211,7 +211,7 @@ export function EventsSettings() {
             <input
               value={triggerForm.pattern}
               onChange={(event) => setTriggerForm({ ...triggerForm, pattern: event.target.value })}
-              placeholder={triggerForm.type === 'file_change' ? 'File pattern (e.g., *.json)' : 'Cron expression'}
+              placeholder={triggerForm.type === 'file_change' ? t('settings.filePatternPlaceholder', 'File pattern (e.g., *.json)') : t('settings.cronExpressionPlaceholder', 'Cron expression')}
               className={settingsInputClass}
             />
           </label>

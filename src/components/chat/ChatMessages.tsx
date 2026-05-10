@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store/appStore'
 import type { Message, ToolCall, MessageAttachment } from '@/types'
 import { IconifyIcon, ICON_DATA } from '@/components/icons/IconifyIcons'
+import { getLocale, t as translate } from '@/services/i18n'
 import { isSpeechSynthesisAvailable, loadVoiceSettings, speak } from '@/services/voiceInteraction'
 import { CopyButton, MarkdownContent } from './ChatMarkdown'
 import { useI18n } from '@/hooks/useI18n'
@@ -9,9 +10,13 @@ import { useI18n } from '@/hooks/useI18n'
 // ─── Helpers ───────────────────────────────────────────────────────
 
 export function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  const locale = getLocale()
+  const wholeNumber = new Intl.NumberFormat(locale).format(bytes)
+  const decimalFormatter = new Intl.NumberFormat(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
+
+  if (bytes < 1024) return translate('common.fileSizeBytes', '{size} B').replace('{size}', wholeNumber)
+  if (bytes < 1024 * 1024) return translate('common.fileSizeKB', '{size} KB').replace('{size}', decimalFormatter.format(bytes / 1024))
+  return translate('common.fileSizeMB', '{size} MB').replace('{size}', decimalFormatter.format(bytes / (1024 * 1024)))
 }
 
 function formatRelativeTime(ts: number, locale = 'en'): string {
@@ -28,19 +33,20 @@ function formatRelativeTime(ts: number, locale = 'en'): string {
 }
 
 const STATUS_CONFIG = {
-  pending:   { icon: '○', label: 'Pending', color: 'text-text-muted', bg: 'bg-surface-2/65', border: 'border-border-subtle/55' },
-  running:   { icon: '◌', label: 'Running', color: 'text-accent', bg: 'bg-accent/10', border: 'border-accent/18' },
-  completed: { icon: 'ui-check', label: 'Success', color: 'text-success', bg: 'bg-success/10', border: 'border-success/18' },
-  error:     { icon: 'ui-cross', label: 'Failed', color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger/18' },
+  pending:   { icon: '○', color: 'text-text-muted', bg: 'bg-surface-2/65', border: 'border-border-subtle/55' },
+  running:   { icon: '◌', color: 'text-accent', bg: 'bg-accent/10', border: 'border-accent/18' },
+  completed: { icon: 'ui-check', color: 'text-success', bg: 'bg-success/10', border: 'border-success/18' },
+  error:     { icon: 'ui-cross', color: 'text-danger', bg: 'bg-danger/10', border: 'border-danger/18' },
 } as const
 
 function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
+  if (ms < 1000) return `${ms}${translate('common.millisecondsUnit', 'ms')}`
+  return `${(ms / 1000).toFixed(1)}${translate('common.secondsUnitShort', 's')}`
 }
 
 /** Detect result content type for rendering hints */
-function detectResultType(output: string): 'json' | 'error' | 'path' | 'text' {
+function detectResultType(output: string, status?: ToolCall['status']): 'json' | 'error' | 'path' | 'text' {
+  if (status === 'error') return 'error'
   const trimmed = output.trim()
   if (trimmed.startsWith('Error:') || trimmed.startsWith('Tool "') || trimmed.startsWith('[Custom tool error]') || trimmed.startsWith('Path blocked') || trimmed.startsWith('Command blocked'))
     return 'error'
@@ -60,25 +66,27 @@ function resultPreview(output: string, maxLen = 60): string {
 }
 
 /** Categorize tool errors for better display */
-function categorizeError(output: string): { kind: 'permission' | 'timeout' | 'validation' | 'crash' | 'generic'; label: string } {
+function categorizeError(output: string): 'permission' | 'timeout' | 'validation' | 'crash' | 'generic' {
   const lower = output.toLowerCase()
   if (lower.includes('blocked by confirmation') || lower.includes('permission') || lower.includes('plan mode'))
-    return { kind: 'permission', label: 'Permission Denied' }
+    return 'permission'
   if (lower.includes('timeout') || lower.includes('timed out'))
-    return { kind: 'timeout', label: 'Timeout' }
+    return 'timeout'
   if (lower.includes('validation') || lower.includes('invalid') || lower.includes('missing parameter'))
-    return { kind: 'validation', label: 'Validation Error' }
+    return 'validation'
   if (lower.includes('threw exception') || lower.includes('unexpected'))
-    return { kind: 'crash', label: 'Runtime Error' }
-  return { kind: 'generic', label: 'Error' }
+    return 'crash'
+  return 'generic'
 }
 
-const RESULT_TYPE_BADGE = {
-  json:  { label: 'JSON', cls: 'border border-sky-500/18 bg-sky-500/10 text-sky-400' },
-  error: { label: 'ERR', cls: 'border border-danger/18 bg-danger/10 text-danger' },
-  path:  { label: 'PATH', cls: 'border border-amber-500/18 bg-amber-500/10 text-amber-400' },
-  text:  { label: 'TEXT', cls: 'border border-border-subtle/55 bg-surface-2/75 text-text-muted' },
-} as const
+function getResultTypeBadge(resultType: 'json' | 'error' | 'path' | 'text') {
+  return {
+    json: { label: translate('chat.resultTypeJson', 'JSON'), cls: 'border border-sky-500/18 bg-sky-500/10 text-sky-400' },
+    error: { label: translate('chat.resultTypeError', 'ERR'), cls: 'border border-danger/18 bg-danger/10 text-danger' },
+    path: { label: translate('chat.resultTypePath', 'PATH'), cls: 'border border-amber-500/18 bg-amber-500/10 text-amber-400' },
+    text: { label: translate('chat.resultTypeText', 'TEXT'), cls: 'border border-border-subtle/55 bg-surface-2/75 text-text-muted' },
+  }[resultType]
+}
 
 /** Max chars shown in UI for tool results (Claude Code uses 50 000 with disk persistence) */
 const MAX_RESULT_DISPLAY = 10_000
@@ -86,15 +94,29 @@ const MAX_RESULT_DISPLAY = 10_000
 // ─── Tool Call Row ─────────────────────────────────────────────────
 
 function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }) {
+  const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const cfg = STATUS_CONFIG[call.status]
+  const statusLabel = {
+    pending: t('chat.pending', 'Pending'),
+    running: t('chat.running', 'Running'),
+    completed: t('chat.success', 'Success'),
+    error: t('chat.failed', 'Failed'),
+  }[call.status]
   const displayOutput = call.outputEnvelope?.dataPreview ?? call.output
-  const resultType = displayOutput ? detectResultType(displayOutput) : null
-  const typeBadge = resultType ? RESULT_TYPE_BADGE[resultType] : null
+  const resultType = displayOutput ? detectResultType(displayOutput, call.status) : null
+  const typeBadge = resultType ? getResultTypeBadge(resultType) : null
   const errorInfo = call.status === 'error' && displayOutput ? categorizeError(displayOutput) : null
+  const errorLabel = errorInfo ? {
+    permission: t('chat.toolPermissionDenied', 'Permission denied'),
+    timeout: t('chat.toolTimeout', 'Timeout'),
+    validation: t('chat.toolValidationError', 'Validation error'),
+    crash: t('chat.toolRuntimeError', 'Runtime error'),
+    generic: t('chat.toolError', 'Error'),
+  }[errorInfo] : null
   const truncatedOutput = displayOutput && displayOutput.length > MAX_RESULT_DISPLAY
-    ? displayOutput.slice(0, MAX_RESULT_DISPLAY) + `\n\n... [${(displayOutput.length - MAX_RESULT_DISPLAY).toLocaleString()} characters truncated]`
+    ? displayOutput.slice(0, MAX_RESULT_DISPLAY) + `\n\n... [${t('chat.toolCharactersTruncated', '{count} characters truncated').replace('{count}', (displayOutput.length - MAX_RESULT_DISPLAY).toLocaleString())}]`
     : displayOutput
 
   useEffect(() => {
@@ -111,8 +133,8 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
   const collapsedSummary = (() => {
     if (call.outputEnvelope?.summary) return call.outputEnvelope.summary
     if (call.output && call.status === 'completed') return resultPreview(call.output)
-    if (!call.output && call.status === 'completed') return 'Completed with no explicit output'
-    if (call.status === 'pending') return 'Waiting for execution'
+    if (!call.output && call.status === 'completed') return t('chat.toolCompletedNoOutput', 'Completed with no explicit output')
+    if (call.status === 'pending') return t('chat.toolWaitingExecution', 'Waiting for execution')
     if (call.input && call.status !== 'completed') {
       return Object.entries(call.input)
         .map(([key, value]) => `${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)
@@ -136,7 +158,7 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
             {stepLabel && <span className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-2 py-0.5 font-mono text-[9px] text-text-muted/62">{stepLabel}</span>}
             <span className="truncate text-[12.5px] font-semibold text-text-primary">{call.toolName}</span>
             {typeBadge && !open && <span className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] ${typeBadge.cls}`}>{typeBadge.label}</span>}
-            {errorInfo && !open && <span className="rounded-full border border-danger/18 bg-danger/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-danger">{errorInfo.label}</span>}
+            {errorLabel && !open && <span className="rounded-full border border-danger/18 bg-danger/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-danger">{errorLabel}</span>}
           </div>
           {collapsedSummary && (
             <div className="mt-1 truncate text-[11px] leading-5 text-text-muted/76 font-[JetBrains_Mono,monospace]">
@@ -147,7 +169,7 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
 
         <div className="ml-auto flex shrink-0 items-center gap-2 pl-2">
           <span className={`rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${cfg.border} ${cfg.bg} ${cfg.color}`}>
-            {cfg.label}
+            {statusLabel}
           </span>
           {elapsed > 0 && <span className="text-[10px] text-text-muted/58">{formatDuration(elapsed)}</span>}
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-text-muted/40 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
@@ -157,18 +179,18 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
       {open && (
         <div className="border-t border-border-subtle/45 bg-surface-0/34 px-4 pb-4 pt-3 space-y-3 animate-fade-in">
           <div>
-            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">Arguments</div>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.arguments', 'Arguments')}</div>
             <pre className="max-h-40 overflow-auto rounded-2xl border border-border-subtle/45 bg-surface-0/68 px-3 py-2.5 text-[11px] text-text-muted font-[JetBrains_Mono,monospace]">{JSON.stringify(call.input, null, 2)}</pre>
           </div>
 
           {truncatedOutput && (
             <div>
               <div className="mb-2 flex items-center gap-2">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">Result</div>
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.result', 'Result')}</div>
                 {typeBadge && <span className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] ${typeBadge.cls}`}>{typeBadge.label}</span>}
-                {call.outputEnvelope?.storedExternally && <span className="rounded-full border border-amber-500/18 bg-amber-500/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-amber-400">REF</span>}
+                {call.outputEnvelope?.storedExternally && <span className="rounded-full border border-amber-500/18 bg-amber-500/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-amber-400">{t('chat.referenceBadge', 'REF')}</span>}
                 {call.outputEnvelope?.outputChars !== undefined && (
-                  <span className="text-[10px] text-text-muted/45">{call.outputEnvelope.outputChars.toLocaleString()} chars</span>
+                  <span className="text-[10px] text-text-muted/45">{call.outputEnvelope.outputChars.toLocaleString()} {t('chat.charactersUnit', 'chars')}</span>
                 )}
                 {call.output && (
                   <div className="ml-auto flex items-center gap-1.5">
@@ -178,10 +200,10 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
                         e.stopPropagation()
                         void navigator.clipboard.writeText(call.output ?? '')
                       }}
-                      title="Copy full output to clipboard"
+                      title={t('chat.copyFullOutput', 'Copy full output to clipboard')}
                       className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-2.5 py-1 text-[10px] font-medium text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
                     >
-                      Copy
+                      {t('common.copy', 'Copy')}
                     </button>
                     {call.output.length > MAX_RESULT_DISPLAY && (
                       <button
@@ -202,10 +224,10 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
                             // Download may fail in restricted environments.
                           }
                         }}
-                        title="Download full output as .txt"
+                        title={t('chat.downloadFullOutput', 'Download full output as .txt')}
                         className="rounded-full border border-border-subtle/50 bg-surface-0/55 px-2.5 py-1 text-[10px] font-medium text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
                       >
-                        Download
+                        {t('chat.download', 'Download')}
                       </button>
                     )}
                   </div>
@@ -213,7 +235,7 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
               </div>
               {call.outputEnvelope?.dataRef && (
                 <div className="mb-2 rounded-2xl border border-border-subtle/45 bg-surface-2/60 px-3 py-2 text-[11px] text-text-muted">
-                  Full output: {call.outputEnvelope.dataRef}
+                  {t('chat.fullOutput', 'Full output')}: {call.outputEnvelope.dataRef}
                 </div>
               )}
               {call.outputEnvelope?.warnings?.length ? (
@@ -638,15 +660,15 @@ export function MessageBubble({
 
               {!isUser && !message.isStreaming && message.tokenUsage && (
                 <div className="mt-4 border-t border-border-subtle/45 pt-3">
-                  <span className="text-[10px] font-medium text-text-muted/42">{t('chat.tokens', 'Tokens')}: {message.tokenUsage.promptTokens} in / {message.tokenUsage.completionTokens} out / {message.tokenUsage.totalTokens} total</span>
+                  <span className="text-[10px] font-medium text-text-muted/42">{t('chat.tokens', 'Tokens')}: {t('chat.tokensUsage', '{prompt} in / {completion} out / {total} total').replace('{prompt}', String(message.tokenUsage.promptTokens)).replace('{completion}', String(message.tokenUsage.completionTokens)).replace('{total}', String(message.tokenUsage.totalTokens))}</span>
                 </div>
               )}
               {!isUser && !message.isStreaming && message.runtime && (
                 <div className="mt-3 flex flex-wrap gap-1.5 border-t border-border-subtle/45 pt-3 text-[10px] text-text-muted/50">
-                  <span className="rounded-full bg-surface-2/70 px-2 py-0.5">run {message.runtime.runId}</span>
+                  <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{t('chat.runBadge', 'run {id}').replace('{id}', message.runtime.runId)}</span>
                   {message.runtime.agentName && <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{message.runtime.agentName}</span>}
-                  {message.runtime.toolNames?.length ? <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{message.runtime.toolNames.length} tools</span> : null}
-                  {message.contextSummary && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-300">context pruned</span>}
+                  {message.runtime.toolNames?.length ? <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{t('chat.toolsUsedBadge', '{count} tools').replace('{count}', String(message.runtime.toolNames.length))}</span> : null}
+                  {message.contextSummary && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-300">{t('chat.contextPruned', 'context pruned')}</span>}
                 </div>
               )}
               {message.citations?.length ? (

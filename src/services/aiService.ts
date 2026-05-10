@@ -3,6 +3,7 @@ import { generateText, streamText, stepCountIs, type ToolSet, type ModelMessage,
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
+import { t } from '@/services/i18n'
 import { logger } from '@/services/logger'
 
 type ElectronBridge = {
@@ -451,16 +452,19 @@ function getProviderInstance(key: string): ProviderInstance | undefined {
  */
 export function validateModelConfig(model: { provider?: string; providerType?: string; modelId?: string; apiKey?: string }): { valid: boolean; error?: string } {
   if (!model.provider) {
-    return { valid: false, error: 'Provider ID is missing' }
+    return { valid: false, error: t('models.providerIdMissing', 'Provider ID is missing') }
   }
   if (!model.providerType) {
-    return { valid: false, error: 'Provider type is missing' }
+    return { valid: false, error: t('models.providerTypeMissing', 'Provider type is missing') }
   }
   if (!model.modelId) {
-    return { valid: false, error: 'Model ID is missing' }
+    return { valid: false, error: t('models.modelIdMissing', 'Model ID is missing') }
   }
   if (!model.apiKey && model.providerType !== 'ollama') {
-    return { valid: false, error: `API key is required for ${getProviderTypeName(model.providerType)}` }
+    return {
+      valid: false,
+      error: t('models.apiKeyRequiredForProvider', 'API key is required for {provider}').replace('{provider}', getProviderTypeName(model.providerType)),
+    }
   }
   return { valid: true }
 }

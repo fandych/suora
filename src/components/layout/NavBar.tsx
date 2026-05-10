@@ -66,7 +66,7 @@ export function NavBar() {
   const { t } = useI18n()
 
   return (
-    <nav aria-label="Main navigation" className="relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r border-border-subtle/80 bg-surface-1/96 py-3 shadow-[inset_-1px_0_0_rgba(255,255,255,0.025)]">
+    <nav aria-label={t('nav.mainNavigation', 'Main navigation')} className="relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r border-border-subtle/80 bg-surface-1/96 py-3 shadow-[inset_-1px_0_0_rgba(255,255,255,0.025)]">
       {/* Logo */}
       <button
         type="button"
@@ -77,7 +77,7 @@ export function NavBar() {
         <img src={logoSvg} alt="SUORA" width={32} height={32} className="h-8 w-8" />
       </button>
 
-      <div aria-label="Navigation items" className="flex flex-1 flex-col gap-1.5">
+      <div aria-label={t('nav.navigationItems', 'Navigation items')} className="flex flex-1 flex-col gap-1.5">
         {navItems.map((item) => {
           const isActive = location.pathname.startsWith(item.path)
           const label = t(item.i18nKey, item.fallbackLabel)

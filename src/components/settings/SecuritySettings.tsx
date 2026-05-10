@@ -101,7 +101,7 @@ function EnvVarsSection() {
       return
     }
     if (!ENV_KEY_REGEX.test(trimmedKey)) {
-      setKeyError(t('settings.envKeyInvalid', 'Must start with a letter or _ and contain only letters, numbers, _'))
+      setKeyError(t('settings.envKeyInvalid', 'Variable name must start with a letter or _ and contain only letters, numbers, and _'))
       return
     }
     if (envVariables.some((variable) => variable.key === trimmedKey)) {
@@ -207,7 +207,7 @@ function EnvVarsSection() {
                     type={editSecret ? 'password' : 'text'}
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
-                    aria-label="Variable value"
+                    aria-label={t('settings.envValue', 'Value')}
                     className={settingsMonoInputClass}
                   />
                   <input
@@ -247,7 +247,7 @@ function EnvVarsSection() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-[12px] font-semibold text-text-primary">{variable.key}</span>
-                      {variable.secret && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-medium uppercase text-amber-600">secret</span>}
+                      {variable.secret && <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[9px] font-medium uppercase text-amber-600">{t('settings.secretBadge', 'secret')}</span>}
                     </div>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="font-mono text-[11px] text-text-muted wrap-break-word">{variable.secret && !visibleKeys.has(variable.key) ? '••••••••' : variable.value}</span>

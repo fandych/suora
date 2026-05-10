@@ -1,4 +1,5 @@
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { useI18n } from '@/hooks/useI18n'
 import { buildAgentFlowNodes, type BuildAgentFlowOptions, type AgentFlowNodeState } from '@/services/agentMermaid'
 import type { Agent } from '@/types'
 
@@ -7,6 +8,8 @@ interface AgentFlowDiagramProps {
   options?: BuildAgentFlowOptions
   className?: string
 }
+
+type Translate = (key: string, fallback?: string) => string
 
 function nodeClasses(state: AgentFlowNodeState) {
   switch (state) {
@@ -22,9 +25,17 @@ function nodeClasses(state: AgentFlowNodeState) {
   }
 }
 
-function stateLabel(state: AgentFlowNodeState) {
-  if (state === 'terminal') return 'endpoint'
-  return state
+function stateLabel(state: AgentFlowNodeState, translate: Translate) {
+  if (state === 'terminal') return translate('agents.flowStateTerminal', 'endpoint')
+  if (state === 'warning') return translate('agents.flowStateWarning', 'warning')
+  if (state === 'disabled') return translate('agents.flowStateDisabled', 'disabled')
+  return translate('agents.flowStateActive', 'active')
+}
+
+function connectorLabel(nodeId: string, translate: Translate) {
+  if (nodeId === 'runtime') return translate('agents.flowConnectorRespond', 'respond')
+  if (nodeId === 'output') return translate('agents.flowConnectorLearn', 'learn')
+  return translate('agents.flowConnectorCompose', 'compose')
 }
 
 function trimPreview(value: string, maxLength: number) {
@@ -33,6 +44,7 @@ function trimPreview(value: string, maxLength: number) {
 }
 
 export function AgentFlowDiagram({ agent, options, className }: AgentFlowDiagramProps) {
+  const { t } = useI18n()
   const nodes = buildAgentFlowNodes(agent, options)
 
   return (
@@ -48,7 +60,7 @@ export function AgentFlowDiagram({ agent, options, className }: AgentFlowDiagram
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-semibold text-text-primary">{node.title}</span>
-                    <span className="rounded-full border border-current/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em]">{stateLabel(node.state)}</span>
+                    <span className="rounded-full border border-current/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em]">{stateLabel(node.state, t)}</span>
                   </div>
                   <div className="mt-2 text-xs leading-relaxed text-text-muted">{trimPreview(node.detail, 126)}</div>
                   {!!node.badges?.length && (
@@ -63,7 +75,7 @@ export function AgentFlowDiagram({ agent, options, className }: AgentFlowDiagram
             </div>
             {index < nodes.length - 1 && (
               <div className="ml-7 flex h-7 items-center border-l border-border-subtle pl-5 text-[10px] text-text-muted">
-                {node.id === 'runtime' ? 'respond' : node.id === 'output' ? 'learn' : 'compose'}
+                {connectorLabel(node.id, t)}
               </div>
             )}
           </div>

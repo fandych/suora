@@ -8,12 +8,12 @@ const EDGE_TYPES: DocumentGraphEdgeType[] = ['contains', 'references', 'tagged',
 // Keep the adapter preview compact enough for the inspector panel without rendering the full graph JSON.
 const GRAPHIFY_PREVIEW_MAX_CHARS = 1400
 
-const NODE_STYLE: Record<DocumentGraphNode['type'], { color: string; radius: number; label: string }> = {
-  group: { color: '#12A8A0', radius: 26, label: 'Group' },
-  folder: { color: '#D9A441', radius: 21, label: 'Folder' },
-  document: { color: '#4D7CFF', radius: 19, label: 'Document' },
-  tag: { color: '#35B98F', radius: 16, label: 'Tag' },
-  'external-link': { color: '#E45F68', radius: 15, label: 'External' },
+const NODE_STYLE: Record<DocumentGraphNode['type'], { color: string; radius: number }> = {
+  group: { color: '#12A8A0', radius: 26 },
+  folder: { color: '#D9A441', radius: 21 },
+  document: { color: '#4D7CFF', radius: 19 },
+  tag: { color: '#35B98F', radius: 16 },
+  'external-link': { color: '#E45F68', radius: 15 },
 }
 
 const NODE_SWATCH_CLASS: Record<DocumentGraphNode['type'], string> = {
@@ -130,6 +130,34 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
       else next.add(edgeType)
       return next
     })
+  }
+
+  const getNodeTypeLabel = (nodeType: DocumentGraphNode['type']) => {
+    switch (nodeType) {
+      case 'group':
+        return t('documents.graphNodeGroup', 'Group')
+      case 'folder':
+        return t('documents.graphNodeFolder', 'Folder')
+      case 'document':
+        return t('documents.graphNodeDocument', 'Document')
+      case 'tag':
+        return t('documents.graphNodeTag', 'Tag')
+      case 'external-link':
+        return t('documents.graphNodeExternal', 'External')
+    }
+  }
+
+  const getEdgeTypeLabel = (edgeType: DocumentGraphEdgeType) => {
+    switch (edgeType) {
+      case 'contains':
+        return t('documents.graphEdgeContains', 'contains')
+      case 'references':
+        return t('documents.graphEdgeReferences', 'references')
+      case 'tagged':
+        return t('documents.graphEdgeTagged', 'tagged')
+      case 'external-link':
+        return t('documents.graphEdgeExternalLink', 'external-link')
+    }
   }
 
   return (
@@ -250,7 +278,7 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
                 onClick={() => toggleEdge(edgeType)}
                 className={`rounded-2xl border px-3 py-1.5 text-[10px] font-semibold transition-all ${enabledEdges.has(edgeType) ? 'border-accent/25 bg-accent/12 text-accent' : 'border-border-subtle/55 bg-surface-2/45 text-text-muted hover:text-text-primary'}`}
               >
-                {edgeType}
+                {getEdgeTypeLabel(edgeType)}
               </button>
             ))}
           </div>
@@ -264,7 +292,7 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
                 <span className={`h-2.5 w-2.5 rounded-full ${NODE_SWATCH_CLASS[selectedNode.type]}`} />
                 <span className="text-[12px] font-semibold text-text-primary">{selectedNode.label}</span>
               </div>
-              <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/80">{selectedNode.metadata.path || selectedNode.metadata.url || NODE_STYLE[selectedNode.type].label}</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/80">{selectedNode.metadata.path || selectedNode.metadata.url || getNodeTypeLabel(selectedNode.type)}</p>
               {selectedNode.metadata.excerpt && <p className="mt-3 line-clamp-4 text-[11px] leading-relaxed text-text-muted">{selectedNode.metadata.excerpt}</p>}
             </div>
           ) : (

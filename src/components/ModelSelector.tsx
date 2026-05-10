@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store/appStore'
+import { useI18n } from '@/hooks/useI18n'
 import { testConnection } from '@/services/aiService'
 import { toast } from '@/services/toast'
 
@@ -10,6 +11,7 @@ type TestState =
   | { kind: 'error'; message: string }
 
 export function ModelSelector() {
+  const { t } = useI18n()
   const { models, selectedModel, setSelectedModel, providerConfigs } = useAppStore()
   const [testState, setTestState] = useState<TestState>({ kind: 'idle' })
 
@@ -22,7 +24,7 @@ export function ModelSelector() {
     if (!selectedModel || testState.kind === 'pending') return
     const provider = providerConfigs.find((p) => p.id === selectedModel.provider)
     if (!provider) {
-      setTestState({ kind: 'error', message: 'Provider not configured' })
+      setTestState({ kind: 'error', message: t('models.providerNotConfigured', 'Provider not configured') })
       return
     }
     setTestState({ kind: 'pending' })
@@ -36,16 +38,16 @@ export function ModelSelector() {
       )
       if (result.success) {
         setTestState({ kind: 'ok', latency: result.latency ?? 0 })
-        toast.success('Connection OK', `${selectedModel.name} · ${result.latency ?? 0}ms`)
+        toast.success(t('models.connectionOk', 'Connection OK'), `${selectedModel.name} · ${result.latency ?? 0}ms`)
       } else {
-        const message = result.error ?? 'Connection test failed'
+        const message = result.error ?? t('models.connectionTestFailed', 'Connection test failed')
         setTestState({ kind: 'error', message })
-        toast.error('Connection failed', message)
+        toast.error(t('models.connectionFailed', 'Connection failed'), message)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       setTestState({ kind: 'error', message })
-      toast.error('Connection failed', message)
+      toast.error(t('models.connectionFailed', 'Connection failed'), message)
     }
   }
 
@@ -53,12 +55,12 @@ export function ModelSelector() {
     <div className="p-4 border-b border-border-subtle">
       <div className="space-y-2">
         <label htmlFor="model-selector-select" className="text-xs font-medium text-text-muted uppercase tracking-wider">
-          Model
+          {t('chat.model', 'Model')}
         </label>
         <div className="flex items-stretch gap-2">
           <select
             id="model-selector-select"
-            aria-label="Select model"
+            aria-label={t('chat.selectModelAria', 'Select model')}
             value={selectedModel?.id || ''}
             onChange={(e) => {
               const model = models.find((m) => m.id === e.target.value)
@@ -67,7 +69,7 @@ export function ModelSelector() {
             }}
             className="flex-1 px-3 py-2.5 rounded-xl bg-surface-2 text-text-primary border border-border focus:outline-none focus:ring-2 focus:ring-accent/30 focus:border-accent/50"
           >
-            <option value="">-- Select a model --</option>
+            <option value="">{t('chat.selectModel', '-- Select Model --')}</option>
             {models.map((model) => (
               <option key={model.id} value={model.id}>
                 {getProviderDisplayName(model.provider)} / {model.name}
@@ -78,25 +80,25 @@ export function ModelSelector() {
             type="button"
             onClick={handleTest}
             disabled={!selectedModel || testState.kind === 'pending'}
-            aria-label="Test connection to selected model"
+            aria-label={t('models.testConnection', 'Test Connection')}
             {...(testState.kind === 'pending' ? { 'aria-busy': true } : {})}
-            title={selectedModel ? 'Send a minimal request to verify this model works' : 'Select a model first'}
+            title={selectedModel ? t('models.testConnectionHint', 'Send a minimal request to verify this model works') : t('models.selectModelFirst', 'Select a model first')}
             className="px-3 rounded-xl bg-surface-2 hover:bg-surface-3 disabled:opacity-40 disabled:cursor-not-allowed text-text-primary text-xs font-medium border border-border transition-colors"
           >
             {testState.kind === 'pending' ? (
               <span className="inline-flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full border-2 border-accent/30 border-t-accent animate-spin" aria-hidden="true" />
-                Testing…
+                {t('models.testing', 'Testing...')}
               </span>
             ) : (
-              'Test'
+              t('common.test', 'Test')
             )}
           </button>
         </div>
 
         {testState.kind === 'ok' && (
           <p role="status" className="text-[11px] text-emerald-500">
-            ✓ Connected in {testState.latency}ms
+            ✓ {t('models.connectedWithLatency', 'Connected ({latency}ms)').replace('{latency}', String(testState.latency))}
           </p>
         )}
         {testState.kind === 'error' && (

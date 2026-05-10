@@ -159,6 +159,21 @@ export function MCPSettingsPanel() {
       : t('mcp.scopeUser', 'user')
   )
 
+  const getTransportLabel = (transport: MCPServerConfig['transport']) => {
+    switch (transport) {
+      case 'stdio':
+        return t('mcp.transportStdio', 'Stdio')
+      case 'http':
+        return t('mcp.transportHttp', 'HTTP')
+      case 'sse':
+        return t('mcp.transportSse', 'SSE')
+      case 'ws':
+        return t('mcp.transportWs', 'WebSocket')
+      default:
+        return transport
+    }
+  }
+
   const startCreate = () => {
     const draft = createMcpServerDraft()
     setForm(draft)
@@ -200,7 +215,7 @@ export function MCPSettingsPanel() {
     if (!target) return
     const ok = await confirm({
       title: t('mcp.deleteTitle', 'Delete MCP server?'),
-      body: t('mcp.deleteBody', `"${target.name}" will be removed.`).replace('{name}', () => target.name),
+      body: t('mcp.deleteBody', '"{name}" will be removed.').replace('{name}', target.name),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })
@@ -237,7 +252,7 @@ export function MCPSettingsPanel() {
               <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{selected.name}</h2>
               <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">{t('mcp.serverOverviewHint', 'Inspect transport details, connection health, and discovered capabilities before exposing this server to the workspace runtime.')}</p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
-                <span className="rounded-full border border-border-subtle/45 bg-surface-0/78 px-3 py-1 text-[11px] text-text-secondary">{selected.transport.toUpperCase()}</span>
+                <span className="rounded-full border border-border-subtle/45 bg-surface-0/78 px-3 py-1 text-[11px] text-text-secondary">{getTransportLabel(selected.transport)}</span>
                 <span className="rounded-full border border-border-subtle/45 bg-surface-0/78 px-3 py-1 text-[11px] text-text-secondary">{getScopeLabel(selected.scope)}</span>
                 <StatusBadge status={selected.status} label={getStatusLabel(selected.status)} />
               </div>
@@ -389,7 +404,7 @@ export function MCPSettingsPanel() {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3 xl:w-96 xl:grid-cols-1">
-            <SummaryStat label={t('mcp.transport', 'Transport')} value={form.transport.toUpperCase()} accent />
+            <SummaryStat label={t('mcp.transport', 'Transport')} value={getTransportLabel(form.transport)} accent />
             <SummaryStat label={t('mcp.scope', 'Scope')} value={getScopeLabel(form.scope)} />
             <SummaryStat label={t('common.mode', 'Mode')} value={isExistingServerForm ? t('common.edit', 'Edit') : t('common.new', 'New')} />
           </div>
@@ -433,10 +448,10 @@ export function MCPSettingsPanel() {
                   title={t('mcp.transport', 'Transport')}
                   className={`mt-1.5 ${selectCls}`}
                 >
-                  <option value="stdio">stdio</option>
-                  <option value="http">http</option>
-                  <option value="sse">sse</option>
-                  <option value="ws">ws</option>
+                  <option value="stdio">{getTransportLabel('stdio')}</option>
+                  <option value="http">{getTransportLabel('http')}</option>
+                  <option value="sse">{getTransportLabel('sse')}</option>
+                  <option value="ws">{getTransportLabel('ws')}</option>
                 </select>
               </FieldLabel>
               <div className="flex items-end pb-1">
@@ -466,7 +481,7 @@ export function MCPSettingsPanel() {
                     <input
                       value={form.command || ''}
                       onChange={(e) => setForm({ ...form, command: e.target.value })}
-                      placeholder="npx"
+                      placeholder={t('mcp.commandPlaceholder', 'npx')}
                       className={`mt-1.5 ${inputCls}`}
                     />
                   </FieldLabel>
@@ -475,7 +490,7 @@ export function MCPSettingsPanel() {
                     <input
                       value={(form.args || []).join(' ')}
                       onChange={(e) => setForm({ ...form, args: e.target.value.trim() ? e.target.value.trim().split(/\s+/) : [] })}
-                      placeholder="-y @modelcontextprotocol/server-filesystem C:/workspace"
+                      placeholder={t('mcp.argsPlaceholder', '-y @modelcontextprotocol/server-filesystem C:/workspace')}
                       className={`mt-1.5 ${inputCls} font-mono text-xs`}
                     />
                   </FieldLabel>
@@ -486,7 +501,7 @@ export function MCPSettingsPanel() {
                       onChange={(e) => setEnvInput(e.target.value)}
                       rows={5}
                       className={`mt-1.5 ${textareaCls}`}
-                      placeholder={'API_KEY=sk-...\nNODE_ENV=production'}
+                      placeholder={t('mcp.envPlaceholder', 'API_KEY=sk-...\nNODE_ENV=production')}
                     />
                   </FieldLabel>
                 </>
@@ -497,7 +512,7 @@ export function MCPSettingsPanel() {
                     <input
                       value={form.url || ''}
                       onChange={(e) => setForm({ ...form, url: e.target.value })}
-                      placeholder="https://mcp.example.com"
+                      placeholder={t('mcp.urlPlaceholder', 'https://mcp.example.com')}
                       className={`mt-1.5 ${inputCls} font-mono text-xs`}
                     />
                   </FieldLabel>
@@ -508,7 +523,7 @@ export function MCPSettingsPanel() {
                       onChange={(e) => setHeadersInput(e.target.value)}
                       rows={5}
                       className={`mt-1.5 ${textareaCls}`}
-                      placeholder={'Authorization=Bearer token\nContent-Type=application/json'}
+                      placeholder={t('mcp.headersPlaceholder', 'Authorization=Bearer token\nContent-Type=application/json')}
                     />
                   </FieldLabel>
                 </>
@@ -526,7 +541,7 @@ export function MCPSettingsPanel() {
             <div className="space-y-4">
               <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-4 text-sm text-text-secondary">
                 <div>{t('common.name', 'Name')}: <span className="font-semibold text-text-primary">{form.name || t('mcp.newServer', 'New MCP Server')}</span></div>
-                <div className="mt-2">{t('mcp.transport', 'Transport')}: <span className="font-semibold text-text-primary">{form.transport.toUpperCase()}</span></div>
+                <div className="mt-2">{t('mcp.transport', 'Transport')}: <span className="font-semibold text-text-primary">{getTransportLabel(form.transport)}</span></div>
                 <div className="mt-2">{t('mcp.scope', 'Scope')}: <span className="font-semibold text-text-primary">{getScopeLabel(form.scope)}</span></div>
               </div>
 
@@ -620,11 +635,11 @@ export function MCPSettingsPanel() {
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
                             <span className="truncate text-[13px] font-semibold text-text-primary">{server.name}</span>
-                            {!server.enabled && <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] text-text-muted">OFF</span>}
+                            {!server.enabled && <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] text-text-muted">{t('common.off', 'Off')}</span>}
                           </div>
                           <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{server.transport === 'stdio' ? server.command || t('mcp.commandMissing', 'Command not configured') : server.url || t('mcp.urlMissing', 'URL not configured')}</p>
                           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
-                            <span className="rounded-full bg-surface-3/80 px-2 py-0.5 uppercase">{server.transport}</span>
+                            <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{getTransportLabel(server.transport)}</span>
                             <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{getScopeLabel(server.scope)}</span>
                             <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{t('mcp.toolsCount', `${toolsCount} tools`).replace('{count}', String(toolsCount))}</span>
                           </div>

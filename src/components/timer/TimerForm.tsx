@@ -140,7 +140,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
             <div className="grid gap-3 sm:grid-cols-3 xl:w-[24rem] xl:grid-cols-1">
               <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('timer.type', 'Type')}</div>
-                <div className="mt-2 text-lg font-semibold text-text-primary">{form.type === 'once' ? t('timer.oneTime', 'One-time') : form.type === 'interval' ? t('timer.repeating', 'Repeating') : 'Cron'}</div>
+                <div className="mt-2 text-lg font-semibold text-text-primary">{form.type === 'once' ? t('timer.oneTime', 'One-time') : form.type === 'interval' ? t('timer.repeating', 'Repeating') : t('timer.cronLabel', 'Cron')}</div>
               </div>
               <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('timer.action', 'Action')}</div>
@@ -185,7 +185,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
                       className={`px-3.5 py-2 rounded-2xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${form.type === tt ? 'bg-accent/20 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.14)]' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`}
                       onClick={() => setForm({ ...form, type: tt, schedule: '' })}
                     >
-                      {tt === 'once' ? <><IconifyIcon name="ui-timer-once" size={14} /> {t('timer.oneTime', 'One-time')}</> : tt === 'interval' ? <><IconifyIcon name="ui-repeat" size={14} /> {t('timer.repeating', 'Repeating')}</> : <><IconifyIcon name="ui-clock" size={14} /> Cron</>}
+                      {tt === 'once' ? <><IconifyIcon name="ui-timer-once" size={14} /> {t('timer.oneTime', 'One-time')}</> : tt === 'interval' ? <><IconifyIcon name="ui-repeat" size={14} /> {t('timer.repeating', 'Repeating')}</> : <><IconifyIcon name="ui-clock" size={14} /> {t('timer.cronLabel', 'Cron')}</>}
                     </button>
                   ))}
                 </div>
@@ -281,7 +281,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
                   {form.action === 'notify' ? t('timer.notificationBody', 'Notification Body') : t('timer.promptText', 'Prompt Text')}
                 </label>
                 <textarea
-                  className="w-full px-4 py-3 rounded-[24px] bg-surface-2/75 border border-border-subtle text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 resize-none"
+                  className="w-full px-4 py-3 rounded-3xl bg-surface-2/75 border border-border-subtle text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 resize-none"
                   rows={5}
                   value={form.prompt}
                   onChange={(e) => setForm({ ...form, prompt: e.target.value })}
@@ -290,7 +290,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
               </div>
               )}
 
-              <div className="rounded-[24px] border border-border-subtle/45 bg-surface-0/55 p-4">
+              <div className="rounded-3xl border border-border-subtle/45 bg-surface-0/55 p-4">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">{t('timer.review', 'Review')}</div>
                 <div className="mt-2 text-[13px] leading-6 text-text-secondary/82">
                   {t('timer.reviewHint', 'Timers should be specific enough that the action can run without ambiguity. If you are scheduling a pipeline, confirm it has already been saved.')}

@@ -128,8 +128,11 @@ export function ModelsLayout() {
       title: t('models.deleteProviderTitle', 'Delete provider?'),
       body: t(
         'models.deleteProviderBody',
-        `"${target.name}" will be removed along with its ${modelCount} model${modelCount === 1 ? '' : 's'} and API key. This cannot be undone.`,
-      ),
+        '"{name}" will be removed along with its {count} model{plural} and API key. This cannot be undone.',
+      )
+        .replace('{name}', target.name)
+        .replace('{count}', String(modelCount))
+        .replace('{plural}', modelCount === 1 ? '' : 's'),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })

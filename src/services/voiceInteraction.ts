@@ -2,6 +2,7 @@
 // No external dependencies required.
 
 import { readCached, writeCached } from '@/services/fileStorage'
+import { t } from '@/services/i18n'
 import { safeParse, safeStringify } from '@/utils/safeJson'
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -51,7 +52,7 @@ interface STTCallbacks {
  */
 export function startListening(settings: VoiceSettings, callbacks: STTCallbacks): void {
   if (!isSpeechRecognitionAvailable()) {
-    callbacks.onError('Speech recognition not available in this browser')
+    callbacks.onError(t('voice.speechRecognitionUnavailable', 'Speech recognition not available in this browser'))
     return
   }
 
@@ -61,7 +62,7 @@ export function startListening(settings: VoiceSettings, callbacks: STTCallbacks)
   const SpeechRecognitionCtor = win.SpeechRecognition ?? win.webkitSpeechRecognition
 
   if (!SpeechRecognitionCtor) {
-    callbacks.onError('Speech recognition not supported')
+    callbacks.onError(t('voice.speechRecognitionUnsupported', 'Speech recognition not supported'))
     return
   }
 

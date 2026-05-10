@@ -13,6 +13,7 @@ import {
 } from '@/services/channelMessageHandler'
 import type { ChannelConfig } from '@/types'
 import { ChannelPlatformIcon, getPlatformDisplayName, useChannelIconCollections } from './ChannelIcons'
+import { formatChannelRelativeTime } from './ChannelComponents'
 import { ChannelEditor } from './ChannelEditor'
 import { ChannelMessageHistory, ChannelHealthMonitor, ChannelDebugPanel, ChannelUsersPanel } from './ChannelPanels'
 import { confirm as showConfirm } from '@/services/confirmDialog'
@@ -67,16 +68,6 @@ function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   )
 }
 
-function formatRelativeTime(value?: number) {
-  if (!value) return 'No activity yet'
-  const diff = Date.now() - value
-  if (diff < 60_000) return 'just now'
-  if (diff < 3_600_000) return `${Math.max(1, Math.floor(diff / 60_000))}m ago`
-  if (diff < 86_400_000) return `${Math.max(1, Math.floor(diff / 3_600_000))}h ago`
-  if (diff < 604_800_000) return `${Math.max(1, Math.floor(diff / 86_400_000))}d ago`
-  return new Date(value).toLocaleDateString()
-}
-
 function copyToClipboard(value: string) {
   navigator.clipboard?.writeText(value).catch(() => {})
 }
@@ -102,7 +93,7 @@ function ChannelDetail({
   onToggle: () => void
   onStartServer: () => void
 }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { channelHealth, channelMessages, channelUsers } = useAppStore()
   const [activeTab, setActiveTab] = useState<ChannelTab>('config')
 
@@ -215,7 +206,7 @@ function ChannelDetail({
         <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryStat label={t('channels.messages', 'Messages')} value={String(channel.messageCount)} accent />
           <SummaryStat label={t('channels.users', 'Users')} value={String(users.length)} />
-          <SummaryStat label={t('channels.lastSeen', 'Last Seen')} value={formatRelativeTime(channel.lastMessageAt)} />
+          <SummaryStat label={t('channels.lastSeen', 'Last Seen')} value={formatChannelRelativeTime(channel.lastMessageAt, locale, t('channels.noActivityYet', 'No activity yet'))} />
           <SummaryStat label={t('channels.latency', 'Latency')} value={health?.latencyMs !== undefined ? `${health.latencyMs}ms` : t('channels.pending', 'Pending')} />
         </div>
       </section>
@@ -320,7 +311,7 @@ function ChannelDetail({
             >
               <div className="space-y-3">
                 <DetailRow label={t('channels.lastMessage', 'Last Message')} value={channel.lastMessageAt ? new Date(channel.lastMessageAt).toLocaleString() : t('channels.noMessagesYet', 'No messages yet')} />
-                <DetailRow label={t('channels.recentActivity', 'Recent Activity')} value={formatRelativeTime(channel.lastMessageAt)} />
+                <DetailRow label={t('channels.recentActivity', 'Recent Activity')} value={formatChannelRelativeTime(channel.lastMessageAt, locale, t('channels.noActivityYet', 'No activity yet'))} />
                 <DetailRow label={t('channels.users', 'Users')} value={String(users.length)} />
                 <DetailRow label={t('channels.messages', 'Messages')} value={String(messages.length || channel.messageCount)} />
               </div>
@@ -361,7 +352,7 @@ function ChannelDetail({
 // ─── Main Layout ───────────────────────────────────────────────────
 
 export function ChannelLayout() {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const [panelWidth, setPanelWidth] = useResizablePanel('channels', 320)
   const { channels, agents, addChannel, updateChannel, removeChannel } = useAppStore()
   const [serverRunning, setServerRunning] = useState(false)
@@ -504,10 +495,7 @@ export function ChannelLayout() {
     if (!selectedChannel) return
     const ok = await showConfirm({
       title: t('channels.deleteTitle', 'Delete channel?'),
-      body: t(
-        'channels.deleteBody',
-        `"${selectedChannel.name}" will be permanently removed along with its configuration and message history. This cannot be undone.`,
-      ),
+      body: t('channels.deleteBody', '"{name}" will be permanently removed along with its configuration and message history. This cannot be undone.').replace('{name}', selectedChannel.name),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })
@@ -617,7 +605,7 @@ export function ChannelLayout() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="truncate text-[13px] font-semibold text-text-primary">{channel.name}</span>
-                          {!channel.enabled && <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] text-text-muted">OFF</span>}
+                          {!channel.enabled && <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] text-text-muted">{t('common.off', 'Off')}</span>}
                         </div>
                         <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{platformLabel} · {agentLabel}</p>
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
@@ -625,7 +613,7 @@ export function ChannelLayout() {
                           <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{channel.messageCount} {t('channels.messages', 'messages')}</span>
                           {channel.autoReply && <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{t('channels.autoReply', 'Auto Reply')}</span>}
                         </div>
-                        <div className="mt-2 text-[10px] text-text-muted/70">{channel.lastMessageAt ? `${t('channels.lastSeen', 'Last seen')}: ${formatRelativeTime(channel.lastMessageAt)}` : t('channels.noActivityYet', 'No activity yet')}</div>
+                        <div className="mt-2 text-[10px] text-text-muted/70">{channel.lastMessageAt ? `${t('channels.lastSeen', 'Last seen')}: ${formatChannelRelativeTime(channel.lastMessageAt, locale)}` : t('channels.noActivityYet', 'No activity yet')}</div>
                       </div>
                     </div>
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${badgeTone}`}>{!channel.enabled ? t('common.off', 'Off') : channel.status === 'active' ? t('channels.live', 'Live') : channel.status === 'error' ? t('common.error', 'Error') : t('channels.idle', 'Idle')}</span>
@@ -663,7 +651,7 @@ export function ChannelLayout() {
         ) : (
           <WorkbenchEmptyState
             icon={<IconifyIcon name="action-chat" size={30} color="currentColor" />}
-            title={t('channels.selectChannel', 'Select a channel or create a new one')}
+            title={`${t('channels.selectChannel', 'Select a channel')} ${t('channels.orCreateChannel', 'or create a new one')}`}
             description={t('channels.selectChannelHint', 'Organize inbound chat surfaces, attach a reply agent, and monitor webhook or stream traffic from one place.')}
             actions={(
               <button

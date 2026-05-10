@@ -93,11 +93,11 @@ export function MarkdownEditor({
         <div className="flex items-center gap-2">
           {isPreview && (
             <span className="rounded-full border border-accent/20 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
-              Live render
+              {t('skills.liveRender', 'Live render')}
             </span>
           )}
           <span className="rounded-full border border-border-subtle/45 bg-surface-0/55 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/75">
-            Markdown
+            {t('skills.markdownLabel', 'Markdown')}
           </span>
         </div>
       </div>
@@ -157,13 +157,13 @@ export function SkillTestPanel({ skill }: { skill: Skill }) {
   const handleRun = useCallback(async () => {
     setError(null)
     setOutput(null)
-    if (!selectedTool) { setError('No tool selected.'); return }
+    if (!selectedTool) { setError(t('skills.noToolSelected', 'No tool selected.')); return }
 
     let parsedInput: Record<string, unknown>
     try {
       parsedInput = JSON.parse(inputJson)
     } catch {
-      setError('Invalid JSON input.')
+      setError(t('skills.invalidJsonInput', 'Invalid JSON input.'))
       return
     }
 
@@ -195,7 +195,10 @@ export function SkillTestPanel({ skill }: { skill: Skill }) {
         }
       }
 
-      setError(`Tool "${selectedTool}" does not have an executable handler. It may be a reference-only tool.`)
+      setError(
+        t('skills.toolNoExecutableHandler', 'Tool "{name}" does not have an executable handler. It may be a reference-only tool.')
+          .replace('{name}', selectedTool),
+      )
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
@@ -206,7 +209,7 @@ export function SkillTestPanel({ skill }: { skill: Skill }) {
   return (
     <div className="space-y-4">
       <p className="text-xs text-text-muted">
-        Test individual tools from this skill by providing JSON input and running them directly.
+        {t('skills.toolTestHint', 'Test individual tools from this skill by providing JSON input and running them directly.')}
       </p>
 
       {toolNames.length === 0 ? (
@@ -220,7 +223,7 @@ export function SkillTestPanel({ skill }: { skill: Skill }) {
             <select
               value={selectedTool}
               onChange={(e) => { setSelectedTool(e.target.value); setOutput(null); setError(null) }}
-              aria-label="Select tool"
+              aria-label={t('skills.selectTool', 'Select a tool…')}
               className={panelSelectClass}
             >
               {toolNames.map((name) => (
@@ -301,6 +304,13 @@ export function SkillLogPanel({ skill }: { skill: Skill }) {
 
   const displayed = filter === 'all' ? logs : logs.filter((l) => l.status === filter)
   const { t } = useI18n()
+  const filterLabel = (value: typeof filter) => value === 'all'
+    ? t('skills.filterAll', 'All')
+    : value === 'success'
+      ? t('skills.filterSuccess', 'Success')
+      : value === 'error'
+        ? t('skills.filterError', 'Error')
+        : t('skills.filterBlocked', 'Blocked')
 
   return (
     <div className="space-y-3">
@@ -317,7 +327,7 @@ export function SkillLogPanel({ skill }: { skill: Skill }) {
                 filter === f ? 'bg-accent/15 text-accent font-medium' : 'text-text-muted hover:bg-surface-2'
               }`}
             >
-              {f}
+              {filterLabel(f)}
             </button>
           ))}
         </div>
@@ -325,7 +335,10 @@ export function SkillLogPanel({ skill }: { skill: Skill }) {
 
       {displayed.length === 0 ? (
         <div className="text-center py-8 text-text-muted text-sm">
-          No {filter === 'all' ? '' : filter + ' '}{t('skills.noLogs', 'log entries found for this skill\'s tools.')}
+          {filter === 'all'
+            ? t('skills.noLogs', 'No log entries found for this skill\'s tools.')
+            : t('skills.noLogsFiltered', 'No {filter} log entries found for this skill\'s tools.')
+              .replace('{filter}', filterLabel(filter).toLowerCase())}
         </div>
       ) : (
         <div className="space-y-1.5 max-h-100 overflow-y-auto">
@@ -341,7 +354,7 @@ export function SkillLogPanel({ skill }: { skill: Skill }) {
                 }`} />
                 <span className="font-mono font-medium text-text-primary">{entry.toolName}</span>
                 {entry.duration != null && (
-                  <span className="text-text-muted">{entry.duration}ms</span>
+                  <span className="text-text-muted">{entry.duration} {t('common.millisecondsUnit', 'ms')}</span>
                 )}
                 <span className="ml-auto text-text-muted">
                   {new Date(entry.timestamp).toLocaleString()}
@@ -527,7 +540,7 @@ export function CustomCodeEditor({ value, onChange, disabled }: {
           <span className={`text-xs ${testResult.error ? 'text-danger' : 'text-green-400'}`}>
             {testResult.error
               ? <><IconifyIcon name="ui-cross" size={12} color="currentColor" /> {testResult.error}</>
-              : <><IconifyIcon name="ui-check" size={12} color="currentColor" /> Compiled — {testResult.toolNames.length} tool(s) defined</>}
+              : <><IconifyIcon name="ui-check" size={12} color="currentColor" /> {t('skills.compiledToolsCount', 'Compiled — {count} tool(s) defined').replace('{count}', String(testResult.toolNames.length))}</>}
           </span>
         )}
       </div>
@@ -595,14 +608,14 @@ export function SkillDependenciesEditor({ dependencies, onChange, disabled = fal
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-text-primary">{depSkill?.name || dep.skillId}</span>
                   {dep.minVersion && <span className="text-text-muted">≥{dep.minVersion}</span>}
-                  {dep.optional && <span className="text-xs text-yellow-400">(optional)</span>}
+                  {dep.optional && <span className="text-xs text-yellow-400">({t('skills.optional', 'Optional').toLowerCase()})</span>}
                 </div>
                 {!disabled && (
                   <div className="flex items-center gap-1">
                     <button type="button" onClick={() => toggleOptional(dep.skillId)} className="px-1.5 py-0.5 text-[10px] rounded bg-surface-3 text-text-muted hover:text-text-primary">
                       {dep.optional ? t('skills.required', 'Required') : t('skills.optional', 'Optional')}
                     </button>
-                    <button type="button" onClick={() => removeDep(dep.skillId)} title="Remove dependency" className="px-1.5 py-0.5 text-[10px] text-red-400 hover:text-red-300"><IconifyIcon name="ui-close" size={12} color="currentColor" /></button>
+                      <button type="button" onClick={() => removeDep(dep.skillId)} title={t('skills.removeDependency', 'Remove dependency')} className="px-1.5 py-0.5 text-[10px] text-red-400 hover:text-red-300"><IconifyIcon name="ui-close" size={12} color="currentColor" /></button>
                   </div>
                 )}
               </div>
@@ -615,7 +628,7 @@ export function SkillDependenciesEditor({ dependencies, onChange, disabled = fal
           <select
             value={newDepId}
             onChange={(e) => setNewDepId(e.target.value)}
-            aria-label="Select dependency skill"
+            aria-label={t('skills.selectSkill', 'Select skill...')}
             className={`flex-1 ${panelCompactSelectClass}`}
           >
             <option value="">{t('skills.selectSkill', 'Select skill...')}</option>
@@ -625,10 +638,10 @@ export function SkillDependenciesEditor({ dependencies, onChange, disabled = fal
             type="text"
             value={newMinVer}
             onChange={(e) => setNewMinVer(e.target.value)}
-            placeholder="Min ver"
+            placeholder={t('skills.minVer', 'Min ver')}
             className={`w-24 ${panelCompactInputClass}`}
           />
-          <button type="button" onClick={addDep} className={panelCompactButtonClass}>Add</button>
+          <button type="button" onClick={addDep} className={panelCompactButtonClass}>{t('common.add', 'Add')}</button>
         </div>
       )}
     </div>
@@ -692,10 +705,9 @@ export function SkillVersionsPanel({ skill, updateForm }: { skill: Skill; update
               onClick={async () => {
                 const ok = await confirm({
                   title: t('skills.clearHistoryTitle', 'Clear version history?'),
-                  body: t(
-                    'skills.clearHistoryBody',
-                    `All ${versions.length} saved version(s) of "${skill.name}" will be permanently removed. The current version is not affected.`,
-                  ),
+                  body: t('skills.clearHistoryBody', 'All {count} saved version(s) of "{name}" will be permanently removed. The current version is not affected.')
+                    .replace('{count}', String(versions.length))
+                    .replace('{name}', skill.name),
                   danger: true,
                   confirmText: t('common.clear', 'Clear'),
                 })

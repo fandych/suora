@@ -7,11 +7,20 @@
 import type { AgentMessage } from '@/types'
 import type { ModelMessage } from 'ai'
 import { initializeProvider, generateResponse, streamResponseWithTools } from '@/services/aiService'
+import { t } from '@/services/i18n'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, readLiveStoreState, buildSystemPrompt } from '@/services/tools'
 
 // ─── Constants ─────────────────────────────────────────────────────
 
 const MAX_DELEGATION_DEPTH = 3
+
+function translateTemplate(key: string, fallback: string, values: Record<string, string | number> = {}): string {
+  let message = t(key, fallback)
+  for (const [name, value] of Object.entries(values)) {
+    message = message.replaceAll(`{${name}}`, String(value))
+  }
+  return message
+}
 
 // ─── Message log ───────────────────────────────────────────────────
 
@@ -100,16 +109,16 @@ export async function delegateToAgent(
   depth: number = 0,
 ): Promise<string> {
   if (depth >= MAX_DELEGATION_DEPTH) {
-    return `Error: Maximum delegation depth (${MAX_DELEGATION_DEPTH}) reached. Cannot delegate further.`
+    return translateTemplate('agents.delegateDepthReached', 'Maximum delegation depth ({depth}) reached. Cannot delegate further.', { depth: MAX_DELEGATION_DEPTH })
   }
 
   const state = readStore()
-  if (!state) return 'Error: Store not available'
+  if (!state) return t('agents.delegateStoreUnavailable', 'Store not available')
 
   // Find target agent
   const targetAgent = state.agents?.find((a) => a.id === toAgentId)
-  if (!targetAgent) return `Error: Agent "${toAgentId}" not found`
-  if (!targetAgent.enabled) return `Error: Agent "${targetAgent.name}" is disabled`
+  if (!targetAgent) return translateTemplate('agents.delegateAgentNotFound', 'Agent "{name}" not found', { name: toAgentId })
+  if (!targetAgent.enabled) return translateTemplate('agents.delegateAgentDisabled', 'Agent "{name}" is disabled', { name: targetAgent.name })
 
   // Log the request message
   const requestMsg: AgentMessage = {

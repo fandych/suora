@@ -144,17 +144,17 @@ export function ChannelEditor({
                   className={INPUT_CLASS}
                 >
                   <optgroup label={t('channels.chinesePlatforms', 'Chinese Platforms')}>
-                    <option value="feishu">飞书 Feishu / Lark</option>
-                    <option value="dingtalk">钉钉 DingTalk</option>
-                    <option value="wechat">企业微信 WeChat Work</option>
-                    <option value="wechat_official">微信公众号 WeChat Official</option>
-                    <option value="wechat_miniprogram">微信小程序 WeChat Mini Program</option>
+                    <option value="feishu">{getPlatformDisplayName('feishu')}</option>
+                    <option value="dingtalk">{getPlatformDisplayName('dingtalk')}</option>
+                    <option value="wechat">{getPlatformDisplayName('wechat')}</option>
+                    <option value="wechat_official">{getPlatformDisplayName('wechat_official')}</option>
+                    <option value="wechat_miniprogram">{getPlatformDisplayName('wechat_miniprogram')}</option>
                   </optgroup>
                   <optgroup label={t('channels.internationalPlatforms', 'International Platforms')}>
-                    <option value="slack">Slack</option>
-                    <option value="telegram">Telegram</option>
-                    <option value="discord">Discord</option>
-                    <option value="teams">Microsoft Teams</option>
+                    <option value="slack">{getPlatformDisplayName('slack')}</option>
+                    <option value="telegram">{getPlatformDisplayName('telegram')}</option>
+                    <option value="discord">{getPlatformDisplayName('discord')}</option>
+                    <option value="teams">{getPlatformDisplayName('teams')}</option>
                   </optgroup>
                   <optgroup label={t('channels.otherPlatforms', 'Other')}>
                     <option value="custom">{t('channels.customChannel', 'Custom Channel')}</option>
@@ -270,7 +270,7 @@ export function ChannelEditor({
 
           {draft.platform === 'feishu' && (
             <EditorSection
-              eyebrow="Feishu"
+              eyebrow={getPlatformDisplayName('feishu')}
               title={t('channels.feishuVerification', 'Feishu Verification')}
               description={t('channels.feishuVerificationHint', 'Use the verification token and encrypt key from the Feishu bot console so webhook traffic can be validated correctly.')}
             >
@@ -301,7 +301,7 @@ export function ChannelEditor({
 
           {draft.platform === 'slack' && (
             <EditorSection
-              eyebrow="Slack"
+              eyebrow={getPlatformDisplayName('slack')}
               title={t('channels.slackBotAccess', 'Slack Bot Access')}
               description={t('channels.slackBotAccessHint', 'Paste the bot token and signing secret from your Slack app so inbound events can be trusted and replies can be delivered.')}
             >
@@ -313,7 +313,7 @@ export function ChannelEditor({
                     value={draft.slackBotToken || ''}
                     onChange={(event) => setDraft({ ...draft, slackBotToken: event.target.value })}
                     aria-label={t('channels.botToken', 'Bot Token')}
-                    placeholder="xoxb-..."
+                    placeholder={t('channels.slackBotTokenPlaceholder', 'xoxb-...')}
                     className={INPUT_CLASS}
                   />
                   <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.slackBotTokenHint', 'Bot User OAuth Token from your Slack app settings.')}</p>
@@ -335,7 +335,7 @@ export function ChannelEditor({
 
           {draft.platform === 'telegram' && (
             <EditorSection
-              eyebrow="Telegram"
+              eyebrow={getPlatformDisplayName('telegram')}
               title={t('channels.telegramBotAccess', 'Telegram Bot Access')}
               description={t('channels.telegramBotAccessHint', 'Use the bot token issued by @BotFather to authenticate outbound replies and webhook callbacks.')}
             >
@@ -346,7 +346,7 @@ export function ChannelEditor({
                   value={draft.telegramBotToken || ''}
                   onChange={(event) => setDraft({ ...draft, telegramBotToken: event.target.value })}
                   aria-label={t('channels.botToken', 'Bot Token')}
-                  placeholder="123456:ABC-DEF1234..."
+                  placeholder={t('channels.telegramBotTokenPlaceholder', '123456:ABC-DEF1234...')}
                   className={INPUT_CLASS}
                 />
                 <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.telegramBotTokenHint', 'Bot token from @BotFather on Telegram.')}</p>
@@ -356,7 +356,7 @@ export function ChannelEditor({
 
           {draft.platform === 'discord' && (
             <EditorSection
-              eyebrow="Discord"
+              eyebrow={getPlatformDisplayName('discord')}
               title={t('channels.discordBotAccess', 'Discord Bot Access')}
               description={t('channels.discordBotAccessHint', 'Fill in the application credentials from the Discord developer portal before enabling the channel.')}
             >
@@ -387,7 +387,7 @@ export function ChannelEditor({
 
           {draft.platform === 'teams' && (
             <EditorSection
-              eyebrow="Teams"
+              eyebrow={getPlatformDisplayName('teams')}
               title={t('channels.teamsConfig', 'Teams Configuration')}
               description={t('channels.teamsConfigHint', 'Add the bot registration identifiers from Azure so Teams can authenticate and route bot traffic correctly.')}
             >
@@ -429,7 +429,7 @@ export function ChannelEditor({
 
           {draft.platform === 'wechat_official' && (
             <EditorSection
-              eyebrow="WeChat"
+              eyebrow={getPlatformDisplayName('wechat_official')}
               title={t('channels.wechatOfficialVerification', 'Official Account Verification')}
               description={t('channels.wechatOfficialVerificationHint', 'WeChat Official Accounts validate each request with the token configured in the management portal.')}
             >
@@ -460,7 +460,7 @@ export function ChannelEditor({
                   value={draft.customWebhookUrl || ''}
                   onChange={(event) => setDraft({ ...draft, customWebhookUrl: event.target.value })}
                   aria-label={t('channels.outgoingWebhookUrl', 'Outgoing Webhook URL')}
-                  placeholder="https://your-api.example.com/send"
+                  placeholder={t('channels.customWebhookUrlPlaceholder', 'https://your-api.example.com/send')}
                   className={INPUT_CLASS}
                 />
                 <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.customWebhookUrlHint', 'Replies will be POSTed to this endpoint.')}</p>

@@ -5,7 +5,7 @@ import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, Tool
 import { setLiveStoreAccessor, setLiveStoreWriter } from '@/services/tools'
 import { loadExternalResources, syncExternalDirectoryAccess } from '@/services/externalDirectories'
 import { loadAllSkills } from '@/services/skillRegistry'
-import { setI18nLocale, t } from '@/services/i18n'
+import { normalizeAppLocale, setI18nLocale, t } from '@/services/i18n'
 import { fileStateStorage, flushPendingSplitStoreWrites } from '@/services/fileStorage'
 import { createSessionSlice } from '@/store/slices/sessionSlice'
 import { createModelConfigSlice, normalizeToolSecuritySettings, syncToolSecurityToElectron } from '@/store/slices/modelConfigSlice'
@@ -811,13 +811,14 @@ export const useAppStore = create<AppStore>()(
       // i18n
       locale: 'en' as AppLocale,
       setLocale: (locale) => {
-        setI18nLocale(locale)
+        const nextLocale = normalizeAppLocale(locale)
+        setI18nLocale(nextLocale)
         set((state) => {
           const agents = state.agents.map((agent) => localizeBuiltinAgent(normalizeAgent(agent)))
           const selectedAgent = state.selectedAgent
             ? agents.find((agent) => agent.id === state.selectedAgent?.id) ?? localizeBuiltinAgent(normalizeAgent(state.selectedAgent))
             : null
-          return { locale, agents, selectedAgent }
+          return { locale: nextLocale, agents, selectedAgent }
         })
       },
 
@@ -1018,7 +1019,9 @@ export const useAppStore = create<AppStore>()(
       },
       merge: (persisted, current) => {
         const merged = { ...(current as object), ...(persisted as object) } as AppStore
-        setI18nLocale(merged.locale ?? current.locale)
+        const nextLocale = normalizeAppLocale(typeof merged.locale === 'string' ? merged.locale : current.locale)
+        merged.locale = nextLocale
+        setI18nLocale(nextLocale)
         // Filter out legacy builtin skills from persisted state
         merged.skills = merged.skills.filter((s) => s.type !== 'builtin')
         merged.agents = mergeBuiltinAgents(merged.agents)

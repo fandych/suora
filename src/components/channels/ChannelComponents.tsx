@@ -1,5 +1,6 @@
 import { useState, type ComponentPropsWithoutRef } from 'react'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { useI18n } from '@/hooks/useI18n'
 import { ChannelPlatformIcon } from './ChannelIcons'
 import type { ChannelHistoryMessage, ChannelMessageDirection } from '@/types'
 import Markdown from 'react-markdown'
@@ -8,6 +9,7 @@ import remarkGfm from 'remark-gfm'
 // ─── Channel Copy Button ───────────────────────────────────────────
 
 export function ChannelCopyButton({ text, className = '' }: { text: string; className?: string }) {
+  const { t } = useI18n()
   const [copied, setCopied] = useState(false)
   const copy = () => {
     navigator.clipboard.writeText(text).then(() => {
@@ -16,8 +18,10 @@ export function ChannelCopyButton({ text, className = '' }: { text: string; clas
     }).catch(() => { /* clipboard access denied */ })
   }
   return (
-    <button onClick={copy} title="Copy" className={`text-[11px] px-1.5 py-0.5 rounded-md transition-colors inline-flex items-center gap-1 ${copied ? 'text-success' : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'} ${className}`}>
-      {copied ? <><IconifyIcon name="ui-check" size={12} color="currentColor" /> Copied</> : <><IconifyIcon name="ui-copy" size={12} color="currentColor" /> Copy</>}
+    <button onClick={copy} title={copied ? t('common.copied', 'Copied') : t('common.copy', 'Copy')} className={`text-[11px] px-1.5 py-0.5 rounded-md transition-colors inline-flex items-center gap-1 ${copied ? 'text-success' : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'} ${className}`}>
+      {copied
+        ? <><IconifyIcon name="ui-check" size={12} color="currentColor" /> {t('common.copied', 'Copied')}</>
+        : <><IconifyIcon name="ui-copy" size={12} color="currentColor" /> {t('common.copy', 'Copy')}</>}
     </button>
   )
 }
@@ -25,6 +29,7 @@ export function ChannelCopyButton({ text, className = '' }: { text: string; clas
 // ─── Channel Code Block ────────────────────────────────────────────
 
 function ChannelCodeBlock({ children, className, ...rest }: ComponentPropsWithoutRef<'code'>) {
+  const { t } = useI18n()
   const isInline = !className
   const code = String(children).replace(/\n$/, '')
   const lang = className?.replace('language-', '') ?? ''
@@ -36,7 +41,7 @@ function ChannelCodeBlock({ children, className, ...rest }: ComponentPropsWithou
   return (
     <div className="relative group/code my-3 rounded-xl overflow-hidden border border-border-subtle/80 bg-surface-0/60 shadow-sm">
       <div className="flex items-center justify-between px-3 py-1.5 bg-surface-2/40 border-b border-border-subtle/60">
-        <span className="text-[10px] text-text-muted/70 uppercase tracking-wider font-semibold">{lang || 'code'}</span>
+        <span className="text-[10px] text-text-muted/70 uppercase tracking-wider font-semibold">{lang || t('channels.codeLabel', 'Code')}</span>
         <ChannelCopyButton text={code} />
       </div>
       <pre className="overflow-x-auto p-3.5 text-[11.5px] leading-relaxed"><code className="font-[JetBrains_Mono,monospace] text-text-primary" {...rest}>{children}</code></pre>
@@ -73,12 +78,18 @@ function ChannelMarkdownContent({ content }: { content: string }) {
 
 // ─── Relative Time ─────────────────────────────────────────────────
 
-export function formatChannelRelativeTime(ts: number): string {
-  const diff = Date.now() - ts
-  if (diff < 60_000) return 'just now'
-  if (diff < 3600_000) return `${Math.floor(diff / 60_000)}m ago`
-  if (diff < 86400_000) return `${Math.floor(diff / 3600_000)}h ago`
-  return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+export function formatChannelRelativeTime(value: number | undefined, locale: string, emptyLabel = ''): string {
+  if (!value) return emptyLabel
+
+  const diff = Date.now() - value
+  const formatter = new Intl.RelativeTimeFormat(locale, { numeric: 'auto' })
+
+  if (diff < 60_000) return formatter.format(0, 'second')
+  if (diff < 3_600_000) return formatter.format(-Math.max(1, Math.floor(diff / 60_000)), 'minute')
+  if (diff < 86_400_000) return formatter.format(-Math.max(1, Math.floor(diff / 3_600_000)), 'hour')
+  if (diff < 604_800_000) return formatter.format(-Math.max(1, Math.floor(diff / 86_400_000)), 'day')
+
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(new Date(value))
 }
 
 export function normalizeChannelDirection(direction?: string): ChannelMessageDirection {
@@ -90,7 +101,15 @@ export function normalizeChannelDirection(direction?: string): ChannelMessageDir
 // ─── Channel Message Bubble ────────────────────────────────────────
 
 export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistoryMessage; showChannel?: string }) {
+  const { t, locale } = useI18n()
   const isOutgoing = normalizeChannelDirection(msg.direction) === 'outgoing'
+  const statusLabel = msg.status === 'sent'
+    ? t('channels.statusSent', 'Sent')
+    : msg.status === 'failed'
+      ? t('channels.statusFailed', 'Failed')
+      : msg.status === 'pending'
+        ? t('channels.pending', 'Pending')
+        : msg.status
 
   const incomingBubbleCls = 'bg-surface-2/60 text-text-primary rounded-2xl rounded-bl-sm border border-border/60 shadow-sm'
   const outgoingBubbleCls = 'bg-gradient-to-br from-accent to-accent-hover text-white rounded-2xl rounded-br-sm shadow-[0_2px_12px_rgba(var(--t-accent-rgb),0.20)]'
@@ -123,7 +142,7 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
                   → {showChannel}
                 </span>
               )}
-              <span className="ml-auto shrink-0 text-[9px] text-text-muted/50">{formatChannelRelativeTime(msg.timestamp)}</span>
+              <span className="ml-auto shrink-0 text-[9px] text-text-muted/50">{formatChannelRelativeTime(msg.timestamp, locale)}</span>
             </div>
           )}
 
@@ -135,7 +154,7 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
           {/* Status badge for failed/pending (only on incoming - outgoing shows in action row) */}
           {!isOutgoing && (msg.status === 'failed' || msg.status === 'pending') && (
             <div className="mt-2 pt-1.5 border-t border-border-subtle/50">
-              <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${statusCls}`}>{msg.status}</span>
+              <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${statusCls}`}>{statusLabel}</span>
             </div>
           )}
         </div>
@@ -144,8 +163,8 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
         <div className={`mt-1 flex h-5 items-center gap-1 px-1 text-[9px] ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
           {isOutgoing && (
             <>
-              <span className={`rounded px-1.5 py-0.5 text-[9px] ${statusCls}`}>{msg.status}</span>
-              <span className="text-text-muted/40">{formatChannelRelativeTime(msg.timestamp)}</span>
+              <span className={`rounded px-1.5 py-0.5 text-[9px] ${statusCls}`}>{statusLabel}</span>
+              <span className="text-text-muted/40">{formatChannelRelativeTime(msg.timestamp, locale)}</span>
             </>
           )}
           {msg.content && (
@@ -157,7 +176,7 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
       {/* Outgoing avatar */}
       {isOutgoing && (
         <div className="w-8 h-8 rounded-xl bg-accent/15 flex items-center justify-center text-[11px] ml-3 mt-0.5 shrink-0 font-semibold text-accent/80 border border-accent/10">
-          Bot
+          {t('channels.botLabel', 'Bot')}
         </div>
       )}
     </div>

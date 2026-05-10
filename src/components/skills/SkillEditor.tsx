@@ -250,7 +250,7 @@ function ResourceTreePanel({
     }
     const ok = await confirm({
       title: t('skills.deleteResourceTitle', 'Delete bundled resource?'),
-      body: t('skills.deleteResourceBody', `"${resource.path}" will be removed from this skill.`),
+      body: t('skills.deleteResourceBody', '"{path}" will be removed from this skill.').replace('{path}', resource.path),
       danger: true,
       confirmText: t('common.delete', 'Delete'),
     })
@@ -280,8 +280,8 @@ function ResourceTreePanel({
         t('skills.invalidResourcePath', 'Invalid resource path'),
         t(
           'skills.invalidResourcePathHint',
-          `Paths must start with one of: ${SKILL_TOP_LEVEL_FOLDERS.join(', ')}/`,
-        ),
+          'Paths must start with one of: {folders}/',
+        ).replace('{folders}', SKILL_TOP_LEVEL_FOLDERS.join(', ')),
       )
       return
     }
@@ -408,8 +408,8 @@ function ResourceTreePanel({
         t('skills.invalidResourcePath', 'Invalid resource path'),
         t(
           'skills.topLevelFolderLocked',
-          `Top-level folder must be one of: ${SKILL_TOP_LEVEL_FOLDERS.join(', ')}.`,
-        ),
+          'Top-level folder must be one of: {folders}.',
+        ).replace('{folders}', SKILL_TOP_LEVEL_FOLDERS.join(', ')),
       )
       return
     }
@@ -1205,7 +1205,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                     <div>
                       <label className={settingsLabelClass}>{t('skills.category', 'Category')}</label>
                       <select
-                        aria-label="Category"
+                        aria-label={t('skills.category', 'Category')}
                         value={form.frontmatter.category || form.category || ''}
                         onChange={(e) => updateFrontmatter({ category: e.target.value })}
                         className={skillSelectClass}

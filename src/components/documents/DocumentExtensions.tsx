@@ -2,6 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core'
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react'
 import { useEffect, useId, useState, useRef } from 'react'
 import katex from 'katex'
+import { t } from '@/services/i18n'
 import { useAppStore } from '@/store/appStore'
 import type { NodeViewProps } from '@tiptap/react'
 import 'katex/dist/katex.min.css'
@@ -151,7 +152,7 @@ function MermaidBlockView({ node }: NodeViewProps) {
     renderMermaid(mermaidId, code, isDark).then((svg) => {
       if (containerRef.current) containerRef.current.innerHTML = svg
     }).catch(() => {
-      if (containerRef.current) containerRef.current.textContent = 'Mermaid render error'
+      if (containerRef.current) containerRef.current.textContent = t('documents.mermaidRenderError', 'Mermaid render error')
     })
   }, [code, isDark, mermaidId])
 
