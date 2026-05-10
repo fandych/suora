@@ -6,6 +6,7 @@ import { useAIChat } from '@/hooks/useAIChat'
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { toast } from '@/services/toast'
+import { isMainChatSession } from '@/utils/chatSessions'
 import { MessageBubble } from './ChatMessages'
 import { ChatInput } from './ChatInput'
 import { TodoProgress } from './TodoProgress'
@@ -107,7 +108,7 @@ function ModelDropdown({
       <div className="relative">
         <button
           type="button"
-          aria-label="Select model"
+          aria-label={t('chat.selectModelAria', 'Select model')}
           onClick={() => setOpen(!open)}
           className="flex w-full min-w-56 items-center justify-between gap-3 rounded-2xl border border-border-subtle/55 bg-surface-0/70 px-3.5 py-3 text-left shadow-sm transition-all hover:border-accent/18 hover:bg-surface-0/90 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/20"
         >
@@ -121,7 +122,7 @@ function ModelDropdown({
             </div>
             <div className="min-w-0">
               <div className="truncate text-[13px] font-semibold text-text-primary">{current?.name ?? t('chat.selectModel', '-- Select Model --')}</div>
-              <div className="truncate text-[11px] text-text-muted/68">{current ? `${currentProvider} / ${current.modelId}` : `${models.length} ${t('chat.availableModels', 'available models')}`}</div>
+              <div className="truncate text-[11px] text-text-muted/68">{current ? `${currentProvider} / ${current.modelId}` : t('chat.availableModelsCount', '{count} available models').replace('{count}', String(models.length))}</div>
             </div>
           </div>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted/45"><polyline points="6 9 12 15 18 9"/></svg>
@@ -181,6 +182,8 @@ function ModelDropdown({
 function ChatTabBar() {
   const { sessions, activeSessionId, openSessionTabs, openSessionTab, closeSessionTab, agents, addSession, selectedModel, selectedAgent } = useAppStore()
   const { t } = useI18n()
+  const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions])
+  const chatSessionIds = useMemo(() => new Set(chatSessions.map((session) => session.id)), [chatSessions])
 
   const handleNewTab = () => {
     if (!selectedModel) {
@@ -206,8 +209,8 @@ function ChatTabBar() {
           {t('chat.tabs', 'Tabs')}
         </span>
 
-        {openSessionTabs.map((tabId) => {
-          const session = sessions.find((item) => item.id === tabId)
+        {openSessionTabs.filter((tabId) => chatSessionIds.has(tabId)).map((tabId) => {
+          const session = chatSessions.find((item) => item.id === tabId)
           if (!session) return null
           const isActive = activeSessionId === tabId
           const agent = session.agentId ? agents.find((item) => item.id === session.agentId) : null
@@ -335,13 +338,15 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
 }
 
 export function ChatMain() {
-  const { sessions, activeSessionId, openSessionTabs, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore()
+  const { sessions, activeSessionId, openSessionTabs, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, setActiveSession, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore()
   const { t, locale } = useI18n()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
   const [showDebug, setShowDebug] = useState(false)
   const { sendMessage, cancelStream, retryLastError, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat()
+  const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions])
+  const chatSessionIds = useMemo(() => new Set(chatSessions.map((session) => session.id)), [chatSessions])
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -366,7 +371,12 @@ export function ChatMain() {
     return () => { cancelStream() }
   }, [activeSessionId, cancelStream])
 
-  const activeSession = sessions.find((s) => s.id === activeSessionId) ?? null
+  useEffect(() => {
+    if (!activeSessionId || chatSessionIds.has(activeSessionId)) return
+    setActiveSession(chatSessions[0]?.id ?? null)
+  }, [activeSessionId, chatSessionIds, chatSessions, setActiveSession])
+
+  const activeSession = chatSessions.find((s) => s.id === activeSessionId) ?? null
   const messages = activeSession?.messages ?? []
   const enabledModels = useMemo(() => models.filter((model) => model.enabled), [models])
   const providerNameById = useMemo(
@@ -491,7 +501,7 @@ export function ChatMain() {
     const branchSession: Session = {
       ...activeSession,
       id: generateId('session'),
-      title: `${activeSession.title} · branch`,
+      title: `${activeSession.title}${t('chat.branchSuffix', ' · branch')}`,
       createdAt: Date.now(),
       updatedAt: Date.now(),
       parentSessionId: activeSession.id,
@@ -609,7 +619,7 @@ export function ChatMain() {
         ref={messagesContainerRef}
         onScroll={handleScroll}
         role="log"
-        aria-label="Chat messages"
+        aria-label={t('chat.messagesAria', 'Chat messages')}
         aria-live="polite"
         className="module-canvas min-h-0 flex-1 overflow-y-auto"
       >

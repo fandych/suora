@@ -198,6 +198,7 @@ export interface Session {
   title: string
   createdAt: number
   updatedAt: number
+  surface?: 'chat' | 'timer-assistant' | 'pipeline-assistant'
   agentId?: string
   modelId?: string
   messages: Message[]
@@ -205,6 +206,7 @@ export interface Session {
   branchOfMessageId?: string
   pinnedMessageIds?: string[]
   documentContextIds?: string[]
+  contextPrompt?: string
 }
 
 export type MessageCitationKind = 'document' | 'tool' | 'web' | 'attachment' | 'file'
@@ -1202,7 +1204,7 @@ export interface AgentPipelineExecution {
 
 // ─── i18n ──────────────────────────────────────────────────────────
 
-export type AppLocale = 'en' | 'zh' | 'ja' | 'ko' | 'fr' | 'de' | 'es' | 'pt' | 'ru' | 'ar'
+export type AppLocale = 'en' | 'zh'
 
 // ─── Email Configuration ──────────────────────────────────────────
 

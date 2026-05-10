@@ -25,6 +25,10 @@ vi.mock('@/components/pipeline/PipelineFlowDiagram', () => ({
   PipelineFlowDiagram: () => <div data-testid="pipeline-diagram" />,
 }))
 
+vi.mock('./PipelineAssistantDrawer', () => ({
+  PipelineAssistantDrawer: ({ mode }: { mode: 'create' | 'edit' }) => <div data-testid="pipeline-assistant-drawer">{mode}</div>,
+}))
+
 vi.mock('@/hooks/useResizablePanel', () => ({
   useResizablePanel: () => [320, vi.fn()],
 }))
@@ -37,6 +41,8 @@ vi.mock('@/services/agentPipelineService', () => ({
 vi.mock('@/services/pipelineFiles', () => ({
   loadPipelinesFromDisk: vi.fn().mockResolvedValue([]),
   loadPipelineExecutionsFromDisk: vi.fn().mockResolvedValue([]),
+  savePipelineToDisk: vi.fn().mockResolvedValue(true),
+  deletePipelineFromDisk: vi.fn().mockResolvedValue(true),
 }))
 
 vi.mock('@/services/fileStorage', async () => {
@@ -219,5 +225,30 @@ describe('PipelineLayout', () => {
     expect(screen.queryByText('Current draft')).not.toBeInTheDocument()
     expect(screen.queryByText('Loaded from Launch Flow')).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /Launch Flow/i })).toHaveLength(1)
+  })
+
+  it('labels never-run saved pipelines as awaiting first run instead of unsaved', async () => {
+    renderPipelineLayout()
+
+    expect(await screen.findByText('Awaiting first run')).toBeInTheDocument()
+    expect(screen.queryByText('Unsaved')).not.toBeInTheDocument()
+  })
+
+  it('opens the AI create drawer from the header action', async () => {
+    const user = userEvent.setup()
+    renderPipelineLayout()
+
+    await user.click(await screen.findByRole('button', { name: 'AI Create' }))
+
+    expect(await screen.findByTestId('pipeline-assistant-drawer')).toHaveTextContent('create')
+  })
+
+  it('opens the AI edit drawer for the selected saved pipeline', async () => {
+    const user = userEvent.setup()
+    renderPipelineLayout()
+
+    await user.click(await screen.findByRole('button', { name: 'AI Edit' }))
+
+    expect(await screen.findByTestId('pipeline-assistant-drawer')).toHaveTextContent('edit')
   })
 })

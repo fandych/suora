@@ -16,20 +16,38 @@ function InfoCard({ label, value }: { label: string; value: string }) {
   )
 }
 
-export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
+export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle, onRunNow }: {
   timer: ScheduledTask
   onEdit: () => void
+  onOpenAssistant?: () => void
   onDelete: () => void
   onToggle: () => void
   onRunNow?: () => void
 }) {
   const { agents, agentPipelines, setActiveModule } = useAppStore()
   const { t } = useI18n()
+  const aiEditLabel = t('timer.aiEditCurrent', 'AI Edit')
   const navigate = useNavigate()
   const [history, setHistory] = useState<TimerExecution[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const agent = timer.agentId ? agents.find((a) => a.id === timer.agentId) : null
   const pipeline = timer.pipelineId ? agentPipelines.find((item) => item.id === timer.pipelineId) : null
+  const scheduleValue = timer.type === 'once'
+    ? formatDateTime(new Date(timer.schedule).getTime())
+    : timer.type === 'cron'
+      ? timer.schedule
+      : t('timer.assistantEveryMinutes', 'Every {minutes} minutes').replace('{minutes}', timer.schedule)
+  const retriesValue = `${t('timer.max', 'Max')}: ${timer.maxRetries ?? 0}, ${t('timer.interval', 'Interval')}: ${timer.retryIntervalMinutes ?? 5} ${t('timer.minutes', 'minutes')}`
+  const missedRunsValue = timer.missedRunPolicy === 'run-once'
+    ? t('timer.runOnce', 'Run once')
+    : timer.missedRunPolicy === 'run-all'
+      ? t('timer.runAll', 'Run all')
+      : t('timer.skipMissed', 'Skip')
+  const calendarValue = timer.calendarRule === 'weekdays'
+    ? t('timer.weekdays', 'Weekdays')
+    : timer.calendarRule === 'weekends'
+      ? t('timer.weekends', 'Weekends')
+      : t('timer.allDays', 'All days')
 
   useEffect(() => {
     if (showHistory) {
@@ -89,6 +107,14 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
               >
                 {t('timer.runNow', 'Run now')}
               </button>
+              {onOpenAssistant && (
+                <button
+                  onClick={onOpenAssistant}
+                  className="px-4 py-2.5 rounded-2xl bg-accent text-white text-sm font-semibold hover:bg-accent-hover transition-colors"
+                >
+                  {aiEditLabel}
+                </button>
+              )}
               <button
                 onClick={onEdit}
                 className="px-4 py-2.5 rounded-2xl bg-surface-2 text-text-muted text-sm font-semibold hover:text-text-secondary transition-colors"
@@ -115,14 +141,14 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <InfoCard label={t('timer.schedule', 'Schedule')} value={timer.type === 'once' ? formatDateTime(new Date(timer.schedule).getTime()) : timer.type === 'cron' ? timer.schedule : `Every ${timer.schedule} minutes`} />
+                <InfoCard label={t('timer.schedule', 'Schedule')} value={scheduleValue} />
                 <InfoCard label={t('timer.nextRun', 'Next Run')} value={timer.nextRun ? `${formatDateTime(timer.nextRun)} (${formatRelative(timer.nextRun)})` : t('timer.notScheduled', 'Not scheduled')} />
                 <InfoCard label={t('timer.lastRun', 'Last Run')} value={timer.lastRun ? formatDateTime(timer.lastRun) : t('timer.never', 'Never')} />
                 <InfoCard label={t('timer.created', 'Created')} value={formatDateTime(timer.createdAt)} />
                 <InfoCard label={t('timer.timezone', 'Timezone')} value={timer.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone} />
-                <InfoCard label={t('timer.retries', 'Retries')} value={`${t('timer.max', 'Max')}: ${timer.maxRetries ?? 0}, ${t('timer.interval', 'Interval')}: ${timer.retryIntervalMinutes ?? 5}m`} />
-                <InfoCard label={t('timer.missedRuns', 'Missed runs')} value={timer.missedRunPolicy ?? 'skip'} />
-                <InfoCard label={t('timer.calendar', 'Calendar')} value={timer.calendarRule ?? 'all-days'} />
+                <InfoCard label={t('timer.retries', 'Retries')} value={retriesValue} />
+                <InfoCard label={t('timer.missedRuns', 'Missed runs')} value={missedRunsValue} />
+                <InfoCard label={t('timer.calendar', 'Calendar')} value={calendarValue} />
               </div>
             </section>
 
@@ -201,7 +227,7 @@ export function TimerDetail({ timer, onEdit, onDelete, onToggle, onRunNow }: {
                                 return savedPipeline ? ` ${savedPipeline.name}` : ''
                               })()}
                             </div>
-                            {exec.result && <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-text-secondary/85">{exec.result}</div>}
+                            {exec.result && <div className="mt-2 whitespace-pre-wrap wrap-break-word text-[11px] leading-5 text-text-secondary/85">{exec.result}</div>}
                             {exec.error && <div className="mt-2 truncate text-[10px] text-red-400">{exec.error}</div>}
                           </div>
                           {canOpenPipeline && (

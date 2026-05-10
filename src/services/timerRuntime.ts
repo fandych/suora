@@ -2,6 +2,7 @@ import type { Agent, Model, ScheduledTask, Skill } from '@/types'
 import type { ModelMessage, UserModelMessage } from 'ai'
 import { initializeProvider, streamResponseWithTools, validateModelConfig } from '@/services/aiService'
 import { executePipelineById } from '@/services/agentPipelineService'
+import { t } from '@/services/i18n'
 import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineExecutionPresentation'
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import { buildSystemPrompt, getSkillSystemPrompts, getToolsForAgent, mergeSkillsWithBuiltins } from '@/services/tools'
@@ -16,6 +17,14 @@ type ElectronBridge = {
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
+}
+
+function translateTemplate(key: string, fallback: string, values: Record<string, string | number> = {}): string {
+  let message = t(key, fallback)
+  for (const [name, value] of Object.entries(values)) {
+    message = message.replaceAll(`{${name}}`, String(value))
+  }
+  return message
 }
 
 function extractTimerPayload(args: unknown[]): ScheduledTask | null {
@@ -95,45 +104,44 @@ function resolveTimerModel(state: ReturnType<typeof useAppStore.getState>, agent
 }
 
 async function executePromptTimer(timerData: ScheduledTask, firedAt: number): Promise<void> {
-  const state = useAppStore.getState()
   if (!timerData.prompt?.trim()) {
     throw new Error('Prompt timers require non-empty prompt content.')
   }
-
-  const agent = resolveTimerAgent(timerData)
-  const model = resolveTimerModel(state, agent)
-  const validation = validateModelConfig(model)
-  if (!validation.valid) {
-    throw new Error(validation.error ?? 'Selected model is not configured correctly.')
-  }
-
-  initializeProvider(model.providerType, model.apiKey || 'ollama', model.baseUrl, model.provider)
-
-  const mergedSkills = mergeSkillsWithBuiltins((state.skills ?? []) as Skill[])
-  const tools = getToolsForAgent(agent.skills, mergedSkills, {
-    allowedTools: agent.allowedTools,
-    disallowedTools: agent.disallowedTools,
-    permissionMode: agent.permissionMode,
-  })
-  const skillPrompts = await getSkillSystemPrompts(agent.skills, mergedSkills)
-  const systemPrompt = buildSystemPrompt({
-    agentPrompt: agent.systemPrompt,
-    responseStyle: agent.responseStyle,
-    memories: agent.memories,
-    skillPrompts,
-    toolNames: Object.keys(tools),
-    permissionMode: agent.permissionMode,
-  })
-
-  const modelIdentifier = `${model.provider}:${model.modelId}`
-  const modelMessages: ModelMessage[] = [
-    { role: 'user', content: timerData.prompt } satisfies UserModelMessage,
-  ]
-
   let fullContent = ''
   let runError: string | undefined
 
   try {
+    const state = useAppStore.getState()
+    const agent = resolveTimerAgent(timerData)
+    const model = resolveTimerModel(state, agent)
+    const validation = validateModelConfig(model)
+    if (!validation.valid) {
+      throw new Error(validation.error ?? 'Selected model is not configured correctly.')
+    }
+
+    initializeProvider(model.providerType, model.apiKey || 'ollama', model.baseUrl, model.provider)
+
+    const mergedSkills = mergeSkillsWithBuiltins((state.skills ?? []) as Skill[])
+    const tools = getToolsForAgent(agent.skills, mergedSkills, {
+      allowedTools: agent.allowedTools,
+      disallowedTools: agent.disallowedTools,
+      permissionMode: agent.permissionMode,
+    })
+    const skillPrompts = await getSkillSystemPrompts(agent.skills, mergedSkills)
+    const systemPrompt = buildSystemPrompt({
+      agentPrompt: agent.systemPrompt,
+      responseStyle: agent.responseStyle,
+      memories: agent.memories,
+      skillPrompts,
+      toolNames: Object.keys(tools),
+      permissionMode: agent.permissionMode,
+    })
+
+    const modelIdentifier = `${model.provider}:${model.modelId}`
+    const modelMessages: ModelMessage[] = [
+      { role: 'user', content: timerData.prompt } satisfies UserModelMessage,
+    ]
+
     for await (const event of streamResponseWithTools(modelIdentifier, modelMessages, {
       systemPrompt,
       tools,
@@ -162,7 +170,7 @@ async function executePromptTimer(timerData: ScheduledTask, firedAt: number): Pr
     result: finalContent,
   })
 
-  state.addNotification({
+  useAppStore.getState().addNotification({
     id: generateId('notif'),
     type: runError ? 'error' : 'success',
     title: runError ? `Prompt failed: ${timerData.name}` : `Prompt completed: ${timerData.name}`,
@@ -182,20 +190,20 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
   state.addNotification({
     id: generateId('notif'),
     type: 'info',
-    title: `Timer fired: ${timerData.name}`,
+    title: translateTemplate('timer.firedTitle', 'Timer fired: {name}', { name: timerData.name }),
     message:
       timerData.action === 'pipeline'
-        ? 'Pipeline execution started'
+        ? t('timer.pipelineExecutionStarted', 'Pipeline execution started')
         : timerData.action === 'prompt'
           ? timerData.prompt?.slice(0, 100)
-          : 'Notification sent',
+          : t('timer.notificationSent', 'Notification sent'),
     timestamp: Date.now(),
     read: false,
     action:
       timerData.action === 'pipeline'
         ? {
             module: 'pipeline',
-            label: 'Open pipeline run',
+            label: t('timer.openPipelineRun', 'Open pipeline run'),
             path: timerData.pipelineId
               ? buildPipelineExecutionPath({
                   pipelineId: timerData.pipelineId,
@@ -204,7 +212,7 @@ export async function handleTimerFired(timerData: ScheduledTask): Promise<void> 
                 })
               : '/pipeline',
           }
-        : { module: 'timer', label: 'Execution History' },
+        : { module: 'timer', label: t('timer.executionHistory', 'Execution History') },
   })
 
   try {

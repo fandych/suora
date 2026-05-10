@@ -1,5 +1,6 @@
 import type { StateCreator } from 'zustand'
 import type { AppStore } from '@/store/appStore'
+import { isMainChatSession } from '@/utils/chatSessions'
 
 export type SessionSlice = Pick<
   AppStore,
@@ -19,12 +20,15 @@ export const createSessionSlice: StateCreator<AppStore, [], [], SessionSlice> = 
   activeSessionId: null,
   openSessionTabs: [],
   addSession: (session) => {
+    const shouldOpenInMainChat = isMainChatSession(session)
     set((state) => ({
       sessions: [session, ...state.sessions],
-      activeSessionId: session.id,
-      openSessionTabs: state.openSessionTabs.includes(session.id)
+      activeSessionId: shouldOpenInMainChat ? session.id : state.activeSessionId,
+      openSessionTabs: shouldOpenInMainChat && state.openSessionTabs.includes(session.id)
         ? state.openSessionTabs
-        : [...state.openSessionTabs, session.id],
+        : shouldOpenInMainChat
+          ? [...state.openSessionTabs, session.id]
+          : state.openSessionTabs,
     }))
   },
   updateSession: (id, data) => {

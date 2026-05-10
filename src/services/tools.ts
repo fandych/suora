@@ -8,7 +8,7 @@
 
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
-import type { DocumentGroup, DocumentItem, DocumentNode, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
+import type { Agent, AgentPipeline, AgentPipelineBudget, AgentPipelineStep, AgentPipelineVariable, DocumentGroup, DocumentItem, DocumentNode, Model, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
 import { getPluginTools } from '@/services/pluginSystem'
 import { logger } from '@/services/logger'
 import { serializeSkillToMarkdown } from '@/services/skillRegistry'
@@ -24,6 +24,8 @@ import { delegateToAgent } from '@/services/agentCommunication'
 import { confirmChoice } from '@/services/confirmDialog'
 import { buildDocumentGraph, queryDocumentGraph } from '@/services/documentGraph'
 import { searchDocuments } from '@/services/documents'
+import { deletePipelineFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
+import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { safePathSegment } from '@/utils/pathSegments'
 import { safeParse, safeStringify } from '@/utils/safeJson'
 
@@ -480,6 +482,14 @@ async function persistSkillFileIfPossible(skill: Skill): Promise<string> {
 }
 
 function getPersistedStoreState(): { workspacePath: string; activeSessionId: string } {
+  const liveState = readStoreState()
+  if (liveState) {
+    return {
+      workspacePath: typeof liveState.workspacePath === 'string' ? liveState.workspacePath : '',
+      activeSessionId: typeof liveState.activeSessionId === 'string' ? liveState.activeSessionId : '',
+    }
+  }
+
   try {
     const raw = readCached(STORE_KEY)
     if (!raw) return { workspacePath: '', activeSessionId: '' }
@@ -514,6 +524,220 @@ async function readTodos(key: string): Promise<TodoItem[]> {
 
 async function writeTodos(key: string, todos: TodoItem[]): Promise<void> {
   await electronInvoke('db:savePersistedStore', key, safeStringify(todos), 1)
+}
+
+const pipelineToolStepSchema = z.object({
+  agent_id: z.string().describe('Agent ID for this pipeline step'),
+  task: z.string().describe('Prompt/task for the step'),
+  name: z.string().optional().describe('Optional step name'),
+  enabled: z.boolean().optional().describe('Whether the step is enabled'),
+  continue_on_error: z.boolean().optional().describe('Continue running later steps if this step fails'),
+  retry_count: z.number().int().min(0).max(10).optional().describe('How many retries to allow'),
+  retry_backoff_ms: z.number().int().min(0).optional().describe('Delay between retries in milliseconds'),
+  retry_backoff_strategy: z.enum(['fixed', 'exponential']).optional().describe('Retry spacing strategy'),
+  timeout_ms: z.number().int().positive().optional().describe('Step timeout in milliseconds'),
+  max_input_chars: z.number().int().positive().optional().describe('Maximum input size'),
+  max_output_chars: z.number().int().positive().optional().describe('Maximum output size'),
+  output_type: z.enum(['text', 'json', 'file', 'table']).optional().describe('Expected output type'),
+  model_id: z.string().optional().describe('Optional model override for the step'),
+  output_transform: z.enum(['trim', 'first-line', 'last-line', 'json-path']).optional().describe('Optional output transform'),
+  output_transform_path: z.string().optional().describe('Path used when output_transform is json-path'),
+  export_var: z.string().optional().describe('Pipeline variable name to store the step output into'),
+  run_if: z.string().optional().describe('Optional conditional expression for whether the step runs'),
+})
+
+const pipelineToolVariableSchema = z.object({
+  name: z.string().describe('Variable name'),
+  label: z.string().optional().describe('Optional human-friendly label'),
+  description: z.string().optional().describe('Optional description'),
+  default_value: z.string().optional().describe('Optional default value'),
+  required: z.boolean().optional().describe('Whether the variable must be supplied'),
+})
+
+const pipelineToolBudgetSchema = z.object({
+  max_total_duration_ms: z.number().int().min(0).optional().describe('Whole-pipeline duration budget in milliseconds'),
+  max_total_tokens: z.number().int().min(0).optional().describe('Whole-pipeline token budget'),
+  max_step_count: z.number().int().min(0).optional().describe('Maximum number of enabled steps that may execute'),
+})
+
+type PipelineToolStepInput = z.infer<typeof pipelineToolStepSchema>
+type PipelineToolVariableInput = z.infer<typeof pipelineToolVariableSchema>
+type PipelineToolBudgetInput = z.infer<typeof pipelineToolBudgetSchema>
+
+function parseStructuredToolInput(value: unknown): unknown {
+  if (typeof value !== 'string') return value
+
+  const trimmed = value.trim()
+  if (!trimmed) return value
+
+  if (trimmed !== 'null' && !trimmed.startsWith('[') && !trimmed.startsWith('{')) {
+    return value
+  }
+
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return value
+  }
+}
+
+function allowJsonStringInput<TSchema extends z.ZodTypeAny>(schema: TSchema) {
+  return z.preprocess(parseStructuredToolInput, schema)
+}
+
+function sanitizeOptionalText(value?: string | null): string | undefined {
+  if (value === undefined || value === null) return undefined
+  const trimmed = value.trim()
+  return trimmed || undefined
+}
+
+function mapPipelineToolStep(step: PipelineToolStepInput): AgentPipelineStep {
+  return {
+    agentId: step.agent_id.trim(),
+    task: step.task,
+    ...(sanitizeOptionalText(step.name) ? { name: sanitizeOptionalText(step.name) } : {}),
+    ...(step.enabled !== undefined ? { enabled: step.enabled } : {}),
+    ...(step.continue_on_error !== undefined ? { continueOnError: step.continue_on_error } : {}),
+    ...(step.retry_count !== undefined ? { retryCount: step.retry_count } : {}),
+    ...(step.retry_backoff_ms !== undefined ? { retryBackoffMs: step.retry_backoff_ms } : {}),
+    ...(step.retry_backoff_strategy !== undefined ? { retryBackoffStrategy: step.retry_backoff_strategy } : {}),
+    ...(step.timeout_ms !== undefined ? { timeoutMs: step.timeout_ms } : {}),
+    ...(step.max_input_chars !== undefined ? { maxInputChars: step.max_input_chars } : {}),
+    ...(step.max_output_chars !== undefined ? { maxOutputChars: step.max_output_chars } : {}),
+    ...(step.output_type !== undefined ? { outputType: step.output_type } : {}),
+    ...(sanitizeOptionalText(step.model_id) ? { modelId: sanitizeOptionalText(step.model_id) } : {}),
+    ...(step.output_transform !== undefined ? { outputTransform: step.output_transform } : {}),
+    ...(sanitizeOptionalText(step.output_transform_path) ? { outputTransformPath: sanitizeOptionalText(step.output_transform_path) } : {}),
+    ...(sanitizeOptionalText(step.export_var) ? { exportVar: sanitizeOptionalText(step.export_var) } : {}),
+    ...(sanitizeOptionalText(step.run_if) ? { runIf: sanitizeOptionalText(step.run_if) } : {}),
+  }
+}
+
+function mapPipelineToolVariable(variable: PipelineToolVariableInput): AgentPipelineVariable {
+  return {
+    name: variable.name.trim(),
+    ...(sanitizeOptionalText(variable.label) ? { label: sanitizeOptionalText(variable.label) } : {}),
+    ...(sanitizeOptionalText(variable.description) ? { description: sanitizeOptionalText(variable.description) } : {}),
+    ...(variable.default_value !== undefined ? { defaultValue: variable.default_value } : {}),
+    ...(variable.required !== undefined ? { required: variable.required } : {}),
+  }
+}
+
+function mapPipelineToolBudget(budget?: PipelineToolBudgetInput | null): AgentPipelineBudget | undefined {
+  if (!budget) return undefined
+
+  const nextBudget: AgentPipelineBudget = {
+    ...(budget.max_total_duration_ms !== undefined ? { maxTotalDurationMs: budget.max_total_duration_ms } : {}),
+    ...(budget.max_total_tokens !== undefined ? { maxTotalTokens: budget.max_total_tokens } : {}),
+    ...(budget.max_step_count !== undefined ? { maxStepCount: budget.max_step_count } : {}),
+  }
+
+  return Object.keys(nextBudget).length > 0 ? nextBudget : undefined
+}
+
+function getPipelineToolContext(): { workspacePath: string; state: Record<string, unknown>; agents: Agent[]; models: Model[] } | { error: string } {
+  const { workspacePath } = getPersistedStoreState()
+  if (!workspacePath) return { error: 'Workspace path not set' }
+
+  const state = readStoreState()
+  if (!state) return { error: 'Store not available' }
+
+  return {
+    workspacePath,
+    state,
+    agents: Array.isArray(state.agents) ? state.agents as Agent[] : [],
+    models: Array.isArray(state.models) ? state.models as Model[] : [],
+  }
+}
+
+async function getAvailablePipelinesForTools(workspacePath: string, state: Record<string, unknown>): Promise<AgentPipeline[]> {
+  const persisted = await loadPipelinesFromDisk(workspacePath)
+  if (persisted.length > 0) return persisted
+  return Array.isArray(state.agentPipelines) ? state.agentPipelines as AgentPipeline[] : []
+}
+
+function resolvePipelineReference(
+  pipelines: AgentPipeline[],
+  pipelineId?: string,
+  pipelineName?: string,
+): { pipeline?: AgentPipeline; error?: string } {
+  const trimmedId = pipelineId?.trim()
+  const trimmedName = pipelineName?.trim()
+
+  if (trimmedId) {
+    const byId = pipelines.find((pipeline) => pipeline.id === trimmedId)
+    if (byId) return { pipeline: byId }
+    return { error: `Pipeline not found: ${trimmedId}` }
+  }
+
+  if (!trimmedName) {
+    return { error: 'Provide pipeline_id or pipeline_name.' }
+  }
+
+  const lowerName = trimmedName.toLowerCase()
+  const exactMatches = pipelines.filter((pipeline) => pipeline.name.toLowerCase() === lowerName)
+  if (exactMatches.length === 1) return { pipeline: exactMatches[0] }
+  if (exactMatches.length > 1) {
+    return { error: `Multiple pipelines match the name "${trimmedName}". Use pipeline_id instead.` }
+  }
+
+  const partialMatches = pipelines.filter((pipeline) => pipeline.name.toLowerCase().includes(lowerName))
+  if (partialMatches.length === 1) return { pipeline: partialMatches[0] }
+  if (partialMatches.length > 1) {
+    return { error: `Multiple pipelines partially match "${trimmedName}". Use pipeline_id instead.` }
+  }
+
+  return { error: `Pipeline not found: ${trimmedName}` }
+}
+
+function formatPipelineIssues(pipeline: Pick<AgentPipeline, 'name' | 'steps' | 'variables' | 'budget'>, agents: Agent[], models: Model[]): string | null {
+  const validation = validateAgentPipeline(pipeline, agents, models)
+  if (validation.valid) return null
+
+  return validation.errors
+    .map((issue) => `${issue.stepIndex !== undefined ? `Step ${issue.stepIndex + 1}: ` : ''}${issue.message}`)
+    .join('\n')
+}
+
+function summarizePipelineForTool(pipeline: AgentPipeline) {
+  return {
+    id: pipeline.id,
+    name: pipeline.name,
+    description: pipeline.description ?? null,
+    createdAt: pipeline.createdAt,
+    updatedAt: pipeline.updatedAt,
+    lastRunAt: pipeline.lastRunAt ?? null,
+    variables: (pipeline.variables ?? []).map((variable) => ({
+      name: variable.name,
+      label: variable.label ?? null,
+      description: variable.description ?? null,
+      defaultValue: variable.defaultValue ?? null,
+      required: variable.required ?? false,
+    })),
+    budget: pipeline.budget ?? null,
+    steps: pipeline.steps.map((step, index) => ({
+      index: index + 1,
+      name: step.name ?? null,
+      agentId: step.agentId,
+      task: step.task,
+      enabled: step.enabled !== false,
+      continueOnError: step.continueOnError ?? false,
+      retryCount: step.retryCount ?? 0,
+      timeoutMs: step.timeoutMs ?? null,
+      modelId: step.modelId ?? null,
+      runIf: step.runIf ?? null,
+      exportVar: step.exportVar ?? null,
+    })),
+  }
+}
+
+function syncPipelinesIntoStore(nextPipelines: AgentPipeline[], selectedPipelineId?: string | null): boolean {
+  return writeStoreState((state) => {
+    state.agentPipelines = nextPipelines
+    if (selectedPipelineId !== undefined) {
+      state.selectedAgentPipelineId = selectedPipelineId
+    }
+  })
 }
 
 // ─── AI SDK tool definitions ───────────────────────────────────────
@@ -1098,6 +1322,196 @@ export const builtinToolDefs: ToolSet = {
       const result = (await electronInvoke('timer:delete', id)) as { success?: boolean; error?: string }
       if (result.error) return `Error: ${result.error}`
       return `Removed timer: ${id}`
+    },
+  }),
+
+  pipeline_list: tool({
+    description: 'List saved pipelines available in the current workspace. Use this before updating or deleting a pipeline when you need the exact id or want to inspect the current saved steps.',
+    inputSchema: z.object({
+      query: z.string().optional().describe('Optional case-insensitive filter applied to pipeline id, name, and description'),
+      include_steps: z.boolean().optional().default(true).describe('Whether to include step details in the output'),
+    }),
+    execute: async ({ query, include_steps }) => {
+      const context = getPipelineToolContext()
+      if ('error' in context) return `Error: ${context.error}`
+
+      const pipelines = await getAvailablePipelinesForTools(context.workspacePath, context.state)
+      const keyword = query?.trim().toLowerCase()
+      const filtered = keyword
+        ? pipelines.filter((pipeline) => {
+          const haystack = [pipeline.id, pipeline.name, pipeline.description ?? ''].join(' ').toLowerCase()
+          return haystack.includes(keyword)
+        })
+        : pipelines
+
+      if (filtered.length === 0) {
+        return keyword ? `No pipelines found matching "${query}".` : 'No saved pipelines found.'
+      }
+
+      const payload = filtered.map((pipeline) => {
+        const summary = summarizePipelineForTool(pipeline)
+        if (!include_steps) {
+          return {
+            id: summary.id,
+            name: summary.name,
+            description: summary.description,
+            createdAt: summary.createdAt,
+            updatedAt: summary.updatedAt,
+            lastRunAt: summary.lastRunAt,
+            variableCount: summary.variables.length,
+            stepCount: summary.steps.length,
+          }
+        }
+        return summary
+      })
+
+      return JSON.stringify(payload, null, 2)
+    },
+  }),
+
+  pipeline_add: tool({
+    description: 'Create a new saved pipeline in the current workspace. Provide the full step list you want saved. The tool validates the pipeline against available agents and models before saving.',
+    inputSchema: z.object({
+      name: z.string().describe('Pipeline name'),
+      description: z.string().optional().describe('Optional pipeline description'),
+      steps: allowJsonStringInput(z.array(pipelineToolStepSchema).min(1)).describe('Complete ordered list of pipeline steps'),
+      variables: allowJsonStringInput(z.array(pipelineToolVariableSchema)).optional().describe('Optional declared pipeline variables'),
+      budget: allowJsonStringInput(pipelineToolBudgetSchema).optional().describe('Optional whole-pipeline budget caps'),
+    }),
+    execute: async ({ name, description, steps, variables, budget }) => {
+      const context = getPipelineToolContext()
+      if ('error' in context) return `Error: ${context.error}`
+
+      const trimmedName = name.trim()
+      if (!trimmedName) return 'Error: Pipeline name cannot be empty.'
+
+      const mappedSteps = steps.map(mapPipelineToolStep)
+      const mappedVariables = variables?.map(mapPipelineToolVariable)
+      const mappedBudget = mapPipelineToolBudget(budget)
+      const now = Date.now()
+      const nextPipeline: AgentPipeline = {
+        id: `pipeline-${crypto.randomUUID()}`,
+        name: trimmedName,
+        ...(sanitizeOptionalText(description) ? { description: sanitizeOptionalText(description) } : {}),
+        steps: mappedSteps,
+        ...(mappedVariables && mappedVariables.length > 0 ? { variables: mappedVariables } : {}),
+        ...(mappedBudget ? { budget: mappedBudget } : {}),
+        createdAt: now,
+        updatedAt: now,
+      }
+
+      const validationError = formatPipelineIssues(nextPipeline, context.agents, context.models)
+      if (validationError) {
+        return `Error: Pipeline validation failed.\n${validationError}`
+      }
+
+      const saved = await savePipelineToDisk(context.workspacePath, nextPipeline)
+      if (!saved) return 'Error: Failed to save pipeline to disk.'
+
+      const currentPipelines = await getAvailablePipelinesForTools(context.workspacePath, context.state)
+      const nextPipelines = [nextPipeline, ...currentPipelines.filter((pipeline) => pipeline.id !== nextPipeline.id)]
+      const synced = syncPipelinesIntoStore(nextPipelines, nextPipeline.id)
+
+      return JSON.stringify({
+        message: `Created pipeline "${nextPipeline.name}".`,
+        pipeline: summarizePipelineForTool(nextPipeline),
+        storeSynced: synced,
+      }, null, 2)
+    },
+  }),
+
+  pipeline_update: tool({
+    description: 'Update an existing saved pipeline. Prefer pipeline_id when available. Any provided steps replace the full saved step list. Set description to an empty string or null to clear it. Set variables or budget to null to remove them.',
+    inputSchema: z.object({
+      pipeline_id: z.string().optional().describe('Exact pipeline id to update'),
+      pipeline_name: z.string().optional().describe('Exact or partial pipeline name when id is unknown'),
+      name: z.string().optional().describe('New pipeline name'),
+      description: z.string().nullable().optional().describe('New description; null or empty clears it'),
+      steps: allowJsonStringInput(z.array(pipelineToolStepSchema).min(1)).optional().describe('Complete replacement step list'),
+      variables: allowJsonStringInput(z.array(pipelineToolVariableSchema).nullable()).optional().describe('Replacement variable list; null clears variables'),
+      budget: allowJsonStringInput(pipelineToolBudgetSchema.nullable()).optional().describe('Replacement budget; null clears budget'),
+    }),
+    execute: async ({ pipeline_id, pipeline_name, name, description, steps, variables, budget }) => {
+      const context = getPipelineToolContext()
+      if ('error' in context) return `Error: ${context.error}`
+
+      const pipelines = await getAvailablePipelinesForTools(context.workspacePath, context.state)
+      const resolved = resolvePipelineReference(pipelines, pipeline_id, pipeline_name)
+      if (!resolved.pipeline) return `Error: ${resolved.error}`
+
+      if (name === undefined && description === undefined && steps === undefined && variables === undefined && budget === undefined) {
+        return 'Error: No updates were provided.'
+      }
+
+      const nextName = name !== undefined ? name.trim() : resolved.pipeline.name
+      if (!nextName) return 'Error: Pipeline name cannot be empty.'
+
+      const nextDescription = description === undefined ? resolved.pipeline.description : sanitizeOptionalText(description)
+      const nextSteps = steps ? steps.map(mapPipelineToolStep) : resolved.pipeline.steps
+      const nextVariables = variables === undefined
+        ? resolved.pipeline.variables
+        : variables === null
+          ? undefined
+          : variables.map(mapPipelineToolVariable)
+      const nextBudget = budget === undefined ? resolved.pipeline.budget : mapPipelineToolBudget(budget)
+
+      const updatedPipeline: AgentPipeline = {
+        ...resolved.pipeline,
+        name: nextName,
+        ...(nextDescription ? { description: nextDescription } : {}),
+        ...(!nextDescription ? { description: undefined } : {}),
+        steps: nextSteps,
+        ...(nextVariables && nextVariables.length > 0 ? { variables: nextVariables } : { variables: undefined }),
+        ...(nextBudget ? { budget: nextBudget } : { budget: undefined }),
+        updatedAt: Date.now(),
+      }
+
+      const validationError = formatPipelineIssues(updatedPipeline, context.agents, context.models)
+      if (validationError) {
+        return `Error: Pipeline validation failed.\n${validationError}`
+      }
+
+      const saved = await savePipelineToDisk(context.workspacePath, updatedPipeline)
+      if (!saved) return `Error: Failed to save pipeline "${resolved.pipeline.name}".`
+
+      const nextPipelines = [updatedPipeline, ...pipelines.filter((pipeline) => pipeline.id !== updatedPipeline.id)]
+      const synced = syncPipelinesIntoStore(nextPipelines, updatedPipeline.id)
+
+      return JSON.stringify({
+        message: `Updated pipeline "${updatedPipeline.name}".`,
+        pipeline: summarizePipelineForTool(updatedPipeline),
+        storeSynced: synced,
+      }, null, 2)
+    },
+  }),
+
+  pipeline_remove: tool({
+    description: 'Delete a saved pipeline from the current workspace. Prefer pipeline_id when available.',
+    inputSchema: z.object({
+      pipeline_id: z.string().optional().describe('Exact pipeline id to remove'),
+      pipeline_name: z.string().optional().describe('Exact or partial pipeline name when id is unknown'),
+    }),
+    execute: async ({ pipeline_id, pipeline_name }) => {
+      const context = getPipelineToolContext()
+      if ('error' in context) return `Error: ${context.error}`
+
+      const pipelines = await getAvailablePipelinesForTools(context.workspacePath, context.state)
+      const resolved = resolvePipelineReference(pipelines, pipeline_id, pipeline_name)
+      if (!resolved.pipeline) return `Error: ${resolved.error}`
+
+      const deleted = await deletePipelineFromDisk(context.workspacePath, resolved.pipeline.id)
+      if (!deleted) return `Error: Failed to delete pipeline "${resolved.pipeline.name}".`
+
+      const nextPipelines = pipelines.filter((pipeline) => pipeline.id !== resolved.pipeline?.id)
+      const currentSelectedId = typeof context.state.selectedAgentPipelineId === 'string' ? context.state.selectedAgentPipelineId : null
+      const nextSelectedId = currentSelectedId === resolved.pipeline.id ? null : currentSelectedId
+      const synced = syncPipelinesIntoStore(nextPipelines, nextSelectedId)
+
+      return JSON.stringify({
+        message: `Removed pipeline "${resolved.pipeline.name}".`,
+        pipelineId: resolved.pipeline.id,
+        storeSynced: synced,
+      }, null, 2)
     },
   }),
 
@@ -2853,6 +3267,7 @@ export const TOOL_META: Record<string, ToolMeta> = {
   clipboard_read:        { userFacingName: 'Read clipboard', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   todo_list:             { userFacingName: 'List todos', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   timer_list:            { userFacingName: 'List timers', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
+  pipeline_list:         { userFacingName: 'List pipelines', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   memory_search:         { userFacingName: 'Search memory', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   memory_list:           { userFacingName: 'List memories', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   agent_list:            { userFacingName: 'List agents', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
@@ -2891,9 +3306,12 @@ export const TOOL_META: Record<string, ToolMeta> = {
   todo_add:              { userFacingName: 'Add todo', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   todo_update:           { userFacingName: 'Update todo', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   todo_remove:           { userFacingName: 'Remove todo', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
-  timer_add:             { userFacingName: 'Add timer', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
-  timer_update:          { userFacingName: 'Update timer', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
-  timer_remove:          { userFacingName: 'Remove timer', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
+  timer_add:             { userFacingName: 'Add timer', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
+  timer_update:          { userFacingName: 'Update timer', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
+  timer_remove:          { userFacingName: 'Remove timer', isReadOnly: false, isDestructive: true, isConcurrencySafe: false, requiresConfirmation: true },
+  pipeline_add:          { userFacingName: 'Add pipeline', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
+  pipeline_update:       { userFacingName: 'Update pipeline', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
+  pipeline_remove:       { userFacingName: 'Remove pipeline', isReadOnly: false, isDestructive: true, isConcurrencySafe: false, requiresConfirmation: true },
   memory_store:          { userFacingName: 'Store memory', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   memory_delete:         { userFacingName: 'Delete memory', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   agent_notify:          { userFacingName: 'Notify agent', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
@@ -3049,6 +3467,8 @@ export function formatToolError(error: unknown): string {
 export interface SystemPromptOptions {
   /** Agent's base system prompt */
   agentPrompt?: string
+  /** Page or workflow specific session context */
+  sessionContext?: string
   /** Response style hint (concise/detailed) */
   responseStyle?: string
   /** Agent's recent memories */
@@ -3080,6 +3500,10 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string | undefined
   // ── Static: agent identity & instructions ──
   if (opts.agentPrompt) {
     sections.push(opts.agentPrompt)
+  }
+
+  if (opts.sessionContext) {
+    sections.push(`<session-context>\n${opts.sessionContext}\n</session-context>`)
   }
 
   if (opts.responseStyle && STYLE_HINTS[opts.responseStyle]) {

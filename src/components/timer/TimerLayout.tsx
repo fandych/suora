@@ -9,6 +9,7 @@ import type { ScheduledTask } from '@/types'
 import { electronInvoke, electronOn, electronOff, formatRelative, TIMER_REFRESH_INTERVAL_MS, type TimerFormData } from './timerHelpers'
 import { TimerForm } from './TimerForm'
 import { TimerDetail } from './TimerDetail'
+import { TimerAssistantDrawer } from './TimerAssistantDrawer'
 import { loadPipelinesFromDisk } from '@/services/pipelineFiles'
 import { handleTimerFired } from '@/services/timerRuntime'
 import { WorkbenchEmptyState } from '@/components/ui/Primitives'
@@ -20,9 +21,11 @@ export function TimerLayout() {
   const [editing, setEditing] = useState(false)
   const [creating, setCreating] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [assistantState, setAssistantState] = useState<{ mode: 'create' | 'edit'; timerId: string | null } | null>(null)
   const { workspacePath, setAgentPipelines } = useAppStore()
   const { t } = useI18n()
   const deferredSearchQuery = useDeferredValue(searchQuery)
+  const aiCreateLabel = t('timer.aiCreate', 'AI Create')
 
   const loadTimers = useCallback(async () => {
     try {
@@ -54,11 +57,29 @@ export function TimerLayout() {
   }, [workspacePath, setAgentPipelines])
 
   const selectedTimer = timers.find((t) => t.id === selectedId) ?? null
+  const assistantTimer = assistantState?.timerId ? timers.find((t) => t.id === assistantState.timerId) ?? null : null
 
   useEffect(() => {
-    if (creating || editing || selectedId || timers.length === 0) return
-    setSelectedId(timers[0].id)
+    if (creating || editing) return
+    if (timers.length === 0) {
+      if (selectedId) setSelectedId(null)
+      return
+    }
+    if (selectedId && timers.some((timer) => timer.id === selectedId)) return
+    const newestTimer = [...timers].sort((a, b) => b.createdAt - a.createdAt)[0]
+    if (newestTimer) setSelectedId(newestTimer.id)
   }, [timers, selectedId, creating, editing])
+
+  useEffect(() => {
+    if (!assistantState || assistantState.mode !== 'edit') return
+    if (!assistantState.timerId) {
+      setAssistantState(null)
+      return
+    }
+    if (!timers.some((timer) => timer.id === assistantState.timerId)) {
+      setAssistantState(null)
+    }
+  }, [assistantState, timers])
 
   const filteredTimers = useMemo(() => {
     const query = deferredSearchQuery.trim().toLowerCase()
@@ -134,19 +155,41 @@ export function TimerLayout() {
     loadTimers()
   }
 
+  function openAssistantCreate() {
+    setCreating(false)
+    setEditing(false)
+    setSelectedId(null)
+    setAssistantState({ mode: 'create', timerId: null })
+  }
+
+  function openAssistantEdit(timerId: string) {
+    setCreating(false)
+    setEditing(false)
+    setSelectedId(timerId)
+    setAssistantState({ mode: 'edit', timerId })
+  }
+
   // ─── Render ────────────────────────────────────────────────────────
 
   const sortedTimers = [...filteredTimers].sort((a, b) => b.createdAt - a.createdAt)
 
   return (
-    <>
+    <div className="relative flex min-h-0 flex-1">
       <SidePanel title={t('timer.title', 'Timers')} width={panelWidth} action={
-        <button
-          className="text-[11px] px-3 py-1.5 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-semibold"
-          onClick={() => { setCreating(true); setEditing(false); setSelectedId(null) }}
-        >
-          {t('timer.new', '+ New')}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="text-[11px] px-3 py-1.5 rounded-xl bg-accent text-white hover:bg-accent-hover transition-colors font-semibold"
+            onClick={openAssistantCreate}
+          >
+            {aiCreateLabel}
+          </button>
+          <button
+            className="text-[11px] px-3 py-1.5 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-semibold"
+            onClick={() => { setCreating(true); setEditing(false); setSelectedId(null) }}
+          >
+            {t('timer.new', '+ New')}
+          </button>
+        </div>
       }>
         <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
           <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
@@ -230,6 +273,7 @@ export function TimerLayout() {
           <TimerDetail
             timer={selectedTimer}
             onEdit={() => setEditing(true)}
+            onOpenAssistant={() => openAssistantEdit(selectedTimer.id)}
             onDelete={handleDelete}
             onToggle={handleToggle}
             onRunNow={handleRunNow}
@@ -247,13 +291,22 @@ export function TimerLayout() {
                 </>
               )}
               actions={(
-                <button
-                  type="button"
-                  className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
-                  onClick={() => { setCreating(true); setEditing(false); setSelectedId(null) }}
-                >
-                  {t('timer.new', '+ New')}
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
+                    onClick={openAssistantCreate}
+                  >
+                    {aiCreateLabel}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent"
+                    onClick={() => { setCreating(true); setEditing(false); setSelectedId(null) }}
+                  >
+                    {t('timer.new', '+ New')}
+                  </button>
+                </div>
               )}
               metrics={[
                 {
@@ -277,6 +330,14 @@ export function TimerLayout() {
           </div>
         )}
       </div>
-    </>
+      {assistantState && (
+        <TimerAssistantDrawer
+          mode={assistantState.mode}
+          timer={assistantState.mode === 'edit' ? assistantTimer : null}
+          onClose={() => setAssistantState(null)}
+          onTimerMutated={() => { void loadTimers() }}
+        />
+      )}
+    </div>
   )
 }

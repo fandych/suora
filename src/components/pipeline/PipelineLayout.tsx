@@ -1,7 +1,8 @@
-import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
+import { PipelineAssistantDrawer } from '@/components/pipeline/PipelineAssistantDrawer'
 import { PipelineFlowDiagram } from '@/components/pipeline/PipelineFlowDiagram'
 import { flushPendingSplitStoreWrites } from '@/services/fileStorage'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
@@ -12,9 +13,10 @@ import { executeAgentPipeline, dryRunAgentPipeline, type AgentPipelineProgressSt
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
 import { formatPipelineExecutionEngineLabel, formatPipelineExecutionFallbackReason } from '@/services/pipelineExecutionPresentation'
-import { loadPipelineExecutionsFromDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
+import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
 import { PipelineImportError, parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability'
 import { confirm } from '@/services/confirmDialog'
+import { t as translate } from '@/services/i18n'
 import type { AgentPipeline, AgentPipelineBudget, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep, AgentPipelineVariable, PipelineStepUsage } from '@/types'
 import { generateId } from '@/utils/helpers'
 
@@ -137,7 +139,7 @@ function buildPreviewSteps(pipeline: AgentPipelineStep[], agentNameMap: Record<s
     task: step.task,
     input: step.enabled === false ? '' : (index === 0 ? step.task : ''),
     status: step.enabled === false ? 'skipped' : 'pending',
-    error: step.enabled === false ? 'Step disabled' : undefined,
+    error: step.enabled === false ? translate('agents.pipelineStepDisabled', 'Step disabled') : undefined,
   }))
 }
 
@@ -152,6 +154,7 @@ export function PipelineLayout() {
   const [searchParams, setSearchParams] = useSearchParams()
   const [panelWidth, setPanelWidth] = useResizablePanel('pipeline', 280)
   const [searchQuery, setSearchQuery] = useState('')
+  const [assistantState, setAssistantState] = useState<{ mode: 'create' | 'edit'; pipelineId: string | null } | null>(null)
   const [pipelineDescription, setPipelineDescription] = useState('')
   const [pipelineVariables, setPipelineVariables] = useState<AgentPipelineVariable[]>([])
   const [pipelineBudget, setPipelineBudget] = useState<AgentPipelineBudget | undefined>(undefined)
@@ -203,12 +206,15 @@ export function PipelineLayout() {
   const selectedSavedPipeline = selectedAgentPipelineId
     ? agentPipelines.find((item) => item.id === selectedAgentPipelineId) ?? null
     : null
+  const assistantPipeline = assistantState?.pipelineId
+    ? agentPipelines.find((item) => item.id === assistantState.pipelineId) ?? null
+    : null
   const resetPipelineExecutionState = () => {
     setLiveSteps([])
     setActiveExecution(null)
   }
 
-  const hydratePipelineEditor = (savedPipeline: AgentPipeline) => {
+  const hydratePipelineEditor = useCallback((savedPipeline: AgentPipeline) => {
     setAgentPipelineName(savedPipeline.name)
     setPipelineDescription(savedPipeline.description ?? '')
     setPipelineVariables(savedPipeline.variables ?? [])
@@ -216,7 +222,25 @@ export function PipelineLayout() {
     setPipelineBudget(savedPipeline.budget)
     setAgentPipeline(savedPipeline.steps)
     resetPipelineExecutionState()
-  }
+  }, [setAgentPipeline, setAgentPipelineName])
+
+  const selectSavedPipeline = useCallback((savedPipeline: AgentPipeline) => {
+    hydratedRequestedPipelineIdRef.current = null
+    hydratedSelectedPipelineIdRef.current = savedPipeline.id
+    setSelectedAgentPipelineId(savedPipeline.id)
+    hydratePipelineEditor(savedPipeline)
+  }, [hydratePipelineEditor, setSelectedAgentPipelineId])
+
+  const refreshSavedPipelines = useCallback(async (): Promise<AgentPipeline[]> => {
+    if (!workspacePath) return []
+    try {
+      const savedPipelines = await loadPipelinesFromDisk(workspacePath)
+      setAgentPipelines(savedPipelines)
+      return savedPipelines
+    } catch {
+      return []
+    }
+  }, [workspacePath, setAgentPipelines])
 
   const updatePipelineVariables = (updater: (current: AgentPipelineVariable[]) => AgentPipelineVariable[]) => {
     setPipelineVariables((current) => {
@@ -267,13 +291,8 @@ export function PipelineLayout() {
     [enabledPipelineSteps],
   )
   useEffect(() => {
-    if (!workspacePath) return
-    loadPipelinesFromDisk(workspacePath).then((savedPipelines) => {
-      setAgentPipelines(savedPipelines)
-    }).catch(() => {
-      // Ignore pipeline loading errors
-    })
-  }, [workspacePath, setAgentPipelines])
+    void refreshSavedPipelines()
+  }, [refreshSavedPipelines])
 
   useEffect(() => {
     if (!requestedPipelineId) {
@@ -285,10 +304,8 @@ export function PipelineLayout() {
     if (hydratedRequestedPipelineIdRef.current === requestedPipeline.id) return
 
     hydratedRequestedPipelineIdRef.current = requestedPipeline.id
-    hydratedSelectedPipelineIdRef.current = requestedPipeline.id
-    setSelectedAgentPipelineId(requestedPipeline.id)
-    hydratePipelineEditor(requestedPipeline)
-  }, [requestedPipelineId, agentPipelines, setSelectedAgentPipelineId])
+    selectSavedPipeline(requestedPipeline)
+  }, [requestedPipelineId, agentPipelines, selectSavedPipeline])
 
   useEffect(() => {
     if (!selectedAgentPipelineId) {
@@ -301,7 +318,18 @@ export function PipelineLayout() {
 
     hydratedSelectedPipelineIdRef.current = selectedAgentPipelineId
     hydratePipelineEditor(selectedPipeline)
-  }, [selectedAgentPipelineId, agentPipelines])
+  }, [selectedAgentPipelineId, agentPipelines, hydratePipelineEditor])
+
+  useEffect(() => {
+    if (!assistantState || assistantState.mode !== 'edit') return
+    if (!assistantState.pipelineId) {
+      setAssistantState(null)
+      return
+    }
+    if (!agentPipelines.some((item) => item.id === assistantState.pipelineId)) {
+      setAssistantState(null)
+    }
+  }, [assistantState, agentPipelines])
 
   useEffect(() => {
     if (!workspacePath || !selectedAgentPipelineId) {
@@ -410,10 +438,15 @@ export function PipelineLayout() {
   const loadSavedPipeline = (pipelineId: string) => {
     const selectedPipeline = agentPipelines.find((item) => item.id === pipelineId)
     if (!selectedPipeline) return
-    hydratedRequestedPipelineIdRef.current = null
-    hydratedSelectedPipelineIdRef.current = selectedPipeline.id
-    setSelectedAgentPipelineId(selectedPipeline.id)
-    hydratePipelineEditor(selectedPipeline)
+    selectSavedPipeline(selectedPipeline)
+  }
+
+  const openAssistantCreate = () => {
+    setAssistantState({ mode: 'create', pipelineId: null })
+  }
+
+  const openAssistantEdit = (pipelineId: string) => {
+    setAssistantState({ mode: 'edit', pipelineId })
   }
 
   const replacePipelineDraft = (nextPipeline: AgentPipelineStep[]) => {
@@ -643,20 +676,8 @@ export function PipelineLayout() {
       lastRunAt: savedPipeline?.lastRunAt,
     }
 
-    const previousPipelines = agentPipelines
-    const previousSelectedPipelineId = selectedAgentPipelineId
-    const nextPipelines = [nextPipeline, ...agentPipelines.filter((item) => item.id !== nextPipeline.id)]
-
-    hydratedSelectedPipelineIdRef.current = nextPipeline.id
-    setAgentPipelines(nextPipelines)
-    setSelectedAgentPipelineId(nextPipeline.id)
-
-    try {
-      await flushPendingSplitStoreWrites()
-    } catch {
-      hydratedSelectedPipelineIdRef.current = previousSelectedPipelineId
-      setAgentPipelines(previousPipelines)
-      setSelectedAgentPipelineId(previousSelectedPipelineId)
+    const saved = await savePipelineToDisk(workspacePath, nextPipeline)
+    if (!saved) {
       addNotification({
         id: generateId('notif'),
         type: 'error',
@@ -666,6 +687,25 @@ export function PipelineLayout() {
         read: false,
       })
       return
+    }
+
+    const nextPipelines = [nextPipeline, ...agentPipelines.filter((item) => item.id !== nextPipeline.id)]
+
+    hydratedSelectedPipelineIdRef.current = nextPipeline.id
+    setAgentPipelines(nextPipelines)
+    setSelectedAgentPipelineId(nextPipeline.id)
+
+    try {
+      await flushPendingSplitStoreWrites()
+    } catch {
+      addNotification({
+        id: generateId('notif'),
+        type: 'warning',
+        title: t('agents.pipelineSaveSyncWarningTitle', 'Pipeline saved with a sync warning'),
+        message: t('agents.pipelineSaveSyncWarningBody', 'The pipeline was saved to disk, but the workspace state could not be flushed immediately.'),
+        timestamp: Date.now(),
+        read: false,
+      })
     }
 
     addNotification({
@@ -688,19 +728,8 @@ export function PipelineLayout() {
     })
     if (!confirmed) return
 
-    const nextPipelines = agentPipelines.filter((item) => item.id !== selectedSavedPipeline.id)
-    const previousSelectedPipelineId = selectedAgentPipelineId
-
-    hydratedSelectedPipelineIdRef.current = null
-    setAgentPipelines(nextPipelines)
-    setSelectedAgentPipelineId(null)
-
-    try {
-      await flushPendingSplitStoreWrites()
-    } catch {
-      hydratedSelectedPipelineIdRef.current = previousSelectedPipelineId
-      setAgentPipelines(agentPipelines)
-      setSelectedAgentPipelineId(previousSelectedPipelineId)
+    const deleted = await deletePipelineFromDisk(workspacePath, selectedSavedPipeline.id)
+    if (!deleted) {
       addNotification({
         id: generateId('notif'),
         type: 'error',
@@ -712,8 +741,51 @@ export function PipelineLayout() {
       return
     }
 
+    const nextPipelines = agentPipelines.filter((item) => item.id !== selectedSavedPipeline.id)
+
+    hydratedSelectedPipelineIdRef.current = null
+    setAgentPipelines(nextPipelines)
+    setSelectedAgentPipelineId(null)
+
+    try {
+      await flushPendingSplitStoreWrites()
+    } catch {
+      addNotification({
+        id: generateId('notif'),
+        type: 'warning',
+        title: t('agents.pipelineDeleteSyncWarningTitle', 'Pipeline removed with a sync warning'),
+        message: t('agents.pipelineDeleteSyncWarningBody', 'The pipeline was removed from disk, but the workspace state could not be flushed immediately.'),
+        timestamp: Date.now(),
+        read: false,
+      })
+    }
+
     resetPipelineEditor()
   }
+
+  const handleAssistantPipelineMutated = useCallback(async () => {
+    const refreshedPipelines = await refreshSavedPipelines()
+    if (refreshedPipelines.length === 0) {
+      resetPipelineEditor()
+      return
+    }
+
+    if (assistantState?.mode === 'edit' && assistantState.pipelineId) {
+      const updatedPipeline = refreshedPipelines.find((item) => item.id === assistantState.pipelineId)
+      if (updatedPipeline) {
+        selectSavedPipeline(updatedPipeline)
+        return
+      }
+
+      if (selectedAgentPipelineId === assistantState.pipelineId) {
+        resetPipelineEditor()
+      }
+      setAssistantState(null)
+      return
+    }
+
+    selectSavedPipeline(refreshedPipelines[0])
+  }, [assistantState, refreshSavedPipelines, resetPipelineEditor, selectSavedPipeline, selectedAgentPipelineId])
 
   const runPipeline = async () => {
     if (enabledPipelineSteps.length === 0 || invalidEnabledSteps > 0 || !pipelineValidation.valid || running) return
@@ -837,13 +909,22 @@ export function PipelineLayout() {
         title={t('agents.pipeline', 'Pipeline')}
         width={panelWidth}
         action={
-          <button
-            type="button"
-            onClick={resetPipelineEditor}
-            className="rounded-xl bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20"
-          >
-            + {t('common.new', 'New')}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={openAssistantCreate}
+              className="rounded-xl bg-accent px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-accent-hover"
+            >
+              {t('timer.aiCreate', 'AI Create')}
+            </button>
+            <button
+              type="button"
+              onClick={resetPipelineEditor}
+              className="rounded-xl bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20"
+            >
+              + {t('common.new', 'New')}
+            </button>
+          </div>
         }
       >
         <div className="module-sidebar-stack p-3 space-y-3">
@@ -901,7 +982,7 @@ export function PipelineLayout() {
                       </div>
                       {savedPipeline.description && <div className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{savedPipeline.description}</div>}
                       <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-text-muted">
-                        <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{savedPipeline.lastRunAt ? t('agents.pipelineRecentRun', 'Recent run') : t('agents.pipelineUnsaved', 'Awaiting first run')}</span>
+                        <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{savedPipeline.lastRunAt ? t('agents.pipelineRecentRun', 'Recent run') : t('agents.pipelineAwaitingFirstRun', 'Awaiting first run')}</span>
                       </div>
                     </div>
                     <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-3 text-accent">
@@ -939,6 +1020,8 @@ export function PipelineLayout() {
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
+            <button type="button" onClick={openAssistantCreate} className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover">{t('timer.aiCreate', 'AI Create')}</button>
+            <button type="button" onClick={() => selectedSavedPipeline && openAssistantEdit(selectedSavedPipeline.id)} disabled={!selectedSavedPipeline} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40">{t('timer.aiEditCurrent', 'AI Edit')}</button>
             <button type="button" onClick={resetPipelineEditor} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('common.new', 'New')}</button>
             <button type="button" onClick={() => replacePipelineDraft([])} disabled={pipeline.length === 0 || running} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('common.clearAll', 'Clear All')}</button>
             <button type="button" onClick={() => void importPipelineFromJson()} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('agents.pipelineImport', 'Import JSON')}</button>
@@ -1770,6 +1853,14 @@ export function PipelineLayout() {
           </aside>
         </div>
       </div>
+      {assistantState && (
+        <PipelineAssistantDrawer
+          mode={assistantState.mode}
+          pipeline={assistantState.mode === 'edit' ? assistantPipeline : null}
+          onClose={() => setAssistantState(null)}
+          onPipelineMutated={() => { void handleAssistantPipelineMutated() }}
+        />
+      )}
     </>
   )
 }

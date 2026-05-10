@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChatMain } from './ChatMain'
@@ -293,5 +293,52 @@ describe('ChatMain', () => {
 
     // Welcome screen content should still be visible
     expect(screen.getByText(/Select or create a conversation/i)).toBeInTheDocument()
+  })
+
+  it('ignores hidden assistant sessions in the main chat surface', async () => {
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const visibleSession: Session = {
+      id: 'session-visible',
+      title: 'Visible chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: [],
+    }
+
+    const hiddenSession: Session = {
+      id: 'session-hidden',
+      title: 'Hidden pipeline draft',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      surface: 'pipeline-assistant',
+      modelId: model.id,
+      messages: [],
+    }
+
+    useAppStore.setState({
+      sessions: [hiddenSession, visibleSession],
+      activeSessionId: hiddenSession.id,
+      openSessionTabs: [hiddenSession.id, visibleSession.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    await waitFor(() => expect(useAppStore.getState().activeSessionId).toBe(visibleSession.id))
+
+    expect(screen.getAllByText('Visible chat').length).toBeGreaterThan(0)
+    expect(screen.queryByText('Hidden pipeline draft')).not.toBeInTheDocument()
   })
 })

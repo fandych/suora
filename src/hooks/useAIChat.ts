@@ -12,6 +12,7 @@ import { loadPipelineExecutionsFromDisk } from '@/services/pipelineFiles'
 import { detectNaturalPipelineChatCommand, looksLikePipelineChatCommand, parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
 import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineExecutionPresentation'
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
+import { t } from '@/services/i18n'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt } from '@/services/tools'
 import { logger } from '@/services/logger'
 import { sanitizeToolError } from '@/services/sanitization'
@@ -201,9 +202,14 @@ function updateSessionMessage(sessionId: string, messageId: string, updates: Par
 
 // ─── Hook ─────────────────────────────────────────────────────────
 
-export function useAIChat() {
+interface UseAIChatOptions {
+  sessionId?: string | null
+}
+
+export function useAIChat(options: UseAIChatOptions = {}) {
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { sessionId: targetSessionId } = options
 
   const streamingRef = useRef(false)
   const abortRef = useRef<AbortController | null>(null)
@@ -212,6 +218,12 @@ export function useAIChat() {
   useEffect(() => {
     return () => { abortRef.current?.abort() }
   }, [])
+
+  const resolveTargetSession = useCallback((store = useAppStore.getState()) => {
+    const resolvedSessionId = activeStreamMessageRef.current?.sessionId ?? targetSessionId ?? store.activeSessionId
+    if (!resolvedSessionId) return null
+    return store.sessions.find((session) => session.id === resolvedSessionId) ?? null
+  }, [targetSessionId])
 
   const cancelStream = useCallback(() => {
     abortRef.current?.abort()
@@ -222,9 +234,7 @@ export function useAIChat() {
 
     const store = useAppStore.getState()
     const activeStreamMessage = activeStreamMessageRef.current
-    const session = activeStreamMessage
-      ? store.sessions.find((s) => s.id === activeStreamMessage.sessionId)
-      : store.sessions.find((s) => s.id === store.activeSessionId)
+    const session = resolveTargetSession(store)
     if (!session) return
     const lastMsg = activeStreamMessage
       ? session.messages.find((message) => message.id === activeStreamMessage.messageId)
@@ -250,7 +260,7 @@ export function useAIChat() {
           }
         : message),
     })
-  }, [])
+  }, [resolveTargetSession])
 
   const sendMessage = useCallback(async (userMessage: string, attachments?: MessageAttachment[]) => {
     const earlyPipelineCommand = parseSlashPipelineChatCommand(userMessage)
@@ -260,7 +270,7 @@ export function useAIChat() {
     }
 
     const store = useAppStore.getState()
-    const activeSession = store.sessions.find((s) => s.id === store.activeSessionId)
+    const activeSession = store.sessions.find((s) => s.id === (targetSessionId ?? store.activeSessionId))
     if (!activeSession) { setError('No active session'); return }
 
     const prevMessages = activeSession.messages
@@ -304,8 +314,10 @@ export function useAIChat() {
         id: generateId('msg'),
         role: 'assistant',
         content: pipelineCommand.type === 'run'
-          ? `Preparing pipeline ${pipelineCommand.reference}...`
-          : 'Processing pipeline command...',
+          ? (pipelineChatLanguage === 'zh'
+            ? `正在准备流水线 ${pipelineCommand.reference}...`
+            : `Preparing pipeline ${pipelineCommand.reference}...`)
+          : (pipelineChatLanguage === 'zh' ? '正在处理流水线指令...' : 'Processing pipeline command...'),
         timestamp: Date.now(),
         isStreaming: true,
       }
@@ -484,14 +496,14 @@ export function useAIChat() {
             id: generateId('notif'),
             type: execution.status === 'success' ? 'success' : 'error',
             title: execution.status === 'success'
-              ? `Pipeline completed: ${execution.pipelineName}`
-              : `Pipeline failed: ${execution.pipelineName}`,
+              ? t('agents.pipelineCompletedTitle', 'Pipeline completed: {name}').replace('{name}', execution.pipelineName)
+              : t('agents.pipelineFailedTitle', 'Pipeline failed: {name}').replace('{name}', execution.pipelineName),
             message: buildPipelineExecutionNotificationMessage(execution),
             timestamp: Date.now(),
             read: false,
             action: {
               module: 'pipeline',
-              label: 'Open pipeline run',
+              label: t('agents.pipelineOpenRun', 'Open pipeline run'),
               path: buildPipelineExecutionPath({
                 pipelineId: resolution.pipeline.id,
                 executionId: execution.id,
@@ -500,7 +512,9 @@ export function useAIChat() {
           })
         }
       } catch (err) {
-        const message = err instanceof Error ? err.message : 'Pipeline execution failed'
+        const message = err instanceof Error
+          ? err.message
+          : (pipelineChatLanguage === 'zh' ? '流水线执行失败。' : 'Pipeline execution failed')
         setError(message)
         updateSessionMessage(activeSession.id, assistantMsg.id, {
           content: message,
@@ -620,6 +634,7 @@ export function useAIChat() {
 
       const systemPrompt = buildSystemPrompt({
         agentPrompt: sessionAgent?.systemPrompt,
+        sessionContext: activeSession.contextPrompt,
         responseStyle: sessionAgent?.responseStyle,
         memories: sessionAgent?.memories,
         skillPrompts,
@@ -930,12 +945,12 @@ export function useAIChat() {
         useAppStore.getState().recordAgentPerformance(sessionAgent.id, elapsed, tokenUsage?.totalTokens ?? 0, hasError)
       }
     }
-  }, [cancelStream])
+  }, [cancelStream, targetSessionId])
 
   const retryLastError = useCallback(() => {
     if (streamingRef.current) return
     const store = useAppStore.getState()
-    const session = store.sessions.find((s) => s.id === store.activeSessionId)
+    const session = resolveTargetSession()
     if (!session || session.messages.length < 2) return
 
     const lastMsg = session.messages[session.messages.length - 1]
@@ -956,21 +971,21 @@ export function useAIChat() {
     store.updateSession(session.id, { messages: cleaned })
 
     sendMessage(userText, userAttachments)
-  }, [sendMessage])
+  }, [resolveTargetSession, sendMessage])
 
   const deleteMessage = useCallback((messageId: string) => {
     const store = useAppStore.getState()
-    const session = store.sessions.find((s) => s.id === store.activeSessionId)
+    const session = resolveTargetSession(store)
     if (!session) return
     store.updateSession(session.id, {
       messages: session.messages.filter((m) => m.id !== messageId),
     })
-  }, [])
+  }, [resolveTargetSession])
 
   const regenerateMessage = useCallback((messageId: string) => {
     if (streamingRef.current) return
     const store = useAppStore.getState()
-    const session = store.sessions.find((s) => s.id === store.activeSessionId)
+    const session = resolveTargetSession(store)
     if (!session) return
 
     // Find the assistant message to regenerate
@@ -996,14 +1011,14 @@ export function useAIChat() {
     store.updateSession(session.id, { messages: withoutUser })
 
     sendMessage(userText, userAttachments)
-  }, [sendMessage])
+  }, [resolveTargetSession, sendMessage])
 
   const clearMessages = useCallback(() => {
     const store = useAppStore.getState()
-    const session = store.sessions.find((s) => s.id === store.activeSessionId)
+    const session = resolveTargetSession(store)
     if (!session) return
     store.updateSession(session.id, { messages: [] })
-  }, [])
+  }, [resolveTargetSession])
 
   return { sendMessage, cancelStream, retryLastError, deleteMessage, regenerateMessage, clearMessages, isLoading, error }
 }

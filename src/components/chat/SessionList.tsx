@@ -7,6 +7,7 @@ import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
+import { isMainChatSession } from '@/utils/chatSessions'
 import { safeStringify } from '@/utils/safeJson'
 
 function formatSessionRelativeTime(ts: number, locale = 'en'): string {
@@ -71,9 +72,14 @@ export function SessionList({ width }: { width?: number }) {
     }
   }, [])
 
+  const chatSessions = useMemo(
+    () => sessions.filter(isMainChatSession),
+    [sessions],
+  )
+
   const handleNewSession = () => {
     if (!selectedModel) {
-      toast.warning('No model configured', 'Please add a model provider in Models settings first.')
+      toast.warning(t('chat.noModelConfigured', 'No model configured'), t('chat.addModelFirst', 'Please add a model provider in Models settings first.'))
       return
     }
     const session: Session = {
@@ -90,13 +96,13 @@ export function SessionList({ width }: { width?: number }) {
 
   const filteredSessions = useMemo(() => {
     const query = deferredSearchQuery.trim().toLowerCase()
-    if (!query) return sessions
+    if (!query) return chatSessions
 
-    return sessions.filter((session) =>
+    return chatSessions.filter((session) =>
       session.title.toLowerCase().includes(query) ||
       session.messages.some((message) => message.content.toLowerCase().includes(query)),
     )
-  }, [sessions, deferredSearchQuery])
+  }, [chatSessions, deferredSearchQuery])
 
   const orderedSessions = useMemo(
     () => [...filteredSessions].sort((a, b) => b.updatedAt - a.updatedAt),
@@ -109,7 +115,7 @@ export function SessionList({ width }: { width?: number }) {
   )
 
   const startRename = (sessionId: string) => {
-    const session = sessions.find((item) => item.id === sessionId)
+    const session = chatSessions.find((item) => item.id === sessionId)
     if (!session) return
     setEditingId(sessionId)
     setEditTitle(session.title)
@@ -188,7 +194,7 @@ export function SessionList({ width }: { width?: number }) {
           </div>
           <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
             <span>{filteredSessions.length} {t('common.results', 'results')}</span>
-            {searchQuery && <span>{sessions.length} {t('common.total', 'total')}</span>}
+            {searchQuery && <span>{chatSessions.length} {t('common.total', 'total')}</span>}
           </div>
         </div>
 

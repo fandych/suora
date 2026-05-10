@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { DocumentGroup, DocumentNode, Skill } from '@/types'
-import { buildToolHints, builtinToolDefs, getSkillSystemPrompts, setLiveStoreAccessor } from './tools'
+import { z } from 'zod'
+import type { Agent, DocumentGroup, DocumentNode, Model, Skill } from '@/types'
+import { buildToolHints, builtinToolDefs, getSkillSystemPrompts, setLiveStoreAccessor, setLiveStoreWriter } from './tools'
 
 function getDescription(toolName: 'web_search' | 'list_documents' | 'query_document_graph' | 'read_document' | 'write_file' | 'append_file') {
   return (builtinToolDefs[toolName] as { description?: string }).description ?? ''
@@ -115,6 +116,210 @@ describe('builtin tool guidance', () => {
 
       expect(output).toContain('Successfully appended 7 characters')
       expect(invoke).toHaveBeenCalledWith('fs:appendFile', '/workspace/notes/output.md', 'chunk-2')
+    } finally {
+      Reflect.deleteProperty(window, 'electron')
+    }
+  })
+
+  it('resolves session-scoped todo tools from live store state without cached persistence', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.todo_list.execute>>[1]
+    const invoke = vi.fn().mockResolvedValue({
+      data: JSON.stringify([
+        {
+          id: 'todo-1',
+          title: 'Review timer run',
+          status: 'pending',
+          priority: 'high',
+          createdAt: '2026-05-10T00:00:00.000Z',
+          updatedAt: '2026-05-10T00:00:00.000Z',
+        },
+      ]),
+    })
+
+    setLiveStoreAccessor(() => ({
+      workspacePath: '/workspace',
+      activeSessionId: 'session-live',
+    }))
+
+    Object.defineProperty(window, 'electron', {
+      configurable: true,
+      value: { invoke },
+    })
+
+    try {
+      const output = await builtinToolDefs.todo_list.execute?.({ status: 'all' }, toolOptions)
+
+      expect(output).toContain('Review timer run')
+      expect(invoke).toHaveBeenCalledWith('db:loadPersistedStore', 'session-todos:session-live')
+    } finally {
+      Reflect.deleteProperty(window, 'electron')
+    }
+  })
+
+  it('creates saved pipelines through the pipeline_add tool and syncs live store state', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.pipeline_add.execute>>[1]
+    const agent: Agent = {
+      id: 'agent-1',
+      name: 'Writer',
+      systemPrompt: 'Write clearly',
+      modelId: 'model-1',
+      skills: [],
+      enabled: true,
+      memories: [],
+      autoLearn: false,
+    }
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT Test',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4.1',
+      enabled: true,
+      isDefault: true,
+    }
+    const liveState: Record<string, unknown> = {
+      workspacePath: '/workspace',
+      agents: [agent],
+      models: [model],
+      agentPipelines: [],
+      selectedAgentPipelineId: null,
+    }
+    const invoke = vi.fn(async (channel: string) => {
+      if (channel === 'db:saveEntity') return { success: true }
+      if (channel === 'db:listEntities') return { success: true, data: [] }
+      return undefined
+    })
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+    })
+
+    Object.defineProperty(window, 'electron', {
+      configurable: true,
+      value: { invoke },
+    })
+
+    try {
+      const output = await builtinToolDefs.pipeline_add.execute?.({
+        name: 'Launch Flow',
+        description: 'Draft, review, and publish release notes.',
+        steps: [
+          { agent_id: 'agent-1', task: 'Draft release notes' },
+          { agent_id: 'agent-1', task: 'Review the draft', retry_count: 1 },
+        ],
+        variables: [{ name: 'topic', default_value: 'release' }],
+      }, toolOptions)
+
+      const parsed = JSON.parse(String(output)) as {
+        message: string
+        storeSynced: boolean
+        pipeline: { id: string; name: string; steps: Array<{ task: string }> }
+      }
+
+      expect(parsed.message).toContain('Created pipeline')
+      expect(parsed.storeSynced).toBe(true)
+      expect(parsed.pipeline.name).toBe('Launch Flow')
+      expect(parsed.pipeline.steps).toHaveLength(2)
+      expect(invoke).toHaveBeenCalledWith('db:saveEntity', 'pipelines', parsed.pipeline.id, expect.objectContaining({ name: 'Launch Flow' }))
+      expect(liveState.agentPipelines).toEqual([
+        expect.objectContaining({ id: parsed.pipeline.id, name: 'Launch Flow' }),
+      ])
+      expect(liveState.selectedAgentPipelineId).toBe(parsed.pipeline.id)
+    } finally {
+      Reflect.deleteProperty(window, 'electron')
+    }
+  })
+
+  it('accepts JSON-string pipeline variables for pipeline_update tool calls', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.pipeline_update.execute>>[1]
+    const agent: Agent = {
+      id: 'agent-1',
+      name: 'Writer',
+      systemPrompt: 'Write clearly',
+      modelId: 'model-1',
+      skills: [],
+      enabled: true,
+      memories: [],
+      autoLearn: false,
+    }
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT Test',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4.1',
+      enabled: true,
+      isDefault: true,
+    }
+    const existingPipeline = {
+      id: 'pipeline-1',
+      name: 'Launch Flow',
+      description: 'Draft, review, and publish release notes.',
+      createdAt: 1,
+      updatedAt: 1,
+      variables: [{ name: 'topic', defaultValue: 'release' }],
+      steps: [
+        { agentId: 'agent-1', task: 'Draft release notes for {{vars.topic}}' },
+      ],
+    }
+    const liveState: Record<string, unknown> = {
+      workspacePath: '/workspace',
+      agents: [agent],
+      models: [model],
+      agentPipelines: [existingPipeline],
+      selectedAgentPipelineId: 'pipeline-1',
+    }
+    const invoke = vi.fn(async (channel: string, _entity: string, id: string, value?: unknown) => {
+      if (channel === 'db:saveEntity') return { success: true }
+      if (channel === 'db:listEntities') return { success: true, data: [existingPipeline] }
+      if (channel === 'db:getEntity') return { success: true, data: value ?? null, id }
+      return undefined
+    })
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+    })
+
+    Object.defineProperty(window, 'electron', {
+      configurable: true,
+      value: { invoke },
+    })
+
+    try {
+      const pipelineUpdateInputSchema = builtinToolDefs.pipeline_update.inputSchema as z.ZodTypeAny
+      const parsed = pipelineUpdateInputSchema.safeParse({
+        pipeline_id: 'pipeline-1',
+        variables: JSON.stringify([{ name: 'audience', label: 'Audience', default_value: 'release' }]),
+        steps: [
+          { agent_id: 'agent-1', task: 'Draft release notes for {{vars.audience}}' },
+        ],
+      })
+
+      expect(parsed.success).toBe(true)
+      if (!parsed.success) return
+
+      const output = await builtinToolDefs.pipeline_update.execute?.(parsed.data, toolOptions)
+      const result = JSON.parse(String(output)) as {
+        message: string
+        storeSynced: boolean
+        pipeline: {
+          id: string
+          variables: Array<{ name: string; defaultValue: string | null }>
+          steps: Array<{ task: string }>
+        }
+      }
+
+      expect(result.message).toContain('Updated pipeline')
+      expect(result.storeSynced).toBe(true)
+      expect(result.pipeline.variables).toEqual([
+        expect.objectContaining({ name: 'audience', defaultValue: 'release' }),
+      ])
+      expect(result.pipeline.steps[0]?.task).toContain('{{vars.audience}}')
+      expect(invoke).toHaveBeenCalledWith('db:saveEntity', 'pipelines', 'pipeline-1', expect.objectContaining({
+        variables: [expect.objectContaining({ name: 'audience', defaultValue: 'release' })],
+      }))
     } finally {
       Reflect.deleteProperty(window, 'electron')
     }
