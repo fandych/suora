@@ -565,7 +565,7 @@ function ResourceTreePanel({
         ),
       })
       setEditorOriginal(editorContent)
-      toast.success(t('skills.saveFile', 'File saved'))
+      toast.success(t('skills.fileSaved', 'File saved'))
     } catch (err: unknown) {
       toast.error(
         t('skills.saveFileFailed', 'Failed to save file'),
