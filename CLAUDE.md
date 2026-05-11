@@ -168,6 +168,8 @@ Document these as separate facts rather than flattening them into one provider l
 Built-in agents are defined in the store and currently include:
 
 - Assistant
+- Pipeline builder
+- Timer builder
 - Code Expert
 - Writing Strategist
 - Research Analyst
@@ -268,6 +270,8 @@ npm run test:e2e:ui
 - Vitest covers `src/**/*.{test,spec}.{ts,tsx}` and `electron/**/*.{test,spec}.{ts,tsx}`.
 - Playwright currently runs renderer-focused smoke coverage against a Vite server on `http://localhost:5173`.
 - Do not describe the current Playwright setup as full Electron-window automation unless the config changes to launch Electron directly.
+- For any code-editing task, the final validation bar is the current GitHub Actions `test` job in `.github/workflows/test.yml` on Node 22.x: start from `npm ci` when dependencies or the lockfile could affect results, then run `npm run lint`, `npm run type-check`, `npm run test:run`, `npm run test:coverage`, `npm audit --audit-level=moderate`, Playwright browser setup as needed for `npm run test:e2e`, and `npm run build`.
+- If the local environment prevents one of those workflow steps from running, call out the exact blocked step and reason explicitly instead of implying that the Actions test flow should pass.
 
 ## Contributor Guidance
 
@@ -279,6 +283,7 @@ npm run test:e2e:ui
 4. Prefer feature-local services in `src/services/` for execution logic.
 5. Add focused tests for the touched slice when a test surface already exists.
 6. Update docs if you change routes, providers, built-in agents, settings sections, or security behavior.
+7. After any code change, validate against the GitHub Actions `test` job in `.github/workflows/test.yml`, matching its Node 22.x environment and steps as closely as practical before handing off. Do not claim the work is complete if that workflow-level validation has not been run or if a step is still blocked.
 
 ### When Touching Electron APIs
 

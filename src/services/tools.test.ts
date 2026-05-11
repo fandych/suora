@@ -325,6 +325,27 @@ describe('builtin tool guidance', () => {
     }
   })
 
+  it('accepts cron schedules for timer_add and timer_update tool calls', () => {
+    const timerAddInputSchema = builtinToolDefs.timer_add.inputSchema as z.ZodTypeAny
+    const timerUpdateInputSchema = builtinToolDefs.timer_update.inputSchema as z.ZodTypeAny
+
+    const addParsed = timerAddInputSchema.safeParse({
+      name: 'Weekday report reminder',
+      type: 'cron',
+      schedule: '0 9 * * 1-5',
+      action: 'notify',
+      prompt: 'Read the daily report',
+    })
+    const updateParsed = timerUpdateInputSchema.safeParse({
+      id: 'timer-1',
+      type: 'cron',
+      schedule: '30 8 * * 1-5',
+    })
+
+    expect(addParsed.success).toBe(true)
+    expect(updateParsed.success).toBe(true)
+  })
+
   it('includes enabled Claude-style shared local skills in runtime prompts even when not assigned to the agent', async () => {
     const sharedSkill: Skill = {
       id: 'claude-shared-skill',

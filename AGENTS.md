@@ -115,6 +115,8 @@ Document runtime support and UI exposure separately. Do not collapse them into o
 Built-in agents are defined in `src/store/appStore.ts`:
 
 - Assistant
+- Pipeline builder
+- Timer builder
 - Code Expert
 - Writing Strategist
 - Research Analyst
@@ -178,6 +180,7 @@ When implementing changes:
 5. Keep Electron main/preload changes in sync.
 6. Add focused tests when a nearby test surface already exists.
 7. Update docs when routes, providers, built-in agents, settings sections, or security behavior change.
+8. After any code change, validate against the GitHub Actions `test` job in `.github/workflows/test.yml`, matching its Node 22.x environment and steps as closely as practical before handing off. Do not claim the work is complete if that workflow-level validation has not been run or if a step is still blocked.
 
 When editing documentation, prefer implementation-backed facts over inherited prose. The most drift-prone items in this repo are:
 
@@ -230,6 +233,8 @@ npm run test:e2e:ui
 - Vitest covers renderer and Electron slices where `*.test.*` and `*.spec.*` files already exist
 - Playwright is currently renderer-focused smoke coverage against the Vite app, not full Electron window automation
 - For targeted work, prefer the narrowest relevant validation first, then widen only if needed
+- For any code-editing task, the final validation bar is the current GitHub Actions `test` job in `.github/workflows/test.yml` on Node 22.x: start from `npm ci` when dependencies or the lockfile could affect results, then run `npm run lint`, `npm run type-check`, `npm run test:run`, `npm run test:coverage`, `npm audit --audit-level=moderate`, Playwright browser setup as needed for `npm run test:e2e`, and `npm run build`
+- If the local environment prevents one of those workflow steps from running, report the exact blocked step and reason explicitly instead of implying that the Actions test flow should pass
 
 ## Notes
 

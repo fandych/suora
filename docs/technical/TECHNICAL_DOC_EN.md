@@ -198,9 +198,11 @@ Do not flatten all three into one list.
 
 ### Built-in agents
 
-The current store seeds one general assistant plus six specialized agents.
+The current store seeds one general assistant plus eight specialized agents.
 
 - Assistant
+- Pipeline builder
+- Timer builder
 - Code Expert
 - Writing Strategist
 - Research Analyst

@@ -47,6 +47,37 @@ const LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT = [
   '你是一个友好、可靠且知识丰富的 AI 助手，可以使用所有可用的工具和技能。你能够协助回答问题、写作、编程、分析、文件操作、发送邮件、网页搜索、执行命令、管理定时任务、进行 Git 操作等各种任务。请主动选择最合适的工具；当任务适合借助工具完成时，不要犹豫。回复时保持清晰和简洁；如果你不确定，请诚实说明。如果用户使用中文，就用中文回复，否则匹配用户的语言。',
 ]
 
+export const PIPELINE_BUILDER_AGENT_ID = 'builtin-pipeline-builder'
+export const TIMER_BUILDER_AGENT_ID = 'builtin-timer-builder'
+
+const LEGACY_PIPELINE_BUILDER_AGENT_NAME = ['Pipeline builder', '流水线编排']
+const LEGACY_PIPELINE_BUILDER_AGENT_WHEN_TO_USE = [
+  'Use inside the Pipeline module to convert natural-language requirements into saved pipelines, update existing pipelines, and keep the work focused on pipeline structure instead of completing the end task directly.',
+  '在流水线模块中使用，将自然语言需求转换成已保存的流水线、更新现有流水线，并把重点放在流水线结构上，而不是直接替用户完成业务任务。',
+]
+const LEGACY_PIPELINE_BUILDER_AGENT_GREETING = [
+  'Ready to build pipelines.',
+  '已准备好创建流水线。',
+]
+const LEGACY_PIPELINE_BUILDER_AGENT_SYSTEM_PROMPT = [
+  'You are Suora\'s pipeline builder. Your job is to create, inspect, update, or remove saved pipelines inside the Pipeline module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved pipeline and use pipeline_list, pipeline_add, pipeline_update, and pipeline_remove when needed. Before any mutation, briefly summarize the pipeline fields you are about to apply. If required details are missing, ask a short clarifying question. Prefer existing enabled agents for steps, and only add variables, retries, timeouts, or budgets when they materially improve the pipeline.',
+  '你是 Suora 的流水线编排助手。你的职责是在流水线模块中创建、检查、更新或删除已保存的流水线。不要直接替用户完成其业务任务，而是把需求翻译成结构化的已保存流水线，并在需要时使用 pipeline_list、pipeline_add、pipeline_update、pipeline_remove。在执行任何增删改之前，先简要总结你将要应用的流水线字段。如果关键信息缺失，先提出一个简短的澄清问题。步骤应优先复用当前已启用的 agent，只有在确实能改善流水线时才添加变量、重试、超时或预算限制。',
+]
+
+const LEGACY_TIMER_BUILDER_AGENT_NAME = ['Timer builder', '定时任务编排']
+const LEGACY_TIMER_BUILDER_AGENT_WHEN_TO_USE = [
+  'Use inside the Timer module to turn natural-language scheduling requests into saved timers, update existing timers, and keep the work focused on timer structure instead of completing the end task directly.',
+  '在定时任务模块中使用，将自然语言调度需求转换成已保存的定时任务、更新现有定时任务，并把重点放在定时任务结构上，而不是直接替用户完成终局任务。',
+]
+const LEGACY_TIMER_BUILDER_AGENT_GREETING = [
+  'Ready to build timers.',
+  '已准备好创建定时任务。',
+]
+const LEGACY_TIMER_BUILDER_AGENT_SYSTEM_PROMPT = [
+  'You are Suora\'s timer builder. Your job is to create, inspect, update, or remove saved timers inside the Timer module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved timer and use timer_list, timer_add, timer_update, and timer_remove when needed. If the timer should run a saved pipeline and the pipeline id is unclear, use pipeline_list to identify it first. Before any mutation, briefly summarize the timer fields you are about to apply. If required details are missing, ask a short clarifying question. Prefer the simplest timer shape that satisfies the request.',
+  '你是 Suora 的定时任务编排助手。你的职责是在定时任务模块中创建、检查、更新或删除已保存的定时任务。不要直接替用户完成其业务任务，而是把需求翻译成结构化的已保存定时任务，并在需要时使用 timer_list、timer_add、timer_update、timer_remove。如果定时任务需要运行某个已保存流水线，但流水线 ID 不明确，先使用 pipeline_list 识别目标流水线。在执行任何增删改之前，先简要总结你将要应用的定时任务字段。如果关键信息缺失，先提出一个简短的澄清问题。优先使用能满足需求的最简单定时任务结构。',
+]
+
 function buildDefaultAgent(): Agent {
   return {
     id: 'default-assistant',
@@ -78,20 +109,86 @@ function shouldRefreshBuiltinField(value: string | undefined, legacyValues: stri
 }
 
 function localizeBuiltinAgent(agent: Agent): Agent {
-  if (agent.id !== 'default-assistant') return agent
-
-  const localized = buildDefaultAgent()
-  return {
-    ...localized,
-    ...agent,
-    name: shouldRefreshBuiltinField(agent.name, LEGACY_DEFAULT_AGENT_NAME) ? localized.name : agent.name,
-    whenToUse: shouldRefreshBuiltinField(agent.whenToUse, LEGACY_DEFAULT_AGENT_WHEN_TO_USE) ? localized.whenToUse : agent.whenToUse,
-    systemPrompt: shouldRefreshBuiltinField(agent.systemPrompt, LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT) ? localized.systemPrompt : agent.systemPrompt,
-    greeting: shouldRefreshBuiltinField(agent.greeting, LEGACY_DEFAULT_AGENT_GREETING) ? localized.greeting : agent.greeting,
+  if (agent.id === 'default-assistant') {
+    const localized = buildDefaultAgent()
+    return {
+      ...localized,
+      ...agent,
+      name: shouldRefreshBuiltinField(agent.name, LEGACY_DEFAULT_AGENT_NAME) ? localized.name : agent.name,
+      whenToUse: shouldRefreshBuiltinField(agent.whenToUse, LEGACY_DEFAULT_AGENT_WHEN_TO_USE) ? localized.whenToUse : agent.whenToUse,
+      systemPrompt: shouldRefreshBuiltinField(agent.systemPrompt, LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT) ? localized.systemPrompt : agent.systemPrompt,
+      greeting: shouldRefreshBuiltinField(agent.greeting, LEGACY_DEFAULT_AGENT_GREETING) ? localized.greeting : agent.greeting,
+    }
   }
+
+  if (agent.id === PIPELINE_BUILDER_AGENT_ID) {
+    const localized = buildPipelineBuilderAgent()
+    return {
+      ...localized,
+      ...agent,
+      name: shouldRefreshBuiltinField(agent.name, LEGACY_PIPELINE_BUILDER_AGENT_NAME) ? localized.name : agent.name,
+      whenToUse: shouldRefreshBuiltinField(agent.whenToUse, LEGACY_PIPELINE_BUILDER_AGENT_WHEN_TO_USE) ? localized.whenToUse : agent.whenToUse,
+      systemPrompt: shouldRefreshBuiltinField(agent.systemPrompt, LEGACY_PIPELINE_BUILDER_AGENT_SYSTEM_PROMPT) ? localized.systemPrompt : agent.systemPrompt,
+      greeting: shouldRefreshBuiltinField(agent.greeting, LEGACY_PIPELINE_BUILDER_AGENT_GREETING) ? localized.greeting : agent.greeting,
+    }
+  }
+
+  if (agent.id === TIMER_BUILDER_AGENT_ID) {
+    const localized = buildTimerBuilderAgent()
+    return {
+      ...localized,
+      ...agent,
+      name: shouldRefreshBuiltinField(agent.name, LEGACY_TIMER_BUILDER_AGENT_NAME) ? localized.name : agent.name,
+      whenToUse: shouldRefreshBuiltinField(agent.whenToUse, LEGACY_TIMER_BUILDER_AGENT_WHEN_TO_USE) ? localized.whenToUse : agent.whenToUse,
+      systemPrompt: shouldRefreshBuiltinField(agent.systemPrompt, LEGACY_TIMER_BUILDER_AGENT_SYSTEM_PROMPT) ? localized.systemPrompt : agent.systemPrompt,
+      greeting: shouldRefreshBuiltinField(agent.greeting, LEGACY_TIMER_BUILDER_AGENT_GREETING) ? localized.greeting : agent.greeting,
+    }
+  }
+
+  return agent
 }
 
 const DEFAULT_AGENT: Agent = buildDefaultAgent()
+
+function buildPipelineBuilderAgent(): Agent {
+  return {
+    ...buildProfessionalAgent(
+      PIPELINE_BUILDER_AGENT_ID,
+      t('agents.pipelineBuilder', 'Pipeline builder'),
+      'agent-devops',
+      '#0F766E',
+      t('agents.pipelineBuilderWhenToUse', 'Use inside the Pipeline module to convert natural-language requirements into saved pipelines, update existing pipelines, and keep the work focused on pipeline structure instead of completing the end task directly.'),
+      t('agents.pipelineBuilderSystemPrompt', 'You are Suora\'s pipeline builder. Your job is to create, inspect, update, or remove saved pipelines inside the Pipeline module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved pipeline and use pipeline_list, pipeline_add, pipeline_update, and pipeline_remove when needed. Before any mutation, briefly summarize the pipeline fields you are about to apply. If required details are missing, ask a short clarifying question. Prefer existing enabled agents for steps, and only add variables, retries, timeouts, or budgets when they materially improve the pipeline.'),
+      [],
+      'acceptEdits',
+      0.2,
+    ),
+    allowedTools: ['pipeline_list', 'pipeline_add', 'pipeline_update', 'pipeline_remove'],
+    greeting: t('agents.pipelineBuilderGreeting', 'Ready to build pipelines.'),
+  }
+}
+
+const PIPELINE_BUILDER_AGENT: Agent = buildPipelineBuilderAgent()
+
+function buildTimerBuilderAgent(): Agent {
+  return {
+    ...buildProfessionalAgent(
+      TIMER_BUILDER_AGENT_ID,
+      t('agents.timerBuilder', 'Timer builder'),
+      'agent-devops',
+      '#F97316',
+      t('agents.timerBuilderWhenToUse', 'Use inside the Timer module to turn natural-language scheduling requests into saved timers, update existing timers, and keep the work focused on timer structure instead of completing the end task directly.'),
+      t('agents.timerBuilderSystemPrompt', 'You are Suora\'s timer builder. Your job is to create, inspect, update, or remove saved timers inside the Timer module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved timer and use timer_list, timer_add, timer_update, and timer_remove when needed. If the timer should run a saved pipeline and the pipeline id is unclear, use pipeline_list to identify it first. Before any mutation, briefly summarize the timer fields you are about to apply. If required details are missing, ask a short clarifying question. Prefer the simplest timer shape that satisfies the request.'),
+      [],
+      'acceptEdits',
+      0.2,
+    ),
+    allowedTools: ['timer_list', 'timer_add', 'timer_update', 'timer_remove', 'pipeline_list'],
+    greeting: t('agents.timerBuilderGreeting', 'Ready to build timers.'),
+  }
+}
+
+const TIMER_BUILDER_AGENT: Agent = buildTimerBuilderAgent()
 
 function buildProfessionalAgent(
   id: string,
@@ -131,6 +228,8 @@ function buildProfessionalAgent(
 
 const BUILTIN_AGENTS: Agent[] = [
   DEFAULT_AGENT,
+  PIPELINE_BUILDER_AGENT,
+  TIMER_BUILDER_AGENT,
   buildProfessionalAgent(
     'builtin-code-expert',
     'Code Expert',

@@ -157,6 +157,8 @@ npm run dev
 ### 当前内置 Agent
 
 - Assistant
+- Pipeline builder
+- Timer builder
 - Code Expert
 - Writing Strategist
 - Research Analyst

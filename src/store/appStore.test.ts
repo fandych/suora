@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { useAppStore, initWorkspacePath, loadExternalSkillsAndAgents, loadSessionsFromWorkspace, loadSettingsFromWorkspace } from './appStore'
+import { PIPELINE_BUILDER_AGENT_ID, TIMER_BUILDER_AGENT_ID, useAppStore, initWorkspacePath, loadExternalSkillsAndAgents, loadSessionsFromWorkspace, loadSettingsFromWorkspace } from './appStore'
 import type { Agent, Session, Skill } from '@/types'
 
 // Mock sessionFiles and other file-based services
@@ -45,6 +45,7 @@ describe('appStore', () => {
       agentPipeline: [],
       agentPipelines: [],
     })
+    useAppStore.getState().setLocale('en')
   })
 
   describe('Session Management', () => {
@@ -169,6 +170,80 @@ describe('appStore', () => {
       clearAgentPipeline()
 
       expect(useAppStore.getState().agentPipeline).toEqual([])
+    })
+
+    it('should localize the builtin pipeline builder agent when locale changes', () => {
+      const pipelineBuilder: Agent = {
+        id: PIPELINE_BUILDER_AGENT_ID,
+        name: 'Pipeline builder',
+        avatar: 'agent-devops',
+        color: '#0F766E',
+        whenToUse: 'Use inside the Pipeline module to convert natural-language requirements into saved pipelines, update existing pipelines, and keep the work focused on pipeline structure instead of completing the end task directly.',
+        systemPrompt: 'You are Suora\'s pipeline builder. Your job is to create, inspect, update, or remove saved pipelines inside the Pipeline module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved pipeline and use pipeline_list, pipeline_add, pipeline_update, and pipeline_remove when needed. Before any mutation, briefly summarize the pipeline fields you are about to apply. If required details are missing, ask a short clarifying question. Prefer existing enabled agents for steps, and only add variables, retries, timeouts, or budgets when they materially improve the pipeline.',
+        modelId: '',
+        skills: [],
+        temperature: 0.2,
+        maxTokens: 4096,
+        maxTurns: 24,
+        enabled: true,
+        greeting: 'Ready to build pipelines.',
+        responseStyle: 'balanced',
+        allowedTools: ['pipeline_list', 'pipeline_add', 'pipeline_update', 'pipeline_remove'],
+        disallowedTools: [],
+        permissionMode: 'acceptEdits',
+        memories: [],
+        autoLearn: true,
+      }
+
+      useAppStore.setState({
+        agents: [pipelineBuilder],
+        selectedAgent: pipelineBuilder,
+      })
+
+      useAppStore.getState().setLocale('zh')
+
+      const localized = useAppStore.getState().agents[0]
+      expect(localized?.name).toBe('流水线编排')
+      expect(localized?.whenToUse).toContain('在流水线模块中使用')
+      expect(localized?.greeting).toBe('已准备好创建流水线。')
+      expect(useAppStore.getState().selectedAgent?.name).toBe('流水线编排')
+    })
+
+    it('should localize the builtin timer builder agent when locale changes', () => {
+      const timerBuilder: Agent = {
+        id: TIMER_BUILDER_AGENT_ID,
+        name: 'Timer builder',
+        avatar: 'agent-devops',
+        color: '#F97316',
+        whenToUse: 'Use inside the Timer module to turn natural-language scheduling requests into saved timers, update existing timers, and keep the work focused on timer structure instead of completing the end task directly.',
+        systemPrompt: 'You are Suora\'s timer builder. Your job is to create, inspect, update, or remove saved timers inside the Timer module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved timer and use timer_list, timer_add, timer_update, and timer_remove when needed. If the timer should run a saved pipeline and the pipeline id is unclear, use pipeline_list to identify it first. Before any mutation, briefly summarize the timer fields you are about to apply. If required details are missing, ask a short clarifying question. Prefer the simplest timer shape that satisfies the request.',
+        modelId: '',
+        skills: [],
+        temperature: 0.2,
+        maxTokens: 4096,
+        maxTurns: 24,
+        enabled: true,
+        greeting: 'Ready to build timers.',
+        responseStyle: 'balanced',
+        allowedTools: ['timer_list', 'timer_add', 'timer_update', 'timer_remove', 'pipeline_list'],
+        disallowedTools: [],
+        permissionMode: 'acceptEdits',
+        memories: [],
+        autoLearn: true,
+      }
+
+      useAppStore.setState({
+        agents: [timerBuilder],
+        selectedAgent: timerBuilder,
+      })
+
+      useAppStore.getState().setLocale('zh')
+
+      const localized = useAppStore.getState().agents[0]
+      expect(localized?.name).toBe('定时任务编排')
+      expect(localized?.whenToUse).toContain('在定时任务模块中使用')
+      expect(localized?.greeting).toBe('已准备好创建定时任务。')
+      expect(useAppStore.getState().selectedAgent?.name).toBe('定时任务编排')
     })
 
     it('should persist saved pipelines in the filesystem-backed store payload', () => {

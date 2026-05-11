@@ -1,7 +1,7 @@
 import { render, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store/appStore'
-import type { Message, Model, ToolCall } from '@/types'
+import { TIMER_BUILDER_AGENT_ID, useAppStore } from '@/store/appStore'
+import type { Agent, Message, Model, ToolCall } from '@/types'
 import { TimerAssistantDrawer } from './TimerAssistantDrawer'
 
 const mockAIChat = {
@@ -35,6 +35,27 @@ describe('TimerAssistantDrawer', () => {
     modelId: 'gpt-4.1',
     enabled: true,
   }
+  const timerBuilder: Agent = {
+    id: TIMER_BUILDER_AGENT_ID,
+    name: 'Timer builder',
+    avatar: 'agent-devops',
+    color: '#F97316',
+    whenToUse: 'Use inside the Timer module to turn natural-language scheduling requests into saved timers, update existing timers, and keep the work focused on timer structure instead of completing the end task directly.',
+    systemPrompt: '',
+    modelId: '',
+    skills: [],
+    temperature: 0.2,
+    maxTokens: 4096,
+    maxTurns: 24,
+    enabled: true,
+    greeting: 'Ready to build timers.',
+    responseStyle: 'balanced',
+    allowedTools: ['timer_list', 'timer_add', 'timer_update', 'timer_remove', 'pipeline_list'],
+    disallowedTools: [],
+    permissionMode: 'acceptEdits',
+    memories: [],
+    autoLearn: true,
+  }
 
   beforeEach(() => {
     localStorage.clear()
@@ -51,7 +72,22 @@ describe('TimerAssistantDrawer', () => {
       models: [model],
       selectedModel: model,
       selectedAgent: null,
+      agents: [timerBuilder],
     })
+    useAppStore.getState().setLocale('en')
+  })
+
+  it('binds the drawer session to the dedicated timer builder agent and includes cron guidance', async () => {
+    render(
+      <TimerAssistantDrawer
+        mode="create"
+        onClose={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(useAppStore.getState().sessions).toHaveLength(1))
+    expect(useAppStore.getState().sessions[0]?.agentId).toBe(TIMER_BUILDER_AGENT_ID)
+    expect(useAppStore.getState().sessions[0]?.contextPrompt).toContain('"cron"')
   })
 
   it('notifies once when a completed timer tool call is observed', async () => {

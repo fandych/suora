@@ -152,6 +152,8 @@ If you use Ollama, the default local endpoint is `http://localhost:11434/v1`.
 ### Built-in agents
 
 - Assistant
+- Pipeline builder
+- Timer builder
 - Code Expert
 - Writing Strategist
 - Research Analyst

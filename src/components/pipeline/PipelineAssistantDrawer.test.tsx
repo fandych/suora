@@ -1,6 +1,6 @@
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore } from '@/store/appStore'
+import { PIPELINE_BUILDER_AGENT_ID, useAppStore } from '@/store/appStore'
 import type { AgentPipeline, Message, Model, ToolCall } from '@/types'
 import { PipelineAssistantDrawer } from './PipelineAssistantDrawer'
 
@@ -59,8 +59,41 @@ describe('PipelineAssistantDrawer', () => {
       models: [model],
       selectedModel: model,
       selectedAgent: null,
-      agents: [{ id: 'agent-1', name: 'Writer', systemPrompt: '', modelId: 'model-1', enabled: true, skills: [], memories: [], autoLearn: false }],
+      agents: [
+        { id: PIPELINE_BUILDER_AGENT_ID, name: 'Pipeline builder', systemPrompt: '', modelId: 'model-1', enabled: true, skills: [], memories: [], autoLearn: false },
+        { id: 'agent-1', name: 'Writer', systemPrompt: '', modelId: 'model-1', enabled: true, skills: [], memories: [], autoLearn: false },
+      ],
     })
+    useAppStore.getState().setLocale('en')
+  })
+
+  it('binds the drawer session to the dedicated pipeline builder agent', async () => {
+    render(
+      <PipelineAssistantDrawer
+        mode="create"
+        onClose={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(useAppStore.getState().sessions).toHaveLength(1))
+    expect(useAppStore.getState().sessions[0]?.agentId).toBe(PIPELINE_BUILDER_AGENT_ID)
+  })
+
+  it('renders the create drawer in Chinese when locale is zh', async () => {
+    useAppStore.getState().setLocale('zh')
+
+    render(
+      <PipelineAssistantDrawer
+        mode="create"
+        onClose={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(useAppStore.getState().sessions).toHaveLength(1))
+    expect(screen.getByRole('dialog', { name: '流水线助手' })).toBeInTheDocument()
+    expect(screen.getByText('AI 创建流水线')).toBeInTheDocument()
+    expect(screen.getByText('使用自然语言创建或修改已保存流水线。执行更改前需要先确认。')).toBeInTheDocument()
+    expect(screen.getByText('描述你想创建的流水线')).toBeInTheDocument()
   })
 
   it('notifies once when a completed pipeline tool call is observed', async () => {

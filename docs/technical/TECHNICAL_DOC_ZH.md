@@ -199,6 +199,8 @@ AI 集成位于 `src/services/aiService.ts`。
 ### 当前内置 Agent
 
 - Assistant
+- Pipeline builder
+- Timer builder
 - Code Expert
 - Writing Strategist
 - Research Analyst

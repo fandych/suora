@@ -4,7 +4,7 @@ import { MessageBubble } from '@/components/chat/ChatMessages'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useAIChat } from '@/hooks/useAIChat'
 import { useI18n } from '@/hooks/useI18n'
-import { useAppStore } from '@/store/appStore'
+import { TIMER_BUILDER_AGENT_ID, useAppStore } from '@/store/appStore'
 import type { MessageAttachment, ScheduledTask, Session } from '@/types'
 import { generateId } from '@/utils/helpers'
 
@@ -88,6 +88,7 @@ function buildContextPrompt({
   const lines = [
     t('timer.assistantContextIntro', "You are operating inside Suora's Timer module as the timer assistant."),
     t('timer.assistantContextTools', 'Use timer_list, timer_add, timer_update, and timer_remove to help the user create or modify timers.'),
+    t('timer.assistantContextScheduleTypes', 'Timers support type "once" with an ISO datetime, "interval" with minutes, and "cron" with a cron expression.'),
     mode === 'edit' && timer
       ? t('timer.assistantContextEditTarget', 'When the user says "this timer" or "current timer", it refers to the target timer below. Unless the user explicitly asks to create a new timer or delete it, prefer timer_update with this id.')
       : t('timer.assistantContextCreateTarget', 'The default goal in this session is to create a new timer. If the user wants to edit an existing timer, list or identify the target timer first.'),
@@ -177,7 +178,7 @@ export function TimerAssistantDrawer({
       createdAt: Date.now(),
       updatedAt: Date.now(),
       surface: 'timer-assistant',
-      agentId: 'default-assistant',
+      agentId: TIMER_BUILDER_AGENT_ID,
       modelId: selectedModel?.id,
       messages: [],
       contextPrompt,
@@ -212,6 +213,7 @@ export function TimerAssistantDrawer({
 
     updateSession(sessionId, {
       title: buildSessionTitle(mode, timer, t),
+      agentId: TIMER_BUILDER_AGENT_ID,
       modelId: selectedModel?.id,
       contextPrompt,
       ...(contextChanged ? { messages: [] } : {}),

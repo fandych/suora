@@ -4,7 +4,7 @@ import { MessageBubble } from '@/components/chat/ChatMessages'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useAIChat } from '@/hooks/useAIChat'
 import { useI18n } from '@/hooks/useI18n'
-import { useAppStore } from '@/store/appStore'
+import { PIPELINE_BUILDER_AGENT_ID, useAppStore } from '@/store/appStore'
 import type { AgentPipeline, MessageAttachment, Session } from '@/types'
 import { generateId } from '@/utils/helpers'
 
@@ -179,7 +179,7 @@ export function PipelineAssistantDrawer({
       createdAt: Date.now(),
       updatedAt: Date.now(),
       surface: 'pipeline-assistant',
-      agentId: 'default-assistant',
+      agentId: PIPELINE_BUILDER_AGENT_ID,
       modelId: selectedModel?.id,
       messages: [],
       contextPrompt,
@@ -214,6 +214,7 @@ export function PipelineAssistantDrawer({
 
     updateSession(sessionId, {
       title: buildSessionTitle(mode, pipeline, t),
+      agentId: PIPELINE_BUILDER_AGENT_ID,
       modelId: selectedModel?.id,
       contextPrompt,
       ...(contextChanged ? { messages: [] } : {}),

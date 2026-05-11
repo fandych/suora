@@ -1263,11 +1263,11 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   timer_add: tool({
-    description: 'Create a new timer/scheduled task. Use type "once" with an ISO date string for a one-time reminder. Use type "interval" with a number (minutes) for recurring tasks. Actions can notify, enqueue an agent prompt, or run a saved pipeline.',
+    description: 'Create a new timer/scheduled task. Use type "once" with an ISO date string for a one-time reminder. Use type "interval" with a number (minutes) for recurring tasks. Use type "cron" with a cron expression for calendar-style schedules. Actions can notify, enqueue an agent prompt, or run a saved pipeline.',
     inputSchema: z.object({
       name: z.string().describe('Name/title of the timer'),
-      type: z.enum(['once', 'interval']).describe('"once" for a one-time timer, "interval" for repeating'),
-      schedule: z.string().describe('For "once": ISO date string (e.g. "2025-03-26T14:30:00"). For "interval": number of minutes between repeats (e.g. "30" for every 30 minutes).'),
+      type: z.enum(['once', 'interval', 'cron']).describe('"once" for a one-time timer, "interval" for repeating every N minutes, "cron" for a cron-expression schedule'),
+      schedule: z.string().describe('For "once": ISO date string (e.g. "2025-03-26T14:30:00"). For "interval": number of minutes between repeats (e.g. "30" for every 30 minutes). For "cron": cron expression (e.g. "0 9 * * 1-5").'),
       action: z.enum(['notify', 'prompt', 'pipeline']).optional().default('notify').describe('Action when timer fires: "notify" for desktop notification, "prompt" for agent prompt, "pipeline" to run a saved pipeline'),
       prompt: z.string().optional().describe('Notification body text or the prompt to send to the agent'),
       pipeline_id: z.string().optional().describe('Saved pipeline ID to run when action="pipeline"'),
@@ -1287,8 +1287,8 @@ export const builtinToolDefs: ToolSet = {
     inputSchema: z.object({
       id: z.string().describe('ID of the timer to update'),
       name: z.string().optional().describe('New name'),
-      type: z.enum(['once', 'interval']).optional().describe('New type'),
-      schedule: z.string().optional().describe('New schedule value'),
+      type: z.enum(['once', 'interval', 'cron']).optional().describe('New type: "once", "interval", or "cron"'),
+      schedule: z.string().optional().describe('New schedule value. For "once": ISO date string. For "interval": minutes. For "cron": cron expression.'),
       action: z.enum(['notify', 'prompt', 'pipeline']).optional().describe('New action'),
       prompt: z.string().optional().describe('New prompt/body text'),
       pipeline_id: z.string().optional().describe('Saved pipeline ID to run when action="pipeline"'),
