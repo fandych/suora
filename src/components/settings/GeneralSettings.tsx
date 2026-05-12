@@ -22,7 +22,7 @@ import type { AppLocale, BubbleStyle, CodeFont, FontSize, ThemeMode } from '@/ty
 
 const ACCENT_SWATCH_STYLES = {
   default: { fill: 'bg-[#C99A2E]', ring: 'ring-[#C99A2E]/45' },
-  sapphire: { fill: 'bg-[#3B7DD8]', ring: 'ring-[#3B7DD8]/45' },
+  sapphire: { fill: 'bg-[#0024D4]', ring: 'ring-[#0024D4]/45' },
   emerald: { fill: 'bg-[#2DA66E]', ring: 'ring-[#2DA66E]/45' },
   amethyst: { fill: 'bg-[#8B5CF6]', ring: 'ring-[#8B5CF6]/45' },
   coral: { fill: 'bg-[#E06848]', ring: 'ring-[#E06848]/45' },

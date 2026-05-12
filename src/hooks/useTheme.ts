@@ -18,7 +18,7 @@ const CODE_FONT_MAP: Record<string, string> = {
 
 const ACCENT_PRESETS: Record<string, { accent: string; hover: string; glow: string; soft: string; secondary: string; rgb: string }> = {
   // 'default' → use CSS-defined enterprise AI palette (no override)
-  sapphire:  { accent: '#3B82F6', hover: '#60A5FA', glow: 'rgba(59,130,246,0.24)',  soft: 'rgba(59,130,246,0.10)',  secondary: '#93C5FD', rgb: '59,130,246' },
+  sapphire:  { accent: '#0024D4', hover: '#3250DE', glow: 'rgba(0,36,212,0.24)',  soft: 'rgba(0,36,212,0.10)',  secondary: '#99A7F1', rgb: '0,36,212' },
   emerald:   { accent: '#007F8F', hover: '#009DA8', glow: 'rgba(0,127,143,0.16)',   soft: 'rgba(0,127,143,0.085)',   secondary: '#B7791F', rgb: '0,127,143' },
   amethyst:  { accent: '#A855F7', hover: '#C084FC', glow: 'rgba(168,85,247,0.24)',  soft: 'rgba(168,85,247,0.10)',  secondary: '#D8B4FE', rgb: '168,85,247' },
   coral:     { accent: '#FB7252', hover: '#FF8A6D', glow: 'rgba(251,114,82,0.24)',  soft: 'rgba(251,114,82,0.10)',  secondary: '#FFA891', rgb: '251,114,82' },
