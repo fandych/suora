@@ -15,6 +15,7 @@ import { WorkbenchEmptyState } from '@/components/ui/Primitives'
 import { confirm } from '@/services/confirmDialog'
 import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus'
 import { createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
+import { buildDocumentImportFromDataTransferItems, buildDocumentImportFromFolderFiles, createDocumentNodesFromImport, type DocumentImportBundle } from '@/services/documentImport'
 import { buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
@@ -38,6 +39,10 @@ function getDocumentGroupColorClass(color: string) {
 function getDocumentNodeDisplayName(node: DocumentNode): string {
   if (node.type !== 'document') return node.title
   return getDocumentDisplayName(node.title)
+}
+
+function hasFileTransfer(dataTransfer: DataTransfer | null): boolean {
+  return Array.from(dataTransfer?.types ?? []).includes('Files')
 }
 
 const EMPTY_DOCUMENT_CHILDREN: DocumentNode[] = []
@@ -948,6 +953,7 @@ function DocumentSourceTextarea({
 
 export function DocumentsLayout() {
   const { t } = useI18n()
+  const folderImportInputRef = useRef<HTMLInputElement | null>(null)
   const [panelWidth, setPanelWidth] = useResizablePanel('documents', 310)
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -958,6 +964,8 @@ export function DocumentsLayout() {
   const [editingGroupName, setEditingGroupName] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   const [mode, setMode] = useState<'editor' | 'source' | 'graph'>('editor')
+  const [isImporting, setIsImporting] = useState(false)
+  const [importStatus, setImportStatus] = useState<{ type: 'success' | 'error'; message: string } | null>(null)
   const [isExportingCorpus, setIsExportingCorpus] = useState(false)
   const [exportStatus, setExportStatus] = useState<{ type: 'success' | 'error'; message: string; rootDir?: string } | null>(null)
   const {
@@ -1347,8 +1355,119 @@ export function DocumentsLayout() {
     })
   }
 
+  const importDocumentBundle = useCallback(async (bundle: DocumentImportBundle | null) => {
+    if (!bundle) {
+      setImportStatus({
+        type: 'error',
+        message: t('documents.importNoFiles', 'No supported text files were found to import.'),
+      })
+      return
+    }
+
+    setIsImporting(true)
+    setImportStatus(null)
+
+    try {
+      let targetGroup = activeGroup
+      if (!targetGroup) {
+        targetGroup = createDocumentGroup(t('documents.importedGroup', 'Imported Documents'))
+        addDocumentGroup(targetGroup)
+      }
+
+      const result = createDocumentNodesFromImport(bundle.files, {
+        groupId: targetGroup.id,
+        parentId: targetGroup.id === activeGroupId ? selectedFolderId : null,
+      })
+
+      if (!result.documentCount || !result.firstDocument) {
+        const skippedMessage = bundle.skippedPaths.length
+          ? ` ${t('documents.importSkipped', 'Skipped {count} unsupported files.').replace('{count}', String(bundle.skippedPaths.length))}`
+          : ''
+        setImportStatus({
+          type: 'error',
+          message: `${t('documents.importNoFiles', 'No supported text files were found to import.')}${skippedMessage}`,
+        })
+        return
+      }
+
+      result.nodes.forEach((node) => {
+        if (node.type === 'folder') addDocumentFolder(node)
+        else addDocument(node)
+      })
+
+      setExpanded((prev) => {
+        const next = new Set(prev)
+        next.add(targetGroup.id)
+        if (selectedFolderId) next.add(selectedFolderId)
+        result.createdFolderIds.forEach((id) => next.add(id))
+        return next
+      })
+      setSelectedDocumentGroup(targetGroup.id)
+      setSelectedDocument(result.firstDocument.id)
+      setSelectedFolderId(result.firstDocument.parentId)
+      setMode(isMarkdownDocumentTitle(result.firstDocument.title) ? 'editor' : 'source')
+      setQuery('')
+
+      const successMessage = t('documents.importSuccess', 'Imported {docs} documents and {folders} folders.')
+        .replace('{docs}', String(result.documentCount))
+        .replace('{folders}', String(result.folderCount))
+      const skippedMessage = bundle.skippedPaths.length
+        ? ` ${t('documents.importSkipped', 'Skipped {count} unsupported files.').replace('{count}', String(bundle.skippedPaths.length))}`
+        : ''
+      setImportStatus({ type: 'success', message: `${successMessage}${skippedMessage}` })
+    } catch (error) {
+      setImportStatus({
+        type: 'error',
+        message: `${t('documents.importFailed', 'Failed to import files.')} ${error instanceof Error ? error.message : String(error)}`,
+      })
+    } finally {
+      setIsImporting(false)
+    }
+  }, [
+    activeGroup,
+    activeGroupId,
+    addDocument,
+    addDocumentFolder,
+    addDocumentGroup,
+    selectedFolderId,
+    setSelectedDocument,
+    setSelectedDocumentGroup,
+    t,
+  ])
+
+  const handleImportFolder = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files?.length) return
+    try {
+      await importDocumentBundle(await buildDocumentImportFromFolderFiles(files))
+    } finally {
+      event.target.value = ''
+    }
+  }
+
+  const handleDropImport = async (event: React.DragEvent<HTMLDivElement>) => {
+    if (!hasFileTransfer(event.dataTransfer)) return
+    event.preventDefault()
+
+    const droppedBundle = event.dataTransfer.items.length
+      ? await buildDocumentImportFromDataTransferItems(event.dataTransfer.items)
+      : null
+    const bundle = droppedBundle ?? (event.dataTransfer.files.length
+      ? await buildDocumentImportFromFolderFiles(event.dataTransfer.files)
+      : null)
+    await importDocumentBundle(bundle)
+  }
+
   return (
-    <>
+    <div
+      className="flex min-h-0 min-w-0 flex-1"
+      onDragOver={(event) => {
+        if (!hasFileTransfer(event.dataTransfer)) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'copy'
+      }}
+      onDrop={(event) => void handleDropImport(event)}
+    >
       <SidePanel
         title={t('documents.title', 'Documents')}
         width={panelWidth}
@@ -1358,7 +1477,46 @@ export function DocumentsLayout() {
           </button>
         }
       >
+        <input
+          ref={folderImportInputRef}
+          type="file"
+          multiple
+          onChange={(event) => void handleImportFolder(event)}
+          className="hidden"
+          aria-label={t('documents.importFolder', 'Import document folder')}
+          webkitdirectory=""
+          directory=""
+        />
         <div className="flex h-full min-h-0 flex-col gap-0 px-3 py-3">
+          <div className="mb-3 rounded-3xl border border-dashed border-border-subtle/55 bg-surface-0/35 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.importFiles', 'Import Files')}</h3>
+                <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">
+                  {activeGroup
+                    ? t('documents.importHint', 'Drop files or folders here to import them into the current group or selected folder.')
+                    : t('documents.importHintNoGroup', 'Drop files or folders here to create a document group automatically.')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => folderImportInputRef.current?.click()}
+                disabled={isImporting}
+                className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isImporting ? t('documents.importing', 'Importing…') : t('documents.importFolder', 'Import folder')}
+              </button>
+            </div>
+            {importStatus ? (
+              <div className={`mt-3 rounded-2xl border px-3 py-3 text-[11px] ${importStatus.type === 'success' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700' : 'border-danger/20 bg-danger/10 text-danger/95'}`}>
+                {importStatus.message}
+              </div>
+            ) : (
+              <p className="mt-3 rounded-2xl border border-dashed border-border-subtle/55 px-3 py-4 text-center text-[11px] text-text-muted">
+                {t('documents.importSupported', 'Markdown, code, config, and text files are supported. Binary files are skipped.')}
+              </p>
+            )}
+          </div>
           {/* Search */}
           <div className="mb-3 rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3">
             <div className="relative">
@@ -1691,6 +1849,6 @@ export function DocumentsLayout() {
           </div>
         )}
       </section>
-    </>
+    </div>
   )
 }
