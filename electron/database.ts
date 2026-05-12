@@ -199,6 +199,19 @@ function normalizeDocumentDirectoryPath(relativePath: string): string | null {
   return normalized
 }
 
+function hashString(value: string): string {
+  let hash = 0x811c9dc5
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16).padStart(8, '0')
+}
+
+function createSyncedDocumentNodeId(prefix: 'doc-sync' | 'doc-folder-sync', groupId: string, relativePath: string): string {
+  return `${prefix}-${hashString(`${groupId}:${relativePath.toLowerCase()}`)}`
+}
+
 async function pathExists(filePath: string): Promise<boolean> {
   try {
     await fs.access(filePath)
@@ -644,6 +657,148 @@ export class SuoraDatabase {
     return asArray(documentIndex.nodes)
   }
 
+  private async scanDocumentGroupDirectory(groupDirectory: string): Promise<{
+    directories: Array<{ relativePath: string; modifiedAt: number }>
+    files: Array<{ relativePath: string; content: string; modifiedAt: number }>
+  }> {
+    const directories: Array<{ relativePath: string; modifiedAt: number }> = []
+    const files: Array<{ relativePath: string; content: string; modifiedAt: number }> = []
+    const visitDirectory = async (relativeDirectory: string): Promise<void> => {
+      let entries: Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>
+      try {
+        entries = await fs.readdir(this.file(relativeDirectory), { withFileTypes: true }) as Array<{ name: string; isDirectory: () => boolean; isFile: () => boolean }>
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') return
+        throw error
+      }
+
+      const sortedEntries = [...entries].sort((first, second) => first.name.localeCompare(second.name))
+      for (const entry of sortedEntries) {
+        const relativePath = path.posix.join(relativeDirectory, entry.name)
+        const absolutePath = this.file(relativePath)
+        if (entry.isDirectory()) {
+          const stat = await fs.stat(absolutePath).catch(() => null)
+          directories.push({
+            relativePath,
+            modifiedAt: stat && Number.isFinite(stat.mtimeMs) ? Math.trunc(stat.mtimeMs) : Date.now(),
+          })
+          await visitDirectory(relativePath)
+          continue
+        }
+
+        if (!entry.isFile() || !entry.name.toLowerCase().endsWith('.md')) continue
+
+        const [content, stat] = await Promise.all([
+          readTextIfExists(absolutePath),
+          fs.stat(absolutePath).catch(() => null),
+        ])
+        if (typeof content !== 'string') continue
+        files.push({
+          relativePath,
+          content,
+          modifiedAt: stat && Number.isFinite(stat.mtimeMs) ? Math.trunc(stat.mtimeMs) : Date.now(),
+        })
+      }
+    }
+
+    await visitDirectory(groupDirectory)
+
+    directories.sort((first, second) => first.relativePath.localeCompare(second.relativePath))
+    files.sort((first, second) => first.relativePath.localeCompare(second.relativePath))
+    return { directories, files }
+  }
+
+  private async syncDocumentNodesWithFilesystem(groups: DocumentGroupLike[], nodes: unknown[]): Promise<unknown[]> {
+    const groupPaths = buildDocumentGroupPaths(groups)
+    const indexedNodes = nodes.filter(isRecord) as DocumentNodeLike[]
+    const syncedNodes: DocumentNodeLike[] = []
+
+    for (const group of groups) {
+      const groupDirectory = groupPaths.get(group.id)?.documentDirectory
+      if (!groupDirectory) continue
+
+      const groupNodes = indexedNodes.filter((node) => node.groupId === group.id)
+      const existingOrderById = new Map(groupNodes.map((node, index) => [node.id, index]))
+      const folderNodeByPath = new Map<string, DocumentNodeLike>()
+      const documentNodeByPath = new Map<string, DocumentNodeLike>()
+      const nextGroupNodes: DocumentNodeLike[] = []
+
+      for (const node of groupNodes) {
+        if (node.type === 'folder' && typeof node.path === 'string') {
+          const normalized = normalizeDocumentDirectoryPath(node.path)
+          if (normalized && (normalized === groupDirectory || normalized.startsWith(`${groupDirectory}/`))) {
+            folderNodeByPath.set(normalized, node)
+          }
+        }
+        if (node.type === 'document' && typeof node.filePath === 'string') {
+          const normalized = normalizeDocumentContentFilePath(node.filePath)
+          if (normalized && normalized.startsWith(`${groupDirectory}/`)) {
+            documentNodeByPath.set(normalized, node)
+          }
+        }
+      }
+
+      const scanned = await this.scanDocumentGroupDirectory(groupDirectory)
+      const folderIdByPath = new Map<string, string>()
+
+      for (const directory of scanned.directories) {
+        const existingFolder = folderNodeByPath.get(directory.relativePath)
+        const parentDirectory = path.posix.dirname(directory.relativePath)
+        const parentId = parentDirectory === groupDirectory ? null : (folderIdByPath.get(parentDirectory) ?? null)
+        const createdAt = typeof existingFolder?.createdAt === 'number' ? existingFolder.createdAt : directory.modifiedAt
+        const updatedAt = typeof existingFolder?.updatedAt === 'number' ? existingFolder.updatedAt : directory.modifiedAt
+        const folderId = existingFolder?.id ?? createSyncedDocumentNodeId('doc-folder-sync', group.id, directory.relativePath)
+        folderIdByPath.set(directory.relativePath, folderId)
+        nextGroupNodes.push({
+          ...existingFolder,
+          id: folderId,
+          groupId: group.id,
+          parentId,
+          type: 'folder',
+          title: path.posix.basename(directory.relativePath),
+          path: directory.relativePath,
+          createdAt,
+          updatedAt,
+        })
+      }
+
+      for (const file of scanned.files) {
+        const existingDocument = documentNodeByPath.get(file.relativePath)
+        const parentDirectory = path.posix.dirname(file.relativePath)
+        const parentId = parentDirectory === groupDirectory ? null : (folderIdByPath.get(parentDirectory) ?? null)
+        const createdAt = typeof existingDocument?.createdAt === 'number' ? existingDocument.createdAt : file.modifiedAt
+        const updatedAt = typeof existingDocument?.updatedAt === 'number' ? existingDocument.updatedAt : file.modifiedAt
+        nextGroupNodes.push({
+          ...existingDocument,
+          id: existingDocument?.id ?? createSyncedDocumentNodeId('doc-sync', group.id, file.relativePath),
+          groupId: group.id,
+          parentId,
+          type: 'document',
+          title: stripMarkdownExtension(path.posix.basename(file.relativePath)),
+          filePath: file.relativePath,
+          markdown: file.content,
+          createdAt,
+          updatedAt,
+        })
+      }
+
+      nextGroupNodes.sort((first, second) => {
+        const firstOrder = existingOrderById.get(first.id)
+        const secondOrder = existingOrderById.get(second.id)
+        if (firstOrder !== undefined && secondOrder !== undefined) return firstOrder - secondOrder
+        if (firstOrder !== undefined) return -1
+        if (secondOrder !== undefined) return 1
+
+        const firstPath = first.type === 'folder' ? first.path : first.filePath
+        const secondPath = second.type === 'folder' ? second.path : second.filePath
+        return String(firstPath ?? '').localeCompare(String(secondPath ?? ''))
+      })
+      syncedNodes.push(...nextGroupNodes)
+    }
+
+    return syncedNodes
+  }
+
   private async readStoredDocumentPaths(): Promise<{ files: Set<string>; directories: Set<string> }> {
     const documentIndex = asObject(await readJson<unknown>(this.file('documents/index.json'), {}))
     const groups = asArray(documentIndex.groups).filter(isEntity) as DocumentGroupLike[]
@@ -779,12 +934,16 @@ export class SuoraDatabase {
     const rawDocumentNodes = indexedDocumentNodes.length > 0 ? indexedDocumentNodes : legacyDocumentNodes
     const hasDocumentIndexState = rawDocumentGroups.length > 0 || rawDocumentNodes.length > 0 || typeof documentIndex.selectedGroupId === 'string' || typeof documentIndex.selectedDocumentId === 'string'
     const documentGroups = hasDocumentIndexState ? rawDocumentGroups.map(withoutDocumentGroupStorageFields) : asArray(settings.documentGroups)
-    const documentNodes = await Promise.all((hasDocumentIndexState ? rawDocumentNodes : asArray(settings.documentNodes)).map(async (node) => {
+    const syncedDocumentNodes = hasDocumentIndexState
+      ? await this.syncDocumentNodesWithFilesystem(documentGroupRecords, rawDocumentNodes)
+      : asArray(settings.documentNodes)
+    const documentNodes = await Promise.all(syncedDocumentNodes.map(async (node) => {
       if (!isRecord(node) || node.type !== 'document') return node
       const filePath = typeof node.filePath === 'string' ? node.filePath : ''
       const markdown = filePath ? await readTextIfExists(this.file(filePath)) : null
       return { ...node, markdown: typeof markdown === 'string' ? markdown : (typeof node.markdown === 'string' ? node.markdown : '') }
     }))
+    const documentNodeIds = new Set(documentNodes.filter(isEntity).map((node) => node.id))
     const sessionIndexRaw = await readJson<unknown>(this.file('sessions/index.json'), { sessions: [] })
     const sessionIndex = asObject(sessionIndexRaw)
     const sessionMetadata = asArray(sessionIndex.sessions).filter(isEntity) as SessionLike[]
@@ -824,9 +983,9 @@ export class SuoraDatabase {
       selectedDocumentGroupId: typeof documentIndex.selectedGroupId === 'string'
         ? documentIndex.selectedGroupId
         : (typeof settings.selectedDocumentGroupId === 'string' ? settings.selectedDocumentGroupId : null),
-      selectedDocumentId: typeof documentIndex.selectedDocumentId === 'string'
+      selectedDocumentId: typeof documentIndex.selectedDocumentId === 'string' && documentNodeIds.has(documentIndex.selectedDocumentId)
         ? documentIndex.selectedDocumentId
-        : (typeof settings.selectedDocumentId === 'string' ? settings.selectedDocumentId : null),
+        : (typeof settings.selectedDocumentId === 'string' && documentNodeIds.has(settings.selectedDocumentId) ? settings.selectedDocumentId : null),
       globalMemories: asArray(await readJson<unknown>(this.file('memories/index.json'), [])),
       agentPipelines: asArray(await readJson<unknown>(this.file('pipelines/index.json'), [])),
       mcpServers: asArray(await readJson<unknown>(this.file('mcp/index.json'), [])),

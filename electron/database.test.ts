@@ -168,6 +168,57 @@ describe('SuoraDatabase', () => {
     await appDatabase.close()
   })
 
+  it('rebuilds document nodes from markdown files when a group index is empty', async () => {
+    const workspace = await makeWorkspace()
+    await fs.mkdir(path.join(workspace, 'documents', 'indexes'), { recursive: true })
+    await fs.mkdir(path.join(workspace, 'documents', 'Docs', 'Nested'), { recursive: true })
+    await fs.writeFile(path.join(workspace, 'documents', 'index.json'), JSON.stringify({
+      groups: [{ id: 'document-group-1', name: 'Docs', color: '#12A8A0', createdAt: 1, updatedAt: 1, indexPath: 'documents/indexes/Docs-index.json' }],
+      selectedGroupId: 'document-group-1',
+      selectedDocumentId: null,
+    }))
+    await fs.writeFile(path.join(workspace, 'documents', 'indexes', 'Docs-index.json'), JSON.stringify({ groupId: 'document-group-1', nodes: [] }))
+    await fs.writeFile(path.join(workspace, 'documents', 'Docs', 'Outline.md'), '# Outline')
+    await fs.writeFile(path.join(workspace, 'documents', 'Docs', 'Nested', 'Drilldown.md'), '# Drilldown')
+
+    const appDatabase = await openSuoraDatabase(workspace)
+    const restored = safeParse<{ state: Record<string, unknown>; version: number }>((await appDatabase.getPersistedStore('suora-store')) ?? '{}')
+    const documentNodes = restored.state.documentNodes as Array<Record<string, unknown>>
+
+    expect(restored.state.documentGroups).toEqual([{ id: 'document-group-1', name: 'Docs', color: '#12A8A0', createdAt: 1, updatedAt: 1 }])
+    expect(documentNodes).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        groupId: 'document-group-1',
+        parentId: null,
+        type: 'document',
+        title: 'Outline',
+        filePath: 'documents/Docs/Outline.md',
+        markdown: '# Outline',
+      }),
+      expect.objectContaining({
+        groupId: 'document-group-1',
+        parentId: null,
+        type: 'folder',
+        title: 'Nested',
+        path: 'documents/Docs/Nested',
+      }),
+      expect.objectContaining({
+        groupId: 'document-group-1',
+        type: 'document',
+        title: 'Drilldown',
+        filePath: 'documents/Docs/Nested/Drilldown.md',
+        markdown: '# Drilldown',
+      }),
+    ]))
+
+    const nestedFolder = documentNodes.find((node) => node.type === 'folder' && node.path === 'documents/Docs/Nested')
+    const nestedDocument = documentNodes.find((node) => node.type === 'document' && node.filePath === 'documents/Docs/Nested/Drilldown.md')
+    expect(nestedFolder?.id).toBeTruthy()
+    expect(nestedDocument?.parentId).toBe(nestedFolder?.id)
+
+    await appDatabase.close()
+  })
+
   it('creates empty document folders and removes stale renamed markdown files', async () => {
     const workspace = await makeWorkspace()
     const appDatabase = await openSuoraDatabase(workspace)

@@ -19,6 +19,16 @@ import { buildDocumentImportFromDataTransferItems, buildDocumentImportFromFolder
 import { buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
+interface DirEntry {
+  name: string
+  isDirectory: boolean
+  path: string
+}
+
+interface FsWatchChangedPayload {
+  dir?: string
+}
+
 const DOCUMENT_GROUP_COLOR_CLASS: Record<string, string> = {
   '#12A8A0': 'bg-[#12A8A0]',
   '#4D7CFF': 'bg-[#4D7CFF]',
@@ -43,6 +53,14 @@ function getDocumentNodeDisplayName(node: DocumentNode): string {
 
 function hasFileTransfer(dataTransfer: DataTransfer | null): boolean {
   return Array.from(dataTransfer?.types ?? []).includes('Files')
+}
+
+function normalizeWatchedPath(pathValue: string): string {
+  return pathValue.replace(/\\/g, '/').replace(/\/+$/g, '')
+}
+
+function joinWorkspacePath(workspacePath: string, relativePath: string): string {
+  return `${normalizeWatchedPath(workspacePath)}/${relativePath.replace(/^[/\\]+/, '').replace(/\\/g, '/')}`
 }
 
 const EMPTY_DOCUMENT_CHILDREN: DocumentNode[] = []
@@ -954,6 +972,9 @@ function DocumentSourceTextarea({
 export function DocumentsLayout() {
   const { t } = useI18n()
   const folderImportInputRef = useRef<HTMLInputElement | null>(null)
+  const watcherPathsRef = useRef<Set<string>>(new Set())
+  const rehydrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rehydrateInFlightRef = useRef<Promise<void> | null>(null)
   const [panelWidth, setPanelWidth] = useResizablePanel('documents', 310)
   const [query, setQuery] = useState('')
   const deferredQuery = useDeferredValue(query)
@@ -1078,14 +1099,112 @@ export function DocumentsLayout() {
   }, [documentNodes])
   const documentNodeIds = useMemo(() => new Set(documentNodes.map((node) => node.id)), [documentNodes])
   const documentFolderIds = useMemo(() => new Set(documentNodes.filter((node) => node.type === 'folder').map((node) => node.id)), [documentNodes])
+  const watchedFolderRelativePaths = useMemo(
+    () => documentNodes
+      .filter((node): node is DocumentFolder & { path: string } => node.type === 'folder' && typeof node.path === 'string' && node.path.length > 0)
+      .map((node) => node.path)
+      .sort((first, second) => first.localeCompare(second)),
+    [documentNodes],
+  )
+  const watchedFolderPathKey = useMemo(() => watchedFolderRelativePaths.join('|'), [watchedFolderRelativePaths])
+  const documentGroupKey = useMemo(() => documentGroups.map((group) => group.id).sort().join('|'), [documentGroups])
   const activeDocumentAncestorKey = useMemo(
     () => activeDocument ? collectAncestorFolderIds(activeDocument.parentId, documentNodes).join('|') : '',
     [activeDocument?.id, activeDocument?.parentId, documentNodes],
   )
 
+  const scheduleDocumentFilesystemRefresh = useCallback(() => {
+    if (rehydrateTimerRef.current) {
+      clearTimeout(rehydrateTimerRef.current)
+    }
+    rehydrateTimerRef.current = setTimeout(() => {
+      rehydrateTimerRef.current = null
+      if (rehydrateInFlightRef.current) return
+      const request = Promise.resolve(useAppStore.persist.rehydrate()).finally(() => {
+        rehydrateInFlightRef.current = null
+      })
+      rehydrateInFlightRef.current = request
+    }, 150)
+  }, [])
+
   useEffect(() => {
     if (!selectedDocumentGroupId && documentGroups[0]) setSelectedDocumentGroup(documentGroups[0].id)
   }, [documentGroups, selectedDocumentGroupId, setSelectedDocumentGroup])
+
+  useEffect(() => {
+    const electron = window.electron
+    if (!electron) return
+
+    const handleWatchChanged = (_event: unknown, payload: unknown) => {
+      const directory = payload && typeof payload === 'object' && typeof (payload as FsWatchChangedPayload).dir === 'string'
+        ? normalizeWatchedPath((payload as FsWatchChangedPayload).dir as string)
+        : ''
+      if (!directory || !watcherPathsRef.current.has(directory)) return
+      scheduleDocumentFilesystemRefresh()
+    }
+
+    electron.on('fs:watch:changed', handleWatchChanged)
+    return () => {
+      electron.off('fs:watch:changed', handleWatchChanged)
+    }
+  }, [scheduleDocumentFilesystemRefresh])
+
+  useEffect(() => {
+    return () => {
+      const electron = window.electron
+      if (rehydrateTimerRef.current) {
+        clearTimeout(rehydrateTimerRef.current)
+        rehydrateTimerRef.current = null
+      }
+      if (!electron) return
+      for (const watchedPath of watcherPathsRef.current) {
+        void electron.invoke('fs:watch:stop', watchedPath).catch(() => {})
+      }
+      watcherPathsRef.current.clear()
+    }
+  }, [])
+
+  useEffect(() => {
+    const electron = window.electron
+    if (!electron || !workspacePath) return
+
+    let cancelled = false
+    const syncDocumentWatchers = async () => {
+      const documentsRootPath = normalizeWatchedPath(joinWorkspacePath(workspacePath, 'documents'))
+      const nextPaths = new Set<string>([documentsRootPath])
+      const rootEntries = await electron.invoke('fs:listDir', documentsRootPath) as DirEntry[] | { error: string }
+
+      if (Array.isArray(rootEntries)) {
+        for (const entry of rootEntries) {
+          if (!entry.isDirectory || entry.name === 'indexes') continue
+          nextPaths.add(normalizeWatchedPath(entry.path))
+        }
+      }
+
+      for (const relativeFolderPath of watchedFolderRelativePaths) {
+        nextPaths.add(normalizeWatchedPath(joinWorkspacePath(workspacePath, relativeFolderPath)))
+      }
+
+      const previousPaths = watcherPathsRef.current
+      const pathsToStop = Array.from(previousPaths).filter((watchedPath) => !nextPaths.has(watchedPath))
+      const pathsToStart = Array.from(nextPaths).filter((watchedPath) => !previousPaths.has(watchedPath))
+
+      await Promise.all(pathsToStop.map((watchedPath) => electron.invoke('fs:watch:stop', watchedPath).catch(() => {})))
+      await Promise.all(pathsToStart.map((watchedPath) => electron.invoke('fs:watch:start', watchedPath).catch(() => {})))
+
+      if (cancelled) {
+        await Promise.all(pathsToStart.map((watchedPath) => electron.invoke('fs:watch:stop', watchedPath).catch(() => {})))
+        return
+      }
+
+      watcherPathsRef.current = nextPaths
+    }
+
+    void syncDocumentWatchers()
+    return () => {
+      cancelled = true
+    }
+  }, [documentGroupKey, watchedFolderPathKey, watchedFolderRelativePaths, workspacePath])
 
   useEffect(() => {
     if (selectedFolderId && !documentFolderIds.has(selectedFolderId)) {

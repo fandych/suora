@@ -242,6 +242,7 @@ export interface DocumentFolder {
   parentId: string | null
   type: 'folder'
   title: string
+  path?: string
   createdAt: number
   updatedAt: number
 }
@@ -253,6 +254,7 @@ export interface DocumentItem {
   type: 'document'
   title: string
   markdown: string
+  filePath?: string
   createdAt: number
   updatedAt: number
 }
