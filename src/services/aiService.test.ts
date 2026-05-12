@@ -122,10 +122,11 @@ describe('aiService', () => {
       })
       vi.mocked(window.electron.invoke).mockImplementation(async (channel, ...args) => {
         if (channel === 'ai:fetch:start') {
-          const payload = args[0] as { method?: string; url?: string; bodyText?: string }
+          const payload = args[0] as { method?: string; url?: string; bodyText?: string; headers?: Record<string, string> }
           expect(payload.method).toBe('POST')
           expect(payload.url).toBe('https://api.example.com/chat/completions')
           expect(payload.bodyText).toContain('"model":"qwen-test"')
+          expect(payload.headers?.['x-suora-client']).toBe('suora-desktop-assistant')
 
           setTimeout(() => {
             for (const listener of listeners) {
@@ -174,6 +175,9 @@ describe('aiService', () => {
       expect(window.electron.invoke).toHaveBeenCalledWith('ai:fetch:start', expect.objectContaining({
         url: 'https://api.example.com/chat/completions',
         method: 'POST',
+        headers: expect.objectContaining({
+          'x-suora-client': 'suora-desktop-assistant',
+        }),
       }))
     })
   })

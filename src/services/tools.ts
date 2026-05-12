@@ -8,7 +8,7 @@
 
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
-import type { Agent, AgentPipeline, AgentPipelineBudget, AgentPipelineStep, AgentPipelineVariable, DocumentGroup, DocumentItem, DocumentNode, Model, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
+import type { Agent, AgentPipeline, AgentPipelineBudget, AgentPipelineStep, AgentPipelineVariable, DocumentFolder, DocumentGroup, DocumentItem, DocumentNode, Model, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
 import { getPluginTools } from '@/services/pluginSystem'
 import { logger } from '@/services/logger'
 import { serializeSkillToMarkdown } from '@/services/skillRegistry'
@@ -23,7 +23,7 @@ import { readCached, writeCached } from '@/services/fileStorage'
 import { delegateToAgent } from '@/services/agentCommunication'
 import { confirmChoice } from '@/services/confirmDialog'
 import { buildDocumentGraph, queryDocumentGraph } from '@/services/documentGraph'
-import { searchDocuments } from '@/services/documents'
+import { createDocument, createDocumentGroup, searchDocuments } from '@/services/documents'
 import { deletePipelineFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { safePathSegment } from '@/utils/pathSegments'
@@ -96,14 +96,14 @@ const STORE_KEY = 'suora-store'
 const EVENTS_STORAGE_KEY = 'suora-event-triggers'
 
 // Late-binding accessor for live Zustand store state (set by appStore after creation)
-let _liveStoreAccessor: (() => Record<string, unknown>) | null = null
+let _liveStoreAccessor: (() => Record<string, unknown> | null) | null = null
 let _liveStoreWriter: ((updater: (state: Record<string, unknown>) => void) => void) | null = null
 
 /**
  * Register a live store state accessor to avoid reading from the file cache.
  * Called once from appStore.ts after the store is created.
  */
-export function setLiveStoreAccessor(accessor: () => Record<string, unknown>) {
+export function setLiveStoreAccessor(accessor: () => Record<string, unknown> | null) {
   _liveStoreAccessor = accessor
 }
 
@@ -408,6 +408,30 @@ function resolveDocument(
   return docs.find((doc) => doc.id === documentIdOrTitle)
     ?? docs.find((doc) => doc.title.toLowerCase() === query)
     ?? docs.find((doc) => doc.title.toLowerCase().includes(query))
+    ?? null
+}
+
+function resolveDocumentGroup(
+  groups: DocumentGroup[],
+  groupIdOrName: string,
+): DocumentGroup | null {
+  const query = groupIdOrName.trim().toLowerCase()
+  return groups.find((group) => group.id === groupIdOrName)
+    ?? groups.find((group) => group.name.toLowerCase() === query)
+    ?? groups.find((group) => group.name.toLowerCase().includes(query))
+    ?? null
+}
+
+function resolveDocumentFolder(
+  nodes: DocumentNode[],
+  folderIdOrTitle: string,
+  groupId?: string,
+): DocumentFolder | null {
+  const query = folderIdOrTitle.trim().toLowerCase()
+  const folders = nodes.filter((node): node is DocumentFolder => node.type === 'folder' && (!groupId || node.groupId === groupId))
+  return folders.find((folder) => folder.id === folderIdOrTitle)
+    ?? folders.find((folder) => folder.title.toLowerCase() === query)
+    ?? folders.find((folder) => folder.title.toLowerCase().includes(query))
     ?? null
 }
 
@@ -2981,6 +3005,94 @@ export const builtinToolDefs: ToolSet = {
     },
   }),
 
+  create_document: tool({
+    description: 'Create a new Suora document in the current group or a specified group/folder. Use this when the user wants the result saved as a document instead of only returned in chat.',
+    inputSchema: z.object({
+      title: z.string().describe('Document title to create'),
+      markdown: z.string().optional().describe('Optional initial Markdown content. If omitted, a starter template is used for Markdown documents.'),
+      group_id: z.string().optional().describe('Optional target document group ID or name'),
+      parent_id: z.string().optional().describe('Optional target folder ID or title within the chosen group'),
+      reason: z.string().describe('Short reason for creating the document, shown in confirmation/tool output'),
+    }),
+    execute: async ({ title, markdown, group_id, parent_id, reason }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+
+        const nextTitle = title.trim()
+        if (!nextTitle) return 'Error: Document title is required.'
+
+        const groups = (state.documentGroups || []) as DocumentGroup[]
+        const nodes = (state.documentNodes || []) as DocumentNode[]
+        const explicitGroup = group_id?.trim() ? resolveDocumentGroup(groups, group_id) : null
+        if (group_id?.trim() && !explicitGroup) {
+          return `Document group not found: ${group_id}`
+        }
+
+        let targetGroup: DocumentGroup | null = explicitGroup
+          ?? groups.find((group) => group.id === state.selectedDocumentGroupId)
+          ?? groups[0]
+          ?? null
+
+        const targetFolder = parent_id?.trim()
+          ? resolveDocumentFolder(nodes, parent_id, explicitGroup?.id)
+            ?? (!explicitGroup ? resolveDocumentFolder(nodes, parent_id) : null)
+          : null
+
+        if (parent_id?.trim() && !targetFolder) {
+          return `Folder not found: ${parent_id}`
+        }
+
+        if (targetFolder && targetGroup && targetFolder.groupId !== targetGroup.id) {
+          return `Folder "${targetFolder.title}" is not in group "${targetGroup.name}".`
+        }
+
+        if (!targetGroup && targetFolder) {
+          targetGroup = groups.find((group) => group.id === targetFolder.groupId) ?? null
+        }
+
+        let createdGroup: DocumentGroup | null = null
+        if (!targetGroup) {
+          createdGroup = createDocumentGroup('New Document Group')
+          targetGroup = createdGroup
+        }
+
+        const selectedDocumentId = typeof state.selectedDocumentId === 'string' ? state.selectedDocumentId : null
+        const selectedDocument = selectedDocumentId
+          ? resolveDocument(nodes, selectedDocumentId)
+          : null
+        const defaultParentId = selectedDocument && selectedDocument.groupId === targetGroup.id
+          ? selectedDocument.parentId
+          : null
+        const nextParentId = targetFolder?.id ?? defaultParentId ?? null
+        const nextDocument = createDocument(targetGroup.id, nextParentId, nextTitle)
+        if (markdown !== undefined) {
+          nextDocument.markdown = markdown
+        }
+
+        const destination = `${targetGroup.name}${targetFolder ? ` / ${targetFolder.title}` : ''}`
+        if (!(await confirmIfNeeded(`document_create\n${nextTitle}\nLocation: ${destination}\nReason: ${reason}\nInitial length: ${nextDocument.markdown.length} characters`))) {
+          return 'Cancelled by user confirmation policy.'
+        }
+
+        if (!writeStoreState((s) => {
+          if (createdGroup) {
+            const currentGroups = (s.documentGroups || []) as DocumentGroup[]
+            s.documentGroups = [...currentGroups, createdGroup]
+          }
+          const currentNodes = (s.documentNodes || []) as DocumentNode[]
+          s.documentNodes = [...currentNodes, nextDocument]
+          s.selectedDocumentGroupId = targetGroup.id
+          s.selectedDocumentId = nextDocument.id
+        })) return 'Error: Store not available'
+
+        return `Created document "${nextDocument.title}" (${nextDocument.id}) in ${destination}. Reason: ${reason}`
+      } catch (err) {
+        return `Error creating document: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
   update_document: tool({
     description: 'Replace a Suora document with revised Markdown. Typically requires reading the document first and preserving user content unless asked to change it.',
     inputSchema: z.object({
@@ -3288,6 +3400,7 @@ export const TOOL_META: Record<string, ToolMeta> = {
   list_documents:        { userFacingName: 'List documents', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'document markdown notes' },
   query_document_graph:  { userFacingName: 'Query document graph', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'document graph references tags related notes' },
   read_document:         { userFacingName: 'Read document', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'document markdown content' },
+  create_document:       { userFacingName: 'Create document', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true, searchHint: 'create document markdown note' },
   list_skills:           { userFacingName: 'List skills', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   read_skill:            { userFacingName: 'Read skill', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'skill instructions content' },
   get_settings:          { userFacingName: 'Get settings', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },

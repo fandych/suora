@@ -223,6 +223,8 @@ let currentToolAllowedDirectoryCanonicalPaths: string[] = []
 let currentToolBlockedCommands: string[] = ['rm -rf', 'del /f /q', 'format', 'shutdown']
 let suoraDatabase: SuoraDatabase | null = null
 let suoraDatabaseWorkspacePath: string | null = null
+const AI_REQUEST_CLIENT_HEADER = 'x-suora-client'
+const AI_REQUEST_CLIENT_VALUE = 'suora-desktop-assistant'
 
 const DB_JSON_TABLES = new Set<JsonTableName>([
   'provider_configs',
@@ -1687,12 +1689,20 @@ function startAiFetchRequest(
     : payload.bodyText !== undefined
       ? Buffer.from(payload.bodyText, 'utf-8')
       : undefined
+  const headers = { ...(payload.headers ?? {}) }
+  const headerNames = new Set(Object.keys(headers).map((name) => name.toLowerCase()))
+  if (!headerNames.has('user-agent')) {
+    headers['User-Agent'] = `Mozilla/5.0 Suora/${app.getVersion()}`
+  }
+  if (!headerNames.has(AI_REQUEST_CLIENT_HEADER)) {
+    headers['X-Suora-Client'] = AI_REQUEST_CLIENT_VALUE
+  }
 
   const req = reqModule.request(
     url,
     {
       method,
-      headers: payload.headers ?? {},
+      headers,
       lookup: safeDnsLookup,
     },
     (res: IncomingMessage) => {

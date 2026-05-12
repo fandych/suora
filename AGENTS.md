@@ -117,6 +117,7 @@ Built-in agents are defined in `src/store/appStore.ts`:
 - Assistant
 - Pipeline builder
 - Timer builder
+- Document editor
 - Code Expert
 - Writing Strategist
 - Research Analyst

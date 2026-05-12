@@ -49,6 +49,7 @@ const LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT = [
 
 export const PIPELINE_BUILDER_AGENT_ID = 'builtin-pipeline-builder'
 export const TIMER_BUILDER_AGENT_ID = 'builtin-timer-builder'
+export const DOCUMENT_EDITOR_AGENT_ID = 'builtin-document-editor'
 
 const LEGACY_PIPELINE_BUILDER_AGENT_NAME = ['Pipeline builder', '流水线编排']
 const LEGACY_PIPELINE_BUILDER_AGENT_WHEN_TO_USE = [
@@ -76,6 +77,20 @@ const LEGACY_TIMER_BUILDER_AGENT_GREETING = [
 const LEGACY_TIMER_BUILDER_AGENT_SYSTEM_PROMPT = [
   'You are Suora\'s timer builder. Your job is to create, inspect, update, or remove saved timers inside the Timer module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved timer and use timer_list, timer_add, timer_update, and timer_remove when needed. If the timer should run a saved pipeline and the pipeline id is unclear, use pipeline_list to identify it first. Before any mutation, briefly summarize the timer fields you are about to apply. If required details are missing, ask a short clarifying question. Prefer the simplest timer shape that satisfies the request.',
   '你是 Suora 的定时任务编排助手。你的职责是在定时任务模块中创建、检查、更新或删除已保存的定时任务。不要直接替用户完成其业务任务，而是把需求翻译成结构化的已保存定时任务，并在需要时使用 timer_list、timer_add、timer_update、timer_remove。如果定时任务需要运行某个已保存流水线，但流水线 ID 不明确，先使用 pipeline_list 识别目标流水线。在执行任何增删改之前，先简要总结你将要应用的定时任务字段。如果关键信息缺失，先提出一个简短的澄清问题。优先使用能满足需求的最简单定时任务结构。',
+]
+
+const LEGACY_DOCUMENT_EDITOR_AGENT_NAME = ['Document editor', '文档编辑']
+const LEGACY_DOCUMENT_EDITOR_AGENT_WHEN_TO_USE = [
+  'Use inside the Documents module to create new documents, rewrite existing ones, and keep the work focused on saved document content instead of only replying in chat.',
+  '在文档模块中使用，用来创建新文档、重写现有文档，并把重点放在已保存的文档内容上，而不是只在聊天里回复结果。',
+]
+const LEGACY_DOCUMENT_EDITOR_AGENT_GREETING = [
+  'Ready to edit documents.',
+  '已准备好编辑文档。',
+]
+const LEGACY_DOCUMENT_EDITOR_AGENT_SYSTEM_PROMPT = [
+  'You are Suora\'s document editor. Your job is to create and revise saved documents inside the Documents module. When the user wants a result saved as a document, do not stop at a chat reply. Use list_documents and read_document to inspect existing notes, then use create_document or update_document to write the requested content into the workspace. Before any mutation, briefly summarize the document title, location, and content changes you plan to apply. If the target document or destination is unclear, ask a short clarifying question.',
+  '你是 Suora 的文档编辑助手。你的职责是在文档模块中创建和修订已保存文档。当用户希望结果被保存成文档时，不要只停留在聊天回复。先使用 list_documents 和 read_document 检查现有笔记，再使用 create_document 或 update_document 把要求的内容写入工作区。在执行任何增删改之前，先简要总结你将要应用的文档标题、位置和内容变更。如果目标文档或保存位置不明确，先提出一个简短的澄清问题。',
 ]
 
 function buildDefaultAgent(): Agent {
@@ -145,6 +160,18 @@ function localizeBuiltinAgent(agent: Agent): Agent {
     }
   }
 
+  if (agent.id === DOCUMENT_EDITOR_AGENT_ID) {
+    const localized = buildDocumentEditorAgent()
+    return {
+      ...localized,
+      ...agent,
+      name: shouldRefreshBuiltinField(agent.name, LEGACY_DOCUMENT_EDITOR_AGENT_NAME) ? localized.name : agent.name,
+      whenToUse: shouldRefreshBuiltinField(agent.whenToUse, LEGACY_DOCUMENT_EDITOR_AGENT_WHEN_TO_USE) ? localized.whenToUse : agent.whenToUse,
+      systemPrompt: shouldRefreshBuiltinField(agent.systemPrompt, LEGACY_DOCUMENT_EDITOR_AGENT_SYSTEM_PROMPT) ? localized.systemPrompt : agent.systemPrompt,
+      greeting: shouldRefreshBuiltinField(agent.greeting, LEGACY_DOCUMENT_EDITOR_AGENT_GREETING) ? localized.greeting : agent.greeting,
+    }
+  }
+
   return agent
 }
 
@@ -190,6 +217,26 @@ function buildTimerBuilderAgent(): Agent {
 
 const TIMER_BUILDER_AGENT: Agent = buildTimerBuilderAgent()
 
+function buildDocumentEditorAgent(): Agent {
+  return {
+    ...buildProfessionalAgent(
+      DOCUMENT_EDITOR_AGENT_ID,
+      t('agents.documentEditor', 'Document editor'),
+      'agent-writer',
+      '#2563EB',
+      t('agents.documentEditorWhenToUse', 'Use inside the Documents module to create new documents, rewrite existing ones, and keep the work focused on saved document content instead of only replying in chat.'),
+      t('agents.documentEditorSystemPrompt', 'You are Suora\'s document editor. Your job is to create and revise saved documents inside the Documents module. When the user wants a result saved as a document, do not stop at a chat reply. Use list_documents and read_document to inspect existing notes, then use create_document or update_document to write the requested content into the workspace. Before any mutation, briefly summarize the document title, location, and content changes you plan to apply. If the target document or destination is unclear, ask a short clarifying question.'),
+      [],
+      'acceptEdits',
+      0.35,
+    ),
+    allowedTools: ['list_documents', 'read_document', 'create_document', 'update_document'],
+    greeting: t('agents.documentEditorGreeting', 'Ready to edit documents.'),
+  }
+}
+
+const DOCUMENT_EDITOR_AGENT: Agent = buildDocumentEditorAgent()
+
 function buildProfessionalAgent(
   id: string,
   name: string,
@@ -230,6 +277,7 @@ const BUILTIN_AGENTS: Agent[] = [
   DEFAULT_AGENT,
   PIPELINE_BUILDER_AGENT,
   TIMER_BUILDER_AGENT,
+  DOCUMENT_EDITOR_AGENT,
   buildProfessionalAgent(
     'builtin-code-expert',
     'Code Expert',

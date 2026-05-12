@@ -57,6 +57,8 @@ const PROVIDER_TYPE_NAMES: Record<string, string> = {
 }
 
 const MAX_STREAM_EVENT_PAYLOAD_LENGTH = 20_000
+const AI_REQUEST_CLIENT_HEADER = 'x-suora-client'
+const AI_REQUEST_CLIENT_VALUE = 'suora-desktop-assistant'
 
 /**
  * Verbose console tracing is only emitted when the user sets
@@ -148,6 +150,16 @@ async function serializeRequestBody(request: Request): Promise<Pick<AiFetchStart
   return { bodyBase64: encodeBase64(new Uint8Array(buffer)) }
 }
 
+function withAiRequestHeaders(headers: Record<string, string>): Record<string, string> {
+  if (headers[AI_REQUEST_CLIENT_HEADER]) {
+    return headers
+  }
+  return {
+    ...headers,
+    [AI_REQUEST_CLIENT_HEADER]: AI_REQUEST_CLIENT_VALUE,
+  }
+}
+
 function getProviderFetch(): typeof fetch | undefined {
   const bridge = getElectronBridge()
   if (!bridge?.invoke || !bridge.on || !bridge.off) {
@@ -170,7 +182,7 @@ function getProviderFetch(): typeof fetch | undefined {
       throw createAbortError()
     }
 
-    const headers = Object.fromEntries(request.headers.entries())
+    const headers = withAiRequestHeaders(Object.fromEntries(request.headers.entries()))
     const bodyPayload = await serializeRequestBody(request.clone())
     const payload: AiFetchStartPayload = {
       url: request.url,

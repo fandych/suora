@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { Agent, DocumentGroup, DocumentNode, Model, Skill } from '@/types'
 import { buildToolHints, builtinToolDefs, getSkillSystemPrompts, setLiveStoreAccessor, setLiveStoreWriter } from './tools'
@@ -8,6 +8,11 @@ function getDescription(toolName: 'web_search' | 'list_documents' | 'query_docum
 }
 
 describe('builtin tool guidance', () => {
+  beforeEach(() => {
+    setLiveStoreAccessor(() => null)
+    setLiveStoreWriter(() => false)
+  })
+
   it('prioritizes local documents before web search for local knowledge questions', () => {
     expect(getDescription('list_documents')).toContain('Use this first')
     expect(getDescription('list_documents')).toContain('before using web_search')
@@ -78,6 +83,82 @@ describe('builtin tool guidance', () => {
     expect(parsed.relatedDocuments.map((doc) => doc.id)).toContain('budget')
     expect(parsed.relatedDocuments.find((doc) => doc.id === 'budget')?.reasons.join(' ')).toContain('references')
     expect(parsed.tags).toContain('amber')
+  })
+
+  it('creates documents in the selected group and syncs live store state', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.create_document.execute>>[1]
+    const group: DocumentGroup = { id: 'group-1', name: 'Docs', color: '#12A8A0', createdAt: 1, updatedAt: 1 }
+    const liveState: Record<string, unknown> = {
+      documentGroups: [group],
+      documentNodes: [],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: null,
+      toolSecurity: {
+        allowedDirectories: [],
+        blockedCommands: [],
+        requireConfirmation: false,
+        sandboxMode: 'workspace',
+      },
+    }
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+      return true
+    })
+
+    const output = await builtinToolDefs.create_document.execute?.({
+      title: 'Launch Brief',
+      markdown: '# Launch Brief\n\nOwner: Ops',
+      reason: 'Save the launch summary as a document',
+    }, toolOptions)
+
+    expect(output).toContain('Created document "Launch Brief"')
+    expect((liveState.documentNodes as DocumentNode[])).toHaveLength(1)
+    expect((liveState.documentNodes as DocumentNode[])[0]).toMatchObject({
+      type: 'document',
+      title: 'Launch Brief',
+      groupId: group.id,
+      markdown: '# Launch Brief\n\nOwner: Ops',
+    })
+    expect(liveState.selectedDocumentGroupId).toBe(group.id)
+    expect(liveState.selectedDocumentId).toBe((liveState.documentNodes as DocumentNode[])[0]?.id)
+  })
+
+  it('creates a default group when none exists before creating a document', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.create_document.execute>>[1]
+    const liveState: Record<string, unknown> = {
+      documentGroups: [],
+      documentNodes: [],
+      selectedDocumentGroupId: null,
+      selectedDocumentId: null,
+      toolSecurity: {
+        allowedDirectories: [],
+        blockedCommands: [],
+        requireConfirmation: false,
+        sandboxMode: 'workspace',
+      },
+    }
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+      return true
+    })
+
+    const output = await builtinToolDefs.create_document.execute?.({
+      title: 'First Note',
+      reason: 'Create the first workspace note',
+    }, toolOptions)
+
+    expect(output).toContain('Created document "First Note"')
+    expect((liveState.documentGroups as DocumentGroup[])).toHaveLength(1)
+    expect((liveState.documentNodes as DocumentNode[])).toHaveLength(1)
+    expect((liveState.documentNodes as DocumentNode[])[0]).toMatchObject({
+      type: 'document',
+      title: 'First Note',
+      groupId: (liveState.documentGroups as DocumentGroup[])[0]?.id,
+    })
   })
 
   it('guides large file writes toward chunking with append_file', () => {

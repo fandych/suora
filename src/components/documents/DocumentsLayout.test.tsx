@@ -5,6 +5,12 @@ import { DocumentsLayout } from './DocumentsLayout'
 import { useAppStore } from '@/store/appStore'
 import { createDocument, createDocumentGroup } from '@/services/documents'
 
+vi.mock('./DocumentsAssistantDrawer', () => ({
+  DocumentsAssistantDrawer: ({ mode, document }: { mode: 'create' | 'edit'; document?: { id: string } | null }) => (
+    <div data-testid="documents-assistant-drawer">{`${mode}:${document?.id ?? 'new'}`}</div>
+  ),
+}))
+
 vi.mock('@tiptap/react', () => ({
   EditorContent: ({ className }: { className?: string }) => <div data-testid="editor-content" className={className} />,
   useEditor: () => ({
@@ -77,36 +83,14 @@ describe('DocumentsLayout', () => {
     expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('Welcome')
   })
 
-  it('imports folder files into a new document group', async () => {
+  it('opens the documents assistant in create mode from the sidebar action', async () => {
+    const user = userEvent.setup()
+
     render(<DocumentsLayout />)
 
-    const files = [
-      new File(['# Overview'], 'overview.md', { type: 'text/markdown' }),
-      new File(['console.log("ship")'], 'deploy.ts', { type: 'text/typescript' }),
-      new File(['PNG'], 'diagram.png', { type: 'image/png' }),
-    ] as Array<File & { webkitRelativePath?: string }>
-    files[0].webkitRelativePath = 'workspace-docs/overview.md'
-    files[1].webkitRelativePath = 'workspace-docs/scripts/deploy.ts'
-    files[2].webkitRelativePath = 'workspace-docs/assets/diagram.png'
-    const list = Object.assign(files, {
-      item: (index: number) => files[index] ?? null,
-    }) as unknown as FileList
+    await user.click(screen.getAllByRole('button', { name: 'AI Create' })[0])
 
-    fireEvent.change(screen.getByLabelText('Import document folder'), {
-      target: { files: list },
-    })
-
-    await waitFor(() => {
-      expect(useAppStore.getState().documentGroups).toHaveLength(1)
-      expect(useAppStore.getState().documentNodes.some((node) => node.type === 'folder' && node.title === 'workspace-docs')).toBe(true)
-      expect(useAppStore.getState().documentNodes.some((node) => node.type === 'document' && node.title === 'overview.md')).toBe(true)
-      expect(useAppStore.getState().documentNodes.some((node) => node.type === 'document' && node.title === 'deploy.ts')).toBe(true)
-      expect(useAppStore.getState().documentNodes.some((node) => node.type === 'document' && node.title === 'diagram.png')).toBe(false)
-    })
-
-    expect(screen.getByText(/Imported 2 documents and 2 folders/i)).toBeInTheDocument()
-    expect(screen.getByText(/Skipped 1 unsupported files/i)).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('overview.md')
+    expect(screen.getByTestId('documents-assistant-drawer')).toHaveTextContent('create:new')
   })
 
   it('supports folder and document CRUD plus search', async () => {
@@ -170,6 +154,26 @@ describe('DocumentsLayout', () => {
 
     expect(confirmMock).toHaveBeenCalledTimes(1)
     expect(useAppStore.getState().documentNodes.filter((node) => node.type === 'document')).toHaveLength(1)
+  })
+
+  it('opens the documents assistant in edit mode for the active document', async () => {
+    const user = userEvent.setup()
+    const group = createDocumentGroup('Docs')
+    const rootDoc = createDocument(group.id, null, 'Intro')
+
+    useAppStore.setState({
+      locale: 'en',
+      documentGroups: [group],
+      documentNodes: [rootDoc],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: rootDoc.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    await user.click(screen.getByRole('button', { name: 'AI Edit' }))
+
+    expect(screen.getByTestId('documents-assistant-drawer')).toHaveTextContent(`edit:${rootDoc.id}`)
   })
 
   it('preserves script extensions and uses source editing for non-markdown documents', async () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { PIPELINE_BUILDER_AGENT_ID, TIMER_BUILDER_AGENT_ID, useAppStore, initWorkspacePath, loadExternalSkillsAndAgents, loadSessionsFromWorkspace, loadSettingsFromWorkspace } from './appStore'
+import { DOCUMENT_EDITOR_AGENT_ID, PIPELINE_BUILDER_AGENT_ID, TIMER_BUILDER_AGENT_ID, useAppStore, initWorkspacePath, loadExternalSkillsAndAgents, loadSessionsFromWorkspace, loadSettingsFromWorkspace } from './appStore'
 import type { Agent, Session, Skill } from '@/types'
 
 // Mock sessionFiles and other file-based services
@@ -244,6 +244,43 @@ describe('appStore', () => {
       expect(localized?.whenToUse).toContain('在定时任务模块中使用')
       expect(localized?.greeting).toBe('已准备好创建定时任务。')
       expect(useAppStore.getState().selectedAgent?.name).toBe('定时任务编排')
+    })
+
+    it('should localize the builtin document editor agent when locale changes', () => {
+      const documentEditor: Agent = {
+        id: DOCUMENT_EDITOR_AGENT_ID,
+        name: 'Document editor',
+        avatar: 'agent-writer',
+        color: '#2563EB',
+        whenToUse: 'Use inside the Documents module to create new documents, rewrite existing ones, and keep the work focused on saved document content instead of only replying in chat.',
+        systemPrompt: 'You are Suora\'s document editor. Your job is to create and revise saved documents inside the Documents module. When the user wants a result saved as a document, do not stop at a chat reply. Use list_documents and read_document to inspect existing notes, then use create_document or update_document to write the requested content into the workspace. Before any mutation, briefly summarize the document title, location, and content changes you plan to apply. If the target document or destination is unclear, ask a short clarifying question.',
+        modelId: '',
+        skills: [],
+        temperature: 0.35,
+        maxTokens: 4096,
+        maxTurns: 24,
+        enabled: true,
+        greeting: 'Ready to edit documents.',
+        responseStyle: 'balanced',
+        allowedTools: ['list_documents', 'read_document', 'create_document', 'update_document'],
+        disallowedTools: [],
+        permissionMode: 'acceptEdits',
+        memories: [],
+        autoLearn: true,
+      }
+
+      useAppStore.setState({
+        agents: [documentEditor],
+        selectedAgent: documentEditor,
+      })
+
+      useAppStore.getState().setLocale('zh')
+
+      const localized = useAppStore.getState().agents[0]
+      expect(localized?.name).toBe('文档编辑')
+      expect(localized?.whenToUse).toContain('在文档模块中使用')
+      expect(localized?.greeting).toBe('已准备好编辑文档。')
+      expect(useAppStore.getState().selectedAgent?.name).toBe('文档编辑')
     })
 
     it('should persist saved pipelines in the filesystem-backed store payload', () => {
