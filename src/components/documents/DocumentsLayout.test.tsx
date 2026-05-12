@@ -77,6 +77,38 @@ describe('DocumentsLayout', () => {
     expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('Welcome')
   })
 
+  it('imports folder files into a new document group', async () => {
+    render(<DocumentsLayout />)
+
+    const files = [
+      new File(['# Overview'], 'overview.md', { type: 'text/markdown' }),
+      new File(['console.log("ship")'], 'deploy.ts', { type: 'text/typescript' }),
+      new File(['PNG'], 'diagram.png', { type: 'image/png' }),
+    ] as Array<File & { webkitRelativePath?: string }>
+    files[0].webkitRelativePath = 'workspace-docs/overview.md'
+    files[1].webkitRelativePath = 'workspace-docs/scripts/deploy.ts'
+    files[2].webkitRelativePath = 'workspace-docs/assets/diagram.png'
+    const list = Object.assign(files, {
+      item: (index: number) => files[index] ?? null,
+    }) as unknown as FileList
+
+    fireEvent.change(screen.getByLabelText('Import document folder'), {
+      target: { files: list },
+    })
+
+    await waitFor(() => {
+      expect(useAppStore.getState().documentGroups).toHaveLength(1)
+      expect(useAppStore.getState().documentNodes.some((node) => node.type === 'folder' && node.title === 'workspace-docs')).toBe(true)
+      expect(useAppStore.getState().documentNodes.some((node) => node.type === 'document' && node.title === 'overview.md')).toBe(true)
+      expect(useAppStore.getState().documentNodes.some((node) => node.type === 'document' && node.title === 'deploy.ts')).toBe(true)
+      expect(useAppStore.getState().documentNodes.some((node) => node.type === 'document' && node.title === 'diagram.png')).toBe(false)
+    })
+
+    expect(screen.getByText(/Imported 2 documents and 2 folders/i)).toBeInTheDocument()
+    expect(screen.getByText(/Skipped 1 unsupported files/i)).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('overview.md')
+  })
+
   it('supports folder and document CRUD plus search', async () => {
     const user = userEvent.setup()
     const group = createDocumentGroup('Docs')
