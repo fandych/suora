@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { DOCUMENT_EDITOR_AGENT_ID, PIPELINE_BUILDER_AGENT_ID, TIMER_BUILDER_AGENT_ID, useAppStore, initWorkspacePath, loadExternalSkillsAndAgents, loadSessionsFromWorkspace, loadSettingsFromWorkspace } from './appStore'
+import { AGENT_BUILDER_AGENT_ID, DOCUMENT_EDITOR_AGENT_ID, PIPELINE_BUILDER_AGENT_ID, TIMER_BUILDER_AGENT_ID, useAppStore, initWorkspacePath, loadExternalSkillsAndAgents, loadSessionsFromWorkspace, loadSettingsFromWorkspace } from './appStore'
 import type { Agent, Session, Skill } from '@/types'
 
 // Mock sessionFiles and other file-based services
@@ -207,6 +207,43 @@ describe('appStore', () => {
       expect(localized?.whenToUse).toContain('在流水线模块中使用')
       expect(localized?.greeting).toBe('已准备好创建流水线。')
       expect(useAppStore.getState().selectedAgent?.name).toBe('流水线编排')
+    })
+
+    it('should localize the builtin agent builder agent when locale changes', () => {
+      const agentBuilder: Agent = {
+        id: AGENT_BUILDER_AGENT_ID,
+        name: 'Agent builder',
+        avatar: 'agent-robot',
+        color: '#7C3AED',
+        whenToUse: 'Use inside the Agents module to turn natural-language requirements into saved agent profiles, update existing agents, and keep the work focused on agent configuration instead of completing the end task directly.',
+        systemPrompt: 'You are Suora\'s agent builder. Your job is to create, inspect, update, or remove saved agents inside the Agents module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved agent profile and use agent_list, agent_add, agent_update, and agent_remove when needed. If the exact model id or skill id is unclear, use list_models or list_skills first. Before any mutation, briefly summarize the agent fields you are about to apply. If required details are missing, ask a short clarifying question. Keep the resulting agent practical: choose a clear system prompt, only add tool restrictions when they materially improve safety, and prefer the simplest configuration that satisfies the request.',
+        modelId: '',
+        skills: [],
+        temperature: 0.25,
+        maxTokens: 4096,
+        maxTurns: 24,
+        enabled: true,
+        greeting: 'Ready to build agents.',
+        responseStyle: 'balanced',
+        allowedTools: ['agent_list', 'agent_add', 'agent_update', 'agent_remove', 'list_models', 'list_skills'],
+        disallowedTools: [],
+        permissionMode: 'acceptEdits',
+        memories: [],
+        autoLearn: true,
+      }
+
+      useAppStore.setState({
+        agents: [agentBuilder],
+        selectedAgent: agentBuilder,
+      })
+
+      useAppStore.getState().setLocale('zh')
+
+      const localized = useAppStore.getState().agents[0]
+      expect(localized?.name).toBe('智能体编排')
+      expect(localized?.whenToUse).toContain('在智能体模块中使用')
+      expect(localized?.greeting).toBe('已准备好创建智能体。')
+      expect(useAppStore.getState().selectedAgent?.name).toBe('智能体编排')
     })
 
     it('should localize the builtin timer builder agent when locale changes', () => {

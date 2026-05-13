@@ -50,6 +50,7 @@ const LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT = [
 export const PIPELINE_BUILDER_AGENT_ID = 'builtin-pipeline-builder'
 export const TIMER_BUILDER_AGENT_ID = 'builtin-timer-builder'
 export const DOCUMENT_EDITOR_AGENT_ID = 'builtin-document-editor'
+export const AGENT_BUILDER_AGENT_ID = 'builtin-agent-builder'
 
 const LEGACY_PIPELINE_BUILDER_AGENT_NAME = ['Pipeline builder', '流水线编排']
 const LEGACY_PIPELINE_BUILDER_AGENT_WHEN_TO_USE = [
@@ -63,6 +64,20 @@ const LEGACY_PIPELINE_BUILDER_AGENT_GREETING = [
 const LEGACY_PIPELINE_BUILDER_AGENT_SYSTEM_PROMPT = [
   'You are Suora\'s pipeline builder. Your job is to create, inspect, update, or remove saved pipelines inside the Pipeline module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved pipeline and use pipeline_list, pipeline_add, pipeline_update, and pipeline_remove when needed. Before any mutation, briefly summarize the pipeline fields you are about to apply. If required details are missing, ask a short clarifying question. Prefer existing enabled agents for steps, and only add variables, retries, timeouts, or budgets when they materially improve the pipeline.',
   '你是 Suora 的流水线编排助手。你的职责是在流水线模块中创建、检查、更新或删除已保存的流水线。不要直接替用户完成其业务任务，而是把需求翻译成结构化的已保存流水线，并在需要时使用 pipeline_list、pipeline_add、pipeline_update、pipeline_remove。在执行任何增删改之前，先简要总结你将要应用的流水线字段。如果关键信息缺失，先提出一个简短的澄清问题。步骤应优先复用当前已启用的 agent，只有在确实能改善流水线时才添加变量、重试、超时或预算限制。',
+]
+
+const LEGACY_AGENT_BUILDER_AGENT_NAME = ['Agent builder', '智能体编排']
+const LEGACY_AGENT_BUILDER_AGENT_WHEN_TO_USE = [
+  'Use inside the Agents module to turn natural-language requirements into saved agent profiles, update existing agents, and keep the work focused on agent configuration instead of completing the end task directly.',
+  '在智能体模块中使用，将自然语言需求转换成已保存的智能体配置、更新现有智能体，并把重点放在智能体配置本身，而不是直接替用户完成终局任务。',
+]
+const LEGACY_AGENT_BUILDER_AGENT_GREETING = [
+  'Ready to build agents.',
+  '已准备好创建智能体。',
+]
+const LEGACY_AGENT_BUILDER_AGENT_SYSTEM_PROMPT = [
+  'You are Suora\'s agent builder. Your job is to create, inspect, update, or remove saved agents inside the Agents module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved agent profile and use agent_list, agent_add, agent_update, and agent_remove when needed. If the exact model id or skill id is unclear, use list_models or list_skills first. Before any mutation, briefly summarize the agent fields you are about to apply. If required details are missing, ask a short clarifying question. Keep the resulting agent practical: choose a clear system prompt, only add tool restrictions when they materially improve safety, and prefer the simplest configuration that satisfies the request.',
+  '你是 Suora 的智能体编排助手。你的职责是在智能体模块中创建、检查、更新或删除已保存的智能体。不要直接替用户完成其业务任务，而是把需求翻译成结构化的已保存智能体配置，并在需要时使用 agent_list、agent_add、agent_update、agent_remove。如果模型 ID 或技能 ID 不明确，先使用 list_models 或 list_skills 确认。在执行任何增删改之前，先简要总结你将要应用的智能体字段。如果关键信息缺失，先提出一个简短的澄清问题。配置要务实：给出清晰的 system prompt，只在确实能改善安全性时再添加工具限制，并优先采用满足需求的最简配置。',
 ]
 
 const LEGACY_TIMER_BUILDER_AGENT_NAME = ['Timer builder', '定时任务编排']
@@ -148,6 +163,18 @@ function localizeBuiltinAgent(agent: Agent): Agent {
     }
   }
 
+  if (agent.id === AGENT_BUILDER_AGENT_ID) {
+    const localized = buildAgentBuilderAgent()
+    return {
+      ...localized,
+      ...agent,
+      name: shouldRefreshBuiltinField(agent.name, LEGACY_AGENT_BUILDER_AGENT_NAME) ? localized.name : agent.name,
+      whenToUse: shouldRefreshBuiltinField(agent.whenToUse, LEGACY_AGENT_BUILDER_AGENT_WHEN_TO_USE) ? localized.whenToUse : agent.whenToUse,
+      systemPrompt: shouldRefreshBuiltinField(agent.systemPrompt, LEGACY_AGENT_BUILDER_AGENT_SYSTEM_PROMPT) ? localized.systemPrompt : agent.systemPrompt,
+      greeting: shouldRefreshBuiltinField(agent.greeting, LEGACY_AGENT_BUILDER_AGENT_GREETING) ? localized.greeting : agent.greeting,
+    }
+  }
+
   if (agent.id === TIMER_BUILDER_AGENT_ID) {
     const localized = buildTimerBuilderAgent()
     return {
@@ -176,6 +203,26 @@ function localizeBuiltinAgent(agent: Agent): Agent {
 }
 
 const DEFAULT_AGENT: Agent = buildDefaultAgent()
+
+function buildAgentBuilderAgent(): Agent {
+  return {
+    ...buildProfessionalAgent(
+      AGENT_BUILDER_AGENT_ID,
+      t('agents.agentBuilder', 'Agent builder'),
+      'agent-robot',
+      '#7C3AED',
+      t('agents.agentBuilderWhenToUse', 'Use inside the Agents module to turn natural-language requirements into saved agent profiles, update existing agents, and keep the work focused on agent configuration instead of completing the end task directly.'),
+      t('agents.agentBuilderSystemPrompt', 'You are Suora\'s agent builder. Your job is to create, inspect, update, or remove saved agents inside the Agents module. Do not complete the user\'s requested business task directly. Instead, translate the request into a structured saved agent profile and use agent_list, agent_add, agent_update, and agent_remove when needed. If the exact model id or skill id is unclear, use list_models or list_skills first. Before any mutation, briefly summarize the agent fields you are about to apply. If required details are missing, ask a short clarifying question. Keep the resulting agent practical: choose a clear system prompt, only add tool restrictions when they materially improve safety, and prefer the simplest configuration that satisfies the request.'),
+      [],
+      'acceptEdits',
+      0.25,
+    ),
+    allowedTools: ['agent_list', 'agent_add', 'agent_update', 'agent_remove', 'list_models', 'list_skills'],
+    greeting: t('agents.agentBuilderGreeting', 'Ready to build agents.'),
+  }
+}
+
+const AGENT_BUILDER_AGENT: Agent = buildAgentBuilderAgent()
 
 function buildPipelineBuilderAgent(): Agent {
   return {
@@ -275,6 +322,7 @@ function buildProfessionalAgent(
 
 const BUILTIN_AGENTS: Agent[] = [
   DEFAULT_AGENT,
+  AGENT_BUILDER_AGENT,
   PIPELINE_BUILDER_AGENT,
   TIMER_BUILDER_AGENT,
   DOCUMENT_EDITOR_AGENT,

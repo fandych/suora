@@ -764,6 +764,247 @@ function syncPipelinesIntoStore(nextPipelines: AgentPipeline[], selectedPipeline
   })
 }
 
+const agentToolResponseStyleSchema = z.enum(['concise', 'detailed', 'balanced'])
+const agentToolPermissionModeSchema = z.enum(['default', 'acceptEdits', 'plan', 'bypassPermissions'])
+
+const agentToolMutationSchema = {
+  avatar: z.string().nullable().optional().describe('Optional avatar/icon id; null clears it'),
+  color: z.string().nullable().optional().describe('Optional hex color; null clears it'),
+  model_id: z.string().nullable().optional().describe('Optional model id; null clears it back to the default model fallback'),
+  skills: allowJsonStringInput(z.array(z.string()).nullable()).optional().describe('Assigned skill ids; pass [] to clear or null to remove all skills'),
+  temperature: z.number().min(0).max(2).optional().describe('Sampling temperature between 0 and 2'),
+  max_tokens: z.number().int().positive().optional().describe('Maximum output tokens'),
+  max_turns: z.number().int().min(2).nullable().optional().describe('Maximum agentic turns; null clears the override'),
+  enabled: z.boolean().optional().describe('Whether the agent is enabled'),
+  greeting: z.string().nullable().optional().describe('Optional greeting shown when starting a chat; null clears it'),
+  response_style: agentToolResponseStyleSchema.nullable().optional().describe('Response style; null clears the override'),
+  when_to_use: z.string().nullable().optional().describe('Optional hint for when this agent should be selected; null clears it'),
+  allowed_tools: allowJsonStringInput(z.array(z.string()).nullable()).optional().describe('Allowlist of tool names; [] or null removes the allowlist restriction'),
+  disallowed_tools: allowJsonStringInput(z.array(z.string()).nullable()).optional().describe('Denylist of tool names; [] or null clears the denylist'),
+  permission_mode: agentToolPermissionModeSchema.nullable().optional().describe('Permission mode override; null clears it'),
+  auto_learn: z.boolean().optional().describe('Whether the agent may store durable memories automatically'),
+}
+
+type AgentToolResponseStyleInput = z.infer<typeof agentToolResponseStyleSchema>
+type AgentToolPermissionModeInput = z.infer<typeof agentToolPermissionModeSchema>
+type AgentToolMutationInput = {
+  name?: string
+  avatar?: string | null
+  color?: string | null
+  system_prompt?: string
+  model_id?: string | null
+  skills?: string[] | null
+  temperature?: number
+  max_tokens?: number
+  max_turns?: number | null
+  enabled?: boolean
+  greeting?: string | null
+  response_style?: AgentToolResponseStyleInput | null
+  when_to_use?: string | null
+  allowed_tools?: string[] | null
+  disallowed_tools?: string[] | null
+  permission_mode?: AgentToolPermissionModeInput | null
+  auto_learn?: boolean
+}
+
+function sanitizeStringList(values?: string[] | string | null): string[] | undefined {
+  if (values === undefined || values === null) return undefined
+
+  const normalized = parseStructuredToolInput(values)
+  if (!Array.isArray(normalized)) return undefined
+
+  const nextValues = Array.from(new Set(
+    normalized
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ))
+
+  return nextValues.length > 0 ? nextValues : []
+}
+
+function summarizeAgentForTool(agent: Agent) {
+  return {
+    id: agent.id,
+    name: agent.name,
+    avatar: agent.avatar ?? null,
+    color: agent.color ?? null,
+    systemPrompt: agent.systemPrompt,
+    modelId: agent.modelId || null,
+    skills: [...agent.skills],
+    temperature: agent.temperature ?? null,
+    maxTokens: agent.maxTokens ?? null,
+    maxTurns: agent.maxTurns ?? null,
+    enabled: agent.enabled !== false,
+    greeting: agent.greeting ?? null,
+    responseStyle: agent.responseStyle ?? null,
+    whenToUse: agent.whenToUse ?? null,
+    allowedTools: [...(agent.allowedTools ?? [])],
+    disallowedTools: [...(agent.disallowedTools ?? [])],
+    permissionMode: agent.permissionMode ?? null,
+    autoLearn: agent.autoLearn,
+    memoryCount: agent.memories?.length ?? 0,
+  }
+}
+
+function resolveAgentReference(
+  agents: Agent[],
+  agentId?: string,
+  agentName?: string,
+): { agent?: Agent; error?: string } {
+  const trimmedId = agentId?.trim()
+  const trimmedName = agentName?.trim()
+
+  if (trimmedId) {
+    const byId = agents.find((agent) => agent.id === trimmedId)
+    if (byId) return { agent: byId }
+    return { error: `Agent not found: ${trimmedId}` }
+  }
+
+  if (!trimmedName) {
+    return { error: 'Provide agent_id or agent_name.' }
+  }
+
+  const lowered = trimmedName.toLowerCase()
+  const exactMatches = agents.filter((agent) => agent.name.toLowerCase() === lowered)
+  if (exactMatches.length === 1) return { agent: exactMatches[0] }
+  if (exactMatches.length > 1) {
+    return { error: `Multiple agents match the name "${trimmedName}". Use agent_id instead.` }
+  }
+
+  const partialMatches = agents.filter((agent) => agent.name.toLowerCase().includes(lowered))
+  if (partialMatches.length === 1) return { agent: partialMatches[0] }
+  if (partialMatches.length > 1) {
+    return { error: `Multiple agents partially match "${trimmedName}". Use agent_id instead.` }
+  }
+
+  return { error: `Agent not found: ${trimmedName}` }
+}
+
+function snapshotAgentVersion(agent: Agent): Omit<Agent, 'memories'> {
+  const { memories: _memories, ...snapshot } = agent
+  return snapshot
+}
+
+function appendAgentVersionToStore(state: Record<string, unknown>, agent: Agent, source: 'manual' | 'import' | 'marketplace' | 'migration' | 'rollback' = 'manual') {
+  const existingVersions = Array.isArray(state.agentVersions) ? state.agentVersions as Array<{ agentId?: string }> : []
+  const nextVersion = {
+    id: `aver-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    agentId: agent.id,
+    version: existingVersions.filter((item) => item.agentId === agent.id).length + 1,
+    snapshot: snapshotAgentVersion(agent),
+    createdAt: Date.now(),
+    source,
+  }
+  state.agentVersions = [...existingVersions, nextVersion].slice(-200)
+}
+
+function validateAgentForTool(agent: Agent, models: Model[], skills: Skill[]): string | null {
+  const issues: string[] = []
+
+  if (!agent.name.trim()) issues.push('Agent name cannot be empty.')
+  if (agent.modelId && !models.some((model) => model.id === agent.modelId)) {
+    issues.push(`Selected model does not exist: ${agent.modelId}`)
+  }
+
+  const missingSkillIds = agent.skills.filter((skillId) => !skills.some((skill) => skill.id === skillId))
+  if (missingSkillIds.length > 0) {
+    issues.push(`Assigned skill ids are missing: ${missingSkillIds.join(', ')}`)
+  }
+
+  const conflictingTools = (agent.allowedTools ?? []).filter((toolName) => agent.disallowedTools?.includes(toolName))
+  if (conflictingTools.length > 0) {
+    issues.push(`Tool is both allowed and disallowed: ${conflictingTools.join(', ')}`)
+  }
+
+  return issues.length > 0 ? issues.join('\n') : null
+}
+
+function buildAgentFromToolInput(input: Required<Pick<AgentToolMutationInput, 'name' | 'system_prompt'>> & AgentToolMutationInput): Agent {
+  const trimmedName = input.name.trim()
+  const skills = sanitizeStringList(input.skills) ?? []
+  const allowedTools = sanitizeStringList(input.allowed_tools) ?? []
+  const disallowedTools = sanitizeStringList(input.disallowed_tools) ?? []
+  const nextGreeting = sanitizeOptionalText(input.greeting)
+  const nextWhenToUse = sanitizeOptionalText(input.when_to_use)
+  const nextModelId = sanitizeOptionalText(input.model_id) ?? ''
+  const nextAvatar = sanitizeOptionalText(input.avatar)
+  const nextColor = sanitizeOptionalText(input.color)
+
+  return {
+    id: `agent-${crypto.randomUUID()}`,
+    name: trimmedName,
+    ...(nextAvatar ? { avatar: nextAvatar } : {}),
+    ...(nextColor ? { color: nextColor } : {}),
+    systemPrompt: input.system_prompt,
+    modelId: nextModelId,
+    skills,
+    temperature: input.temperature ?? 0.7,
+    maxTokens: input.max_tokens ?? 4096,
+    ...(input.max_turns !== undefined && input.max_turns !== null ? { maxTurns: input.max_turns } : {}),
+    enabled: input.enabled ?? true,
+    ...(nextGreeting ? { greeting: nextGreeting } : {}),
+    ...(input.response_style ? { responseStyle: input.response_style } : { responseStyle: 'balanced' }),
+    ...(nextWhenToUse ? { whenToUse: nextWhenToUse } : {}),
+    allowedTools,
+    disallowedTools,
+    ...(input.permission_mode ? { permissionMode: input.permission_mode } : {}),
+    memories: [],
+    autoLearn: input.auto_learn ?? false,
+  }
+}
+
+function applyAgentToolPatch(agent: Agent, patch: AgentToolMutationInput): Agent {
+  const nextAllowedTools = patch.allowed_tools === undefined
+    ? agent.allowedTools ?? []
+    : sanitizeStringList(patch.allowed_tools) ?? []
+  const nextDisallowedTools = patch.disallowed_tools === undefined
+    ? agent.disallowedTools ?? []
+    : sanitizeStringList(patch.disallowed_tools) ?? []
+  const nextSkills = patch.skills === undefined
+    ? agent.skills
+    : sanitizeStringList(patch.skills) ?? []
+  const nextName = patch.name !== undefined ? patch.name.trim() : agent.name
+
+  return {
+    ...agent,
+    name: nextName,
+    ...(patch.avatar !== undefined ? { avatar: sanitizeOptionalText(patch.avatar) } : {}),
+    ...(patch.color !== undefined ? { color: sanitizeOptionalText(patch.color) } : {}),
+    ...(patch.system_prompt !== undefined ? { systemPrompt: patch.system_prompt } : {}),
+    ...(patch.model_id !== undefined ? { modelId: sanitizeOptionalText(patch.model_id) ?? '' } : {}),
+    skills: nextSkills,
+    ...(patch.temperature !== undefined ? { temperature: patch.temperature } : {}),
+    ...(patch.max_tokens !== undefined ? { maxTokens: patch.max_tokens } : {}),
+    ...(patch.max_turns !== undefined
+      ? (patch.max_turns === null ? { maxTurns: undefined } : { maxTurns: patch.max_turns })
+      : {}),
+    ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
+    ...(patch.greeting !== undefined ? { greeting: sanitizeOptionalText(patch.greeting) } : {}),
+    ...(patch.response_style !== undefined
+      ? (patch.response_style === null ? { responseStyle: undefined } : { responseStyle: patch.response_style })
+      : {}),
+    ...(patch.when_to_use !== undefined ? { whenToUse: sanitizeOptionalText(patch.when_to_use) } : {}),
+    allowedTools: nextAllowedTools,
+    disallowedTools: nextDisallowedTools,
+    ...(patch.permission_mode !== undefined
+      ? (patch.permission_mode === null ? { permissionMode: undefined } : { permissionMode: patch.permission_mode })
+      : {}),
+    ...(patch.auto_learn !== undefined ? { autoLearn: patch.auto_learn } : {}),
+  }
+}
+
+function getAgentToolContext(): { state: Record<string, unknown>; agents: Agent[]; models: Model[]; skills: Skill[] } | { error: string } {
+  const state = readStoreState()
+  if (!state) return { error: 'Store not available' }
+
+  return {
+    state,
+    agents: Array.isArray(state.agents) ? state.agents as Agent[] : [],
+    models: Array.isArray(state.models) ? state.models as Model[] : [],
+    skills: Array.isArray(state.skills) ? state.skills as Skill[] : [],
+  }
+}
+
 // ─── AI SDK tool definitions ───────────────────────────────────────
 
 export const builtinToolDefs: ToolSet = {
@@ -1935,7 +2176,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   agent_list: tool({
-    description: 'List all available agents with their names, skills, model, and status. Shows which agent is currently selected. Use this to discover agents available for delegation.',
+    description: 'List all available agents with their names, skills, model, and status. Shows which agent is currently selected. Use this before updating or deleting an agent when you need the exact id.',
     inputSchema: z.object({
       enabled_only: z.boolean().optional().default(false).describe('If true, only show enabled agents'),
     }),
@@ -1958,6 +2199,129 @@ export const builtinToolDefs: ToolSet = {
       } catch (err) {
         return `Error listing agents: ${err instanceof Error ? err.message : String(err)}`
       }
+    },
+  }),
+
+  agent_add: tool({
+    description: 'Create a new saved agent profile in the current workspace. Provide the system prompt and any optional routing, tool, or skill settings you want persisted.',
+    inputSchema: z.object({
+      name: z.string().describe('Agent name'),
+      system_prompt: z.string().describe('System prompt for the new agent'),
+      ...agentToolMutationSchema,
+    }),
+    execute: async ({ name, system_prompt, ...rest }) => {
+      const context = getAgentToolContext()
+      if ('error' in context) return `Error: ${context.error}`
+
+      const trimmedName = name.trim()
+      if (!trimmedName) return 'Error: Agent name cannot be empty.'
+      if (!system_prompt.trim()) return 'Error: System prompt cannot be empty.'
+
+      const nextAgent = buildAgentFromToolInput({ name: trimmedName, system_prompt, ...rest })
+      const validationError = validateAgentForTool(nextAgent, context.models, context.skills)
+      if (validationError) {
+        return `Error: Agent validation failed.\n${validationError}`
+      }
+
+      const synced = writeStoreState((state) => {
+        const currentAgents = Array.isArray(state.agents) ? state.agents as Agent[] : []
+        state.agents = [...currentAgents, nextAgent]
+        state.selectedAgent = nextAgent
+        appendAgentVersionToStore(state, nextAgent, 'manual')
+      })
+      if (!synced) return 'Error: Store not available'
+
+      return JSON.stringify({
+        message: `Created agent "${nextAgent.name}".`,
+        agent: summarizeAgentForTool(nextAgent),
+        storeSynced: synced,
+      }, null, 2)
+    },
+  }),
+
+  agent_update: tool({
+    description: 'Update an existing saved agent profile. Prefer agent_id when available. Any provided lists replace the full saved list. Set optional text fields to null or an empty string to clear them.',
+    inputSchema: z.object({
+      agent_id: z.string().optional().describe('Exact agent id to update'),
+      agent_name: z.string().optional().describe('Exact or partial agent name when id is unknown'),
+      name: z.string().optional().describe('New agent name'),
+      system_prompt: z.string().optional().describe('New system prompt for the agent'),
+      ...agentToolMutationSchema,
+    }),
+    execute: async ({ agent_id, agent_name, ...updates }) => {
+      const context = getAgentToolContext()
+      if ('error' in context) return `Error: ${context.error}`
+
+      const resolved = resolveAgentReference(context.agents, agent_id, agent_name)
+      if (!resolved.agent) return `Error: ${resolved.error}`
+
+      if (Object.values(updates).every((value) => value === undefined)) {
+        return 'Error: No updates were provided.'
+      }
+
+      const updatedAgent = applyAgentToolPatch(resolved.agent, updates)
+      if (!updatedAgent.name.trim()) return 'Error: Agent name cannot be empty.'
+
+      const validationError = validateAgentForTool(updatedAgent, context.models, context.skills)
+      if (validationError) {
+        return `Error: Agent validation failed.\n${validationError}`
+      }
+
+      const synced = writeStoreState((state) => {
+        const currentAgents = Array.isArray(state.agents) ? state.agents as Agent[] : []
+        state.agents = currentAgents.map((agent) => agent.id === updatedAgent.id ? updatedAgent : agent)
+        if ((state.selectedAgent as Agent | undefined)?.id === updatedAgent.id) {
+          state.selectedAgent = updatedAgent
+        }
+        appendAgentVersionToStore(state, updatedAgent, 'manual')
+      })
+      if (!synced) return 'Error: Store not available'
+
+      return JSON.stringify({
+        message: `Updated agent "${updatedAgent.name}".`,
+        agent: summarizeAgentForTool(updatedAgent),
+        storeSynced: synced,
+      }, null, 2)
+    },
+  }),
+
+  agent_remove: tool({
+    description: 'Delete a saved agent profile from the current workspace. Prefer agent_id when available.',
+    inputSchema: z.object({
+      agent_id: z.string().optional().describe('Exact agent id to remove'),
+      agent_name: z.string().optional().describe('Exact or partial agent name when id is unknown'),
+    }),
+    execute: async ({ agent_id, agent_name }) => {
+      const context = getAgentToolContext()
+      if ('error' in context) return `Error: ${context.error}`
+
+      const resolved = resolveAgentReference(context.agents, agent_id, agent_name)
+      if (!resolved.agent) return `Error: ${resolved.error}`
+      if (resolved.agent.id === 'default-assistant') {
+        return 'Error: The default assistant cannot be removed.'
+      }
+
+      const synced = writeStoreState((state) => {
+        const currentAgents = Array.isArray(state.agents) ? state.agents as Agent[] : []
+        state.agents = currentAgents.filter((agent) => agent.id !== resolved.agent?.id)
+        if ((state.selectedAgent as Agent | undefined)?.id === resolved.agent?.id) {
+          state.selectedAgent = null
+        }
+        if (Array.isArray(state.sessions)) {
+          state.sessions = (state.sessions as Array<Record<string, unknown>>).map((session) =>
+            session.agentId === resolved.agent?.id
+              ? { ...session, agentId: undefined }
+              : session,
+          )
+        }
+      })
+      if (!synced) return 'Error: Store not available'
+
+      return JSON.stringify({
+        message: `Removed agent "${resolved.agent.name}".`,
+        agentId: resolved.agent.id,
+        storeSynced: synced,
+      }, null, 2)
     },
   }),
 
@@ -3425,6 +3789,9 @@ export const TOOL_META: Record<string, ToolMeta> = {
   pipeline_add:          { userFacingName: 'Add pipeline', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
   pipeline_update:       { userFacingName: 'Update pipeline', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
   pipeline_remove:       { userFacingName: 'Remove pipeline', isReadOnly: false, isDestructive: true, isConcurrencySafe: false, requiresConfirmation: true },
+  agent_add:             { userFacingName: 'Add agent', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
+  agent_update:          { userFacingName: 'Update agent', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
+  agent_remove:          { userFacingName: 'Remove agent', isReadOnly: false, isDestructive: true, isConcurrencySafe: false, requiresConfirmation: true },
   memory_store:          { userFacingName: 'Store memory', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   memory_delete:         { userFacingName: 'Delete memory', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   agent_notify:          { userFacingName: 'Notify agent', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },

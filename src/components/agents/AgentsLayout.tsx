@@ -7,6 +7,7 @@ import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import type { Agent, Session } from '@/types'
 import { AgentTestChat } from './AgentTestChat'
 import { AgentEditor } from './AgentEditor'
+import { AgentAssistantDrawer } from './AgentAssistantDrawer'
 import { AgentOrchestrationPanel } from './AgentOrchestrationPanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
@@ -159,10 +160,6 @@ function AgentList({
   searchQuery,
   onSearchChange,
   onSelect,
-  onStartChat,
-  onDuplicate,
-  onExport,
-  onDelete,
   onContextMenu,
 }: {
   agents: Agent[]
@@ -170,10 +167,6 @@ function AgentList({
   searchQuery: string
   onSearchChange: (q: string) => void
   onSelect: (agent: Agent) => void
-  onStartChat: (agent: Agent) => void
-  onDuplicate: (agent: Agent) => void
-  onExport: (agent: Agent) => void
-  onDelete: (id: string) => void
   onContextMenu: (e: React.MouseEvent, agent: Agent) => void
 }) {
   const { t } = useI18n()
@@ -247,8 +240,7 @@ function AgentList({
                 : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60 hover:text-text-primary'
             } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30`}
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="flex min-w-0 gap-3">
+            <div className="flex min-w-0 gap-3">
                 <div className="relative mt-0.5 shrink-0">
                   <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 shadow-sm">
                     <AgentAvatar avatar={agent.avatar} size={22} />
@@ -260,17 +252,38 @@ function AgentList({
                   )}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[13px] font-semibold truncate text-text-primary">{displayName}</span>
-                    {!agent.enabled && (
-                      <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-text-muted shrink-0">{t('common.off', 'off')}</span>
-                    )}
-                    {sourceBadge && (
-                      <span className="rounded-full border border-accent/20 bg-accent/10 px-1.5 py-0.5 text-[9px] text-accent shrink-0">{t('agents.builtin', 'builtin')}</span>
-                    )}
-                    {isDefault && (
-                      <span className="rounded-full border border-border-subtle/50 bg-surface-0/80 px-1.5 py-0.5 text-[9px] text-text-muted shrink-0">{t('agents.default', 'default')}</span>
-                    )}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                      <span className="truncate text-[13px] font-semibold text-text-primary">{displayName}</span>
+                      {!agent.enabled && (
+                        <span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-text-muted">{t('common.off', 'off')}</span>
+                      )}
+                      {sourceBadge && (
+                        <span className="shrink-0 rounded-full border border-accent/20 bg-accent/10 px-1.5 py-0.5 text-[9px] text-accent">{t('agents.builtin', 'builtin')}</span>
+                      )}
+                      {isDefault && (
+                        <span className="shrink-0 rounded-full border border-border-subtle/50 bg-surface-0/80 px-1.5 py-0.5 text-[9px] text-text-muted">{t('agents.default', 'default')}</span>
+                      )}
+                    </div>
+                    <div className={`flex items-center gap-1 shrink-0 transition-opacity ${
+                      isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
+                    }`}>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onContextMenu(e, agent)
+                        }}
+                        aria-label={t('common.actions', 'Actions')}
+                        aria-haspopup="menu"
+                        title={t('common.actions', 'Actions')}
+                        className="flex h-8 items-center gap-1 rounded-xl bg-surface-0/65 px-2.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-accent/8 hover:text-accent"
+                        tabIndex={isActive ? 0 : -1}
+                      >
+                        <span>{t('common.actions', 'Actions')}</span>
+                        <IconifyIcon name="ui-chevron-down" size={12} color="currentColor" />
+                      </button>
+                    </div>
                   </div>
                   <p className="mt-1.5 text-[11px] leading-relaxed text-text-secondary/80 line-clamp-2">{previewText}</p>
                   <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -279,53 +292,6 @@ function AgentList({
                     {agent.autoLearn && <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] text-success">{t('agents.autoLearn', 'Auto-learn')}</span>}
                   </div>
                 </div>
-              </div>
-              <div className={`flex items-center gap-1 shrink-0 transition-opacity ${
-                isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'
-              }`}>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onStartChat(agent) }}
-                  aria-label={t('agents.startChat', 'Start chat with this agent')}
-                  title={t('agents.startChat', 'Start chat with this agent')}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/65 text-text-muted transition-colors hover:text-accent hover:bg-accent/8"
-                  tabIndex={isActive ? 0 : -1}
-                >
-                  <IconifyIcon name="ui-chat" size={14} color="currentColor" />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onDuplicate(agent) }}
-                  aria-label={t('agents.duplicateAgent', 'Duplicate agent')}
-                  title={t('agents.duplicateAgent', 'Duplicate agent')}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/65 text-text-muted transition-colors hover:text-accent hover:bg-accent/8"
-                  tabIndex={isActive ? 0 : -1}
-                >
-                  ⧉
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onExport(agent) }}
-                  aria-label={t('agents.exportJson', 'Export agent as JSON')}
-                  title={t('agents.exportJson', 'Export agent as JSON')}
-                  className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/65 text-text-muted transition-colors hover:text-accent hover:bg-accent/8"
-                  tabIndex={isActive ? 0 : -1}
-                >
-                  ↓
-                </button>
-                {!isDefault && (
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); onDelete(agent.id) }}
-                    aria-label={t('agents.deleteAgent', 'Delete agent')}
-                    title={t('agents.deleteAgent', 'Delete agent')}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/65 text-text-muted transition-colors hover:text-danger hover:bg-danger/8"
-                    tabIndex={isActive ? 0 : -1}
-                  >
-                    <IconifyIcon name="ui-close" size={14} color="currentColor" />
-                  </button>
-                )}
-              </div>
             </div>
           </div>
         )
@@ -342,8 +308,10 @@ export function AgentsLayout() {
   const { agents, addAgent, updateAgent, removeAgent, setSelectedAgent, addSession, setActiveSession, setActiveModule, addAgentVersion } = useAppStore()
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isAdding, setIsAdding] = useState(false)
+  const [assistantState, setAssistantState] = useState<{ mode: 'create' | 'edit'; agentId: string | null } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [testAgent, setTestAgent] = useState<Agent | null>(null)
+  const [editorRevision, setEditorRevision] = useState(0)
   const [showHub, setShowHub] = useState(false)
   const [sideTab, setSideTab] = useState<'local' | 'marketplace'>('local')
   const [marketSearch, setMarketSearch] = useState('')
@@ -364,6 +332,9 @@ export function AgentsLayout() {
   }, [ctxMenu])
 
   const editingAgent = editingId ? agents.find((a) => a.id === editingId) ?? null : null
+  const assistantAgent = assistantState?.agentId
+    ? agents.find((a) => a.id === assistantState.agentId) ?? null
+    : null
   const marketplaceAgents = useMemo<MarketplaceAgentTemplate[]>(() => (
     MARKETPLACE_AGENT_SEEDS.map((seed) => ({
       ...seed,
@@ -373,6 +344,17 @@ export function AgentsLayout() {
       systemPrompt: t(`agents.marketplace.${seed.id}.systemPrompt`, seed.fallbackSystemPrompt),
     }))
   ), [t])
+
+  useEffect(() => {
+    if (!assistantState || assistantState.mode !== 'edit') return
+    if (!assistantState.agentId || agents.some((agent) => agent.id === assistantState.agentId)) return
+    if (editingId === assistantState.agentId) {
+      setEditingId(null)
+      setTestAgent(null)
+      setEditorRevision((value) => value + 1)
+    }
+    setAssistantState(null)
+  }, [agents, assistantState, editingId])
 
   const handleSave = (agent: Agent) => {
     if (editingId) {
@@ -480,10 +462,96 @@ export function AgentsLayout() {
     setActiveModule('chat')
   }
 
+  const handleAssistantAgentMutated = () => {
+    const store = useAppStore.getState()
+
+    if (assistantState?.mode === 'edit' && assistantState.agentId) {
+      const updatedAgent = store.agents.find((item) => item.id === assistantState.agentId) ?? null
+      if (updatedAgent) {
+        setEditingId(updatedAgent.id)
+        setIsAdding(false)
+        setTestAgent(null)
+        setEditorRevision((value) => value + 1)
+        return
+      }
+
+      if (editingId === assistantState.agentId) {
+        setEditingId(null)
+        setTestAgent(null)
+        setEditorRevision((value) => value + 1)
+      }
+      setIsAdding(false)
+      setAssistantState(null)
+      return
+    }
+
+    const selectedByTool = store.selectedAgent
+    const createdAgent = selectedByTool && store.agents.some((item) => item.id === selectedByTool.id)
+      ? store.agents.find((item) => item.id === selectedByTool.id) ?? null
+      : (store.agents[store.agents.length - 1] ?? null)
+    if (!createdAgent) return
+
+    setEditingId(createdAgent.id)
+    setIsAdding(false)
+    setTestAgent(null)
+    setEditorRevision((value) => value + 1)
+  }
+
   const filteredMarketAgents = marketplaceAgents.filter((a) =>
     !marketSearch || a.name.toLowerCase().includes(marketSearch.toLowerCase()) || a.category.toLowerCase().includes(marketSearch.toLowerCase())
   )
   const enabledAgentCount = agents.filter((agent) => agent.enabled).length
+
+  const openAgentMenu = (event: React.MouseEvent, agent: Agent) => {
+    event.preventDefault()
+    const menuWidth = 176
+    const menuHeight = agent.id === DEFAULT_AGENT_ID ? 196 : 236
+    const x = Math.min(event.clientX, window.innerWidth - menuWidth - 8)
+    const y = Math.min(event.clientY, window.innerHeight - menuHeight - 8)
+    setCtxMenu({
+      x: Math.max(8, x),
+      y: Math.max(8, y),
+      agent,
+    })
+  }
+
+  const editorHeader = (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border-subtle/60 bg-surface-0/70 px-4 py-3">
+      <div>
+        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('timer.assistantSection', 'Side chat')}</div>
+        <div className="mt-1 text-sm font-semibold text-text-primary">
+          {isAdding
+            ? t('agents.agentAssistantTitleCreate', 'AI Create Agent')
+            : t('agents.agentAssistantTitleEdit', 'AI Edit Agent')}
+        </div>
+        <p className="mt-1 text-[12px] text-text-secondary/78">
+          {isAdding
+            ? t('agents.agentAssistantHeroCreateHint', 'Describe the role, desired behavior, model preference, skills, and any tool or permission guardrails.')
+            : t('agents.agentAssistantHeroEditHint', 'You can rewrite the system prompt, change skills or model routing, and tighten tool permissions.')}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => setAssistantState({ mode: 'create', agentId: null })}
+          className="inline-flex items-center gap-1.5 rounded-xl border border-border-subtle/55 bg-surface-0/75 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent"
+        >
+          <IconifyIcon name="ui-sparkles" size={14} color="currentColor" />
+          {t('timer.aiCreate', 'AI Create')}
+        </button>
+        {!isAdding && editingAgent && (
+          <button
+            type="button"
+            onClick={() => setAssistantState({ mode: 'edit', agentId: editingAgent.id })}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover"
+          >
+            <IconifyIcon name="ui-sparkles" size={14} color="currentColor" />
+            {t('timer.aiEditCurrent', 'AI Edit')}
+          </button>
+        )}
+      </div>
+    </div>
+  )
 
   const installMarketAgent = (tpl: MarketplaceAgentTemplate) => {
     const greetingTemplate = t('agents.marketplace.greeting', "Hi! I'm {name}. {description}")
@@ -515,6 +583,15 @@ export function AgentsLayout() {
         width={panelWidth}
         action={
           <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setAssistantState({ mode: 'create', agentId: null })}
+              title={t('timer.aiCreate', 'AI Create')}
+              className="inline-flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent-hover"
+            >
+              <IconifyIcon name="ui-sparkles" size={13} color="currentColor" />
+              {t('timer.aiCreate', 'AI Create')}
+            </button>
             <button
               type="button"
               onClick={() => setShowHub(!showHub)}
@@ -576,11 +653,7 @@ export function AgentsLayout() {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onSelect={(agent) => { setEditingId(agent.id); setIsAdding(false) }}
-          onStartChat={handleStartChat}
-          onDuplicate={handleDuplicate}
-          onExport={handleExport}
-          onDelete={handleDelete}
-          onContextMenu={(e, agent) => setCtxMenu({ x: e.clientX, y: e.clientY, agent })}
+          onContextMenu={openAgentMenu}
         />
         )}
 
@@ -649,26 +722,30 @@ export function AgentsLayout() {
         {ctxMenu && (
           <div
             ref={ctxRef}
-            className="fixed bg-surface-2 border border-border-subtle rounded-xl shadow-xl py-1 min-w-40 animate-fade-in z-9999"
+            className="fixed z-50 min-w-44 rounded-2xl border border-border/60 bg-surface-2/95 py-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale"
             {...{ style: { top: ctxMenu.y, left: ctxMenu.x } }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <button type="button" className="w-full text-left px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors flex items-center gap-1.5" onClick={() => { handleStartChat(ctxMenu.agent); setCtxMenu(null) }}>
+            <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { handleStartChat(ctxMenu.agent); setCtxMenu(null) }}>
               <IconifyIcon name="ui-chat" size={14} color="currentColor" /> {t('agents.startChat', 'Start Chat')}
             </button>
-            <button type="button" className="w-full text-left px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors flex items-center gap-1.5" onClick={() => { setEditingId(ctxMenu.agent.id); setIsAdding(false); setCtxMenu(null) }}>
+            <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { setAssistantState({ mode: 'edit', agentId: ctxMenu.agent.id }); setCtxMenu(null) }}>
+              <IconifyIcon name="ui-sparkles" size={14} color="currentColor" /> {t('timer.aiEditCurrent', 'AI Edit')}
+            </button>
+            <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { setEditingId(ctxMenu.agent.id); setIsAdding(false); setCtxMenu(null) }}>
               <IconifyIcon name="ui-edit" size={14} color="currentColor" /> {t('common.edit', 'Edit')}
             </button>
-            <button type="button" className="w-full text-left px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors flex items-center gap-1.5" onClick={() => { handleDuplicate(ctxMenu.agent); setCtxMenu(null) }}>
-              ⧉ {t('common.duplicate', 'Duplicate')}
+            <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { handleDuplicate(ctxMenu.agent); setCtxMenu(null) }}>
+              <IconifyIcon name="ui-copy" size={14} color="currentColor" /> {t('common.duplicate', 'Duplicate')}
             </button>
-            <button type="button" className="w-full text-left px-3 py-1.5 text-[13px] text-text-secondary hover:bg-surface-3 hover:text-text-primary transition-colors flex items-center gap-1.5" onClick={() => { handleExport(ctxMenu.agent); setCtxMenu(null) }}>
-              ↓ {t('common.export', 'Export')}
+            <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { handleExport(ctxMenu.agent); setCtxMenu(null) }}>
+              <IconifyIcon name="ui-export" size={14} color="currentColor" /> {t('common.export', 'Export')}
             </button>
             {ctxMenu.agent.id !== DEFAULT_AGENT_ID && (
               <>
-                <div className="my-1 border-t border-border-subtle" />
-                <button type="button" className="w-full text-left px-3 py-1.5 text-[13px] text-danger hover:bg-danger/10 transition-colors flex items-center gap-1.5" onClick={() => { handleDelete(ctxMenu.agent.id); setCtxMenu(null) }}>
-                  <IconifyIcon name="ui-close" size={14} color="currentColor" /> {t('common.delete', 'Delete')}
+                <div className="separator-gradient mx-2 my-1" />
+                <button type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-danger transition-colors hover:bg-danger/10" onClick={() => { handleDelete(ctxMenu.agent.id); setCtxMenu(null) }}>
+                  <IconifyIcon name="ui-trash" size={14} color="currentColor" /> {t('common.delete', 'Delete')}
                 </button>
               </>
             )}
@@ -687,15 +764,18 @@ export function AgentsLayout() {
         />
       ) : isAdding || editingId ? (
         <>
-          <AgentEditor
-            key={editingId ?? 'new'} // reset form state when switching agents
-            agent={isAdding ? null : editingAgent}
-            onSave={handleSave}
-            onCancel={() => { setIsAdding(false); setEditingId(null); setTestAgent(null) }}
-            onTest={(agentData) => setTestAgent(agentData)}
-          />
+          <div className="min-h-0 min-w-0 flex flex-1 overflow-hidden">
+            <AgentEditor
+              key={`${editingId ?? 'new'}:${editorRevision}`}
+              agent={isAdding ? null : editingAgent}
+              onSave={handleSave}
+              onCancel={() => { setIsAdding(false); setEditingId(null); setTestAgent(null) }}
+              onTest={(agentData) => setTestAgent(agentData)}
+              header={editorHeader}
+            />
+          </div>
           {testAgent && (
-            <div className="w-95 shrink-0">
+            <div className="min-h-0 w-95 shrink-0">
               <AgentTestChat
                 key={testAgent.id}
                 agent={testAgent}
@@ -715,8 +795,15 @@ export function AgentsLayout() {
               <>
                 <button
                   type="button"
-                  onClick={() => { setIsAdding(true); setEditingId(null) }}
+                  onClick={() => setAssistantState({ mode: 'create', agentId: null })}
                   className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
+                >
+                  {t('timer.aiCreate', 'AI Create')}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsAdding(true); setEditingId(null) }}
+                  className="rounded-2xl border border-border-subtle/60 bg-surface-0/60 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-all hover:border-accent/20 hover:text-text-primary"
                 >
                   + {t('common.new', 'New')} {t('agents.title', 'Agents')}
                 </button>
@@ -748,6 +835,14 @@ export function AgentsLayout() {
             ]}
           />
         </div>
+      )}
+      {assistantState && (
+        <AgentAssistantDrawer
+          mode={assistantState.mode}
+          agent={assistantState.mode === 'edit' ? assistantAgent : null}
+          onClose={() => setAssistantState(null)}
+          onAgentMutated={handleAssistantAgentMutated}
+        />
       )}
     </>
   )

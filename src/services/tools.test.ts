@@ -406,6 +406,178 @@ describe('builtin tool guidance', () => {
     }
   })
 
+  it('creates saved agents through the agent_add tool and records a version snapshot', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.agent_add.execute>>[1]
+    const skill: Skill = {
+      id: 'skill-1',
+      name: 'Launch skill',
+      description: 'Help with launches.',
+      enabled: true,
+      source: 'local',
+      content: 'Help with launches.',
+      frontmatter: { name: 'Launch skill', description: 'Help with launches.' },
+      context: 'inline',
+    }
+    const liveState: Record<string, unknown> = {
+      agents: [],
+      selectedAgent: null,
+      models: [],
+      skills: [skill],
+      agentVersions: [],
+    }
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+      return true
+    })
+
+    const output = await builtinToolDefs.agent_add.execute?.({
+      name: 'Launch Planner',
+      system_prompt: 'Plan launches with explicit milestones.',
+      skills: JSON.stringify(['skill-1']),
+      allowed_tools: JSON.stringify(['agent_list']),
+      auto_learn: true,
+    }, toolOptions)
+
+    const parsed = JSON.parse(String(output)) as {
+      message: string
+      storeSynced: boolean
+      agent: { id: string; name: string; skills: string[]; allowedTools: string[]; autoLearn: boolean }
+    }
+
+    expect(parsed.message).toContain('Created agent')
+    expect(parsed.storeSynced).toBe(true)
+    expect(parsed.agent).toMatchObject({
+      name: 'Launch Planner',
+      skills: ['skill-1'],
+      allowedTools: ['agent_list'],
+      autoLearn: true,
+    })
+    expect(liveState.agents).toEqual([
+      expect.objectContaining({ id: parsed.agent.id, name: 'Launch Planner' }),
+    ])
+    expect(liveState.selectedAgent).toEqual(expect.objectContaining({ id: parsed.agent.id, name: 'Launch Planner' }))
+    expect(liveState.agentVersions).toEqual([
+      expect.objectContaining({ agentId: parsed.agent.id, source: 'manual', snapshot: expect.objectContaining({ name: 'Launch Planner' }) }),
+    ])
+  })
+
+  it('updates saved agents through the agent_update tool and keeps selectedAgent in sync', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.agent_update.execute>>[1]
+    const existingAgent: Agent = {
+      id: 'agent-1',
+      name: 'Launch Planner',
+      systemPrompt: 'Plan launches with explicit milestones.',
+      modelId: '',
+      skills: [],
+      temperature: 0.7,
+      maxTokens: 4096,
+      enabled: true,
+      greeting: 'Hello',
+      responseStyle: 'balanced',
+      allowedTools: ['agent_list'],
+      disallowedTools: [],
+      memories: [],
+      autoLearn: false,
+    }
+    const skill: Skill = {
+      id: 'skill-1',
+      name: 'Launch skill',
+      description: 'Help with launches.',
+      enabled: true,
+      source: 'local',
+      content: 'Help with launches.',
+      frontmatter: { name: 'Launch skill', description: 'Help with launches.' },
+      context: 'inline',
+    }
+    const liveState: Record<string, unknown> = {
+      agents: [existingAgent],
+      selectedAgent: existingAgent,
+      models: [],
+      skills: [skill],
+      agentVersions: [],
+    }
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+      return true
+    })
+
+    const parsedInput = (builtinToolDefs.agent_update.inputSchema as z.ZodTypeAny).safeParse({
+      agent_id: 'agent-1',
+      skills: JSON.stringify(['skill-1']),
+      allowed_tools: JSON.stringify(['agent_list', 'agent_update']),
+      greeting: null,
+      auto_learn: true,
+    })
+
+    expect(parsedInput.success).toBe(true)
+    if (!parsedInput.success) return
+
+    const output = await builtinToolDefs.agent_update.execute?.(parsedInput.data, toolOptions)
+    const result = JSON.parse(String(output)) as {
+      message: string
+      storeSynced: boolean
+      agent: { id: string; skills: string[]; allowedTools: string[]; greeting: string | null; autoLearn: boolean }
+    }
+
+    expect(result.message).toContain('Updated agent')
+    expect(result.storeSynced).toBe(true)
+    expect(result.agent).toMatchObject({
+      id: 'agent-1',
+      skills: ['skill-1'],
+      allowedTools: ['agent_list', 'agent_update'],
+      greeting: null,
+      autoLearn: true,
+    })
+    expect(liveState.agents).toEqual([
+      expect.objectContaining({ id: 'agent-1', skills: ['skill-1'], allowedTools: ['agent_list', 'agent_update'], greeting: undefined, autoLearn: true }),
+    ])
+    expect(liveState.selectedAgent).toEqual(expect.objectContaining({ id: 'agent-1', skills: ['skill-1'], autoLearn: true }))
+    expect(liveState.agentVersions).toEqual([
+      expect.objectContaining({ agentId: 'agent-1', source: 'manual', snapshot: expect.objectContaining({ allowedTools: ['agent_list', 'agent_update'] }) }),
+    ])
+  })
+
+  it('removes saved agents through the agent_remove tool and detaches dependent sessions', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.agent_remove.execute>>[1]
+    const existingAgent: Agent = {
+      id: 'agent-1',
+      name: 'Launch Planner',
+      systemPrompt: 'Plan launches with explicit milestones.',
+      modelId: '',
+      skills: [],
+      enabled: true,
+      memories: [],
+      autoLearn: false,
+    }
+    const liveState: Record<string, unknown> = {
+      agents: [existingAgent],
+      selectedAgent: existingAgent,
+      models: [],
+      skills: [],
+      sessions: [{ id: 'session-1', agentId: 'agent-1' }],
+    }
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+      return true
+    })
+
+    const output = await builtinToolDefs.agent_remove.execute?.({ agent_id: 'agent-1' }, toolOptions)
+    const parsed = JSON.parse(String(output)) as { message: string; agentId: string; storeSynced: boolean }
+
+    expect(parsed.message).toContain('Removed agent')
+    expect(parsed.agentId).toBe('agent-1')
+    expect(parsed.storeSynced).toBe(true)
+    expect(liveState.agents).toEqual([])
+    expect(liveState.selectedAgent).toBeNull()
+    expect(liveState.sessions).toEqual([{ id: 'session-1', agentId: undefined }])
+  })
+
   it('accepts cron schedules for timer_add and timer_update tool calls', () => {
     const timerAddInputSchema = builtinToolDefs.timer_add.inputSchema as z.ZodTypeAny
     const timerUpdateInputSchema = builtinToolDefs.timer_update.inputSchema as z.ZodTypeAny

@@ -1,6 +1,6 @@
 {
   "name": "suora",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "Suora - AI desktop assistant with multi-model support, skills, agents, memory, and plugin system",
   "keywords": [
     "suora",
@@ -57,7 +57,7 @@
     "electron-updater": "^6.8.3",
     "express": "^5.2.1",
     "katex": "^0.16.45",
-    "mermaid": "^11.14.0",
+    "mermaid": "^11.15.0",
     "nodemailer": "^8.0.6",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -102,7 +102,7 @@
   "overrides": {
     "@xmldom/xmldom": "^0.9.10",
     "lodash": "^4.18.1",
-    "lodash-es": "4.17.21",
+    "lodash-es": "4.18.1",
     "plist": "^4.0.0",
     "uuid": "^14.0.0"
   },

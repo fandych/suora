@@ -198,7 +198,7 @@ export interface Session {
   title: string
   createdAt: number
   updatedAt: number
-  surface?: 'chat' | 'timer-assistant' | 'pipeline-assistant' | 'documents-assistant'
+  surface?: 'chat' | 'timer-assistant' | 'pipeline-assistant' | 'documents-assistant' | 'agents-assistant'
   agentId?: string
   modelId?: string
   messages: Message[]

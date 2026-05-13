@@ -115,6 +115,7 @@ Document runtime support and UI exposure separately. Do not collapse them into o
 Built-in agents are defined in `src/store/appStore.ts`:
 
 - Assistant
+- Agent builder
 - Pipeline builder
 - Timer builder
 - Document editor

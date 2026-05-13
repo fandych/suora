@@ -168,6 +168,7 @@ Document these as separate facts rather than flattening them into one provider l
 Built-in agents are defined in the store and currently include:
 
 - Assistant
+- Agent builder
 - Pipeline builder
 - Timer builder
 - Document editor

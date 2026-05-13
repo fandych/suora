@@ -77,11 +77,12 @@ function getBuiltinSkillTranslationKey(skillNameOrId: string): string | null {
   return null
 }
 
-export function AgentEditor({ agent, onSave, onCancel, onTest }: {
+export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
   agent: Agent | null
   onSave: (agent: Agent) => void
   onCancel: () => void
   onTest?: (agent: Agent) => void
+  header?: ReactNode
 }) {
   const { t } = useI18n()
   const { models, skills, providerConfigs, agentVersions, restoreAgentVersion, removeAgentMemory, clearAgentMemories, updateAgent, addNotification } = useAppStore()
@@ -236,7 +237,12 @@ export function AgentEditor({ agent, onSave, onCancel, onTest }: {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="module-canvas flex-1 overflow-y-auto">
+    <form onSubmit={handleSubmit} className="module-canvas min-h-0 flex-1 overflow-y-auto">
+      {header && (
+        <div className="module-content mx-auto w-full max-w-448 px-5 xl:px-8">
+          {header}
+        </div>
+      )}
       <div className="module-content mx-auto flex w-full max-w-448 flex-col gap-6 px-5 py-6 xl:px-8 xl:py-8">
         <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-start 2xl:justify-between">
