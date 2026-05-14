@@ -1,6 +1,11 @@
 // External directory loading for skills and agents
 import type { Skill, Agent, ExternalDirectoryConfig, SkillSource } from '@/types'
-import { attachBundledResources, parseSkillMarkdown } from '@/services/skillRegistry'
+import {
+  attachBundledResources,
+  parseSkillMarkdown,
+  CLAUDE_CODE_SKILLS_DIRECTORY,
+  OTHER_AGENTS_SKILLS_DIRECTORY,
+} from '@/services/skillRegistry'
 import { safeParse } from '@/utils/safeJson'
 
 interface DirEntry {
@@ -15,8 +20,46 @@ function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
 }
 
+function normalizeExternalDirectoryKey(path: string): string {
+  return path.trim().replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+}
+
+const LEGACY_EXTERNAL_DIRECTORY_ALIASES = new Map<string, string>([
+  [normalizeExternalDirectoryKey('~/.claude/.suora/skills'), CLAUDE_CODE_SKILLS_DIRECTORY],
+  [normalizeExternalDirectoryKey('~/.agents/.suora/skills'), OTHER_AGENTS_SKILLS_DIRECTORY],
+])
+
+export function normalizeExternalDirectoryPath(path: string): string {
+  const normalizedPath = path.trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  if (!normalizedPath) return normalizedPath
+  return LEGACY_EXTERNAL_DIRECTORY_ALIASES.get(normalizedPath.toLowerCase()) ?? normalizedPath
+}
+
+export function normalizeExternalDirectoryConfigs(
+  directories: ExternalDirectoryConfig[],
+): ExternalDirectoryConfig[] {
+  const deduped = new Map<string, ExternalDirectoryConfig>()
+
+  for (const directory of directories) {
+    if (!directory?.path?.trim()) continue
+
+    const normalizedPath = normalizeExternalDirectoryPath(directory.path)
+    const key = `${directory.type}:${normalizeExternalDirectoryKey(normalizedPath)}`
+    const existing = deduped.get(key)
+
+    deduped.set(key, {
+      ...(existing ?? directory),
+      ...directory,
+      path: normalizedPath,
+      enabled: existing ? existing.enabled || directory.enabled : directory.enabled,
+    })
+  }
+
+  return Array.from(deduped.values())
+}
+
 function getSkillSource(dirPath: string): SkillSource {
-  const normalizedPath = dirPath.replace(/\\/g, '/').toLowerCase()
+  const normalizedPath = normalizeExternalDirectoryPath(dirPath).toLowerCase()
   if (normalizedPath.includes('/.agents/')) return 'agent-dir'
   if (normalizedPath.includes('/.claude/')) return 'claude-dir'
   return 'workspace'
@@ -59,9 +102,11 @@ export async function syncExternalDirectoryAccess(
   const electron = getElectron()
   if (!electron) return
 
+  const normalizedDirectories = normalizeExternalDirectoryConfigs(directories)
+
   const allowedPaths = [
-    ...directories.filter((dir) => dir.enabled).map((dir) => dir.path),
-    ...extraPaths,
+    ...normalizedDirectories.filter((dir) => dir.enabled).map((dir) => dir.path),
+    ...extraPaths.map(normalizeExternalDirectoryPath),
   ]
   const uniquePaths = Array.from(new Set(allowedPaths.filter((dirPath) => dirPath.trim().length > 0)))
   await electron.invoke('workspace:setExternalDirectories', uniquePaths)
@@ -229,7 +274,9 @@ export async function loadExternalResources(
   const skills: Skill[] = []
   const agents: Agent[] = []
 
-  for (const dir of directories) {
+  const normalizedDirectories = normalizeExternalDirectoryConfigs(directories)
+
+  for (const dir of normalizedDirectories) {
     if (!dir.enabled) continue
 
     if (dir.type === 'skills') {

@@ -66,7 +66,7 @@ export function ExternalDirsSettings() {
             type="text"
             value={extDirPath}
             onChange={(event) => setExtDirPath(event.target.value)}
-            placeholder={t('settings.externalDirectoryPlaceholder', 'e.g., ~/.agents/.suora/skills')}
+            placeholder={t('settings.externalDirectoryPlaceholder', 'e.g., ~/.agents/skills')}
             aria-label={t('settings.externalDirectoryPath', 'External directory path')}
             className={settingsInputClass}
           />

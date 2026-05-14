@@ -42,7 +42,7 @@ Suora 是一个基于 Electron 的本地 AI 工作台。当前版本由以下工
 | `/pipeline` | Agent 流水线编辑与执行历史 |
 | `/models/:view` | 提供商、模型和比较视图 |
 | `/agents` | Agent 管理 |
-| `/skills/:view` | 已安装、浏览和技能源视图 |
+| `/skills` | 已安装技能与本地外部技能来源 |
 | `/timer` | 定时器与调度管理 |
 | `/channels` | 消息渠道集成 |
 | `/mcp` | 集成与 MCP 配置 |

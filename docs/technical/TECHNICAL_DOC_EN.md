@@ -42,7 +42,7 @@ The renderer is routed with a hash router and lazy-loads feature modules.
 | `/pipeline` | Agent pipeline editor and execution history |
 | `/models/:view` | Provider, model, and compare views |
 | `/agents` | Agent manager |
-| `/skills/:view` | Installed, browse, and sources skill views |
+| `/skills` | Installed skills plus local external skill sources |
 | `/timer` | Timer and schedule management |
 | `/channels` | Messaging channel integrations |
 | `/mcp` | Integrations and MCP configuration |

@@ -474,7 +474,7 @@ describe('appStore', () => {
 
       useAppStore.setState({
         workspacePath: 'C:/workspace',
-        externalDirectories: [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }],
+        externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }],
         agents: [{
           id: 'default-assistant', name: 'Assistant', systemPrompt: 'Default prompt',
           modelId: '', skills: [], enabled: true, memories: [], autoLearn: true,
@@ -485,7 +485,7 @@ describe('appStore', () => {
       await loadExternalSkillsAndAgents()
 
       expect(syncExternalDirectoryAccess).toHaveBeenCalledWith(
-        [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }],
+        [{ path: '~/.claude/skills', enabled: true, type: 'skills' }],
         ['~/.suora/skills'],
       )
       expect(useAppStore.getState().agents.map((agent) => agent.id)).toEqual([
@@ -610,6 +610,17 @@ describe('appStore', () => {
 
       expect(useAppStore.getState().providerConfigs.map((provider) => provider.id)).toEqual(['provider-hydrated'])
       expect(useAppStore.getState().externalDirectories.map((directory) => directory.path)).toEqual(['C:/skills'])
+    })
+
+    it('should normalize and deduplicate legacy skill directory aliases in store actions', () => {
+      useAppStore.setState({ externalDirectories: [] })
+
+      useAppStore.getState().addExternalDirectory({ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' })
+      useAppStore.getState().addExternalDirectory({ path: '~/.claude/skills', enabled: false, type: 'skills' })
+
+      expect(useAppStore.getState().externalDirectories).toEqual([
+        { path: '~/.claude/skills', enabled: true, type: 'skills' },
+      ])
     })
   })
 })

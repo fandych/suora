@@ -29,10 +29,11 @@ vi.mock('./SkillEditor', () => ({
   ),
 }))
 
-function renderSkillsLayout() {
+function renderSkillsLayout(initialEntry = '/skills') {
   return render(
-    <MemoryRouter initialEntries={['/skills/installed']}>
+    <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
+        <Route path="/skills" element={<SkillsLayout />} />
         <Route path="/skills/:view" element={<SkillsLayout />} />
       </Routes>
     </MemoryRouter>,
@@ -72,32 +73,70 @@ describe('SkillsLayout', () => {
     })
   })
 
-  it('toggles the Claude Code local skill source from the installed sidebar', async () => {
+  it('toggles the Claude Code local skill source from the single skills view', async () => {
     const user = userEvent.setup()
-    renderSkillsLayout()
+    renderSkillsLayout('/skills')
 
     await user.click(screen.getByRole('checkbox', { name: 'Enable Claude Code' }))
 
     await waitFor(() => {
       expect(useAppStore.getState().externalDirectories).toContainEqual({
-        path: '~/.claude/.suora/skills',
+        path: '~/.claude/skills',
         enabled: true,
         type: 'skills',
       })
     })
 
     await waitFor(() => {
-      expect(window.electron.invoke).toHaveBeenCalledWith('workspace:setExternalDirectories', ['~/.claude/.suora/skills', '~/.suora/skills'])
+      expect(window.electron.invoke).toHaveBeenCalledWith('workspace:setExternalDirectories', ['~/.claude/skills', '~/.suora/skills'])
     })
 
     await user.click(screen.getByRole('checkbox', { name: 'Disable Claude Code' }))
 
     await waitFor(() => {
       expect(useAppStore.getState().externalDirectories).toContainEqual({
-        path: '~/.claude/.suora/skills',
+        path: '~/.claude/skills',
         enabled: false,
         type: 'skills',
       })
     })
+  })
+
+  it('uses a solid primary background for enabled local source toggles', () => {
+    useAppStore.setState({
+      externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }],
+    })
+
+    renderSkillsLayout('/skills')
+
+    const checkbox = screen.getByRole('checkbox', { name: 'Disable Claude Code' })
+    expect(checkbox.closest('label')).toHaveClass('bg-accent')
+  })
+
+  it('does not render skills tabs or a skills search input', () => {
+    renderSkillsLayout('/skills')
+
+    expect(screen.queryByPlaceholderText('Search skills...')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Installed' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Browse' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sources' })).not.toBeInTheDocument()
+  })
+
+  it('shows only the two built-in local skill sources and maps legacy paths to the new ones', () => {
+    useAppStore.setState({
+      externalDirectories: [
+        { path: '~/.claude/.suora/skills', enabled: true, type: 'skills' },
+        { path: '~/.agents/skills', enabled: true, type: 'skills' },
+        { path: 'C:/shared/skills', enabled: true, type: 'skills' },
+      ],
+    })
+
+    renderSkillsLayout('/skills')
+
+    expect(screen.getByText('~/.claude/skills')).toBeInTheDocument()
+    expect(screen.getByText('~/.agents/skills')).toBeInTheDocument()
+    expect(screen.queryByText('~/.claude/.suora/skills')).not.toBeInTheDocument()
+    expect(screen.queryByText('C:/shared/skills')).not.toBeInTheDocument()
+    expect(screen.getAllByRole('checkbox')).toHaveLength(2)
   })
 })

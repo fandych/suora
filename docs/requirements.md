@@ -66,7 +66,7 @@ Suora 是一款基于 Electron 的本地优先 AI 工作台。当前代码体现
 | Pipeline | `/pipeline` | 支持多步 agent 工作流、重试、超时、`runIf`、变量导出、可视化预览、执行历史与导入导出 |
 | Models | `/models/:view` | 支持提供商配置、模型管理、比较视图与默认模型管理 |
 | Agents | `/agents` | 支持内置与自定义 agent、prompt、skills、工具限制、记忆、版本与统计 |
-| Skills | `/skills/:view` | 支持已安装 skills、注册表浏览、来源管理、`SKILL.md` 编辑、资源树、导入与导出 |
+| Skills | `/skills` | 支持已安装 skills、本地外部来源管理、`SKILL.md` 编辑、资源树、导入与导出 |
 | Timer | `/timer` | 支持 Once、Interval、Cron 三类任务，以及通知、agent prompt、pipeline 执行三类动作 |
 | Channels | `/channels` | 支持渠道配置、reply agent、auto reply、消息历史、用户列表、健康与调试面板 |
 | MCP | `/mcp` | 支持 MCP 服务器配置、连接状态与能力接入 |

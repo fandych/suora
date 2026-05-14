@@ -2,12 +2,13 @@
 // Reads provider configs from {workspace}/models.json and
 // external directories from {workspace}/settings.json.
 // Also migrates legacy provider storage from settings.json/providers.
-import type { ProviderConfig, WorkspaceSettings } from '@/types'
+import type { ProviderConfig, WorkspaceSettings, ExternalDirectoryConfig } from '@/types'
 import {
   prepareModelsDataForSave,
   restoreModelsDataAfterLoad,
   type ElectronBridge,
 } from '@/services/secureState'
+import { normalizeExternalDirectoryConfigs } from '@/services/externalDirectories'
 import { safeParse, safeStringify } from '@/utils/safeJson'
 
 function getElectron(): ElectronBridge | undefined {
@@ -70,7 +71,19 @@ export async function loadWorkspaceSettings(workspacePath: string): Promise<Work
     const raw = await electron.invoke('fs:readFile', settingsPath)
     if (typeof raw === 'string') {
       settingsData = safeParse<Record<string, unknown>>(raw)
-      if (Array.isArray(settingsData.externalDirectories)) result.externalDirectories = settingsData.externalDirectories
+      if (Array.isArray(settingsData.externalDirectories)) {
+        const normalizedExternalDirectories = normalizeExternalDirectoryConfigs(
+          settingsData.externalDirectories as ExternalDirectoryConfig[],
+        )
+        result.externalDirectories = normalizedExternalDirectories
+        if (JSON.stringify(normalizedExternalDirectories) !== JSON.stringify(settingsData.externalDirectories)) {
+          settingsData = {
+            ...settingsData,
+            externalDirectories: normalizedExternalDirectories,
+          }
+          shouldRewriteSettingsData = true
+        }
+      }
 
       if (result.providers.length === 0) {
         const legacyProviders = readProviderConfigs(settingsData)
@@ -89,11 +102,14 @@ export async function loadWorkspaceSettings(workspacePath: string): Promise<Work
       providerConfigs: result.providers,
     })
     await writeJsonFile(electron, modelsPath, nextModelsData).catch(() => false)
+  }
 
-    if (shouldRewriteSettingsData) {
-      const cleanedSettingsData = stripLegacyProviderKeys(settingsData)
-      await writeJsonFile(electron, settingsPath, cleanedSettingsData).catch(() => false)
+  if (shouldRewriteSettingsData) {
+    const cleanedSettingsData = {
+      ...stripLegacyProviderKeys(settingsData),
+      ...(result.externalDirectories ? { externalDirectories: result.externalDirectories } : {}),
     }
+    await writeJsonFile(electron, settingsPath, cleanedSettingsData).catch(() => false)
   }
 
   return result
@@ -136,9 +152,10 @@ export async function saveWorkspaceSettings(
         const raw = await electron.invoke('fs:readFile', settingsPath)
         if (typeof raw === 'string') settingsData = safeParse<Record<string, unknown>>(raw)
       } catch { /* file may not exist */ }
+      const normalizedExternalDirectories = normalizeExternalDirectoryConfigs(settings.externalDirectories)
       const nextSettingsData = {
         ...stripLegacyProviderKeys(settingsData),
-        externalDirectories: settings.externalDirectories,
+        externalDirectories: normalizedExternalDirectories,
       }
       if (!(await writeJsonFile(electron, settingsPath, nextSettingsData))) return false
     }

@@ -25,7 +25,7 @@ Top-level routes are defined in `src/App.tsx`:
 - `/pipeline`
 - `/models/:view` with `/models -> /models/providers`
 - `/agents`
-- `/skills/:view` with `/skills -> /skills/installed`
+- `/skills`
 - `/timer`
 - `/channels`
 - `/mcp`
@@ -44,7 +44,6 @@ Current settings sections are defined in `src/components/settings/SettingsLayout
 Useful subviews to remember when editing navigation or docs:
 
 - Models: `providers`, `models`, `compare`
-- Skills: `installed`, `browse`, `sources`
 
 ## Primary Anchors
 

@@ -13,6 +13,39 @@ import { createUIPreferencesSlice } from '@/store/slices/uiPreferencesSlice'
 import { createSafePersistStorage } from '@/services/safePersistStorage'
 import { taskFingerprint } from '@/utils/taskFingerprint'
 
+function normalizeExternalDirectoryPathInStore(path: string): string {
+  const normalizedPath = path.trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  const normalizedKey = normalizedPath.toLowerCase()
+
+  if (normalizedKey === '~/.claude/.suora/skills') return '~/.claude/skills'
+  if (normalizedKey === '~/.agents/.suora/skills') return '~/.agents/skills'
+
+  return normalizedPath
+}
+
+function normalizeExternalDirectoriesInStore(
+  directories: ExternalDirectoryConfig[],
+): ExternalDirectoryConfig[] {
+  const deduped = new Map<string, ExternalDirectoryConfig>()
+
+  for (const directory of directories) {
+    if (!directory?.path?.trim()) continue
+
+    const normalizedPath = normalizeExternalDirectoryPathInStore(directory.path)
+    const key = `${directory.type}:${normalizedPath.toLowerCase()}`
+    const existing = deduped.get(key)
+
+    deduped.set(key, {
+      ...(existing ?? directory),
+      ...directory,
+      path: normalizedPath,
+      enabled: existing ? existing.enabled || directory.enabled : directory.enabled,
+    })
+  }
+
+  return Array.from(deduped.values())
+}
+
 function normalizeAgentMaxTurns(maxTurns: number | undefined): number | undefined {
   if (typeof maxTurns !== 'number' || !Number.isFinite(maxTurns)) return undefined
   return Math.max(2, Math.trunc(maxTurns))
@@ -778,15 +811,21 @@ export const useAppStore = create<AppStore>()(
       // External Directories
       externalDirectories: [],
       addExternalDirectory: (dir) => set((state) => ({
-        externalDirectories: [...state.externalDirectories, dir],
+        externalDirectories: normalizeExternalDirectoriesInStore([...state.externalDirectories, dir]),
       })),
       updateExternalDirectory: (path, data) => set((state) => ({
-        externalDirectories: state.externalDirectories.map((d) =>
-          d.path === path ? { ...d, ...data } : d
+        externalDirectories: normalizeExternalDirectoriesInStore(
+          state.externalDirectories.map((directory) =>
+            normalizeExternalDirectoryPathInStore(directory.path) === normalizeExternalDirectoryPathInStore(path)
+              ? { ...directory, ...data, path: normalizeExternalDirectoryPathInStore(path) }
+              : directory,
+          ),
         ),
       })),
       removeExternalDirectory: (path) => set((state) => ({
-        externalDirectories: state.externalDirectories.filter((d) => d.path !== path),
+        externalDirectories: state.externalDirectories.filter(
+          (directory) => normalizeExternalDirectoryPathInStore(directory.path) !== normalizeExternalDirectoryPathInStore(path),
+        ),
       })),
 
       // Channels
@@ -1248,6 +1287,7 @@ export const useAppStore = create<AppStore>()(
         if (!merged.agentSelectionPreferences) {
           merged.agentSelectionPreferences = []
         }
+        merged.externalDirectories = normalizeExternalDirectoriesInStore(merged.externalDirectories ?? [])
         merged.toolSecurity = normalizeToolSecuritySettings(merged.toolSecurity)
 
         return merged
@@ -1417,11 +1457,13 @@ export async function loadExternalSkillsAndAgents(): Promise<void> {
   const state = useAppStore.getState()
   if (!state.workspacePath) return
 
-  await syncExternalDirectoryAccess(state.externalDirectories, ['~/.suora/skills'])
+  const externalDirectories = normalizeExternalDirectoriesInStore(state.externalDirectories)
+
+  await syncExternalDirectoryAccess(externalDirectories, ['~/.suora/skills'])
 
   const [diskSkills, { skills: externalSkills }] = await Promise.all([
     loadAllSkills(state.workspacePath),
-    loadExternalResources(state.externalDirectories),
+    loadExternalResources(externalDirectories),
   ])
 
   const skillMap = new Map<string, Skill>()
@@ -1442,6 +1484,7 @@ export async function loadExternalSkillsAndAgents(): Promise<void> {
     const selectedAgentId = current.selectedAgent?.id
 
     return {
+      externalDirectories,
       skills: Array.from(skillMap.values()),
       agents: allAgents,
       selectedAgent: selectedAgentId

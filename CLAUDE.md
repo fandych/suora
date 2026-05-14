@@ -30,7 +30,7 @@ Top-level routes are defined in `src/App.tsx` and currently include:
 - `/pipeline`
 - `/models/:view`
 - `/agents`
-- `/skills/:view`
+- `/skills`
 - `/timer`
 - `/channels`
 - `/mcp`
@@ -40,7 +40,6 @@ Current redirect defaults are:
 
 - `/ -> /chat`
 - `/models -> /models/providers`
-- `/skills -> /skills/installed`
 - `/settings -> /settings/general`
 
 Current settings sections are:
@@ -56,7 +55,6 @@ Current settings sections are:
 Current module subviews that often matter in navigation and docs are:
 
 - Models: `providers`, `models`, `compare`
-- Skills: `installed`, `browse`, `sources`
 
 ## Repository Layout
 

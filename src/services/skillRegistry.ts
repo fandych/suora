@@ -31,8 +31,8 @@ const MAX_PROMPT_RESOURCE_ENTRIES = 80
 const REFERENCE_FILE_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.csv'])
 
 export const USER_SKILLS_DIRECTORY = '~/.suora/skills'
-export const CLAUDE_CODE_SKILLS_DIRECTORY = '~/.claude/.suora/skills'
-export const OTHER_AGENTS_SKILLS_DIRECTORY = '~/.agents/.suora/skills'
+export const CLAUDE_CODE_SKILLS_DIRECTORY = '~/.claude/skills'
+export const OTHER_AGENTS_SKILLS_DIRECTORY = '~/.agents/skills'
 
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
