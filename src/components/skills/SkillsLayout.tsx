@@ -5,7 +5,16 @@ import { SidePanel } from '@/components/layout/SidePanel'
 import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import type { Skill, RegistrySkillEntry, SkillRegistrySource, SkillBundledResource, SkillsLockfile } from '@/types'
-import { createBlankSkill, deleteSkillFromDisk, serializeSkillToMarkdown, parseSkillMarkdown, loadSkillsLockfile, getSkillLockStatus } from '@/services/skillRegistry'
+import {
+  CLAUDE_CODE_SKILLS_DIRECTORY,
+  OTHER_AGENTS_SKILLS_DIRECTORY,
+  createBlankSkill,
+  deleteSkillFromDisk,
+  serializeSkillToMarkdown,
+  parseSkillMarkdown,
+  loadSkillsLockfile,
+  getSkillLockStatus,
+} from '@/services/skillRegistry'
 import { browseRegistrySkills, searchRegistrySkills, installSkillFromRegistry, uninstallSkill, getDefaultRegistrySources, previewSkillInstall, getFeaturedRegistrySkills } from '@/services/skillMarketplace'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
@@ -22,9 +31,6 @@ type ViewMode = 'installed' | 'browse' | 'sources'
 const SKILL_VIEW_MODES = new Set<ViewMode>(['installed', 'browse', 'sources'])
 
 const ALL_CATEGORY = 'All'
-const CLAUDE_CODE_SKILLS_PATH = '~/.claude/skills'
-const OTHER_AGENTS_SKILLS_PATH = '~/.agents/skills'
-
 function buildImportedResourceManifest(resources: Array<{ path: string; size: number }>): SkillBundledResource[] {
   const manifest = new Map<string, SkillBundledResource>()
   for (const resource of resources) {
@@ -113,20 +119,20 @@ export function SkillsLayout() {
     return [
       {
         id: 'claude-code',
-        path: CLAUDE_CODE_SKILLS_PATH,
+        path: CLAUDE_CODE_SKILLS_DIRECTORY,
         label: t('skills.claudeCode', 'Claude Code'),
         icon: 'lucide:sparkles',
-        description: t('skills.claudeCodeDesc', 'Load skills from the local .claude/skills folder.'),
-        enabled: skillDirectories.get(CLAUDE_CODE_SKILLS_PATH)?.enabled ?? false,
+        description: t('skills.claudeCodeDesc', 'Load skills from the local .claude/.suora/skills folder.'),
+        enabled: skillDirectories.get(CLAUDE_CODE_SKILLS_DIRECTORY)?.enabled ?? false,
         skillCount: skills.filter((skill) => skill.source === 'claude-dir').length,
       },
       {
         id: 'other-agents',
-        path: OTHER_AGENTS_SKILLS_PATH,
+        path: OTHER_AGENTS_SKILLS_DIRECTORY,
         label: t('skills.otherAgents', 'Other Agents'),
         icon: 'lucide:folder-open',
-        description: t('skills.otherAgentsDesc', 'Load skills from the shared .agents/skills folder.'),
-        enabled: skillDirectories.get(OTHER_AGENTS_SKILLS_PATH)?.enabled ?? false,
+        description: t('skills.otherAgentsDesc', 'Load skills from the shared .agents/.suora/skills folder.'),
+        enabled: skillDirectories.get(OTHER_AGENTS_SKILLS_DIRECTORY)?.enabled ?? false,
         skillCount: skills.filter((skill) => skill.source === 'agent-dir').length,
       },
     ]

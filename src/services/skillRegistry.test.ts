@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { buildSkillPrompts, deleteSkillFromDisk, getSkillLockStatus, loadLocalSkills, loadSkillsLockfile, parseSkillMarkdown, saveSkillToDisk, serializeSkillToMarkdown } from './skillRegistry'
+import { buildSkillPrompts, deleteSkillFromDisk, getSkillLockStatus, loadLocalSkills, loadProjectSkills, loadSkillsLockfile, parseSkillMarkdown, saveSkillToDisk, serializeSkillToMarkdown } from './skillRegistry'
 
 describe('skillRegistry', () => {
   beforeEach(() => {
@@ -125,6 +125,38 @@ Plan carefully.
     expect(skills[0].referenceFiles).toEqual([
       { path: '/workspace/skills/creator/references/schemas.md', label: 'references/schemas.md' },
     ])
+  })
+
+  it('loads project skills from nested .suora directories inside .agents and .claude', async () => {
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel, filePath) => {
+      if (channel === 'fs:listDir' && filePath === '/workspace/.agents/.suora/skills') {
+        return [{ name: 'agent-skill', isDirectory: true, path: '/workspace/.agents/.suora/skills/agent-skill' }]
+      }
+      if (channel === 'fs:listDir' && filePath === '/workspace/.claude/.suora/skills') {
+        return [{ name: 'claude-skill', isDirectory: true, path: '/workspace/.claude/.suora/skills/claude-skill' }]
+      }
+      if (channel === 'fs:listDir' && filePath === '/workspace/.suora/skills') {
+        return []
+      }
+      if (channel === 'fs:listDir' && filePath === '/workspace/.agents/.suora/skills/agent-skill') {
+        return [{ name: 'SKILL.md', isDirectory: false, path: '/workspace/.agents/.suora/skills/agent-skill/SKILL.md' }]
+      }
+      if (channel === 'fs:listDir' && filePath === '/workspace/.claude/.suora/skills/claude-skill') {
+        return [{ name: 'SKILL.md', isDirectory: false, path: '/workspace/.claude/.suora/skills/claude-skill/SKILL.md' }]
+      }
+      if (channel === 'fs:readFile' && filePath === '/workspace/.agents/.suora/skills/agent-skill/SKILL.md') {
+        return '---\nname: agent-skill\ndescription: Agent shared skill\n---\n\nUse agent shared skill.'
+      }
+      if (channel === 'fs:readFile' && filePath === '/workspace/.claude/.suora/skills/claude-skill/SKILL.md') {
+        return '---\nname: claude-skill\ndescription: Claude shared skill\n---\n\nUse claude shared skill.'
+      }
+      return { error: `unexpected ${channel}:${filePath}` }
+    })
+
+    const skills = await loadProjectSkills('/workspace')
+
+    expect(skills.map((skill) => skill.name)).toEqual(['agent-skill', 'claude-skill'])
+    expect(skills.every((skill) => skill.source === 'project')).toBe(true)
   })
 
   it('adds reference content and bundled resource manifest to skill prompts', async () => {

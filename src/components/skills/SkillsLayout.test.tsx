@@ -80,21 +80,21 @@ describe('SkillsLayout', () => {
 
     await waitFor(() => {
       expect(useAppStore.getState().externalDirectories).toContainEqual({
-        path: '~/.claude/skills',
+        path: '~/.claude/.suora/skills',
         enabled: true,
         type: 'skills',
       })
     })
 
     await waitFor(() => {
-      expect(window.electron.invoke).toHaveBeenCalledWith('workspace:setExternalDirectories', ['~/.claude/skills', '~/.suora/skills'])
+      expect(window.electron.invoke).toHaveBeenCalledWith('workspace:setExternalDirectories', ['~/.claude/.suora/skills', '~/.suora/skills'])
     })
 
     await user.click(screen.getByRole('checkbox', { name: 'Disable Claude Code' }))
 
     await waitFor(() => {
       expect(useAppStore.getState().externalDirectories).toContainEqual({
-        path: '~/.claude/skills',
+        path: '~/.claude/.suora/skills',
         enabled: false,
         type: 'skills',
       })

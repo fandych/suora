@@ -46,7 +46,7 @@ describe('workspaceSettings', () => {
         })
       }
       if (channel === 'fs:readFile' && filePath === 'C:/workspace/settings.json') {
-        return JSON.stringify({ externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }] })
+        return JSON.stringify({ externalDirectories: [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }] })
       }
       if (channel === 'safe-storage:decrypt') {
         return { data: Buffer.from(String(filePath), 'base64').toString('utf-8') }
@@ -57,7 +57,7 @@ describe('workspaceSettings', () => {
     const result = await loadWorkspaceSettings('C:/workspace')
 
     expect(result.providers).toEqual(providerConfigs)
-    expect(result.externalDirectories).toEqual([{ path: '~/.claude/skills', enabled: true, type: 'skills' }])
+    expect(result.externalDirectories).toEqual([{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }])
   })
 
   it('should migrate legacy providers from settings.json when models.json is missing', async () => {
@@ -68,7 +68,7 @@ describe('workspaceSettings', () => {
       if (channel === 'fs:readFile' && filePath === 'C:/workspace/settings.json') {
         return JSON.stringify({
           providers: providerConfigs,
-          externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }],
+          externalDirectories: [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }],
         })
       }
       if (channel === 'safe-storage:isAvailable') {
@@ -92,7 +92,7 @@ describe('workspaceSettings', () => {
     expect(invoke).toHaveBeenCalledWith(
       'fs:writeFile',
       'C:/workspace/settings.json',
-      JSON.stringify({ externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }] }, null, 2),
+      JSON.stringify({ externalDirectories: [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }] }, null, 2),
     )
   })
 
@@ -120,7 +120,7 @@ describe('workspaceSettings', () => {
 
     const result = await saveWorkspaceSettings('C:/workspace', {
       providers: providerConfigs,
-      externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }],
+      externalDirectories: [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }],
     })
 
     expect(result).toBe(true)
@@ -131,7 +131,7 @@ describe('workspaceSettings', () => {
       'fs:writeFile',
       'C:/workspace/settings.json',
       JSON.stringify({
-        externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }],
+        externalDirectories: [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }],
         theme: 'dark',
       }, null, 2),
     )

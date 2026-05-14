@@ -225,8 +225,8 @@ function getFeaturedSkills(): RegistrySkillEntry[] {
  * Discover skills from a GitHub repository.
  * Looks for SKILL.md files in standard locations:
  *   - skills/<name>/SKILL.md
- *   - .agents/skills/<name>/SKILL.md
- *   - .claude/skills/<name>/SKILL.md
+ *   - .agents/.suora/skills/<name>/SKILL.md
+ *   - .claude/.suora/skills/<name>/SKILL.md
  */
 export async function discoverSkillsFromGitHub(
   repoUrl: string,
