@@ -339,7 +339,7 @@ export interface AgentMessage {
 /**
  * Skill source — where this skill was loaded from.
  * - 'local': Created locally in the workspace skills/ directory
- * - 'project': From .agents/skills/ or .claude/skills/ in the project
+ * - 'project': From .agents/.suora/skills/ or .claude/.suora/skills/ in the project
  * - 'user': From user-level global skills directory (~/.suora/skills/)
  * - 'registry': Installed from a skill registry (skills.sh, GitHub, custom)
  */

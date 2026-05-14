@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useAppStore, loadExternalSkillsAndAgents, saveSettingsToWorkspace } from '@/store/appStore'
+import { CLAUDE_CODE_SKILLS_DIRECTORY, OTHER_AGENTS_SKILLS_DIRECTORY } from '@/services/skillRegistry'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
@@ -11,8 +12,8 @@ export function ExternalDirsSettings() {
   const [extDirType, setExtDirType] = useState<'agents' | 'skills'>('skills')
 
   const presetDirectories = [
-    { path: '~/.agents/skills', type: 'skills' as const },
-    { path: '~/.claude/skills', type: 'skills' as const },
+    { path: OTHER_AGENTS_SKILLS_DIRECTORY, type: 'skills' as const },
+    { path: CLAUDE_CODE_SKILLS_DIRECTORY, type: 'skills' as const },
     { path: '~/.agents/agents', type: 'agents' as const },
     { path: '~/.claude/agents', type: 'agents' as const },
   ]
@@ -65,7 +66,7 @@ export function ExternalDirsSettings() {
             type="text"
             value={extDirPath}
             onChange={(event) => setExtDirPath(event.target.value)}
-            placeholder={t('settings.externalDirectoryPlaceholder', 'e.g., ~/.agents/skills')}
+            placeholder={t('settings.externalDirectoryPlaceholder', 'e.g., ~/.agents/.suora/skills')}
             aria-label={t('settings.externalDirectoryPath', 'External directory path')}
             className={settingsInputClass}
           />

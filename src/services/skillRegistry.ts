@@ -30,6 +30,10 @@ const MAX_PROMPT_SCRIPT_PATHS = 30
 const MAX_PROMPT_RESOURCE_ENTRIES = 80
 const REFERENCE_FILE_EXTENSIONS = new Set(['.md', '.markdown', '.txt', '.json', '.yaml', '.yml', '.csv'])
 
+export const USER_SKILLS_DIRECTORY = '~/.suora/skills'
+export const CLAUDE_CODE_SKILLS_DIRECTORY = '~/.claude/.suora/skills'
+export const OTHER_AGENTS_SKILLS_DIRECTORY = '~/.agents/.suora/skills'
+
 function getElectron(): ElectronBridge | undefined {
   return (window as unknown as { electron?: ElectronBridge }).electron
 }
@@ -623,8 +627,8 @@ export async function loadLocalSkills(workspacePath: string): Promise<Skill[]> {
 
 /**
  * Load skills from project-level directories:
- * - .agents/skills/
- * - .claude/skills/
+ * - .agents/.suora/skills/
+ * - .claude/.suora/skills/
  * - .suora/skills/
  */
 export async function loadProjectSkills(workspacePath: string): Promise<Skill[]> {
@@ -632,8 +636,8 @@ export async function loadProjectSkills(workspacePath: string): Promise<Skill[]>
   if (!electron || !workspacePath) return []
 
   const dirs = [
-    `${workspacePath}/.agents/skills`,
-    `${workspacePath}/.claude/skills`,
+    `${workspacePath}/.agents/.suora/skills`,
+    `${workspacePath}/.claude/.suora/skills`,
     `${workspacePath}/.suora/skills`,
   ]
 

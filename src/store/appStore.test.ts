@@ -474,7 +474,7 @@ describe('appStore', () => {
 
       useAppStore.setState({
         workspacePath: 'C:/workspace',
-        externalDirectories: [{ path: '~/.claude/skills', enabled: true, type: 'skills' }],
+        externalDirectories: [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }],
         agents: [{
           id: 'default-assistant', name: 'Assistant', systemPrompt: 'Default prompt',
           modelId: '', skills: [], enabled: true, memories: [], autoLearn: true,
@@ -485,7 +485,7 @@ describe('appStore', () => {
       await loadExternalSkillsAndAgents()
 
       expect(syncExternalDirectoryAccess).toHaveBeenCalledWith(
-        [{ path: '~/.claude/skills', enabled: true, type: 'skills' }],
+        [{ path: '~/.claude/.suora/skills', enabled: true, type: 'skills' }],
         ['~/.suora/skills'],
       )
       expect(useAppStore.getState().agents.map((agent) => agent.id)).toEqual([
