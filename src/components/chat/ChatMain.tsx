@@ -386,6 +386,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
   && prevProps.setMessageFeedback === nextProps.setMessageFeedback
 ))
 
+function getCurrentChatSession() {
+  const state = useAppStore.getState()
+  if (!state.activeSessionId) return null
+  return state.sessions.find((session) => session.id === state.activeSessionId) ?? null
+}
+
 export function ChatMain() {
   const { sessions, activeSessionId, openSessionTabs, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, setActiveSession, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore()
   const { t, locale } = useI18n()
@@ -536,12 +542,9 @@ export function ChatMain() {
   }, [activeSession, models, setSelectedModel, updateSession])
 
   const updateMessage = useCallback((messageId: string, patch: Partial<import('@/types').Message>) => {
-    const store = useAppStore.getState()
-    const sessionId = store.activeSessionId
-    if (!sessionId) return
-    const session = store.sessions.find((item) => item.id === sessionId)
+    const session = getCurrentChatSession()
     if (!session) return
-    updateSession(session.id, {
+    useAppStore.getState().updateSession(session.id, {
       messages: session.messages.map((message) => message.id === messageId ? { ...message, ...patch } : message),
       pinnedMessageIds: patch.pinned === undefined
         ? session.pinnedMessageIds
@@ -549,13 +552,10 @@ export function ChatMain() {
           ? Array.from(new Set([...(session.pinnedMessageIds ?? []), messageId]))
           : (session.pinnedMessageIds ?? []).filter((id) => id !== messageId),
     })
-  }, [updateSession])
+  }, [])
 
   const branchFromMessage = useCallback((messageId: string) => {
-    const store = useAppStore.getState()
-    const sessionId = store.activeSessionId
-    if (!sessionId) return
-    const session = store.sessions.find((item) => item.id === sessionId)
+    const session = getCurrentChatSession()
     if (!session) return
     const index = session.messages.findIndex((message) => message.id === messageId)
     if (index < 0) return
@@ -577,17 +577,14 @@ export function ChatMain() {
   }, [addSession, openSessionTab, t])
 
   const setMessageFeedback = useCallback((messageId: string, feedback: 'positive' | 'negative' | undefined) => {
-    const store = useAppStore.getState()
-    const sessionId = store.activeSessionId
-    if (!sessionId) return
-    const session = store.sessions.find((item) => item.id === sessionId)
+    const session = getCurrentChatSession()
     if (!session) return
-    updateSession(session.id, {
+    useAppStore.getState().updateSession(session.id, {
       messages: session.messages.map((message) =>
         message.id === messageId ? { ...message, feedback } : message,
       ),
     })
-  }, [updateSession])
+  }, [])
 
   const handleAgentSelect = useCallback((agent: Agent | null) => {
     setSelectedAgent(agent)
