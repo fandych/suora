@@ -32,6 +32,7 @@ vi.mock('./TodoProgress', () => ({
 describe('ChatMain', () => {
   beforeEach(() => {
     localStorage.clear()
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
     useAppStore.setState({
       sessions: [],
       activeSessionId: null,

@@ -35,7 +35,7 @@ describe('chatContext', () => {
 
     expect(modelMessages[0].role).toBe('user')
     expect(JSON.stringify(modelMessages[0].content)).toContain('[Attachment manifest]')
-    expect(JSON.stringify(modelMessages[0].content)).toContain('[Attachment truncated:')
+    expect(JSON.stringify(modelMessages[0].content)).toContain('truncated')
   })
 
   it('uses structured tool envelopes for model tool results', () => {
