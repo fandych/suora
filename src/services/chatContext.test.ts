@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Message } from '@/types'
-import { buildContextSummary, selectMessagesForModel, toModelMessages } from './chatContext'
+import { buildContextSummary, estimateTokens, selectMessagesForModel, toModelMessages } from './chatContext'
 
 function message(id: string, role: Message['role'], content: string): Message {
   return { id, role, content, timestamp: Number(id.replace(/\D/g, '') || 1) }
@@ -35,7 +35,7 @@ describe('chatContext', () => {
 
     expect(modelMessages[0].role).toBe('user')
     expect(JSON.stringify(modelMessages[0].content)).toContain('[Attachment manifest]')
-    expect(JSON.stringify(modelMessages[0].content)).toContain('[Attachment truncated:')
+    expect(JSON.stringify(modelMessages[0].content)).toContain('truncated')
   })
 
   it('uses structured tool envelopes for model tool results', () => {
@@ -63,5 +63,20 @@ describe('chatContext', () => {
     expect(modelMessages[1].role).toBe('tool')
     expect(JSON.stringify(modelMessages[1].content)).toContain('Large output stored externally')
     expect(JSON.stringify(modelMessages[1].content)).toContain('runtime-artifacts/tool-outputs/run-tool.txt')
+  })
+
+  it('hard-limits oversized recent turns to stay near the context budget', () => {
+    const messages = [
+      message('m1', 'user', 'u'.repeat(24_000)),
+      message('m2', 'assistant', 'a'.repeat(24_000)),
+      message('m3', 'user', 'latest question'),
+    ]
+
+    const selected = selectMessagesForModel(messages, 2_000)
+    const selectedTokens = selected.reduce((sum, entry) => sum + estimateTokens(entry.content), 0)
+
+    expect(selected[selected.length - 1]?.content).toContain('latest question')
+    expect(selectedTokens).toBeLessThanOrEqual(2_400)
+    expect(selected.some((entry) => entry.content.includes('truncated for context'))).toBe(true)
   })
 })

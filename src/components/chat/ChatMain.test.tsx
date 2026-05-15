@@ -32,6 +32,7 @@ vi.mock('./TodoProgress', () => ({
 describe('ChatMain', () => {
   beforeEach(() => {
     localStorage.clear()
+    window.HTMLElement.prototype.scrollIntoView = vi.fn()
     useAppStore.setState({
       sessions: [],
       activeSessionId: null,
@@ -293,6 +294,46 @@ describe('ChatMain', () => {
 
     // Welcome screen content should still be visible
     expect(screen.getByText(/Select or create a conversation/i)).toBeInTheDocument()
+  })
+
+  it('hides older messages in very long chats to keep rendering responsive', () => {
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const session: Session = {
+      id: 'session-1',
+      title: 'Long chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: Array.from({ length: 150 }, (_, index) => ({
+        id: `msg-${index + 1}`,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `message ${index + 1}`,
+        timestamp: Date.now() + index,
+      })),
+    }
+
+    useAppStore.setState({
+      sessions: [session],
+      activeSessionId: session.id,
+      openSessionTabs: [session.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    expect(screen.getByText('30 older messages are hidden to keep long chats responsive.')).toBeInTheDocument()
+    expect(screen.getAllByText(/^message$/)).toHaveLength(120)
   })
 
   it('ignores hidden assistant sessions in the main chat surface', async () => {
