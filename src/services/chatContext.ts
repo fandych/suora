@@ -82,9 +82,8 @@ function messageTokenCost(message: Message): number {
 
 function truncateTextForContext(label: string, value: string, maxChars: number): string {
   if (value.length <= maxChars) return value
-  const clampedChars = Math.max(0, maxChars)
-  const omitted = value.length - clampedChars
-  return `${value.slice(0, clampedChars)}\n\n[${label} truncated for context: ${omitted.toLocaleString()} characters omitted]`
+  const omitted = value.length - maxChars
+  return `${value.slice(0, maxChars)}\n\n[${label} truncated for context: ${omitted.toLocaleString()} characters omitted]`
 }
 
 function compactMessageForContext(message: Message, maxTokens: number): Message {
@@ -117,7 +116,7 @@ function compactMessageWithCharBudget(message: Message, charBudget: number): Mes
     if (!value || remainingChars <= 0) return ''
     const allocated = Math.max(80, Math.min(remainingChars, preferredMax))
     const truncated = truncateTextForContext(label, value, allocated)
-    remainingChars = Math.max(0, remainingChars - Math.min(truncated.length, allocated))
+    remainingChars = Math.max(0, remainingChars - truncated.length)
     return truncated
   }
 
