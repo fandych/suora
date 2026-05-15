@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { generateId } from '@/utils/helpers'
 import type { Agent, MessageAttachment, Model, Session } from '@/types'
@@ -339,6 +339,53 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
   )
 }
 
+const ChatMessageRow = memo(function ChatMessageRow({
+  message,
+  retryLastError,
+  deleteMessage,
+  regenerateMessage,
+  updateMessage,
+  branchFromMessage,
+  setMessageFeedback,
+}: {
+  message: import('@/types').Message
+  retryLastError: () => void
+  deleteMessage: (messageId: string) => void
+  regenerateMessage: (messageId: string) => void
+  updateMessage: (messageId: string, patch: Partial<import('@/types').Message>) => void
+  branchFromMessage: (messageId: string) => void
+  setMessageFeedback: (messageId: string, feedback: 'positive' | 'negative' | undefined) => void
+}) {
+  const handleRetry = useCallback(() => retryLastError(), [retryLastError])
+  const handleDelete = useCallback(() => deleteMessage(message.id), [deleteMessage, message.id])
+  const handleRegenerate = useCallback(() => regenerateMessage(message.id), [message.id, regenerateMessage])
+  const handleEdit = useCallback((content: string) => updateMessage(message.id, { content }), [message.id, updateMessage])
+  const handleTogglePin = useCallback(() => updateMessage(message.id, { pinned: !message.pinned }), [message.id, message.pinned, updateMessage])
+  const handleBranch = useCallback(() => branchFromMessage(message.id), [branchFromMessage, message.id])
+  const handleFeedback = useCallback((feedback: 'positive' | 'negative' | undefined) => setMessageFeedback(message.id, feedback), [message.id, setMessageFeedback])
+
+  return (
+    <MessageBubble
+      message={message}
+      onRetry={message.isError ? handleRetry : undefined}
+      onDelete={handleDelete}
+      onRegenerate={message.role === 'assistant' && !message.isStreaming ? handleRegenerate : undefined}
+      onEdit={message.role === 'user' && !message.isStreaming ? handleEdit : undefined}
+      onTogglePin={!message.isStreaming ? handleTogglePin : undefined}
+      onBranch={!message.isStreaming ? handleBranch : undefined}
+      onFeedback={message.role === 'assistant' ? handleFeedback : undefined}
+    />
+  )
+}, (prevProps, nextProps) => (
+  prevProps.message === nextProps.message
+  && prevProps.retryLastError === nextProps.retryLastError
+  && prevProps.deleteMessage === nextProps.deleteMessage
+  && prevProps.regenerateMessage === nextProps.regenerateMessage
+  && prevProps.updateMessage === nextProps.updateMessage
+  && prevProps.branchFromMessage === nextProps.branchFromMessage
+  && prevProps.setMessageFeedback === nextProps.setMessageFeedback
+))
+
 export function ChatMain() {
   const { sessions, activeSessionId, openSessionTabs, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, setActiveSession, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore()
   const { t, locale } = useI18n()
@@ -420,9 +467,9 @@ export function ChatMain() {
 
   useEffect(() => {
     if (isNearBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' })
     }
-  }, [messages])
+  }, [isStreaming, messages])
 
   const starterPrompts = useMemo(() => ([
     {
@@ -489,37 +536,58 @@ export function ChatMain() {
   }, [activeSession, models, setSelectedModel, updateSession])
 
   const updateMessage = useCallback((messageId: string, patch: Partial<import('@/types').Message>) => {
-    if (!activeSession) return
-    updateSession(activeSession.id, {
-      messages: activeSession.messages.map((message) => message.id === messageId ? { ...message, ...patch } : message),
+    const store = useAppStore.getState()
+    const sessionId = store.activeSessionId
+    if (!sessionId) return
+    const session = store.sessions.find((item) => item.id === sessionId)
+    if (!session) return
+    updateSession(session.id, {
+      messages: session.messages.map((message) => message.id === messageId ? { ...message, ...patch } : message),
       pinnedMessageIds: patch.pinned === undefined
-        ? activeSession.pinnedMessageIds
+        ? session.pinnedMessageIds
         : patch.pinned
-          ? Array.from(new Set([...(activeSession.pinnedMessageIds ?? []), messageId]))
-          : (activeSession.pinnedMessageIds ?? []).filter((id) => id !== messageId),
+          ? Array.from(new Set([...(session.pinnedMessageIds ?? []), messageId]))
+          : (session.pinnedMessageIds ?? []).filter((id) => id !== messageId),
     })
-  }, [activeSession, updateSession])
+  }, [updateSession])
 
   const branchFromMessage = useCallback((messageId: string) => {
-    if (!activeSession) return
-    const index = activeSession.messages.findIndex((message) => message.id === messageId)
+    const store = useAppStore.getState()
+    const sessionId = store.activeSessionId
+    if (!sessionId) return
+    const session = store.sessions.find((item) => item.id === sessionId)
+    if (!session) return
+    const index = session.messages.findIndex((message) => message.id === messageId)
     if (index < 0) return
     const branchSession: Session = {
-      ...activeSession,
+      ...session,
       id: generateId('session'),
-      title: `${activeSession.title}${t('chat.branchSuffix', ' · branch')}`,
+      title: `${session.title}${t('chat.branchSuffix', ' · branch')}`,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      parentSessionId: activeSession.id,
+      parentSessionId: session.id,
       branchOfMessageId: messageId,
-      messages: activeSession.messages.slice(0, index + 1).map((message) => ({
+      messages: session.messages.slice(0, index + 1).map((message) => ({
         ...message,
-        branchRootSessionId: activeSession.id,
+        branchRootSessionId: session.id,
       })),
     }
     addSession(branchSession)
     openSessionTab(branchSession.id)
-  }, [activeSession, addSession, openSessionTab])
+  }, [addSession, openSessionTab, t])
+
+  const setMessageFeedback = useCallback((messageId: string, feedback: 'positive' | 'negative' | undefined) => {
+    const store = useAppStore.getState()
+    const sessionId = store.activeSessionId
+    if (!sessionId) return
+    const session = store.sessions.find((item) => item.id === sessionId)
+    if (!session) return
+    updateSession(session.id, {
+      messages: session.messages.map((message) =>
+        message.id === messageId ? { ...message, feedback } : message,
+      ),
+    })
+  }, [updateSession])
 
   const handleAgentSelect = useCallback((agent: Agent | null) => {
     setSelectedAgent(agent)
@@ -757,23 +825,15 @@ export function ChatMain() {
                     )}
                     <div className="space-y-0.5">
                       {visibleMessages.map((msg) => (
-                        <MessageBubble
+                        <ChatMessageRow
                           key={msg.id}
                           message={msg}
-                          onRetry={msg.isError ? () => retryLastError() : undefined}
-                          onDelete={() => deleteMessage(msg.id)}
-                          onRegenerate={msg.role === 'assistant' && !msg.isStreaming ? () => regenerateMessage(msg.id) : undefined}
-                          onEdit={msg.role === 'user' && !msg.isStreaming ? (content) => updateMessage(msg.id, { content }) : undefined}
-                          onTogglePin={!msg.isStreaming ? () => updateMessage(msg.id, { pinned: !msg.pinned }) : undefined}
-                          onBranch={!msg.isStreaming ? () => branchFromMessage(msg.id) : undefined}
-                          onFeedback={msg.role === 'assistant' ? (fb) => {
-                            const session = sessions.find((item) => item.id === activeSessionId)
-                            if (!session) return
-                            const updatedMessages = session.messages.map((message) =>
-                              message.id === msg.id ? { ...message, feedback: fb } : message,
-                            )
-                            updateSession(session.id, { messages: updatedMessages })
-                          } : undefined}
+                          retryLastError={retryLastError}
+                          deleteMessage={deleteMessage}
+                          regenerateMessage={regenerateMessage}
+                          updateMessage={updateMessage}
+                          branchFromMessage={branchFromMessage}
+                          setMessageFeedback={setMessageFeedback}
                         />
                       ))}
                     </div>

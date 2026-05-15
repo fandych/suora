@@ -5,16 +5,18 @@ import { ChatMain } from './ChatMain'
 import { useAppStore } from '@/store/appStore'
 import type { Agent, Model, Session } from '@/types'
 
+const mockUseAIChatState = {
+  sendMessage: vi.fn(),
+  cancelStream: vi.fn(),
+  retryLastError: vi.fn(),
+  deleteMessage: vi.fn(),
+  regenerateMessage: vi.fn(),
+  clearMessages: vi.fn(),
+  isLoading: false,
+}
+
 vi.mock('@/hooks/useAIChat', () => ({
-  useAIChat: () => ({
-    sendMessage: vi.fn(),
-    cancelStream: vi.fn(),
-    retryLastError: vi.fn(),
-    deleteMessage: vi.fn(),
-    regenerateMessage: vi.fn(),
-    clearMessages: vi.fn(),
-    isLoading: false,
-  }),
+  useAIChat: () => mockUseAIChatState,
 }))
 
 vi.mock('./ChatMessages', () => ({
@@ -33,6 +35,13 @@ describe('ChatMain', () => {
   beforeEach(() => {
     localStorage.clear()
     window.HTMLElement.prototype.scrollIntoView = vi.fn()
+    mockUseAIChatState.sendMessage.mockReset()
+    mockUseAIChatState.cancelStream.mockReset()
+    mockUseAIChatState.retryLastError.mockReset()
+    mockUseAIChatState.deleteMessage.mockReset()
+    mockUseAIChatState.regenerateMessage.mockReset()
+    mockUseAIChatState.clearMessages.mockReset()
+    mockUseAIChatState.isLoading = false
     useAppStore.setState({
       sessions: [],
       activeSessionId: null,
@@ -334,6 +343,52 @@ describe('ChatMain', () => {
 
     expect(screen.getByText('30 older messages are hidden to keep long chats responsive.')).toBeInTheDocument()
     expect(screen.getAllByText(/^message$/)).toHaveLength(120)
+  })
+
+  it('uses auto scrolling while streaming to avoid smooth-scroll thrash', () => {
+    const scrollIntoView = vi.fn()
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView
+    mockUseAIChatState.isLoading = true
+
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const session: Session = {
+      id: 'session-1',
+      title: 'Streaming chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: [
+        {
+          id: 'msg-1',
+          role: 'assistant',
+          content: 'partial response',
+          timestamp: Date.now(),
+          isStreaming: true,
+        },
+      ],
+    }
+
+    useAppStore.setState({
+      sessions: [session],
+      activeSessionId: session.id,
+      openSessionTabs: [session.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' })
   })
 
   it('ignores hidden assistant sessions in the main chat surface', async () => {
