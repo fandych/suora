@@ -333,7 +333,7 @@ describe('ChatMain', () => {
     render(<ChatMain />)
 
     expect(screen.getByText('30 older messages are hidden to keep long chats responsive.')).toBeInTheDocument()
-    expect(screen.getAllByText('message')).toHaveLength(120)
+    expect(screen.getAllByText(/^message$/)).toHaveLength(120)
   })
 
   it('ignores hidden assistant sessions in the main chat surface', async () => {

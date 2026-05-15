@@ -18,6 +18,7 @@ const RESERVED_RECENT_MESSAGES = 8
 const COMPACT_MESSAGE_TOKEN_BUDGET = 1_200
 const MAX_CONTEXT_MESSAGE_TOKENS = 6_000
 const CONTEXT_TRUNCATION_NOTICE_TOKENS = 80
+const CONTEXT_SUMMARY_MESSAGE_ID = 'context-summary'
 
 export function estimateTokens(value: string): number {
   return Math.ceil(value.length / 4)
@@ -156,7 +157,7 @@ function enforceContextBudget(messages: Message[], tokenBudget: number): Message
   let total = adjusted.reduce((sum, message) => sum + messageTokenCost(message), 0)
 
   while (adjusted.length > 1 && total > tokenBudget) {
-    const candidateIndex = adjusted.findIndex((message) => !message.pinned && message.id !== 'context-summary')
+    const candidateIndex = adjusted.findIndex((message) => !message.pinned && message.id !== CONTEXT_SUMMARY_MESSAGE_ID)
     if (candidateIndex < 0) break
 
     const candidate = adjusted[candidateIndex]
@@ -213,7 +214,7 @@ export function selectMessagesForModel(messages: Message[], tokenBudget = DEFAUL
   }
   if (summary && selected.length > 0) {
     selected.unshift({
-      id: 'context-summary',
+      id: CONTEXT_SUMMARY_MESSAGE_ID,
       role: 'assistant',
       content: summary,
       timestamp: Date.now(),

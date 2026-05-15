@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Message } from '@/types'
-import { buildContextSummary, selectMessagesForModel, toModelMessages } from './chatContext'
+import { buildContextSummary, estimateTokens, selectMessagesForModel, toModelMessages } from './chatContext'
 
 function message(id: string, role: Message['role'], content: string): Message {
   return { id, role, content, timestamp: Number(id.replace(/\D/g, '') || 1) }
@@ -73,7 +73,7 @@ describe('chatContext', () => {
     ]
 
     const selected = selectMessagesForModel(messages, 2_000)
-    const selectedTokens = selected.reduce((sum, entry) => sum + Math.ceil(entry.content.length / 4), 0)
+    const selectedTokens = selected.reduce((sum, entry) => sum + estimateTokens(entry.content), 0)
 
     expect(selected[selected.length - 1]?.content).toContain('latest question')
     expect(selectedTokens).toBeLessThanOrEqual(2_400)
