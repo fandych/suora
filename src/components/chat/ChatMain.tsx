@@ -12,6 +12,8 @@ import { ChatInput } from './ChatInput'
 import { TodoProgress } from './TodoProgress'
 import { AgentStateDebug } from '@/components/debug/AgentStateDebug'
 
+const MAX_RENDERED_MESSAGES = 120
+
 function formatRelativeLabel(ts: number, locale = 'en'): string {
   const diffSeconds = Math.round((ts - Date.now()) / 1000)
   const absSeconds = Math.abs(diffSeconds)
@@ -378,6 +380,10 @@ export function ChatMain() {
 
   const activeSession = chatSessions.find((s) => s.id === activeSessionId) ?? null
   const messages = activeSession?.messages ?? []
+  const hiddenMessageCount = Math.max(0, messages.length - MAX_RENDERED_MESSAGES)
+  const visibleMessages = hiddenMessageCount > 0
+    ? messages.slice(-MAX_RENDERED_MESSAGES)
+    : messages
   const enabledModels = useMemo(() => models.filter((model) => model.enabled), [models])
   const providerNameById = useMemo(
     () => new Map(providerConfigs.map((config) => [config.id, config.name])),
@@ -744,8 +750,13 @@ export function ChatMain() {
                 <section className="relative overflow-visible">
                   <div className="relative z-10 px-1 py-1 sm:px-2 xl:px-3">
                     <TodoProgress />
+                    {hiddenMessageCount > 0 && (
+                      <div className="mb-3 rounded-2xl border border-amber-500/18 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-200">
+                        {t('chat.hiddenOlderMessages', '{count} older messages are hidden to keep long chats responsive.').replace('{count}', hiddenMessageCount.toLocaleString())}
+                      </div>
+                    )}
                     <div className="space-y-0.5">
-                      {messages.map((msg) => (
+                      {visibleMessages.map((msg) => (
                         <MessageBubble
                           key={msg.id}
                           message={msg}

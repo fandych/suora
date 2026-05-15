@@ -15,6 +15,9 @@ export const MAX_TEXT_ATTACHMENT_CHARS = 24_000
 export const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024
 const DEFAULT_MODEL_HISTORY_TOKEN_BUDGET = 24_000
 const RESERVED_RECENT_MESSAGES = 8
+const COMPACT_MESSAGE_TOKEN_BUDGET = 1_200
+const MAX_CONTEXT_MESSAGE_TOKENS = 6_000
+const CONTEXT_TRUNCATION_NOTICE_TOKENS = 80
 
 export function estimateTokens(value: string): number {
   return Math.ceil(value.length / 4)
@@ -77,6 +80,105 @@ function messageTokenCost(message: Message): number {
   return estimateTokens(text)
 }
 
+function truncateTextForContext(label: string, value: string, maxChars: number): string {
+  if (value.length <= maxChars) return value
+  const clampedChars = Math.max(0, maxChars)
+  const omitted = value.length - clampedChars
+  return `${value.slice(0, clampedChars)}\n\n[${label} truncated for context: ${omitted.toLocaleString()} characters omitted]`
+}
+
+function compactMessageForContext(message: Message, maxTokens: number): Message {
+  const safeMaxTokens = Math.max(maxTokens, CONTEXT_TRUNCATION_NOTICE_TOKENS)
+  let charBudget = Math.max(safeMaxTokens * 4, 320)
+  let compacted = compactMessageWithCharBudget(message, charBudget)
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const cost = messageTokenCost(compacted)
+    if (cost <= safeMaxTokens) return compacted
+    const shrinkRatio = Math.max(0.35, safeMaxTokens / Math.max(cost, 1))
+    const nextBudget = Math.max(160, Math.floor(charBudget * shrinkRatio * 0.92))
+    if (nextBudget >= charBudget) break
+    charBudget = nextBudget
+    compacted = compactMessageWithCharBudget(message, charBudget)
+  }
+
+  return compacted
+}
+
+function compactMessageWithCharBudget(message: Message, charBudget: number): Message {
+  const nextMessage: Message = {
+    ...message,
+    content: '',
+    contentParts: undefined,
+  }
+  let remainingChars = Math.max(0, charBudget)
+
+  const assignChunk = (value: string, label: string, preferredMax: number): string => {
+    if (!value || remainingChars <= 0) return ''
+    const allocated = Math.max(80, Math.min(remainingChars, preferredMax))
+    const truncated = truncateTextForContext(label, value, allocated)
+    remainingChars = Math.max(0, remainingChars - Math.min(truncated.length, allocated))
+    return truncated
+  }
+
+  const contentShare = message.content
+    ? (message.attachments?.length || message.toolCalls?.length ? Math.floor(charBudget * 0.45) : charBudget)
+    : 0
+  nextMessage.content = assignChunk(message.content ?? '', message.role === 'user' ? 'User message' : 'Assistant message', contentShare)
+
+  if (message.attachments?.length) {
+    const attachmentBudget = Math.max(240, Math.floor(charBudget * 0.35))
+    const perAttachmentBudget = Math.max(120, Math.floor(attachmentBudget / message.attachments.length))
+    nextMessage.attachments = message.attachments.map((attachment) => {
+      if (attachment.type !== 'file') return attachment
+      return {
+        ...attachment,
+        data: assignChunk(attachment.data, `Attachment ${attachment.name}`, perAttachmentBudget),
+      }
+    })
+  }
+
+  if (message.toolCalls?.length) {
+    const toolBudget = Math.max(200, Math.floor(charBudget * 0.3))
+    const perToolBudget = Math.max(120, Math.floor(toolBudget / message.toolCalls.length))
+    nextMessage.toolCalls = message.toolCalls.map((toolCall) => ({
+      ...toolCall,
+      output: toolCall.output
+        ? assignChunk(toolCall.output, `Tool result ${toolCall.toolName}`, perToolBudget)
+        : toolCall.output,
+    }))
+  }
+
+  return nextMessage
+}
+
+function enforceContextBudget(messages: Message[], tokenBudget: number): Message[] {
+  const adjusted = [...messages]
+  let total = adjusted.reduce((sum, message) => sum + messageTokenCost(message), 0)
+
+  while (adjusted.length > 1 && total > tokenBudget) {
+    const candidateIndex = adjusted.findIndex((message) => !message.pinned && message.id !== 'context-summary')
+    if (candidateIndex < 0) break
+
+    const candidate = adjusted[candidateIndex]
+    const compactBudget = Math.max(Math.min(COMPACT_MESSAGE_TOKEN_BUDGET, tokenBudget), CONTEXT_TRUNCATION_NOTICE_TOKENS)
+    const compacted = compactMessageForContext(candidate, compactBudget)
+    const currentCost = messageTokenCost(candidate)
+    const compactedCost = messageTokenCost(compacted)
+
+    if (compactedCost < currentCost) {
+      adjusted[candidateIndex] = compacted
+      total = total - currentCost + compactedCost
+      continue
+    }
+
+    adjusted.splice(candidateIndex, 1)
+    total -= currentCost
+  }
+
+  return adjusted
+}
+
 export function buildContextSummary(messages: Message[], tokenBudget = DEFAULT_MODEL_HISTORY_TOKEN_BUDGET): string | undefined {
   const total = messages.reduce((sum, message) => sum + messageTokenCost(message), 0)
   if (total <= tokenBudget) return undefined
@@ -87,16 +189,22 @@ export function buildContextSummary(messages: Message[], tokenBudget = DEFAULT_M
 
 export function selectMessagesForModel(messages: Message[], tokenBudget = DEFAULT_MODEL_HISTORY_TOKEN_BUDGET): Message[] {
   const selected: Message[] = []
-  const pinnedMessages = messages.filter((message) => message.pinned)
+  const pinnedMessages = messages
+    .filter((message) => message.pinned)
+    .map((message) => compactMessageForContext(message, MAX_CONTEXT_MESSAGE_TOKENS))
   let remaining = tokenBudget
 
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     const message = messages[index]
     if (message.pinned) continue
-    const cost = messageTokenCost(message)
+    const maxTokensForMessage = isFinite(remaining)
+      ? Math.max(Math.min(remaining, MAX_CONTEXT_MESSAGE_TOKENS), CONTEXT_TRUNCATION_NOTICE_TOKENS)
+      : MAX_CONTEXT_MESSAGE_TOKENS
+    const compactedMessage = compactMessageForContext(message, maxTokensForMessage)
+    const cost = messageTokenCost(compactedMessage)
     const isRecent = messages.length - index <= RESERVED_RECENT_MESSAGES
     if (!isRecent && selected.length > 0 && remaining - cost < 0) break
-    selected.unshift(message)
+    selected.unshift(compactedMessage)
     remaining -= cost
   }
 
@@ -113,7 +221,7 @@ export function selectMessagesForModel(messages: Message[], tokenBudget = DEFAUL
     })
   }
 
-  return selected
+  return enforceContextBudget(selected, tokenBudget)
 }
 
 export function toModelMessages(messages: Message[], tokenBudget = DEFAULT_MODEL_HISTORY_TOKEN_BUDGET): ModelMessage[] {

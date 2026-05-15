@@ -64,4 +64,19 @@ describe('chatContext', () => {
     expect(JSON.stringify(modelMessages[1].content)).toContain('Large output stored externally')
     expect(JSON.stringify(modelMessages[1].content)).toContain('runtime-artifacts/tool-outputs/run-tool.txt')
   })
+
+  it('hard-limits oversized recent turns to stay near the context budget', () => {
+    const messages = [
+      message('m1', 'user', 'u'.repeat(24_000)),
+      message('m2', 'assistant', 'a'.repeat(24_000)),
+      message('m3', 'user', 'latest question'),
+    ]
+
+    const selected = selectMessagesForModel(messages, 2_000)
+    const selectedTokens = selected.reduce((sum, entry) => sum + Math.ceil(entry.content.length / 4), 0)
+
+    expect(selected[selected.length - 1]?.content).toContain('latest question')
+    expect(selectedTokens).toBeLessThanOrEqual(2_400)
+    expect(selected.some((entry) => entry.content.includes('truncated for context'))).toBe(true)
+  })
 })
