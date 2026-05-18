@@ -5,35 +5,49 @@ title: Workbench map
 
 # Workbench map
 
-Suora is not a single-chat shell. The current application already spans multiple product areas.
+Suora is a multi-module desktop workbench. These routes are already part of the current product surface.
 
 <div className="doc-chip-row">
-  <div className="doc-chip"><strong>Interaction</strong><span>Chat · Models · Agents · Settings</span></div>
+  <div className="doc-chip"><strong>Work with AI</strong><span>Chat · Models · Agents · Settings</span></div>
   <div className="doc-chip"><strong>Knowledge</strong><span>Documents · Skills</span></div>
   <div className="doc-chip"><strong>Automation</strong><span>Pipeline · Timer</span></div>
-  <div className="doc-chip"><strong>Connectivity</strong><span>Channels · MCP</span></div>
+  <div className="doc-chip"><strong>Connect external systems</strong><span>Channels · MCP</span></div>
 </div>
 
-## Route surface
-
-The current top-level routes include:
+## Top-level routes
 
 - `/chat`
 - `/documents`
 - `/pipeline`
 - `/models/:view`
 - `/agents`
-- `/skills`
+- `/skills` (legacy `/skills/:view` redirects here)
 - `/timer`
 - `/channels`
 - `/mcp`
 - `/settings/:section`
 
-## Why this matters for documentation
+## Module groups
 
-The homepage should feel like a hub for a real workbench, not a single-product marketing splash. That is why the new Pages design emphasizes:
+| Group | Routes | What it covers |
+| --- | --- | --- |
+| Work with AI | `/chat`, `/models/:view`, `/agents`, `/settings/:section` | Conversations, model setup, agent configuration, and workspace preferences |
+| Build knowledge and automation | `/documents`, `/skills`, `/pipeline`, `/timer` | Local notes, reusable skills, workflow automation, and scheduled actions |
+| Connect external systems | `/channels`, `/mcp` | Messaging integrations and MCP server connections |
 
-- module navigation
-- curated documentation entry points
-- release downloads
-- a persistent repository entry
+## Default route behavior
+
+- `/` redirects to `/chat`
+- `/models` redirects to `/models/providers`
+- `/skills/:view` redirects to `/skills`
+- `/settings` redirects to `/settings/general`
+
+## Settings sections
+
+- `general`
+- `security`
+- `voice`
+- `shortcuts`
+- `data`
+- `logs`
+- `system`

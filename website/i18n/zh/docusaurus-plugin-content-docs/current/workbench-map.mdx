@@ -5,33 +5,49 @@ title: 工作台地图
 
 # 工作台地图
 
-Suora 不是一个单聊天壳，而是已经覆盖多个模块的桌面工作台。
+Suora 是一个多模块桌面工作台，下面这些路由都已经属于当前产品范围。
 
 <div className="doc-chip-row">
-  <div className="doc-chip"><strong>交互层</strong><span>Chat · Models · Agents · Settings</span></div>
+  <div className="doc-chip"><strong>与 AI 协作</strong><span>Chat · Models · Agents · Settings</span></div>
   <div className="doc-chip"><strong>知识层</strong><span>Documents · Skills</span></div>
   <div className="doc-chip"><strong>自动化</strong><span>Pipeline · Timer</span></div>
-  <div className="doc-chip"><strong>外部连接</strong><span>Channels · MCP</span></div>
+  <div className="doc-chip"><strong>连接外部系统</strong><span>Channels · MCP</span></div>
 </div>
 
-## 当前顶层路由
+## 顶层路由
 
 - `/chat`
 - `/documents`
 - `/pipeline`
 - `/models/:view`
 - `/agents`
-- `/skills/:view`
+- `/skills`（旧路由 `/skills/:view` 会跳转到这里）
 - `/timer`
 - `/channels`
 - `/mcp`
 - `/settings/:section`
 
-## 为什么首页要这样设计
+## 模块分组
 
-新的 GitHub Pages 首页应该看起来像真正的文档门户，而不是单页营销页，所以它更强调：
+| 分组 | 路由 | 主要用途 |
+| --- | --- | --- |
+| 与 AI 协作 | `/chat`、`/models/:view`、`/agents`、`/settings/:section` | 对话、模型配置、Agent 管理，以及工作区偏好设置 |
+| 知识与自动化 | `/documents`、`/skills`、`/pipeline`、`/timer` | 本地文档、技能复用、流程编排和定时执行 |
+| 连接外部系统 | `/channels`、`/mcp` | 消息渠道接入与 MCP 服务连接 |
 
-- 模块入口
-- 文档跳转
-- 发布下载
-- 常驻仓库入口
+## 默认跳转
+
+- `/` 会跳转到 `/chat`
+- `/models` 会跳转到 `/models/providers`
+- `/skills/:view` 会跳转到 `/skills`
+- `/settings` 会跳转到 `/settings/general`
+
+## 设置分区
+
+- `general`
+- `security`
+- `voice`
+- `shortcuts`
+- `data`
+- `logs`
+- `system`
