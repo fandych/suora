@@ -1,12 +1,12 @@
 import type {LocaleContent} from './homeContentTypes';
 
 export const homeContentEn: LocaleContent = {
-  metaTitle: 'Suora docs portal',
-  metaDescription: 'Docusaurus-powered GitHub Pages portal for Suora with English-only pages, language buttons, and a prominent GitHub repo entry.',
-  pageEyebrow: 'GitHub Pages · Docusaurus · React + MDX',
-  heroTitle: 'A polished front door for the Suora AI workbench.',
+  metaTitle: 'Suora documentation',
+  metaDescription: 'Local-first AI workbench docs for chat, documents, agents, skills, pipelines, timers, channels, MCP, and settings.',
+  pageEyebrow: 'Local-first desktop AI workbench',
+  heroTitle: 'Suora for chat, knowledge, and automation.',
   heroSummary:
-    'This GitHub Pages site is now built with Docusaurus, uses single-language pages, and keeps the GitHub repository visible from the first glance. The layout borrows the documentation-first rhythm of turbo-broccoli while staying tailored to Suora.',
+    'Use Suora to run conversations, organize local documents, manage models and agents, build reusable skills, automate workflows, and connect external systems from one desktop workspace.',
   heroButtons: {
     docs: 'Open docs',
     releases: 'Latest release',
@@ -14,7 +14,7 @@ export const homeContentEn: LocaleContent = {
   },
   sidebarTitle: 'On this page',
   sidebarSummary:
-    'A documentation-portal layout with one language per page, sticky navigation, and fast paths to releases and repository sources.',
+    'Jump between the product overview, setup path, key guides, and release downloads.',
   anchorLabels: [
     {href: '#overview', label: 'Overview'},
     {href: '#quickstart', label: 'Quick start'},
@@ -23,14 +23,14 @@ export const homeContentEn: LocaleContent = {
   ],
   repoTitle: 'GitHub repository',
   repoSummary:
-    'Use the repo as the source of truth for code, release notes, issues, and the long-form markdown document set.',
+    'Browse source code, issues, release notes, and the full markdown manuals in GitHub.',
   repoButtons: {
     repo: 'Open repo',
     release: 'Open releases',
   },
-  releaseCardTitle: 'Live release status',
+  releaseCardTitle: 'Latest packaged release',
   releaseCardSummary:
-    'The homepage keeps a bundled fallback snapshot, then refreshes from GitHub Releases at runtime.',
+    'Check the newest tag and download packaged builds for Windows, macOS, and Linux.',
   releaseLive: 'Live release data loaded from GitHub.',
   releaseFallback:
     'Live release data is temporarily unavailable, so the bundled release snapshot is shown instead.',
@@ -41,43 +41,44 @@ export const homeContentEn: LocaleContent = {
   },
   stats: [
     {value: '10', label: 'top-level workbench areas'},
-    {value: '2', label: 'homepage locales'},
-    {value: 'React + MDX', label: 'Pages implementation'},
-    {value: 'GitHub Pages', label: 'Deployment target'},
+    {value: '7', label: 'settings sections'},
+    {value: '3', label: 'desktop platforms'},
+    {value: 'BYOK + local', label: 'model strategy'},
   ],
   sectionLabels: {
     quickstart: 'Start here',
     docs: 'Documentation',
     downloads: 'Releases',
   },
-  quickstartTitle: 'Get into the right path fast.',
+  quickstartTitle: 'Start with the shortest setup path.',
   quickstartSummary:
-    'Use the shortest route for installation, workbench orientation, or deeper implementation reading.',
+    'Set up a provider, open the right module first, and then continue into the guide that matches your workflow.',
   quickstartSteps: [
-    'Download the newest Windows, macOS, or Linux build from GitHub Releases.',
-    'Configure at least one provider or local model endpoint in the Models module.',
-    'Pick Chat, Documents, Pipelines, or Timer based on the workflow you want to explore first.',
+    'Download the latest Windows, macOS, or Linux build from GitHub Releases.',
+    'Open Models and configure at least one provider or local model endpoint.',
+    'Start in Chat for conversations or Documents for local notes and context.',
+    'Add Pipeline or Timer once you want repeatable automation.',
   ],
   routesTitle: 'Current workbench shape',
   routesSummary:
-    'Suora is a multi-surface desktop workbench, not a single-chat shell. These modules are already first-class product areas.',
+    'Suora already ships as a multi-module desktop workbench, not a single-chat shell.',
   routes: [
-    {title: 'Interaction layer', items: ['Chat', 'Models', 'Agents', 'Settings']},
-    {title: 'Knowledge + automation', items: ['Documents', 'Skills', 'Pipeline', 'Timer']},
-    {title: 'External connectivity', items: ['Channels', 'MCP', 'Releases']},
+    {title: 'Work with AI', items: ['Chat', 'Models', 'Agents', 'Settings']},
+    {title: 'Build knowledge and automation', items: ['Documents', 'Skills', 'Pipeline', 'Timer']},
+    {title: 'Connect external systems', items: ['Channels', 'MCP']},
   ],
-  docsTitle: 'Curated documentation paths',
+  docsTitle: 'Choose the right guide',
   docsSummary:
-    'The Docusaurus layer gives GitHub Pages a cleaner reading flow while linking out to the longer repository-backed manuals when needed.',
+    'Start with the short pages here, then open the longer repository-backed manuals for full workflows and implementation details.',
   docCards: [
-    {title: 'Getting started', description: 'Install flow, first launch sequence, and the fastest way to orient yourself.', to: '/docs/intro', cta: 'Read guide'},
-    {title: 'Workbench map', description: 'A concise map of modules, routes, and the product surface shipping today.', to: '/docs/workbench-map', cta: 'Explore map'},
-    {title: 'Docs library', description: 'Direct links to README, feature reference, technical docs, and user guides.', to: '/docs/docs-library', cta: 'Open library'},
-    {title: 'Downloads', description: 'Release channels, package formats, and platform-specific installation notes.', to: '/docs/downloads', cta: 'See downloads'},
+    {title: 'Getting started', description: 'First-run setup, module entry points, and the fastest onboarding path.', to: '/docs/intro', cta: 'Read guide'},
+    {title: 'Workbench map', description: 'Current routes, module groups, and the product surface shipping today.', to: '/docs/workbench-map', cta: 'Explore map'},
+    {title: 'Docs library', description: 'Pick the manual you need for usage, testing, channels, or architecture.', to: '/docs/docs-library', cta: 'Open library'},
+    {title: 'Downloads', description: 'Platform packages, source run commands, and release entry points.', to: '/docs/downloads', cta: 'See downloads'},
   ],
-  librariesTitle: 'Repository-backed references',
+  librariesTitle: 'Long-form manuals in GitHub',
   librariesSummary:
-    'When you need the complete markdown set, jump straight to the source documents in GitHub.',
+    'Open the repository manuals when you need the full reference set.',
   libraryLinks: [
     {label: 'README', href: 'https://github.com/fandych/suora/blob/main/README.md'},
     {label: 'FEATURES.md', href: 'https://github.com/fandych/suora/blob/main/FEATURES.md'},
@@ -86,13 +87,13 @@ export const homeContentEn: LocaleContent = {
     {label: 'Technical docs (ZH)', href: 'https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_ZH.md'},
     {label: 'User guide (ZH)', href: 'https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_ZH.md'},
   ],
-  downloadsTitle: 'Release-ready download flow',
+  downloadsTitle: 'Download or run from source',
   downloadsSummary:
-    'GitHub Pages now acts like a release foyer: documentation first, package decisions second, repository entry always visible.',
+    'Releases provide packaged desktop apps, while the repository provides the source workflow for contributors.',
   platformCards: [
-    {title: 'Windows', description: 'Installer and portable release assets are published from GitHub Releases.'},
-    {title: 'macOS', description: 'DMG and ZIP packages are listed in every tagged release build.'},
-    {title: 'Linux', description: 'AppImage, DEB, and RPM packages are linked from the latest release page.'},
+    {title: 'Windows', description: 'Use the installer or portable executable attached to each release.'},
+    {title: 'macOS', description: 'Download the DMG or ZIP package from the latest tagged release.'},
+    {title: 'Linux', description: 'Use the AppImage, DEB, or RPM package published on the release page.'},
   ],
   versionLabel: (version) => `Open ${version}`,
   releaseSummary: (version) => `Download packages from ${version}.`,
