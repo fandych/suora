@@ -17,5 +17,7 @@ dev-app-update.yml
 
 # Coverage
 coverage/
+playwright-report/
+test-results/
 temp/
 tmp/

@@ -25,7 +25,7 @@ import { useAppStore } from '@/store/appStore'
 import { generateId } from '@/utils/helpers'
 import type { Message, ToolCall, MessageAttachment, ContentPart } from '@/types'
 
-const STREAM_FLUSH_INTERVAL = 50 // ms between store updates during text streaming
+const STREAM_FLUSH_INTERVAL = 100 // ms between store updates during text streaming
 
 type PipelineChatLanguage = 'en' | 'zh'
 
