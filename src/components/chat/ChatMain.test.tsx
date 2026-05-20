@@ -391,6 +391,54 @@ describe('ChatMain', () => {
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' })
   })
 
+  it('does not cancel generation when switching main chat sessions', async () => {
+    mockUseAIChatState.isLoading = true
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const sessions: Session[] = [
+      {
+        id: 'session-1',
+        title: 'First chat',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        modelId: model.id,
+        messages: [{ id: 'msg-1', role: 'assistant', content: 'working', timestamp: Date.now(), isStreaming: true }],
+      },
+      {
+        id: 'session-2',
+        title: 'Second chat',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        modelId: model.id,
+        messages: [],
+      },
+    ]
+
+    useAppStore.setState({
+      sessions,
+      activeSessionId: 'session-1',
+      openSessionTabs: sessions.map((session) => session.id),
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    useAppStore.getState().setActiveSession('session-2')
+
+    await waitFor(() => expect(screen.getAllByText('Second chat').length).toBeGreaterThan(0))
+    expect(mockUseAIChatState.cancelStream).not.toHaveBeenCalled()
+  })
+
   it('ignores hidden assistant sessions in the main chat surface', async () => {
     const model: Model = {
       id: 'model-1',

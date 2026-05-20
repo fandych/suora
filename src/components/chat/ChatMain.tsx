@@ -424,7 +424,7 @@ export function ChatMain() {
 
   useEffect(() => {
     return () => { cancelStream() }
-  }, [activeSessionId, cancelStream])
+  }, [cancelStream])
 
   useEffect(() => {
     if (!activeSessionId || chatSessionIds.has(activeSessionId)) return

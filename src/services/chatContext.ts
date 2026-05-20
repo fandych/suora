@@ -154,26 +154,76 @@ function compactMessageWithCharBudget(message: Message, charBudget: number): Mes
 
 function enforceContextBudget(messages: Message[], tokenBudget: number): Message[] {
   const adjusted = [...messages]
+  const latestMessageId = [...adjusted]
+    .reverse()
+    .find((message) => message.id !== CONTEXT_SUMMARY_MESSAGE_ID)?.id
   let total = adjusted.reduce((sum, message) => sum + messageTokenCost(message), 0)
 
-  while (adjusted.length > 1 && total > tokenBudget) {
-    const candidateIndex = adjusted.findIndex((message) => !message.pinned && message.id !== CONTEXT_SUMMARY_MESSAGE_ID)
-    if (candidateIndex < 0) break
+  const chooseCandidate = (): { index: number; removable: boolean; removeOnly?: boolean } | undefined => {
+    const olderUnpinnedIndex = adjusted.findIndex((message) => (
+      !message.pinned
+      && message.id !== CONTEXT_SUMMARY_MESSAGE_ID
+      && message.id !== latestMessageId
+    ))
+    if (olderUnpinnedIndex >= 0) return { index: olderUnpinnedIndex, removable: true }
 
-    const candidate = adjusted[candidateIndex]
-    const compactBudget = Math.max(Math.min(COMPACT_MESSAGE_TOKEN_BUDGET, tokenBudget), CONTEXT_TRUNCATION_NOTICE_TOKENS)
-    const compacted = compactMessageForContext(candidate, compactBudget)
+    const pinnedIndex = adjusted.findIndex((message) => message.pinned && message.id !== latestMessageId)
+    if (pinnedIndex >= 0) return { index: pinnedIndex, removable: false }
+
+    const summaryIndex = adjusted.findIndex((message) => message.id === CONTEXT_SUMMARY_MESSAGE_ID)
+    if (summaryIndex >= 0) return { index: summaryIndex, removable: true, removeOnly: true }
+
+    const latestIndex = adjusted.findIndex((message) => message.id === latestMessageId)
+    if (latestIndex >= 0) return { index: latestIndex, removable: false }
+
+    return undefined
+  }
+
+  let attempts = 0
+  while (adjusted.length > 0 && total > tokenBudget && attempts < messages.length * 4 + 8) {
+    attempts += 1
+    const candidateInfo = chooseCandidate()
+    if (!candidateInfo) break
+
+    const candidate = adjusted[candidateInfo.index]
     const currentCost = messageTokenCost(candidate)
+
+    if (candidateInfo.removeOnly) {
+      adjusted.splice(candidateInfo.index, 1)
+      total -= currentCost
+      continue
+    }
+
+    const remainingForCandidate = tokenBudget - (total - currentCost)
+    const compactBudget = Math.max(
+      Math.min(COMPACT_MESSAGE_TOKEN_BUDGET, tokenBudget, remainingForCandidate),
+      CONTEXT_TRUNCATION_NOTICE_TOKENS,
+    )
+    const compacted = compactMessageForContext(candidate, compactBudget)
     const compactedCost = messageTokenCost(compacted)
 
     if (compactedCost < currentCost) {
-      adjusted[candidateIndex] = compacted
+      adjusted[candidateInfo.index] = compacted
       total = total - currentCost + compactedCost
       continue
     }
 
-    adjusted.splice(candidateIndex, 1)
-    total -= currentCost
+    if (candidate.pinned) {
+      const summaryIndex = adjusted.findIndex((message) => message.id === CONTEXT_SUMMARY_MESSAGE_ID)
+      if (summaryIndex >= 0) {
+        total -= messageTokenCost(adjusted[summaryIndex])
+        adjusted.splice(summaryIndex, 1)
+        continue
+      }
+    }
+
+    if (candidateInfo.removable && adjusted.length > 1) {
+      adjusted.splice(candidateInfo.index, 1)
+      total -= currentCost
+      continue
+    }
+
+    break
   }
 
   return adjusted

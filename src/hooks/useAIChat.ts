@@ -206,38 +206,44 @@ interface UseAIChatOptions {
   sessionId?: string | null
 }
 
+interface ActiveChatStream {
+  abortController: AbortController
+  messageId: string
+}
+
 export function useAIChat(options: UseAIChatOptions = {}) {
-  const [isLoading, setIsLoading] = useState(false)
+  const [, setStreamVersion] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const { sessionId: targetSessionId } = options
 
-  const streamingRef = useRef(false)
-  const abortRef = useRef<AbortController | null>(null)
-  const activeStreamMessageRef = useRef<{ sessionId: string; messageId: string } | null>(null)
+  const activeStreamsRef = useRef(new Map<string, ActiveChatStream>())
 
-  useEffect(() => {
-    return () => { abortRef.current?.abort() }
+  const notifyStreamChange = useCallback(() => {
+    setStreamVersion((version) => version + 1)
   }, [])
 
   const resolveTargetSession = useCallback((store = useAppStore.getState()) => {
-    const resolvedSessionId = activeStreamMessageRef.current?.sessionId ?? targetSessionId ?? store.activeSessionId
+    const resolvedSessionId = targetSessionId ?? store.activeSessionId
     if (!resolvedSessionId) return null
     return store.sessions.find((session) => session.id === resolvedSessionId) ?? null
   }, [targetSessionId])
 
-  const cancelStream = useCallback(() => {
-    abortRef.current?.abort()
-    abortRef.current = null
-    // Immediately clear loading state so the UI reflects the stop
-    streamingRef.current = false
-    setIsLoading(false)
-
+  const cancelStream = useCallback((sessionId?: string, reason = 'Cancelled by user') => {
     const store = useAppStore.getState()
-    const activeStreamMessage = activeStreamMessageRef.current
-    const session = resolveTargetSession(store)
+    const resolvedSessionId = sessionId ?? targetSessionId ?? store.activeSessionId
+    if (!resolvedSessionId) return
+
+    const activeStream = activeStreamsRef.current.get(resolvedSessionId)
+    activeStream?.abortController.abort()
+    if (activeStream) {
+      activeStreamsRef.current.delete(resolvedSessionId)
+      notifyStreamChange()
+    }
+
+    const session = store.sessions.find((item) => item.id === resolvedSessionId) ?? null
     if (!session) return
-    const lastMsg = activeStreamMessage
-      ? session.messages.find((message) => message.id === activeStreamMessage.messageId)
+    const lastMsg = activeStream
+      ? session.messages.find((message) => message.id === activeStream.messageId)
       : session.messages[session.messages.length - 1]
     if (!lastMsg || lastMsg.role !== 'assistant') return
 
@@ -254,24 +260,44 @@ export function useAIChat(options: UseAIChatOptions = {}) {
             isStreaming: false,
             cancellation: {
               cancelledAt: Date.now(),
-              cancelReason: 'Cancelled by user',
+              cancelReason: reason,
               partialContentLength: lastMsg.content.length,
             },
           }
         : message),
     })
-  }, [resolveTargetSession])
+  }, [notifyStreamChange, targetSessionId])
+
+  const setActiveStream = useCallback((sessionId: string, stream: ActiveChatStream) => {
+    activeStreamsRef.current.set(sessionId, stream)
+    notifyStreamChange()
+  }, [notifyStreamChange])
+
+  const clearActiveStream = useCallback((sessionId: string, abortController: AbortController) => {
+    const activeStream = activeStreamsRef.current.get(sessionId)
+    if (activeStream?.abortController !== abortController) return
+    activeStreamsRef.current.delete(sessionId)
+    notifyStreamChange()
+  }, [notifyStreamChange])
+
+  useEffect(() => {
+    return () => {
+      for (const sessionId of Array.from(activeStreamsRef.current.keys())) {
+        cancelStream(sessionId)
+      }
+    }
+  }, [cancelStream])
 
   const sendMessage = useCallback(async (userMessage: string, attachments?: MessageAttachment[]) => {
     const earlyPipelineCommand = parseSlashPipelineChatCommand(userMessage)
-    if (streamingRef.current) {
-      if (earlyPipelineCommand?.type === 'cancel') cancelStream()
-      return
-    }
-
     const store = useAppStore.getState()
     const activeSession = store.sessions.find((s) => s.id === (targetSessionId ?? store.activeSessionId))
     if (!activeSession) { setError('No active session'); return }
+
+    if (activeStreamsRef.current.has(activeSession.id)) {
+      if (earlyPipelineCommand?.type === 'cancel') cancelStream(activeSession.id)
+      return
+    }
 
     const prevMessages = activeSession.messages
     const userMsg: Message = {
@@ -303,12 +329,9 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         : null)
 
     if (pipelineCommand) {
-      streamingRef.current = true
-      setIsLoading(true)
       setError(null)
 
       const abortController = new AbortController()
-      abortRef.current = abortController
 
       const assistantMsg: Message = {
         id: generateId('msg'),
@@ -326,6 +349,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         messages: [...prevMessages, userMsg, assistantMsg],
         title: prevMessages.length === 0 ? userMessage.slice(0, 30) : activeSession.title,
       })
+      setActiveStream(activeSession.id, { abortController, messageId: assistantMsg.id })
 
       try {
         if (pipelineCommand.type === 'list') {
@@ -522,9 +546,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
           isError: true,
         })
       } finally {
-        streamingRef.current = false
-        abortRef.current = null
-        setIsLoading(false)
+        clearActiveStream(activeSession.id, abortController)
       }
 
       return
@@ -559,12 +581,9 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       return
     }
 
-    streamingRef.current = true
-    setIsLoading(true)
     setError(null)
 
     const abortController = new AbortController()
-    abortRef.current = abortController
 
     try {
       if (model.apiKey || model.providerType === 'ollama') {
@@ -574,8 +593,6 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to initialize AI provider'
       setError(errorMsg)
       pushImmediateAssistantReply(errorMsg, true)
-      streamingRef.current = false
-      setIsLoading(false)
       return
     }
 
@@ -603,7 +620,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       messages: [...prevMessages, userMsg, assistantMsg],
       title: prevMessages.length === 0 ? userMessage.slice(0, 30) : activeSession.title,
     })
-    activeStreamMessageRef.current = { sessionId: activeSession.id, messageId: assistantMsg.id }
+    setActiveStream(activeSession.id, { abortController, messageId: assistantMsg.id })
 
     const perfStart = performance.now()
     let tokenUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
@@ -687,7 +704,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         inactivityTimer = setTimeout(() => {
           logger.warn('[Chat:Timeout] No stream events for 5 minutes — aborting')
           setError('Response timed out — no data received for 5 minutes. Please retry.')
-          abortController.abort()
+          cancelStream(activeSession.id, 'Response timed out — no data received for 5 minutes')
         }, STREAM_INACTIVITY_TIMEOUT_MS)
       }
       resetInactivityTimer()
@@ -914,14 +931,11 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         }
       }
     } finally {
-      streamingRef.current = false
-      abortRef.current = null
-      activeStreamMessageRef.current = null
+      clearActiveStream(activeSession.id, abortController)
       if (inactivityTimer) {
         clearTimeout(inactivityTimer)
         inactivityTimer = null
       }
-      setIsLoading(false)
       const elapsed = Math.round(performance.now() - perfStart)
       // Record model usage statistics (always, even on cancel/error)
       if (tokenUsage) {
@@ -945,12 +959,12 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         useAppStore.getState().recordAgentPerformance(sessionAgent.id, elapsed, tokenUsage?.totalTokens ?? 0, hasError)
       }
     }
-  }, [cancelStream, targetSessionId])
+  }, [cancelStream, clearActiveStream, setActiveStream, targetSessionId])
 
   const retryLastError = useCallback(() => {
-    if (streamingRef.current) return
     const store = useAppStore.getState()
     const session = resolveTargetSession()
+    if (session && activeStreamsRef.current.has(session.id)) return
     if (!session || session.messages.length < 2) return
 
     const lastMsg = session.messages[session.messages.length - 1]
@@ -983,9 +997,9 @@ export function useAIChat(options: UseAIChatOptions = {}) {
   }, [resolveTargetSession])
 
   const regenerateMessage = useCallback((messageId: string) => {
-    if (streamingRef.current) return
     const store = useAppStore.getState()
     const session = resolveTargetSession(store)
+    if (session && activeStreamsRef.current.has(session.id)) return
     if (!session) return
 
     // Find the assistant message to regenerate
@@ -1019,6 +1033,9 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     if (!session) return
     store.updateSession(session.id, { messages: [] })
   }, [resolveTargetSession])
+
+  const loadingSessionId = targetSessionId ?? useAppStore.getState().activeSessionId
+  const isLoading = Boolean(loadingSessionId && activeStreamsRef.current.has(loadingSessionId))
 
   return { sendMessage, cancelStream, retryLastError, deleteMessage, regenerateMessage, clearMessages, isLoading, error }
 }

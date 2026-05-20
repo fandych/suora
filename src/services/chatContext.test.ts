@@ -79,4 +79,23 @@ describe('chatContext', () => {
     expect(selectedTokens).toBeLessThanOrEqual(2_400)
     expect(selected.some((entry) => entry.content.includes('truncated for context'))).toBe(true)
   })
+
+  it('does not let oversized pinned history evict the latest turn', () => {
+    const pinned = message('m1', 'user', 'pinned '.repeat(16_000))
+    pinned.pinned = true
+    const messages = [
+      pinned,
+      message('m2', 'assistant', 'older assistant reply'),
+      message('m3', 'user', 'latest question'),
+    ]
+
+    const selected = selectMessagesForModel(messages, 2_000)
+    const selectedTokens = selected.reduce((sum, entry) => sum + estimateTokens(entry.content), 0)
+
+    expect(selected.some((entry) => entry.id === pinned.id)).toBe(true)
+    expect(selected.some((entry) => entry.id === 'm3')).toBe(true)
+    expect(selected[selected.length - 1]?.content).toContain('latest question')
+    expect(selectedTokens).toBeLessThanOrEqual(2_400)
+    expect(selected.find((entry) => entry.id === pinned.id)?.content).toContain('truncated for context')
+  })
 })
