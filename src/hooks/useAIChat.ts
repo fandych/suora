@@ -26,6 +26,7 @@ import { generateId } from '@/utils/helpers'
 import type { Message, ToolCall, MessageAttachment, ContentPart } from '@/types'
 
 const STREAM_FLUSH_INTERVAL = 100 // ms between store updates during text streaming
+const MAX_CHAT_TOOL_STEPS = 100
 
 type PipelineChatLanguage = 'en' | 'zh'
 
@@ -119,6 +120,18 @@ function hashText(value: string): string {
     hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
   }
   return Math.abs(hash).toString(16)
+}
+
+function looksLikeToolFailureOutput(output: string): boolean {
+  const normalized = output.trim().toLowerCase()
+  if (!normalized) return false
+
+  return normalized.startsWith('error:')
+    || normalized.startsWith('search error:')
+    || normalized.startsWith('path blocked')
+    || normalized.startsWith('command blocked')
+    || normalized.startsWith('cancelled by user')
+    || normalized.startsWith('tool "')
 }
 
 function formatPipelineExecutionMessage(
@@ -709,10 +722,14 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       }
       resetInactivityTimer()
 
+      const toolStepBudget = Math.max(2, Math.min((sessionAgent?.maxTurns ?? defaultAgent?.maxTurns ?? 30) + 1, MAX_CHAT_TOOL_STEPS))
+
       for await (const event of streamResponseWithTools(modelIdentifier, modelMessages, {
         systemPrompt,
         tools: filteredTools,
-        maxSteps: Math.max(2, Math.min(sessionAgent?.maxTurns ?? 20, 50)),
+        // Agent maxTurns is a tool-action budget; the model still needs one
+        // extra step to turn the final tool result into an answer.
+        maxSteps: toolStepBudget,
         abortSignal: abortController.signal,
         apiKey: model.apiKey,
         baseUrl: model.baseUrl,
@@ -760,14 +777,22 @@ export function useAIChat(options: UseAIChatOptions = {}) {
 
           case 'tool-result': {
             const matchingCall = currentToolCalls.find(t => t.id === event.toolCallId)
+            const toolFailed = looksLikeToolFailureOutput(event.output)
+            const normalizedOutput = toolFailed ? sanitizeToolError(event.output) : event.output
             const duration = matchingCall?.startedAt ? `${Date.now() - matchingCall.startedAt}ms` : '?'
-            const outputLen = event.output?.length ?? 0
+            const outputLen = normalizedOutput?.length ?? 0
             logger.info(`[Chat:ToolResult] ${event.toolName} | id=${event.toolCallId} | duration=${duration} | outputLen=${outputLen}`, {
               toolCallId: event.toolCallId,
               toolName: event.toolName,
               durationMs: duration,
-              output: outputLen <= 4000 ? event.output : event.output.slice(0, 4000) + `... [truncated]`,
+              output: outputLen <= 4000 ? normalizedOutput : normalizedOutput.slice(0, 4000) + `... [truncated]`,
             })
+            if (toolFailed) {
+              logger.warn(`[Chat:ToolResultReclassified] ${event.toolName} | id=${event.toolCallId} returned an error-shaped result payload`, {
+                toolCallId: event.toolCallId,
+                toolName: event.toolName,
+              })
+            }
             // Cap persisted tool output at 50KB to avoid bloating the session
             // store (tool outputs can be very large when they wrap file contents
             // or API responses). The original length is kept as metadata so the
@@ -775,13 +800,13 @@ export function useAIChat(options: UseAIChatOptions = {}) {
             // an external store for large payloads.
             const PERSISTED_TOOL_OUTPUT_MAX = 50_000
             const persistedOutput = outputLen > PERSISTED_TOOL_OUTPUT_MAX
-              ? event.output.slice(0, PERSISTED_TOOL_OUTPUT_MAX) + `\n\n... [${(outputLen - PERSISTED_TOOL_OUTPUT_MAX).toLocaleString()} characters truncated — total ${outputLen.toLocaleString()} chars]`
-              : event.output
+              ? normalizedOutput.slice(0, PERSISTED_TOOL_OUTPUT_MAX) + `\n\n... [${(outputLen - PERSISTED_TOOL_OUTPUT_MAX).toLocaleString()} characters truncated — total ${outputLen.toLocaleString()} chars]`
+              : normalizedOutput
             const completedAt = Date.now()
             const durationMs = matchingCall?.startedAt ? completedAt - matchingCall.startedAt : undefined
             const envelope = await createToolOutputEnvelope({
-              status: 'completed',
-              output: event.output,
+              status: toolFailed ? 'error' : 'completed',
+              output: normalizedOutput,
               durationMs,
               workspacePath: store.workspacePath,
               runId,
@@ -789,7 +814,14 @@ export function useAIChat(options: UseAIChatOptions = {}) {
             })
             currentToolCalls = currentToolCalls.map((t) =>
               t.id === event.toolCallId
-                ? { ...t, status: 'completed', output: persistedOutput, outputEnvelope: envelope, completedAt, durationMs }
+                ? {
+                    ...t,
+                    status: toolFailed ? 'error' : 'completed',
+                    output: persistedOutput,
+                    outputEnvelope: envelope,
+                    completedAt,
+                    durationMs,
+                  }
                 : t
             )
             flushToStore(false)

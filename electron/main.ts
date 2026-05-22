@@ -1037,11 +1037,19 @@ interface ShellExecResult {
   error?: string
 }
 
+const WINDOWS_UTF8_POWERSHELL_PREAMBLE = [
+  '$utf8NoBom = New-Object System.Text.UTF8Encoding $false',
+  '$OutputEncoding = $utf8NoBom',
+  '[Console]::InputEncoding = $utf8NoBom',
+  '[Console]::OutputEncoding = $utf8NoBom',
+  'try { chcp 65001 > $null } catch {}',
+].join('; ')
+
 function getRelaxedShellCommand(command: string): { bin: string; args: string[] } {
   if (process.platform === 'win32') {
     return {
       bin: 'powershell.exe',
-      args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', command],
+      args: ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', `${WINDOWS_UTF8_POWERSHELL_PREAMBLE}; ${command}`],
     }
   }
 
@@ -1049,12 +1057,25 @@ function getRelaxedShellCommand(command: string): { bin: string; args: string[] 
 }
 
 function getShellEnv(relaxed: boolean): NodeJS.ProcessEnv {
-  if (relaxed) return { ...process.env }
+  if (relaxed) {
+    return {
+      ...process.env,
+      LANG: process.env.LANG ?? 'en_US.UTF-8',
+      LC_ALL: process.env.LC_ALL ?? 'en_US.UTF-8',
+      ...(process.platform === 'win32'
+        ? {
+            PYTHONIOENCODING: process.env.PYTHONIOENCODING ?? 'utf-8',
+            PYTHONUTF8: process.env.PYTHONUTF8 ?? '1',
+          }
+        : {}),
+    }
+  }
 
   const minimalEnv: NodeJS.ProcessEnv = {
     PATH: process.env.PATH ?? '',
     HOME: process.env.HOME ?? '',
-    LANG: process.env.LANG ?? 'C.UTF-8',
+    LANG: process.env.LANG ?? 'en_US.UTF-8',
+    LC_ALL: process.env.LC_ALL ?? 'en_US.UTF-8',
   }
   if (process.platform === 'win32') {
     minimalEnv.SYSTEMROOT = process.env.SYSTEMROOT ?? ''
@@ -1062,6 +1083,8 @@ function getShellEnv(relaxed: boolean): NodeJS.ProcessEnv {
     minimalEnv.TEMP = process.env.TEMP ?? ''
     minimalEnv.TMP = process.env.TMP ?? ''
     minimalEnv.PATHEXT = process.env.PATHEXT ?? ''
+    minimalEnv.PYTHONIOENCODING = process.env.PYTHONIOENCODING ?? 'utf-8'
+    minimalEnv.PYTHONUTF8 = process.env.PYTHONUTF8 ?? '1'
   }
   return minimalEnv
 }
@@ -1074,14 +1097,15 @@ function executeShellCommand(bin: string, args: string[], relaxed = false): Prom
       {
         timeout: 30_000,
         maxBuffer: 1024 * 1024,
+        encoding: 'utf8',
         cwd: currentWorkspacePath,
         windowsHide: true,
         env: getShellEnv(relaxed),
       },
       (error, stdout, stderr) => {
         resolve({
-          stdout: stdout?.toString() || '',
-          stderr: stderr?.toString() || '',
+          stdout: String(stdout ?? ''),
+          stderr: String(stderr ?? ''),
           error: error ? error.message : undefined,
         })
       },

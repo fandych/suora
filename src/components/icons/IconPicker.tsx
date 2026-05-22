@@ -5,6 +5,7 @@
  * Collections are loaded lazily from @iconify/json via the icon service.
  */
 import { useState, useCallback, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { Icon as OfflineIcon } from '@iconify/react'
 import { useI18n } from '@/hooks/useI18n'
 import { ICON_DATA, IconifyIcon as PresetIcon, parseIconValue } from './IconifyIcons'
@@ -44,6 +45,29 @@ const COLOR_PALETTE = [
   '#8B5CF6', '#A855F7', '#D946EF', '#EC4899',
   '#F43F5E', '#78716C', '#6B7280', '#1F2937',
 ]
+
+const COLOR_SWATCH_CLASSES: Record<string, string> = {
+  '#EF4444': 'bg-red-500',
+  '#F97316': 'bg-orange-500',
+  '#F59E0B': 'bg-amber-500',
+  '#EAB308': 'bg-yellow-500',
+  '#84CC16': 'bg-lime-500',
+  '#22C55E': 'bg-green-500',
+  '#10B981': 'bg-emerald-500',
+  '#14B8A6': 'bg-teal-500',
+  '#06B6D4': 'bg-cyan-500',
+  '#0EA5E9': 'bg-sky-500',
+  '#3B82F6': 'bg-blue-500',
+  '#6366F1': 'bg-indigo-500',
+  '#8B5CF6': 'bg-violet-500',
+  '#A855F7': 'bg-purple-500',
+  '#D946EF': 'bg-fuchsia-500',
+  '#EC4899': 'bg-pink-500',
+  '#F43F5E': 'bg-rose-500',
+  '#78716C': 'bg-stone-500',
+  '#6B7280': 'bg-gray-500',
+  '#1F2937': 'bg-gray-800',
+}
 
 // ─── Component ─────────────────────────────────────────────────────
 
@@ -138,14 +162,14 @@ export function IconPicker({ value, onSelect, onClose, presetFilter }: IconPicke
   const featuredCollections = collections.filter(c => FEATURED_COLLECTIONS.includes(c.prefix))
   const otherCollections = collections.filter(c => !FEATURED_COLLECTIONS.includes(c.prefix))
 
-  return (
+  const picker = (
     <div
       ref={backdropRef}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+      className="fixed inset-0 z-1000 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       onClick={handleBackdropClick}
       onKeyDown={handleKeyDown}
     >
-      <div className="w-[600px] max-h-[580px] bg-surface-1 border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden">
+      <div className="flex max-h-[min(580px,calc(100vh-2rem))] w-[min(600px,calc(100vw-2rem))] flex-col overflow-hidden rounded-xl border border-border bg-surface-1 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-border-subtle">
           <h3 className="text-sm font-semibold text-text-primary">
@@ -231,7 +255,7 @@ export function IconPicker({ value, onSelect, onClose, presetFilter }: IconPicke
             /* Iconify collections + icons */
             <>
               {/* Collections sidebar */}
-              <div className="w-[170px] border-r border-border-subtle overflow-y-auto py-2 px-2 shrink-0">
+              <div className="w-42.5 border-r border-border-subtle overflow-y-auto py-2 px-2 shrink-0">
                 {featuredCollections.length > 0 && (
                   <>
                     <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider px-2 mb-1">
@@ -309,7 +333,7 @@ export function IconPicker({ value, onSelect, onClose, presetFilter }: IconPicke
                               : 'bg-surface-2 hover:bg-surface-3'
                           }`}
                         >
-                          <OfflineIcon icon={fullName} width={20} height={20} className="text-text-primary" style={selectedIcon === fullName && selectedColor ? { color: selectedColor } : undefined} />
+                          <OfflineIcon icon={fullName} width={20} height={20} color={selectedIcon === fullName && selectedColor ? selectedColor : undefined} className="text-text-primary" />
                         </button>
                       )
                     })}
@@ -339,8 +363,7 @@ export function IconPicker({ value, onSelect, onClose, presetFilter }: IconPicke
                       selectedColor === c
                         ? 'border-accent scale-110 shadow-md'
                         : 'border-transparent hover:border-border'
-                    } ${!c ? 'bg-gradient-to-br from-surface-3 to-surface-1' : ''}`}
-                    style={c ? { backgroundColor: c } : undefined}
+                    } ${c ? COLOR_SWATCH_CLASSES[c] : 'bg-linear-to-br from-surface-3 to-surface-1'}`}
                   >
                     {!c && selectedColor === '' && (
                       <span className="block w-full h-full rounded-full border-2 border-accent" />
@@ -370,7 +393,7 @@ export function IconPicker({ value, onSelect, onClose, presetFilter }: IconPicke
                 <>
                   <div className="w-8 h-8 rounded-lg bg-surface-2 flex items-center justify-center">
                     {selectedIcon.includes(':') ? (
-                      <OfflineIcon icon={selectedIcon} width={20} height={20} style={selectedColor ? { color: selectedColor } : undefined} className="text-text-primary" />
+                      <OfflineIcon icon={selectedIcon} width={20} height={20} color={selectedColor || undefined} className="text-text-primary" />
                     ) : (
                       <PresetIcon name={selectedIcon} size={20} color={selectedColor || undefined} />
                     )}
@@ -403,4 +426,6 @@ export function IconPicker({ value, onSelect, onClose, presetFilter }: IconPicke
       </div>
     </div>
   )
+
+  return createPortal(picker, document.body)
 }

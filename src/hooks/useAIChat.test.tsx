@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAIChat } from './useAIChat'
 import { useAppStore } from '@/store/appStore'
-import type { Model, Session } from '@/types'
+import type { Agent, Model, Session } from '@/types'
 
 const streamResponseWithTools = vi.fn()
 
@@ -36,6 +36,21 @@ function session(id: string): Session {
     updatedAt: Date.now(),
     modelId: 'model-1',
     messages: [],
+  }
+}
+
+function agent(overrides: Partial<Agent> = {}): Agent {
+  return {
+    id: 'default-assistant',
+    name: 'Assistant',
+    systemPrompt: 'Be helpful',
+    modelId: '',
+    skills: [],
+    enabled: true,
+    memories: [],
+    autoLearn: false,
+    maxTurns: 6,
+    ...overrides,
   }
 }
 
@@ -119,5 +134,63 @@ describe('useAIChat', () => {
     expect(useAppStore.getState().sessions[0]?.messages.at(-1)?.isStreaming).toBe(false)
     expect(useAppStore.getState().sessions[0]?.messages.at(-1)?.cancellation?.cancelReason).toContain('Response timed out')
     unmount()
+  })
+
+  it('adds one reply step of headroom on top of the agent tool-turn budget', async () => {
+    const selectedAgent = agent({ id: 'agent-tools', maxTurns: 3 })
+    useAppStore.setState({
+      agents: [selectedAgent],
+      selectedAgent,
+    })
+
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'finish-step', finishReason: 'stop' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('please use tools')
+    })
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+    expect(streamResponseWithTools.mock.calls[0]?.[2]).toMatchObject({ maxSteps: 4 })
+  })
+
+  it('marks error-shaped tool results as failed tool calls', async () => {
+    const selectedAgent = agent({ id: 'agent-tools', maxTurns: 3 })
+    useAppStore.setState({
+      agents: [selectedAgent],
+      selectedAgent,
+    })
+
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield {
+        type: 'tool-call',
+        toolCallId: 'tool-1',
+        toolName: 'shell',
+        input: { command: 'Get-ChildItem' },
+      }
+      yield {
+        type: 'tool-result',
+        toolCallId: 'tool-1',
+        toolName: 'shell',
+        output: 'Error: Command blocked by sandbox policy: format\nStdout: \nStderr: ',
+      }
+      yield { type: 'finish-step', finishReason: 'stop' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('please check the workspace')
+    })
+
+    await waitFor(() => {
+      const assistantMessage = useAppStore.getState().sessions[0]?.messages.at(-1)
+      expect(assistantMessage?.isStreaming).toBe(false)
+      expect(assistantMessage?.toolCalls?.[0]?.status).toBe('error')
+      expect(assistantMessage?.toolCalls?.[0]?.outputEnvelope?.status).toBe('error')
+    })
   })
 })

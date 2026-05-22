@@ -97,17 +97,18 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const [elapsed, setElapsed] = useState(0)
-  const cfg = STATUS_CONFIG[call.status]
+  const effectiveStatus = call.outputEnvelope?.status ?? call.status
+  const cfg = STATUS_CONFIG[effectiveStatus]
   const statusLabel = {
     pending: t('chat.pending', 'Pending'),
     running: t('chat.running', 'Running'),
     completed: t('chat.success', 'Success'),
     error: t('chat.failed', 'Failed'),
-  }[call.status]
+  }[effectiveStatus]
   const displayOutput = call.outputEnvelope?.dataPreview ?? call.output
-  const resultType = displayOutput ? detectResultType(displayOutput, call.status) : null
+  const resultType = displayOutput ? detectResultType(displayOutput, effectiveStatus) : null
   const typeBadge = resultType ? getResultTypeBadge(resultType) : null
-  const errorInfo = call.status === 'error' && displayOutput ? categorizeError(displayOutput) : null
+  const errorInfo = effectiveStatus === 'error' && displayOutput ? categorizeError(displayOutput) : null
   const errorLabel = errorInfo ? {
     permission: t('chat.toolPermissionDenied', 'Permission denied'),
     timeout: t('chat.toolTimeout', 'Timeout'),
@@ -120,7 +121,7 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
     : displayOutput
 
   useEffect(() => {
-    if (call.status !== 'running') {
+    if (effectiveStatus !== 'running') {
       if (call.completedAt && call.startedAt) setElapsed(call.completedAt - call.startedAt)
       return
     }
@@ -128,14 +129,14 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
     tick()
     const id = setInterval(tick, 200)
     return () => clearInterval(id)
-  }, [call.status, call.startedAt, call.completedAt])
+  }, [effectiveStatus, call.startedAt, call.completedAt])
 
   const collapsedSummary = (() => {
     if (call.outputEnvelope?.summary) return call.outputEnvelope.summary
-    if (call.output && call.status === 'completed') return resultPreview(call.output)
-    if (!call.output && call.status === 'completed') return t('chat.toolCompletedNoOutput', 'Completed with no explicit output')
-    if (call.status === 'pending') return t('chat.toolWaitingExecution', 'Waiting for execution')
-    if (call.input && call.status !== 'completed') {
+    if (call.output && effectiveStatus === 'completed') return resultPreview(call.output)
+    if (!call.output && effectiveStatus === 'completed') return t('chat.toolCompletedNoOutput', 'Completed with no explicit output')
+    if (effectiveStatus === 'pending') return t('chat.toolWaitingExecution', 'Waiting for execution')
+    if (call.input && effectiveStatus !== 'completed') {
       return Object.entries(call.input)
         .map(([key, value]) => `${key}=${typeof value === 'string' ? value : JSON.stringify(value)}`)
         .join(', ')
@@ -148,7 +149,7 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
     <div className={`overflow-hidden rounded-[22px] border ${cfg.border} ${cfg.bg} text-[12px] shadow-sm transition-all duration-200`}>
       <button type="button" onClick={() => setOpen(!open)} className="flex w-full items-start gap-3 px-4 py-3.5 text-left transition-colors hover:bg-black/5">
         <div className={`mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border ${cfg.border} ${cfg.bg} ${cfg.color}`}>
-          <span className={`text-[12px] leading-none ${call.status === 'running' ? 'animate-spin' : ''}`}>
+          <span className={`text-[12px] leading-none ${effectiveStatus === 'running' ? 'animate-spin' : ''}`}>
             {cfg.icon in ICON_DATA ? <IconifyIcon name={cfg.icon} size={13} color="currentColor" /> : cfg.icon}
           </span>
         </div>
@@ -243,7 +244,7 @@ function ToolCallRow({ call, stepLabel }: { call: ToolCall; stepLabel?: string }
                   {call.outputEnvelope.warnings.join(' ')}
                 </div>
               ) : null}
-              <pre className={`max-h-56 overflow-auto whitespace-pre-wrap rounded-2xl border border-border-subtle/45 bg-surface-0/68 px-3 py-2.5 text-[11px] font-[JetBrains_Mono,monospace] ${call.status === 'error' ? 'text-danger' : 'text-success/82'}`}>{truncatedOutput}</pre>
+              <pre className={`max-h-56 overflow-auto whitespace-pre-wrap rounded-2xl border border-border-subtle/45 bg-surface-0/68 px-3 py-2.5 text-[11px] font-[JetBrains_Mono,monospace] ${effectiveStatus === 'error' ? 'text-danger' : 'text-success/82'}`}>{truncatedOutput}</pre>
             </div>
           )}
         </div>

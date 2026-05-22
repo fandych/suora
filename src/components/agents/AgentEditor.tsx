@@ -236,6 +236,33 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
     }
   }
 
+  const actionButtons = (
+    <div className="flex flex-wrap items-center gap-3">
+      <button
+        type="submit"
+        className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
+      >
+        {agent ? t('common.saveChanges', 'Save Changes') : t('agents.createAgent', 'Create Agent')}
+      </button>
+      {agent && onTest && (
+        <button
+          type="button"
+          onClick={() => onTest(form)}
+          className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/25 bg-accent/8 px-5 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/12"
+        >
+          <IconifyIcon name="ui-test-tube" size={14} color="currentColor" /> {t('common.test', 'Test')}
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={handleCancel}
+        className="rounded-2xl bg-surface-3 px-5 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-4"
+      >
+        {t('common.cancel', 'Cancel')}
+      </button>
+    </div>
+  )
+
   return (
     <form onSubmit={handleSubmit} className="module-canvas min-h-0 flex-1 overflow-y-auto">
       {header && (
@@ -312,7 +339,22 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
           </div>
         </section>
 
-        <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,0.92fr)]">
+        <div className="sticky top-0 z-30 rounded-3xl border border-border-subtle/55 bg-surface-1/92 p-3 shadow-[0_18px_46px_rgba(15,23,42,0.10)] backdrop-blur-xl">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold text-text-primary">{t('agents.reviewAndSave', 'Review & Save')}</div>
+              <div className="mt-1 text-[11px] text-text-muted">
+                {dirty ? t('common.unsavedChanges', 'Unsaved changes') : t('agents.readyToSave', 'Ready when the profile is configured')}
+              </div>
+              {validationError && (
+                <p role="alert" className="mt-2 rounded-2xl border border-danger/20 bg-danger/8 px-3 py-2 text-[12px] text-danger">{validationError}</p>
+              )}
+            </div>
+            {actionButtons}
+          </div>
+        </div>
+
+        <div className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1.55fr)_minmax(22rem,0.92fr)]">
           <div className="space-y-6">
             <EditorSection
               eyebrow={t('agents.identity', 'Identity')}
@@ -581,7 +623,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
             </EditorSection>
           </div>
 
-          <div className="space-y-6 2xl:sticky 2xl:top-6 self-start">
+          <div className="space-y-6 self-start 2xl:sticky 2xl:top-24 2xl:max-h-[calc(100vh-7rem)] 2xl:overflow-y-auto 2xl:pb-2 2xl:pr-2">
             <EditorSection
               eyebrow={t('agents.diagnostics', 'Diagnostics')}
               title={t('agents.capabilityProfile', 'Capability Profile')}
@@ -894,39 +936,6 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
               )}
             </EditorSection>
 
-            <EditorSection
-              eyebrow={t('common.actions', 'Actions')}
-              title={t('agents.reviewAndSave', 'Review & Save')}
-              description={t('agents.reviewAndSaveHint', 'Save this profile when the model, skills, and permissions match the behavior you want to ship.')}
-            >
-              {validationError && (
-                <p className="mb-4 rounded-2xl border border-danger/20 bg-danger/8 px-4 py-3 text-[12px] text-danger">{validationError}</p>
-              )}
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="submit"
-                  className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
-                >
-                  {agent ? t('common.saveChanges', 'Save Changes') : t('agents.createAgent', 'Create Agent')}
-                </button>
-                {agent && onTest && (
-                  <button
-                    type="button"
-                    onClick={() => onTest(form)}
-                    className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/25 bg-accent/8 px-5 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/12"
-                  >
-                    <IconifyIcon name="ui-test-tube" size={14} color="currentColor" /> {t('common.test', 'Test')}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleCancel}
-                  className="rounded-2xl bg-surface-3 px-5 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-4"
-                >
-                  {t('common.cancel', 'Cancel')}
-                </button>
-              </div>
-            </EditorSection>
           </div>
         </div>
       </div>
