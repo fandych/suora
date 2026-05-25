@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DocumentItem, DocumentNode } from '@/types'
 import { buildDocumentGraph, extractDocumentReferenceTargets, extractDocumentTags, queryDocumentGraph } from './documentGraph'
 import { toGraphifyExport } from './graphifyAdapter'
-import { buildDocumentSearchIndex, createDocument, createDocumentGroup, extractMarkdownImageReferences, extractMarkdownReferences, getDocumentDisplayName, isMarkdownDocumentTitle, findReferencedDocuments, searchDocumentIndex, searchDocuments, tokenizeDocumentSearchQuery } from './documents'
+import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, extractMarkdownImageReferences, extractMarkdownReferences, getDocumentDisplayName, isMarkdownDocumentTitle, findReferencedDocuments, searchDocumentIndex, searchDocuments, tokenizeDocumentSearchQuery } from './documents'
 
 describe('documents service', () => {
   it('creates document groups and markdown documents with stable defaults', () => {
@@ -65,6 +65,28 @@ describe('documents service', () => {
     ] satisfies DocumentItem[]
 
     expect(findReferencedDocuments('[[Architecture.md]], [[Brief]], and [Roadmap](#doc:roadmap-id)', docs).map((doc) => doc.id)).toEqual(['a', 'roadmap-id', 'brief-id'])
+  })
+
+  it('analyzes document health for dead links, duplicate titles, tags, and orphans', () => {
+    const nodes = [
+      { id: 'overview', type: 'document', title: 'Overview', markdown: 'See [[Budget]]. #project', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
+      { id: 'budget', type: 'document', title: 'Budget', markdown: 'Tracked in [Overview](#doc:overview). #project', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
+      { id: 'dup-a', type: 'document', title: 'Duplicate.md', markdown: 'See [[Missing]].', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
+      { id: 'dup-b', type: 'document', title: 'Duplicate', markdown: 'Standalone draft.', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
+      { id: 'other', type: 'document', title: 'Outside', markdown: '[[Missing]]', groupId: 'other', parentId: null, createdAt: 1, updatedAt: 1 },
+    ] satisfies DocumentNode[]
+
+    const report = analyzeDocumentHealth(nodes, 'g')
+
+    expect(report.documentCount).toBe(4)
+    expect(report.taggedDocumentCount).toBe(2)
+    expect(report.referencedDocumentCount).toBe(2)
+    expect(report.deadReferenceCount).toBe(1)
+    expect(report.duplicateTitleCount).toBe(2)
+    expect(report.orphanDocumentCount).toBe(1)
+    expect(report.score).toBeLessThan(100)
+    expect(report.issues.map((issue) => issue.kind)).toEqual(expect.arrayContaining(['dead-reference', 'duplicate-title', 'missing-tags', 'orphan']))
+    expect(report.issues.find((issue) => issue.kind === 'dead-reference')?.reference).toBe('Missing')
   })
 
   it('progressively searches title and markdown body scoped to a group', () => {

@@ -202,7 +202,7 @@ describe('DocumentsLayout', () => {
       expect(useAppStore.getState().documentNodes.some((node) => node.id === rootDoc.id && node.type === 'document' && node.title === 'deploy.sh')).toBe(true)
     })
 
-    expect(screen.getByText('deploy.sh')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('deploy.sh')
     expect(screen.getAllByText('SH').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Editor' })).toBeDisabled()
     expect(screen.getByPlaceholderText('Edit this text or script file.')).toBeInTheDocument()
@@ -314,6 +314,42 @@ describe('DocumentsLayout', () => {
     expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/README.md'), expect.any(String))
     expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/manifest.json'), expect.any(String))
     expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/docs/Project-Overview.md'), expect.stringContaining('Read [Budget]'))
+  })
+
+  it('surfaces knowledge health lint issues for the active document group', () => {
+    const group = createDocumentGroup('Knowledge Base')
+    const overview = {
+      ...createDocument(group.id, null, 'Overview'),
+      markdown: 'See [[Missing Page]]. #project',
+    }
+    const duplicateA = {
+      ...createDocument(group.id, null, 'Duplicate.md'),
+      id: 'duplicate-a',
+      markdown: 'Draft without tags.',
+    }
+    const duplicateB = {
+      ...createDocument(group.id, null, 'Duplicate'),
+      id: 'duplicate-b',
+      markdown: 'Another draft without tags.',
+    }
+
+    useAppStore.setState({
+      locale: 'en',
+      documentGroups: [group],
+      documentNodes: [overview, duplicateA, duplicateB],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: overview.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    const healthCard = screen.getByText('Knowledge Health').closest('div.rounded-3xl') as HTMLElement
+    expect(healthCard).toBeTruthy()
+    expect(within(healthCard).getByText('Dead links')).toBeInTheDocument()
+    expect(within(healthCard).getByText('Missing reference: Missing Page')).toBeInTheDocument()
+    expect(within(healthCard).getAllByText('Duplicate document title').length).toBeGreaterThan(0)
+    expect(within(within(healthCard).getByText('Dead links').parentElement as HTMLElement).getByText('1')).toBeInTheDocument()
+    expect(within(within(healthCard).getByText('Duplicates').parentElement as HTMLElement).getByText('2')).toBeInTheDocument()
   })
 
   it('clears document tree inputs when creating a new group', async () => {

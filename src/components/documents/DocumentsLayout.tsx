@@ -15,7 +15,7 @@ import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/Docu
 import { WorkbenchEmptyState } from '@/components/ui/Primitives'
 import { confirm } from '@/services/confirmDialog'
 import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus'
-import { buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
+import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
 import { buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
@@ -44,6 +44,12 @@ function sortDocumentNodes(a: DocumentNode, b: DocumentNode) {
 
 function getDocumentGroupColorClass(color: string) {
   return DOCUMENT_GROUP_COLOR_CLASS[color] ?? 'bg-accent'
+}
+
+function getDocumentHealthScoreClass(score: number) {
+  if (score >= 80) return 'border-success/25 bg-success/10 text-success'
+  if (score >= 60) return 'border-amber-400/25 bg-amber-400/10 text-amber-500'
+  return 'border-danger/25 bg-danger/10 text-danger'
 }
 
 function getDocumentNodeDisplayName(node: DocumentNode): string {
@@ -1038,6 +1044,10 @@ export function DocumentsLayout() {
     () => activeGroupId ? buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroupId }) : EMPTY_DOCUMENT_GRAPH,
     [activeGroupId, documentGroups, documentNodes],
   )
+  const documentHealth = useMemo(
+    () => analyzeDocumentHealth(documentNodes, activeGroupId),
+    [activeGroupId, documentNodes],
+  )
   const graphInsights = useMemo(
     () => activeDocument && activeGroupId
       ? queryDocumentGraph(documentGraph, groupNodes, {
@@ -1729,6 +1739,50 @@ export function DocumentsLayout() {
                         )}
                       </>
                     )}
+                  </div>
+                  <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.knowledgeHealth', 'Knowledge Health')}</h3>
+                        <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.knowledgeHealthHint', 'LLM Wiki-style lint checks keep references, tags, and titles ready for query and graph expansion.')}</p>
+                      </div>
+                      <div className={`shrink-0 rounded-2xl border px-3 py-2 text-center ${getDocumentHealthScoreClass(documentHealth.score)}`}>
+                        <div className="text-base font-semibold leading-none">{documentHealth.score}</div>
+                        <div className="mt-1 text-[9px] font-semibold uppercase tracking-[0.14em] opacity-80">{t('documents.healthScore', 'score')}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.deadLinks', 'Dead links')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{documentHealth.deadReferenceCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.duplicateTitles', 'Duplicates')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{documentHealth.duplicateTitleCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.taggedDocs', 'Tagged')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{documentHealth.taggedDocumentCount}/{documentHealth.documentCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.orphanDocs', 'Orphans')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{documentHealth.orphanDocumentCount}</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {documentHealth.issues.length === 0 ? (
+                        <p className="rounded-2xl border border-dashed border-success/25 bg-success/5 px-3 py-5 text-center text-[11px] text-success">{t('documents.noHealthIssues', 'No knowledge health issues found.')}</p>
+                      ) : documentHealth.issues.slice(0, 4).map((issue) => (
+                        <button key={issue.id} type="button" onClick={() => openDocument(issue.documentId)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="min-w-0 truncate text-[12px] font-semibold text-text-primary">{issue.message}</span>
+                            <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${issue.severity === 'high' ? 'bg-danger/10 text-danger' : issue.severity === 'medium' ? 'bg-amber-400/10 text-amber-500' : 'bg-surface-3/70 text-text-muted'}`}>{issue.severity}</span>
+                          </span>
+                          <span className="mt-1 block truncate text-[10px] text-text-muted">{issue.title}</span>
+                          <span className="mt-2 block line-clamp-2 text-[10px] leading-relaxed text-text-secondary/80">{issue.detail}</span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.relatedNotes', 'Related Notes')}</h3>
