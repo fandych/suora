@@ -15,7 +15,7 @@ import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/Docu
 import { WorkbenchEmptyState } from '@/components/ui/Primitives'
 import { confirm } from '@/services/confirmDialog'
 import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus'
-import { createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
+import { buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
 import { buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
@@ -1016,9 +1016,10 @@ export function DocumentsLayout() {
   const activeDocumentExtension = activeDocument ? getDocumentExtension(activeDocument.title) || '.md' : ''
   const groupDocuments = useMemo(() => groupNodes.filter((node): node is DocumentItem => node.type === 'document'), [groupNodes])
   const documentNodeById = useMemo(() => new Map<string, DocumentNode>(documentNodes.map((node) => [node.id, node])), [documentNodes])
+  const documentSearchIndex = useMemo(() => buildDocumentSearchIndex(documentNodes, null), [documentNodes])
   const searchResults = useMemo(
-    () => deferredQuery.trim() ? searchDocuments(documentNodes, null, deferredQuery) : EMPTY_SEARCH_RESULTS,
-    [documentNodes, deferredQuery],
+    () => deferredQuery.trim() ? searchDocumentIndex(documentSearchIndex, deferredQuery) : EMPTY_SEARCH_RESULTS,
+    [deferredQuery, documentSearchIndex],
   )
   const referencedDocuments = useMemo(() => activeDocument ? findReferencedDocuments(activeDocument.markdown, groupDocuments).filter((doc) => doc.id !== activeDocument.id) : [], [activeDocument, groupDocuments])
   const imageReferences = useMemo(() => activeDocument && activeDocumentIsMarkdown ? extractMarkdownImageReferences(activeDocument.markdown) : [], [activeDocument, activeDocumentIsMarkdown])
@@ -1540,10 +1541,15 @@ export function DocumentsLayout() {
               <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
                 {query.trim() ? (
                   <div className="space-y-2">
-                    {searchResults.map(({ node, excerpt }) => (
+                    {searchResults.map(({ node, excerpt, matchedFields, path }) => (
                       <button key={node.id} type="button" onClick={() => openDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
                         <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
-                        <div className="mt-1 truncate text-[10px] text-text-muted">{groupNameById.get(node.groupId) ?? t('documents.groups', 'Groups')} / {buildDocumentPath(node, documentNodes, documentNodeById)}</div>
+                        <div className="mt-1 truncate text-[10px] text-text-muted">{groupNameById.get(node.groupId) ?? t('documents.groups', 'Groups')} / {path || buildDocumentPath(node, documentNodes, documentNodeById)}</div>
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {matchedFields.slice(0, 3).map((field) => (
+                            <span key={field} className="rounded-full border border-accent/15 bg-accent/8 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-accent/90">{field}</span>
+                          ))}
+                        </div>
                         <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
                       </button>
                     ))}

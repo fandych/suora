@@ -6,6 +6,27 @@ export interface DocumentSearchResult {
   node: DocumentItem
   score: number
   excerpt: string
+  path: string
+  matchedFields: DocumentSearchField[]
+  titleMatch: boolean
+}
+
+export type DocumentSearchField = 'title' | 'path' | 'heading' | 'tag' | 'body'
+
+export interface DocumentSearchIndexEntry {
+  node: DocumentItem
+  path: string
+  title: string
+  headings: string[]
+  tags: string[]
+  body: string
+  tokens: Set<string>
+  normalized: Record<DocumentSearchField, string>
+}
+
+export interface DocumentSearchIndex {
+  entries: DocumentSearchIndexEntry[]
+  documentCount: number
 }
 
 export interface DocumentAssetReference {
@@ -16,6 +37,50 @@ export interface DocumentAssetReference {
 }
 
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdx'])
+const DOCUMENT_SEARCH_STOP_WORDS = new Set([
+  '的',
+  '是',
+  '了',
+  '什么',
+  '在',
+  '有',
+  '和',
+  '与',
+  '对',
+  '从',
+  'the',
+  'is',
+  'a',
+  'an',
+  'what',
+  'how',
+  'are',
+  'was',
+  'were',
+  'do',
+  'does',
+  'did',
+  'be',
+  'been',
+  'being',
+  'have',
+  'has',
+  'had',
+  'it',
+  'its',
+  'in',
+  'on',
+  'at',
+  'to',
+  'for',
+  'of',
+  'with',
+  'by',
+  'this',
+  'that',
+  'these',
+  'those',
+])
 const TEXT_DOCUMENT_EXTENSIONS = new Set([
   ...MARKDOWN_EXTENSIONS,
   '.txt',
@@ -98,6 +163,149 @@ export function getDocumentKindLabel(title: string): string {
 
 function getMarkdownHeadingTitle(title: string): string {
   return getDocumentDisplayName(title).replace(/\.(md|markdown|mdx)$/i, '')
+}
+
+function isDocumentNode(node: DocumentNode): node is DocumentItem {
+  return node.type === 'document'
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function hasCjk(value: string): boolean {
+  return /[\u3400-\u4dbf\u4e00-\u9fff]/.test(value)
+}
+
+export function tokenizeDocumentSearchQuery(query: string): string[] {
+  const rawTokens = normalizeSearchText(query)
+    .split(/[\s,，。！？、；：""''（）()\-_/\\·~～…]+/)
+    .filter((token) => token.length > 1)
+    .filter((token) => !DOCUMENT_SEARCH_STOP_WORDS.has(token))
+
+  const tokens: string[] = []
+  for (const token of rawTokens) {
+    if (hasCjk(token) && token.length > 2) {
+      const chars = [...token]
+      for (let index = 0; index < chars.length - 1; index += 1) {
+        tokens.push(chars[index] + chars[index + 1])
+      }
+      for (const char of chars) {
+        if (!DOCUMENT_SEARCH_STOP_WORDS.has(char)) tokens.push(char)
+      }
+    }
+    tokens.push(token)
+  }
+
+  return Array.from(new Set(tokens))
+}
+
+function extractDocumentSearchHeadings(markdown: string): string[] {
+  const headings: string[] = []
+  for (const line of markdown.split('\n')) {
+    const match = /^(#{1,6})\s+(.+)$/.exec(line.trim())
+    if (match) headings.push(match[2].trim())
+  }
+  return headings
+}
+
+function extractDocumentSearchTags(markdown: string): string[] {
+  const tags = new Set<string>()
+  const frontmatter = /^---\n([\s\S]*?)\n---/.exec(markdown)
+
+  if (frontmatter) {
+    const tagList = /^tags:\s*\[([^\]]+)\]/im.exec(frontmatter[1])
+    if (tagList) {
+      tagList[1].split(',').forEach((tag) => {
+        const normalized = tag.trim().replace(/^['"]|['"]$/g, '')
+        if (normalized) tags.add(normalized)
+      })
+    }
+
+    const tagBlock = /^tags:\s*\n((?:\s*-\s*.+\n?)+)/im.exec(frontmatter[1])
+    if (tagBlock) {
+      tagBlock[1].split('\n').forEach((line) => {
+        const normalized = line.replace(/^\s*-\s*/, '').trim().replace(/^['"]|['"]$/g, '')
+        if (normalized) tags.add(normalized)
+      })
+    }
+  }
+
+  for (const match of markdown.matchAll(/(?:^|\s)#([\p{L}\p{N}_/-]{2,})/gu)) {
+    tags.add(match[1])
+  }
+
+  return Array.from(tags)
+}
+
+function buildSearchPath(node: DocumentNode, nodeById: Map<string, DocumentNode>): string {
+  const parts = [node.type === 'document' ? getDocumentDisplayName(node.title) : node.title]
+  const visited = new Set<string>()
+  let parentId = node.parentId
+
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId)
+    const parent = nodeById.get(parentId)
+    if (!parent) break
+    parts.unshift(parent.type === 'document' ? getDocumentDisplayName(parent.title) : parent.title)
+    parentId = parent.parentId
+  }
+
+  return parts.join(' / ')
+}
+
+function fieldContainsToken(fieldValue: string, token: string): boolean {
+  return fieldValue.includes(token)
+}
+
+function compactExcerpt(markdown: string, query: string, tokens: string[], maxLength = 180): string {
+  const normalized = markdown.toLowerCase()
+  const phraseIndex = query ? normalized.indexOf(query) : -1
+  const tokenIndex = phraseIndex >= 0
+    ? phraseIndex
+    : tokens
+      .map((token) => normalized.indexOf(token))
+      .filter((index) => index >= 0)
+      .sort((first, second) => first - second)[0] ?? 0
+  const excerptStart = Math.max(0, tokenIndex - 56)
+  const prefix = excerptStart > 0 ? '…' : ''
+  const excerpt = markdown.slice(excerptStart, excerptStart + maxLength).replace(/\s+/g, ' ').trim()
+  return `${prefix}${excerpt}`
+}
+
+export function buildDocumentSearchIndex(nodes: DocumentNode[], groupId: string | null = null): DocumentSearchIndex {
+  const nodeById = new Map<string, DocumentNode>(nodes.map((node) => [node.id, node]))
+  const documents = nodes.filter((node): node is DocumentItem => isDocumentNode(node) && (!groupId || node.groupId === groupId))
+
+  const entries = documents.map((node) => {
+    const path = buildSearchPath(node, nodeById)
+    const headings = extractDocumentSearchHeadings(node.markdown)
+    const tags = extractDocumentSearchTags(node.markdown)
+    const normalized = {
+      title: normalizeSearchText(getDocumentDisplayName(node.title)),
+      path: normalizeSearchText(path),
+      heading: normalizeSearchText(headings.join(' ')),
+      tag: normalizeSearchText(tags.join(' ')),
+      body: normalizeSearchText(node.markdown),
+    }
+    const tokens = new Set(tokenizeDocumentSearchQuery(Object.values(normalized).join(' ')))
+
+    return {
+      node,
+      path,
+      title: getDocumentDisplayName(node.title),
+      headings,
+      tags,
+      body: node.markdown,
+      tokens,
+      normalized,
+    }
+  })
+
+  return {
+    entries,
+    documentCount: entries.length,
+  }
 }
 
 export function createDocumentId(prefix: string): string {
@@ -298,28 +506,89 @@ export function tiptapJsonToMarkdown(json: TiptapNode): string {
 
 // ──────────────────────────────────────────────────────────────────────────────
 
-export function searchDocuments(nodes: DocumentNode[], groupId: string | null, query: string): DocumentSearchResult[] {
-  const q = query.trim().toLowerCase()
+export function searchDocumentIndex(index: DocumentSearchIndex, query: string): DocumentSearchResult[] {
+  const q = normalizeSearchText(query)
   if (!q) return []
 
-  const docs = nodes.filter((node): node is DocumentItem => node.type === 'document' && (!groupId || node.groupId === groupId))
+  const queryTokens = tokenizeDocumentSearchQuery(q)
 
-  return docs
-    .map((node) => {
-      const title = node.title.toLowerCase()
-      const body = node.markdown.toLowerCase()
-      const titleIndex = title.indexOf(q)
-      const bodyIndex = body.indexOf(q)
-      if (titleIndex === -1 && bodyIndex === -1) return null
-      const sourceIndex = bodyIndex === -1 ? 0 : bodyIndex
-      const excerptStart = Math.max(0, sourceIndex - 48)
-      const excerpt = node.markdown.slice(excerptStart, excerptStart + 160).replace(/\s+/g, ' ').trim()
+  return index.entries
+    .map((entry) => {
+      let score = 0
+      const matchedFields = new Set<DocumentSearchField>()
+      const titlePhraseIndex = entry.normalized.title.indexOf(q)
+      const bodyPhraseIndex = entry.normalized.body.indexOf(q)
+      const headingPhraseIndex = entry.normalized.heading.indexOf(q)
+      const tagPhraseIndex = entry.normalized.tag.indexOf(q)
+      const pathPhraseIndex = entry.normalized.path.indexOf(q)
+
+      if (titlePhraseIndex === 0) {
+        score += 220
+        matchedFields.add('title')
+      } else if (titlePhraseIndex > -1) {
+        score += 160
+        matchedFields.add('title')
+      }
+
+      if (tagPhraseIndex > -1) {
+        score += 120
+        matchedFields.add('tag')
+      }
+      if (headingPhraseIndex > -1) {
+        score += 100
+        matchedFields.add('heading')
+      }
+      if (pathPhraseIndex > -1) {
+        score += 70
+        matchedFields.add('path')
+      }
+      if (bodyPhraseIndex > -1) {
+        score += 45
+        matchedFields.add('body')
+      }
+
+      let tokenHits = 0
+      for (const token of queryTokens) {
+        if (!entry.tokens.has(token)) continue
+        tokenHits += 1
+        if (fieldContainsToken(entry.normalized.title, token)) {
+          score += 26
+          matchedFields.add('title')
+        }
+        if (fieldContainsToken(entry.normalized.tag, token)) {
+          score += 22
+          matchedFields.add('tag')
+        }
+        if (fieldContainsToken(entry.normalized.heading, token)) {
+          score += 18
+          matchedFields.add('heading')
+        }
+        if (fieldContainsToken(entry.normalized.path, token)) {
+          score += 12
+          matchedFields.add('path')
+        }
+        if (fieldContainsToken(entry.normalized.body, token)) {
+          score += 8
+          matchedFields.add('body')
+        }
+      }
+
+      if (score === 0 || matchedFields.size === 0) return null
+      if (queryTokens.length > 2 && bodyPhraseIndex === -1 && titlePhraseIndex === -1 && tokenHits < Math.ceil(queryTokens.length / 2)) return null
+
       return {
-        node,
-        score: (titleIndex === 0 ? 100 : titleIndex > -1 ? 70 : 0) + (bodyIndex > -1 ? 20 : 0),
-        excerpt,
+        node: entry.node,
+        score,
+        excerpt: compactExcerpt(entry.body, q, queryTokens),
+        path: entry.path,
+        matchedFields: Array.from(matchedFields),
+        titleMatch: matchedFields.has('title'),
       }
     })
     .filter((result): result is DocumentSearchResult => Boolean(result))
-    .sort((a, b) => b.score - a.score || b.node.updatedAt - a.node.updatedAt)
+    .sort((a, b) => b.score - a.score || b.node.updatedAt - a.node.updatedAt || a.node.title.localeCompare(b.node.title))
+}
+
+export function searchDocuments(nodes: DocumentNode[], groupId: string | null, query: string): DocumentSearchResult[] {
+  return searchDocumentIndex(buildDocumentSearchIndex(nodes, groupId), query)
 }

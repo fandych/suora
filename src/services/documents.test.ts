@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { DocumentItem, DocumentNode } from '@/types'
 import { buildDocumentGraph, extractDocumentReferenceTargets, extractDocumentTags, queryDocumentGraph } from './documentGraph'
 import { toGraphifyExport } from './graphifyAdapter'
-import { createDocument, createDocumentGroup, extractMarkdownImageReferences, extractMarkdownReferences, getDocumentDisplayName, isMarkdownDocumentTitle, findReferencedDocuments, searchDocuments } from './documents'
+import { buildDocumentSearchIndex, createDocument, createDocumentGroup, extractMarkdownImageReferences, extractMarkdownReferences, getDocumentDisplayName, isMarkdownDocumentTitle, findReferencedDocuments, searchDocumentIndex, searchDocuments, tokenizeDocumentSearchQuery } from './documents'
 
 describe('documents service', () => {
   it('creates document groups and markdown documents with stable defaults', () => {
@@ -79,6 +79,7 @@ describe('documents service', () => {
 
     expect(results.map((result) => result.node.id)).toEqual(['a', 'b'])
     expect(results[1].excerpt).toContain('Architecture follow-up')
+    expect(results[0].matchedFields).toContain('title')
   })
 
   it('keeps exact title matches ahead of fresher noise in large document corpora', () => {
@@ -101,6 +102,38 @@ describe('documents service', () => {
 
     expect(results.map((result) => result.node.id)).toEqual(['exact', 'body-hit'])
     expect(results[0].excerpt).toContain('验收日期')
+  })
+
+  it('builds a reusable document search index for path, tags, headings, and CJK tokens', () => {
+    const nodes = [
+      { id: 'folder', type: 'folder', title: 'Research', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 1 },
+      {
+        id: 'a',
+        type: 'document',
+        title: 'Knowledge Notes',
+        markdown: `---
+tags: [llm-wiki]
+---
+
+## 默会学习
+
+这里整理专家经验和知识沉淀。`,
+        groupId: 'g',
+        parentId: 'folder',
+        createdAt: 1,
+        updatedAt: 2,
+      },
+      { id: 'b', type: 'document', title: 'Unrelated', markdown: 'Noise', groupId: 'g', parentId: null, createdAt: 1, updatedAt: 3 },
+    ] satisfies DocumentNode[]
+
+    const index = buildDocumentSearchIndex(nodes, 'g')
+
+    expect(index.documentCount).toBe(2)
+    expect(searchDocumentIndex(index, 'llm wiki').map((result) => result.node.id)).toEqual(['a'])
+    expect(searchDocumentIndex(index, 'Research').map((result) => result.node.id)).toEqual(['a'])
+    expect(searchDocumentIndex(index, '默会知识').map((result) => result.node.id)).toEqual(['a'])
+    expect(searchDocumentIndex(index, '默会知识')[0].matchedFields).toEqual(expect.arrayContaining(['heading', 'body']))
+    expect(tokenizeDocumentSearchQuery('默会知识')).toEqual(expect.arrayContaining(['默会', '知识', '默']))
   })
 
   it('extracts graph reference targets and tags from markdown', () => {
