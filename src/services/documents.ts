@@ -126,6 +126,11 @@ const DOCUMENT_SEARCH_SCORE = {
   pathToken: 12,
   bodyToken: 8,
 } as const
+const DOCUMENT_HEALTH_SEVERITY_PENALTY: Record<DocumentHealthSeverity, number> = {
+  high: 18,
+  medium: 10,
+  low: 4,
+}
 const MIN_QUERY_TOKENS_FOR_RELEVANCE_THRESHOLD = 3
 const MIN_TOKEN_HIT_RATIO = 0.5
 const TEXT_DOCUMENT_EXTENSIONS = new Set([
@@ -419,10 +424,11 @@ export function createDocument(groupId: string, parentId: string | null, title =
 }
 
 export function extractMarkdownReferences(markdown: string): string[] {
-  return extractMarkdownReferenceTargets(markdown).flatMap((ref) => {
+  const refs = extractMarkdownReferenceTargets(markdown).flatMap((ref) => {
     if (ref.label && ref.label !== ref.target) return [ref.label, ref.target]
     return [ref.target]
   }).filter(Boolean)
+  return Array.from(new Set(refs))
 }
 
 export function findReferencedDocuments(markdown: string, documents: DocumentItem[]): DocumentItem[] {
@@ -483,7 +489,7 @@ export function analyzeDocumentHealth(nodes: DocumentNode[], groupId: string | n
 
   for (const doc of documents) {
     const targets = extractMarkdownReferenceTargets(doc.markdown)
-    if (targets.length === 0) {
+    if (targets.length === 0 && !documentsWithTags.has(doc.id)) {
       issues.push({
         id: `orphan:${doc.id}`,
         kind: 'orphan',
@@ -555,7 +561,7 @@ export function analyzeDocumentHealth(nodes: DocumentNode[], groupId: string | n
     }
   }
 
-  const severityPenalty = issues.reduce((total, issue) => total + (issue.severity === 'high' ? 18 : issue.severity === 'medium' ? 10 : 4), 0)
+  const severityPenalty = issues.reduce((total, issue) => total + DOCUMENT_HEALTH_SEVERITY_PENALTY[issue.severity], 0)
   const score = documents.length === 0 ? 100 : Math.max(0, Math.min(100, 100 - Math.round(severityPenalty / Math.max(1, documents.length))))
 
   return {

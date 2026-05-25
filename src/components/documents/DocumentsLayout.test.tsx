@@ -202,7 +202,7 @@ describe('DocumentsLayout', () => {
       expect(useAppStore.getState().documentNodes.some((node) => node.id === rootDoc.id && node.type === 'document' && node.title === 'deploy.sh')).toBe(true)
     })
 
-    expect(screen.getAllByText('deploy.sh').length).toBeGreaterThan(0)
+    expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('deploy.sh')
     expect(screen.getAllByText('SH').length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: 'Editor' })).toBeDisabled()
     expect(screen.getByPlaceholderText('Edit this text or script file.')).toBeInTheDocument()

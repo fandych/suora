@@ -46,6 +46,12 @@ function getDocumentGroupColorClass(color: string) {
   return DOCUMENT_GROUP_COLOR_CLASS[color] ?? 'bg-accent'
 }
 
+function getDocumentHealthScoreClass(score: number) {
+  if (score >= 80) return 'border-success/25 bg-success/10 text-success'
+  if (score >= 60) return 'border-amber-400/25 bg-amber-400/10 text-amber-500'
+  return 'border-danger/25 bg-danger/10 text-danger'
+}
+
 function getDocumentNodeDisplayName(node: DocumentNode): string {
   if (node.type !== 'document') return node.title
   return getDocumentDisplayName(node.title)
@@ -1740,7 +1746,7 @@ export function DocumentsLayout() {
                         <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.knowledgeHealth', 'Knowledge Health')}</h3>
                         <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.knowledgeHealthHint', 'LLM Wiki-style lint checks keep references, tags, and titles ready for query and graph expansion.')}</p>
                       </div>
-                      <div className={`shrink-0 rounded-2xl border px-3 py-2 text-center ${documentHealth.score >= 80 ? 'border-success/25 bg-success/10 text-success' : documentHealth.score >= 60 ? 'border-amber-400/25 bg-amber-400/10 text-amber-500' : 'border-danger/25 bg-danger/10 text-danger'}`}>
+                      <div className={`shrink-0 rounded-2xl border px-3 py-2 text-center ${getDocumentHealthScoreClass(documentHealth.score)}`}>
                         <div className="text-base font-semibold leading-none">{documentHealth.score}</div>
                         <div className="mt-1 text-[9px] font-semibold uppercase tracking-[0.14em] opacity-80">{t('documents.healthScore', 'score')}</div>
                       </div>
