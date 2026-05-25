@@ -36,6 +36,38 @@ export interface DocumentAssetReference {
   title?: string
 }
 
+export type DocumentHealthIssueKind = 'dead-reference' | 'duplicate-title' | 'missing-tags' | 'orphan'
+export type DocumentHealthSeverity = 'high' | 'medium' | 'low'
+
+export interface DocumentHealthIssue {
+  id: string
+  kind: DocumentHealthIssueKind
+  severity: DocumentHealthSeverity
+  documentId: string
+  title: string
+  message: string
+  detail: string
+  reference?: string
+  relatedDocumentIds?: string[]
+}
+
+export interface DocumentHealthReport {
+  score: number
+  documentCount: number
+  taggedDocumentCount: number
+  referencedDocumentCount: number
+  orphanDocumentCount: number
+  deadReferenceCount: number
+  duplicateTitleCount: number
+  issues: DocumentHealthIssue[]
+  issueCounts: Record<DocumentHealthIssueKind, number>
+}
+
+interface MarkdownReferenceTarget {
+  label: string
+  target: string
+}
+
 const MARKDOWN_EXTENSIONS = new Set(['.md', '.markdown', '.mdx'])
 const DOCUMENT_SEARCH_STOP_WORDS = new Set([
   '的',
@@ -254,6 +286,29 @@ function extractDocumentSearchTags(markdown: string): string[] {
   return Array.from(tags)
 }
 
+function normalizeDocumentTitleKey(title: string): string {
+  return getDocumentDisplayName(title).replace(/\.(md|markdown|mdx)$/i, '').toLowerCase().trim()
+}
+
+function extractMarkdownReferenceTargets(markdown: string): MarkdownReferenceTarget[] {
+  const refs = new Map<string, MarkdownReferenceTarget>()
+  const wikiPattern = /\[\[([^\]\n]+)\]\]/g
+  const markdownPattern = /\[([^\]\n]+)\]\(#doc:([^)]+)\)/g
+
+  let match: RegExpExecArray | null
+  while ((match = wikiPattern.exec(markdown)) !== null) {
+    const target = match[1].trim()
+    if (target) refs.set(`wiki:${target.toLowerCase()}`, { label: target, target })
+  }
+  while ((match = markdownPattern.exec(markdown)) !== null) {
+    const label = match[1].trim()
+    const target = match[2].trim()
+    if (target) refs.set(`doc:${target.toLowerCase()}`, { label: label || target, target })
+  }
+
+  return Array.from(refs.values())
+}
+
 function buildSearchPath(node: DocumentNode, nodeById: Map<string, DocumentNode>): string {
   const parts = [node.type === 'document' ? getDocumentDisplayName(node.title) : node.title]
   const visited = new Set<string>()
@@ -364,24 +419,14 @@ export function createDocument(groupId: string, parentId: string | null, title =
 }
 
 export function extractMarkdownReferences(markdown: string): string[] {
-  const refs = new Set<string>()
-  const wikiPattern = /\[\[([^\]\n]+)\]\]/g
-  const markdownPattern = /\[([^\]\n]+)\]\(#doc:([^)]+)\)/g
-
-  let match: RegExpExecArray | null
-  while ((match = wikiPattern.exec(markdown)) !== null) {
-    refs.add(match[1].trim())
-  }
-  while ((match = markdownPattern.exec(markdown)) !== null) {
-    refs.add(match[1].trim())
-    refs.add(match[2].trim())
-  }
-
-  return Array.from(refs).filter(Boolean)
+  return extractMarkdownReferenceTargets(markdown).flatMap((ref) => {
+    if (ref.label && ref.label !== ref.target) return [ref.label, ref.target]
+    return [ref.target]
+  }).filter(Boolean)
 }
 
 export function findReferencedDocuments(markdown: string, documents: DocumentItem[]): DocumentItem[] {
-  const refs = extractMarkdownReferences(markdown)
+  const refs = extractMarkdownReferenceTargets(markdown).map((ref) => ref.target)
   if (refs.length === 0) return []
 
   const refSet = new Set(refs.map((ref) => ref.toLowerCase()))
@@ -398,6 +443,135 @@ export function findReferencedDocuments(markdown: string, documents: DocumentIte
   }
 
   return Array.from(matched.values())
+}
+
+export function analyzeDocumentHealth(nodes: DocumentNode[], groupId: string | null = null): DocumentHealthReport {
+  const documents = nodes
+    .filter((node): node is DocumentItem => isDocumentNode(node))
+    .filter((doc) => !groupId || doc.groupId === groupId)
+  const issues: DocumentHealthIssue[] = []
+  const issueCounts: Record<DocumentHealthIssueKind, number> = {
+    'dead-reference': 0,
+    'duplicate-title': 0,
+    'missing-tags': 0,
+    orphan: 0,
+  }
+  const documentsById = new Map<string, DocumentItem>()
+  const documentsByTitle = new Map<string, DocumentItem[]>()
+  const referencedDocumentIds = new Set<string>()
+  const documentsWithTags = new Set<string>()
+
+  for (const doc of documents) {
+    documentsById.set(doc.id.toLowerCase(), doc)
+    const keys = new Set([
+      doc.title.toLowerCase().trim(),
+      getDocumentDisplayName(doc.title).toLowerCase().trim(),
+      normalizeDocumentTitleKey(doc.title),
+    ])
+    for (const key of keys) {
+      const bucket = documentsByTitle.get(key) ?? []
+      bucket.push(doc)
+      documentsByTitle.set(key, bucket)
+    }
+    if (extractDocumentSearchTags(doc.markdown).length > 0) documentsWithTags.add(doc.id)
+  }
+
+  const resolveReference = (target: string) => {
+    const key = target.toLowerCase().trim()
+    return documentsById.get(key) ?? documentsByTitle.get(key)?.[0] ?? documentsByTitle.get(normalizeDocumentTitleKey(target))?.[0] ?? null
+  }
+
+  for (const doc of documents) {
+    const targets = extractMarkdownReferenceTargets(doc.markdown)
+    if (targets.length === 0) {
+      issues.push({
+        id: `orphan:${doc.id}`,
+        kind: 'orphan',
+        severity: 'low',
+        documentId: doc.id,
+        title: doc.title,
+        message: 'No outgoing references',
+        detail: 'Add [[wikilinks]] or #tags so this note becomes part of the knowledge graph.',
+      })
+      issueCounts.orphan += 1
+    }
+
+    if (!documentsWithTags.has(doc.id)) {
+      issues.push({
+        id: `missing-tags:${doc.id}`,
+        kind: 'missing-tags',
+        severity: 'low',
+        documentId: doc.id,
+        title: doc.title,
+        message: 'No tags found',
+        detail: 'Add YAML tags or inline #tags to improve graph clustering and discovery.',
+      })
+      issueCounts['missing-tags'] += 1
+    }
+
+    for (const ref of targets) {
+      const resolved = resolveReference(ref.target)
+      if (resolved && resolved.id !== doc.id) {
+        referencedDocumentIds.add(resolved.id)
+        continue
+      }
+      if (!resolved) {
+        issues.push({
+          id: `dead-reference:${doc.id}:${ref.target.toLowerCase()}`,
+          kind: 'dead-reference',
+          severity: 'high',
+          documentId: doc.id,
+          title: doc.title,
+          message: `Missing reference: ${ref.target}`,
+          detail: 'Create the target note or update this wikilink before exporting/querying the corpus.',
+          reference: ref.target,
+        })
+        issueCounts['dead-reference'] += 1
+      }
+    }
+  }
+
+  const duplicateGroups = new Map<string, DocumentItem[]>()
+  for (const doc of documents) {
+    const key = normalizeDocumentTitleKey(doc.title)
+    const bucket = documentsByTitle.get(key) ?? []
+    if (bucket.length > 1) duplicateGroups.set(key, Array.from(new Map(bucket.map((item) => [item.id, item])).values()))
+  }
+
+  for (const [key, duplicates] of duplicateGroups) {
+    if (duplicates.length < 2) continue
+    issueCounts['duplicate-title'] += duplicates.length
+    for (const doc of duplicates) {
+      issues.push({
+        id: `duplicate-title:${key}:${doc.id}`,
+        kind: 'duplicate-title',
+        severity: 'medium',
+        documentId: doc.id,
+        title: doc.title,
+        message: 'Duplicate document title',
+        detail: 'Rename one copy so wikilinks and graph references resolve predictably.',
+        relatedDocumentIds: duplicates.filter((item) => item.id !== doc.id).map((item) => item.id),
+      })
+    }
+  }
+
+  const severityPenalty = issues.reduce((total, issue) => total + (issue.severity === 'high' ? 18 : issue.severity === 'medium' ? 10 : 4), 0)
+  const score = documents.length === 0 ? 100 : Math.max(0, Math.min(100, 100 - Math.round(severityPenalty / Math.max(1, documents.length))))
+
+  return {
+    score,
+    documentCount: documents.length,
+    taggedDocumentCount: documentsWithTags.size,
+    referencedDocumentCount: referencedDocumentIds.size,
+    orphanDocumentCount: issueCounts.orphan,
+    deadReferenceCount: issueCounts['dead-reference'],
+    duplicateTitleCount: issueCounts['duplicate-title'],
+    issues: issues.sort((a, b) => {
+      const severityRank = { high: 0, medium: 1, low: 2 } satisfies Record<DocumentHealthSeverity, number>
+      return severityRank[a.severity] - severityRank[b.severity] || a.title.localeCompare(b.title) || a.message.localeCompare(b.message)
+    }),
+    issueCounts,
+  }
 }
 
 export function extractMarkdownImageReferences(markdown: string): DocumentAssetReference[] {
