@@ -39,7 +39,7 @@ export function createDocumentVersion(
 ): DocumentVersion {
   const wordCount = (markdown.match(/[\p{L}\p{N}]+/gu) ?? []).length
   return {
-    id: `doc-version-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    id: `doc-version-${Date.now().toString(36)}-${crypto.randomUUID().slice(0, 8)}`,
     documentId,
     markdown,
     title,

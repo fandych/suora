@@ -54,10 +54,9 @@ export function computeDocumentStatistics(markdown: string): DocumentStatistics 
 
   const cjkChars = body.match(CJK_PATTERN) ?? []
   const words = body.match(WORD_PATTERN) ?? []
-  // CJK characters count as roughly 1.5 "words" for reading time
-  const effectiveWordCount = words.length - cjkChars.length + cjkChars.length
+  const effectiveWordCount = words.length
   const cjkReadingTime = cjkChars.length / CJK_CHARS_PER_MINUTE
-  const nonCjkWordCount = words.length - cjkChars.length
+  const nonCjkWordCount = Math.max(0, words.length - cjkChars.length)
   const nonCjkReadingTime = nonCjkWordCount / WORDS_PER_MINUTE
   const readingTimeMinutes = Math.max(1, Math.ceil(cjkReadingTime + nonCjkReadingTime))
 
