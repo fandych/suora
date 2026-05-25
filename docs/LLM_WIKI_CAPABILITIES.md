@@ -37,6 +37,42 @@ LLM Wiki 展示了一种本地桌面知识库模式：让 LLM 持续读取用户
 - **人工复核工作流**：异步复核队列中由模型提出受限操作，最终由用户决定是否接受。
 - **Agent/API 集成**：本地 token 保护 HTTP API 与 agent skill，可用于混合搜索、读取文件、遍历图谱和重新扫描来源。
 
+## Coverage confirmation
+
+The main `nashsu/llm_wiki` capability themes are included in this reference. The table below confirms coverage and separates reference coverage from current Suora implementation status.
+
+| LLM Wiki capability theme | Included in this reference | Current Suora status |
+| --- | --- | --- |
+| Two-step / traceable ingest | Yes | Planning reference only |
+| Multimodal and multi-format source ingestion | Yes | Partially related to existing document/attachment workflows; full LLM Wiki-style ingest is not claimed |
+| Knowledge graph relevance and community detection | Yes | Suora has document graph/backlink features; advanced relevance/community scoring remains planning reference |
+| Graph insights and knowledge-gap discovery | Yes | Planning reference only |
+| Vector semantic search and hybrid retrieval | Yes | Planning reference only for Documents |
+| Persistent ingest queue, retry, cancel, and source watching | Yes | Planning reference only |
+| Deep Research loop and web result auto-ingest | Yes | Related research tooling exists elsewhere, but LLM Wiki-style document auto-ingest is not claimed |
+| Async human review queue | Yes | Planning reference only |
+| Browser/web clipper source capture | Yes, under multi-format sources and deep research | Planning reference only |
+| Local API and agent skill integration | Yes | Planning reference only |
+| Obsidian-style wiki files, frontmatter, index/log, and wikilinks | Yes | Planning reference only |
+
+## 覆盖确认
+
+`nashsu/llm_wiki` 的主要能力主题已经包含在本文档中。下表用于确认覆盖范围，并把“已纳入参考”和“Suora 当前实现状态”分开说明。
+
+| LLM Wiki 能力主题 | 本文档是否包含 | Suora 当前状态 |
+| --- | --- | --- |
+| 两阶段 / 可追溯导入 | 是 | 规划参考，不声明已实现 |
+| 多模态与多格式来源导入 | 是 | 与现有文档/附件工作流部分相关；不声明完整 LLM Wiki 式导入已实现 |
+| 知识图谱关联度与社区发现 | 是 | Suora 已有文档图谱/回链能力；高级关联评分和社区发现仍作为规划参考 |
+| 图谱洞察与知识缺口发现 | 是 | 规划参考，不声明已实现 |
+| 向量语义搜索与混合检索 | 是 | Documents 的规划参考，不声明已实现 |
+| 持久化导入队列、重试、取消和来源监听 | 是 | 规划参考，不声明已实现 |
+| Deep Research 闭环与网页结果自动导入 | 是 | 仓库中已有相关研究工具概念，但不声明 LLM Wiki 式文档自动导入已实现 |
+| 异步人工复核队列 | 是 | 规划参考，不声明已实现 |
+| 浏览器 / 网页剪藏来源捕获 | 是，归入多格式来源和深度研究 | 规划参考，不声明已实现 |
+| 本地 API 与 agent skill 集成 | 是 | 规划参考，不声明已实现 |
+| Obsidian 风格 wiki 文件、frontmatter、index/log 和 wikilinks | 是 | 规划参考，不声明已实现 |
+
 ## Documentation guidance
 
 - Treat this document as a capability reference and product-planning input, not proof that Suora has already implemented every item.
