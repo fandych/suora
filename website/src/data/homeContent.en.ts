@@ -82,6 +82,7 @@ export const homeContentEn: LocaleContent = {
   libraryLinks: [
     {label: 'README', href: 'https://github.com/fandych/suora/blob/main/README.md'},
     {label: 'FEATURES.md', href: 'https://github.com/fandych/suora/blob/main/FEATURES.md'},
+    {label: 'LLM Wiki capability reference', href: 'https://github.com/fandych/suora/blob/main/docs/LLM_WIKI_CAPABILITIES.md'},
     {label: 'Technical docs (EN)', href: 'https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md'},
     {label: 'User guide (EN)', href: 'https://github.com/fandych/suora/blob/main/docs/user/USER_GUIDE_EN.md'},
     {label: 'Technical docs (ZH)', href: 'https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_ZH.md'},

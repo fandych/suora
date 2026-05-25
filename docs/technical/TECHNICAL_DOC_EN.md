@@ -96,6 +96,7 @@ docs/
   user/USER_GUIDE_EN.md          primary English user guide
   technical/TECHNICAL_DOC_ZH.md  primary Chinese technical doc
   technical/TECHNICAL_DOC_EN.md  primary English technical doc
+  LLM_WIKI_CAPABILITIES.md       LLM Wiki-inspired document capability reference
   CHANNEL_INTEGRATION.md         focused channel guide
   TESTING.md                     focused testing guide
   requirements.md                product scope baseline
