@@ -32,6 +32,8 @@ Suora is a local-first desktop AI workbench, not a single-chat shell. The curren
 | MCP | MCP server configuration and connection-state tracking |
 | Settings | General, security, voice, shortcuts, data, logs, and system sections |
 
+For future document-intelligence planning, see `docs/LLM_WIKI_CAPABILITIES.md` for an LLM Wiki-inspired capability reference. It is intentionally separate from the current capability table above.
+
 ## Providers and Agents
 
 ### Runtime provider support

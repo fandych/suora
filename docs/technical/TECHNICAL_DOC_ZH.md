@@ -96,6 +96,7 @@ docs/
   user/USER_GUIDE_EN.md          英文主用户文档
   technical/TECHNICAL_DOC_ZH.md  中文主技术文档
   technical/TECHNICAL_DOC_EN.md  英文主技术文档
+  LLM_WIKI_CAPABILITIES.md       LLM Wiki 风格文档智能能力参考
   CHANNEL_INTEGRATION.md         渠道专题
   TESTING.md                     测试专题
   requirements.md                产品范围与需求基线

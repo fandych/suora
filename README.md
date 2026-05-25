@@ -88,6 +88,7 @@ The repo now keeps a smaller maintained documentation set:
 | [docs/user/USER_GUIDE_EN.md](./docs/user/USER_GUIDE_EN.md) | Primary English user guide |
 | [docs/technical/TECHNICAL_DOC_ZH.md](./docs/technical/TECHNICAL_DOC_ZH.md) | Primary Chinese technical reference |
 | [docs/technical/TECHNICAL_DOC_EN.md](./docs/technical/TECHNICAL_DOC_EN.md) | Primary English technical reference |
+| [docs/LLM_WIKI_CAPABILITIES.md](./docs/LLM_WIKI_CAPABILITIES.md) | LLM Wiki-inspired document intelligence capability reference |
 | [docs/TESTING.md](./docs/TESTING.md) | Testing and validation notes |
 | [docs/CHANNEL_INTEGRATION.md](./docs/CHANNEL_INTEGRATION.md) | Channel setup and runtime notes |
 | [docs/requirements.md](./docs/requirements.md) | Scope and requirements baseline |
