@@ -204,7 +204,8 @@ The Documents module currently supports:
 - math blocks
 - document search
 - backlinks and references
-- graph view
+- source-aware related-note expansion
+- graph view with bridges, sparse clusters, gaps, and unexpected-link insights
 - using selected documents as chat context
 
 Recommended flow:

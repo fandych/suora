@@ -285,6 +285,7 @@ describe('DocumentsLayout', () => {
 
     vi.mocked(window.electron.invoke).mockImplementation(async (channel: string) => {
       if (channel === 'system:ensureDirectory' || channel === 'fs:writeFile') return { success: true }
+      if (channel === 'shell:openPath') return { success: true }
       return undefined
     })
 
@@ -310,10 +311,43 @@ describe('DocumentsLayout', () => {
       expect(screen.getByText(/Graphify corpus exported successfully/i)).toBeInTheDocument()
     })
 
+    await user.click(screen.getByRole('button', { name: 'Open Folder' }))
+
     expect(window.electron.invoke).toHaveBeenCalledWith('system:ensureDirectory', expect.stringContaining('/workspace/.suora/exports/graphify/Knowledge-Base-'))
     expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/README.md'), expect.any(String))
     expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/manifest.json'), expect.any(String))
     expect(window.electron.invoke).toHaveBeenCalledWith('fs:writeFile', expect.stringContaining('/docs/Project-Overview.md'), expect.stringContaining('Read [Budget]'))
+    expect(window.electron.invoke).toHaveBeenCalledWith('shell:openPath', expect.stringContaining('/workspace/.suora/exports/graphify/Knowledge-Base-'))
+  })
+
+  it('shows corpus export feedback in graph mode where the sidebar is hidden', async () => {
+    const user = userEvent.setup()
+    const group = createDocumentGroup('Knowledge Base')
+    const overview = createDocument(group.id, null, 'Project Overview')
+
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'system:ensureDirectory' || channel === 'fs:writeFile') return { success: true }
+      return undefined
+    })
+
+    useAppStore.setState({
+      locale: 'en',
+      workspacePath: '/workspace',
+      documentGroups: [group],
+      documentNodes: [overview],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: overview.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    await user.click(screen.getByRole('button', { name: 'Graph' }))
+    await user.click(screen.getAllByRole('button', { name: 'Export Corpus' })[0])
+
+    await waitFor(() => {
+      expect(screen.getByText(/Graphify corpus exported successfully/i)).toBeInTheDocument()
+    })
+    expect(screen.getByText(/Path:/i)).toBeInTheDocument()
   })
 
   it('surfaces knowledge health lint issues for the active document group', () => {
@@ -350,6 +384,79 @@ describe('DocumentsLayout', () => {
     expect(within(healthCard).getAllByText('Duplicate document title').length).toBeGreaterThan(0)
     expect(within(within(healthCard).getByText('Dead links').parentElement as HTMLElement).getByText('1')).toBeInTheDocument()
     expect(within(within(healthCard).getByText('Duplicates').parentElement as HTMLElement).getByText('2')).toBeInTheDocument()
+  })
+
+  it('lets sidebar graph insights switch to graph inspection without opening the document', async () => {
+    const user = userEvent.setup()
+    const group = createDocumentGroup('Knowledge Base')
+    const overview = {
+      ...createDocument(group.id, null, 'Overview'),
+      markdown: 'See [[Bridge]].',
+    }
+    const bridge = {
+      ...createDocument(group.id, null, 'Bridge'),
+      id: 'bridge',
+      markdown: 'See [[Detail]].',
+    }
+    const detail = {
+      ...createDocument(group.id, null, 'Detail'),
+      id: 'detail',
+      markdown: 'Evidence page.',
+    }
+
+    useAppStore.setState({
+      locale: 'en',
+      documentGroups: [group],
+      documentNodes: [overview, bridge, detail],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: overview.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    const insightsCard = screen.getByText('Graph Insights').closest('div.rounded-3xl') as HTMLElement
+    expect(insightsCard).toBeTruthy()
+
+    await user.click(within(insightsCard).getAllByRole('button', { name: /Bridge bridges several notes/i })[0])
+
+    expect(screen.getByTestId('document-graph')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('Overview')
+  })
+
+  it('opens a sidebar graph insight document from its explicit Open button', async () => {
+    const user = userEvent.setup()
+    const group = createDocumentGroup('Knowledge Base')
+    const overview = {
+      ...createDocument(group.id, null, 'Overview'),
+      markdown: 'See [[Bridge]].',
+    }
+    const bridge = {
+      ...createDocument(group.id, null, 'Bridge'),
+      id: 'bridge',
+      markdown: 'See [[Detail]].',
+    }
+    const detail = {
+      ...createDocument(group.id, null, 'Detail'),
+      id: 'detail',
+      markdown: 'Evidence page.',
+    }
+
+    useAppStore.setState({
+      locale: 'en',
+      documentGroups: [group],
+      documentNodes: [overview, bridge, detail],
+      selectedDocumentGroupId: group.id,
+      selectedDocumentId: overview.id,
+    })
+
+    render(<DocumentsLayout />)
+
+    const insightsCard = screen.getByText('Graph Insights').closest('div.rounded-3xl') as HTMLElement
+    await user.click(within(insightsCard).getByRole('button', { name: /Open\s*Bridge bridges several notes/i }))
+
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: 'Document title' })).toHaveValue('Bridge')
+    })
   })
 
   it('clears document tree inputs when creating a new group', async () => {

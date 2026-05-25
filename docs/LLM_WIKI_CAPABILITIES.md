@@ -45,9 +45,9 @@ The main `nashsu/llm_wiki` capability themes are included in this reference. The
 | --- | --- | --- |
 | Two-step / traceable ingest | Yes | Planning reference only |
 | Multimodal and multi-format source ingestion | Yes | Partially related to existing document/attachment workflows; full LLM Wiki-style ingest is not claimed |
-| Knowledge graph relevance and community detection | Yes | Suora has document graph/backlink features; advanced relevance/community scoring remains planning reference |
-| Graph insights and knowledge-gap discovery | Yes | Planning reference only |
-| Vector semantic search and hybrid retrieval | Yes | Planning reference only for Documents |
+| Knowledge graph relevance and community detection | Yes | Suora has document graph/backlinks plus source-aware related-note expansion and lightweight local community grouping; full Louvain/vector scoring remains planning reference |
+| Graph insights and knowledge-gap discovery | Yes | Implemented locally for bridges, sparse clusters, isolated pages, and unexpected links; Deep Research actions remain planning reference |
+| Vector semantic search and hybrid retrieval | Yes | Documents now combine token search with graph/source expansion; optional vector retrieval remains planning reference |
 | Persistent ingest queue, retry, cancel, and source watching | Yes | Planning reference only |
 | Deep Research loop and web result auto-ingest | Yes | Related research tooling exists elsewhere, but LLM Wiki-style document auto-ingest is not claimed |
 | Async human review queue | Yes | Planning reference only |
@@ -63,9 +63,9 @@ The main `nashsu/llm_wiki` capability themes are included in this reference. The
 | --- | --- | --- |
 | 两阶段 / 可追溯导入 | 是 | 规划参考，不声明已实现 |
 | 多模态与多格式来源导入 | 是 | 与现有文档/附件工作流部分相关；不声明完整 LLM Wiki 式导入已实现 |
-| 知识图谱关联度与社区发现 | 是 | Suora 已有文档图谱/回链能力；高级关联评分和社区发现仍作为规划参考 |
-| 图谱洞察与知识缺口发现 | 是 | 规划参考，不声明已实现 |
-| 向量语义搜索与混合检索 | 是 | Documents 的规划参考，不声明已实现 |
+| 知识图谱关联度与社区发现 | 是 | Suora 已有文档图谱/回链、基于来源的相关笔记扩展，以及轻量本地知识簇分组；完整 Louvain/向量评分仍作为规划参考 |
+| 图谱洞察与知识缺口发现 | 是 | 已本地实现桥接节点、稀疏簇、孤立页面和意外连接提示；Deep Research 动作仍作为规划参考 |
+| 向量语义搜索与混合检索 | 是 | Documents 已组合关键词检索与图谱/来源扩展；可选向量检索仍作为规划参考 |
 | 持久化导入队列、重试、取消和来源监听 | 是 | 规划参考，不声明已实现 |
 | Deep Research 闭环与网页结果自动导入 | 是 | 仓库中已有相关研究工具概念，但不声明 LLM Wiki 式文档自动导入已实现 |
 | 异步人工复核队列 | 是 | 规划参考，不声明已实现 |

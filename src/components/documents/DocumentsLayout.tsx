@@ -16,7 +16,7 @@ import { WorkbenchEmptyState } from '@/components/ui/Primitives'
 import { confirm } from '@/services/confirmDialog'
 import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus'
 import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
-import { buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
+import { analyzeDocumentGraphInsights, buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
 interface DirEntry {
@@ -27,6 +27,12 @@ interface DirEntry {
 
 interface FsWatchChangedPayload {
   dir?: string
+}
+
+interface ExportCorpusStatus {
+  type: 'success' | 'error'
+  message: string
+  rootDir?: string
 }
 
 const DOCUMENT_GROUP_COLOR_CLASS: Record<string, string> = {
@@ -988,7 +994,7 @@ export function DocumentsLayout() {
   const [mode, setMode] = useState<'editor' | 'source' | 'graph'>('editor')
   const [assistantState, setAssistantState] = useState<{ mode: 'create' | 'edit'; documentId?: string } | null>(null)
   const [isExportingCorpus, setIsExportingCorpus] = useState(false)
-  const [exportStatus, setExportStatus] = useState<{ type: 'success' | 'error'; message: string; rootDir?: string } | null>(null)
+  const [exportStatus, setExportStatus] = useState<ExportCorpusStatus | null>(null)
   const {
     documentGroups,
     documentNodes,
@@ -1057,6 +1063,10 @@ export function DocumentsLayout() {
         })
       : null,
     [activeDocument, activeGroupId, documentGraph, groupNodes],
+  )
+  const graphInsightReport = useMemo(
+    () => analyzeDocumentGraphInsights(documentGraph, groupNodes),
+    [documentGraph, groupNodes],
   )
   const graphBacklinks = useMemo(
     () => activeDocument
@@ -1508,6 +1518,38 @@ export function DocumentsLayout() {
     })
   }
 
+  const openExportFolder = async (rootDir: string) => {
+    const result = await window.electron.invoke('shell:openPath', rootDir) as { success?: boolean; error?: string }
+    if (!result?.success) {
+      setExportStatus({
+        type: 'error',
+        message: `${t('documents.exportFolderOpenError', 'Could not open exported corpus folder.')} ${result?.error || ''}`.trim(),
+        rootDir,
+      })
+    }
+  }
+
+  const renderExportStatusBanner = () => exportStatus ? (
+    <div className={`mx-5 mt-3 shrink-0 rounded-2xl border px-4 py-3 text-[11px] ${exportStatus.type === 'success' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700' : 'border-danger/20 bg-danger/10 text-danger/95'}`}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <p className="font-semibold">{exportStatus.message}</p>
+          {exportStatus.rootDir && (
+            <p className="mt-2 break-all font-(--font-code) text-[10px] text-text-secondary">
+              <span className="font-sans font-semibold text-text-muted">{t('documents.exportCorpusPath', 'Path')}: </span>
+              {exportStatus.rootDir}
+            </p>
+          )}
+        </div>
+        {exportStatus.rootDir && exportStatus.type === 'success' && (
+          <button type="button" onClick={() => void openExportFolder(exportStatus.rootDir as string)} className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-500/15">
+            {t('documents.openExportFolder', 'Open Folder')}
+          </button>
+        )}
+      </div>
+    </div>
+  ) : null
+
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <SidePanel
@@ -1657,6 +1699,7 @@ export function DocumentsLayout() {
                 </button>
               </div>
             </header>
+            {renderExportStatusBanner()}
             <div className={`grid min-h-0 flex-1 overflow-hidden ${mode === 'graph' ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_280px]'}`}>
               <div className="min-h-0 overflow-hidden p-5">
                 {mode === 'editor' ? (
@@ -1676,7 +1719,7 @@ export function DocumentsLayout() {
                     extension={activeDocumentExtension}
                   />
                 ) : (
-                  <DocumentGraphView graph={documentGraph} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument} />
+                  <DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument} />
                 )}
               </div>
               {mode !== 'graph' && (
@@ -1785,6 +1828,41 @@ export function DocumentsLayout() {
                     </div>
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.graphInsights', 'Graph Insights')}</h3>
+                      <span className="rounded-xl border border-border-subtle/55 bg-surface-2/55 px-2 py-0.5 text-[10px] text-text-muted">{graphInsightReport.communities.length} {t('documents.graphCommunities', 'clusters')}</span>
+                    </div>
+                    <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.graphInsightsHint', 'LLM Wiki-style graph checks surface bridges, sparse clusters, isolated pages, and unexpected links before they hurt retrieval.')}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.graphInsightBridge', 'Bridge')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{graphInsightReport.bridgeCount}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.graphInsightSurprisingConnection', 'Connection')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{graphInsightReport.surprisingConnectionCount}</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 space-y-2">
+                      {graphInsightReport.insights.length ? graphInsightReport.insights.slice(0, 3).map((insight) => (
+                        <article key={insight.id} className="rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 hover:border-accent/25 hover:bg-accent/8">
+                          <button type="button" onClick={() => setMode('graph')} className="w-full text-left">
+                            <span className="block truncate text-[12px] font-semibold text-text-primary">{insight.title}</span>
+                            <span className="mt-2 block line-clamp-2 text-[10px] leading-relaxed text-text-secondary/80">{insight.detail}</span>
+                          </button>
+                          <div className="mt-2 flex justify-end">
+                            <button type="button" onClick={() => insight.documentIds[0] && openDocument(insight.documentIds[0])} className="rounded-xl border border-accent/18 bg-accent/8 px-2.5 py-1 text-[10px] font-semibold text-accent hover:bg-accent/14">
+                              {t('documents.openInsightDocument', 'Open')}
+                              <span className="sr-only"> {insight.title}</span>
+                            </button>
+                          </div>
+                        </article>
+                      )) : (
+                        <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noGraphInsights', 'No graph insights yet.')}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.relatedNotes', 'Related Notes')}</h3>
                     <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.relatedNotesHint', 'Suora expands from the current note through references and shared tags so large note collections remain navigable.')}</p>
                     <div className="mt-4 space-y-2">
@@ -1830,14 +1908,7 @@ export function DocumentsLayout() {
                         {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
                       </button>
                     </div>
-                    {exportStatus ? (
-                      <div className={`mt-3 rounded-2xl border px-3 py-3 text-[11px] ${exportStatus.type === 'success' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700' : 'border-danger/20 bg-danger/10 text-danger/95'}`}>
-                        <p className="font-semibold">{exportStatus.message}</p>
-                        {exportStatus.rootDir && <p className="mt-2 break-all font-(--font-code) text-[10px] text-text-secondary">{exportStatus.rootDir}</p>}
-                      </div>
-                    ) : (
-                      <p className="mt-3 rounded-2xl border border-dashed border-border-subtle/55 px-3 py-4 text-center text-[11px] text-text-muted">{t('documents.exportCorpusReady', 'The exported folder will include docs/, manifest.json, and a Suora graph preview for future Graphify upgrades.')}</p>
-                    )}
+                    <p className="mt-3 rounded-2xl border border-dashed border-border-subtle/55 px-3 py-4 text-center text-[11px] text-text-muted">{t('documents.exportCorpusReady', 'The exported folder will include docs/, manifest.json, and a Suora graph preview for future Graphify upgrades.')}</p>
                   </div>
                   {activeDocumentIsMarkdown && (
                     <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
@@ -1892,8 +1963,9 @@ export function DocumentsLayout() {
                 </button>
               </div>
             </header>
+            {renderExportStatusBanner()}
             <div className="min-h-0 flex-1 overflow-hidden p-5">
-              <DocumentGraphView graph={documentGraph} selectedDocumentId={null} onSelectDocument={openDocument} />
+              <DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={null} onSelectDocument={openDocument} />
             </div>
           </div>
         ) : (

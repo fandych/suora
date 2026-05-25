@@ -44,6 +44,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'git:add',
   'git:commit',
   'shell:exec',
+  'shell:openPath',
   'shell:openUrl',
   'web:search',
   'web:fetch',

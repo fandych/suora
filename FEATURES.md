@@ -22,7 +22,7 @@ Suora is a local-first desktop AI workbench, not a single-chat shell. The curren
 | Area | Current capability surface |
 | --- | --- |
 | Chat | Multi-session conversations, attachments, model/agent switching, tool-call visibility, branching, retry, citations, read-aloud, and command-palette entry points |
-| Documents | Local document groups, nested folders, markdown editing, Mermaid, math, search, backlinks, graph view, related-note expansion, and chat context attachment |
+| Documents | Local document groups, nested folders, markdown editing, Mermaid, math, source-aware search expansion, backlinks, graph view, graph insights, related-note expansion, and chat context attachment |
 | Pipeline | Saved multi-step agent workflows with retries, timeouts, budgets, `runIf`, output transforms, exported variables, history, and Mermaid preview |
 | Models | Provider configuration, connectivity testing, enabled model lists, per-model parameters, and compare view |
 | Agents | Built-in and custom agents with prompts, model binding, tool policy, skills, memories, testing, import/export, duplication, and version snapshots |

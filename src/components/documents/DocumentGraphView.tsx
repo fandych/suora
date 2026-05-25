@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { toGraphifyExport } from '@/services/graphifyAdapter'
-import type { DocumentGraph, DocumentGraphEdgeType, DocumentGraphNode } from '@/services/documentGraph'
+import type { DocumentGraph, DocumentGraphEdgeType, DocumentGraphInsightKind, DocumentGraphInsightsReport, DocumentGraphNode } from '@/services/documentGraph'
 
 const EDGE_TYPES: DocumentGraphEdgeType[] = ['contains', 'references', 'tagged', 'external-link']
 // Keep the adapter preview compact enough for the inspector panel without rendering the full graph JSON.
@@ -26,6 +26,7 @@ const NODE_SWATCH_CLASS: Record<DocumentGraphNode['type'], string> = {
 
 interface DocumentGraphViewProps {
   graph: DocumentGraph
+  insights?: DocumentGraphInsightsReport
   selectedDocumentId: string | null
   onSelectDocument: (id: string) => void
 }
@@ -48,13 +49,20 @@ function getRelatedNodeIds(graph: DocumentGraph, selectedDocumentId: string | nu
   return related
 }
 
-export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument }: DocumentGraphViewProps) {
+export function DocumentGraphView({ graph, insights, selectedDocumentId, onSelectDocument }: DocumentGraphViewProps) {
   const { t } = useI18n()
   const [query, setQuery] = useState('')
   const [enabledEdges, setEnabledEdges] = useState<Set<DocumentGraphEdgeType>>(() => new Set(EDGE_TYPES))
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(selectedDocumentId ? `doc-graph:${selectedDocumentId}` : null)
+  const [selectedInsightId, setSelectedInsightId] = useState<string | null>(null)
   const [showExport, setShowExport] = useState(false)
+  const [copyStatus, setCopyStatus] = useState<'idle' | 'copied' | 'error'>('idle')
 
+  const activeInsight = selectedInsightId ? insights?.insights.find((insight) => insight.id === selectedInsightId) ?? null : null
+  const highlightedInsightNodeIds = useMemo(
+    () => new Set(activeInsight?.documentIds.map((documentId) => `doc-graph:${documentId}`) ?? []),
+    [activeInsight],
+  )
   const relatedNodeIds = useMemo(() => getRelatedNodeIds(graph, selectedDocumentId), [graph, selectedDocumentId])
   const filteredEdges = useMemo(() => graph.edges.filter((edge) => enabledEdges.has(edge.type)), [enabledEdges, graph.edges])
   const visibleNodeIds = useMemo(() => {
@@ -110,18 +118,16 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
     () => positionedNodes.map((node) => ({
       ...node,
       active: node.documentId === selectedDocumentId || node.id === selectedNodeId,
-      related: relatedNodeIds.has(node.id),
+      related: relatedNodeIds.has(node.id) || highlightedInsightNodeIds.has(node.id),
     })),
-    [positionedNodes, relatedNodeIds, selectedDocumentId, selectedNodeId],
+    [highlightedInsightNodeIds, positionedNodes, relatedNodeIds, selectedDocumentId, selectedNodeId],
   )
   const decoratedById = useMemo(() => new Map(decoratedNodes.map((node) => [node.id, node])), [decoratedNodes])
   const visibleEdges = filteredEdges.filter((edge) => positionedById.has(edge.source) && positionedById.has(edge.target))
   const selectedNode = (selectedNodeId && graph.nodes.find((node) => node.id === selectedNodeId)) || (selectedDocumentId && graph.nodes.find((node) => node.documentId === selectedDocumentId)) || null
   const backlinks = selectedDocumentId ? graph.backlinksByDocumentId[selectedDocumentId] ?? [] : []
-  const graphifyPreview = useMemo(
-    () => showExport ? JSON.stringify(toGraphifyExport(graph), null, 2).slice(0, GRAPHIFY_PREVIEW_MAX_CHARS) : '',
-    [graph, showExport],
-  )
+  const graphifyJson = useMemo(() => JSON.stringify(toGraphifyExport(graph), null, 2), [graph])
+  const graphifyPreview = showExport ? graphifyJson.slice(0, GRAPHIFY_PREVIEW_MAX_CHARS) : ''
 
   const toggleEdge = (edgeType: DocumentGraphEdgeType) => {
     setEnabledEdges((prev) => {
@@ -157,6 +163,36 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
         return t('documents.graphEdgeTagged', 'tagged')
       case 'external-link':
         return t('documents.graphEdgeExternalLink', 'external-link')
+    }
+  }
+
+  const getInsightKindLabel = (kind: DocumentGraphInsightKind) => {
+    switch (kind) {
+      case 'orphan':
+        return t('documents.graphInsightOrphan', 'Gap')
+      case 'bridge':
+        return t('documents.graphInsightBridge', 'Bridge')
+      case 'sparse-community':
+        return t('documents.graphInsightSparseCommunity', 'Sparse')
+      case 'surprising-connection':
+        return t('documents.graphInsightSurprisingConnection', 'Connection')
+    }
+  }
+
+  const selectInsight = (insightId: string) => {
+    setSelectedInsightId((current) => current === insightId ? null : insightId)
+  }
+
+  const openInsightDocument = (documentId?: string) => {
+    if (documentId) onSelectDocument(documentId)
+  }
+
+  const copyGraphifyJson = async () => {
+    try {
+      await navigator.clipboard.writeText(graphifyJson)
+      setCopyStatus('copied')
+    } catch {
+      setCopyStatus('error')
     }
   }
 
@@ -285,6 +321,49 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
         </section>
 
         <section className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-1/50 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.graphInsights', 'Graph Insights')}</h3>
+            <span className="rounded-xl border border-border-subtle/55 bg-surface-2/55 px-2 py-0.5 text-[10px] text-text-muted">
+              {insights?.communities.length ?? 0} {t('documents.graphCommunities', 'clusters')}
+            </span>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+            <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-2.5 py-2">
+              <div className="text-text-muted">{t('documents.graphInsightBridge', 'Bridge')}</div>
+              <div className="mt-1 text-[12px] font-semibold text-text-primary">{insights?.bridgeCount ?? 0}</div>
+            </div>
+            <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-2.5 py-2">
+              <div className="text-text-muted">{t('documents.graphInsightSparseCommunity', 'Sparse')}</div>
+              <div className="mt-1 text-[12px] font-semibold text-text-primary">{insights?.sparseCommunityCount ?? 0}</div>
+            </div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {insights?.insights.length ? insights.insights.slice(0, 4).map((insight) => (
+              <article
+                key={insight.id}
+                className={`w-full rounded-2xl border px-3 py-2 text-left transition-all ${selectedInsightId === insight.id ? 'border-accent/30 bg-accent/10' : 'border-border-subtle/55 bg-surface-2/55 hover:border-accent/25 hover:bg-accent/8'}`}
+              >
+                <button type="button" onClick={() => selectInsight(insight.id)} className="w-full text-left">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate text-[12px] font-semibold text-text-primary">{insight.title}</span>
+                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${insight.severity === 'high' ? 'bg-danger/10 text-danger' : insight.severity === 'medium' ? 'bg-amber-400/10 text-amber-500' : 'bg-surface-3/70 text-text-muted'}`}>{getInsightKindLabel(insight.kind)}</span>
+                  </span>
+                  <span className="mt-2 block line-clamp-2 text-[10px] leading-relaxed text-text-secondary/80">{insight.detail}</span>
+                </button>
+                <div className="mt-2 flex justify-end">
+                  <button type="button" onClick={() => openInsightDocument(insight.documentIds[0])} className="rounded-xl border border-accent/18 bg-accent/8 px-2.5 py-1 text-[10px] font-semibold text-accent hover:bg-accent/14">
+                    {t('documents.openInsightDocument', 'Open')}
+                    <span className="sr-only"> {insight.title}</span>
+                  </button>
+                </div>
+              </article>
+            )) : (
+              <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-4 text-center text-[11px] text-text-muted">{t('documents.noGraphInsights', 'No graph insights yet.')}</p>
+            )}
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-1/50 p-4">
           <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.graphSelection', 'Selection')}</h3>
           {selectedNode ? (
             <div className="mt-3">
@@ -319,10 +398,16 @@ export function DocumentGraphView({ graph, selectedDocumentId, onSelectDocument 
         </section>
 
         <section className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-1/50 p-4">
-          <button type="button" onClick={() => setShowExport((value) => !value)} className="flex w-full items-center justify-between text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
-            <span>{t('documents.graphifyExport', 'Graphify Adapter')}</span>
-            <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={showExport ? '' : '-rotate-90'} />
-          </button>
+          <div className="flex items-center justify-between gap-2">
+            <button type="button" onClick={() => setShowExport((value) => !value)} className="flex min-w-0 flex-1 items-center justify-between text-left text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">
+              <span>{t('documents.graphifyExport', 'Graphify Adapter')}</span>
+              <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={showExport ? '' : '-rotate-90'} />
+            </button>
+            <button type="button" onClick={() => void copyGraphifyJson()} className="rounded-xl border border-border-subtle/55 bg-surface-2/55 px-2.5 py-1 text-[10px] font-semibold text-text-secondary hover:border-accent/25 hover:bg-accent/8 hover:text-accent">
+              {copyStatus === 'copied' ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}
+            </button>
+          </div>
+          {copyStatus === 'error' && <p className="mt-2 text-[10px] text-danger">{t('documents.graphifyCopyError', 'Could not copy graph JSON.')}</p>}
           {showExport && (
             <pre className="mt-3 max-h-56 overflow-auto rounded-2xl border border-border-subtle/60 bg-surface-2/55 p-3 text-[10px] leading-relaxed text-text-secondary">
               {graphifyPreview}

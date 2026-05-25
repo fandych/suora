@@ -1404,6 +1404,19 @@ ipcMain.handle('fs:glob', async (_event, basePath: string, pattern: string, excl
 
 // ─── IPC Handlers: Open URL in default browser ─────────────────────
 
+ipcMain.handle('shell:openPath', async (_event, targetPath: string) => {
+  try {
+    const pathErr = enforceFsPathInWorkspace(targetPath)
+    if (pathErr) return { error: pathErr }
+    const resolved = resolveUserPath(targetPath, app.getPath('home'))
+    const error = await shell.openPath(resolved)
+    if (error) return { error }
+    return { success: true }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
 ipcMain.handle('shell:openUrl', async (_event, url: string) => {
   try {
     // Only allow http/https protocols

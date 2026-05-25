@@ -178,6 +178,49 @@ button, a, input, select, textarea {
     transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+button:not(:disabled),
+a[href],
+summary,
+label[for],
+label:has(input:not(:disabled)),
+label:has(select:not(:disabled)),
+select:not(:disabled),
+input[type="button"]:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="color"]:not(:disabled),
+input[type="file"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="range"]:not(:disabled),
+input[type="reset"]:not(:disabled),
+input[type="submit"]:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+[role="checkbox"]:not([aria-disabled="true"]),
+[role="menuitem"]:not([aria-disabled="true"]),
+[role="option"]:not([aria-disabled="true"]),
+[role="radio"]:not([aria-disabled="true"]),
+[role="switch"]:not([aria-disabled="true"]),
+[role="tab"]:not([aria-disabled="true"]),
+[role="treeitem"]:not([aria-disabled="true"]),
+[tabindex]:not([tabindex="-1"]):not([aria-disabled="true"]) {
+  @apply cursor-pointer;
+}
+
+input[type="file"]:not(:disabled)::file-selector-button {
+  @apply cursor-pointer;
+}
+
+button:disabled,
+select:disabled,
+input:disabled,
+textarea:disabled,
+[aria-disabled="true"] {
+  @apply cursor-not-allowed;
+}
+
+input[type="file"]:disabled::file-selector-button {
+  @apply cursor-not-allowed;
+}
+
 /* Quiet text emphasis */
 .text-gradient {
   background: none;

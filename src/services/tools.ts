@@ -22,7 +22,7 @@ import {
 import { readCached, writeCached } from '@/services/fileStorage'
 import { delegateToAgent } from '@/services/agentCommunication'
 import { confirmChoice } from '@/services/confirmDialog'
-import { buildDocumentGraph, queryDocumentGraph } from '@/services/documentGraph'
+import { analyzeDocumentGraphInsights, buildDocumentGraph, queryDocumentGraph } from '@/services/documentGraph'
 import { createDocument, createDocumentGroup, searchDocuments } from '@/services/documents'
 import { deletePipelineFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
 import { validateAgentPipeline } from '@/services/pipelineValidation'
@@ -3311,6 +3311,7 @@ export const builtinToolDefs: ToolSet = {
         const groups = (state.documentGroups || []) as DocumentGroup[]
         const nodes = (state.documentNodes || []) as DocumentNode[]
         const graph = buildDocumentGraph(groups, nodes, { groupId: group_id ?? null })
+        const insights = analyzeDocumentGraphInsights(graph, nodes)
         const result = queryDocumentGraph(graph, nodes, {
           query,
           documentIdOrTitle: document_id,
@@ -3331,9 +3332,12 @@ export const builtinToolDefs: ToolSet = {
             tags: graph.tags.length,
             edges: graph.edges.length,
             orphans: graph.orphanDocumentIds.length,
+            communities: insights.communities.length,
+            graphInsights: insights.insights.length,
           },
           seeds: result.seeds,
           relatedDocuments: result.relatedDocuments,
+          insights: insights.insights.slice(0, 5),
           tags: result.tags,
           externalLinks: result.externalLinks.slice(0, 10),
         }, null, 2)

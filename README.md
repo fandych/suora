@@ -37,7 +37,7 @@ Suora is an Electron-based AI workbench for local knowledge work, automation, an
 | Module | Current role |
 | --- | --- |
 | Chat | Conversations, attachments, tool calls, and pipeline commands |
-| Documents | Local notes, folders, backlinks, graph, and chat context |
+| Documents | Local notes, folders, backlinks, source-aware graph insights, and chat context |
 | Models | Provider setup, model enablement, testing, and compare |
 | Agents | Built-in and custom agents with testing and versioning |
 | Skills | Installed skills, registry browsing, `SKILL.md` editing, and import/export |

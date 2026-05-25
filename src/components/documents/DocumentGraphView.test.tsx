@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocumentGraphView } from './DocumentGraphView'
 import { useAppStore } from '@/store/appStore'
-import type { DocumentGraph } from '@/services/documentGraph'
+import type { DocumentGraph, DocumentGraphInsightsReport } from '@/services/documentGraph'
 
 function createGraph(): DocumentGraph {
   return {
@@ -140,10 +140,46 @@ function createGraph(): DocumentGraph {
   }
 }
 
+function createInsights(): DocumentGraphInsightsReport {
+  return {
+    communities: [
+      {
+        id: 'community:1',
+        label: 'Roadmap',
+        documentIds: ['doc-intro', 'doc-roadmap'],
+        cohesion: 1,
+        directReferenceCount: 1,
+      },
+    ],
+    insights: [
+      {
+        id: 'bridge:doc-roadmap',
+        kind: 'bridge',
+        severity: 'medium',
+        title: 'Roadmap bridges several notes',
+        detail: 'This page sits on a critical path between clusters.',
+        documentIds: ['doc-roadmap'],
+        edgeIds: ['edge-intro-roadmap'],
+        score: 88,
+      },
+    ],
+    orphanCount: 0,
+    bridgeCount: 1,
+    sparseCommunityCount: 0,
+    surprisingConnectionCount: 0,
+  }
+}
+
 describe('DocumentGraphView', () => {
   beforeEach(() => {
     localStorage.clear()
     useAppStore.setState({ locale: 'en' })
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
+    })
   })
 
   it('shows selected document details and backlinks', async () => {
@@ -202,5 +238,40 @@ describe('DocumentGraphView', () => {
 
     expect(onSelectDocument).toHaveBeenCalledWith('doc-roadmap')
     expect(screen.getByText('Refined plan for the next release.')).toBeInTheDocument()
+  })
+
+  it('selects graph insights for inspection before opening their primary document', async () => {
+    const user = userEvent.setup()
+    const onSelectDocument = vi.fn()
+
+    render(<DocumentGraphView graph={createGraph()} insights={createInsights()} selectedDocumentId={null} onSelectDocument={onSelectDocument} />)
+
+    expect(screen.getByText('Graph Insights')).toBeInTheDocument()
+    expect(screen.getByText('1 clusters')).toBeInTheDocument()
+
+    await user.click(screen.getAllByRole('button', { name: /Roadmap bridges several notes/i })[0])
+
+    expect(onSelectDocument).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: /Open\s*Roadmap bridges several notes/i }))
+
+    expect(onSelectDocument).toHaveBeenCalledWith('doc-roadmap')
+  })
+
+  it('copies the full Graphify adapter JSON from the graph panel', async () => {
+    const user = userEvent.setup()
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+
+    render(<DocumentGraphView graph={createGraph()} selectedDocumentId={null} onSelectDocument={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: 'Copy' }))
+
+    expect(writeText).toHaveBeenCalledTimes(1)
+    expect(writeText.mock.calls[0][0]).toContain('"schema": "suora-document-graph"')
+    expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
   })
 })
