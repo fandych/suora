@@ -133,7 +133,7 @@ tags: [llm-wiki]
     expect(searchDocumentIndex(index, 'Research').map((result) => result.node.id)).toEqual(['a'])
     expect(searchDocumentIndex(index, '默会知识').map((result) => result.node.id)).toEqual(['a'])
     expect(searchDocumentIndex(index, '默会知识')[0].matchedFields).toEqual(expect.arrayContaining(['heading', 'body']))
-    expect(tokenizeDocumentSearchQuery('默会知识')).toEqual(expect.arrayContaining(['默会', '知识', '默']))
+    expect(tokenizeDocumentSearchQuery('默会知识')).toEqual(['默会', '会知', '知识', '默', '会', '知', '识'])
   })
 
   it('extracts graph reference targets and tags from markdown', () => {

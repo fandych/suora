@@ -81,6 +81,21 @@ const DOCUMENT_SEARCH_STOP_WORDS = new Set([
   'these',
   'those',
 ])
+const DOCUMENT_SEARCH_SCORE = {
+  titlePrefix: 220,
+  titlePhrase: 160,
+  tagPhrase: 120,
+  headingPhrase: 100,
+  pathPhrase: 70,
+  bodyPhrase: 45,
+  titleToken: 26,
+  tagToken: 22,
+  headingToken: 18,
+  pathToken: 12,
+  bodyToken: 8,
+} as const
+const MIN_QUERY_TOKENS_FOR_RELEVANCE_THRESHOLD = 3
+const MIN_TOKEN_HIT_RATIO = 0.5
 const TEXT_DOCUMENT_EXTENSIONS = new Set([
   ...MARKDOWN_EXTENSIONS,
   '.txt',
@@ -193,6 +208,7 @@ export function tokenizeDocumentSearchQuery(query: string): string[] {
       for (const char of chars) {
         if (!DOCUMENT_SEARCH_STOP_WORDS.has(char)) tokens.push(char)
       }
+      continue
     }
     tokens.push(token)
   }
@@ -254,10 +270,6 @@ function buildSearchPath(node: DocumentNode, nodeById: Map<string, DocumentNode>
   return parts.join(' / ')
 }
 
-function fieldContainsToken(fieldValue: string, token: string): boolean {
-  return fieldValue.includes(token)
-}
-
 function compactExcerpt(markdown: string, query: string, tokens: string[], maxLength = 180): string {
   const normalized = markdown.toLowerCase()
   const phraseIndex = query ? normalized.indexOf(query) : -1
@@ -271,6 +283,17 @@ function compactExcerpt(markdown: string, query: string, tokens: string[], maxLe
   const prefix = excerptStart > 0 ? '…' : ''
   const excerpt = markdown.slice(excerptStart, excerptStart + maxLength).replace(/\s+/g, ' ').trim()
   return `${prefix}${excerpt}`
+}
+
+function meetsMinimumRelevanceThreshold(
+  queryTokens: string[],
+  tokenHits: number,
+  hasBodyPhrase: boolean,
+  hasTitlePhrase: boolean,
+): boolean {
+  if (hasBodyPhrase || hasTitlePhrase) return true
+  if (queryTokens.length < MIN_QUERY_TOKENS_FOR_RELEVANCE_THRESHOLD) return true
+  return tokenHits >= Math.ceil(queryTokens.length * MIN_TOKEN_HIT_RATIO)
 }
 
 export function buildDocumentSearchIndex(nodes: DocumentNode[], groupId: string | null = null): DocumentSearchIndex {
@@ -523,27 +546,27 @@ export function searchDocumentIndex(index: DocumentSearchIndex, query: string): 
       const pathPhraseIndex = entry.normalized.path.indexOf(q)
 
       if (titlePhraseIndex === 0) {
-        score += 220
+        score += DOCUMENT_SEARCH_SCORE.titlePrefix
         matchedFields.add('title')
       } else if (titlePhraseIndex > -1) {
-        score += 160
+        score += DOCUMENT_SEARCH_SCORE.titlePhrase
         matchedFields.add('title')
       }
 
       if (tagPhraseIndex > -1) {
-        score += 120
+        score += DOCUMENT_SEARCH_SCORE.tagPhrase
         matchedFields.add('tag')
       }
       if (headingPhraseIndex > -1) {
-        score += 100
+        score += DOCUMENT_SEARCH_SCORE.headingPhrase
         matchedFields.add('heading')
       }
       if (pathPhraseIndex > -1) {
-        score += 70
+        score += DOCUMENT_SEARCH_SCORE.pathPhrase
         matchedFields.add('path')
       }
       if (bodyPhraseIndex > -1) {
-        score += 45
+        score += DOCUMENT_SEARCH_SCORE.bodyPhrase
         matchedFields.add('body')
       }
 
@@ -551,30 +574,30 @@ export function searchDocumentIndex(index: DocumentSearchIndex, query: string): 
       for (const token of queryTokens) {
         if (!entry.tokens.has(token)) continue
         tokenHits += 1
-        if (fieldContainsToken(entry.normalized.title, token)) {
-          score += 26
+        if (entry.normalized.title.includes(token)) {
+          score += DOCUMENT_SEARCH_SCORE.titleToken
           matchedFields.add('title')
         }
-        if (fieldContainsToken(entry.normalized.tag, token)) {
-          score += 22
+        if (entry.normalized.tag.includes(token)) {
+          score += DOCUMENT_SEARCH_SCORE.tagToken
           matchedFields.add('tag')
         }
-        if (fieldContainsToken(entry.normalized.heading, token)) {
-          score += 18
+        if (entry.normalized.heading.includes(token)) {
+          score += DOCUMENT_SEARCH_SCORE.headingToken
           matchedFields.add('heading')
         }
-        if (fieldContainsToken(entry.normalized.path, token)) {
-          score += 12
+        if (entry.normalized.path.includes(token)) {
+          score += DOCUMENT_SEARCH_SCORE.pathToken
           matchedFields.add('path')
         }
-        if (fieldContainsToken(entry.normalized.body, token)) {
-          score += 8
+        if (entry.normalized.body.includes(token)) {
+          score += DOCUMENT_SEARCH_SCORE.bodyToken
           matchedFields.add('body')
         }
       }
 
       if (score === 0 || matchedFields.size === 0) return null
-      if (queryTokens.length > 2 && bodyPhraseIndex === -1 && titlePhraseIndex === -1 && tokenHits < Math.ceil(queryTokens.length / 2)) return null
+      if (!meetsMinimumRelevanceThreshold(queryTokens, tokenHits, bodyPhraseIndex > -1, titlePhraseIndex > -1)) return null
 
       return {
         node: entry.node,
