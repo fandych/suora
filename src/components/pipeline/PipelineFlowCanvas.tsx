@@ -63,7 +63,7 @@ export function PipelineFlowCanvas({ steps, progressSteps, agentNameMap, classNa
   }
 
   return (
-    <div className={`h-[420px] overflow-hidden rounded-2xl border border-border-subtle bg-slate-900/60 ${className ?? ''}`}>
+    <div className={`h-105 overflow-hidden rounded-2xl border border-border-subtle bg-slate-900/60 ${className ?? ''}`}>
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -85,7 +85,7 @@ export function PipelineFlowCanvas({ steps, progressSteps, agentNameMap, classNa
         <Background color="rgba(148,163,184,0.08)" gap={20} />
         <Controls
           showInteractive={false}
-          className="!rounded-xl !border-slate-700/50 !bg-slate-800/80 !shadow-lg [&>button]:!border-slate-700/30 [&>button]:!bg-transparent [&>button]:!text-slate-400 [&>button:hover]:!bg-white/5"
+          className="rounded-xl! border-slate-700/50! bg-slate-800/80! shadow-lg! [&>button]:border-slate-700/30! [&>button]:bg-transparent! [&>button]:text-slate-400! [&>button:hover]:bg-white/5!"
         />
         <MiniMap
           nodeStrokeWidth={3}
@@ -98,7 +98,7 @@ export function PipelineFlowCanvas({ steps, progressSteps, agentNameMap, classNa
             if (status === 'skipped') return 'rgba(100,116,139,0.4)'
             return 'rgba(148,163,184,0.3)'
           }}
-          className="!rounded-xl !border-slate-700/50 !bg-slate-800/70"
+          className="rounded-xl! border-slate-700/50! bg-slate-800/70!"
           maskColor="rgba(0,0,0,0.6)"
         />
       </ReactFlow>
