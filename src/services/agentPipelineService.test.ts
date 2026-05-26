@@ -240,7 +240,7 @@ describe('agentPipelineService', () => {
     expect(execution.status).toBe('error')
     expect(execution.error).toBe('Cancelled by user')
     expect(execution.steps).toHaveLength(2)
-    expect(execution.steps.every((step) => step.status === 'error' && step.error === 'Cancelled by user')).toBe(true)
+    expect(execution.steps.every((step) => step.status === 'skipped' && step.error === 'Cancelled by user')).toBe(true)
     expect(streamResponseWithTools).not.toHaveBeenCalled()
   })
 

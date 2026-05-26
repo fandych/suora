@@ -707,24 +707,10 @@ async function executeAgentPipelineLegacy(
 
     // Respect cancellation between steps.
     if (options.abortSignal?.aborted) {
-      const completedAt = Date.now()
-      executionSteps.push({
-        id: generateId('pipe-step'),
-        runId,
-        stepIndex: index,
-        agentId: step.agentId,
-        ...(step.name?.trim() ? { name: step.name.trim() } : {}),
-        task: step.task,
-        input: buildStepInput(step, executionSteps, variables),
-        status: 'error',
-        startedAt: completedAt,
-        completedAt,
-        durationMs: 0,
-        error: 'Cancelled by user',
-      })
       didFail = true
       executionError = executionError ?? 'Cancelled by user'
-      continue
+      skipRemainingSteps(index, 'Cancelled by user')
+      break
     }
 
     // Pre-flight budget check: enforce caps before doing any work for this step.
@@ -894,7 +880,17 @@ async function executeAgentPipelineLegacy(
       executionContextCache.set(agent.id, executionContext)
     }
 
-    const { systemPrompt, tools } = await executionContext
+    let resolvedContext: Awaited<ReturnType<typeof buildPipelineExecutionContext>>
+    try {
+      resolvedContext = await executionContext
+    } catch (error) {
+      // Evict the rejected promise so subsequent steps with the same agent
+      // can retry instead of being poisoned by a transient failure.
+      executionContextCache.delete(agent.id)
+      throw error
+    }
+
+    const { systemPrompt, tools } = resolvedContext
     const modelIdentifier = `${model.provider}:${model.modelId}`
     const messages: ModelMessage[] = [{ role: 'user' as const, content: input }]
     const maxAttempts = normalizeRetryCount(step.retryCount) + 1
