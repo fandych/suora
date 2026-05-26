@@ -5,6 +5,7 @@ import {
   prepareSensitiveDataForSave,
   restoreModelsDataAfterLoad,
   restoreSensitiveDataAfterLoad,
+  SecureStoragePersistenceError,
 } from './secureState'
 
 describe('secureState', () => {
@@ -83,8 +84,8 @@ describe('secureState', () => {
 
   it('refuses to persist plaintext secrets when safe storage is unavailable', async () => {
     // Security guarantee: even if the platform cannot encrypt, we must NEVER
-    // write plaintext API keys to disk. prepareModelsDataForSave should strip
-    // the keys and emit a warning so callers know secrets stayed in memory.
+    // write plaintext API keys to disk or overwrite older encrypted keys with
+    // an empty-key payload.
     const warnings: unknown[] = []
     const originalAddEventListener = window.addEventListener
     const listener = (event: Event) => warnings.push((event as CustomEvent).detail)
@@ -108,13 +109,7 @@ describe('secureState', () => {
       apiKeys: { openai: 'sk-user' },
     }
 
-    const result = await prepareModelsDataForSave(electron, rawModelsData)
-
-    // Keys stripped from the object about to be written.
-    expect((result.providerConfigs as Array<{ apiKey: string }>)[0].apiKey).toBe('')
-    expect(result.apiKeys).toEqual({})
-    // No encrypted blob written either (secure storage was unavailable).
-    expect(result.encryptedSecrets).toBeUndefined()
+    await expect(prepareModelsDataForSave(electron, rawModelsData)).rejects.toThrow(SecureStoragePersistenceError)
     // A warning was emitted so the UI can surface the problem.
     expect(warnings).toContainEqual({ reason: 'unavailable' })
 

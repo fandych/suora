@@ -135,11 +135,25 @@ async function decryptPathSecrets(
   }
 }
 
+export type SecureStorageWarningReason = 'unavailable' | 'encryption-failed'
+
+export class SecureStoragePersistenceError extends Error {
+  readonly reason: SecureStorageWarningReason
+
+  constructor(reason: SecureStorageWarningReason) {
+    super(reason === 'encryption-failed'
+      ? 'Secure storage encryption failed; refusing to persist secrets without encryption.'
+      : 'Secure storage is unavailable; refusing to persist secrets without encryption.')
+    this.name = 'SecureStoragePersistenceError'
+    this.reason = reason
+  }
+}
+
 /**
  * Emit a user-visible warning that secure storage is unavailable.
  * Components can listen for this event to render a banner / toast.
  */
-function emitSecureStorageWarning(reason: 'unavailable' | 'encryption-failed'): void {
+function emitSecureStorageWarning(reason: SecureStorageWarningReason): void {
   try {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
@@ -149,6 +163,11 @@ function emitSecureStorageWarning(reason: 'unavailable' | 'encryption-failed'): 
   } catch {
     // best-effort only
   }
+}
+
+function refuseUnsafeSecretPersistence(reason: SecureStorageWarningReason): never {
+  emitSecureStorageWarning(reason)
+  throw new SecureStoragePersistenceError(reason)
 }
 
 export async function prepareModelsDataForSave(
@@ -194,12 +213,10 @@ export async function prepareModelsDataForSave(
     return nextParsed
   }
 
-  // Secrets present: require safeStorage. If unavailable, REFUSE to persist
-  // the plaintext — emit a warning and return the stripped object so keys
-  // remain in memory only for this session.
+  // Secrets present: require safeStorage. If unavailable, REFUSE the write
+  // entirely so an empty-key payload cannot overwrite an older encrypted one.
   if (!(await isSecureStorageAvailable(electron))) {
-    emitSecureStorageWarning('unavailable')
-    return nextParsed
+    refuseUnsafeSecretPersistence('unavailable')
   }
 
   const encryptedSecrets = await encryptSecrets(electron, {
@@ -209,9 +226,7 @@ export async function prepareModelsDataForSave(
   })
 
   if (!encryptedSecrets) {
-    // Encryption itself failed — still refuse plaintext persistence.
-    emitSecureStorageWarning('encryption-failed')
-    return nextParsed
+    refuseUnsafeSecretPersistence('encryption-failed')
   }
 
   nextParsed.encryptedSecrets = encryptedSecrets
@@ -282,8 +297,7 @@ export async function prepareSensitiveDataForSave(
   if (Object.keys(secrets).length === 0) return stripped
 
   if (!(await isSecureStorageAvailable(electron))) {
-    emitSecureStorageWarning('unavailable')
-    return stripped
+    refuseUnsafeSecretPersistence('unavailable')
   }
 
   const encryptedSecrets = await encryptPathSecrets(electron, {
@@ -292,8 +306,7 @@ export async function prepareSensitiveDataForSave(
   })
 
   if (!encryptedSecrets) {
-    emitSecureStorageWarning('encryption-failed')
-    return stripped
+    refuseUnsafeSecretPersistence('encryption-failed')
   }
 
   stripped._encryptedSecrets = encryptedSecrets

@@ -103,4 +103,32 @@ describe('fileStateStorage', () => {
     expect(parsed.state.apiKeys).toEqual({})
     expect(parsed.state.encryptedSecrets).toEqual(expect.any(String))
   })
+
+  it('does not overwrite persisted model secrets when secure storage is unavailable', async () => {
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel: string) => {
+      if (channel === 'safe-storage:isAvailable') return false
+      return { success: true }
+    })
+
+    fileStateStorage.setItem('suora-store', JSON.stringify({
+      version: 16,
+      state: {
+        workspacePath: 'C:/workspace',
+        providerConfigs: [{
+          id: 'provider-1',
+          name: 'OpenAI',
+          apiKey: 'sk-provider',
+          baseUrl: 'https://api.example.com/v1',
+          providerType: 'openai',
+          models: [{ modelId: 'gpt-4.1', name: 'GPT 4.1', enabled: true }],
+        }],
+        apiKeys: {},
+      },
+    }))
+
+    await expect(flushPendingSplitStoreWrites()).rejects.toThrow(/Secure storage is unavailable/)
+    expect(vi.mocked(window.electron.invoke).mock.calls.some(
+      ([channel, key]) => channel === 'db:savePersistedStore' && key === 'suora-store',
+    )).toBe(false)
+  })
 })
