@@ -193,4 +193,147 @@ describe('useAIChat', () => {
       expect(assistantMessage?.toolCalls?.[0]?.outputEnvelope?.status).toBe('error')
     })
   })
+
+  it('ignores empty input with no attachments', async () => {
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('')
+    })
+    await act(async () => {
+      await result.current.sendMessage('   \n\t  ')
+    })
+
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+    expect(useAppStore.getState().sessions[0]?.messages).toHaveLength(0)
+  })
+
+  it('retryLastError replays the previous user message and skips streaming errors', async () => {
+    streamResponseWithTools.mockImplementationOnce(async function* () {
+      throw new Error('boom')
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('first attempt')
+    })
+
+    await waitFor(() => {
+      const last = useAppStore.getState().sessions[0]?.messages.at(-1)
+      expect(last?.isError).toBe(true)
+      expect(last?.isStreaming).toBeFalsy()
+    })
+
+    // Simulate that the error message is still marked as streaming — retry should bail out.
+    act(() => {
+      const sessions = useAppStore.getState().sessions
+      const target = sessions[0]
+      if (!target) return
+      useAppStore.setState({
+        sessions: sessions.map((session) => session.id === target.id
+          ? {
+              ...session,
+              messages: session.messages.map((message, index) => index === session.messages.length - 1
+                ? { ...message, isStreaming: true }
+                : message),
+            }
+          : session),
+      })
+    })
+
+    act(() => {
+      result.current.retryLastError()
+    })
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+
+    // Clear the streaming flag so retryLastError now proceeds.
+    act(() => {
+      const sessions = useAppStore.getState().sessions
+      const target = sessions[0]
+      if (!target) return
+      useAppStore.setState({
+        sessions: sessions.map((session) => session.id === target.id
+          ? {
+              ...session,
+              messages: session.messages.map((message, index) => index === session.messages.length - 1
+                ? { ...message, isStreaming: false }
+                : message),
+            }
+          : session),
+      })
+    })
+
+    streamResponseWithTools.mockImplementationOnce(async function* () {
+      yield { type: 'text-delta', text: 'retry-ok' }
+    })
+
+    await act(async () => {
+      result.current.retryLastError()
+    })
+
+    await waitFor(() => expect(streamResponseWithTools).toHaveBeenCalledTimes(2))
+    await waitFor(() => {
+      const last = useAppStore.getState().sessions[0]?.messages.at(-1)
+      expect(last?.role).toBe('assistant')
+      expect(last?.content).toBe('retry-ok')
+      expect(last?.isError).toBeFalsy()
+    })
+  })
+
+  it('regenerateMessage ignores non-assistant message ids', async () => {
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'first' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('hello')
+    })
+
+    await waitFor(() => expect(streamResponseWithTools).toHaveBeenCalledTimes(1))
+
+    const beforeMessages = useAppStore.getState().sessions[0]?.messages ?? []
+    const userMsg = beforeMessages.find((message) => message.role === 'user')
+    expect(userMsg).toBeDefined()
+    if (!userMsg) return
+
+    act(() => {
+      result.current.regenerateMessage(userMsg.id)
+    })
+
+    // No additional stream should have been triggered, and the conversation
+    // history should be untouched.
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+    expect(useAppStore.getState().sessions[0]?.messages).toHaveLength(beforeMessages.length)
+  })
+
+  it('clearMessages and deleteMessage update the active session', async () => {
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'reply' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('hi')
+    })
+
+    await waitFor(() => {
+      expect(useAppStore.getState().sessions[0]?.messages).toHaveLength(2)
+    })
+
+    const userId = useAppStore.getState().sessions[0]?.messages[0]?.id as string
+    act(() => {
+      result.current.deleteMessage(userId)
+    })
+    expect(useAppStore.getState().sessions[0]?.messages.some((message) => message.id === userId)).toBe(false)
+
+    act(() => {
+      result.current.clearMessages()
+    })
+    expect(useAppStore.getState().sessions[0]?.messages).toHaveLength(0)
+  })
 })
