@@ -25,6 +25,10 @@ vi.mock('@/components/pipeline/PipelineFlowDiagram', () => ({
   PipelineFlowDiagram: () => <div data-testid="pipeline-diagram" />,
 }))
 
+vi.mock('@/components/pipeline/PipelineFlowCanvas', () => ({
+  PipelineFlowCanvas: () => <div data-testid="pipeline-flow-canvas" />,
+}))
+
 vi.mock('./PipelineAssistantDrawer', () => ({
   PipelineAssistantDrawer: ({ mode }: { mode: 'create' | 'edit' }) => <div data-testid="pipeline-assistant-drawer">{mode}</div>,
 }))

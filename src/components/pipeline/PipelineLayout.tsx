@@ -4,6 +4,7 @@ import { SidePanel } from '@/components/layout/SidePanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { PipelineAssistantDrawer } from '@/components/pipeline/PipelineAssistantDrawer'
 import { PipelineFlowDiagram } from '@/components/pipeline/PipelineFlowDiagram'
+import { PipelineFlowCanvas } from '@/components/pipeline/PipelineFlowCanvas'
 import { flushPendingSplitStoreWrites } from '@/services/fileStorage'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
@@ -160,7 +161,7 @@ export function PipelineLayout() {
   const [pipelineBudget, setPipelineBudget] = useState<AgentPipelineBudget | undefined>(undefined)
   const [dryRunResult, setDryRunResult] = useState<DryRunResult | null>(null)
   const [variableValues, setVariableValues] = useState<Record<string, string>>({})
-  const [diagramView, setDiagramView] = useState<'preview' | 'source'>('preview')
+  const [diagramView, setDiagramView] = useState<'flow' | 'list' | 'source'>('flow')
   const [copiedMermaid, setCopiedMermaid] = useState(false)
   const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([])
   const [running, setRunning] = useState(false)
@@ -1663,10 +1664,17 @@ export function PipelineLayout() {
                   <div className="mt-4 inline-flex rounded-2xl border border-border-subtle bg-surface-2/60 p-1">
                     <button
                       type="button"
-                      onClick={() => setDiagramView('preview')}
-                      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${diagramView === 'preview' ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-primary'}`}
+                      onClick={() => setDiagramView('flow')}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${diagramView === 'flow' ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-primary'}`}
                     >
-                      {t('agents.pipelineDiagramPreview', 'Preview')}
+                      {t('agents.pipelineDiagramFlow', 'Flow')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDiagramView('list')}
+                      className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${diagramView === 'list' ? 'bg-accent/15 text-accent' : 'text-text-muted hover:text-text-primary'}`}
+                    >
+                      {t('agents.pipelineDiagramList', 'List')}
                     </button>
                     <button
                       type="button"
@@ -1678,9 +1686,13 @@ export function PipelineLayout() {
                   </div>
 
                   <div className="mt-4">
-                    {diagramView === 'preview' ? (
+                    {diagramView === 'flow' && (
+                      <PipelineFlowCanvas steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap} />
+                    )}
+                    {diagramView === 'list' && (
                       <PipelineFlowDiagram steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap} />
-                    ) : (
+                    )}
+                    {diagramView === 'source' && (
                       <pre className="max-h-96 overflow-auto rounded-2xl border border-border-subtle bg-surface-0/45 p-4 text-[11px] leading-relaxed text-text-secondary">
                         <code>{mermaidSource}</code>
                       </pre>
