@@ -302,13 +302,17 @@ export function useAIChat(options: UseAIChatOptions = {}) {
   }, [cancelStream])
 
   const sendMessage = useCallback(async (userMessage: string, attachments?: MessageAttachment[]) => {
-    const earlyPipelineCommand = parseSlashPipelineChatCommand(userMessage)
+    // Guard against accidental whitespace-only sends. If there are no attachments
+    // either, do nothing — there is nothing to send.
+    if ((!userMessage || !userMessage.trim()) && !attachments?.length) return
+
+    const slashPipelineCommand = parseSlashPipelineChatCommand(userMessage)
     const store = useAppStore.getState()
     const activeSession = store.sessions.find((s) => s.id === (targetSessionId ?? store.activeSessionId))
     if (!activeSession) { setError('No active session'); return }
 
     if (activeStreamsRef.current.has(activeSession.id)) {
-      if (earlyPipelineCommand?.type === 'cancel') cancelStream(activeSession.id)
+      if (slashPipelineCommand?.type === 'cancel') cancelStream(activeSession.id)
       return
     }
 
@@ -335,7 +339,6 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     }
 
     const pipelineChatLanguage = detectPipelineChatLanguage(userMessage)
-    const slashPipelineCommand = parseSlashPipelineChatCommand(userMessage)
     const pipelineCommand = slashPipelineCommand
       ?? (looksLikePipelineChatCommand(userMessage)
         ? detectNaturalPipelineChatCommand(userMessage, await listSavedPipelines())
@@ -549,15 +552,30 @@ export function useAIChat(options: UseAIChatOptions = {}) {
           })
         }
       } catch (err) {
-        const message = err instanceof Error
-          ? err.message
-          : (pipelineChatLanguage === 'zh' ? '流水线执行失败。' : 'Pipeline execution failed')
-        setError(message)
-        updateSessionMessage(activeSession.id, assistantMsg.id, {
-          content: message,
-          isStreaming: false,
-          isError: true,
-        })
+        if (abortController.signal.aborted) {
+          // The pipeline run was cancelled by the user (e.g. via the stop button
+          // or `/pipeline cancel`). cancelStream() has already recorded the
+          // cancellation reason on the message; just clear the streaming flag
+          // and surface a friendly message instead of treating the abort as a
+          // generic provider error.
+          const cancelledContent = pipelineChatLanguage === 'zh'
+            ? '已取消正在运行的流水线。'
+            : 'Pipeline run cancelled.'
+          updateSessionMessage(activeSession.id, assistantMsg.id, {
+            content: cancelledContent,
+            isStreaming: false,
+          })
+        } else {
+          const message = err instanceof Error
+            ? err.message
+            : (pipelineChatLanguage === 'zh' ? '流水线执行失败。' : 'Pipeline execution failed')
+          setError(message)
+          updateSessionMessage(activeSession.id, assistantMsg.id, {
+            content: message,
+            isStreaming: false,
+            isError: true,
+          })
+        }
       } finally {
         clearActiveStream(activeSession.id, abortController)
       }
@@ -1001,6 +1019,9 @@ export function useAIChat(options: UseAIChatOptions = {}) {
 
     const lastMsg = session.messages[session.messages.length - 1]
     if (!lastMsg?.isError) return
+    // Don't retry a message that is still streaming — wait for it to complete
+    // or be cancelled first so we don't double-fire requests.
+    if (lastMsg.isStreaming) return
 
     let userText = ''
     let userAttachments: MessageAttachment[] | undefined
@@ -1037,6 +1058,9 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     // Find the assistant message to regenerate
     const msgIndex = session.messages.findIndex((m) => m.id === messageId)
     if (msgIndex < 0) return
+    // Regeneration only makes sense for assistant messages — bail out cleanly
+    // if a user message id was passed in by mistake.
+    if (session.messages[msgIndex]?.role !== 'assistant') return
 
     // Find the user message before it
     let userText = ''
