@@ -71,7 +71,7 @@ export const PipelineStepNode = memo(function PipelineStepNode({ data }: NodePro
           <span className="rounded-full bg-violet-500/15 px-1.5 py-0.5 text-[9px] text-violet-300">conditional</span>
         )}
         {retryCount > 0 && (
-          <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[9px] text-blue-300">{retryCount} retry</span>
+          <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[9px] text-blue-300">{retryCount} {retryCount > 1 ? 'retries' : 'retry'}</span>
         )}
         {!continueOnError && (
           <span className="rounded-full bg-red-500/15 px-1.5 py-0.5 text-[9px] text-red-300">stop on error</span>
