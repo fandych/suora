@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { IconPicker } from '@/components/icons/IconPicker'
 import { useI18n } from '@/hooks/useI18n'
-import type { ChannelConfig, ChannelConnectionMode, ChannelPlatform } from '@/types'
+import type { ChannelConfig, ChannelConnectionMode, ChannelPlatform, EmailFilterRule, EmailAction, EmailFilterField, EmailFilterOperator, EmailActionType } from '@/types'
 import { ChannelPlatformIcon, getPlatformDisplayName } from './ChannelIcons'
 
 function EditorSection({
@@ -155,6 +155,7 @@ export function ChannelEditor({
                     <option value="telegram">{getPlatformDisplayName('telegram')}</option>
                     <option value="discord">{getPlatformDisplayName('discord')}</option>
                     <option value="teams">{getPlatformDisplayName('teams')}</option>
+                    <option value="email">{getPlatformDisplayName('email')}</option>
                   </optgroup>
                   <optgroup label={t('channels.otherPlatforms', 'Other')}>
                     <option value="custom">{t('channels.customChannel', 'Custom Channel')}</option>
@@ -447,6 +448,10 @@ export function ChannelEditor({
             </EditorSection>
           )}
 
+          {draft.platform === 'email' && (
+            <EmailChannelConfig draft={draft} setDraft={setDraft} t={t} INPUT_CLASS={INPUT_CLASS} />
+          )}
+
           {draft.platform === 'custom' && (
             <EditorSection
               eyebrow={t('channels.customChannel', 'Custom Channel')}
@@ -612,5 +617,431 @@ export function ChannelEditor({
         </div>
       </div>
     </div>
+  )
+}
+
+// ─── Email Channel Configuration Sub-component ──────────────────────
+
+function EmailChannelConfig({
+  draft,
+  setDraft,
+  t,
+  INPUT_CLASS,
+}: {
+  draft: ChannelConfig
+  setDraft: (d: ChannelConfig) => void
+  t: (key: string, fallback: string) => string
+  INPUT_CLASS: string
+}) {
+  const filters = draft.emailFilters || []
+  const actions = draft.emailActions || []
+
+  const addFilter = () => {
+    const newFilter: EmailFilterRule = {
+      id: crypto.randomUUID(),
+      field: 'subject',
+      operator: 'contains',
+      value: '',
+      enabled: true,
+    }
+    setDraft({ ...draft, emailFilters: [...filters, newFilter] })
+  }
+
+  const updateFilter = (id: string, updates: Partial<EmailFilterRule>) => {
+    setDraft({
+      ...draft,
+      emailFilters: filters.map((f) => (f.id === id ? { ...f, ...updates } : f)),
+    })
+  }
+
+  const removeFilter = (id: string) => {
+    setDraft({ ...draft, emailFilters: filters.filter((f) => f.id !== id) })
+  }
+
+  const addAction = () => {
+    const newAction: EmailAction = {
+      id: crypto.randomUUID(),
+      type: 'auto_reply',
+      enabled: true,
+      useAgent: true,
+    }
+    setDraft({ ...draft, emailActions: [...actions, newAction] })
+  }
+
+  const updateAction = (id: string, updates: Partial<EmailAction>) => {
+    setDraft({
+      ...draft,
+      emailActions: actions.map((a) => (a.id === id ? { ...a, ...updates } : a)),
+    })
+  }
+
+  const removeAction = (id: string) => {
+    setDraft({ ...draft, emailActions: actions.filter((a) => a.id !== id) })
+  }
+
+  const FILTER_FIELDS: { value: EmailFilterField; label: string }[] = [
+    { value: 'subject', label: t('channels.emailFilterSubject', 'Subject') },
+    { value: 'from', label: t('channels.emailFilterFrom', 'From') },
+    { value: 'to', label: t('channels.emailFilterTo', 'To') },
+    { value: 'cc', label: t('channels.emailFilterCc', 'CC') },
+    { value: 'body', label: t('channels.emailFilterBody', 'Body') },
+    { value: 'has_attachment', label: t('channels.emailFilterHasAttachment', 'Has Attachment') },
+  ]
+
+  const FILTER_OPERATORS: { value: EmailFilterOperator; label: string }[] = [
+    { value: 'contains', label: t('channels.emailOpContains', 'Contains') },
+    { value: 'not_contains', label: t('channels.emailOpNotContains', 'Not Contains') },
+    { value: 'equals', label: t('channels.emailOpEquals', 'Equals') },
+    { value: 'starts_with', label: t('channels.emailOpStartsWith', 'Starts With') },
+    { value: 'ends_with', label: t('channels.emailOpEndsWith', 'Ends With') },
+    { value: 'regex', label: t('channels.emailOpRegex', 'Regex') },
+    { value: 'is_true', label: t('channels.emailOpIsTrue', 'Is True') },
+  ]
+
+  const ACTION_TYPES: { value: EmailActionType; label: string }[] = [
+    { value: 'auto_reply', label: t('channels.emailActionAutoReply', 'Auto Reply') },
+    { value: 'forward', label: t('channels.emailActionForward', 'Forward') },
+    { value: 'label', label: t('channels.emailActionLabel', 'Label / Tag') },
+    { value: 'agent_process', label: t('channels.emailActionAgentProcess', 'Agent Process') },
+    { value: 'webhook', label: t('channels.emailActionWebhook', 'Webhook') },
+  ]
+
+  return (
+    <>
+      <EditorSection
+        eyebrow={t('channels.emailImap', 'IMAP')}
+        title={t('channels.emailImapConfig', 'IMAP Configuration')}
+        description={t('channels.emailImapConfigHint', 'Configure the IMAP server to monitor incoming emails. The channel will periodically poll the mailbox for new messages matching your filter rules.')}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapHost', 'IMAP Host')}</span>
+            <input
+              type="text"
+              value={draft.emailImapHost || ''}
+              onChange={(e) => setDraft({ ...draft, emailImapHost: e.target.value })}
+              placeholder={t('channels.emailImapHostPlaceholder', 'e.g. imap.gmail.com')}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapPort', 'IMAP Port')}</span>
+            <input
+              type="number"
+              value={draft.emailImapPort || 993}
+              onChange={(e) => setDraft({ ...draft, emailImapPort: parseInt(e.target.value) || 993 })}
+              className={INPUT_CLASS}
+            />
+          </label>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapUser', 'Username / Email')}</span>
+            <input
+              type="text"
+              value={draft.emailImapUser || ''}
+              onChange={(e) => setDraft({ ...draft, emailImapUser: e.target.value })}
+              placeholder={t('channels.emailImapUserPlaceholder', 'your@email.com')}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapPassword', 'Password')}</span>
+            <input
+              type="password"
+              value={draft.emailImapPassword || ''}
+              onChange={(e) => setDraft({ ...draft, emailImapPassword: e.target.value })}
+              placeholder={t('channels.emailImapPasswordPlaceholder', 'App password or IMAP password')}
+              className={INPUT_CLASS}
+            />
+          </label>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapMailbox', 'Mailbox')}</span>
+            <input
+              type="text"
+              value={draft.emailImapMailbox || 'INBOX'}
+              onChange={(e) => setDraft({ ...draft, emailImapMailbox: e.target.value })}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailPollInterval', 'Poll Interval (seconds)')}</span>
+            <input
+              type="number"
+              value={draft.emailPollInterval || 60}
+              onChange={(e) => setDraft({ ...draft, emailPollInterval: Math.max(10, parseInt(e.target.value) || 60) })}
+              min={10}
+              className={INPUT_CLASS}
+            />
+          </label>
+        </div>
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={draft.emailImapTls !== false}
+            onChange={(e) => setDraft({ ...draft, emailImapTls: e.target.checked })}
+            className="h-4 w-4 rounded border-border-subtle text-accent focus:ring-2 focus:ring-accent/20"
+          />
+          <span className="text-sm text-text-secondary">{t('channels.emailUseTls', 'Use TLS / SSL')}</span>
+        </label>
+      </EditorSection>
+
+      <EditorSection
+        eyebrow={t('channels.emailSmtp', 'SMTP')}
+        title={t('channels.emailSmtpConfig', 'SMTP Configuration')}
+        description={t('channels.emailSmtpConfigHint', 'Configure SMTP for sending reply emails. If not set, replies will use the IMAP credentials with common SMTP defaults.')}
+      >
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailSmtpHost', 'SMTP Host')}</span>
+            <input
+              type="text"
+              value={draft.emailSmtpHost || ''}
+              onChange={(e) => setDraft({ ...draft, emailSmtpHost: e.target.value })}
+              placeholder={t('channels.emailSmtpHostPlaceholder', 'e.g. smtp.gmail.com')}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailSmtpPort', 'SMTP Port')}</span>
+            <input
+              type="number"
+              value={draft.emailSmtpPort || 465}
+              onChange={(e) => setDraft({ ...draft, emailSmtpPort: parseInt(e.target.value) || 465 })}
+              className={INPUT_CLASS}
+            />
+          </label>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailSmtpUser', 'SMTP Username')}</span>
+            <input
+              type="text"
+              value={draft.emailSmtpUser || ''}
+              onChange={(e) => setDraft({ ...draft, emailSmtpUser: e.target.value })}
+              placeholder={t('channels.emailSmtpUserPlaceholder', 'Leave blank to use IMAP username')}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailSmtpPassword', 'SMTP Password')}</span>
+            <input
+              type="password"
+              value={draft.emailSmtpPassword || ''}
+              onChange={(e) => setDraft({ ...draft, emailSmtpPassword: e.target.value })}
+              placeholder={t('channels.emailSmtpPasswordPlaceholder', 'Leave blank to use IMAP password')}
+              className={INPUT_CLASS}
+            />
+          </label>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailFromName', 'From Name')}</span>
+            <input
+              type="text"
+              value={draft.emailFromName || ''}
+              onChange={(e) => setDraft({ ...draft, emailFromName: e.target.value })}
+              placeholder={t('channels.emailFromNamePlaceholder', 'e.g. Support Bot')}
+              className={INPUT_CLASS}
+            />
+          </label>
+          <label className="block">
+            <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailFromAddress', 'From Address')}</span>
+            <input
+              type="text"
+              value={draft.emailFromAddress || ''}
+              onChange={(e) => setDraft({ ...draft, emailFromAddress: e.target.value })}
+              placeholder={t('channels.emailFromAddressPlaceholder', 'Leave blank to use IMAP email')}
+              className={INPUT_CLASS}
+            />
+          </label>
+        </div>
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={draft.emailSmtpTls !== false}
+            onChange={(e) => setDraft({ ...draft, emailSmtpTls: e.target.checked })}
+            className="h-4 w-4 rounded border-border-subtle text-accent focus:ring-2 focus:ring-accent/20"
+          />
+          <span className="text-sm text-text-secondary">{t('channels.emailSmtpUseTls', 'Use TLS / SSL for SMTP')}</span>
+        </label>
+        <label className="flex items-center gap-3">
+          <input
+            type="checkbox"
+            checked={draft.emailMarkAsRead !== false}
+            onChange={(e) => setDraft({ ...draft, emailMarkAsRead: e.target.checked })}
+            className="h-4 w-4 rounded border-border-subtle text-accent focus:ring-2 focus:ring-accent/20"
+          />
+          <span className="text-sm text-text-secondary">{t('channels.emailMarkAsRead', 'Mark processed emails as read')}</span>
+        </label>
+      </EditorSection>
+
+      <EditorSection
+        eyebrow={t('channels.emailFilters', 'Filters')}
+        title={t('channels.emailFilterRules', 'Email Filter Rules')}
+        description={t('channels.emailFilterRulesHint', 'Define rules to filter incoming emails. Only emails matching ALL enabled rules will be processed. Leave empty to process all incoming emails.')}
+      >
+        {filters.map((filter) => (
+          <div key={filter.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-border-subtle/45 bg-surface-0/55 p-3">
+            <input
+              type="checkbox"
+              checked={filter.enabled}
+              onChange={(e) => updateFilter(filter.id, { enabled: e.target.checked })}
+              className="h-4 w-4 rounded border-border-subtle text-accent focus:ring-2 focus:ring-accent/20"
+            />
+            <select
+              value={filter.field}
+              onChange={(e) => updateFilter(filter.id, { field: e.target.value as EmailFilterField })}
+              className="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary"
+            >
+              {FILTER_FIELDS.map((f) => (
+                <option key={f.value} value={f.value}>{f.label}</option>
+              ))}
+            </select>
+            <select
+              value={filter.operator}
+              onChange={(e) => updateFilter(filter.id, { operator: e.target.value as EmailFilterOperator })}
+              className="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary"
+            >
+              {FILTER_OPERATORS.filter((op) => filter.field === 'has_attachment' ? op.value === 'is_true' : op.value !== 'is_true').map((op) => (
+                <option key={op.value} value={op.value}>{op.label}</option>
+              ))}
+            </select>
+            {filter.field !== 'has_attachment' && (
+              <input
+                type="text"
+                value={filter.value}
+                onChange={(e) => updateFilter(filter.id, { value: e.target.value })}
+                placeholder={t('channels.emailFilterValuePlaceholder', 'Keyword or pattern...')}
+                className="min-w-0 flex-1 rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary placeholder-text-muted/55"
+              />
+            )}
+            <button
+              type="button"
+              onClick={() => removeFilter(filter.id)}
+              className="rounded-lg p-1.5 text-text-muted hover:bg-red-500/12 hover:text-red-400"
+            >
+              <IconifyIcon name="ui-close" size={12} color="currentColor" />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addFilter}
+          className="rounded-2xl border border-dashed border-border-subtle/55 bg-surface-0/40 px-4 py-3 text-sm font-medium text-text-muted transition-colors hover:border-accent/30 hover:text-accent"
+        >
+          <span className="inline-flex items-center gap-1.5"><IconifyIcon name="ui-plus" size={14} color="currentColor" /> {t('channels.emailAddFilter', 'Add Filter Rule')}</span>
+        </button>
+      </EditorSection>
+
+      <EditorSection
+        eyebrow={t('channels.emailActionsLabel', 'Actions')}
+        title={t('channels.emailActionsConfig', 'Email Actions')}
+        description={t('channels.emailActionsConfigHint', 'Configure what happens when an email matches the filter rules. Multiple actions can be executed for each matched email.')}
+      >
+        {actions.map((action) => (
+          <div key={action.id} className="space-y-3 rounded-2xl border border-border-subtle/45 bg-surface-0/55 p-4">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={action.enabled}
+                onChange={(e) => updateAction(action.id, { enabled: e.target.checked })}
+                className="h-4 w-4 rounded border-border-subtle text-accent focus:ring-2 focus:ring-accent/20"
+              />
+              <select
+                value={action.type}
+                onChange={(e) => updateAction(action.id, { type: e.target.value as EmailActionType })}
+                className="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary"
+              >
+                {ACTION_TYPES.map((at) => (
+                  <option key={at.value} value={at.value}>{at.label}</option>
+                ))}
+              </select>
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={() => removeAction(action.id)}
+                className="rounded-lg p-1.5 text-text-muted hover:bg-red-500/12 hover:text-red-400"
+              >
+                <IconifyIcon name="ui-close" size={12} color="currentColor" />
+              </button>
+            </div>
+
+            {(action.type === 'auto_reply' || action.type === 'agent_process') && (
+              <label className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  checked={action.useAgent !== false}
+                  onChange={(e) => updateAction(action.id, { useAgent: e.target.checked })}
+                  className="h-4 w-4 rounded border-border-subtle text-accent focus:ring-2 focus:ring-accent/20"
+                />
+                <span className="text-xs text-text-secondary">{t('channels.emailUseAgent', 'Use channel reply agent to generate response')}</span>
+              </label>
+            )}
+
+            {action.type === 'auto_reply' && !action.useAgent && (
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-text-muted">{t('channels.emailReplyTemplate', 'Reply Template')}</span>
+                <textarea
+                  value={action.replyTemplate || ''}
+                  onChange={(e) => updateAction(action.id, { replyTemplate: e.target.value })}
+                  placeholder={t('channels.emailReplyTemplatePlaceholder', 'Use {{subject}}, {{from}}, {{body}} as placeholders')}
+                  rows={3}
+                  className="w-full rounded-xl border border-border-subtle/55 bg-surface-2/80 px-3 py-2 font-mono text-xs text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"
+                />
+              </label>
+            )}
+
+            {action.type === 'forward' && (
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-text-muted">{t('channels.emailForwardTo', 'Forward To')}</span>
+                <input
+                  type="email"
+                  value={action.forwardTo || ''}
+                  onChange={(e) => updateAction(action.id, { forwardTo: e.target.value })}
+                  placeholder={t('channels.emailForwardToPlaceholder', 'recipient@example.com')}
+                  className={INPUT_CLASS}
+                />
+              </label>
+            )}
+
+            {action.type === 'label' && (
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-text-muted">{t('channels.emailLabelName', 'Label')}</span>
+                <input
+                  type="text"
+                  value={action.label || ''}
+                  onChange={(e) => updateAction(action.id, { label: e.target.value })}
+                  placeholder={t('channels.emailLabelPlaceholder', 'e.g. processed, support')}
+                  className={INPUT_CLASS}
+                />
+              </label>
+            )}
+
+            {action.type === 'webhook' && (
+              <label className="block">
+                <span className="mb-1 block text-[11px] font-medium text-text-muted">{t('channels.emailWebhookUrl', 'Webhook URL')}</span>
+                <input
+                  type="text"
+                  value={action.webhookUrl || ''}
+                  onChange={(e) => updateAction(action.id, { webhookUrl: e.target.value })}
+                  placeholder={t('channels.emailWebhookUrlPlaceholder', 'https://your-api.example.com/email-hook')}
+                  className={INPUT_CLASS}
+                />
+              </label>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addAction}
+          className="rounded-2xl border border-dashed border-border-subtle/55 bg-surface-0/40 px-4 py-3 text-sm font-medium text-text-muted transition-colors hover:border-accent/30 hover:text-accent"
+        >
+          <span className="inline-flex items-center gap-1.5"><IconifyIcon name="ui-plus" size={14} color="currentColor" /> {t('channels.emailAddAction', 'Add Action')}</span>
+        </button>
+      </EditorSection>
+    </>
   )
 }

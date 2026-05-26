@@ -794,6 +794,7 @@ export type ChannelPlatform =
   | 'telegram'            // Telegram
   | 'discord'             // Discord
   | 'teams'               // Microsoft Teams
+  | 'email'               // Email (IMAP/SMTP)
   | 'custom'              // User-defined custom channel
 export type ChannelStatus = 'active' | 'inactive' | 'error'
 
@@ -811,6 +812,36 @@ export interface ChannelMessage {
 }
 
 export type ChannelConnectionMode = 'webhook' | 'stream'
+
+// ─── Email Channel Filter & Action Types ──────────────────────────
+
+export type EmailFilterField = 'subject' | 'from' | 'to' | 'cc' | 'body' | 'has_attachment'
+export type EmailFilterOperator = 'contains' | 'not_contains' | 'equals' | 'starts_with' | 'ends_with' | 'regex' | 'is_true'
+
+export interface EmailFilterRule {
+  id: string
+  field: EmailFilterField
+  operator: EmailFilterOperator
+  value: string             // The keyword/pattern to match (ignored for 'is_true' operator)
+  enabled: boolean
+}
+
+export type EmailActionType = 'auto_reply' | 'forward' | 'label' | 'agent_process' | 'webhook'
+
+export interface EmailAction {
+  id: string
+  type: EmailActionType
+  enabled: boolean
+  // auto_reply: use agent or custom template
+  replyTemplate?: string    // Custom reply template (use {{subject}}, {{from}}, {{body}} placeholders)
+  useAgent?: boolean        // Use the channel's reply agent instead of template
+  // forward: forward the email to another address
+  forwardTo?: string        // Email address to forward to
+  // label: apply a label/tag for organization
+  label?: string
+  // webhook: POST email data to a URL
+  webhookUrl?: string
+}
 
 export interface ChannelConfig {
   id: string
@@ -860,6 +891,25 @@ export interface ChannelConfig {
   customPayloadTemplate?: string // JSON template for outgoing payload, use {{content}} and {{chatId}} placeholders
   customPlatformName?: string    // Display name for the custom platform (e.g., "My Bot", "LINE")
   customPlatformIcon?: string    // Icon name or short text as icon (e.g., "ui-robot")
+
+  // Email channel config (IMAP + SMTP)
+  emailImapHost?: string         // IMAP server host
+  emailImapPort?: number         // IMAP server port (default 993)
+  emailImapUser?: string         // IMAP username (email address)
+  emailImapPassword?: string     // IMAP password or app-specific password
+  emailImapTls?: boolean         // Use TLS (default true)
+  emailImapMailbox?: string      // Mailbox to monitor (default "INBOX")
+  emailSmtpHost?: string         // SMTP server host
+  emailSmtpPort?: number         // SMTP server port (default 465)
+  emailSmtpUser?: string         // SMTP username (usually same as IMAP user)
+  emailSmtpPassword?: string     // SMTP password (usually same as IMAP password)
+  emailSmtpTls?: boolean         // Use TLS for SMTP (default true)
+  emailFromName?: string         // Display name for outgoing emails
+  emailFromAddress?: string      // From address for outgoing emails
+  emailPollInterval?: number     // Poll interval in seconds (default 60)
+  emailFilters?: EmailFilterRule[] // Filtering rules for incoming emails
+  emailActions?: EmailAction[]   // Actions to perform on matched emails
+  emailMarkAsRead?: boolean      // Mark matched emails as read after processing (default true)
 
   // Behavior
   autoReply: boolean

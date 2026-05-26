@@ -32,6 +32,7 @@ const CHANNEL_ICONS: Record<string, ChannelIconDef> = {
   telegram:            { icon: 'simple-icons:telegram',         color: '#26A5E4', collection: 'simple-icons' },
   discord:             { icon: 'simple-icons:discord',          color: '#5865F2', collection: 'simple-icons' },
   teams:               { icon: 'simple-icons:microsoftteams',   color: '#6264A7', collection: 'simple-icons' },
+  email:               { icon: 'ri:mail-fill',                  color: '#EA4335', collection: 'ri' },
   custom:              { icon: 'channel-custom',                color: '#6B7280' },
 }
 
@@ -130,6 +131,7 @@ export function getPlatformDisplayName(platform: string): string {
     case 'telegram': return translate('channels.platformTelegram', 'Telegram')
     case 'discord': return translate('channels.platformDiscord', 'Discord')
     case 'teams': return translate('channels.platformTeams', 'Microsoft Teams')
+    case 'email': return translate('channels.platformEmail', 'Email (IMAP/SMTP)')
     case 'custom': return translate('channels.customChannel', 'Custom Channel')
     default: return platform
   }

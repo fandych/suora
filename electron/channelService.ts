@@ -430,6 +430,8 @@ async function sendMessageForPlatform(channel: ChannelConfig, chatId: string, co
       return sendDiscordMessage(channel, chatId, content)
     case 'teams':
       return sendTeamsMessage(channel, chatId, content)
+    case 'email':
+      return sendEmailMessage(channel, chatId, `Re: Message`, content)
     case 'custom':
       return sendCustomMessage(channel, chatId, content)
     default:
@@ -437,8 +439,422 @@ async function sendMessageForPlatform(channel: ChannelConfig, chatId: string, co
   }
 }
 
+// ─── Email Channel Helpers ─────────────────────────────────────────
+
+import type { EmailFilterRule } from '../src/types/index.js'
+import tls from 'tls'
+import net from 'net'
+
+interface ParsedEmail {
+  uid: number
+  from: string
+  fromName?: string
+  to?: string
+  cc?: string
+  subject: string
+  body: string
+  date?: string
+  hasAttachment: boolean
+  messageId?: string
+}
+
 /**
- * Channel Service - HTTP webhook server for WeChat, Feishu, DingTalk, Slack, Telegram, Discord, Teams integration
+ * Simple IMAP client that fetches new (unseen) emails from a mailbox.
+ * Uses raw IMAP commands over TLS/TCP to avoid external dependencies.
+ */
+async function fetchNewEmails(channel: ChannelConfig, lastSeenUid: number): Promise<ParsedEmail[]> {
+  const host = channel.emailImapHost!
+  const port = channel.emailImapPort || 993
+  const user = channel.emailImapUser!
+  const pass = channel.emailImapPassword!
+  const useTls = channel.emailImapTls !== false
+  const mailbox = channel.emailImapMailbox || 'INBOX'
+
+  return new Promise((resolve, reject) => {
+    let buffer = ''
+    let commandTag = 0
+    let state: 'connecting' | 'login' | 'select' | 'search' | 'fetch' | 'done' = 'connecting'
+    const emails: ParsedEmail[] = []
+    let uidsToFetch: number[] = []
+    let currentEmailData = ''
+    let fetchingLiteral = false
+    let literalBytesRemaining = 0
+
+    const nextTag = () => `A${++commandTag}`
+
+    const send = (cmd: string) => {
+      const tag = nextTag()
+      socket.write(`${tag} ${cmd}\r\n`)
+      return tag
+    }
+
+    const connectOptions = { host, port, rejectUnauthorized: false }
+    const socket: net.Socket = useTls
+      ? tls.connect(connectOptions)
+      : net.createConnection({ host, port })
+
+    const timeout = setTimeout(() => {
+      socket.destroy()
+      reject(new Error('IMAP connection timeout'))
+    }, 30000)
+
+    socket.setEncoding('utf8')
+
+    socket.on('data', (data: string) => {
+      buffer += data
+      processBuffer()
+    })
+
+    socket.on('error', (err) => {
+      clearTimeout(timeout)
+      reject(err)
+    })
+
+    socket.on('close', () => {
+      clearTimeout(timeout)
+      if (state !== 'done') {
+        resolve(emails)
+      }
+    })
+
+    function processBuffer() {
+      // Handle literal data in FETCH responses
+      if (fetchingLiteral && literalBytesRemaining > 0) {
+        const chunk = buffer.substring(0, literalBytesRemaining)
+        currentEmailData += chunk
+        buffer = buffer.substring(chunk.length)
+        literalBytesRemaining -= chunk.length
+        if (literalBytesRemaining <= 0) {
+          fetchingLiteral = false
+          // Parse the fetched email data
+          const parsed = parseImapEmailData(currentEmailData, uidsToFetch[emails.length] || 0)
+          if (parsed) emails.push(parsed)
+          currentEmailData = ''
+        }
+        if (buffer.length > 0) processBuffer()
+        return
+      }
+
+      const lines = buffer.split('\r\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        handleLine(line)
+      }
+    }
+
+    function handleLine(line: string) {
+      if (state === 'connecting' && line.startsWith('* OK')) {
+        state = 'login'
+        send(`LOGIN "${escapeImapString(user)}" "${escapeImapString(pass)}"`)
+      } else if (state === 'login' && line.match(/^A\d+ OK/)) {
+        state = 'select'
+        send(`SELECT "${escapeImapString(mailbox)}"`)
+      } else if (state === 'login' && line.match(/^A\d+ (NO|BAD)/)) {
+        socket.destroy()
+        reject(new Error('IMAP login failed'))
+      } else if (state === 'select' && line.match(/^A\d+ OK/)) {
+        state = 'search'
+        // Search for unseen messages with UID greater than last seen
+        const searchCmd = lastSeenUid > 0
+          ? `UID SEARCH UNSEEN UID ${lastSeenUid + 1}:*`
+          : 'UID SEARCH UNSEEN'
+        send(searchCmd)
+      } else if (state === 'search' && line.startsWith('* SEARCH')) {
+        const parts = line.replace('* SEARCH', '').trim().split(/\s+/)
+        uidsToFetch = parts.filter(Boolean).map(Number).filter((n) => n > 0)
+      } else if (state === 'search' && line.match(/^A\d+ OK/)) {
+        if (uidsToFetch.length === 0) {
+          state = 'done'
+          send('LOGOUT')
+          setTimeout(() => { socket.destroy(); resolve(emails) }, 500)
+        } else {
+          state = 'fetch'
+          // Fetch limited batch (max 20 emails per poll)
+          const batch = uidsToFetch.slice(0, 20)
+          uidsToFetch = batch
+          send(`UID FETCH ${batch.join(',')} (UID RFC822.HEADER BODY[TEXT])`)
+        }
+      } else if (state === 'fetch') {
+        // Detect literal start {NNN}
+        const literalMatch = line.match(/\{(\d+)\}\s*$/)
+        if (literalMatch) {
+          literalBytesRemaining = parseInt(literalMatch[1], 10)
+          fetchingLiteral = true
+          currentEmailData = ''
+          return
+        }
+        if (line.match(/^A\d+ OK/)) {
+          state = 'done'
+          send('LOGOUT')
+          setTimeout(() => { socket.destroy(); resolve(emails) }, 500)
+        }
+      }
+    }
+  })
+}
+
+function escapeImapString(str: string): string {
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
+
+/**
+ * Parse raw IMAP email data (headers + body) into a ParsedEmail
+ */
+function parseImapEmailData(raw: string, uid: number): ParsedEmail | null {
+  try {
+    const headerBodySplit = raw.indexOf('\r\n\r\n')
+    const headers = headerBodySplit > 0 ? raw.substring(0, headerBodySplit) : raw
+    const body = headerBodySplit > 0 ? raw.substring(headerBodySplit + 4) : ''
+
+    const getHeader = (name: string): string => {
+      const regex = new RegExp(`^${name}:\\s*(.+?)$`, 'mi')
+      const match = headers.match(regex)
+      return match ? match[1].trim() : ''
+    }
+
+    const from = getHeader('From')
+    const fromMatch = from.match(/<([^>]+)>/)
+    const fromEmail = fromMatch ? fromMatch[1] : from
+    const fromNameMatch = from.match(/^"?([^"<]+)"?\s*</)
+    const fromName = fromNameMatch ? fromNameMatch[1].trim() : undefined
+
+    return {
+      uid,
+      from: fromEmail,
+      fromName,
+      to: getHeader('To'),
+      cc: getHeader('Cc'),
+      subject: decodeEmailSubject(getHeader('Subject')),
+      body: body.trim().substring(0, 10000),  // Limit body size
+      date: getHeader('Date'),
+      hasAttachment: /Content-Disposition:\s*attachment/i.test(raw),
+      messageId: getHeader('Message-ID'),
+    }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Decode RFC 2047 encoded email subject
+ */
+function decodeEmailSubject(subject: string): string {
+  return subject.replace(/=\?([^?]+)\?([BQ])\?([^?]+)\?=/gi, (_match, _charset, encoding, text) => {
+    if (encoding.toUpperCase() === 'B') {
+      return Buffer.from(text, 'base64').toString('utf8')
+    }
+    // Q encoding
+    return text.replace(/_/g, ' ').replace(/=([0-9A-F]{2})/gi, (_: string, hex: string) => String.fromCharCode(parseInt(hex, 16)))
+  })
+}
+
+/**
+ * Check if an email matches the configured filter rules.
+ * ALL enabled filters must match (AND logic).
+ */
+function matchesEmailFilters(email: ParsedEmail, filters: EmailFilterRule[]): boolean {
+  const enabledFilters = filters.filter((f) => f.enabled)
+  if (enabledFilters.length === 0) return true  // No filters = match all
+
+  return enabledFilters.every((filter) => {
+    let fieldValue: string
+
+    switch (filter.field) {
+      case 'subject':
+        fieldValue = email.subject || ''
+        break
+      case 'from':
+        fieldValue = email.from || ''
+        break
+      case 'to':
+        fieldValue = email.to || ''
+        break
+      case 'cc':
+        fieldValue = email.cc || ''
+        break
+      case 'body':
+        fieldValue = email.body || ''
+        break
+      case 'has_attachment':
+        return email.hasAttachment
+      default:
+        return false
+    }
+
+    switch (filter.operator) {
+      case 'contains':
+        return fieldValue.toLowerCase().includes(filter.value.toLowerCase())
+      case 'not_contains':
+        return !fieldValue.toLowerCase().includes(filter.value.toLowerCase())
+      case 'equals':
+        return fieldValue.toLowerCase() === filter.value.toLowerCase()
+      case 'starts_with':
+        return fieldValue.toLowerCase().startsWith(filter.value.toLowerCase())
+      case 'ends_with':
+        return fieldValue.toLowerCase().endsWith(filter.value.toLowerCase())
+      case 'regex':
+        try {
+          return new RegExp(filter.value, 'i').test(fieldValue)
+        } catch {
+          return false
+        }
+      case 'is_true':
+        return true
+      default:
+        return false
+    }
+  })
+}
+
+/**
+ * Format an email as readable content for the channel message
+ */
+function formatEmailContent(email: ParsedEmail): string {
+  const parts: string[] = []
+  parts.push(`**From:** ${email.fromName ? `${email.fromName} <${email.from}>` : email.from}`)
+  if (email.to) parts.push(`**To:** ${email.to}`)
+  parts.push(`**Subject:** ${email.subject}`)
+  if (email.date) parts.push(`**Date:** ${email.date}`)
+  parts.push('')
+  parts.push(email.body)
+  return parts.join('\n')
+}
+
+/**
+ * Send an email via SMTP (simple implementation using raw SMTP commands over TLS)
+ */
+async function sendEmailMessage(channel: ChannelConfig, toAddress: string, subject: string, content: string): Promise<{ success: boolean; error?: string }> {
+  const host = channel.emailSmtpHost || channel.emailImapHost
+  const port = channel.emailSmtpPort || 465
+  const user = channel.emailSmtpUser || channel.emailImapUser
+  const pass = channel.emailSmtpPassword || channel.emailImapPassword
+  const useTls = channel.emailSmtpTls !== false
+  const fromAddress = channel.emailFromAddress || channel.emailImapUser
+  const fromName = channel.emailFromName || 'Suora'
+
+  if (!host || !user || !pass || !fromAddress) {
+    return { success: false, error: 'Missing SMTP configuration' }
+  }
+
+  return new Promise((resolve) => {
+    let buffer = ''
+    let step: 'greeting' | 'ehlo' | 'auth_start' | 'auth_user' | 'auth_pass' | 'from' | 'to' | 'data' | 'body' | 'quit' = 'greeting'
+
+    const connectOptions = { host, port, rejectUnauthorized: false }
+    const socket: net.Socket = useTls
+      ? tls.connect(connectOptions)
+      : net.createConnection({ host, port })
+
+    const timeout = setTimeout(() => {
+      socket.destroy()
+      resolve({ success: false, error: 'SMTP connection timeout' })
+    }, 30000)
+
+    socket.setEncoding('utf8')
+
+    socket.on('data', (data: string) => {
+      buffer += data
+      const lines = buffer.split('\r\n')
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        if (!line) continue
+        const code = parseInt(line.substring(0, 3), 10)
+
+        switch (step) {
+          case 'greeting':
+            if (code === 220) {
+              step = 'ehlo'
+              socket.write(`EHLO localhost\r\n`)
+            } else {
+              socket.destroy()
+              resolve({ success: false, error: `SMTP greeting failed: ${line}` })
+            }
+            break
+          case 'ehlo':
+            if (code === 250 && !line.startsWith('250-')) {
+              step = 'auth_start'
+              socket.write(`AUTH LOGIN\r\n`)
+            }
+            break
+          case 'auth_start':
+            if (code === 334) {
+              step = 'auth_user'
+              socket.write(Buffer.from(user).toString('base64') + '\r\n')
+            } else {
+              socket.destroy()
+              resolve({ success: false, error: `SMTP AUTH not supported: ${line}` })
+            }
+            break
+          case 'auth_user':
+            if (code === 334) {
+              step = 'auth_pass'
+              socket.write(Buffer.from(pass).toString('base64') + '\r\n')
+            }
+            break
+          case 'auth_pass':
+            if (code === 235) {
+              step = 'from'
+              socket.write(`MAIL FROM:<${fromAddress}>\r\n`)
+            } else {
+              socket.destroy()
+              resolve({ success: false, error: `SMTP auth failed: ${line}` })
+            }
+            break
+          case 'from':
+            if (code === 250) {
+              step = 'to'
+              socket.write(`RCPT TO:<${toAddress}>\r\n`)
+            }
+            break
+          case 'to':
+            if (code === 250) {
+              step = 'data'
+              socket.write('DATA\r\n')
+            }
+            break
+          case 'data':
+            if (code === 354) {
+              step = 'body'
+              const emailBody = [
+                `From: "${fromName}" <${fromAddress}>`,
+                `To: <${toAddress}>`,
+                `Subject: ${subject}`,
+                `Date: ${new Date().toUTCString()}`,
+                `MIME-Version: 1.0`,
+                `Content-Type: text/plain; charset=UTF-8`,
+                '',
+                content,
+                '.',
+              ].join('\r\n')
+              socket.write(emailBody + '\r\n')
+            }
+            break
+          case 'body':
+            if (code === 250) {
+              step = 'quit'
+              socket.write('QUIT\r\n')
+              clearTimeout(timeout)
+              setTimeout(() => { socket.destroy(); resolve({ success: true }) }, 500)
+            } else {
+              socket.destroy()
+              resolve({ success: false, error: `SMTP send failed: ${line}` })
+            }
+            break
+        }
+      }
+    })
+
+    socket.on('error', (err) => {
+      clearTimeout(timeout)
+      resolve({ success: false, error: `SMTP error: ${err.message}` })
+    })
+  })
+}
+
+/**
+ * Channel Service - HTTP webhook server for WeChat, Feishu, DingTalk, Slack, Telegram, Discord, Teams, Email integration
  * Compatible with OpenClaw's channel architecture
  */
 export class ChannelService {
@@ -454,6 +870,9 @@ export class ChannelService {
   private processedMessageIds = new Map<string, number>()  // messageId -> timestamp
   private dedupTTL = 5 * 60 * 1000  // 5 minutes
   private dedupCleanupInterval: ReturnType<typeof setInterval> | null = null
+  // Email IMAP pollers
+  private emailPollers: Map<string, ReturnType<typeof setInterval>> = new Map()
+  private emailLastSeenUid: Map<string, number> = new Map()
 
   constructor(port: number = 3000) {
     this.port = port
@@ -520,6 +939,10 @@ export class ChannelService {
             break
           case 'teams':
             await this.handleTeamsWebhook(req, res, channel)
+            break
+          case 'email':
+            // Email channels use IMAP polling, not webhooks. But allow webhook for external forwarding.
+            await this.handleEmailWebhook(req, res, channel)
             break
           case 'custom':
             await this.handleCustomWebhook(req, res, channel)
@@ -891,6 +1314,66 @@ export class ChannelService {
    * Custom channel webhook handler
    * Accepts a generic JSON payload with expected fields: senderId, senderName, content, chatId
    */
+  /**
+   * Email webhook handler (for external email forwarding services)
+   */
+  private async handleEmailWebhook(req: Request, res: Response, channel: ChannelConfig) {
+    const body = req.body
+
+    // Verify webhook secret if configured
+    if (channel.webhookSecret) {
+      const providedSecret = req.headers['x-webhook-secret'] || req.query.secret
+      if (providedSecret !== channel.webhookSecret) {
+        return res.status(401).json({ error: 'Invalid webhook secret' })
+      }
+    }
+
+    // Extract email data from webhook payload
+    const from = body.from || body.sender || body.from_email || ''
+    const fromName = body.fromName || body.from_name || body.sender_name || from
+    const subject = body.subject || ''
+    const emailBody = body.body || body.text || body.content || body.html || ''
+    const hasAttachment = body.hasAttachment || body.has_attachment || false
+
+    if (!from && !emailBody) {
+      return res.status(200).json({ ok: true, skipped: 'empty email' })
+    }
+
+    const emailData: ParsedEmail = {
+      uid: Date.now(),
+      from,
+      fromName,
+      subject,
+      body: emailBody,
+      date: body.date || new Date().toISOString(),
+      hasAttachment,
+      to: body.to || body.to_email,
+      cc: body.cc,
+    }
+
+    // Apply filters
+    if (!matchesEmailFilters(emailData, channel.emailFilters || [])) {
+      return res.json({ ok: true, skipped: 'did not match filters' })
+    }
+
+    const message: ChannelMessage = {
+      id: `email-webhook-${Date.now()}`,
+      channelId: channel.id,
+      platform: 'email',
+      senderId: from,
+      senderName: fromName,
+      content: formatEmailContent(emailData),
+      timestamp: Date.now(),
+      messageType: 'text',
+      chatId: from,
+      chatType: 'private',
+    }
+
+    await this.emitMessage(channel, message, body)
+    await this.executeEmailActions(channel, emailData, message)
+    res.json({ ok: true })
+  }
+
   private async handleCustomWebhook(req: Request, res: Response, channel: ChannelConfig) {
     const body = req.body
 
@@ -1073,6 +1556,8 @@ export class ChannelService {
     }
     // Manage stream connections for DingTalk stream-mode channels
     await this.syncStreamClients()
+    // Manage email IMAP pollers
+    this.syncEmailPollers()
   }
 
   /**
@@ -1119,6 +1604,8 @@ export class ChannelService {
     this.sessionWebhooks.clear()
     this.processedMessageIds.clear()
     this.stopDedupCleanup()
+    // Stop all email pollers
+    this.stopAllEmailPollers()
 
     if (!this.server) return
 
@@ -1142,12 +1629,13 @@ export class ChannelService {
   }
 
   /**
-   * Get server status (HTTP server or stream clients active)
+   * Get server status (HTTP server or stream clients active or email pollers active)
    */
   public isRunning(): boolean {
     const httpRunning = this.server !== null && this.server.listening
     const streamsActive = this.streamClients.size > 0
-    return httpRunning || streamsActive
+    const emailPollersActive = this.emailPollers.size > 0
+    return httpRunning || streamsActive || emailPollersActive
   }
 
   /**
@@ -1246,6 +1734,9 @@ export class ChannelService {
           break
         case 'custom':
           // Custom channels don't use access tokens (auth is handled via customAuthHeader)
+          return null
+        case 'email':
+          // Email channels don't use access tokens (auth is via IMAP/SMTP credentials)
           return null
         default:
           return null
@@ -1350,6 +1841,182 @@ export class ChannelService {
         getLogger().info('DingTalk stream client removed', { channelId: id })
       }
     }
+  }
+
+  // ─── Email IMAP Polling ───────────────────────────────────────────
+
+  /**
+   * Sync email pollers based on registered email channels
+   */
+  private syncEmailPollers() {
+    const activeEmailChannelIds = new Set<string>()
+
+    for (const [id, channel] of this.channels) {
+      if (channel.platform === 'email' && channel.enabled && channel.emailImapHost && channel.emailImapUser) {
+        activeEmailChannelIds.add(id)
+
+        if (!this.emailPollers.has(id)) {
+          const interval = (channel.emailPollInterval || 60) * 1000
+          getLogger().info('Starting email poller', { channelId: id, interval })
+
+          // Run initial poll
+          this.pollEmailChannel(channel).catch((err) => {
+            getLogger().error('Email poll error (initial)', { channelId: id, error: err instanceof Error ? err.message : String(err) })
+          })
+
+          // Set up recurring poll
+          const timer = setInterval(() => {
+            const currentChannel = this.channels.get(id)
+            if (currentChannel) {
+              this.pollEmailChannel(currentChannel).catch((err) => {
+                getLogger().error('Email poll error', { channelId: id, error: err instanceof Error ? err.message : String(err) })
+              })
+            }
+          }, interval)
+
+          this.emailPollers.set(id, timer)
+        }
+      }
+    }
+
+    // Stop pollers for channels that are no longer email or removed
+    for (const [id] of this.emailPollers) {
+      if (!activeEmailChannelIds.has(id)) {
+        const timer = this.emailPollers.get(id)
+        if (timer) clearInterval(timer)
+        this.emailPollers.delete(id)
+        this.emailLastSeenUid.delete(id)
+        getLogger().info('Email poller removed', { channelId: id })
+      }
+    }
+  }
+
+  /**
+   * Stop all email pollers
+   */
+  private stopAllEmailPollers() {
+    for (const [id, timer] of this.emailPollers) {
+      clearInterval(timer)
+      getLogger().info('Email poller stopped', { channelId: id })
+    }
+    this.emailPollers.clear()
+    this.emailLastSeenUid.clear()
+  }
+
+  /**
+   * Poll an email channel's IMAP server for new messages
+   */
+  private async pollEmailChannel(channel: ChannelConfig): Promise<void> {
+    if (!channel.emailImapHost || !channel.emailImapUser || !channel.emailImapPassword) {
+      return
+    }
+
+    try {
+      const emails = await fetchNewEmails(channel, this.emailLastSeenUid.get(channel.id) || 0)
+
+      for (const email of emails) {
+        // Update last seen UID
+        if (email.uid > (this.emailLastSeenUid.get(channel.id) || 0)) {
+          this.emailLastSeenUid.set(channel.id, email.uid)
+        }
+
+        // Apply filters
+        if (!matchesEmailFilters(email, channel.emailFilters || [])) {
+          continue
+        }
+
+        // Build channel message
+        const message: ChannelMessage = {
+          id: `email-${channel.id}-${email.uid}`,
+          channelId: channel.id,
+          platform: 'email',
+          senderId: email.from,
+          senderName: email.fromName || email.from,
+          content: formatEmailContent(email),
+          timestamp: email.date ? new Date(email.date).getTime() : Date.now(),
+          messageType: 'text',
+          chatId: email.from,  // Use sender email as chatId for threading
+          chatType: 'private',
+        }
+
+        // Emit message (triggers auto-reply via agent if configured)
+        await this.emitMessage(channel, message, { emailMeta: email })
+
+        // Execute configured actions
+        await this.executeEmailActions(channel, email, message)
+      }
+    } catch (err) {
+      getLogger().error('Email poll failed', {
+        channelId: channel.id,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    }
+  }
+
+  /**
+   * Execute configured email actions for a matched email
+   */
+  private async executeEmailActions(channel: ChannelConfig, email: ParsedEmail, _message: ChannelMessage): Promise<void> {
+    const actions = channel.emailActions || []
+
+    for (const action of actions) {
+      if (!action.enabled) continue
+
+      try {
+        switch (action.type) {
+          case 'forward':
+            if (action.forwardTo) {
+              await sendEmailMessage(channel, action.forwardTo, `Fwd: ${email.subject}`, formatEmailContent(email))
+            }
+            break
+          case 'webhook':
+            if (action.webhookUrl) {
+              await httpRequest(action.webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  from: email.from,
+                  fromName: email.fromName,
+                  subject: email.subject,
+                  body: email.body,
+                  date: email.date,
+                  channelId: channel.id,
+                  channelName: channel.name,
+                }),
+              })
+            }
+            break
+          case 'auto_reply':
+            if (!action.useAgent && action.replyTemplate) {
+              const replyContent = action.replyTemplate
+                .replace(/\{\{subject\}\}/g, email.subject || '')
+                .replace(/\{\{from\}\}/g, email.from || '')
+                .replace(/\{\{body\}\}/g, email.body || '')
+              await sendEmailMessage(channel, email.from, `Re: ${email.subject}`, replyContent)
+            }
+            // If useAgent is true, the auto-reply is handled by the channel message handler
+            break
+          // 'agent_process' and 'label' actions are handled by the renderer-side message handler
+          default:
+            break
+        }
+      } catch (err) {
+        getLogger().error('Email action failed', {
+          channelId: channel.id,
+          actionType: action.type,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    }
+  }
+
+  /**
+   * Send a reply email via SMTP (used by message queue for email channels)
+   */
+  public async sendEmailReply(channelId: string, toAddress: string, content: string): Promise<{ success: boolean; error?: string }> {
+    const channel = this.channels.get(channelId)
+    if (!channel || channel.platform !== 'email') return { success: false, error: 'Email channel not found' }
+    return sendEmailMessage(channel, toAddress, `Re: Message`, content)
   }
 
   /**
