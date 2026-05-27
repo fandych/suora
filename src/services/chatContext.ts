@@ -305,16 +305,19 @@ export function toModelMessages(messages: Message[], tokenBudget = DEFAULT_MODEL
     } else if (message.role === 'assistant') {
       if (message.isError) continue
 
-      const completedToolCalls = (message.toolCalls ?? []).filter((toolCall) => toolCall.status === 'completed')
-      if (completedToolCalls.length > 0) {
+      const resolvedToolCalls = (message.toolCalls ?? []).filter((toolCall) => (
+        toolCall.status === 'completed'
+        || (toolCall.status === 'error' && (toolCall.output || toolCall.outputEnvelope))
+      ))
+      if (resolvedToolCalls.length > 0) {
         const parts: Array<TextPart | ToolCallPart> = []
         if (message.content) parts.push({ type: 'text', text: message.content })
-        for (const toolCall of completedToolCalls) {
+        for (const toolCall of resolvedToolCalls) {
           parts.push({ type: 'tool-call', toolCallId: toolCall.id, toolName: toolCall.toolName, input: toolCall.input } satisfies ToolCallPart)
         }
         result.push({ role: 'assistant', content: parts } satisfies AssistantModelMessage)
 
-        const toolResults: ToolResultPart[] = completedToolCalls.map((toolCall) => ({
+        const toolResults: ToolResultPart[] = resolvedToolCalls.map((toolCall) => ({
           type: 'tool-result',
           toolCallId: toolCall.id,
           toolName: toolCall.toolName,

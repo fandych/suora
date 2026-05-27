@@ -799,7 +799,9 @@ export function useAIChat(options: UseAIChatOptions = {}) {
               { id: event.toolCallId, toolName: event.toolName, input: event.input, status: 'running', startedAt: Date.now() },
             ]
             // Add tool-call part to ordered content
-            contentParts.push({ type: 'tool-call', toolCallId: event.toolCallId })
+            if (!contentParts.some((part) => part.type === 'tool-call' && part.toolCallId === event.toolCallId)) {
+              contentParts.push({ type: 'tool-call', toolCallId: event.toolCallId })
+            }
             flushToStore(false)
             lastFlush = Date.now()
             continue

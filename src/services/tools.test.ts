@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { Agent, DocumentGroup, DocumentNode, Model, Skill } from '@/types'
 import { delegateToAgent } from '@/services/agentCommunication'
-import { buildToolHints, builtinToolDefs, fetchMarketplaceSkills, getSkillSystemPrompts, getToolsForAgent, setLiveStoreAccessor, setLiveStoreWriter } from './tools'
+import { buildSystemPrompt, buildToolHints, builtinToolDefs, fetchMarketplaceSkills, getSkillSystemPrompts, getToolsForAgent, setLiveStoreAccessor, setLiveStoreWriter } from './tools'
 
 vi.mock('@/services/agentCommunication', () => ({
   delegateToAgent: vi.fn(async () => 'Delegated response'),
@@ -72,6 +72,17 @@ describe('builtin tool guidance', () => {
       const jsonSchema = z.toJSONSchema(definition.inputSchema as z.ZodTypeAny) as { type?: string }
       expect(jsonSchema.type, toolName).toBe('object')
     }
+  })
+
+  it('instructs auto-learning agents to store reusable tool failure corrections', () => {
+    const prompt = buildSystemPrompt({
+      autoLearn: true,
+      toolNames: ['run_command', 'memory_store'],
+    })
+
+    expect(prompt).toContain('failed tool calls')
+    expect(prompt).toContain('type="correction"')
+    expect(prompt).toContain('avoid making the same failing call again')
   })
 
   it('manages environment variables through the consolidated env_manage tool', async () => {

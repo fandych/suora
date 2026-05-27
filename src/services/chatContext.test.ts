@@ -65,6 +65,34 @@ describe('chatContext', () => {
     expect(JSON.stringify(modelMessages[1].content)).toContain('runtime-artifacts/tool-outputs/run-tool.txt')
   })
 
+  it('keeps failed tool results in model context for later correction', () => {
+    const modelMessages = toModelMessages([
+      {
+        id: 'm1',
+        role: 'assistant',
+        content: '',
+        timestamp: 1,
+        toolCalls: [
+          {
+            id: 'tool-1',
+            toolName: 'run_command',
+            input: { command: 'npm test -- --watch' },
+            output: 'Error: unknown option --watch',
+            outputEnvelope: { status: 'error', summary: 'Error: unknown option --watch', outputChars: 29 },
+            status: 'error',
+            startedAt: 1,
+          },
+        ],
+      },
+    ])
+
+    expect(modelMessages).toHaveLength(2)
+    expect(modelMessages[0].role).toBe('assistant')
+    expect(JSON.stringify(modelMessages[0].content)).toContain('run_command')
+    expect(modelMessages[1].role).toBe('tool')
+    expect(JSON.stringify(modelMessages[1].content)).toContain('unknown option --watch')
+  })
+
   it('hard-limits oversized recent turns to stay near the context budget', () => {
     const messages = [
       message('m1', 'user', 'u'.repeat(24_000)),
