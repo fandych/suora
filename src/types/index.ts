@@ -207,6 +207,7 @@ export interface Session {
   pinnedMessageIds?: string[]
   documentContextIds?: string[]
   contextPrompt?: string
+  memories?: AgentMemoryEntry[]
 }
 
 export type MessageCitationKind = 'document' | 'tool' | 'web' | 'attachment' | 'file'
@@ -263,15 +264,16 @@ export type DocumentNode = DocumentFolder | DocumentItem
 
 // ─── Agent with self-learning & customization ──────────────────────
 
-export type MemoryScope = 'session' | 'global'
+export type MemoryScope = 'session' | 'agent' | 'skill' | 'global'
 
 export interface AgentMemoryEntry {
   id: string
   content: string
   type: 'insight' | 'preference' | 'correction' | 'knowledge'
-  scope: MemoryScope       // 'session' = tied to current session, 'global' = persists across all sessions
+  scope: MemoryScope       // where this memory is stored and recalled
   createdAt: number
   source: string           // session id that generated this
+  targetId?: string        // optional owning session, agent, or skill id
   embedding?: number[]     // optional pre-computed embedding vector (for future use with real embedding APIs)
   tags?: string[]
   confidence?: number
@@ -508,6 +510,8 @@ export interface Skill {
   /** Marketplace statistics (for registry skills) */
   downloads?: number
   rating?: number
+  /** Skill-scoped learned memories that apply when this skill is active */
+  memories?: AgentMemoryEntry[]
 
   // ─── Legacy fields (backward compatibility) ──────────────────
   /** @deprecated Use source instead. Kept for backward compat with old store data. */

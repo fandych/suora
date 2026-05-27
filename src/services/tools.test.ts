@@ -308,11 +308,13 @@ describe('builtin tool guidance', () => {
       enabled: true,
       memories: [{ id: 'memory-old', content: 'Old memory', type: 'knowledge', scope: 'session', createdAt: 1, source: 'session-1' }],
     }]
+    const sessions = [{ id: 'session-1', memories: [] }]
     const globalMemories: Array<Record<string, unknown>> = []
     const getState = installShallowLiveStore({
       selectedAgent: { id: 'agent-1' },
       activeSessionId: 'session-1',
       agents,
+      sessions,
       skills,
       envVariables,
       globalMemories,
@@ -338,12 +340,12 @@ describe('builtin tool guidance', () => {
       type: 'knowledge',
       scope: 'session',
     }, memoryStoreOptions)).resolves.toContain('Stored session knowledge memory')
-    const agentsAfterStore = getState().agents as typeof agents
-    expect(agentsAfterStore).not.toBe(agents)
-    expect(agents[0].memories).toHaveLength(1)
+    const sessionsAfterStore = getState().sessions as typeof sessions
+    expect(sessionsAfterStore).not.toBe(sessions)
+    expect(sessions[0].memories).toHaveLength(0)
 
     await expect(builtinToolDefs.memory_delete.execute?.({ id: 'memory-old' }, memoryDeleteOptions)).resolves.toContain('Deleted memory')
-    expect(getState().agents).not.toBe(agentsAfterStore)
+    expect(getState().agents).not.toBe(agents)
     expect(((getState().agents as typeof agents)[0].memories).map((memory) => memory.id)).not.toContain('memory-old')
 
     await expect(builtinToolDefs.memory_store.execute?.({

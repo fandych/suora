@@ -679,15 +679,27 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       const skillPrompts = sessionAgent
         ? await getSkillSystemPrompts(sessionAgent.skills, mergedSkills)
         : ''
+      const assignedSkillIds = new Set(sessionAgent?.skills ?? [])
+      const promptMemories = sessionAgent?.autoLearn
+        ? [
+            ...(store.globalMemories ?? []),
+            ...(activeSession.memories ?? []),
+            ...(sessionAgent.memories ?? []),
+            ...mergedSkills
+              .filter((skill) => assignedSkillIds.has(skill.id))
+              .flatMap((skill) => skill.memories ?? []),
+          ]
+        : undefined
 
       const systemPrompt = buildSystemPrompt({
         agentPrompt: sessionAgent?.systemPrompt,
         sessionContext: activeSession.contextPrompt,
         responseStyle: sessionAgent?.responseStyle,
-        memories: sessionAgent?.memories,
+        memories: promptMemories,
         skillPrompts,
         toolNames: Object.keys(filteredTools),
         permissionMode: sessionAgent?.permissionMode,
+        autoLearn: sessionAgent?.autoLearn,
       })
       const runtimeSnapshot = {
         ...assistantMsg.runtime,
