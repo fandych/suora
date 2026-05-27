@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, clipboard, Notification, desktopCapturer, Tray, Menu, globalShortcut, nativeImage, safeStorage } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, clipboard, Notification, desktopCapturer, Tray, Menu, globalShortcut, nativeImage, safeStorage, dialog } from 'electron'
 import { fileURLToPath } from 'url'
 import { createRequire } from 'module'
 import path from 'path'
@@ -17,6 +17,7 @@ import { MAX_IPC_TEXT_FILE_BYTES, atomicWriteFile, canonicalizePathSync, isWithi
 import { initLogger, getLogger, closeLogger, type LogLevel } from './logger.js'
 import { getChannelService, type ChannelWebhookEvent } from './channelService.js'
 import { openSuoraDatabase, type JsonTableName, type SuoraDatabase } from './database.js'
+import { acquireWorkspaceLock, releaseWorkspaceLock, releaseWorkspaceLockSync, WorkspaceLockError, type WorkspaceLock } from './workspaceLock.js'
 import type { ChannelConfig } from '../src/types/index.js'
 
 const { autoUpdater } = electronUpdater
@@ -221,6 +222,7 @@ let currentToolSandboxMode: 'workspace' | 'relaxed' = 'workspace'
 let currentToolAllowedDirectoryPaths: string[] = []
 let currentToolAllowedDirectoryCanonicalPaths: string[] = []
 let currentToolBlockedCommands: string[] = ['rm -rf', 'del /f /q', 'format', 'shutdown']
+let currentWorkspaceLock: WorkspaceLock | null = null
 let suoraDatabase: SuoraDatabase | null = null
 let suoraDatabaseWorkspacePath: string | null = null
 const AI_REQUEST_CLIENT_HEADER = 'x-suora-client'
@@ -267,6 +269,47 @@ async function closeSuoraDatabase(): Promise<void> {
   suoraDatabase = null
   suoraDatabaseWorkspacePath = null
   await databaseToClose.close()
+}
+
+function formatWorkspaceLockMessage(error: WorkspaceLockError): string {
+  const owner = error.existing?.pid ? `PID ${error.existing.pid}` : 'another running Suora process'
+  return `This workspace is already open by ${owner}.\n\nWorkspace:\n${error.workspacePath}\n\nClose the installed app or the dev app that is using this workspace, then start Suora again. This prevents API keys and other encrypted settings from being overwritten by two running copies.`
+}
+
+async function acquireInitialWorkspaceLock(): Promise<boolean> {
+  try {
+    currentWorkspaceLock = await acquireWorkspaceLock(currentWorkspacePath)
+    return true
+  } catch (error) {
+    if (error instanceof WorkspaceLockError) {
+      const message = formatWorkspaceLockMessage(error)
+      logger.error('Workspace lock acquisition failed', { workspacePath: error.workspacePath, pid: error.existing?.pid })
+      dialog.showErrorBox('SUORA workspace already open', message)
+      return false
+    }
+    throw error
+  }
+}
+
+async function switchWorkspaceLock(nextWorkspacePath: string): Promise<{ success: true } | { error: string; code?: string }> {
+  const nextResolvedPath = path.resolve(nextWorkspacePath)
+  const sameWorkspace = currentWorkspaceLock && path.resolve(currentWorkspaceLock.workspacePath) === nextResolvedPath
+  if (sameWorkspace) return { success: true }
+
+  let nextLock: WorkspaceLock
+  try {
+    nextLock = await acquireWorkspaceLock(nextResolvedPath)
+  } catch (error) {
+    if (error instanceof WorkspaceLockError) {
+      logger.warn('Workspace switch blocked by active lock', { workspacePath: error.workspacePath, pid: error.existing?.pid })
+      return { error: formatWorkspaceLockMessage(error), code: 'WORKSPACE_LOCKED' }
+    }
+    return { error: error instanceof Error ? error.message : String(error) }
+  }
+
+  await releaseWorkspaceLock(currentWorkspaceLock)
+  currentWorkspaceLock = nextLock
+  return { success: true }
 }
 
 async function getSuoraDatabase(): Promise<SuoraDatabase> {
@@ -379,6 +422,10 @@ ipcMain.handle('workspace:init', async (_event, workspacePath: string) => {
     if (!stat.isDirectory()) {
       return { error: 'Workspace path must be a directory' }
     }
+
+    const lockResult = await switchWorkspaceLock(resolved)
+    if ('error' in lockResult) return lockResult
+
     const workspaceChanged = currentWorkspacePath !== resolved
     currentWorkspacePath = resolved
     refreshAllowedFsRoots()
@@ -3275,6 +3322,10 @@ ipcMain.handle('perf:getMetrics', () => {
 let updateCheckTimeout: ReturnType<typeof setTimeout> | null = null
 
 app.whenReady().then(async () => {
+  if (!(await acquireInitialWorkspaceLock())) {
+    app.quit()
+    return
+  }
   await createWindow()
   createTray()
   registerGlobalShortcuts()
@@ -3297,6 +3348,8 @@ app.on('before-quit', () => {
     clearTimeout(updateCheckTimeout)
     updateCheckTimeout = null
   }
+  releaseWorkspaceLockSync(currentWorkspaceLock)
+  currentWorkspaceLock = null
 })
 
 app.on('window-all-closed', async () => {
