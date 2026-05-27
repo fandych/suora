@@ -6,12 +6,18 @@ import {
   searchSimilar,
   addToIndex,
   removeFromIndex,
+  rebuildIndexFromStore,
+  setVectorMemoryLiveStoreAccessor,
   getIndexStats,
   type MemoryEntry,
   type VectorIndex,
 } from './vectorMemory'
 
 describe('vectorMemory', () => {
+  beforeEach(() => {
+    setVectorMemoryLiveStoreAccessor(null)
+  })
+
   describe('tokenize', () => {
     it('should tokenize simple English text', () => {
       const tokens = tokenize('Hello world this is a test')
@@ -453,6 +459,20 @@ describe('vectorMemory', () => {
 
       expect(statsAfter.totalMemories).toBe(statsBefore.totalMemories - 1)
       expect(statsAfter.indexSize).toBe(statsBefore.indexSize - 1)
+    })
+  })
+
+  describe('rebuildIndexFromStore', () => {
+    it('uses live store memories before cached persistence', () => {
+      setVectorMemoryLiveStoreAccessor(() => ({
+        agents: [{ memories: [{ id: 'live-session', content: 'live session memory' }] }],
+        globalMemories: [{ id: 'live-global', content: 'live global memory' }],
+      }))
+
+      const index = rebuildIndexFromStore()
+
+      expect(Array.from(index.contents.keys())).toEqual(['live-session', 'live-global'])
+      expect(searchSimilar(index, 'global', 2).map((result) => result.id)).toContain('live-global')
     })
   })
 })

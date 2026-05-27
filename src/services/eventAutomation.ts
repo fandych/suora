@@ -4,8 +4,9 @@
 // Keeps state in file-based storage to avoid circular deps with appStore.
 
 import type { EventTrigger } from '@/types'
-import { readCached, writeCached } from '@/services/fileStorage'
+import { fileStateStorage, readCached, writeCached } from '@/services/fileStorage'
 import { safeParse, safeStringify } from '@/utils/safeJson'
+import { CronExpressionParser } from 'cron-parser'
 
 type ElectronBridge = { invoke: (ch: string, ...args: unknown[]) => Promise<unknown> }
 
@@ -15,6 +16,8 @@ function getElectron(): ElectronBridge | undefined {
 
 const STORE_KEY = 'suora-store'
 const EVENTS_STORAGE_KEY = 'suora-event-triggers'
+const CLIPBOARD_POLL_INTERVAL_MS = 2000
+const SCHEDULE_CHECK_INTERVAL_MS = 30_000
 
 // ─── Persistence ────────────────────────────────────────────────────
 
@@ -51,9 +54,15 @@ export function removeTrigger(id: string): void {
   saveTriggers(loadTriggers().filter((t) => t.id !== id))
 }
 
+export async function hydrateTriggers(): Promise<EventTrigger[]> {
+  await fileStateStorage.getItem(EVENTS_STORAGE_KEY)
+  return loadTriggers()
+}
+
 // ─── Event monitoring ───────────────────────────────────────────────
 
 let clipboardPollTimer: ReturnType<typeof setInterval> | null = null
+let scheduleCheckTimer: ReturnType<typeof setInterval> | null = null
 let lastClipboardContent = ''
 let eventHandler: ((trigger: EventTrigger, context: Record<string, string>) => void) | null = null
 
@@ -64,8 +73,8 @@ let eventHandler: ((trigger: EventTrigger, context: Record<string, string>) => v
 export function startEventMonitor(
   onEvent: (trigger: EventTrigger, context: Record<string, string>) => void,
 ): void {
-  eventHandler = onEvent
   stopEventMonitor()
+  eventHandler = onEvent
 
   // Fire app_start triggers
   const triggers = loadTriggers().filter((t) => t.enabled && t.type === 'app_start')
@@ -76,7 +85,11 @@ export function startEventMonitor(
   // Start clipboard monitoring
   clipboardPollTimer = setInterval(() => {
     void checkClipboard()
-  }, 2000)
+  }, CLIPBOARD_POLL_INTERVAL_MS)
+
+  scheduleCheckTimer = setInterval(() => {
+    checkSchedules()
+  }, SCHEDULE_CHECK_INTERVAL_MS)
 }
 
 /**
@@ -87,8 +100,38 @@ export function stopEventMonitor(): void {
     clearInterval(clipboardPollTimer)
     clipboardPollTimer = null
   }
+  if (scheduleCheckTimer) {
+    clearInterval(scheduleCheckTimer)
+    scheduleCheckTimer = null
+  }
   eventHandler = null
   lastClipboardContent = ''
+}
+
+function isScheduleDue(trigger: EventTrigger, now: number): boolean {
+  if (!trigger.pattern?.trim()) return false
+
+  try {
+    const baseTime = trigger.lastTriggered ?? trigger.createdAt
+    const interval = CronExpressionParser.parse(trigger.pattern, { currentDate: new Date(baseTime) })
+    return interval.next().getTime() <= now
+  } catch {
+    return false
+  }
+}
+
+function checkSchedules(): void {
+  const now = Date.now()
+  const triggers = loadTriggers().filter((trigger) => trigger.enabled && trigger.type === 'schedule')
+  for (const trigger of triggers) {
+    if (isScheduleDue(trigger, now)) {
+      fireEvent(trigger, {
+        event: 'schedule',
+        schedule: trigger.pattern ?? '',
+        firedAt: new Date(now).toISOString(),
+      })
+    }
+  }
 }
 
 async function checkClipboard(): Promise<void> {
@@ -116,6 +159,47 @@ async function checkClipboard(): Promise<void> {
   }
 }
 
+function matchesFilePattern(filePath: string, pattern: string): boolean {
+  const normalizedPath = filePath.replace(/\\/g, '/')
+  const normalizedPattern = pattern.replace(/\\/g, '/')
+
+  if (!normalizedPattern.includes('*') && !normalizedPattern.includes('?')) {
+    return normalizedPath.toLowerCase().includes(normalizedPattern.toLowerCase())
+  }
+
+  const target = normalizedPattern.includes('/')
+    ? normalizedPath
+    : normalizedPath.split('/').pop() ?? normalizedPath
+
+  let source = ''
+  for (let index = 0; index < normalizedPattern.length; index += 1) {
+    const char = normalizedPattern[index]
+    const next = normalizedPattern[index + 1]
+
+    if (char === '*' && next === '*') {
+      if (normalizedPattern[index + 2] === '/') {
+        source += '(?:.*/)?'
+        index += 2
+      } else {
+        source += '.*'
+        index += 1
+      }
+    } else if (char === '*') {
+      source += '[^/]*'
+    } else if (char === '?') {
+      source += '[^/]'
+    } else {
+      source += char.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+    }
+  }
+
+  try {
+    return new RegExp(`^${source}$`, 'i').test(target)
+  } catch {
+    return false
+  }
+}
+
 /**
  * Manually fire a file_change event (called from the skill hot-reload watcher).
  */
@@ -123,24 +207,7 @@ export function fireFileChangeEvent(filePath: string, content?: string): void {
   const triggers = loadTriggers().filter((t) => t.enabled && t.type === 'file_change')
   for (const trigger of triggers) {
     if (trigger.pattern) {
-      // Simple glob matching: support *.ext and *pattern* forms
-      const pat = trigger.pattern
-      if (pat.startsWith('*.')) {
-        // Extension match: *.json → file must end with .json
-        const ext = pat.slice(1) // ".json"
-        if (!filePath.toLowerCase().endsWith(ext.toLowerCase())) continue
-      } else if (pat.includes('*')) {
-        // Convert glob to regex: escape dots, replace * with .*
-        const regexStr = pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*')
-        try {
-          if (!new RegExp(regexStr, 'i').test(filePath)) continue
-        } catch {
-          continue
-        }
-      } else {
-        // Literal substring match
-        if (!filePath.toLowerCase().includes(pat.toLowerCase())) continue
-      }
+      if (!matchesFilePattern(filePath, trigger.pattern)) continue
     }
     fireEvent(trigger, { file: filePath, content: content || '' })
   }

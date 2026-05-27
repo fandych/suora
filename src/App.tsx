@@ -8,6 +8,7 @@ import { ToastHost } from '@/components/ToastHost'
 import { useI18n } from '@/hooks/useI18n'
 import { useTheme } from '@/hooks/useTheme'
 import { initChannelMessageListener } from '@/services/channelMessageHandler'
+import { initEventAutomationRuntime } from '@/services/eventAutomationRuntime'
 import { preloadPopularCollections } from '@/services/iconService'
 import { initTimerRuntimeListener } from '@/services/timerRuntime'
 import { toast } from '@/services/toast'
@@ -69,10 +70,12 @@ export default function App() {
   useEffect(() => {
     const cleanup = initChannelMessageListener()
     const cleanupTimerRuntime = initTimerRuntimeListener()
+    const cleanupEventAutomation = initEventAutomationRuntime()
     preloadPopularCollections().catch(console.error)
     return () => {
       cleanup()
       cleanupTimerRuntime()
+      cleanupEventAutomation()
     }
   }, [])
 

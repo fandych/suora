@@ -4,6 +4,12 @@
 import { readCached } from '@/services/fileStorage'
 import { safeParse } from '@/utils/safeJson'
 
+let liveStoreAccessor: (() => Record<string, unknown> | null) | null = null
+
+export function setVectorMemoryLiveStoreAccessor(accessor: (() => Record<string, unknown> | null) | null): void {
+  liveStoreAccessor = accessor
+}
+
 // ─── Types ──────────────────────────────────────────────────────────
 
 export interface MemoryEntry {
@@ -255,22 +261,29 @@ const MAX_INDEX_ENTRIES = 10_000
 
 function loadAllMemoriesFromStore(): MemoryEntry[] {
   try {
-    const raw = readCached('suora-store')
-    if (!raw) return []
+    const liveState = liveStoreAccessor?.()
+    const state = liveState ?? (() => {
+      const raw = readCached('suora-store')
+      if (!raw) return null
+      return safeParse<{
+        state?: {
+          agents?: Array<{ memories?: Array<{ id: string; content: string }> }>
+          globalMemories?: Array<{ id: string; content: string }>
+        }
+      }>(raw).state ?? null
+    })()
 
-    const parsed = safeParse<{
-      state?: {
-        agents?: Array<{ memories?: Array<{ id: string; content: string }> }>
-        globalMemories?: Array<{ id: string; content: string }>
-      }
-    }>(raw)
+    if (!state) return []
 
     const entries: MemoryEntry[] = []
     const seen = new Set<string>()
 
     // Collect from all agents
-    if (parsed.state?.agents) {
-      for (const agent of parsed.state.agents) {
+    const agents = Array.isArray(state.agents)
+      ? state.agents as Array<{ memories?: Array<{ id: string; content: string }> }>
+      : []
+    if (agents.length > 0) {
+      for (const agent of agents) {
         if (agent.memories) {
           for (const m of agent.memories) {
             if (entries.length >= MAX_INDEX_ENTRIES) break
@@ -286,8 +299,11 @@ function loadAllMemoriesFromStore(): MemoryEntry[] {
     }
 
     // Collect global memories
-    if (parsed.state?.globalMemories && entries.length < MAX_INDEX_ENTRIES) {
-      for (const m of parsed.state.globalMemories) {
+    const globalMemories = Array.isArray(state.globalMemories)
+      ? state.globalMemories as Array<{ id: string; content: string }>
+      : []
+    if (globalMemories.length > 0 && entries.length < MAX_INDEX_ENTRIES) {
+      for (const m of globalMemories) {
         if (entries.length >= MAX_INDEX_ENTRIES) break
         if (!m.content) continue
         if (!seen.has(m.id)) {

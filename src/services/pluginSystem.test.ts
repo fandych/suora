@@ -23,6 +23,8 @@ import {
   compareVersions,
   getDefaultConfig,
   validateConfig,
+  createPluginAPIContext,
+  setPluginLiveStoreAccessor,
   registerSettingsPanel,
   unregisterSettingsPanel,
   getSettingsExtensions,
@@ -90,6 +92,7 @@ describe('pluginSystem', () => {
     disablePlugin('test-plugin')
     unregisterSettingsPanel('test-plugin')
     unregisterMessageRenderer('test-plugin')
+    setPluginLiveStoreAccessor(null)
   })
 
   describe('Permission Management', () => {
@@ -146,6 +149,29 @@ describe('pluginSystem', () => {
 
     it('should throw without permission', () => {
       expect(() => registerPluginTools('test-plugin', {})).toThrow(/lacks required permission/)
+    })
+  })
+
+  describe('Plugin API state access', () => {
+    it('reads live store state before falling back to cached persistence', () => {
+      grantPermissions('test-plugin', ['agents:read', 'sessions:read', 'messages:read', 'settings:read'])
+      setPluginLiveStoreAccessor(() => ({
+        agents: [{ id: 'agent-live', name: 'Live Agent', systemPrompt: 'Use live state.' }],
+        activeSessionId: 'session-live',
+        sessions: [{
+          id: 'session-live',
+          title: 'Live Session',
+          messages: [{ role: 'user', content: 'Hello from live state' }],
+        }],
+        theme: 'dark',
+      }))
+
+      const context = createPluginAPIContext('test-plugin', ['agents:read', 'sessions:read', 'messages:read', 'settings:read'])
+
+      expect(context.api.agents.list()).toEqual([{ id: 'agent-live', name: 'Live Agent' }])
+      expect(context.api.sessions.getCurrent()).toEqual({ id: 'session-live', title: 'Live Session' })
+      expect(context.api.messages.getHistory('session-live')).toEqual([{ role: 'user', content: 'Hello from live state' }])
+      expect(context.api.settings.get('theme')).toBe('dark')
     })
   })
 

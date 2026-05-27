@@ -89,7 +89,21 @@ export function getPluginToolNames(pluginId: string): string[] {
   return tools ? Object.keys(tools) : []
 }
 
+let liveStoreAccessor: (() => Record<string, unknown> | null) | null = null
+
+export function setPluginLiveStoreAccessor(accessor: (() => Record<string, unknown> | null) | null): void {
+  liveStoreAccessor = accessor
+}
+
 function readPersistedStoreState(): Record<string, unknown> {
+  if (liveStoreAccessor) {
+    try {
+      return liveStoreAccessor() ?? {}
+    } catch {
+      return {}
+    }
+  }
+
   try {
     const raw = readCached('suora-store')
     return raw ? safeParse<{ state?: Record<string, unknown> }>(raw).state || {} : {}

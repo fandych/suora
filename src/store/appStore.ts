@@ -3,6 +3,8 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { ActiveModule, Model, Session, Agent, Skill, AgentMemoryEntry, ToolSecuritySettings, MarketplaceSettings, ThemeMode, FontSize, CodeFont, BubbleStyle, ProviderConfig, ExternalDirectoryConfig, ChannelConfig, AppNotification, ModelUsageStats, ChannelHistoryMessage, ChannelAccessToken, ChannelHealthStatus, ChannelUser, PluginInfo, AgentVersion, AgentPerformanceStats, AgentPipeline, AgentPipelineStep, AppLocale, ProxySettings, OnboardingState, SkillVersion, EmailConfig, EnvVariable, MCPServerConfig, MCPServerStatus, DocumentGroup, DocumentFolder, DocumentItem, DocumentNode, AgentSelectionPreference } from '@/types'
 import { setLiveStoreAccessor, setLiveStoreWriter } from '@/services/tools'
+import { setPluginLiveStoreAccessor } from '@/services/pluginSystem'
+import { setVectorMemoryLiveStoreAccessor } from '@/services/vectorMemory'
 import { loadExternalResources, syncExternalDirectoryAccess } from '@/services/externalDirectories'
 import { loadAllSkills } from '@/services/skillRegistry'
 import { normalizeAppLocale, setI18nLocale, t } from '@/services/i18n'
@@ -1349,6 +1351,8 @@ export const useAppStore = create<AppStore>()(
 
 // Register live store accessor so tools.ts reads fresh state (not stale file cache)
 setLiveStoreAccessor(() => useAppStore.getState() as unknown as Record<string, unknown>)
+setPluginLiveStoreAccessor(() => useAppStore.getState() as unknown as Record<string, unknown>)
+setVectorMemoryLiveStoreAccessor(() => useAppStore.getState() as unknown as Record<string, unknown>)
 setLiveStoreWriter((updater) => {
   useAppStore.setState((state) => {
     const next = { ...(state as unknown as Record<string, unknown>) }

@@ -56,15 +56,6 @@ interface PersistedAgentEntry {
   memories?: PersistedMemoryEntry[]
 }
 
-interface PersistedStoreShape {
-  state?: {
-    selectedAgent?: { id?: string }
-    agents?: PersistedAgentEntry[]
-    globalMemories?: PersistedMemoryEntry[]
-    activeSessionId?: string
-  }
-}
-
 // ─── Electron IPC bridge ───────────────────────────────────────────
 
 function electronInvoke(channel: string, ...args: unknown[]): Promise<unknown> {
@@ -228,6 +219,15 @@ function getPersistedSecuritySettings() {
 }
 
 function getPersistedMarketplaceSettings() {
+  const liveState = readStoreState()
+  const liveMarketplace = liveState?.marketplace as { source?: 'official' | 'private'; privateUrl?: string } | undefined
+  if (liveMarketplace) {
+    return {
+      source: liveMarketplace.source ?? 'official',
+      privateUrl: liveMarketplace.privateUrl ?? '',
+    }
+  }
+
   try {
     const raw = readCached(STORE_KEY)
     if (!raw) {
@@ -549,6 +549,79 @@ async function readTodos(key: string): Promise<TodoItem[]> {
 async function writeTodos(key: string, todos: TodoItem[]): Promise<void> {
   await electronInvoke('db:savePersistedStore', key, safeStringify(todos), 1)
 }
+
+type BuiltinToolExecute = (args: Record<string, unknown>, options?: unknown) => Promise<unknown> | unknown
+
+async function executeBuiltinTool(toolName: string, args: Record<string, unknown>, options?: unknown): Promise<string> {
+  const execute = builtinToolDefs[toolName]?.execute as BuiltinToolExecute | undefined
+  if (!execute) return `Error: Tool "${toolName}" is unavailable.`
+  const result = await execute(args, options)
+  return typeof result === 'string' ? result : JSON.stringify(result)
+}
+
+const todoManageInputSchema = z.object({
+  action: z.enum(['list', 'add', 'update', 'remove']).describe('Todo action to perform'),
+  id: z.string().optional().describe('Required for update/remove: ID of the todo item'),
+  title: z.string().optional().describe('Required for add; optional for update: todo title'),
+  description: z.string().optional().describe('Optional for add/update: detailed description'),
+  status: z.enum(['all', 'pending', 'in-progress', 'done']).optional().describe('For list: filter by status. For update: new status, except "all" is not valid.'),
+  priority: z.enum(['low', 'medium', 'high']).optional().describe('Optional for add/update: priority level'),
+  dueDate: z.string().optional().describe('Optional for add: due date as ISO string'),
+}).superRefine((input, ctx) => {
+  if (input.action === 'add' && !input.title?.trim()) {
+    ctx.addIssue({ code: 'custom', path: ['title'], message: 'title is required when action is add' })
+  }
+  if ((input.action === 'update' || input.action === 'remove') && !input.id?.trim()) {
+    ctx.addIssue({ code: 'custom', path: ['id'], message: 'id is required when action is update or remove' })
+  }
+  if (input.action === 'update' && input.status === 'all') {
+    ctx.addIssue({ code: 'custom', path: ['status'], message: 'status cannot be all when action is update' })
+  }
+})
+
+const browserExtractInputSchema = z.object({
+  url: z.string().url().describe('The URL to read with the headless browser'),
+  mode: z.enum(['text', 'links', 'title', 'location', 'headings']).default('text').describe('What to extract from the page'),
+})
+
+const eventTriggerManageInputSchema = z.object({
+  action: z.enum(['list', 'create', 'delete']).describe('Event trigger action to perform'),
+  id: z.string().optional().describe('Required for delete: trigger ID to delete'),
+  name: z.string().optional().describe('Required for create: trigger name'),
+  type: z.enum(['file_change', 'clipboard_change', 'schedule', 'app_start']).optional().describe('Required for create: event type'),
+  pattern: z.string().optional().describe('Optional for create: glob for file_change, cron for schedule'),
+  agent_id: z.string().optional().describe('Required for create: agent ID to handle the event'),
+  prompt_template: z.string().optional().describe('Required for create: prompt template with {{file}}, {{content}} placeholders'),
+}).superRefine((input, ctx) => {
+  if (input.action === 'create') {
+    for (const key of ['name', 'type', 'agent_id', 'prompt_template'] as const) {
+      if (!input[key]?.trim()) {
+        ctx.addIssue({ code: 'custom', path: [key], message: `${key} is required when action is create` })
+      }
+    }
+    if (input.type === 'schedule' && !input.pattern?.trim()) {
+      ctx.addIssue({ code: 'custom', path: ['pattern'], message: 'pattern must be a cron expression when type is schedule' })
+    }
+  }
+  if (input.action === 'delete' && !input.id?.trim()) {
+    ctx.addIssue({ code: 'custom', path: ['id'], message: 'id is required when action is delete' })
+  }
+})
+
+const envManageInputSchema = z.object({
+  action: z.enum(['get', 'set', 'list', 'delete']).describe('Environment variable action to perform'),
+  key: z.string().optional().describe('Required for get/set/delete: variable name'),
+  value: z.string().optional().describe('Required for set: variable value'),
+  description: z.string().optional().describe('Optional for set: human-readable description'),
+  secret: z.boolean().optional().describe('Optional for set: whether this is a secret (masked in UI). Default: true'),
+}).superRefine((input, ctx) => {
+  if ((input.action === 'get' || input.action === 'set' || input.action === 'delete') && !input.key?.trim()) {
+    ctx.addIssue({ code: 'custom', path: ['key'], message: 'key is required when action is get, set, or delete' })
+  }
+  if (input.action === 'set' && input.value === undefined) {
+    ctx.addIssue({ code: 'custom', path: ['value'], message: 'value is required when action is set' })
+  }
+})
 
 const pipelineToolStepSchema = z.object({
   agent_id: z.string().describe('Agent ID for this pipeline step'),
@@ -1360,6 +1433,16 @@ export const builtinToolDefs: ToolSet = {
     },
   }),
 
+  browser_extract: tool({
+    description: 'Extract readable information from a JavaScript-rendered web page. Replaces browser_extract_text, browser_extract_links, and simple browser_evaluate read modes.',
+    inputSchema: browserExtractInputSchema,
+    execute: async ({ url, mode }, options) => {
+      if (mode === 'text') return executeBuiltinTool('browser_extract_text', { url }, options)
+      if (mode === 'links') return executeBuiltinTool('browser_extract_links', { url }, options)
+      return executeBuiltinTool('browser_evaluate', { url, expression: mode }, options)
+    },
+  }),
+
   browser_fill_form: tool({
     description: 'Fill a form field on a web page by CSS selector. Navigates to the URL first, then sets the value.',
     inputSchema: z.object({
@@ -1502,6 +1585,34 @@ export const builtinToolDefs: ToolSet = {
       const removed = todos.splice(idx, 1)[0]
       await writeTodos(todosKey, todos)
       return `Removed todo: ${removed.title} (id: ${id})`
+    },
+  }),
+
+  todo_manage: tool({
+    description: 'Manage todo items for the current chat session with one action field: list, add, update, or remove. Prefer this over the legacy todo_* tools.',
+    inputSchema: todoManageInputSchema,
+    execute: async (input, options) => {
+      switch (input.action) {
+        case 'list':
+          return executeBuiltinTool('todo_list', { status: input.status ?? 'all' }, options)
+        case 'add':
+          return executeBuiltinTool('todo_add', {
+            title: input.title,
+            description: input.description ?? '',
+            priority: input.priority ?? 'medium',
+            dueDate: input.dueDate,
+          }, options)
+        case 'update':
+          return executeBuiltinTool('todo_update', {
+            id: input.id,
+            title: input.title,
+            description: input.description,
+            status: input.status,
+            priority: input.priority,
+          }, options)
+        case 'remove':
+          return executeBuiltinTool('todo_remove', { id: input.id }, options)
+      }
     },
   }),
 
@@ -1953,17 +2064,14 @@ export const builtinToolDefs: ToolSet = {
 
         if (scope === 'global') {
           writeStoreState((s) => {
-            if (!s.globalMemories) s.globalMemories = []
-            ;(s.globalMemories as PersistedMemoryEntry[]).push(memory)
+            s.globalMemories = [...((s.globalMemories ?? []) as PersistedMemoryEntry[]), memory]
           })
         } else {
           writeStoreState((s) => {
-            const agents = s.agents as PersistedAgentEntry[] | undefined
-            const agent = agents?.find(a => a.id === agentId)
-            if (agent) {
-              if (!agent.memories) agent.memories = []
-              agent.memories.push(memory)
-            }
+            const agents = (s.agents ?? []) as PersistedAgentEntry[]
+            s.agents = agents.map((agent) => agent.id === agentId
+              ? { ...agent, memories: [...(agent.memories ?? []), memory] }
+              : agent)
           })
         }
         // Update the vector index with the new memory
@@ -2107,13 +2215,13 @@ export const builtinToolDefs: ToolSet = {
 
         // Try session memories
         writeStoreState((s) => {
-          const agents = s.agents as PersistedAgentEntry[] | undefined
-          const agent = agents?.find(a => a.id === agentId)
-          if (agent?.memories) {
-            const before = agent.memories.length
-            agent.memories = agent.memories.filter(m => m.id !== id)
-            if (agent.memories.length < before) found = true
-          }
+          const agents = (s.agents ?? []) as PersistedAgentEntry[]
+          s.agents = agents.map((agent) => {
+            if (agent.id !== agentId || !agent.memories) return agent
+            const memories = agent.memories.filter(m => m.id !== id)
+            if (memories.length < agent.memories.length) found = true
+            return { ...agent, memories }
+          })
 
           // Try global memories
           if (!found) {
@@ -2150,12 +2258,12 @@ export const builtinToolDefs: ToolSet = {
     }),
     execute: async ({ agent_name, task, context }) => {
       try {
-        const raw = readCached(STORE_KEY)
-        if (!raw) return 'Error: Store not available'
-        const parsed = safeParse<PersistedStoreShape>(raw)
-        const fromAgentId = parsed.state?.selectedAgent?.id ?? 'unknown'
-        const agentList = parsed.state?.agents
-        if (!agentList?.length) return 'Error: No agents available'
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const selectedAgent = state.selectedAgent as { id?: string } | undefined
+        const fromAgentId = selectedAgent?.id ?? 'unknown'
+        const agentList = Array.isArray(state.agents) ? state.agents as PersistedAgentEntry[] : []
+        if (!agentList.length) return 'Error: No agents available'
 
         // Fuzzy match by name (case-insensitive substring)
         const needle = agent_name.toLowerCase()
@@ -2333,15 +2441,15 @@ export const builtinToolDefs: ToolSet = {
     }),
     execute: async ({ agent_name, message }) => {
       try {
-        const raw = readCached(STORE_KEY)
-        if (!raw) return 'Error: Store not available'
-        const parsed = safeParse<PersistedStoreShape>(raw)
-        if (!parsed.state?.agents?.length) return 'Error: No agents available'
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const agents = Array.isArray(state.agents) ? state.agents as PersistedAgentEntry[] : []
+        if (!agents.length) return 'Error: No agents available'
 
         const needle = agent_name.toLowerCase()
-        const target = parsed.state.agents.find(
+        const target = agents.find(
           (a) => a.name?.toLowerCase() === needle,
-        ) ?? parsed.state.agents.find(
+        ) ?? agents.find(
           (a) => a.name?.toLowerCase().includes(needle),
         )
         if (!target) return `Error: No agent matching "${agent_name}" found.`
@@ -2352,12 +2460,20 @@ export const builtinToolDefs: ToolSet = {
           type: 'knowledge',
           scope: 'global',
           createdAt: Date.now(),
-          source: parsed.state.activeSessionId || 'agent-comm',
+          source: typeof state.activeSessionId === 'string' && state.activeSessionId ? state.activeSessionId : 'agent-comm',
         }
 
-        if (!target.memories) target.memories = []
-        target.memories.push(memory)
-        writeCached(STORE_KEY, safeStringify(parsed))
+        const synced = writeStoreState((nextState) => {
+          const currentAgents = Array.isArray(nextState.agents) ? nextState.agents as PersistedAgentEntry[] : []
+          nextState.agents = currentAgents.map((agent) => {
+            if (agent.id !== target.id) return agent
+            return {
+              ...agent,
+              memories: [...(agent.memories ?? []), memory],
+            }
+          })
+        })
+        if (!synced) return 'Error: Store not available'
 
         const preview = message.length > PREVIEW_LENGTH ? `${message.slice(0, PREVIEW_LENGTH)}...` : message
         return `Notification sent to "${target.name ?? agent_name}": ${preview}`
@@ -2395,9 +2511,16 @@ export const builtinToolDefs: ToolSet = {
       pattern: z.string().optional().describe('Pattern (glob for file_change, cron for schedule)'),
       agent_id: z.string().describe('Agent ID to handle the event'),
       prompt_template: z.string().describe('Prompt template with {{file}}, {{content}} placeholders'),
+    }).superRefine((input, ctx) => {
+      if (input.type === 'schedule' && !input.pattern?.trim()) {
+        ctx.addIssue({ code: 'custom', path: ['pattern'], message: 'pattern must be a cron expression when type is schedule' })
+      }
     }),
     execute: async ({ name, type, pattern, agent_id, prompt_template }) => {
       try {
+        if (type === 'schedule' && !pattern?.trim()) {
+          return 'Error: schedule triggers require pattern to be a cron expression.'
+        }
         const raw = readCached(EVENTS_STORAGE_KEY)
         const triggers = raw ? safeParse<Array<Record<string, unknown>>>(raw) : []
         const trigger = {
@@ -2439,6 +2562,27 @@ export const builtinToolDefs: ToolSet = {
     },
   }),
 
+
+  event_trigger_manage: tool({
+    description: 'Manage event automation triggers with one action field: list, create, or delete. Prefer this over the legacy event_* trigger tools.',
+    inputSchema: eventTriggerManageInputSchema,
+    execute: async (input, options) => {
+      switch (input.action) {
+        case 'list':
+          return executeBuiltinTool('event_list_triggers', {}, options)
+        case 'create':
+          return executeBuiltinTool('event_create_trigger', {
+            name: input.name,
+            type: input.type,
+            pattern: input.pattern,
+            agent_id: input.agent_id,
+            prompt_template: input.prompt_template,
+          }, options)
+        case 'delete':
+          return executeBuiltinTool('event_delete_trigger', { id: input.id }, options)
+      }
+    },
+  }),
   // ─── Agent Self-Evolution tools ──────────────────────────────────
 
   skill_create: tool({
@@ -2452,13 +2596,12 @@ export const builtinToolDefs: ToolSet = {
     }),
     execute: async ({ name, description, custom_code, prompt, reason }) => {
       try {
-        const raw = readCached(STORE_KEY)
-        if (!raw) return 'Error: Store not available'
-        const parsed = safeParse<{ state?: { skills?: Array<Record<string, unknown>> } }>(raw)
-        if (!parsed.state) return 'Error: Store state not available'
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const skills = Array.isArray(state.skills) ? state.skills as Array<Record<string, unknown>> : []
 
         // Check for duplicate name
-        if (parsed.state.skills?.some((s) => (s.name as string)?.toLowerCase() === name.toLowerCase())) {
+        if (skills.some((s) => (s.name as string)?.toLowerCase() === name.toLowerCase())) {
           return `Error: A skill with name "${name}" already exists`
         }
 
@@ -2478,9 +2621,11 @@ export const builtinToolDefs: ToolSet = {
           version: '1.0.0',
         }
 
-        if (!parsed.state.skills) parsed.state.skills = []
-        parsed.state.skills.push(newSkill)
-        writeCached(STORE_KEY, safeStringify(parsed))
+        const synced = writeStoreState((nextState) => {
+          const currentSkills = Array.isArray(nextState.skills) ? nextState.skills as Array<Record<string, unknown>> : []
+          nextState.skills = [...currentSkills, newSkill]
+        })
+        if (!synced) return 'Error: Store not available'
 
         return `Created new skill "${name}" (${skillId}). Reason: ${reason}`
       } catch (err) {
@@ -2498,16 +2643,16 @@ export const builtinToolDefs: ToolSet = {
     }),
     execute: async ({ skill_id, updates, reason }) => {
       try {
-        const raw = readCached(STORE_KEY)
-        if (!raw) return 'Error: Store not available'
-        const parsed = safeParse<{ state?: { skills?: Array<Record<string, unknown>> } }>(raw)
-        if (!parsed.state?.skills) return 'Error: No skills found'
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const skills = Array.isArray(state.skills) ? state.skills as Array<Record<string, unknown>> : []
+        if (!skills.length) return 'Error: No skills found'
 
-        const idx = parsed.state.skills.findIndex((s) => s.id === skill_id)
+        const idx = skills.findIndex((s) => s.id === skill_id)
         if (idx === -1) return `Skill not found: ${skill_id}`
 
         // Don't allow modifying built-in skills
-        if (parsed.state.skills[idx].type === 'builtin') {
+        if (skills[idx].type === 'builtin') {
           return 'Error: Cannot modify built-in skills'
         }
 
@@ -2520,14 +2665,18 @@ export const builtinToolDefs: ToolSet = {
 
         // Only allow safe fields
         const allowed = ['description', 'customCode', 'prompt', 'name']
-        for (const key of Object.keys(updateObj)) {
-          if (allowed.includes(key)) {
-            parsed.state.skills[idx][key] = updateObj[key]
-          }
-        }
+        const patch = Object.fromEntries(
+          Object.entries(updateObj).filter(([key]) => allowed.includes(key)),
+        )
 
-        writeCached(STORE_KEY, safeStringify(parsed))
-        return `Improved skill "${parsed.state.skills[idx].name}". Reason: ${reason}`
+        const synced = writeStoreState((nextState) => {
+          const currentSkills = Array.isArray(nextState.skills) ? nextState.skills as Array<Record<string, unknown>> : []
+          nextState.skills = currentSkills.map((skill) => skill.id === skill_id ? { ...skill, ...patch } : skill)
+        })
+        if (!synced) return 'Error: Store not available'
+
+        const nextName = typeof patch.name === 'string' ? patch.name : skills[idx].name
+        return `Improved skill "${nextName}". Reason: ${reason}`
       } catch (err) {
         return `Error improving skill: ${err instanceof Error ? err.message : String(err)}`
       }
@@ -2541,12 +2690,12 @@ export const builtinToolDefs: ToolSet = {
     }),
     execute: async ({ skill_id }) => {
       try {
-        const raw = readCached(STORE_KEY)
-        if (!raw) return 'Error: Store not available'
-        const parsed = safeParse<{ state?: { skills?: Array<{ id: string; name: string; description?: string; prompt?: string; customCode?: string; tools?: Array<unknown> }> } }>(raw)
-        if (!parsed.state?.skills) return 'Error: No skills found'
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const skills = Array.isArray(state.skills) ? state.skills as Array<{ id: string; name: string; description?: string; prompt?: string; customCode?: string; tools?: Array<unknown> }> : []
+        if (!skills.length) return 'Error: No skills found'
 
-        const skill = parsed.state.skills.find((s) => s.id === skill_id)
+        const skill = skills.find((s) => s.id === skill_id)
         if (!skill) return `Skill not found: ${skill_id}`
 
         const suggestions: string[] = []
@@ -3604,8 +3753,7 @@ export const builtinToolDefs: ToolSet = {
         if (!target) return `Skill "${skill_id}" not found.`
         writeStoreState((s) => {
           const arr = (s.skills || []) as Array<{ id: string; enabled: boolean }>
-          const sk = arr.find((x) => x.id === skill_id)
-          if (sk) sk.enabled = enabled
+          s.skills = arr.map((skill) => skill.id === skill_id ? { ...skill, enabled } : skill)
         })
         return `Skill "${target.name}" ${enabled ? 'enabled' : 'disabled'}.`
       } catch (err) {
@@ -3656,16 +3804,17 @@ const envVarTools: ToolSet = {
         writeStoreState((s) => {
           const arr = (s.envVariables || []) as Array<{ key: string; value: string; description?: string; secret: boolean; createdAt: number; updatedAt: number }>
           if (exists) {
-            const v = arr.find((e) => e.key === key)
-            if (v) {
-              v.value = value
-              if (description !== undefined) v.description = description
-              v.secret = isSecret
-              v.updatedAt = now
-            }
+            s.envVariables = arr.map((envVariable) => envVariable.key === key
+              ? {
+                  ...envVariable,
+                  value,
+                  description: description !== undefined ? description : envVariable.description,
+                  secret: isSecret,
+                  updatedAt: now,
+                }
+              : envVariable)
           } else {
-            arr.push({ key, value, description, secret: isSecret, createdAt: now, updatedAt: now })
-            s.envVariables = arr
+            s.envVariables = [...arr, { key, value, description, secret: isSecret, createdAt: now, updatedAt: now }]
           }
         })
         return exists
@@ -3715,10 +3864,49 @@ const envVarTools: ToolSet = {
       }
     },
   }),
+
+  env_manage: tool({
+    description: 'Manage environment variables with one action field: get, set, list, or delete. Prefer this over the legacy env_* tools.',
+    inputSchema: envManageInputSchema,
+    execute: async (input, options) => {
+      switch (input.action) {
+        case 'get':
+          return executeBuiltinTool('env_get', { key: input.key }, options)
+        case 'set':
+          return executeBuiltinTool('env_set', {
+            key: input.key,
+            value: input.value,
+            description: input.description,
+            secret: input.secret,
+          }, options)
+        case 'list':
+          return executeBuiltinTool('env_list', {}, options)
+        case 'delete':
+          return executeBuiltinTool('env_delete', { key: input.key }, options)
+      }
+    },
+  }),
 }
 
 // Merge env var tools into main builtinToolDefs
 Object.assign(builtinToolDefs, envVarTools)
+
+const DEFAULT_AGENT_HIDDEN_TOOL_ALIASES = new Set([
+  'todo_list',
+  'todo_add',
+  'todo_update',
+  'todo_remove',
+  'event_list_triggers',
+  'event_create_trigger',
+  'event_delete_trigger',
+  'env_get',
+  'env_set',
+  'env_list',
+  'env_delete',
+  'browser_extract_text',
+  'browser_extract_links',
+  'browser_evaluate',
+])
 
 /**
  * A map from tool ID to a short one-sentence description.
@@ -3745,12 +3933,14 @@ export const TOOL_META: Record<string, ToolMeta> = {
   get_current_time:      { userFacingName: 'Get time', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   get_system_info:       { userFacingName: 'System info', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   clipboard_read:        { userFacingName: 'Read clipboard', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
+  todo_manage:           { userFacingName: 'Manage todos', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   todo_list:             { userFacingName: 'List todos', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   timer_list:            { userFacingName: 'List timers', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   pipeline_list:         { userFacingName: 'List pipelines', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   memory_search:         { userFacingName: 'Search memory', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   memory_list:           { userFacingName: 'List memories', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   agent_list:            { userFacingName: 'List agents', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
+  event_trigger_manage:  { userFacingName: 'Manage triggers', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   event_list_triggers:   { userFacingName: 'List triggers', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   read_attachment:       { userFacingName: 'Read attachment', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   analyze_code_structure:{ userFacingName: 'Analyze code', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'code structure analysis' },
@@ -3758,6 +3948,7 @@ export const TOOL_META: Record<string, ToolMeta> = {
   git_status:            { userFacingName: 'Git status', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   git_diff:              { userFacingName: 'Git diff', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   git_log:               { userFacingName: 'Git log', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
+  env_manage:            { userFacingName: 'Manage env vars', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   env_get:               { userFacingName: 'Get env var', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   env_list:              { userFacingName: 'List env vars', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   channel_server_status: { userFacingName: 'Channel status', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
@@ -3829,6 +4020,7 @@ export const TOOL_META: Record<string, ToolMeta> = {
   open_url:              { userFacingName: 'Open URL', isReadOnly: false, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: true },
   browser_navigate:      { userFacingName: 'Navigate browser', isReadOnly: true, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false, searchHint: 'headless browser navigate' },
   browser_screenshot:    { userFacingName: 'Browser screenshot', isReadOnly: true, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
+  browser_extract:       { userFacingName: 'Browser extract', isReadOnly: true, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false, searchHint: 'headless browser extract text links headings' },
   browser_evaluate:      { userFacingName: 'Browser eval', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
   browser_extract_links: { userFacingName: 'Extract links', isReadOnly: true, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   browser_extract_text:  { userFacingName: 'Extract text', isReadOnly: true, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
@@ -4426,8 +4618,15 @@ export function getToolsForAgent(
   let result: ToolSet = {}
   const runtimeSkillIds = resolveRuntimeSkillIds(agentSkillIds, allSkills)
 
-  // Always include ALL built-in tools — agents decide which to use
+  const explicitlyAllowedTools = new Set(allowedTools ?? [])
+
+  // Always include current built-in tools. Legacy aliases for merged tools are
+  // hidden by default, but remain available when an existing agent allowlist
+  // names them explicitly.
   for (const [name, def] of Object.entries(builtinToolDefs)) {
+    if (DEFAULT_AGENT_HIDDEN_TOOL_ALIASES.has(name) && !explicitlyAllowedTools.has(name)) {
+      continue
+    }
     result[name] = def
   }
 

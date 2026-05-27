@@ -1,16 +1,34 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { Agent, DocumentGroup, DocumentNode, Model, Skill } from '@/types'
-import { buildToolHints, builtinToolDefs, getSkillSystemPrompts, setLiveStoreAccessor, setLiveStoreWriter } from './tools'
+import { delegateToAgent } from '@/services/agentCommunication'
+import { buildToolHints, builtinToolDefs, fetchMarketplaceSkills, getSkillSystemPrompts, getToolsForAgent, setLiveStoreAccessor, setLiveStoreWriter } from './tools'
+
+vi.mock('@/services/agentCommunication', () => ({
+  delegateToAgent: vi.fn(async () => 'Delegated response'),
+}))
 
 function getDescription(toolName: 'web_search' | 'list_documents' | 'query_document_graph' | 'read_document' | 'write_file' | 'append_file') {
   return (builtinToolDefs[toolName] as { description?: string }).description ?? ''
+}
+
+function installShallowLiveStore(initialState: Record<string, unknown>) {
+  let liveState = initialState
+  setLiveStoreAccessor(() => liveState)
+  setLiveStoreWriter((updater) => {
+    const nextState = { ...liveState }
+    updater(nextState)
+    liveState = nextState
+  })
+  return () => liveState
 }
 
 describe('builtin tool guidance', () => {
   beforeEach(() => {
     setLiveStoreAccessor(() => null)
     setLiveStoreWriter(() => false)
+    vi.unstubAllGlobals()
+    vi.mocked(delegateToAgent).mockClear()
   })
 
   it('prioritizes local documents before web search for local knowledge questions', () => {
@@ -23,6 +41,318 @@ describe('builtin tool guidance', () => {
     const hints = buildToolHints(['query_document_graph', 'list_documents', 'read_document', 'web_search'])
     expect(hints).toContain('start with query_document_graph')
     expect(hints).toContain('before web_search')
+  })
+
+  it('hides merged legacy tool aliases from default agent tools while preserving explicit allowlists', () => {
+    const defaultTools = getToolsForAgent([], [])
+    expect(Object.keys(defaultTools)).toEqual(expect.arrayContaining([
+      'todo_manage',
+      'event_trigger_manage',
+      'env_manage',
+      'browser_extract',
+    ]))
+    expect(defaultTools).not.toHaveProperty('todo_add')
+    expect(defaultTools).not.toHaveProperty('event_create_trigger')
+    expect(defaultTools).not.toHaveProperty('env_set')
+    expect(defaultTools).not.toHaveProperty('browser_extract_text')
+
+    const legacyAllowedTools = getToolsForAgent([], [], { allowedTools: ['todo_add'] })
+    expect(Object.keys(legacyAllowedTools)).toEqual(['todo_add'])
+  })
+
+  it('exports consolidated management tools as top-level object schemas', () => {
+    for (const toolName of ['todo_manage', 'event_trigger_manage', 'env_manage', 'browser_extract']) {
+      const jsonSchema = z.toJSONSchema(builtinToolDefs[toolName].inputSchema as z.ZodTypeAny) as { type?: string }
+      expect(jsonSchema.type, toolName).toBe('object')
+    }
+  })
+
+  it('exports every built-in tool with a top-level object schema', () => {
+    for (const [toolName, definition] of Object.entries(builtinToolDefs)) {
+      const jsonSchema = z.toJSONSchema(definition.inputSchema as z.ZodTypeAny) as { type?: string }
+      expect(jsonSchema.type, toolName).toBe('object')
+    }
+  })
+
+  it('manages environment variables through the consolidated env_manage tool', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.env_manage.execute>>[1]
+    const liveState: Record<string, unknown> = { envVariables: [] }
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+      return true
+    })
+
+    await expect(builtinToolDefs.env_manage.execute?.({
+      action: 'set',
+      key: 'API_TOKEN',
+      value: 'secret-value',
+      secret: true,
+    }, toolOptions)).resolves.toContain('created')
+
+    await expect(builtinToolDefs.env_manage.execute?.({ action: 'list' }, toolOptions)).resolves.toContain('API_TOKEN = ********')
+    await expect(builtinToolDefs.env_manage.execute?.({ action: 'get', key: 'API_TOKEN' }, toolOptions)).resolves.toBe('secret-value')
+    await expect(builtinToolDefs.env_manage.execute?.({ action: 'delete', key: 'API_TOKEN' }, toolOptions)).resolves.toContain('deleted')
+    expect(liveState.envVariables).toEqual([])
+  })
+
+  it('updates todos through todo_manage without applying add/list defaults', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.todo_manage.execute>>[1]
+    const invoke = vi.fn(async (channel: string, key: string, value?: string) => {
+      if (channel === 'db:loadPersistedStore') {
+        return {
+          data: JSON.stringify([{
+            id: 'todo-1',
+            title: 'Original title',
+            description: 'Keep this description',
+            status: 'pending',
+            priority: 'high',
+            createdAt: '2026-05-10T00:00:00.000Z',
+            updatedAt: '2026-05-10T00:00:00.000Z',
+          }]),
+        }
+      }
+      if (channel === 'db:savePersistedStore') {
+        return { success: true, key, value }
+      }
+      return undefined
+    })
+
+    setLiveStoreAccessor(() => ({
+      workspacePath: '/workspace',
+      activeSessionId: 'session-live',
+    }))
+
+    Object.defineProperty(window, 'electron', {
+      configurable: true,
+      value: { invoke },
+    })
+
+    try {
+      await expect(builtinToolDefs.todo_manage.execute?.({
+        action: 'update',
+        id: 'todo-1',
+        title: 'Updated title',
+      }, toolOptions)).resolves.toContain('Updated todo: Updated title')
+
+      const saved = JSON.parse(String(invoke.mock.calls.find((call) => call[0] === 'db:savePersistedStore')?.[2])) as Array<Record<string, unknown>>
+      expect(saved[0]).toMatchObject({
+        title: 'Updated title',
+        description: 'Keep this description',
+        priority: 'high',
+        status: 'pending',
+      })
+    } finally {
+      Reflect.deleteProperty(window, 'electron')
+    }
+  })
+
+  it('rejects schedule event triggers without a cron pattern', async () => {
+    const createSchema = builtinToolDefs.event_create_trigger.inputSchema as z.ZodTypeAny
+    const manageSchema = builtinToolDefs.event_trigger_manage.inputSchema as z.ZodTypeAny
+
+    expect(createSchema.safeParse({
+      name: 'Morning trigger',
+      type: 'schedule',
+      agent_id: 'agent-1',
+      prompt_template: 'Run the morning routine',
+    }).success).toBe(false)
+
+    expect(manageSchema.safeParse({
+      action: 'create',
+      name: 'Morning trigger',
+      type: 'schedule',
+      agent_id: 'agent-1',
+      prompt_template: 'Run the morning routine',
+    }).success).toBe(false)
+
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.event_create_trigger.execute>>[1]
+    await expect(builtinToolDefs.event_create_trigger.execute?.({
+      name: 'Morning trigger',
+      type: 'schedule',
+      agent_id: 'agent-1',
+      prompt_template: 'Run the morning routine',
+    }, toolOptions)).resolves.toContain('schedule triggers require pattern')
+  })
+
+  it('notifies agents through live store state instead of cached persistence', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.agent_notify.execute>>[1]
+    const liveState: Record<string, unknown> = {
+      activeSessionId: 'session-live',
+      agents: [{
+        id: 'agent-1',
+        name: 'Research Analyst',
+        enabled: true,
+        memories: [],
+      }],
+    }
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+      return true
+    })
+
+    await expect(builtinToolDefs.agent_notify.execute?.({
+      agent_name: 'research',
+      message: 'Remember the launch context.',
+    }, toolOptions)).resolves.toContain('Notification sent')
+
+    expect(liveState.agents).toEqual([
+      expect.objectContaining({
+        id: 'agent-1',
+        memories: [expect.objectContaining({
+          content: '[Notification from agent] Remember the launch context.',
+          source: 'session-live',
+        })],
+      }),
+    ])
+  })
+
+  it('delegates to agents resolved from live store state', async () => {
+    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.agent_delegate.execute>>[1]
+    setLiveStoreAccessor(() => ({
+      selectedAgent: { id: 'agent-source' },
+      agents: [
+        { id: 'agent-source', name: 'Assistant', enabled: true },
+        { id: 'agent-target', name: 'Research Analyst', enabled: true },
+      ],
+    }))
+
+    await expect(builtinToolDefs.agent_delegate.execute?.({
+      agent_name: 'research',
+      task: 'Check the launch notes',
+      context: 'Use workspace docs',
+    }, toolOptions)).resolves.toBe('Delegated response')
+
+    expect(delegateToAgent).toHaveBeenCalledWith(
+      'agent-source',
+      'agent-target',
+      'Check the launch notes',
+      'Use workspace docs',
+    )
+  })
+
+  it('creates and improves skills through live store state', async () => {
+    const createOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.skill_create.execute>>[1]
+    const improveOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.skill_improve.execute>>[1]
+    const liveState: Record<string, unknown> = { skills: [] }
+
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+      return true
+    })
+
+    await expect(builtinToolDefs.skill_create.execute?.({
+      name: 'Launch Skill',
+      description: 'Helps with launch planning.',
+      prompt: 'Plan launches carefully.',
+      reason: 'Needed for launch work',
+    }, createOptions)).resolves.toContain('Created new skill')
+
+    const createdSkill = (liveState.skills as Array<Record<string, unknown>>)[0]
+    expect(createdSkill).toMatchObject({
+      name: 'Launch Skill',
+      description: 'Helps with launch planning.',
+      prompt: 'Plan launches carefully.',
+    })
+
+    await expect(builtinToolDefs.skill_improve.execute?.({
+      skill_id: String(createdSkill.id),
+      updates: JSON.stringify({ description: 'Improved launch planning skill.', prompt: 'Plan launches with milestones.', ignored: true }),
+      reason: 'Tighten instructions',
+    }, improveOptions)).resolves.toContain('Improved skill')
+
+    expect((liveState.skills as Array<Record<string, unknown>>)[0]).toMatchObject({
+      description: 'Improved launch planning skill.',
+      prompt: 'Plan launches with milestones.',
+    })
+    expect((liveState.skills as Array<Record<string, unknown>>)[0]).not.toHaveProperty('ignored')
+  })
+
+  it('reads marketplace settings from live store state', async () => {
+    const privateUrl = 'https://example.test/private-skills.json'
+    const fetch = vi.fn(async () => new Response(JSON.stringify([
+      {
+        id: 'private-skill',
+        name: 'Private Skill',
+        description: 'Loaded from a private registry.',
+        enabled: true,
+        source: 'registry',
+        content: 'Use private instructions.',
+      },
+    ]), { status: 200 }))
+    vi.stubGlobal('fetch', fetch)
+    setLiveStoreAccessor(() => ({
+      marketplace: { source: 'private', privateUrl },
+    }))
+
+    const skills = await fetchMarketplaceSkills()
+
+    expect(fetch).toHaveBeenCalledWith(privateUrl, { cache: 'no-store' })
+    expect(skills[0]).toMatchObject({ id: 'private-skill', name: 'Private Skill' })
+  })
+
+  it('replaces live store collection references when updating nested tool data', async () => {
+    const envOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.env_set.execute>>[1]
+    const toggleSkillOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.toggle_skill.execute>>[1]
+    const memoryStoreOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.memory_store.execute>>[1]
+    const memoryDeleteOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.memory_delete.execute>>[1]
+    const envVariables = [{ key: 'API_TOKEN', value: 'old', secret: true, createdAt: 1, updatedAt: 1 }]
+    const skills = [{ id: 'skill-1', name: 'Launch Skill', enabled: true }]
+    const agents = [{
+      id: 'agent-1',
+      name: 'Assistant',
+      enabled: true,
+      memories: [{ id: 'memory-old', content: 'Old memory', type: 'knowledge', scope: 'session', createdAt: 1, source: 'session-1' }],
+    }]
+    const globalMemories: Array<Record<string, unknown>> = []
+    const getState = installShallowLiveStore({
+      selectedAgent: { id: 'agent-1' },
+      activeSessionId: 'session-1',
+      agents,
+      skills,
+      envVariables,
+      globalMemories,
+    })
+
+    await expect(builtinToolDefs.env_set.execute?.({
+      key: 'API_TOKEN',
+      value: 'new',
+      secret: false,
+    }, envOptions)).resolves.toContain('updated')
+    expect(getState().envVariables).not.toBe(envVariables)
+    expect(envVariables[0].value).toBe('old')
+
+    await expect(builtinToolDefs.toggle_skill.execute?.({
+      skill_id: 'skill-1',
+      enabled: false,
+    }, toggleSkillOptions)).resolves.toContain('disabled')
+    expect(getState().skills).not.toBe(skills)
+    expect(skills[0].enabled).toBe(true)
+
+    await expect(builtinToolDefs.memory_store.execute?.({
+      content: 'New session memory',
+      type: 'knowledge',
+      scope: 'session',
+    }, memoryStoreOptions)).resolves.toContain('Stored session knowledge memory')
+    const agentsAfterStore = getState().agents as typeof agents
+    expect(agentsAfterStore).not.toBe(agents)
+    expect(agents[0].memories).toHaveLength(1)
+
+    await expect(builtinToolDefs.memory_delete.execute?.({ id: 'memory-old' }, memoryDeleteOptions)).resolves.toContain('Deleted memory')
+    expect(getState().agents).not.toBe(agentsAfterStore)
+    expect(((getState().agents as typeof agents)[0].memories).map((memory) => memory.id)).not.toContain('memory-old')
+
+    await expect(builtinToolDefs.memory_store.execute?.({
+      content: 'New global memory',
+      type: 'knowledge',
+      scope: 'global',
+    }, memoryStoreOptions)).resolves.toContain('Stored global knowledge memory')
+    expect(getState().globalMemories).not.toBe(globalMemories)
+    expect(globalMemories).toEqual([])
   })
 
   it('uses relevance-ranked document results instead of pure recency for large corpora', async () => {

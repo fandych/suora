@@ -16,6 +16,7 @@ import { WorkbenchEmptyState } from '@/components/ui/Primitives'
 import { confirm } from '@/services/confirmDialog'
 import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus'
 import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
+import { computeDocumentGroupStatistics, computeDocumentStatistics } from '@/services/documentStatistics'
 import { analyzeDocumentGraphInsights, buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
 
@@ -1027,6 +1028,8 @@ export function DocumentsLayout() {
   const activeDocumentKindLabel = activeDocument ? getDocumentKindLabel(activeDocument.title) : ''
   const activeDocumentExtension = activeDocument ? getDocumentExtension(activeDocument.title) || '.md' : ''
   const groupDocuments = useMemo(() => groupNodes.filter((node): node is DocumentItem => node.type === 'document'), [groupNodes])
+  const activeDocumentStatistics = useMemo(() => activeDocument ? computeDocumentStatistics(activeDocument.markdown) : null, [activeDocument?.id, activeDocument?.markdown])
+  const activeGroupStatistics = useMemo(() => activeGroupId ? computeDocumentGroupStatistics(documentNodes, activeGroupId) : null, [activeGroupId, documentNodes])
   const documentNodeById = useMemo(() => new Map<string, DocumentNode>(documentNodes.map((node) => [node.id, node])), [documentNodes])
   const documentSearchIndex = useMemo(() => buildDocumentSearchIndex(documentNodes, null), [documentNodes])
   const searchResults = useMemo(
@@ -1743,6 +1746,38 @@ export function DocumentsLayout() {
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <div className="flex items-center justify-between gap-3">
+                      <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.writingStats', 'Writing Stats')}</h3>
+                      <span className="rounded-xl border border-border-subtle/55 bg-surface-2/55 px-2 py-0.5 text-[10px] text-text-muted">{activeDocumentStatistics?.readingTimeMinutes ?? 1} {t('documents.minutesShort', 'min')}</span>
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.words', 'Words')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{(activeDocumentStatistics?.wordCount ?? 0).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.lines', 'Lines')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{activeDocumentStatistics?.lineCount ?? 0}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.headings', 'Headings')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{activeDocumentStatistics?.headingCount ?? 0}</div>
+                      </div>
+                      <div className="rounded-2xl border border-border-subtle/55 bg-surface-2/45 px-3 py-2">
+                        <div className="text-text-muted">{t('documents.codeBlocks', 'Code')}</div>
+                        <div className="mt-1 font-semibold text-text-primary">{activeDocumentStatistics?.codeBlockCount ?? 0}</div>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <span className="rounded-full border border-border-subtle/55 bg-surface-2/45 px-2.5 py-1 text-[10px] text-text-secondary">{activeDocumentStatistics?.paragraphCount ?? 0} {t('documents.paragraphs', 'paragraphs')}</span>
+                      <span className="rounded-full border border-border-subtle/55 bg-surface-2/45 px-2.5 py-1 text-[10px] text-text-secondary">{activeDocumentStatistics?.referenceCount ?? 0} {t('documents.references', 'references')}</span>
+                      <span className="rounded-full border border-border-subtle/55 bg-surface-2/45 px-2.5 py-1 text-[10px] text-text-secondary">{activeDocumentStatistics?.imageCount ?? 0} {t('documents.images', 'images')}</span>
+                      {activeDocumentStatistics?.hasFrontmatter && (
+                        <span className="rounded-full border border-accent/18 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent">{t('documents.frontmatter', 'frontmatter')}</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                    <div className="flex items-center justify-between gap-3">
                       <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.graphSummary', 'Graph Summary')}</h3>
                       <span className="rounded-xl border border-border-subtle/55 bg-surface-2/55 px-2 py-0.5 text-[10px] text-text-muted">{graphInsights?.relatedDocuments.length ?? 0} {t('documents.connectedNotes', 'related')}</span>
                     </div>
@@ -1951,6 +1986,16 @@ export function DocumentsLayout() {
               <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2 py-0.5 text-[10px] text-text-muted">
                 {t('documents.knowledgeGraph', 'Knowledge Graph')}
               </span>
+              {activeGroupStatistics && (
+                <>
+                  <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2 py-0.5 text-[10px] text-text-muted">
+                    {activeGroupStatistics.documentCount} {t('documents.docs', 'docs')} · {activeGroupStatistics.folderCount} {t('documents.folders', 'folders')}
+                  </span>
+                  <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2 py-0.5 text-[10px] text-text-muted">
+                    {activeGroupStatistics.totalWordCount.toLocaleString()} {t('documents.words', 'words')} · {activeGroupStatistics.averageReadingTimeMinutes} {t('documents.avgMin', 'avg min')}
+                  </span>
+                </>
+              )}
               <div className="ml-auto flex gap-2">
                 <button type="button" onClick={openAssistantCreate} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/15">
                   {t('timer.aiCreate', 'AI Create')}
