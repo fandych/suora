@@ -268,6 +268,8 @@ function loadAllMemoriesFromStore(): MemoryEntry[] {
       return safeParse<{
         state?: {
           agents?: Array<{ memories?: Array<{ id: string; content: string }> }>
+          sessions?: Array<{ memories?: Array<{ id: string; content: string }> }>
+          skills?: Array<{ memories?: Array<{ id: string; content: string }> }>
           globalMemories?: Array<{ id: string; content: string }>
         }
       }>(raw).state ?? null
@@ -277,6 +279,24 @@ function loadAllMemoriesFromStore(): MemoryEntry[] {
 
     const entries: MemoryEntry[] = []
     const seen = new Set<string>()
+
+    // Collect from all sessions
+    const sessions = Array.isArray(state.sessions)
+      ? state.sessions as Array<{ memories?: Array<{ id: string; content: string }> }>
+      : []
+    if (sessions.length > 0) {
+      for (const session of sessions) {
+        if (session.memories) {
+          for (const m of session.memories) {
+            if (entries.length >= MAX_INDEX_ENTRIES) break
+            if (!m.content || seen.has(m.id)) continue
+            seen.add(m.id)
+            entries.push({ id: m.id, content: m.content })
+          }
+        }
+        if (entries.length >= MAX_INDEX_ENTRIES) break
+      }
+    }
 
     // Collect from all agents
     const agents = Array.isArray(state.agents)
@@ -292,6 +312,24 @@ function loadAllMemoriesFromStore(): MemoryEntry[] {
               seen.add(m.id)
               entries.push({ id: m.id, content: m.content })
             }
+          }
+        }
+        if (entries.length >= MAX_INDEX_ENTRIES) break
+      }
+    }
+
+    // Collect from all skills
+    const skills = Array.isArray(state.skills)
+      ? state.skills as Array<{ memories?: Array<{ id: string; content: string }> }>
+      : []
+    if (skills.length > 0 && entries.length < MAX_INDEX_ENTRIES) {
+      for (const skill of skills) {
+        if (skill.memories) {
+          for (const m of skill.memories) {
+            if (entries.length >= MAX_INDEX_ENTRIES) break
+            if (!m.content || seen.has(m.id)) continue
+            seen.add(m.id)
+            entries.push({ id: m.id, content: m.content })
           }
         }
         if (entries.length >= MAX_INDEX_ENTRIES) break

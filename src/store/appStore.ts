@@ -1103,7 +1103,7 @@ export const useAppStore = create<AppStore>()(
     }),
     {
       name: 'suora-store',
-      version: 21,
+      version: 22,
       storage: createSafePersistStorage<Record<string, unknown>>(fileStateStorage),
       migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>
@@ -1242,7 +1242,25 @@ export const useAppStore = create<AppStore>()(
         }
         if (version < 20) {
           state.agents = mergeBuiltinAgents((state.agents || []) as Agent[])
-          if (!state.agentSelectionPreferences) state.agentSelectionPreferences = []
+          if (!state.agentSelectionPreferences)           state.agentSelectionPreferences = []
+        }
+        if (version < 22) {
+          state.sessions = ((state.sessions || []) as Session[]).map((session) => ({
+            ...session,
+            memories: session.memories || [],
+          }))
+          state.agents = ((state.agents || []) as Agent[]).map((agent) => ({
+            ...agent,
+            memories: (agent.memories || []).map((memory) => ({
+              ...memory,
+              scope: memory.scope === 'global' ? 'global' as const : 'agent' as const,
+              targetId: memory.targetId ?? agent.id,
+            })),
+          }))
+          state.skills = ((state.skills || []) as Skill[]).map((skill) => ({
+            ...skill,
+            memories: skill.memories || [],
+          }))
         }
         if (version < 21) {
           const sec = state.toolSecurity as Partial<ToolSecuritySettings> | undefined
@@ -1306,6 +1324,7 @@ export const useAppStore = create<AppStore>()(
         selectedModel: state.selectedModel,
         agents: state.agents,
         selectedAgent: state.selectedAgent,
+        skills: state.skills,
         workspacePath: state.workspacePath,
         providerConfigs: state.providerConfigs,
         externalDirectories: state.externalDirectories,
@@ -1475,7 +1494,12 @@ export async function loadExternalSkillsAndAgents(): Promise<void> {
     skillMap.set(skill.name.toLowerCase(), skill)
   }
   for (const skill of [...diskSkills, ...externalSkills]) {
-    skillMap.set(skill.name.toLowerCase(), skill)
+    const key = skill.name.toLowerCase()
+    const existing = skillMap.get(key)
+    skillMap.set(key, {
+      ...skill,
+      memories: existing?.memories ?? skill.memories ?? [],
+    })
   }
 
   useAppStore.setState((current) => {

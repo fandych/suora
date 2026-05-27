@@ -387,14 +387,25 @@ export async function handleChannelMessage(
 
     // Add skill system prompts
     const skillPrompts = await getSkillSystemPrompts(agent.skills, allSkills)
+    const assignedSkillIds = new Set(agent.skills)
+    const promptMemories = agent.autoLearn
+      ? [
+          ...((state.globalMemories as Array<{ content: string }> | undefined) ?? []),
+          ...(agent.memories ?? []),
+          ...allSkills
+            .filter((skill) => assignedSkillIds.has(skill.id))
+            .flatMap((skill) => skill.memories ?? []),
+        ]
+      : undefined
 
     const systemPrompt = buildSystemPrompt({
       agentPrompt: agentPromptBase,
       responseStyle: agent.responseStyle as string | undefined,
-      memories: agent.autoLearn ? agent.memories : undefined,
+      memories: promptMemories,
       skillPrompts: skillPrompts || undefined,
       toolNames: Object.keys(filteredTools),
       permissionMode: (agent as unknown as { permissionMode?: string }).permissionMode,
+      autoLearn: agent.autoLearn,
     }) ?? agent.systemPrompt
 
     // Build proper model identifier (provider:modelId)
