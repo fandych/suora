@@ -4293,6 +4293,8 @@ export function buildSystemPrompt(opts: SystemPromptOptions): string | undefined
       '<auto-memory>',
       'Proactively store durable information with memory_store when it will help future interactions, even if the user does not explicitly ask you to remember it.',
       'Store concise, user-approved or user-stated preferences, corrections, stable project/workflow knowledge, and reusable skill-specific instructions.',
+      'When a command, script, or tool invocation fails and you discover a reusable correction (such as the right command, path, flag, working directory, environment requirement, or retry strategy), store that correction with memory_store before repeating similar work.',
+      'Use type="correction" for learned fixes from failed tool calls, and include enough context to avoid making the same failing call again without storing secrets or raw sensitive output.',
       'Choose the narrowest correct scope: session for only this chat/task, agent for this agent profile, skill for knowledge tied to a specific skill (include target_id or target_name), and global for cross-session/cross-agent knowledge.',
       'Do not store secrets, credentials, sensitive personal data, one-off transient details, or duplicates.',
       '</auto-memory>',

@@ -573,15 +573,19 @@ export function MessageBubble({
 
   const assistantBody = contentParts.length > 0
     ? (() => {
-      const toolParts = contentParts.filter((part) => part.type === 'tool-call')
-      const totalSteps = toolParts.length
+      const totalSteps = new Set(contentParts
+        .filter((part) => part.type === 'tool-call')
+        .map((part) => part.toolCallId)).size
       let stepIndex = 0
+      const renderedToolCallIds = new Set<string>()
 
       return contentParts.map((part, index) => {
         if (part.type === 'text') {
           return <div key={index} className="markdown-body"><MarkdownContent content={part.text} /></div>
         }
 
+        if (renderedToolCallIds.has(part.toolCallId)) return null
+        renderedToolCallIds.add(part.toolCallId)
         const call = toolCalls.find((toolCall) => toolCall.id === part.toolCallId)
         if (!call) return null
         const label = totalSteps > 1 ? `${++stepIndex}/${totalSteps}` : undefined
