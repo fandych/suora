@@ -69,6 +69,68 @@ interface PersistedSkillEntry {
   memories?: PersistedMemoryEntry[]
 }
 
+const MEMORY_STORE_DESCRIPTION = [
+  'Store a fact, preference, correction, or insight into memory for future reference.',
+  'Proactively use this when auto-learning is enabled and the user shares durable preferences, corrections, reusable project knowledge, or skill-specific instructions; the user does not need to say "remember".',
+  'Choose scope="session" for current-chat context, "agent" for the current or named agent, "skill" for knowledge tied to a named skill, and "global" for cross-session/cross-agent knowledge.',
+].join(' ')
+
+function normalizeMemoryScope(memory: PersistedMemoryEntry, fallbackScope: MemoryScope): MemoryScope {
+  if (fallbackScope === 'agent' && memory.scope === 'session') return 'agent'
+  return memory.scope || fallbackScope
+}
+
+function collectOwnerMemories<T extends { id: string; memories?: PersistedMemoryEntry[] }>(
+  owners: T[] | undefined,
+  fallbackScope: MemoryScope,
+): PersistedMemoryEntry[] {
+  return (owners ?? []).flatMap((owner) =>
+    (owner.memories ?? []).map((memory) => ({
+      ...memory,
+      scope: normalizeMemoryScope(memory, fallbackScope),
+      targetId: memory.targetId ?? owner.id,
+    }))
+  )
+}
+
+function collectScopedMemories(state: Record<string, unknown>, scope: MemoryScope | 'all'): PersistedMemoryEntry[] {
+  const allMemories: PersistedMemoryEntry[] = []
+
+  if (scope === 'session' || scope === 'all') {
+    allMemories.push(...collectOwnerMemories(state.sessions as PersistedSessionEntry[] | undefined, 'session'))
+  }
+  if (scope === 'agent' || scope === 'all') {
+    allMemories.push(...collectOwnerMemories(state.agents as PersistedAgentEntry[] | undefined, 'agent'))
+  }
+  if (scope === 'skill' || scope === 'all') {
+    allMemories.push(...collectOwnerMemories(state.skills as PersistedSkillEntry[] | undefined, 'skill'))
+  }
+  if (scope === 'global' || scope === 'all') {
+    const globalMemories = state.globalMemories as PersistedMemoryEntry[] | undefined
+    allMemories.push(...(globalMemories ?? []).map((memory) => ({ ...memory, scope: 'global' as const })))
+  }
+
+  return allMemories
+}
+
+function formatMemoryTag(memory: PersistedMemoryEntry): string {
+  return `[${memory.scope}/${memory.type}${memory.targetId ? `:${memory.targetId}` : ''}]`
+}
+
+function removeMemoryFromOwners<T extends { memories?: PersistedMemoryEntry[] }>(
+  owners: T[],
+  memoryId: string,
+): { owners: T[]; found: boolean } {
+  let found = false
+  const nextOwners = owners.map((owner) => {
+    if (!owner.memories) return owner
+    const memories = owner.memories.filter((memory) => memory.id !== memoryId)
+    if (memories.length < owner.memories.length) found = true
+    return { ...owner, memories }
+  })
+  return { owners: nextOwners, found }
+}
+
 // ─── Electron IPC bridge ───────────────────────────────────────────
 
 function electronInvoke(channel: string, ...args: unknown[]): Promise<unknown> {
@@ -974,7 +1036,7 @@ function snapshotAgentVersion(agent: Agent): Omit<Agent, 'memories'> {
 function appendAgentVersionToStore(state: Record<string, unknown>, agent: Agent, source: 'manual' | 'import' | 'marketplace' | 'migration' | 'rollback' = 'manual') {
   const existingVersions = Array.isArray(state.agentVersions) ? state.agentVersions as Array<{ agentId?: string }> : []
   const nextVersion = {
-    id: `aver-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    id: `aver-${crypto.randomUUID()}`,
     agentId: agent.id,
     version: existingVersions.filter((item) => item.agentId === agent.id).length + 1,
     snapshot: snapshotAgentVersion(agent),
@@ -2038,7 +2100,7 @@ export const builtinToolDefs: ToolSet = {
   // ─── Memory management tools ────────────────────────────────────────
 
   memory_store: tool({
-    description: 'Store a fact, preference, correction, or insight into memory for future reference. Proactively use this when auto-learning is enabled and the user shares durable preferences, corrections, reusable project knowledge, or skill-specific instructions; the user does not need to say "remember". Choose scope="session" for current-chat context, "agent" for the current or named agent, "skill" for knowledge tied to a named skill, and "global" for cross-session/cross-agent knowledge.',
+    description: MEMORY_STORE_DESCRIPTION,
     inputSchema: z.object({
       content: z.string().describe('The concise fact or insight to remember'),
       type: z.enum(['insight', 'preference', 'correction', 'knowledge']).describe('Category of the memory'),
@@ -2155,23 +2217,7 @@ export const builtinToolDefs: ToolSet = {
         const state = readStoreState()
         if (!state) return 'Error: Store not available'
 
-        let allMemories: PersistedMemoryEntry[] = []
-        if (scope === 'session' || scope === 'all') {
-          const sessions = state.sessions as PersistedSessionEntry[] | undefined
-          allMemories.push(...(sessions ?? []).flatMap((session) => (session.memories ?? []).map((m) => ({ ...m, scope: 'session' as const, targetId: m.targetId ?? session.id }))))
-        }
-        if (scope === 'agent' || scope === 'all') {
-          const agents = state.agents as PersistedAgentEntry[] | undefined
-          allMemories.push(...(agents ?? []).flatMap((agent) => (agent.memories ?? []).map((m) => ({ ...m, scope: (m.scope === 'session' ? 'agent' : m.scope) as MemoryScope, targetId: m.targetId ?? agent.id }))))
-        }
-        if (scope === 'skill' || scope === 'all') {
-          const skills = state.skills as PersistedSkillEntry[] | undefined
-          allMemories.push(...(skills ?? []).flatMap((skill) => (skill.memories ?? []).map((m) => ({ ...m, scope: 'skill' as const, targetId: m.targetId ?? skill.id }))))
-        }
-        if (scope === 'global' || scope === 'all') {
-          const globalMemories = state.globalMemories as PersistedMemoryEntry[] | undefined
-          allMemories.push(...(globalMemories ?? []).map(m => ({ ...m, scope: 'global' as const })))
-        }
+        let allMemories = collectScopedMemories(state, scope)
 
         if (!allMemories.length) return 'No memories found.'
 
@@ -2191,7 +2237,7 @@ export const builtinToolDefs: ToolSet = {
           if (!scoped.length) return `No memories semantically matching "${query}"`
           return scoped.map(r => {
             const mem = allMemories.find(m => m.id === r.id)
-            const tag = mem ? `[${mem.scope}/${mem.type}${mem.targetId ? `:${mem.targetId}` : ''}]` : '[unknown]'
+            const tag = mem ? formatMemoryTag(mem) : '[unknown]'
             return `${tag} (id: ${r.id}, score: ${r.score.toFixed(3)}) ${r.content}`
           }).join('\n')
         }
@@ -2201,7 +2247,7 @@ export const builtinToolDefs: ToolSet = {
 
         if (!matches.length) return `No memories matching "${query}"`
         return matches.map(m =>
-          `[${m.scope}/${m.type}${m.targetId ? `:${m.targetId}` : ''}] (id: ${m.id}) ${m.content}`
+          `${formatMemoryTag(m)} (id: ${m.id}) ${m.content}`
         ).join('\n')
       } catch (err) {
         return `Error searching memories: ${err instanceof Error ? err.message : String(err)}`
@@ -2220,23 +2266,7 @@ export const builtinToolDefs: ToolSet = {
         const state = readStoreState()
         if (!state) return 'Error: Store not available'
 
-        let allMemories: PersistedMemoryEntry[] = []
-        if (scope === 'session' || scope === 'all') {
-          const sessions = state.sessions as PersistedSessionEntry[] | undefined
-          allMemories.push(...(sessions ?? []).flatMap((session) => (session.memories ?? []).map((m) => ({ ...m, scope: 'session' as const, targetId: m.targetId ?? session.id }))))
-        }
-        if (scope === 'agent' || scope === 'all') {
-          const agents = state.agents as PersistedAgentEntry[] | undefined
-          allMemories.push(...(agents ?? []).flatMap((agent) => (agent.memories ?? []).map((m) => ({ ...m, scope: (m.scope === 'session' ? 'agent' : m.scope) as MemoryScope, targetId: m.targetId ?? agent.id }))))
-        }
-        if (scope === 'skill' || scope === 'all') {
-          const skills = state.skills as PersistedSkillEntry[] | undefined
-          allMemories.push(...(skills ?? []).flatMap((skill) => (skill.memories ?? []).map((m) => ({ ...m, scope: 'skill' as const, targetId: m.targetId ?? skill.id }))))
-        }
-        if (scope === 'global' || scope === 'all') {
-          const globalMemories = state.globalMemories as PersistedMemoryEntry[] | undefined
-          allMemories.push(...(globalMemories ?? []).map(m => ({ ...m, scope: 'global' as const })))
-        }
+        let allMemories = collectScopedMemories(state, scope)
 
         if (!allMemories.length) return 'No memories found.'
 
@@ -2246,7 +2276,7 @@ export const builtinToolDefs: ToolSet = {
 
         if (!allMemories.length) return type ? `No ${type} memories found.` : 'No memories found.'
         return allMemories.map(m =>
-          `[${m.scope}/${m.type}${m.targetId ? `:${m.targetId}` : ''}] (id: ${m.id}, ${new Date(m.createdAt).toLocaleDateString()}) ${m.content}`
+          `${formatMemoryTag(m)} (id: ${m.id}, ${new Date(m.createdAt).toLocaleDateString()}) ${m.content}`
         ).join('\n')
       } catch (err) {
         return `Error listing memories: ${err instanceof Error ? err.message : String(err)}`
@@ -2267,29 +2297,13 @@ export const builtinToolDefs: ToolSet = {
         let found = false
 
         writeStoreState((s) => {
-          const sessions = (s.sessions ?? []) as PersistedSessionEntry[]
-          s.sessions = sessions.map((session) => {
-            if (!session.memories) return session
-            const memories = session.memories.filter(m => m.id !== id)
-            if (memories.length < session.memories.length) found = true
-            return { ...session, memories }
-          })
-
-          const agents = (s.agents ?? []) as PersistedAgentEntry[]
-          s.agents = agents.map((agent) => {
-            if (!agent.memories) return agent
-            const memories = agent.memories.filter(m => m.id !== id)
-            if (memories.length < agent.memories.length) found = true
-            return { ...agent, memories }
-          })
-
-          const skills = (s.skills ?? []) as PersistedSkillEntry[]
-          s.skills = skills.map((skill) => {
-            if (!skill.memories) return skill
-            const memories = skill.memories.filter(m => m.id !== id)
-            if (memories.length < skill.memories.length) found = true
-            return { ...skill, memories }
-          })
+          const sessionResult = removeMemoryFromOwners((s.sessions ?? []) as PersistedSessionEntry[], id)
+          const agentResult = removeMemoryFromOwners((s.agents ?? []) as PersistedAgentEntry[], id)
+          const skillResult = removeMemoryFromOwners((s.skills ?? []) as PersistedSkillEntry[], id)
+          s.sessions = sessionResult.owners
+          s.agents = agentResult.owners
+          s.skills = skillResult.owners
+          found = sessionResult.found || agentResult.found || skillResult.found
 
           const globalMemories = s.globalMemories as PersistedMemoryEntry[] | undefined
           if (globalMemories) {
@@ -2588,7 +2602,7 @@ export const builtinToolDefs: ToolSet = {
         const raw = readCached(EVENTS_STORAGE_KEY)
         const triggers = raw ? safeParse<Array<Record<string, unknown>>>(raw) : []
         const trigger = {
-          id: `evt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          id: `evt-${crypto.randomUUID()}`,
           name,
           type,
           pattern,
@@ -2669,7 +2683,7 @@ export const builtinToolDefs: ToolSet = {
           return `Error: A skill with name "${name}" already exists`
         }
 
-        const skillId = `evolved-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+        const skillId = `evolved-${crypto.randomUUID()}`
         const newSkill = {
           id: skillId,
           name,
