@@ -179,7 +179,7 @@ export function LogsSettings() {
   }
 
   const exportAuditLogs = () => {
-    const text = JSON.stringify(displayed, null, 2)
+    const text = JSON.stringify(logs, null, 2)
     const blob = new Blob([text], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -330,7 +330,7 @@ export function LogsSettings() {
         <SettingsSection
           eyebrow={t('settings.auditLogs', 'Audit Logs')}
           title={t('settings.filterableAuditStream', 'Filterable Audit Stream')}
-          description={t('settings.filterableAuditStreamHint', 'Search by tool or result content, narrow by status, then export the filtered evidence as JSON if needed.')}
+          description={t('settings.filterableAuditStreamHint', 'Search by tool or result content, narrow by status, then export the audit evidence as JSON if needed.')}
           action={
             <div className="flex flex-wrap gap-2">
               <button
@@ -441,7 +441,7 @@ export function LogsSettings() {
             <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center text-[12px] text-text-muted">{t('settings.desktopRuntimeRequired', 'Runtime log files are available in the desktop app.')}</div>
           ) : (
             <div className="grid gap-4 xl:grid-cols-[320px_1fr]">
-              <div className="space-y-2 max-h-180 overflow-y-auto pr-1">
+              <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                 {runtimeFiles.length === 0 ? (
                   <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center text-[12px] text-text-muted">{t('settings.noRuntimeLogs', 'No runtime log files found.')}</div>
                 ) : (
@@ -476,7 +476,7 @@ export function LogsSettings() {
                 {runtimeError ? (
                   <div className="rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-[12px] text-red-400">{runtimeError}</div>
                 ) : (
-                  <pre className="max-h-180 overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2/70 p-4 font-mono text-[11px] leading-6 text-text-secondary">
+                  <pre className="max-h-96 overflow-auto whitespace-pre-wrap rounded-2xl bg-surface-2/70 p-4 font-mono text-[11px] leading-6 text-text-secondary">
                     {runtimeContent || t('settings.noLogContent', 'No log content to display.')}
                   </pre>
                 )}
