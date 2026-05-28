@@ -13,6 +13,7 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { executeAgentPipeline, dryRunAgentPipeline, type AgentPipelineProgressStep, type DryRunResult } from '@/services/agentPipelineService'
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid'
+import { buildPipelineOptimizationIterations, type PipelineOptimizationIteration } from '@/services/pipelineOptimization'
 import { formatPipelineExecutionEngineLabel, formatPipelineExecutionFallbackReason } from '@/services/pipelineExecutionPresentation'
 import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles'
 import { PipelineImportError, parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability'
@@ -53,6 +54,18 @@ function statusStyles(status: AgentPipelineProgressStep['status'] | AgentPipelin
     case 'pending':
     default:
       return 'bg-surface-3 text-text-secondary border-border-subtle'
+  }
+}
+
+function optimizationStatusStyles(status: PipelineOptimizationIteration['status']) {
+  switch (status) {
+    case 'configured':
+      return 'border-emerald-500/20 bg-emerald-500/12 text-emerald-200'
+    case 'warning':
+      return 'border-red-500/20 bg-red-500/12 text-red-200'
+    case 'recommended':
+    default:
+      return 'border-amber-500/20 bg-amber-500/12 text-amber-200'
   }
 }
 
@@ -164,6 +177,7 @@ export function PipelineLayout() {
   const [diagramView, setDiagramView] = useState<'flow' | 'list' | 'source'>('flow')
   const [copiedMermaid, setCopiedMermaid] = useState(false)
   const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([])
+  const [optimizationIterations, setOptimizationIterations] = useState<PipelineOptimizationIteration[] | null>(null)
   const [running, setRunning] = useState(false)
   const [liveSteps, setLiveSteps] = useState<AgentPipelineProgressStep[]>([])
   const [activeExecution, setActiveExecution] = useState<AgentPipelineExecution | null>(null)
@@ -420,6 +434,10 @@ export function PipelineLayout() {
     [agentPipelineName, pipeline, pipelineVariables, pipelineBudget, agents, models],
   )
 
+  useEffect(() => {
+    setOptimizationIterations(null)
+  }, [agentPipelineName, pipelineDescription, pipeline, pipelineVariables, pipelineBudget, pipelineValidation])
+
   const resetPipelineEditor = () => {
     hydratedRequestedPipelineIdRef.current = null
     hydratedSelectedPipelineIdRef.current = null
@@ -452,6 +470,7 @@ export function PipelineLayout() {
 
   const replacePipelineDraft = (nextPipeline: AgentPipelineStep[]) => {
     setAgentPipeline(nextPipeline)
+    setOptimizationIterations(null)
     resetPipelineExecutionState()
   }
 
@@ -527,6 +546,28 @@ export function PipelineLayout() {
         'agents.pipelineDryRunMessage',
         `${result.steps.filter((step) => step.status === 'would-run').length} step(s) would run, ${result.steps.filter((step) => step.status === 'skipped').length} skipped, ${result.steps.filter((step) => step.status === 'error').length} error(s).`,
       ),
+      timestamp: Date.now(),
+      read: false,
+    })
+  }
+
+  const runOptimizationReview = () => {
+    const iterations = buildPipelineOptimizationIterations(
+      {
+        name: agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline',
+        description: pipelineDescription.trim() || selectedSavedPipeline?.description,
+        steps: pipeline,
+        ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
+        ...(pipelineBudget ? { budget: pipelineBudget } : {}),
+      },
+      pipelineValidation,
+    )
+    setOptimizationIterations(iterations)
+    addNotification({
+      id: generateId('notif'),
+      type: pipelineValidation.valid ? 'info' : 'warning',
+      title: t('agents.pipelineOptimizationTitle', 'Pipeline optimization complete'),
+      message: t('agents.pipelineOptimizationMessage', 'Generated 20 focused optimization iterations for the current pipeline.'),
       timestamp: Date.now(),
       read: false,
     })
@@ -1028,6 +1069,7 @@ export function PipelineLayout() {
             <button type="button" onClick={() => void importPipelineFromJson()} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('agents.pipelineImport', 'Import JSON')}</button>
             <button type="button" onClick={() => void exportCurrentPipeline()} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('agents.pipelineExport', 'Export JSON')}</button>
             <button type="button" onClick={runDryRunPreview} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40" title={t('agents.pipelineDryRunButtonHint', 'Simulate the run without calling any model.')}>{t('agents.pipelineDryRunButton', 'Dry run')}</button>
+            <button type="button" onClick={runOptimizationReview} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40" title={t('agents.pipelineOptimizationHint', 'Generate a 20-iteration optimization review for this pipeline.')}>{t('agents.pipelineOptimize20', 'Optimize ×20')}</button>
             <button type="button" onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40">{t('common.saveChanges', 'Save Changes')}</button>
             <button type="button" onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40">{t('common.delete', 'Delete')}</button>
             <button
@@ -1078,6 +1120,32 @@ export function PipelineLayout() {
                     </li>
                   )
                 })}
+              </ol>
+            </div>
+          )}
+
+          {optimizationIterations && (
+            <div className="mt-3 rounded-3xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3 text-xs text-emerald-100">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="font-semibold">{t('agents.pipelineOptimizationTitle', 'Pipeline optimization')}</div>
+                  <div className="mt-1 text-emerald-100/75">{t('agents.pipelineOptimizationSubtitle', '20 iterative improvements for reliability, cost, and handoff quality.')}</div>
+                </div>
+                <button type="button" onClick={() => setOptimizationIterations(null)} className="text-text-muted hover:text-text-primary" aria-label={t('common.close', 'Close')}>×</button>
+              </div>
+              <ol className="mt-3 grid gap-2 xl:grid-cols-2">
+                {optimizationIterations.map((iteration) => (
+                  <li key={iteration.iteration} className="rounded-2xl border border-border-subtle bg-surface-0/45 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-mono text-[11px] text-text-muted">#{iteration.iteration}</span>
+                      <span className="font-medium text-text-primary">{iteration.title}</span>
+                      <span className={`rounded-full border px-2 py-0.5 text-[10px] ${optimizationStatusStyles(iteration.status)}`}>
+                        {t(`agents.pipelineOptimizationStatus.${iteration.status}`, iteration.status)}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[11px] leading-relaxed text-text-secondary">{iteration.detail}</div>
+                  </li>
+                ))}
               </ol>
             </div>
           )}
