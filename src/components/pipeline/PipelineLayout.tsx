@@ -434,6 +434,10 @@ export function PipelineLayout() {
     [agentPipelineName, pipeline, pipelineVariables, pipelineBudget, agents, models],
   )
 
+  useEffect(() => {
+    setOptimizationIterations(null)
+  }, [agentPipelineName, pipelineDescription, pipeline, pipelineVariables, pipelineBudget, pipelineValidation])
+
   const resetPipelineEditor = () => {
     hydratedRequestedPipelineIdRef.current = null
     hydratedSelectedPipelineIdRef.current = null

@@ -24,6 +24,11 @@ function countSteps(steps: AgentPipelineStep[], predicate: (step: AgentPipelineS
   return steps.reduce((count, step) => count + (predicate(step) ? 1 : 0), 0)
 }
 
+function countDuplicateTasks(steps: AgentPipelineStep[]): number {
+  const normalizedTasks = steps.map((step) => step.task.trim().toLowerCase()).filter(Boolean)
+  return normalizedTasks.length - new Set(normalizedTasks).size
+}
+
 function makeIteration(
   iteration: number,
   title: string,
@@ -40,7 +45,7 @@ export function buildPipelineOptimizationIterations(
   const activeSteps = enabledSteps(pipeline.steps)
   const activeStepCount = validation?.enabledSteps ?? activeSteps.length
   const disabledStepCount = pipeline.steps.length - activeSteps.length
-  const duplicateTaskCount = activeSteps.length - new Set(activeSteps.map((step) => step.task.trim().toLowerCase()).filter(Boolean)).size
+  const duplicateTaskCount = countDuplicateTasks(activeSteps)
   const hasBudget = Boolean(pipeline.budget?.maxTotalDurationMs || pipeline.budget?.maxTotalTokens || pipeline.budget?.maxStepCount)
   const declaredVariableCount = pipeline.variables?.length ?? 0
   const stepReferenceCount = countSteps(activeSteps, (step) => STEP_REFERENCE_PATTERN.test(step.task))
@@ -214,8 +219,8 @@ export function buildPipelineOptimizationIterations(
     makeIteration(
       19,
       'Duplicate task review',
-      duplicateTaskCount <= 0 ? 'configured' : 'recommended',
-      duplicateTaskCount <= 0
+      duplicateTaskCount === 0 ? 'configured' : 'recommended',
+      duplicateTaskCount === 0
         ? 'Enabled step tasks are unique after trimming.'
         : `Review ${duplicateTaskCount} duplicate task(s) to avoid redundant model calls.`,
     ),
