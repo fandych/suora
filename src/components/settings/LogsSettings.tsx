@@ -78,7 +78,7 @@ export function LogsSettings() {
       const result = await electron.invoke('log:listFiles')
       if (!isRuntimeLogFileArray(result)) return
       setRuntimeFiles(result)
-      setSelectedLogFile((current) => current || result[0]?.name || '')
+      setSelectedLogFile((current) => result.some((file) => file.name === current) ? current : result[0]?.name || '')
     } catch (error) {
       setRuntimeError(error instanceof Error ? error.message : String(error))
     }
