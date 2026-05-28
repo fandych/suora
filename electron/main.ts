@@ -2685,6 +2685,40 @@ ipcMain.handle('log:write', (_event, level: LogLevel, message: string, meta?: un
   return { success: true }
 })
 
+ipcMain.handle('log:listFiles', async () => {
+  try {
+    return await getLogger().listFiles()
+  } catch (error) {
+    logger.error('Failed to list log files', { error: error instanceof Error ? error.message : String(error) })
+    return []
+  }
+})
+
+ipcMain.handle('log:readFile', async (_event, fileName: string, maxBytes?: number) => {
+  try {
+    return {
+      fileName,
+      content: await getLogger().readFile(fileName, maxBytes),
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to read log file', { fileName, error: message })
+    return { error: message }
+  }
+})
+
+ipcMain.handle('log:clearFiles', async () => {
+  try {
+    await getLogger().clearFiles()
+    logger.info('Runtime log files cleared')
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.error('Failed to clear log files', { error: message })
+    return { error: message }
+  }
+})
+
 // ─── IPC Handlers: File Watching (Skill Hot-Reload) ────────────────
 
 const activeWatchers = new Map<string, FSWatcher>()
