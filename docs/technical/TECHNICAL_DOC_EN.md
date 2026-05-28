@@ -199,11 +199,13 @@ Do not flatten all three into one list.
 
 ### Built-in agents
 
-The current store seeds one general assistant plus eight specialized agents.
+The current store seeds one general assistant plus ten specialized agents.
 
 - Assistant
+- Agent builder
 - Pipeline builder
 - Timer builder
+- Document editor
 - Code Expert
 - Writing Strategist
 - Research Analyst
@@ -267,7 +269,8 @@ The documents module is a real local knowledge workspace. The current implementa
 - math rendering
 - backlinks and references
 - document search
-- graph view
+- source-aware related-note expansion
+- graph view with bridge, sparse-cluster, gap, and unexpected-link insights
 - document context selection for chat
 
 ### Pipelines
@@ -280,10 +283,20 @@ The pipeline module currently implements multi-step agent workflows with:
 - conditional execution with `runIf`
 - output transforms and exported variables
 - execution budgets for total duration, tokens, and step count
+- Mermaid preview and source export
 - execution history and step-level details
+- runtime metadata for the resolved execution engine and workflow fallback reason
 - save, import, and export flows
 
 The chat layer also supports `/pipeline` commands for listing, running, checking status, reading history, and cancelling saved pipelines.
+
+#### Pipeline execution engine routing
+
+Pipeline execution is routed through `src/services/workflowPipelineExecutor.ts`. The accepted engine values are `auto`, `legacy`, and `workflow`. Resolution order is explicit `executionEngine` option, trigger-scoped environment setting, global environment setting, then `legacy` as the default fallback.
+
+Supported trigger-scoped variables are `PIPELINE_EXECUTION_ENGINE_MANUAL`, `PIPELINE_EXECUTION_ENGINE_CHAT`, and `PIPELINE_EXECUTION_ENGINE_TIMER`; the renderer-facing `VITE_PIPELINE_EXECUTION_ENGINE_*` forms are also accepted. Global defaults use `PIPELINE_EXECUTION_ENGINE` or `VITE_PIPELINE_EXECUTION_ENGINE`.
+
+When the Workflow path is selected but no workflow executor is wired, or when the workflow executor throws, Suora falls back to the legacy executor. The execution runtime snapshot records `executionEngine` and, when applicable, `executionFallbackReason` so Pipeline history and notifications can surface the downgrade.
 
 ### Timers
 
