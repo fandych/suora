@@ -14,6 +14,13 @@ import path from 'path'
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
+export interface LogFileSummary {
+  name: string
+  size: number
+  modifiedAt: string
+  active: boolean
+}
+
 interface LoggerConfig {
   logDir: string
   maxFileSize: number  // in bytes, default 10MB
@@ -27,6 +34,35 @@ const LOG_LEVELS: Record<LogLevel, number> = {
   info: 1,
   warn: 2,
   error: 3,
+}
+
+const LOG_FILE_PATTERN = /^\d{4}-\d{2}-\d{2}\.log(?:\.\d+)?$/
+const DEFAULT_READ_LIMIT_BYTES = 200 * 1024
+const MAX_READ_LIMIT_BYTES = 1024 * 1024
+
+function serializeMeta(meta: unknown): string {
+  if (meta == null) return ''
+  const seen = new WeakSet<object>()
+  try {
+    const serialized = JSON.stringify(meta, (_key, value: unknown) => {
+      if (value instanceof Error) {
+        return {
+          name: value.name,
+          message: value.message,
+          stack: value.stack,
+        }
+      }
+      if (typeof value === 'bigint') return value.toString()
+      if (typeof value === 'object' && value !== null) {
+        if (seen.has(value)) return '[Circular]'
+        seen.add(value)
+      }
+      return value
+    })
+    return serialized ? ` ${serialized}` : ''
+  } catch (error) {
+    return ` ${JSON.stringify({ serializationError: error instanceof Error ? error.message : String(error) })}`
+  }
 }
 
 class RotatingLogger {
@@ -169,8 +205,26 @@ class RotatingLogger {
   private formatMessage(level: LogLevel, message: string, meta?: unknown): string {
     const timestamp = new Date().toISOString()
     const levelStr = level.toUpperCase().padEnd(5)
-    const metaStr = meta ? ` ${JSON.stringify(meta)}` : ''
+    const metaStr = serializeMeta(meta)
     return `[${timestamp}] ${levelStr} ${message}${metaStr}\n`
+  }
+
+  private isLogFile(fileName: string): boolean {
+    return LOG_FILE_PATTERN.test(fileName)
+  }
+
+  private resolveLogFile(fileName: string): string {
+    const baseName = path.basename(fileName)
+    if (baseName !== fileName || !this.isLogFile(baseName)) {
+      throw new Error('Invalid log file name')
+    }
+    return path.join(this.config.logDir, baseName)
+  }
+
+  private async drainQueue(): Promise<void> {
+    while (this.writeQueue.length > 0 || this.isWriting) {
+      await new Promise(resolve => setTimeout(resolve, 25))
+    }
   }
 
   private async writeToFile(content: string): Promise<void> {
@@ -248,11 +302,77 @@ class RotatingLogger {
     this.writeToFile(formatted)
   }
 
+  public async flush(): Promise<void> {
+    await this.drainQueue()
+  }
+
+  public getLogDir(): string {
+    return this.config.logDir
+  }
+
+  public async listFiles(): Promise<LogFileSummary[]> {
+    await this.flush()
+    if (!existsSync(this.config.logDir)) {
+      await fs.mkdir(this.config.logDir, { recursive: true })
+      return []
+    }
+
+    const files = await fs.readdir(this.config.logDir)
+    const summaries = await Promise.all(
+      files
+        .filter((file) => this.isLogFile(file))
+        .map(async (file) => {
+          const filePath = path.join(this.config.logDir, file)
+          const stats = await fs.stat(filePath)
+          return {
+            name: file,
+            size: stats.size,
+            modifiedAt: stats.mtime.toISOString(),
+            active: path.resolve(filePath) === path.resolve(this.currentFilePath),
+          }
+        }),
+    )
+
+    return summaries.sort((left, right) => right.modifiedAt.localeCompare(left.modifiedAt))
+  }
+
+  public async readFile(fileName: string, maxBytes = DEFAULT_READ_LIMIT_BYTES): Promise<string> {
+    await this.flush()
+    const filePath = this.resolveLogFile(fileName)
+    const stats = await fs.stat(filePath)
+    const limit = Math.max(1, Math.min(Math.floor(maxBytes), MAX_READ_LIMIT_BYTES))
+    const start = Math.max(0, stats.size - limit)
+    const handle = await fs.open(filePath, 'r')
+    try {
+      const buffer = Buffer.alloc(stats.size - start)
+      await handle.read(buffer, 0, buffer.length, start)
+      return buffer.toString('utf-8')
+    } finally {
+      await handle.close()
+    }
+  }
+
+  public async clearFiles(): Promise<void> {
+    await this.flush()
+    await this.closeStream()
+    if (!existsSync(this.config.logDir)) {
+      await fs.mkdir(this.config.logDir, { recursive: true })
+    }
+    const files = await fs.readdir(this.config.logDir)
+    await Promise.all(
+      files
+        .filter((file) => this.isLogFile(file))
+        .map((file) => fs.unlink(path.join(this.config.logDir, file))),
+    )
+    this.currentDate = ''
+    this.currentFilePath = ''
+    this.currentFileSize = 0
+    await this.rotateIfNeeded()
+  }
+
   public async close(): Promise<void> {
     // Wait for queue to empty
-    while (this.writeQueue.length > 0 || this.isWriting) {
-      await new Promise(resolve => setTimeout(resolve, 100))
-    }
+    await this.flush()
 
     await this.closeStream()
   }
@@ -291,5 +411,6 @@ export async function closeLogger(): Promise<void> {
   if (loggerInstance) {
     await loggerInstance.close()
     loggerInstance = null
+    loggerReady = null
   }
 }
