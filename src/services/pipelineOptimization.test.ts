@@ -67,8 +67,6 @@ describe('pipelineOptimization', () => {
         budget: undefined,
       },
       {
-        valid: false,
-        issues: [],
         warnings: [{ severity: 'warning', code: 'large-budget', message: 'Large budget' }],
         errors: [{ severity: 'error', code: 'missing-agent', message: 'Missing agent' }],
         enabledSteps: 2,

@@ -55,17 +55,17 @@ function statusStyles(status: AgentPipelineProgressStep['status'] | AgentPipelin
     default:
       return 'bg-surface-3 text-text-secondary border-border-subtle'
   }
+}
 
-  function optimizationStatusStyles(status: PipelineOptimizationIteration['status']) {
-    switch (status) {
-      case 'configured':
-        return 'border-emerald-500/20 bg-emerald-500/12 text-emerald-200'
-      case 'warning':
-        return 'border-red-500/20 bg-red-500/12 text-red-200'
-      case 'recommended':
-      default:
-        return 'border-amber-500/20 bg-amber-500/12 text-amber-200'
-    }
+function optimizationStatusStyles(status: PipelineOptimizationIteration['status']) {
+  switch (status) {
+    case 'configured':
+      return 'border-emerald-500/20 bg-emerald-500/12 text-emerald-200'
+    case 'warning':
+      return 'border-red-500/20 bg-red-500/12 text-red-200'
+    case 'recommended':
+    default:
+      return 'border-amber-500/20 bg-amber-500/12 text-amber-200'
   }
 }
 
