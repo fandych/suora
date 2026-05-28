@@ -200,8 +200,10 @@ AI 集成位于 `src/services/aiService.ts`。
 ### 当前内置 Agent
 
 - Assistant
+- Agent builder
 - Pipeline builder
 - Timer builder
+- Document editor
 - Code Expert
 - Writing Strategist
 - Research Analyst
@@ -265,7 +267,8 @@ AI 集成位于 `src/services/aiService.ts`。
 - 数学公式渲染
 - 反向链接与引用
 - 文档搜索
-- 图谱视图
+- 基于来源信息扩展相关笔记
+- 图谱视图，并提示桥接节点、稀疏簇、知识缺口和意外连接
 - 将选中文档作为聊天上下文
 
 ### 流水线模块
@@ -280,9 +283,18 @@ AI 集成位于 `src/services/aiService.ts`。
 - 总时长、总 Token、步数预算限制
 - Mermaid 预览与源码导出
 - 执行历史与步骤详情
+- 运行时记录实际执行引擎和 workflow fallback 原因
 - 保存、导入、导出
 
 聊天层也支持 `/pipeline` 命令，用于列出、运行、查看状态、读取历史和取消已保存流水线。
+
+#### 流水线执行引擎路由
+
+流水线执行路由位于 `src/services/workflowPipelineExecutor.ts`。当前接受 `auto`、`legacy` 和 `workflow` 三种执行引擎值。解析顺序是：显式传入的 `executionEngine`、按触发来源划分的环境变量、全局环境变量，最后默认回退到 `legacy`。
+
+触发来源环境变量包括 `PIPELINE_EXECUTION_ENGINE_MANUAL`、`PIPELINE_EXECUTION_ENGINE_CHAT` 和 `PIPELINE_EXECUTION_ENGINE_TIMER`；渲染侧也接受对应的 `VITE_PIPELINE_EXECUTION_ENGINE_*` 形式。全局默认值使用 `PIPELINE_EXECUTION_ENGINE` 或 `VITE_PIPELINE_EXECUTION_ENGINE`。
+
+如果选择了 Workflow 路径但 workflow executor 尚未接入，或 workflow executor 执行抛错，Suora 会回退到 legacy executor。执行运行时快照会记录 `executionEngine`，并在需要时记录 `executionFallbackReason`，以便 Pipeline 历史和通知展示降级信息。
 
 ### 定时器模块
 

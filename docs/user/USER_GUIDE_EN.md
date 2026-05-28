@@ -15,13 +15,14 @@ You can use it to:
 - keep a local document workspace and attach document context to chats
 - build multi-step agent pipelines and run them manually or on a schedule
 - connect external messaging platforms so the desktop assistant can answer inbound messages
+- manage model providers, reusable skills, MCP servers, and desktop safety settings
 
 ## 2. Install and First Launch
 
 ### Requirements
 
 - Windows, macOS, or Linux desktop environment
-- Node.js 18+ when running from source
+- Node.js 22.x when running from source
 - npm
 
 ### Run from source
@@ -54,11 +55,14 @@ If you skip it, you can replay it later from `Settings -> System`.
 ### Recommended first-time setup order
 
 1. Configure one cloud provider or local Ollama endpoint in **Models**
-2. Choose a default model and agent in **Chat**
-3. Enable the skills you actually need in **Skills**
-4. Create at least one document group in **Documents**
-5. Add automation later in **Pipeline** and **Timer**
-6. Connect external messaging platforms only when you need them in **Channels**
+2. Enable the models you actually want to use in **Models -> Models**
+3. Choose a default model and agent in **Chat**
+4. Enable the skills you actually need in **Skills**
+5. Create at least one document group in **Documents**
+6. Add automation later in **Pipeline** and **Timer**
+7. Connect external messaging platforms only when you need them in **Channels**
+8. Add MCP servers only when agents need external protocol-backed tools
+9. Review language, theme, security, data, logs, and system diagnostics in **Settings**
 
 ## 3. Workbench Map
 
@@ -67,11 +71,11 @@ The current top-level modules are:
 | Module | What it does |
 | --- | --- |
 | Chat | Multi-session chat, agent/model switching, attachments, and tool-call visibility |
-| Documents | Local document groups, folders, backlinks, and graph view |
+| Documents | Local document groups, folders, backlinks, source-aware search expansion, and graph insights |
 | Pipeline | Multi-step agent workflow design and execution |
 | Models | Provider setup, model enablement, connection testing, and comparison |
 | Agents | Built-in and custom agent management, testing, import/export, and versioning |
-| Skills | Installed skills, registry browsing, and `SKILL.md` editing |
+| Skills | Installed skills, registry browsing, `SKILL.md` editing, source management, and import/export |
 | Timer | One-time, interval, and cron schedules |
 | Channels | Messaging platform integrations and reply routing |
 | MCP | Model Context Protocol server configuration |
@@ -152,8 +156,10 @@ If you use Ollama, the default local endpoint is `http://localhost:11434/v1`.
 ### Built-in agents
 
 - Assistant
+- Agent builder
 - Pipeline builder
 - Timer builder
+- Document editor
 - Code Expert
 - Writing Strategist
 - Research Analyst
@@ -220,6 +226,7 @@ Recommended flow:
 The Pipeline module currently supports:
 
 - multi-step agent workflows
+- execution engine labels and workflow-to-legacy fallback warnings in history and notifications
 - step retries and backoff strategies
 - per-step timeouts
 - conditional execution with `runIf`
@@ -342,6 +349,12 @@ The current implementation tries to store API keys in OS-backed secure storage f
 4. validate the runtime in the Health and Debug panels
 
 ## 10. Troubleshooting
+
+### Pipeline history shows a Workflow fallback warning
+
+- Suora can route pipeline runs through a legacy executor or a Workflow executor
+- if the Workflow path is selected but unavailable or fails, the run safely falls back to the legacy executor
+- check the execution history, notification details, and logs before changing pipeline prompts or agent settings
 
 ### Model calls fail or return nothing
 
