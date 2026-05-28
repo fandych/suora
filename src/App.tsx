@@ -12,6 +12,7 @@ import { initEventAutomationRuntime } from '@/services/eventAutomationRuntime'
 import { preloadPopularCollections } from '@/services/iconService'
 import { initTimerRuntimeListener } from '@/services/timerRuntime'
 import { toast } from '@/services/toast'
+import { initRendererRuntimeLogging } from '@/services/logger'
 
 const ChatLayout = lazy(() => import('@/components/chat/ChatLayout').then(m => ({ default: m.ChatLayout })))
 const DocumentsLayout = lazy(() => import('@/components/documents/DocumentsLayout').then(m => ({ default: m.DocumentsLayout })))
@@ -68,12 +69,14 @@ export default function App() {
 
   // Initialize channel message listener on mount
   useEffect(() => {
+    const cleanupRuntimeLogging = initRendererRuntimeLogging()
     const cleanup = initChannelMessageListener()
     const cleanupTimerRuntime = initTimerRuntimeListener()
     const cleanupEventAutomation = initEventAutomationRuntime()
     preloadPopularCollections().catch(console.error)
     return () => {
       cleanup()
+      cleanupRuntimeLogging()
       cleanupTimerRuntime()
       cleanupEventAutomation()
     }
