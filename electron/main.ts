@@ -2680,11 +2680,11 @@ ipcMain.handle('channel:debugSend', async (_event, channelId: string, mockMessag
 // ─── IPC Handlers: Logging ──────────────────────────────────────────
 
 ipcMain.handle('log:write', (_event, level: unknown, message: unknown, meta?: unknown) => {
+  const logger = getLogger()
   if (!isLogLevel(level)) {
     logger.warn('Rejected renderer log with invalid level', { level })
     return { error: 'Invalid log level' }
   }
-  const logger = getLogger()
   const normalizedMessage = normalizeIpcLogMessage(message)
   switch (level) {
     case 'debug':
