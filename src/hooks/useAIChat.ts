@@ -9,7 +9,7 @@ import { useState, useCallback, useRef, useEffect } from 'react'
 import { streamResponseWithTools, initializeProvider, validateModelConfig } from '@/services/aiService'
 import { executeAgentPipeline, listSavedPipelines, resolvePipelineByReference, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
 import { loadPipelineExecutionsFromDisk } from '@/services/pipelineFiles'
-import { detectNaturalPipelineChatCommand, looksLikePipelineChatCommand, parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
+import { parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
 import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineExecutionPresentation'
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import { t } from '@/services/i18n'
@@ -64,14 +64,14 @@ function formatPipelineCatalogMessage(
         '',
         ...pipelines.map((pipeline, index) => `${index + 1}. ${pipeline.name} · ${pipeline.steps.length} 步 · id: ${pipeline.id}`),
         '',
-        '可使用 /pipeline <名称或ID>，或直接说“运行 Morning Run 流水线”。',
+        '可使用 /pipeline <名称或ID> 运行流水线。',
       ].join('\n')
     : [
         'Saved pipelines',
         '',
         ...pipelines.map((pipeline, index) => `${index + 1}. ${pipeline.name} · ${pipeline.steps.length} steps · id: ${pipeline.id}`),
         '',
-        'Run one with /pipeline <name-or-id>, or say "run pipeline Morning Run".',
+        'Run one with /pipeline <name-or-id>.',
       ].join('\n')
 }
 
@@ -340,9 +340,6 @@ export function useAIChat(options: UseAIChatOptions = {}) {
 
     const pipelineChatLanguage = detectPipelineChatLanguage(userMessage)
     const pipelineCommand = slashPipelineCommand
-      ?? (looksLikePipelineChatCommand(userMessage)
-        ? detectNaturalPipelineChatCommand(userMessage, await listSavedPipelines())
-        : null)
 
     if (pipelineCommand) {
       setError(null)
