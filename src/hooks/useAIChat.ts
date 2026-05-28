@@ -325,19 +325,19 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       ...(attachments?.length ? { attachments } : {}),
     }
 
-    const getLatestSession = () =>
+    const getCurrentSessionState = () =>
       useAppStore.getState().sessions.find((session) => session.id === activeSession.id) ?? null
-    const appendAssistantReply = (assistantReply: Message) => {
-      const latestSession = getLatestSession()
-      const baseMessages = latestSession?.messages ?? prevMessages
+    const appendReplyAndReturnContextMessages = (assistantReply: Message) => {
+      const latestSession = getCurrentSessionState()
+      const currentMessages = latestSession?.messages ?? prevMessages
       useAppStore.getState().updateSession(activeSession.id, {
-        messages: [...baseMessages, userMsg, assistantReply],
-        title: baseMessages.length === 0 ? userMessage.slice(0, 30) : (latestSession?.title ?? activeSession.title),
+        messages: [...currentMessages, userMsg, assistantReply],
+        title: currentMessages.length === 0 ? userMessage.slice(0, 30) : (latestSession?.title ?? activeSession.title),
       })
-      return baseMessages
+      return currentMessages
     }
     const pushImmediateAssistantReply = (content: string, isError = false) => {
-      appendAssistantReply({
+      appendReplyAndReturnContextMessages({
           id: generateId('msg'),
           role: 'assistant',
           content,
@@ -366,7 +366,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         isStreaming: true,
       }
 
-      appendAssistantReply(assistantMsg)
+      appendReplyAndReturnContextMessages(assistantMsg)
       setActiveStream(activeSession.id, { abortController, messageId: assistantMsg.id })
 
       try {
@@ -649,7 +649,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       },
     }
 
-    const baseMessagesAtSend = appendAssistantReply(assistantMsg)
+    const contextMessagesAtSend = appendReplyAndReturnContextMessages(assistantMsg)
     setActiveStream(activeSession.id, { abortController, messageId: assistantMsg.id })
 
     const perfStart = performance.now()
@@ -660,7 +660,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       const modelIdentifier = `${model.provider}:${model.modelId}`
 
       // Convert app messages to AI SDK v6 ModelMessage[]
-      const contextMessages = [...baseMessagesAtSend, userMsg]
+      const contextMessages = [...contextMessagesAtSend, userMsg]
       const modelMessages = buildModelMessages(contextMessages)
       const contextSummary = buildContextSummary(contextMessages)
 
