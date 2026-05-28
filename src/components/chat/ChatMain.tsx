@@ -803,7 +803,7 @@ export function ChatMain() {
                     <div className="rounded-md border border-border-subtle/35 bg-surface-1/34 p-3">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.hints', '提示')}</div>
                       <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-text-secondary/78">
-                        <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or say "run Morning Run pipeline"')}</div>
+                        <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')}</div>
                         <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
                       </div>
                     </div>

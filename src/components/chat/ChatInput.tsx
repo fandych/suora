@@ -486,7 +486,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
                   : voiceState === 'listening'
                     ? t('chat.listening', 'Listening…')
                     : noModel
-                      ? t('chat.selectModelOrRunPipeline', 'Select a model to chat, or say "run Morning Run pipeline"')
+                      ? t('chat.selectModelOrRunPipeline', 'Select a model to chat, or use /pipeline run Morning Run')
                       : t('chat.messagePlaceholder', 'Send a message… (Shift+Enter for new line, paste/drag files)')}
                 rows={1}
                 disabled={disabled}

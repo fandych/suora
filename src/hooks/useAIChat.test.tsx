@@ -157,6 +157,25 @@ describe('useAIChat', () => {
     expect(streamResponseWithTools.mock.calls[0]?.[2]).toMatchObject({ maxSteps: 4 })
   })
 
+  it('routes natural-language pipeline requests through the model instead of executing directly', async () => {
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'I can help plan that pipeline run.' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('Please run pipeline Morning Run for me')
+    })
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+    await waitFor(() => {
+      const messages = useAppStore.getState().sessions[0]?.messages ?? []
+      expect(messages).toHaveLength(2)
+      expect(messages.at(-1)?.content).toBe('I can help plan that pipeline run.')
+    })
+  })
+
   it('marks error-shaped tool results as failed tool calls', async () => {
     const selectedAgent = agent({ id: 'agent-tools', maxTurns: 3 })
     useAppStore.setState({
