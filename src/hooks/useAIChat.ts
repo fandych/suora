@@ -325,16 +325,24 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       ...(attachments?.length ? { attachments } : {}),
     }
 
+    const getLatestSession = () =>
+      useAppStore.getState().sessions.find((session) => session.id === activeSession.id) ?? null
+    const appendAssistantReply = (assistantReply: Message) => {
+      const latestSession = getLatestSession()
+      const baseMessages = latestSession?.messages ?? prevMessages
+      useAppStore.getState().updateSession(activeSession.id, {
+        messages: [...baseMessages, userMsg, assistantReply],
+        title: baseMessages.length === 0 ? userMessage.slice(0, 30) : (latestSession?.title ?? activeSession.title),
+      })
+      return baseMessages
+    }
     const pushImmediateAssistantReply = (content: string, isError = false) => {
-      store.updateSession(activeSession.id, {
-        messages: [...prevMessages, userMsg, {
+      appendAssistantReply({
           id: generateId('msg'),
           role: 'assistant',
           content,
           timestamp: Date.now(),
           isError,
-        }],
-        title: prevMessages.length === 0 ? userMessage.slice(0, 30) : activeSession.title,
       })
     }
 
@@ -358,10 +366,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         isStreaming: true,
       }
 
-      store.updateSession(activeSession.id, {
-        messages: [...prevMessages, userMsg, assistantMsg],
-        title: prevMessages.length === 0 ? userMessage.slice(0, 30) : activeSession.title,
-      })
+      appendAssistantReply(assistantMsg)
       setActiveStream(activeSession.id, { abortController, messageId: assistantMsg.id })
 
       try {
@@ -644,10 +649,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       },
     }
 
-    store.updateSession(activeSession.id, {
-      messages: [...prevMessages, userMsg, assistantMsg],
-      title: prevMessages.length === 0 ? userMessage.slice(0, 30) : activeSession.title,
-    })
+    const baseMessagesAtSend = appendAssistantReply(assistantMsg)
     setActiveStream(activeSession.id, { abortController, messageId: assistantMsg.id })
 
     const perfStart = performance.now()
@@ -658,7 +660,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       const modelIdentifier = `${model.provider}:${model.modelId}`
 
       // Convert app messages to AI SDK v6 ModelMessage[]
-      const contextMessages = [...prevMessages, userMsg]
+      const contextMessages = [...baseMessagesAtSend, userMsg]
       const modelMessages = buildModelMessages(contextMessages)
       const contextSummary = buildContextSummary(contextMessages)
 
@@ -718,8 +720,15 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       let lastFlush = 0
       const flushToStore = (isFinal: boolean) => {
         const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
-        if (!latest) return
-        if (!latest.messages.some((message) => message.id === assistantMsg.id)) return
+        if (!latest) return false
+        if (!latest.messages.some((message) => message.id === assistantMsg.id)) {
+          logger.warn('[Chat:FlushSkipped] Assistant message was removed while streaming; aborting response', {
+            sessionId: activeSession.id,
+            messageId: assistantMsg.id,
+          })
+          abortController.abort()
+          return false
+        }
         useAppStore.getState().updateSession(activeSession.id, {
           messages: latest.messages.map((message) => message.id === assistantMsg.id
             ? {
@@ -735,6 +744,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
               }
             : message),
         })
+        return true
       }
 
       // Stream inactivity timeout: abort if no events received for 5 minutes
@@ -779,7 +789,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
               // Throttle UI updates for text-delta to avoid state-overwrite races
               const now = Date.now()
               if (now - lastFlush > STREAM_FLUSH_INTERVAL) {
-                flushToStore(false)
+                if (!flushToStore(false)) break
                 lastFlush = now
               }
             }
@@ -799,7 +809,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
             if (!contentParts.some((part) => part.type === 'tool-call' && part.toolCallId === event.toolCallId)) {
               contentParts.push({ type: 'tool-call', toolCallId: event.toolCallId })
             }
-            flushToStore(false)
+            if (!flushToStore(false)) break
             lastFlush = Date.now()
             continue
           }
@@ -853,7 +863,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
                   }
                 : t
             )
-            flushToStore(false)
+            if (!flushToStore(false)) break
             lastFlush = Date.now()
             continue
           }
@@ -885,7 +895,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
                   }
                 : t
             )
-            flushToStore(false)
+            if (!flushToStore(false)) break
             lastFlush = Date.now()
             continue
           }
@@ -914,7 +924,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         const now = Date.now()
         if (now - lastFlush >= STREAM_FLUSH_INTERVAL) {
           lastFlush = now
-          flushToStore(false)
+          if (!flushToStore(false)) break
         }
       }
 

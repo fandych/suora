@@ -257,7 +257,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
   const handleSubmit = () => {
     const text = input.trim()
     if ((!text && !attachments.length) || disabled) return
-    onSend(text, attachments.length ? attachments : undefined)
+    onSend(text, attachments.length ? [...attachments] : undefined)
     setInput('')
     setAttachments([])
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
