@@ -68,9 +68,16 @@ describe('RotatingLogger', () => {
 
     await logger.clearFiles()
 
+    expect(await logger.listFiles()).toHaveLength(0)
+
+    logger.info('after clear')
+    await logger.flush()
+
     const files = await logger.listFiles()
     expect(files).toHaveLength(1)
     expect(files[0]?.active).toBe(true)
-    expect(await logger.readFile(files[0]?.name ?? '')).toBe('')
+    const content = await logger.readFile(files[0]?.name ?? '')
+    expect(content).toContain('after clear')
+    expect(content).not.toContain('before clear')
   })
 })
