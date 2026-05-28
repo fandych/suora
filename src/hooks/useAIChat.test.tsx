@@ -5,9 +5,10 @@ import { useAppStore } from '@/store/appStore'
 import type { Agent, Model, Session } from '@/types'
 
 const streamResponseWithTools = vi.fn()
+const initializeProvider = vi.fn()
 
 vi.mock('@/services/aiService', () => ({
-  initializeProvider: vi.fn(),
+  initializeProvider: (...args: unknown[]) => initializeProvider(...args),
   validateModelConfig: vi.fn(() => ({ valid: true })),
   streamResponseWithTools: (...args: unknown[]) => streamResponseWithTools(...args),
 }))
@@ -58,6 +59,7 @@ describe('useAIChat', () => {
   beforeEach(() => {
     vi.useRealTimers()
     streamResponseWithTools.mockReset()
+    initializeProvider.mockReset()
     localStorage.clear()
     const testModel = model()
     useAppStore.setState({
@@ -108,6 +110,87 @@ describe('useAIChat', () => {
       const sessions = useAppStore.getState().sessions
       expect(sessions.find((item) => item.id === 'session-1')?.messages.at(-1)?.isStreaming).toBe(false)
       expect(sessions.find((item) => item.id === 'session-2')?.messages.at(-1)?.isStreaming).toBe(false)
+    })
+  })
+
+  it('preserves session updates that happen while preparing a send', async () => {
+    initializeProvider.mockImplementationOnce(() => {
+      const current = useAppStore.getState()
+      const target = current.sessions.find((item) => item.id === 'session-1')
+      if (!target) return
+      useAppStore.setState({
+        sessions: current.sessions.map((item) => item.id === target.id
+          ? {
+              ...item,
+              messages: [
+                ...item.messages,
+                {
+                  id: 'external-message',
+                  role: 'assistant',
+                  content: 'external update',
+                  timestamp: Date.now(),
+                },
+              ],
+            }
+          : item),
+      })
+    })
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'reply' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('hello')
+    })
+
+    const messages = useAppStore.getState().sessions[0]?.messages ?? []
+    expect(messages.map((message) => message.id)).toContain('external-message')
+    expect(messages.at(-2)?.role).toBe('user')
+    expect(messages.at(-1)?.content).toBe('reply')
+  })
+
+  it('stops writing stream updates when the assistant message is removed', async () => {
+    let releaseSecondDelta: (() => void) | undefined
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'first' }
+      await new Promise<void>((resolve) => { releaseSecondDelta = resolve })
+      yield { type: 'text-delta', text: 'second' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      void result.current.sendMessage('hello')
+    })
+
+    await waitFor(() => {
+      expect(useAppStore.getState().sessions[0]?.messages.at(-1)?.content).toBe('first')
+    })
+    const assistantId = useAppStore.getState().sessions[0]?.messages.at(-1)?.id
+    expect(assistantId).toBeDefined()
+
+    act(() => {
+      const current = useAppStore.getState()
+      const target = current.sessions[0]
+      if (!target || !assistantId) return
+      useAppStore.setState({
+        sessions: current.sessions.map((item) => item.id === target.id
+          ? { ...item, messages: item.messages.filter((message) => message.id !== assistantId) }
+          : item),
+      })
+    })
+
+    await act(async () => {
+      releaseSecondDelta?.()
+    })
+
+    await waitFor(() => {
+      const messages = useAppStore.getState().sessions[0]?.messages ?? []
+      expect(messages.some((message) => message.id === assistantId)).toBe(false)
+      expect(messages.some((message) => message.content.includes('second'))).toBe(false)
+      expect(result.current.isLoading).toBe(false)
     })
   })
 
