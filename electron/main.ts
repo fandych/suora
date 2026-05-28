@@ -257,6 +257,19 @@ function isJsonTableName(table: unknown): table is JsonTableName {
   return typeof table === 'string' && DB_JSON_TABLES.has(table as JsonTableName)
 }
 
+function isLogLevel(value: unknown): value is LogLevel {
+  return value === 'debug' || value === 'info' || value === 'warn' || value === 'error'
+}
+
+function normalizeIpcLogMessage(value: unknown): string {
+  const text = typeof value === 'string'
+    ? value
+    : value instanceof Error
+      ? value.message
+      : String(value)
+  return text.length <= 10_000 ? text : `${text.slice(0, 10_000)}…[truncated]`
+}
+
 function validateDatabaseKey(key: unknown, label: string): string | null {
   if (typeof key !== 'string' || !key.trim()) return `${label} is required`
   if (key.length > 256) return `${label} is too long`
@@ -2666,20 +2679,25 @@ ipcMain.handle('channel:debugSend', async (_event, channelId: string, mockMessag
 
 // ─── IPC Handlers: Logging ──────────────────────────────────────────
 
-ipcMain.handle('log:write', (_event, level: LogLevel, message: string, meta?: unknown) => {
+ipcMain.handle('log:write', (_event, level: unknown, message: unknown, meta?: unknown) => {
+  if (!isLogLevel(level)) {
+    logger.warn('Rejected renderer log with invalid level', { level })
+    return { error: 'Invalid log level' }
+  }
   const logger = getLogger()
+  const normalizedMessage = normalizeIpcLogMessage(message)
   switch (level) {
     case 'debug':
-      logger.debug(message, meta)
+      logger.debug(normalizedMessage, meta)
       break
     case 'info':
-      logger.info(message, meta)
+      logger.info(normalizedMessage, meta)
       break
     case 'warn':
-      logger.warn(message, meta)
+      logger.warn(normalizedMessage, meta)
       break
     case 'error':
-      logger.error(message, meta)
+      logger.error(normalizedMessage, meta)
       break
   }
   return { success: true }

@@ -1,5 +1,6 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react'
 import { t as translate } from '@/services/i18n'
+import { logger, reportRendererCrash } from '@/services/logger'
 
 interface Props {
   children: ReactNode
@@ -28,7 +29,14 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error('[ErrorBoundary] Uncaught error:', error, errorInfo)
+    const meta = {
+      errorId: this.state.errorId,
+      message: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+    }
+    logger.error('[ErrorBoundary] Uncaught error', meta)
+    void reportRendererCrash(error, 'react:error-boundary', meta)
     this.setState({ errorInfo })
   }
 
