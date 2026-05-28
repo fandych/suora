@@ -2683,7 +2683,7 @@ ipcMain.handle('log:write', (_event, level: unknown, message: unknown, meta?: un
   const logger = getLogger()
   if (!isLogLevel(level)) {
     logger.warn('Rejected renderer log with invalid level', { level })
-    return { error: 'Invalid log level' }
+    return { success: false, error: 'Invalid log level' }
   }
   const normalizedMessage = normalizeIpcLogMessage(message)
   switch (level) {

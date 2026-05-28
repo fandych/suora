@@ -7,8 +7,11 @@ function getElectronInvoke() {
 }
 
 describe('renderer logger', () => {
+  let cleanupRuntimeLogging: (() => void) | null = null
+
   afterEach(() => {
-    initRendererRuntimeLogging()()
+    cleanupRuntimeLogging?.()
+    cleanupRuntimeLogging = null
     vi.clearAllMocks()
   })
 
@@ -42,7 +45,7 @@ describe('renderer logger', () => {
 
   it('captures unhandled renderer errors and promise rejections', () => {
     const invoke = getElectronInvoke()
-    initRendererRuntimeLogging()
+    cleanupRuntimeLogging = initRendererRuntimeLogging()
 
     const runtimeError = new Error('boom')
     window.dispatchEvent(new ErrorEvent('error', {
@@ -53,8 +56,15 @@ describe('renderer logger', () => {
       colno: 34,
     }))
 
-    const rejection = new Event('unhandledrejection') as PromiseRejectionEvent
-    Object.defineProperty(rejection, 'reason', { value: new Error('async boom') })
+    const rejection = typeof PromiseRejectionEvent === 'function'
+      ? new PromiseRejectionEvent('unhandledrejection', {
+        reason: new Error('async boom'),
+        promise: Promise.resolve(),
+      })
+      : new Event('unhandledrejection')
+    if (!('reason' in rejection)) {
+      Object.defineProperty(rejection, 'reason', { value: new Error('async boom') })
+    }
     window.dispatchEvent(rejection)
 
     expect(invoke).toHaveBeenCalledWith('log:write', 'error', 'Unhandled renderer error', expect.objectContaining({
