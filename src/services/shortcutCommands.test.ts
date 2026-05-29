@@ -40,8 +40,8 @@ describe('shortcutCommands', () => {
 
   it('builds a routing prompt for the specialized agent', () => {
     const command = parseShortcutCommand('/pipeline create daily report')
-    expect(command).not.toBeNull()
-    const prompt = buildShortcutCommandPrompt(command!)
+    if (!command) throw new Error('Expected shortcut command to parse')
+    const prompt = buildShortcutCommandPrompt(command)
 
     expect(prompt).toContain('"/pipeline create daily report"')
     expect(prompt).toContain('Resource: pipeline')
