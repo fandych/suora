@@ -43,10 +43,12 @@ describe('toolErrorHandler', () => {
       error: 'Invalid tool input: missing path',
     })).toMatchObject({ scope: 'session', targetId: 'session-1' })
 
-    expect(classifyToolError({
+    const global = classifyToolError({
       toolName: 'web_search',
       error: 'Error: failed',
-    })).toMatchObject({ scope: 'global', targetId: undefined })
+    })
+    expect(global.scope).toBe('global')
+    expect(global).not.toHaveProperty('targetId')
   })
 
   it('normalizes volatile error details into stable fingerprints', () => {

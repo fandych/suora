@@ -84,7 +84,7 @@ function classifyErrorText(error: string): Pick<ToolErrorClassification, 'catego
   }
   if (/sandbox|path blocked|outside allowed|not allowed|permission denied|forbidden/.test(normalized)) {
     return {
-      category: normalized.includes('path') || normalized.includes('sandbox') ? 'path' : 'permission',
+      category: /path blocked|outside allowed/.test(normalized) ? 'path' : 'permission',
       retryable: false,
       hint: 'The tool call was blocked by permissions or sandbox policy.',
       solution: 'Use a path inside the configured workspace/allowed directories, or request permission/settings changes before retrying.',
