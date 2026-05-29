@@ -21,6 +21,8 @@ export function parseChatControlCommand(input: string): ChatControlCommand | nul
     return { type: 'clear', raw: trimmed }
   }
 
+  // Support "user" as an alias for "use" because channel users may type
+  // `/model user x` when asking to use a model.
   const modelMatch = trimmed.match(/^\/model(?:\s+(?:use|user|switch|select|set))?\s+(.+)$/i)
   if (modelMatch?.[1]) {
     const reference = cleanReference(modelMatch[1])

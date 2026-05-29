@@ -324,17 +324,17 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         return
       }
 
-      const reply = controlCommand.type === 'model'
+      const controlResult = controlCommand.type === 'model'
         ? (() => {
             const model = resolveModelControlReference(controlCommand.reference, store.models)
-            if (!model) return `Model not found: ${controlCommand.reference}`
+            if (!model) return { content: `Model not found: ${controlCommand.reference}`, isError: true }
             store.setSelectedModel(model)
             store.updateSession(activeSession.id, { modelId: model.id })
-            return `Switched model to ${model.name}.`
+            return { content: `Switched model to ${model.name}.`, isError: false }
           })()
         : (() => {
             const agent = resolveAgentControlReference(controlCommand.reference, store.agents)
-            if (!agent) return `Agent not found: ${controlCommand.reference}`
+            if (!agent) return { content: `Agent not found: ${controlCommand.reference}`, isError: true }
             const preferredModel = agent.modelId
               ? store.models.find((model) => model.id === agent.modelId && model.enabled)
               : null
@@ -344,13 +344,12 @@ export function useAIChat(options: UseAIChatOptions = {}) {
               agentId: agent.id,
               modelId: preferredModel?.id ?? activeSession.modelId,
             })
-            return `Using agent ${agent.name}.`
+            return { content: `Using agent ${agent.name}.`, isError: false }
           })()
 
-      const latestSession = useAppStore.getState().sessions.find((session) => session.id === activeSession.id) ?? activeSession
       store.updateSession(activeSession.id, {
         messages: [
-          ...latestSession.messages,
+          ...activeSession.messages,
           {
             id: generateId('msg'),
             role: 'user',
@@ -361,14 +360,14 @@ export function useAIChat(options: UseAIChatOptions = {}) {
           {
             id: generateId('msg'),
             role: 'assistant',
-            content: reply,
+            content: controlResult.content,
             timestamp: Date.now(),
-            isError: reply.includes('not found'),
+            isError: controlResult.isError,
           },
         ],
-        title: latestSession.messages.length === 0 ? userMessage.slice(0, 30) : latestSession.title,
+        title: activeSession.messages.length === 0 ? userMessage.slice(0, 30) : activeSession.title,
       })
-      setError(reply.includes('not found') ? reply : null)
+      setError(controlResult.isError ? controlResult.content : null)
       return
     }
 

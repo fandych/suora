@@ -342,7 +342,11 @@ export async function handleChannelMessage(
     }
     // Get the agent configured for this channel
     // Get the agent configured for this channel
-    const currentUser = state.channelUsers[user.id] ?? user
+    const currentUser = state.channelUsers[user.id]
+    if (!currentUser) {
+      logger.warn('Channel user not found after tracking', { userId: user.id })
+      return '抱歉，当前用户上下文不可用。'
+    }
     const agent = state.agents.find((a) => a.id === (currentUser.agentId ?? channel.replyAgentId))
 
     if (!agent) {
