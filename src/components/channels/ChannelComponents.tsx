@@ -92,9 +92,20 @@ export function formatChannelRelativeTime(value: number | undefined, locale: str
   return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(new Date(value))
 }
 
+export function formatChannelAbsoluteTime(value: number | undefined, locale: string, emptyLabel = ''): string {
+  if (!value) return emptyLabel
+
+  return new Intl.DateTimeFormat(locale, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value))
+}
+
 export function normalizeChannelDirection(direction?: string): ChannelMessageDirection {
   const normalized = direction?.trim().toLowerCase()
-  if (normalized === 'outgoing' || normalized === 'send' || normalized === 'sent') return 'outgoing'
+  if (normalized === 'outgoing' || normalized === 'send' || normalized === 'sent' || normalized === 'assistant') return 'outgoing'
   return 'incoming'
 }
 
@@ -105,17 +116,24 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
   const isOutgoing = normalizeChannelDirection(msg.direction) === 'outgoing'
   const statusLabel = msg.status === 'sent'
     ? t('channels.statusSent', 'Sent')
+    : msg.status === 'delivered'
+      ? t('channels.statusDelivered', 'Delivered')
     : msg.status === 'failed'
       ? t('channels.statusFailed', 'Failed')
       : msg.status === 'pending'
         ? t('channels.pending', 'Pending')
         : msg.status
 
-  const incomingBubbleCls = 'bg-surface-2/60 text-text-primary rounded-2xl rounded-bl-sm border border-border/60 shadow-sm'
-  const outgoingBubbleCls = 'bg-gradient-to-br from-accent to-accent-hover text-white rounded-2xl rounded-br-sm shadow-[0_2px_12px_rgba(var(--t-accent-rgb),0.20)]'
+  const senderLabel = msg.senderName || msg.senderId || t('channels.unknownSender', 'Unknown sender')
+  const relativeTime = formatChannelRelativeTime(msg.timestamp, locale)
+  const absoluteTime = formatChannelAbsoluteTime(msg.timestamp, locale)
+
+  const incomingBubbleCls = 'bg-surface-2/68 text-text-primary rounded-3xl rounded-bl-md border border-border/60 shadow-sm'
+  const outgoingBubbleCls = 'bg-linear-to-br from-accent to-accent-hover text-white rounded-3xl rounded-br-md shadow-[0_8px_24px_rgba(var(--t-accent-rgb),0.22)]'
 
   const statusCls =
     msg.status === 'sent' ? 'bg-green-500/15 text-green-400' :
+    msg.status === 'delivered' ? 'bg-blue-500/12 text-blue-400' :
     msg.status === 'failed' ? 'bg-red-500/15 text-red-400' :
     msg.status === 'pending' ? 'bg-yellow-500/15 text-yellow-400' :
     'bg-surface-3 text-text-muted'
@@ -124,30 +142,30 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
     <div className={`group mb-4 flex animate-fade-in ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
       {/* Incoming avatar */}
       {!isOutgoing && (
-        <div className="mr-3 mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-accent/10 bg-linear-to-br from-accent/20 to-accent/5 shadow-sm">
+        <div className="mr-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-accent/10 bg-linear-to-br from-accent/22 via-accent/8 to-transparent shadow-sm">
           <ChannelPlatformIcon platform={msg.platform} size={16} />
         </div>
       )}
 
-      <div className="flex max-w-[78%] flex-col">
-        <div className={`px-3.5 py-2.5 text-[12px] leading-6 ${isOutgoing ? outgoingBubbleCls : incomingBubbleCls}`}>
+      <div className="flex max-w-[82%] flex-col">
+        <div className={`px-4 py-3 text-[12.5px] leading-6 ${isOutgoing ? outgoingBubbleCls : incomingBubbleCls}`}>
           {/* Header: sender info, channel, time */}
           {!isOutgoing && (
-            <div className="mb-2 flex min-w-45 items-center gap-2.5 border-b border-border-subtle/50 pb-1.5">
-              <span className="truncate text-[9px] font-semibold uppercase tracking-wide text-accent/70">
-                {msg.senderName || msg.senderId}
+            <div className="mb-2.5 flex min-w-48 flex-wrap items-center gap-2 border-b border-border-subtle/50 pb-2">
+              <span className="max-w-48 truncate rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent/85">
+                {senderLabel}
               </span>
               {showChannel && (
-                <span className="truncate text-[9px] text-text-muted/60">
+                <span className="max-w-40 truncate rounded-full bg-surface-0/65 px-2 py-0.5 text-[10px] text-text-muted/70">
                   → {showChannel}
                 </span>
               )}
-              <span className="ml-auto shrink-0 text-[9px] text-text-muted/50">{formatChannelRelativeTime(msg.timestamp, locale)}</span>
+              <span title={absoluteTime} className="ml-auto shrink-0 text-[10px] text-text-muted/55">{relativeTime}</span>
             </div>
           )}
 
           {/* Message content with markdown */}
-          <div className={isOutgoing ? 'whitespace-pre-wrap' : 'markdown-body'}>
+          <div className={`${isOutgoing ? 'whitespace-pre-wrap' : 'markdown-body'} wrap-break-word`}>
             {isOutgoing ? msg.content : <ChannelMarkdownContent content={msg.content} />}
           </div>
 
@@ -155,16 +173,18 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
           {!isOutgoing && (msg.status === 'failed' || msg.status === 'pending') && (
             <div className="mt-2 pt-1.5 border-t border-border-subtle/50">
               <span className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${statusCls}`}>{statusLabel}</span>
+              {msg.retryCount ? <span className="ml-2 text-[9px] text-text-muted/60">{t('channels.retryCount', 'Retries: {count}').replace('{count}', String(msg.retryCount))}</span> : null}
             </div>
           )}
         </div>
 
         {/* Actions row below bubble */}
-        <div className={`mt-1 flex h-5 items-center gap-1 px-1 text-[9px] ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
+        <div className={`mt-1.5 flex min-h-5 flex-wrap items-center gap-1.5 px-1 text-[9px] ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
           {isOutgoing && (
             <>
               <span className={`rounded px-1.5 py-0.5 text-[9px] ${statusCls}`}>{statusLabel}</span>
-              <span className="text-text-muted/40">{formatChannelRelativeTime(msg.timestamp, locale)}</span>
+              {msg.retryCount ? <span className="rounded bg-surface-3 px-1.5 py-0.5 text-text-muted">{t('channels.retryCount', 'Retries: {count}').replace('{count}', String(msg.retryCount))}</span> : null}
+              <span title={absoluteTime} className="text-text-muted/45">{relativeTime}</span>
             </>
           )}
           {msg.content && (
@@ -175,7 +195,7 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
 
       {/* Outgoing avatar */}
       {isOutgoing && (
-        <div className="w-8 h-8 rounded-xl bg-accent/15 flex items-center justify-center text-[11px] ml-3 mt-0.5 shrink-0 font-semibold text-accent/80 border border-accent/10">
+        <div className="ml-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-accent/10 bg-accent/15 text-[10px] font-semibold text-accent/80">
           {t('channels.botLabel', 'Bot')}
         </div>
       )}
