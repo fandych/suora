@@ -660,6 +660,7 @@ export function recordToolErrorMemory(
     input?: Record<string, unknown>
     error: unknown
     durationMs?: number
+    toolCallId?: string
     errorSource: ToolErrorSource
   },
 ): void {
@@ -671,7 +672,7 @@ export function recordToolErrorMemory(
     type: 'correction',
     scope: draft.scope,
     createdAt: Date.now(),
-    source: activeSessionId,
+    source: context.source || activeSessionId,
     ...(draft.targetId ? { targetId: draft.targetId } : {}),
     tags: draft.tags,
     confidence: draft.category === 'unknown' ? UNKNOWN_TOOL_ERROR_CONFIDENCE : CLASSIFIED_TOOL_ERROR_CONFIDENCE,
@@ -4667,7 +4668,7 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
     wrapped[name] = tool({
       description: toolDef.description ?? name,
       inputSchema: toolDef.inputSchema,
-      execute: async (args: Record<string, unknown>) => {
+      execute: async (args: Record<string, unknown>, options?: { toolCallId?: string }) => {
         const meta = getToolMeta(name)
         const running = runningCounts.get(name) ?? 0
         const effectiveMode = agentPermissionMode || 'default'
@@ -4688,6 +4689,7 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
           recordToolErrorMemory({
             ...errorContext,
             toolName: name,
+            toolCallId: options?.toolCallId,
             input: args,
             error: busyError,
             errorSource: 'returned',
@@ -4712,6 +4714,7 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
             recordToolErrorMemory({
               ...errorContext,
               toolName: name,
+              toolCallId: options?.toolCallId,
               input: args,
               error: cancelledError,
               durationMs: Math.round(performance.now() - startTime),
@@ -4720,7 +4723,7 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
             return cancelledError
           }
 
-          const executeOriginal = () => (originalExecute as (args: Record<string, unknown>) => Promise<string>)(args)
+          const executeOriginal = () => (originalExecute as (args: Record<string, unknown>, options?: unknown) => Promise<string>)(args, options)
           const result = shouldBypassNestedConfirm || requiresWrapperConfirmation
             ? await runWithToolConfirmationBypass(executeOriginal)
             : await executeOriginal()
@@ -4733,6 +4736,7 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
             recordToolErrorMemory({
               ...errorContext,
               toolName: name,
+              toolCallId: options?.toolCallId,
               input: args,
               error: resultStr,
               durationMs,
@@ -4764,6 +4768,7 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
           recordToolErrorMemory({
             ...errorContext,
             toolName: name,
+            toolCallId: options?.toolCallId,
             input: args,
             error: formattedError,
             durationMs,

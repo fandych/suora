@@ -208,6 +208,7 @@ export function buildToolErrorMemoryDraft(context: ToolErrorContext): ToolErrorM
   const content = [
     '[Tool error solution]',
     `Tool: ${context.toolName}`,
+    context.toolCallId ? `Tool call id: ${context.toolCallId}` : '',
     `Category: ${classification.category}`,
     `Owner: ${ownerLabel}`,
     `Error source: ${context.errorSource ?? 'unknown'}`,
@@ -229,6 +230,7 @@ export function buildToolErrorMemoryDraft(context: ToolErrorContext): ToolErrorM
       `retryable:${classification.retryable ? 'yes' : 'no'}`,
       `fingerprint:${classification.fingerprint}`,
       ...(context.source ? [`source:${context.source}`] : []),
+      ...(context.toolCallId ? [`tool-call:${context.toolCallId}`] : []),
     ],
   }
 }
