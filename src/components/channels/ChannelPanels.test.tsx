@@ -78,12 +78,28 @@ describe('ChannelMessageHistory', () => {
     expect(screen.getByText('旧接收消息')).toBeInTheDocument()
     expect(screen.getByText('旧发送消息')).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '接收' }))
+    await user.click(screen.getByRole('button', { name: /接收/ }))
     expect(screen.getByText('旧接收消息')).toBeInTheDocument()
     expect(screen.queryByText('旧发送消息')).not.toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: '发送' }))
+    await user.click(screen.getByRole('button', { name: /发送/ }))
     expect(screen.getByText('旧发送消息')).toBeInTheDocument()
     expect(screen.queryByText('旧接收消息')).not.toBeInTheDocument()
+  })
+
+  it('searches channel messages by content and can reset filters', async () => {
+    const user = userEvent.setup()
+
+    render(<ChannelMessageHistory channelId="channel-1" />)
+
+    await user.type(screen.getByPlaceholderText('搜索内容、发送者、状态或渠道…'), '接收')
+
+    expect(screen.getByText('旧接收消息')).toBeInTheDocument()
+    expect(screen.queryByText('旧发送消息')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '重置筛选' }))
+
+    expect(screen.getByText('旧接收消息')).toBeInTheDocument()
+    expect(screen.getByText('旧发送消息')).toBeInTheDocument()
   })
 })

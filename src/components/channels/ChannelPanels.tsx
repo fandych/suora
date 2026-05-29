@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/appStore'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { ChannelPlatformIcon, getPlatformDisplayName } from './ChannelIcons'
-import { ChannelMessageBubble, formatChannelRelativeTime, normalizeChannelDirection } from './ChannelComponents'
+import { ChannelMessageBubble, formatChannelAbsoluteTime, formatChannelRelativeTime, normalizeChannelDirection } from './ChannelComponents'
 
 function PanelShell({
   eyebrow,
@@ -71,10 +71,11 @@ function StatusPill({ children, tone = 'neutral' }: { children: ReactNode; tone?
 // ─── Channel Message History Panel ─────────────────────────────────
 
 export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
-  const { t } = useI18n()
+  const { t, locale } = useI18n()
   const { channelMessages, channels, channelUsers, clearChannelMessages } = useAppStore()
   const [filter, setFilter] = useState<'all' | 'incoming' | 'outgoing'>('all')
   const [userFilter, setUserFilter] = useState<string>('all') // 'all' or a senderId
+  const [query, setQuery] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   const channelSenders = useMemo(
@@ -82,26 +83,50 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
     [channelId, channelUsers],
   )
 
-  const filtered = useMemo(
-    () => channelMessages
-      .filter((message) => (!channelId || message.channelId === channelId))
-      .filter((message) => filter === 'all' || normalizeChannelDirection(message.direction) === filter)
-      .filter((message) => userFilter === 'all' || message.senderId === userFilter)
-      .sort((left, right) => left.timestamp - right.timestamp),
-    [channelId, channelMessages, filter, userFilter],
-  )
-
-  const totalMessages = useMemo(
-    () => channelMessages.filter((message) => !channelId || message.channelId === channelId).length,
+  const scopedMessages = useMemo(
+    () => channelMessages.filter((message) => !channelId || message.channelId === channelId),
     [channelId, channelMessages],
   )
+
+  const getChannel = useCallback((id: string) => channels.find((channel) => channel.id === id), [channels])
+
+  const directionCounts = useMemo(() => scopedMessages.reduce(
+    (counts, message) => {
+      counts[normalizeChannelDirection(message.direction)] += 1
+      return counts
+    },
+    { incoming: 0, outgoing: 0 },
+  ), [scopedMessages])
+
+  const normalizedQuery = query.trim().toLowerCase()
+  const filtered = useMemo(
+    () => scopedMessages
+      .filter((message) => filter === 'all' || normalizeChannelDirection(message.direction) === filter)
+      .filter((message) => userFilter === 'all' || message.senderId === userFilter)
+      .filter((message) => {
+        if (!normalizedQuery) return true
+        const channelName = getChannel(message.channelId)?.name || ''
+        return [
+          message.content,
+          message.senderName,
+          message.senderId,
+          channelName,
+          message.status,
+          normalizeChannelDirection(message.direction),
+        ].some((value) => value?.toLowerCase().includes(normalizedQuery))
+      })
+      .sort((left, right) => left.timestamp - right.timestamp),
+    [filter, getChannel, normalizedQuery, scopedMessages, userFilter],
+  )
+
+  const totalMessages = scopedMessages.length
 
   const selectedChannel = useMemo(
     () => channelId ? channels.find((channel) => channel.id === channelId) : undefined,
     [channelId, channels],
   )
 
-  const getChannel = useCallback((id: string) => channels.find((channel) => channel.id === id), [channels])
+  const latestMessage = filtered.at(-1)
 
   // Auto-scroll to the latest visible item when the channel receives new messages.
   const prevMsgCountRef = useRef(totalMessages)
@@ -128,13 +153,25 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
           </button>
         }
       >
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           <PanelStat label={t('channels.messages', 'Messages')} value={String(totalMessages)} accent />
           <PanelStat label={t('channels.filtered', 'Filtered')} value={String(filtered.length)} />
           <PanelStat label={t('channels.users', 'Users')} value={String(channelSenders.length)} />
+          <PanelStat label={t('channels.latest', 'Latest')} value={latestMessage ? formatChannelRelativeTime(latestMessage.timestamp, locale) : t('channels.noActivityYet', 'No activity yet')} />
         </div>
 
-        <div className="mt-5 flex flex-wrap gap-2">
+        <div className="mt-5 grid gap-3 xl:grid-cols-[minmax(220px,1fr)_auto]">
+          <label className="relative block">
+            <span className="sr-only">{t('channels.searchMessages', 'Search messages')}</span>
+            <IconifyIcon name="ui-search" size={15} color="currentColor" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('channels.searchMessagesPlaceholder', 'Search content, sender, status, or channel…')}
+              className="w-full rounded-2xl border border-border-subtle/55 bg-surface-0/72 py-2.5 pl-9 pr-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2 xl:justify-end">
           {(['all', 'incoming', 'outgoing'] as const).map((value) => (
             <button
               key={value}
@@ -142,7 +179,11 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
               onClick={() => setFilter(value)}
               className={`rounded-2xl border px-3.5 py-2 text-[10px] font-semibold transition-colors ${filter === value ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}
             >
-              {value === 'all' ? t('channels.filterAll', 'All') : value === 'incoming' ? t('channels.filterIncoming', 'Incoming') : t('channels.filterOutgoing', 'Outgoing')}
+              {value === 'all'
+                ? `${t('channels.filterAll', 'All')} · ${totalMessages}`
+                : value === 'incoming'
+                  ? `${t('channels.filterIncoming', 'Incoming')} · ${directionCounts.incoming}`
+                  : `${t('channels.filterOutgoing', 'Outgoing')} · ${directionCounts.outgoing}`}
             </button>
           ))}
           {channelSenders.length > 1 && (
@@ -164,6 +205,16 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
               </select>
             </>
           )}
+          {(query || filter !== 'all' || userFilter !== 'all') && (
+            <button
+              type="button"
+              onClick={() => { setQuery(''); setFilter('all'); setUserFilter('all') }}
+              className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3.5 py-2 text-[10px] font-semibold text-text-muted transition-colors hover:bg-surface-2 hover:text-text-secondary"
+            >
+              {t('channels.resetFilters', 'Reset filters')}
+            </button>
+          )}
+          </div>
         </div>
       </PanelShell>
 
@@ -171,18 +222,30 @@ export function ChannelMessageHistory({ channelId }: { channelId?: string }) {
         {filtered.length === 0 ? (
           <EmptyPanelState
             icon="action-chat"
-            title={t('channels.noMessagesYet', 'No messages yet')}
-            description={t('channels.messagesAppearHere', 'Messages from connected channels will appear here.')}
+            title={totalMessages === 0 ? t('channels.noMessagesYet', 'No messages yet') : t('channels.noMatchingMessages', 'No matching messages')}
+            description={totalMessages === 0 ? t('channels.messagesAppearHere', 'Messages from connected channels will appear here.') : t('channels.adjustMessageFilters', 'Adjust the search, direction, or sender filter to widen this stream.')}
           />
         ) : (
           <div className="space-y-2.5">
-            {filtered.map((msg) => (
-              <ChannelMessageBubble
-                key={msg.id}
-                msg={msg}
-                showChannel={!channelId ? (getChannel(msg.channelId)?.name || msg.channelId) : undefined}
-              />
-            ))}
+            {filtered.map((msg, index) => {
+              const previous = filtered[index - 1]
+              const showDivider = !previous || new Date(previous.timestamp).toDateString() !== new Date(msg.timestamp).toDateString()
+              return (
+                <div key={msg.id}>
+                  {showDivider && (
+                    <div className="sticky top-0 z-10 my-3 flex justify-center">
+                      <span className="rounded-full border border-border-subtle/55 bg-surface-1/90 px-3 py-1 text-[10px] font-medium text-text-muted shadow-sm backdrop-blur">
+                        {formatChannelAbsoluteTime(msg.timestamp, locale)}
+                      </span>
+                    </div>
+                  )}
+                  <ChannelMessageBubble
+                    msg={msg}
+                    showChannel={!channelId ? (getChannel(msg.channelId)?.name || msg.channelId) : undefined}
+                  />
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -330,6 +393,8 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
   const [selectedChannelId, setSelectedChannelId] = useState(defaultChannelId || channels[0]?.id || '')
   const [mockMessage, setMockMessage] = useState('')
   const [debugLog, setDebugLog] = useState<Array<{ time: string; text: string; tone: 'info' | 'success' | 'error' }>>([])
+  const [logQuery, setLogQuery] = useState('')
+  const [logToneFilter, setLogToneFilter] = useState<'all' | 'info' | 'success' | 'error'>('all')
   const [sending, setSending] = useState(false)
 
   useEffect(() => {
@@ -345,6 +410,15 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
     () => debugLog.filter((entry) => entry.tone === 'error').length,
     [debugLog],
   )
+
+  const filteredLog = useMemo(() => {
+    const normalized = logQuery.trim().toLowerCase()
+    return debugLog.filter((entry) => {
+      const toneMatches = logToneFilter === 'all' || entry.tone === logToneFilter
+      const queryMatches = !normalized || entry.text.toLowerCase().includes(normalized) || entry.time.toLowerCase().includes(normalized) || entry.tone.includes(normalized)
+      return toneMatches && queryMatches
+    })
+  }, [debugLog, logQuery, logToneFilter])
 
   const sendMock = async () => {
     if (!selectedChannelId || !mockMessage.trim()) return
@@ -430,6 +504,33 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
             {sending ? t('common.sending', 'Sending…') : t('common.send', 'Send')}
           </button>
         </div>
+
+        {debugLog.length > 0 && (
+          <div className="mt-3 grid gap-3 xl:grid-cols-[minmax(220px,1fr)_auto]">
+            <label className="relative block">
+              <span className="sr-only">{t('channels.searchDebugLog', 'Search debug log')}</span>
+              <IconifyIcon name="ui-search" size={15} color="currentColor" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55" />
+              <input
+                value={logQuery}
+                onChange={(event) => setLogQuery(event.target.value)}
+                placeholder={t('channels.searchDebugLogPlaceholder', 'Search local trace…')}
+                className="w-full rounded-2xl border border-border-subtle/55 bg-surface-0/72 py-2.5 pl-9 pr-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"
+              />
+            </label>
+            <div className="flex flex-wrap gap-2 xl:justify-end">
+              {(['all', 'info', 'success', 'error'] as const).map((tone) => (
+                <button
+                  key={tone}
+                  type="button"
+                  onClick={() => setLogToneFilter(tone)}
+                  className={`rounded-2xl border px-3.5 py-2 text-[10px] font-semibold transition-colors ${logToneFilter === tone ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}
+                >
+                  {tone === 'all' ? t('channels.filterAll', 'All') : tone === 'info' ? t('channels.logInfo', 'Info') : tone === 'success' ? t('channels.logSuccess', 'Success') : t('channels.logError', 'Error')}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </PanelShell>
 
       <div className="min-h-0 flex-1 overflow-y-auto rounded-4xl border border-border-subtle/55 bg-surface-0/35 p-4 shadow-[0_12px_28px_rgba(15,23,42,0.05)]">
@@ -439,13 +540,22 @@ export function ChannelDebugPanel({ defaultChannelId }: { defaultChannelId?: str
             title={t('channels.debugLogEmpty', 'Debug log will appear here')}
             description={t('channels.debugLogEmptyHint', 'Send a mock message to the selected channel and the local execution trace will start filling this panel.')}
           />
+        ) : filteredLog.length === 0 ? (
+          <EmptyPanelState
+            icon="ui-search"
+            title={t('channels.noMatchingLogs', 'No matching log entries')}
+            description={t('channels.adjustLogFilters', 'Adjust the trace search or severity filter to show more local events.')}
+          />
         ) : (
           <div className="space-y-2 font-mono text-xs">
-            {debugLog.map((entry, index) => (
-              <div key={`${entry.time}-${index}`} className="rounded-2xl border border-border-subtle/45 bg-surface-2/55 px-4 py-3">
-                <div className="flex gap-3">
-                  <span className="shrink-0 text-text-muted">[{entry.time}]</span>
-                  <span className={entry.tone === 'error' ? 'text-red-400' : entry.tone === 'success' ? 'text-green-400' : 'text-text-secondary'}>
+            {filteredLog.map((entry, index) => (
+              <div key={`${entry.time}-${index}`} className={`rounded-2xl border px-4 py-3 ${entry.tone === 'error' ? 'border-red-500/18 bg-red-500/8' : entry.tone === 'success' ? 'border-green-500/18 bg-green-500/8' : 'border-border-subtle/45 bg-surface-2/55'}`}>
+                <div className="flex flex-wrap items-start gap-3">
+                  <span className="shrink-0 rounded bg-surface-0/60 px-1.5 py-0.5 text-text-muted">[{entry.time}]</span>
+                  <span className={`shrink-0 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] ${entry.tone === 'error' ? 'bg-red-500/12 text-red-400' : entry.tone === 'success' ? 'bg-green-500/12 text-green-400' : 'bg-accent/10 text-accent'}`}>
+                    {entry.tone}
+                  </span>
+                  <span className={`min-w-0 flex-1 wrap-break-word ${entry.tone === 'error' ? 'text-red-400' : entry.tone === 'success' ? 'text-green-400' : 'text-text-secondary'}`}>
                     {entry.text}
                   </span>
                 </div>
