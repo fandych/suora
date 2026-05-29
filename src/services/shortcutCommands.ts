@@ -64,7 +64,7 @@ const AGENT_BY_DOMAIN: Record<ShortcutCommandDomain, string> = {
 
 export function parseShortcutCommand(input: string): ShortcutCommand | null {
   const trimmed = input.trim()
-  const match = trimmed.match(/^\/([a-z][\w-]*)(?:\s+([a-z][\w-]*))?(?:\s+([\s\S]*))?$/i)
+  const match = trimmed.match(/^\/([a-z][\w-]*)(?:\s+([a-z][\w-]*))?(?:\s+([\s\S]*))?$/)
   if (!match) return null
 
   const domain = DOMAIN_ALIASES[match[1].toLowerCase()]
