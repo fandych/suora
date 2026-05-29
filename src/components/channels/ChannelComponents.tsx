@@ -129,7 +129,7 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
   const absoluteTime = formatChannelAbsoluteTime(msg.timestamp, locale)
 
   const incomingBubbleCls = 'bg-surface-2/68 text-text-primary rounded-3xl rounded-bl-md border border-border/60 shadow-sm'
-  const outgoingBubbleCls = 'bg-linear-to-br from-accent to-accent-hover text-white rounded-3xl rounded-br-md shadow-[0_8px_24px_rgba(var(--t-accent-rgb),0.22)]'
+  const outgoingBubbleCls = 'bg-gradient-to-br from-accent to-accent-hover text-white rounded-3xl rounded-br-md shadow-[0_8px_24px_rgba(var(--t-accent-rgb),0.22)]'
 
   const statusCls =
     msg.status === 'sent' ? 'bg-green-500/15 text-green-400' :
@@ -142,7 +142,7 @@ export function ChannelMessageBubble({ msg, showChannel }: { msg: ChannelHistory
     <div className={`group mb-4 flex animate-fade-in ${isOutgoing ? 'justify-end' : 'justify-start'}`}>
       {/* Incoming avatar */}
       {!isOutgoing && (
-        <div className="mr-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-accent/10 bg-linear-to-br from-accent/22 via-accent/8 to-transparent shadow-sm">
+        <div className="mr-3 mt-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-accent/10 bg-gradient-to-br from-accent/22 via-accent/8 to-transparent shadow-sm">
           <ChannelPlatformIcon platform={msg.platform} size={16} />
         </div>
       )}
