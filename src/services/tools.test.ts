@@ -74,6 +74,47 @@ describe('builtin tool guidance', () => {
     }
   })
 
+  it('stores classified tool errors as deduplicated session memories', async () => {
+    const liveState: Record<string, unknown> = {
+      workspacePath: '/workspace',
+      activeSessionId: 'session-1',
+      sessions: [{ id: 'session-1', memories: [] }],
+      agents: [],
+      skills: [],
+      toolSecurity: {
+        sandboxMode: 'strict',
+        requireConfirmation: false,
+        allowedDirectories: ['/workspace'],
+        blockedCommands: [],
+      },
+    }
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+    })
+
+    const tools = getToolsForAgent([], [], {
+      allowedTools: ['read_file'],
+      errorContext: {
+        sessionId: 'session-1',
+        source: 'chat',
+      },
+    })
+
+    await expect(tools.read_file.execute?.({ path: '/outside/file.txt' }, {})).resolves.toContain('Path blocked')
+    await expect(tools.read_file.execute?.({ path: '/outside/file.txt' }, {})).resolves.toContain('Path blocked')
+
+    const sessions = liveState.sessions as Array<{ memories?: Array<{ content: string; scope: string; targetId?: string; tags?: string[] }> }>
+    expect(sessions[0].memories).toHaveLength(1)
+    expect(sessions[0].memories?.[0]).toMatchObject({
+      scope: 'session',
+      targetId: 'session-1',
+    })
+    expect(sessions[0].memories?.[0].content).toContain('Tool: read_file')
+    expect(sessions[0].memories?.[0].content).toContain('Recommended fix:')
+    expect(sessions[0].memories?.[0].tags).toEqual(expect.arrayContaining(['tool-error', 'tool:read_file', 'error:path']))
+  })
+
   it('instructs auto-learning agents to store reusable tool failure corrections', () => {
     const prompt = buildSystemPrompt({
       autoLearn: true,

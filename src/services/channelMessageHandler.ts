@@ -383,6 +383,11 @@ export async function handleChannelMessage(
       allowedTools: agent.allowedTools,
       disallowedTools: agent.disallowedTools,
       permissionMode: 'bypassPermissions',
+      errorContext: {
+        agentId: agent.id,
+        skillIds: agent.skills,
+        source: 'channel',
+      },
     })
 
     // Add skill system prompts

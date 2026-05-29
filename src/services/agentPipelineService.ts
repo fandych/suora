@@ -339,6 +339,11 @@ async function buildPipelineExecutionContext(agent: Agent) {
     allowedTools: agent.allowedTools,
     disallowedTools: agent.disallowedTools,
     permissionMode: agent.permissionMode as 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' | undefined,
+    errorContext: {
+      agentId: agent.id,
+      skillIds: agent.skills,
+      source: 'pipeline',
+    },
   })
   const skillPrompts = await getSkillSystemPrompts(agent.skills, allSkills)
   const systemPrompt = buildSystemPrompt({

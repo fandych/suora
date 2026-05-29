@@ -126,6 +126,11 @@ async function executePromptTimer(timerData: ScheduledTask, firedAt: number): Pr
       allowedTools: agent.allowedTools,
       disallowedTools: agent.disallowedTools,
       permissionMode: agent.permissionMode,
+      errorContext: {
+        agentId: agent.id,
+        skillIds: agent.skills,
+        source: 'timer',
+      },
     })
     const skillPrompts = await getSkillSystemPrompts(agent.skills, mergedSkills)
     const systemPrompt = buildSystemPrompt({

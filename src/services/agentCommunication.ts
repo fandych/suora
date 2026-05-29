@@ -166,6 +166,11 @@ export async function delegateToAgent(
       allowedTools: targetAgent.allowedTools,
       disallowedTools: targetAgent.disallowedTools,
       permissionMode: targetAgent.permissionMode as 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions' | undefined,
+      errorContext: {
+        agentId: targetAgent.id,
+        skillIds: targetAgent.skills,
+        source: 'agent-delegation',
+      },
     })
 
     // Build system prompt

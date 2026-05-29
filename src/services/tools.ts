@@ -28,6 +28,7 @@ import { deletePipelineFromDisk, loadPipelinesFromDisk, savePipelineToDisk } fro
 import { validateAgentPipeline } from '@/services/pipelineValidation'
 import { safePathSegment } from '@/utils/pathSegments'
 import { safeParse, safeStringify } from '@/utils/safeJson'
+import { buildToolErrorMemoryDraft, type ToolErrorOwnerContext, type ToolErrorSource } from '@/services/toolErrorHandler'
 
 const OFFICIAL_MARKETPLACE_URL = 'https://raw.githubusercontent.com/suora-market/skills/main/skills.json'
 
@@ -45,6 +46,10 @@ interface PersistedMemoryEntry {
   createdAt: number
   source?: string
   targetId?: string
+  tags?: string[]
+  confidence?: number
+  reviewed?: boolean
+  autoRecall?: boolean
 }
 
 interface PersistedAgentEntry {
@@ -626,6 +631,89 @@ async function writeTodos(key: string, todos: TodoItem[]): Promise<void> {
 }
 
 type BuiltinToolExecute = (args: Record<string, unknown>, options?: unknown) => Promise<unknown> | unknown
+
+function hasToolErrorFingerprint(memories: PersistedMemoryEntry[] | undefined, fingerprint: string): boolean {
+  return (memories ?? []).some((memory) => memory.tags?.includes(`fingerprint:${fingerprint}`))
+}
+
+export function recordToolErrorMemory(
+  context: ToolErrorOwnerContext & {
+    toolName: string
+    input?: Record<string, unknown>
+    error: unknown
+    durationMs?: number
+    errorSource: ToolErrorSource
+  },
+): void {
+  const draft = buildToolErrorMemoryDraft(context)
+  const activeSessionId = context.sessionId || getPersistedStoreState().activeSessionId || 'unknown'
+  const memory: PersistedMemoryEntry = {
+    id: draft.id,
+    content: draft.content,
+    type: 'correction',
+    scope: draft.scope,
+    createdAt: Date.now(),
+    source: activeSessionId,
+    ...(draft.targetId ? { targetId: draft.targetId } : {}),
+    tags: draft.tags,
+    confidence: draft.category === 'unknown' ? 0.5 : 0.75,
+    reviewed: false,
+    autoRecall: true,
+  }
+
+  const wrote = writeStoreState((state) => {
+    if (draft.scope === 'global') {
+      const globalMemories = (state.globalMemories ?? []) as PersistedMemoryEntry[]
+      if (!hasToolErrorFingerprint(globalMemories, draft.fingerprint)) {
+        state.globalMemories = [...globalMemories, memory]
+      }
+      return
+    }
+
+    if (!draft.targetId) return
+
+    if (draft.scope === 'session') {
+      const sessions = (state.sessions ?? []) as PersistedSessionEntry[]
+      state.sessions = sessions.map((session) => {
+        if (session.id !== draft.targetId || hasToolErrorFingerprint(session.memories, draft.fingerprint)) return session
+        return { ...session, memories: [...(session.memories ?? []), memory] }
+      })
+      return
+    }
+
+    if (draft.scope === 'skill') {
+      const skills = (state.skills ?? []) as PersistedSkillEntry[]
+      state.skills = skills.map((skill) => {
+        if (skill.id !== draft.targetId || hasToolErrorFingerprint(skill.memories, draft.fingerprint)) return skill
+        return { ...skill, memories: [...(skill.memories ?? []), memory] }
+      })
+      return
+    }
+
+    const agents = (state.agents ?? []) as PersistedAgentEntry[]
+    state.agents = agents.map((agent) => {
+      if (agent.id !== draft.targetId || hasToolErrorFingerprint(agent.memories, draft.fingerprint)) return agent
+      return { ...agent, memories: [...(agent.memories ?? []), memory] }
+    })
+  })
+
+  if (wrote) {
+    addToIndex(getIndex(), { id: memory.id, content: memory.content })
+    logger.info('[ToolErrorHandler:Stored]', {
+      tool: context.toolName,
+      category: draft.category,
+      scope: draft.scope,
+      targetId: draft.targetId,
+      fingerprint: draft.fingerprint,
+    })
+  } else {
+    logger.warn('[ToolErrorHandler:Skipped] Store unavailable', {
+      tool: context.toolName,
+      scope: draft.scope,
+      targetId: draft.targetId,
+    })
+  }
+}
 
 async function executeBuiltinTool(toolName: string, args: Record<string, unknown>, options?: unknown): Promise<string> {
   const execute = builtinToolDefs[toolName]?.execute as BuiltinToolExecute | undefined
@@ -4546,7 +4634,7 @@ export async function fetchMarketplaceSkills(): Promise<Skill[]> {
  * This is the ONLY place tool execution is instrumented — if a tool
  * returns an error string (not throws), it is still logged as a warning.
  */
-function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string): ToolSet {
+function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorContext: ToolErrorOwnerContext = {}): ToolSet {
   const wrapped: ToolSet = {}
   const runningCounts = new Map<string, number>()
 
@@ -4601,7 +4689,8 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string): ToolSe
           const result = shouldBypassNestedConfirm || requiresWrapperConfirmation
             ? await runWithToolConfirmationBypass(executeOriginal)
             : await executeOriginal()
-          const duration = (performance.now() - startTime).toFixed(0)
+          const durationMs = Math.round(performance.now() - startTime)
+          const duration = String(durationMs)
           const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
           const isErrorResult = typeof result === 'string' && (
             result.startsWith('Error:') ||
@@ -4612,6 +4701,14 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string): ToolSe
           )
 
           if (isErrorResult) {
+            recordToolErrorMemory({
+              ...errorContext,
+              toolName: name,
+              input: args,
+              error: resultStr,
+              durationMs,
+              errorSource: 'returned',
+            })
             logger.warn(`[ToolExec:Fail] ${name} | duration=${duration}ms | returned error`, {
               tool: name,
               durationMs: duration,
@@ -4629,9 +4726,20 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string): ToolSe
 
           return result
         } catch (err) {
-          const duration = (performance.now() - startTime).toFixed(0)
+          const durationMs = Math.round(performance.now() - startTime)
+          const duration = String(durationMs)
           const errorMsg = err instanceof Error ? err.message : String(err)
           const errorStack = err instanceof Error ? err.stack : undefined
+          const formattedError = `Error: ${formatToolError(err)}`
+
+          recordToolErrorMemory({
+            ...errorContext,
+            toolName: name,
+            input: args,
+            error: formattedError,
+            durationMs,
+            errorSource: 'thrown',
+          })
 
           logger.error(`[ToolExec:Error] ${name} | duration=${duration}ms | THREW exception`, {
             tool: name,
@@ -4643,7 +4751,7 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string): ToolSe
 
           // Return formatted error instead of re-throwing so the model can recover
           // (Claude Code pattern: tool errors are surfaced as result strings)
-          return `Error: ${formatToolError(err)}`
+          return formattedError
         } finally {
           const current = runningCounts.get(name) ?? 1
           if (current <= 1) {
@@ -4705,9 +4813,10 @@ export function getToolsForAgent(
     allowedTools?: string[]
     disallowedTools?: string[]
     permissionMode?: 'default' | 'acceptEdits' | 'plan' | 'bypassPermissions'
+    errorContext?: ToolErrorOwnerContext
   } = {},
 ): ToolSet {
-  const { includePluginTools = false, allowedTools, disallowedTools, permissionMode } = options
+  const { includePluginTools = false, allowedTools, disallowedTools, permissionMode, errorContext } = options
   let result: ToolSet = {}
   const runtimeSkillIds = resolveRuntimeSkillIds(agentSkillIds, allSkills)
 
@@ -4759,7 +4868,7 @@ export function getToolsForAgent(
   }
 
   // Wrap every tool with execution-level logging & permission gating
-  return instrumentToolSet(result, permissionMode)
+  return instrumentToolSet(result, permissionMode, errorContext)
 }
 
 /**
