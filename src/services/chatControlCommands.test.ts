@@ -22,6 +22,8 @@ const agents: Agent[] = [
     modelId: 'model-1',
     skills: [],
     enabled: true,
+    memories: [],
+    autoLearn: false,
   },
 ]
 

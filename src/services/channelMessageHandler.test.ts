@@ -130,6 +130,8 @@ describe('channelMessageHandler WeChat XML', () => {
       modelId: 'model-1',
       skills: [],
       enabled: true,
+      memories: [],
+      autoLearn: false,
     }
     useAppStore.setState({
       agents: [testAgent],
