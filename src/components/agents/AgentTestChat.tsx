@@ -93,6 +93,11 @@ export function AgentTestChat({ agent, onClose }: { agent: Agent; onClose: () =>
       allowedTools: agent.allowedTools,
       disallowedTools: agent.disallowedTools,
       permissionMode: agent.permissionMode,
+      errorContext: {
+        agentId: agent.id,
+        skillIds: agent.skills,
+        source: 'agent-test',
+      },
     })
 
     const skillPrompts = await getSkillSystemPrompts(agent.skills, mergedSkills)

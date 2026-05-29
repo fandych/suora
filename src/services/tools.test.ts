@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import type { ToolExecutionOptions } from 'ai'
 import type { Agent, DocumentGroup, DocumentNode, Model, Skill } from '@/types'
 import { delegateToAgent } from '@/services/agentCommunication'
 import { buildSystemPrompt, buildToolHints, builtinToolDefs, fetchMarketplaceSkills, getSkillSystemPrompts, getToolsForAgent, setLiveStoreAccessor, setLiveStoreWriter } from './tools'
@@ -72,6 +73,50 @@ describe('builtin tool guidance', () => {
       const jsonSchema = z.toJSONSchema(definition.inputSchema as z.ZodTypeAny) as { type?: string }
       expect(jsonSchema.type, toolName).toBe('object')
     }
+  })
+
+  it('stores classified tool errors as deduplicated session memories', async () => {
+    const liveState: Record<string, unknown> = {
+      workspacePath: '/workspace',
+      activeSessionId: 'session-1',
+      sessions: [{ id: 'session-1', memories: [] }],
+      agents: [],
+      skills: [],
+      toolSecurity: {
+        sandboxMode: 'strict',
+        requireConfirmation: false,
+        allowedDirectories: ['/workspace'],
+        blockedCommands: [],
+      },
+    }
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+    })
+
+    const tools = getToolsForAgent([], [], {
+      allowedTools: ['read_file'],
+      errorContext: {
+        sessionId: 'session-1',
+        source: 'chat',
+      },
+    })
+
+    const executeReadFile = (input: { path: string }, options: ToolExecutionOptions): Promise<string> =>
+      tools.read_file.execute?.(input as never, options) as Promise<string>
+
+    await expect(executeReadFile({ path: '/outside/file.txt' }, { toolCallId: 'tool-call-1', messages: [] })).resolves.toContain('Path blocked')
+    await expect(executeReadFile({ path: '/outside/file.txt' }, { toolCallId: 'tool-call-2', messages: [] })).resolves.toContain('Path blocked')
+
+    const sessions = liveState.sessions as Array<{ memories?: Array<{ content: string; scope: string; targetId?: string; tags?: string[] }> }>
+    expect(sessions[0].memories).toHaveLength(1)
+    expect(sessions[0].memories?.[0]).toMatchObject({
+      scope: 'session',
+      targetId: 'session-1',
+    })
+    expect(sessions[0].memories?.[0].content).toContain('Tool: read_file')
+    expect(sessions[0].memories?.[0].content).toContain('Recommended fix:')
+    expect(sessions[0].memories?.[0].tags).toEqual(expect.arrayContaining(['tool-error', 'tool:read_file', 'error:path']))
   })
 
   it('instructs auto-learning agents to store reusable tool failure corrections', () => {

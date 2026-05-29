@@ -13,7 +13,7 @@ import { parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
 import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineExecutionPresentation'
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import { t } from '@/services/i18n'
-import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt } from '@/services/tools'
+import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt, recordToolErrorMemory } from '@/services/tools'
 import { logger } from '@/services/logger'
 import { sanitizeToolError } from '@/services/sanitization'
 import { toModelMessages as buildModelMessages, buildContextSummary } from '@/services/chatContext'
@@ -673,6 +673,12 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         allowedTools: sessionAgent.allowedTools,
         disallowedTools: sessionAgent.disallowedTools,
         permissionMode: sessionAgent.permissionMode,
+        errorContext: {
+          sessionId: activeSession.id,
+          agentId: sessionAgent.id,
+          skillIds: sessionAgent.skills,
+          source: 'chat',
+        },
       }) : {}
 
       const skillPrompts = sessionAgent
@@ -878,6 +884,17 @@ export function useAIChat(options: UseAIChatOptions = {}) {
               durationMs: errDuration,
               inputKeys: errMatchingCall?.input ? Object.keys(errMatchingCall.input) : [],
               error: sanitizedError,
+            })
+            recordToolErrorMemory({
+              sessionId: activeSession.id,
+              agentId: sessionAgent?.id,
+              skillIds: sessionAgent?.skills,
+              source: 'chat-stream',
+              toolName: event.toolName,
+              input: errMatchingCall?.input,
+              error: sanitizedError,
+              durationMs: errMatchingCall?.startedAt ? Date.now() - errMatchingCall.startedAt : undefined,
+              errorSource: 'stream',
             })
             currentToolCalls = currentToolCalls.map((t) =>
               t.id === event.toolCallId
