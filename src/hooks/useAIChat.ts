@@ -12,6 +12,7 @@ import { loadPipelineExecutionsFromDisk } from '@/services/pipelineFiles'
 import { parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
 import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineExecutionPresentation'
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
+import { buildShortcutCommandPrompt, parseShortcutCommand } from '@/services/shortcutCommands'
 import { t } from '@/services/i18n'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt, recordToolErrorMemory } from '@/services/tools'
 import { logger } from '@/services/logger'
@@ -306,7 +307,8 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     // either, do nothing — there is nothing to send.
     if ((!userMessage || !userMessage.trim()) && !attachments?.length) return
 
-    const slashPipelineCommand = parseSlashPipelineChatCommand(userMessage)
+    const shortcutCommand = parseShortcutCommand(userMessage)
+    const slashPipelineCommand = shortcutCommand ? null : parseSlashPipelineChatCommand(userMessage)
     const store = useAppStore.getState()
     const activeSession = store.sessions.find((s) => s.id === (targetSessionId ?? store.activeSessionId))
     if (!activeSession) { setError('No active session'); return }
@@ -590,9 +592,11 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     const recommendedAgent = !activeSession.agentId && !selectedAgent
       ? selectBestAgentForTask(userMessage, agents, skills, store.agentPerformance, store.agentSelectionPreferences)
       : null
-    const sessionAgent = activeSession.agentId
+    const shortcutAgent = shortcutCommand ? agents.find((a) => a.id === shortcutCommand.agentId && a.enabled !== false) : null
+    const sessionAgent = shortcutAgent
+      ?? (activeSession.agentId
       ? agents.find((a) => a.id === activeSession.agentId)
-      : (recommendedAgent && recommendedAgent.score >= 20 ? recommendedAgent.agent : (selectedAgent ?? defaultAgent))
+      : (recommendedAgent && recommendedAgent.score >= 20 ? recommendedAgent.agent : (selectedAgent ?? defaultAgent)))
     const model = activeSession.modelId
       ? models.find((m) => m.id === activeSession.modelId)
       : sessionAgent?.modelId
@@ -660,7 +664,10 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       const modelIdentifier = `${model.provider}:${model.modelId}`
 
       // Convert app messages to AI SDK v6 ModelMessage[]
-      const contextMessages = [...contextMessagesAtSend, userMsg]
+      const effectiveUserMsg = shortcutCommand
+        ? { ...userMsg, content: buildShortcutCommandPrompt(shortcutCommand) }
+        : userMsg
+      const contextMessages = [...contextMessagesAtSend, effectiveUserMsg]
       const modelMessages = buildModelMessages(contextMessages)
       const contextSummary = buildContextSummary(contextMessages)
 
