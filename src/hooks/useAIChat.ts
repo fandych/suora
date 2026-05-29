@@ -12,6 +12,7 @@ import { loadPipelineExecutionsFromDisk } from '@/services/pipelineFiles'
 import { parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
 import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineExecutionPresentation'
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
+import { parseChatControlCommand, resolveAgentControlReference, resolveModelControlReference } from '@/services/chatControlCommands'
 import { buildShortcutCommandPrompt, parseShortcutCommand } from '@/services/shortcutCommands'
 import { t } from '@/services/i18n'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt, recordToolErrorMemory } from '@/services/tools'
@@ -312,6 +313,64 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     const store = useAppStore.getState()
     const activeSession = store.sessions.find((s) => s.id === (targetSessionId ?? store.activeSessionId))
     if (!activeSession) { setError('No active session'); return }
+
+    const controlCommand = parseChatControlCommand(userMessage)
+    if (controlCommand) {
+      if (activeStreamsRef.current.has(activeSession.id)) cancelStream(activeSession.id)
+
+      if (controlCommand.type === 'clear') {
+        store.updateSession(activeSession.id, { messages: [] })
+        setError(null)
+        return
+      }
+
+      const reply = controlCommand.type === 'model'
+        ? (() => {
+            const model = resolveModelControlReference(controlCommand.reference, store.models)
+            if (!model) return `Model not found: ${controlCommand.reference}`
+            store.setSelectedModel(model)
+            store.updateSession(activeSession.id, { modelId: model.id })
+            return `Switched model to ${model.name}.`
+          })()
+        : (() => {
+            const agent = resolveAgentControlReference(controlCommand.reference, store.agents)
+            if (!agent) return `Agent not found: ${controlCommand.reference}`
+            const preferredModel = agent.modelId
+              ? store.models.find((model) => model.id === agent.modelId && model.enabled)
+              : null
+            store.setSelectedAgent(agent)
+            if (preferredModel) store.setSelectedModel(preferredModel)
+            store.updateSession(activeSession.id, {
+              agentId: agent.id,
+              modelId: preferredModel?.id ?? activeSession.modelId,
+            })
+            return `Using agent ${agent.name}.`
+          })()
+
+      const latestSession = useAppStore.getState().sessions.find((session) => session.id === activeSession.id) ?? activeSession
+      store.updateSession(activeSession.id, {
+        messages: [
+          ...latestSession.messages,
+          {
+            id: generateId('msg'),
+            role: 'user',
+            content: userMessage,
+            timestamp: Date.now(),
+            ...(attachments?.length ? { attachments } : {}),
+          },
+          {
+            id: generateId('msg'),
+            role: 'assistant',
+            content: reply,
+            timestamp: Date.now(),
+            isError: reply.includes('not found'),
+          },
+        ],
+        title: latestSession.messages.length === 0 ? userMessage.slice(0, 30) : latestSession.title,
+      })
+      setError(reply.includes('not found') ? reply : null)
+      return
+    }
 
     if (activeStreamsRef.current.has(activeSession.id)) {
       if (slashPipelineCommand?.type === 'cancel') cancelStream(activeSession.id)

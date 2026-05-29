@@ -291,6 +291,50 @@ describe('useAIChat', () => {
     expect(JSON.stringify(modelMessages)).toContain('daily report')
   })
 
+  it('handles clear, model, and fixed agent commands without calling the model', async () => {
+    const secondModel: Model = {
+      ...model(),
+      id: 'model-2',
+      name: 'Claude Test',
+      provider: 'anthropic',
+      providerType: 'anthropic',
+      modelId: 'claude-test',
+    }
+    const researchAgent = agent({
+      id: 'agent-research',
+      name: 'Research Agent',
+      modelId: 'model-2',
+    })
+    useAppStore.setState({
+      models: [model(), secondModel],
+      agents: [agent(), researchAgent],
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('/model user Claude Test')
+    })
+
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+    expect(useAppStore.getState().sessions[0]?.modelId).toBe('model-2')
+    expect(useAppStore.getState().sessions[0]?.messages.at(-1)?.content).toBe('Switched model to Claude Test.')
+
+    await act(async () => {
+      await result.current.sendMessage('/agent use $Research Agent')
+    })
+
+    expect(useAppStore.getState().sessions[0]?.agentId).toBe('agent-research')
+    expect(useAppStore.getState().selectedAgent?.id).toBe('agent-research')
+
+    await act(async () => {
+      await result.current.sendMessage('/clear')
+    })
+
+    expect(useAppStore.getState().sessions[0]?.messages).toHaveLength(0)
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+  })
+
   it('marks error-shaped tool results as failed tool calls', async () => {
     const selectedAgent = agent({ id: 'agent-tools', maxTurns: 3 })
     useAppStore.setState({

@@ -981,6 +981,8 @@ export interface ChannelUser {
   firstSeenAt: number      // Timestamp of first interaction
   lastActiveAt: number     // Timestamp of last message
   messageCount: number     // Total messages from this user
+  agentId?: string         // Optional per-user fixed agent selected by channel command
+  modelId?: string         // Optional per-user fixed model selected by channel command
   // Per-user conversation context (recent messages for multi-turn conversations)
   conversationHistory: ChannelUserConversationMessage[]
 }

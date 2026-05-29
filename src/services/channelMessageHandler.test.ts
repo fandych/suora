@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ChannelConfig } from '@/types'
-import { buildWeChatXMLReply, parseWeChatXML, restoreChannelRuntime } from './channelMessageHandler'
+import type { Agent, ChannelConfig, ChannelMessage, Model } from '@/types'
+import { useAppStore } from '@/store/appStore'
+import { buildWeChatXMLReply, handleChannelMessage, parseWeChatXML, restoreChannelRuntime } from './channelMessageHandler'
 
 function createChannel(overrides: Partial<ChannelConfig> = {}): ChannelConfig {
   return {
@@ -22,6 +23,7 @@ function createChannel(overrides: Partial<ChannelConfig> = {}): ChannelConfig {
 describe('channelMessageHandler WeChat XML', () => {
   beforeEach(() => {
     vi.mocked(window.electron.invoke).mockReset()
+    localStorage.clear()
   })
 
   it('parses well-formed WeChat XML via DOM parsing', () => {
@@ -98,5 +100,63 @@ describe('channelMessageHandler WeChat XML', () => {
 
     expect(window.electron.invoke).toHaveBeenCalledWith('channel:status')
     expect(window.electron.invoke).not.toHaveBeenCalledWith('channel:start')
+  })
+
+  it('handles channel control commands for clearing context and fixing model or agent', async () => {
+    const channel = createChannel()
+    const message: ChannelMessage = {
+      id: 'msg-1',
+      channelId: channel.id,
+      platform: channel.platform,
+      senderId: 'user-1',
+      senderName: 'User One',
+      content: '/clear',
+      timestamp: Date.now(),
+      messageType: 'text',
+    }
+    const testModel: Model = {
+      id: 'model-1',
+      name: 'GPT Test',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-test',
+      apiKey: 'test-key',
+      enabled: true,
+    }
+    const testAgent: Agent = {
+      id: 'agent-1',
+      name: 'Research Agent',
+      systemPrompt: 'Research',
+      modelId: 'model-1',
+      skills: [],
+      enabled: true,
+    }
+    useAppStore.setState({
+      agents: [testAgent],
+      models: [testModel],
+      selectedModel: testModel,
+      channelUsers: {
+        [`${channel.id}:user-1`]: {
+          id: `${channel.id}:user-1`,
+          channelId: channel.id,
+          senderId: 'user-1',
+          senderName: 'User One',
+          platform: channel.platform,
+          firstSeenAt: Date.now(),
+          lastActiveAt: Date.now(),
+          messageCount: 1,
+          conversationHistory: [{ role: 'user', content: 'old context', timestamp: Date.now() }],
+        },
+      },
+    })
+
+    await expect(handleChannelMessage(channel, message)).resolves.toBe('上下文已清除。')
+    expect(useAppStore.getState().channelUsers[`${channel.id}:user-1`]?.conversationHistory).toEqual([])
+
+    await expect(handleChannelMessage(channel, { ...message, id: 'msg-2', content: '/model user GPT Test' })).resolves.toBe('已切换模型：GPT Test')
+    expect(useAppStore.getState().channelUsers[`${channel.id}:user-1`]?.modelId).toBe('model-1')
+
+    await expect(handleChannelMessage(channel, { ...message, id: 'msg-3', content: '/agent use $Research Agent' })).resolves.toBe('已固定使用 Agent：Research Agent')
+    expect(useAppStore.getState().channelUsers[`${channel.id}:user-1`]?.agentId).toBe('agent-1')
   })
 })
