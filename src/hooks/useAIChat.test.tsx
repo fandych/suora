@@ -259,6 +259,38 @@ describe('useAIChat', () => {
     })
   })
 
+  it('routes shortcut creation commands through the matching builder agent and tools', async () => {
+    const pipelineBuilder = agent({
+      id: 'builtin-pipeline-builder',
+      name: 'Pipeline builder',
+      systemPrompt: 'Build pipelines',
+      allowedTools: ['pipeline_list', 'pipeline_add', 'pipeline_update', 'pipeline_remove'],
+      maxTurns: 5,
+    })
+    const defaultAgent = agent()
+    useAppStore.setState({
+      agents: [defaultAgent, pipelineBuilder],
+    })
+
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'pipeline created' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('/pipeline create daily report')
+    })
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+    const [, modelMessages, options] = streamResponseWithTools.mock.calls[0] ?? []
+    expect(options.systemPrompt).toContain('Build pipelines')
+    expect(Object.keys(options.tools)).toEqual(expect.arrayContaining(['pipeline_add', 'pipeline_list']))
+    expect(JSON.stringify(modelMessages)).toContain('Resource: pipeline')
+    expect(JSON.stringify(modelMessages)).toContain('Action: create')
+    expect(JSON.stringify(modelMessages)).toContain('daily report')
+  })
+
   it('marks error-shaped tool results as failed tool calls', async () => {
     const selectedAgent = agent({ id: 'agent-tools', maxTurns: 3 })
     useAppStore.setState({

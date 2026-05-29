@@ -86,6 +86,7 @@ export const PIPELINE_BUILDER_AGENT_ID = 'builtin-pipeline-builder'
 export const TIMER_BUILDER_AGENT_ID = 'builtin-timer-builder'
 export const DOCUMENT_EDITOR_AGENT_ID = 'builtin-document-editor'
 export const AGENT_BUILDER_AGENT_ID = 'builtin-agent-builder'
+export const CHANNEL_BUILDER_AGENT_ID = 'builtin-channel-builder'
 
 const LEGACY_PIPELINE_BUILDER_AGENT_NAME = ['Pipeline builder', '流水线编排']
 const LEGACY_PIPELINE_BUILDER_AGENT_WHEN_TO_USE = [
@@ -141,6 +142,20 @@ const LEGACY_DOCUMENT_EDITOR_AGENT_GREETING = [
 const LEGACY_DOCUMENT_EDITOR_AGENT_SYSTEM_PROMPT = [
   'You are Suora\'s document editor. Your job is to create and revise saved documents inside the Documents module. When the user wants a result saved as a document, do not stop at a chat reply. Use list_documents and read_document to inspect existing notes, then use create_document or update_document to write the requested content into the workspace. Before any mutation, briefly summarize the document title, location, and content changes you plan to apply. If the target document or destination is unclear, ask a short clarifying question.',
   '你是 Suora 的文档编辑助手。你的职责是在文档模块中创建和修订已保存文档。当用户希望结果被保存成文档时，不要只停留在聊天回复。先使用 list_documents 和 read_document 检查现有笔记，再使用 create_document 或 update_document 把要求的内容写入工作区。在执行任何增删改之前，先简要总结你将要应用的文档标题、位置和内容变更。如果目标文档或保存位置不明确，先提出一个简短的澄清问题。',
+]
+
+const LEGACY_CHANNEL_BUILDER_AGENT_NAME = ['Channel builder', '渠道编排']
+const LEGACY_CHANNEL_BUILDER_AGENT_WHEN_TO_USE = [
+  'Use inside the Channels module to create, inspect, update, or remove channel integrations and keep the work focused on channel configuration.',
+  '在渠道模块中使用，用来创建、检查、更新或删除渠道集成，并把重点放在渠道配置上。',
+]
+const LEGACY_CHANNEL_BUILDER_AGENT_GREETING = [
+  'Ready to build channels.',
+  '已准备好创建渠道。',
+]
+const LEGACY_CHANNEL_BUILDER_AGENT_SYSTEM_PROMPT = [
+  'You are Suora\'s channel builder. Your job is to create, inspect, update, or remove saved channel integrations inside the Channels module. Use channel_list, channel_add, channel_update, and channel_remove when needed. Before any mutation, briefly summarize the channel fields you are about to apply. If credentials, platform, target agent, or connection details are missing, ask a short clarifying question. Never invent secrets.',
+  '你是 Suora 的渠道编排助手。你的职责是在渠道模块中创建、检查、更新或删除已保存的渠道集成。需要时使用 channel_list、channel_add、channel_update 和 channel_remove。在执行任何增删改之前，先简要总结你将要应用的渠道字段。如果凭据、平台、目标 Agent 或连接细节缺失，先提出一个简短的澄清问题。不要编造密钥。',
 ]
 
 function buildDefaultAgent(): Agent {
@@ -234,6 +249,18 @@ function localizeBuiltinAgent(agent: Agent): Agent {
     }
   }
 
+  if (agent.id === CHANNEL_BUILDER_AGENT_ID) {
+    const localized = buildChannelBuilderAgent()
+    return {
+      ...localized,
+      ...agent,
+      name: shouldRefreshBuiltinField(agent.name, LEGACY_CHANNEL_BUILDER_AGENT_NAME) ? localized.name : agent.name,
+      whenToUse: shouldRefreshBuiltinField(agent.whenToUse, LEGACY_CHANNEL_BUILDER_AGENT_WHEN_TO_USE) ? localized.whenToUse : agent.whenToUse,
+      systemPrompt: shouldRefreshBuiltinField(agent.systemPrompt, LEGACY_CHANNEL_BUILDER_AGENT_SYSTEM_PROMPT) ? localized.systemPrompt : agent.systemPrompt,
+      greeting: shouldRefreshBuiltinField(agent.greeting, LEGACY_CHANNEL_BUILDER_AGENT_GREETING) ? localized.greeting : agent.greeting,
+    }
+  }
+
   return agent
 }
 
@@ -319,6 +346,26 @@ function buildDocumentEditorAgent(): Agent {
 
 const DOCUMENT_EDITOR_AGENT: Agent = buildDocumentEditorAgent()
 
+function buildChannelBuilderAgent(): Agent {
+  return {
+    ...buildProfessionalAgent(
+      CHANNEL_BUILDER_AGENT_ID,
+      t('agents.channelBuilder', 'Channel builder'),
+      'agent-robot',
+      '#0891B2',
+      t('agents.channelBuilderWhenToUse', 'Use inside the Channels module to create, inspect, update, or remove channel integrations and keep the work focused on channel configuration.'),
+      t('agents.channelBuilderSystemPrompt', 'You are Suora\'s channel builder. Your job is to create, inspect, update, or remove saved channel integrations inside the Channels module. Use channel_list, channel_add, channel_update, and channel_remove when needed. Before any mutation, briefly summarize the channel fields you are about to apply. If credentials, platform, target agent, or connection details are missing, ask a short clarifying question. Never invent secrets.'),
+      [],
+      'acceptEdits',
+      0.25,
+    ),
+    allowedTools: ['channel_list', 'channel_add', 'channel_update', 'channel_remove', 'agent_list'],
+    greeting: t('agents.channelBuilderGreeting', 'Ready to build channels.'),
+  }
+}
+
+const CHANNEL_BUILDER_AGENT: Agent = buildChannelBuilderAgent()
+
 function buildProfessionalAgent(
   id: string,
   name: string,
@@ -361,6 +408,7 @@ const BUILTIN_AGENTS: Agent[] = [
   PIPELINE_BUILDER_AGENT,
   TIMER_BUILDER_AGENT,
   DOCUMENT_EDITOR_AGENT,
+  CHANNEL_BUILDER_AGENT,
   buildProfessionalAgent(
     'builtin-code-expert',
     'Code Expert',

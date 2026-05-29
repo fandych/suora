@@ -8,7 +8,7 @@
 
 import { tool, type ToolSet } from 'ai'
 import { z } from 'zod'
-import type { Agent, AgentPipeline, AgentPipelineBudget, AgentPipelineStep, AgentPipelineVariable, DocumentFolder, DocumentGroup, DocumentItem, DocumentNode, MemoryScope, Model, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
+import type { Agent, AgentPipeline, AgentPipelineBudget, AgentPipelineStep, AgentPipelineVariable, ChannelConfig, ChannelConnectionMode, ChannelPlatform, DocumentFolder, DocumentGroup, DocumentItem, DocumentNode, MemoryScope, Model, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
 import { getPluginTools } from '@/services/pluginSystem'
 import { logger } from '@/services/logger'
 import { serializeSkillToMarkdown } from '@/services/skillRegistry'
@@ -967,6 +967,40 @@ function resolvePipelineReference(
   }
 
   return { error: `Pipeline not found: ${trimmedName}` }
+}
+
+function resolveChannelReference(
+  channels: ChannelConfig[],
+  channelId?: string,
+  channelName?: string,
+): { channel?: ChannelConfig; error?: string } {
+  const trimmedId = channelId?.trim()
+  const trimmedName = channelName?.trim()
+
+  if (trimmedId) {
+    const byId = channels.find((channel) => channel.id === trimmedId)
+    if (byId) return { channel: byId }
+    return { error: `Channel not found: ${trimmedId}` }
+  }
+
+  if (!trimmedName) {
+    return { error: 'Provide channel_id or channel_name.' }
+  }
+
+  const lowerName = trimmedName.toLowerCase()
+  const exactMatches = channels.filter((channel) => channel.name.toLowerCase() === lowerName)
+  if (exactMatches.length === 1) return { channel: exactMatches[0] }
+  if (exactMatches.length > 1) {
+    return { error: `Multiple channels match the name "${trimmedName}". Use channel_id instead.` }
+  }
+
+  const partialMatches = channels.filter((channel) => channel.name.toLowerCase().includes(lowerName))
+  if (partialMatches.length === 1) return { channel: partialMatches[0] }
+  if (partialMatches.length > 1) {
+    return { error: `Multiple channels partially match "${trimmedName}". Use channel_id instead.` }
+  }
+
+  return { error: `Channel not found: ${trimmedName}` }
 }
 
 function formatPipelineIssues(pipeline: Pick<AgentPipeline, 'name' | 'steps' | 'variables' | 'budget'>, agents: Agent[], models: Model[]): string | null {
@@ -3119,6 +3153,196 @@ export const builtinToolDefs: ToolSet = {
 
   // ─── Channel Integration Tools ──────────────────────────────────────
 
+  channel_list: tool({
+    description: 'List saved channel integrations and their configuration summary. Use this before updating or deleting a channel when you need the exact id.',
+    inputSchema: z.object({
+      query: z.string().optional().describe('Optional case-insensitive filter applied to channel id, name, platform, and reply agent'),
+    }),
+    execute: async ({ query }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const channels = (state.channels || []) as ChannelConfig[]
+        const agents = (state.agents || []) as Agent[]
+        const agentNameById = new Map(agents.map((agent) => [agent.id, agent.name]))
+        const keyword = query?.trim().toLowerCase()
+        const filtered = keyword
+          ? channels.filter((channel) => [channel.id, channel.name, channel.platform, channel.customPlatformName ?? '', agentNameById.get(channel.replyAgentId) ?? ''].join(' ').toLowerCase().includes(keyword))
+          : channels
+
+        if (filtered.length === 0) return keyword ? `No channels found matching "${query}".` : 'No saved channels found.'
+
+        return JSON.stringify(filtered.map((channel) => ({
+          id: channel.id,
+          name: channel.name,
+          platform: channel.platform,
+          customPlatformName: channel.customPlatformName,
+          enabled: channel.enabled,
+          status: channel.status,
+          connectionMode: channel.connectionMode,
+          webhookPath: channel.webhookPath,
+          autoReply: channel.autoReply,
+          replyAgentId: channel.replyAgentId,
+          replyAgentName: agentNameById.get(channel.replyAgentId),
+          messageCount: channel.messageCount,
+          createdAt: channel.createdAt,
+        })), null, 2)
+      } catch (err) {
+        return `Error listing channels: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
+  channel_add: tool({
+    description: 'Create a saved channel integration. Never invent credential values; ask the user for missing secrets when required by the selected platform.',
+    inputSchema: z.object({
+      name: z.string().describe('Channel display name'),
+      platform: z.enum(['wechat', 'wechat_official', 'wechat_miniprogram', 'feishu', 'dingtalk', 'slack', 'telegram', 'discord', 'teams', 'email', 'custom']).default('feishu').describe('Channel platform'),
+      connection_mode: z.enum(['webhook', 'stream']).optional().default('webhook').describe('Connection mode'),
+      webhook_path: z.string().optional().describe('Webhook path. If omitted, a safe default path is generated.'),
+      enabled: z.boolean().optional().default(false).describe('Whether the channel should be enabled immediately'),
+      auto_reply: z.boolean().optional().default(true).describe('Whether Suora should automatically reply to incoming messages'),
+      reply_agent_id: z.string().optional().describe('Agent id that handles messages from this channel'),
+      custom_platform_name: z.string().optional().describe('Display name when platform is custom'),
+      reason: z.string().describe('Short reason for creating the channel, shown in confirmation/tool output'),
+    }),
+    execute: async ({ name, platform, connection_mode, webhook_path, enabled, auto_reply, reply_agent_id, custom_platform_name, reason }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const trimmedName = name.trim()
+        if (!trimmedName) return 'Error: Channel name is required.'
+
+        const agents = (state.agents || []) as Agent[]
+        const replyAgentId = reply_agent_id?.trim() || agents.find((agent) => agent.enabled !== false)?.id || 'default-assistant'
+        if (reply_agent_id?.trim() && !agents.some((agent) => agent.id === replyAgentId)) {
+          return `Reply agent not found: ${reply_agent_id}`
+        }
+
+        const now = Date.now()
+        const safePlatform = platform as ChannelPlatform
+        const connectionMode = connection_mode as ChannelConnectionMode
+        const path = webhook_path?.trim() || `/webhook/${safePathSegment(safePlatform)}/${now}`
+        const nextChannel: ChannelConfig = {
+          id: `channel-${crypto.randomUUID()}`,
+          name: trimmedName,
+          platform: safePlatform,
+          enabled,
+          status: enabled ? 'active' : 'inactive',
+          connectionMode,
+          webhookPath: path.startsWith('/') ? path : `/${path}`,
+          autoReply: auto_reply,
+          replyAgentId,
+          createdAt: now,
+          messageCount: 0,
+          ...(custom_platform_name?.trim() ? { customPlatformName: custom_platform_name.trim() } : {}),
+        }
+
+        if (!(await confirmIfNeeded(`channel_add\n${nextChannel.name}\nPlatform: ${nextChannel.platform}\nConnection: ${nextChannel.connectionMode}\nWebhook: ${nextChannel.webhookPath}\nReply agent: ${nextChannel.replyAgentId}\nReason: ${reason}`))) {
+          return 'Cancelled by user confirmation policy.'
+        }
+
+        if (!writeStoreState((s) => {
+          const channels = (s.channels || []) as ChannelConfig[]
+          s.channels = [nextChannel, ...channels]
+        })) return 'Error: Store not available'
+
+        return JSON.stringify({ message: `Created channel "${nextChannel.name}".`, channel: nextChannel }, null, 2)
+      } catch (err) {
+        return `Error creating channel: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
+  channel_update: tool({
+    description: 'Update a saved channel integration. Prefer channel_id when available. Only provided fields are changed.',
+    inputSchema: z.object({
+      channel_id: z.string().optional().describe('Exact channel id to update'),
+      channel_name: z.string().optional().describe('Exact or partial channel name when id is unknown'),
+      name: z.string().optional().describe('New channel display name'),
+      enabled: z.boolean().optional().describe('Enable or disable the channel'),
+      auto_reply: z.boolean().optional().describe('Enable or disable automatic replies'),
+      reply_agent_id: z.string().optional().describe('Agent id that handles messages from this channel'),
+      connection_mode: z.enum(['webhook', 'stream']).optional().describe('New connection mode'),
+      webhook_path: z.string().optional().describe('New webhook path'),
+      reason: z.string().describe('Short reason for updating the channel, shown in confirmation/tool output'),
+    }),
+    execute: async ({ channel_id, channel_name, name, enabled, auto_reply, reply_agent_id, connection_mode, webhook_path, reason }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const channels = (state.channels || []) as ChannelConfig[]
+        const resolved = resolveChannelReference(channels, channel_id, channel_name)
+        if (!resolved.channel) return `Error: ${resolved.error}`
+
+        if (reply_agent_id?.trim()) {
+          const agents = (state.agents || []) as Agent[]
+          if (!agents.some((agent) => agent.id === reply_agent_id.trim())) return `Reply agent not found: ${reply_agent_id}`
+        }
+
+        const updates: Partial<ChannelConfig> = {}
+        if (name !== undefined) {
+          const nextName = name.trim()
+          if (!nextName) return 'Error: Channel name cannot be empty.'
+          updates.name = nextName
+        }
+        if (enabled !== undefined) {
+          updates.enabled = enabled
+          updates.status = enabled ? 'active' : 'inactive'
+        }
+        if (auto_reply !== undefined) updates.autoReply = auto_reply
+        if (reply_agent_id !== undefined) updates.replyAgentId = reply_agent_id.trim()
+        if (connection_mode !== undefined) updates.connectionMode = connection_mode
+        if (webhook_path !== undefined) updates.webhookPath = webhook_path.startsWith('/') ? webhook_path : `/${webhook_path}`
+        if (Object.keys(updates).length === 0) return 'Error: No updates were provided.'
+
+        if (!(await confirmIfNeeded(`channel_update\n${resolved.channel.name} (${resolved.channel.id})\nFields: ${Object.keys(updates).join(', ')}\nReason: ${reason}`))) {
+          return 'Cancelled by user confirmation policy.'
+        }
+
+        if (!writeStoreState((s) => {
+          const arr = (s.channels || []) as ChannelConfig[]
+          s.channels = arr.map((channel) => channel.id === resolved.channel?.id ? { ...channel, ...updates } : channel)
+        })) return 'Error: Store not available'
+
+        return `Updated channel "${updates.name ?? resolved.channel.name}" (${resolved.channel.id}). Reason: ${reason}`
+      } catch (err) {
+        return `Error updating channel: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
+  channel_remove: tool({
+    description: 'Delete a saved channel integration. Prefer channel_id when available.',
+    inputSchema: z.object({
+      channel_id: z.string().optional().describe('Exact channel id to remove'),
+      channel_name: z.string().optional().describe('Exact or partial channel name when id is unknown'),
+      reason: z.string().describe('Short reason for deleting the channel, shown in confirmation/tool output'),
+    }),
+    execute: async ({ channel_id, channel_name, reason }) => {
+      try {
+        const state = readStoreState()
+        if (!state) return 'Error: Store not available'
+        const channels = (state.channels || []) as ChannelConfig[]
+        const resolved = resolveChannelReference(channels, channel_id, channel_name)
+        if (!resolved.channel) return `Error: ${resolved.error}`
+
+        if (!(await confirmIfNeeded(`channel_remove\n${resolved.channel.name} (${resolved.channel.id})\nReason: ${reason}`))) {
+          return 'Cancelled by user confirmation policy.'
+        }
+
+        if (!writeStoreState((s) => {
+          const arr = (s.channels || []) as ChannelConfig[]
+          s.channels = arr.filter((channel) => channel.id !== resolved.channel?.id)
+        })) return 'Error: Store not available'
+
+        return `Removed channel "${resolved.channel.name}" (${resolved.channel.id}). Reason: ${reason}`
+      } catch (err) {
+        return `Error removing channel: ${err instanceof Error ? err.message : String(err)}`
+      }
+    },
+  }),
+
   channel_start_server: tool({
     description: 'Start the channel webhook server to receive messages from WeChat, Feishu, and DingTalk.',
     inputSchema: z.object({}),
@@ -4136,6 +4360,7 @@ export const TOOL_META: Record<string, ToolMeta> = {
   env_manage:            { userFacingName: 'Manage env vars', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
   env_get:               { userFacingName: 'Get env var', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   env_list:              { userFacingName: 'List env vars', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
+  channel_list:          { userFacingName: 'List channels', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   channel_server_status: { userFacingName: 'Channel status', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   list_models:           { userFacingName: 'List models', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
   list_sessions:         { userFacingName: 'List sessions', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false },
@@ -4218,6 +4443,9 @@ export const TOOL_META: Record<string, ToolMeta> = {
   loop_execute:          { userFacingName: 'Loop execute', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
 
   // ── Channel tools ──
+  channel_add:           { userFacingName: 'Add channel', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
+  channel_update:        { userFacingName: 'Update channel', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
+  channel_remove:        { userFacingName: 'Remove channel', isReadOnly: false, isDestructive: true, isConcurrencySafe: false, requiresConfirmation: true },
   channel_start_server:  { userFacingName: 'Start channel', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
   channel_stop_server:   { userFacingName: 'Stop channel', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: true },
   channel_send_message:  { userFacingName: 'Send channel msg', isReadOnly: false, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false },
