@@ -101,8 +101,10 @@ describe('builtin tool guidance', () => {
       },
     })
 
-    await expect(tools.read_file.execute?.({ path: '/outside/file.txt' }, {})).resolves.toContain('Path blocked')
-    await expect(tools.read_file.execute?.({ path: '/outside/file.txt' }, {})).resolves.toContain('Path blocked')
+    const executeReadFile = tools.read_file.execute as unknown as (input: { path: string }, options: { toolCallId: string; messages: [] }) => Promise<string>
+
+    await expect(executeReadFile({ path: '/outside/file.txt' }, { toolCallId: 'tool-call-1', messages: [] })).resolves.toContain('Path blocked')
+    await expect(executeReadFile({ path: '/outside/file.txt' }, { toolCallId: 'tool-call-2', messages: [] })).resolves.toContain('Path blocked')
 
     const sessions = liveState.sessions as Array<{ memories?: Array<{ content: string; scope: string; targetId?: string; tags?: string[] }> }>
     expect(sessions[0].memories).toHaveLength(1)
