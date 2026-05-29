@@ -638,6 +638,22 @@ function hasToolErrorFingerprint(memories: PersistedMemoryEntry[] | undefined, f
   return (memories ?? []).some((memory) => memory.tags?.includes(`fingerprint:${fingerprint}`))
 }
 
+function isToolErrorResult(result: string): boolean {
+  const normalized = result.trim().toLowerCase()
+  return (
+    normalized.startsWith('error:') ||
+    normalized.startsWith('[custom tool error]') ||
+    normalized.startsWith('path blocked') ||
+    normalized.startsWith('command blocked') ||
+    normalized.startsWith('cancelled by') ||
+    normalized.startsWith('tool "') ||
+    normalized.includes('tool invocation failed') ||
+    normalized.includes('parse tool call') ||
+    normalized.includes('invalid tool input') ||
+    normalized.includes('failed to execute tool')
+  )
+}
+
 export function recordToolErrorMemory(
   context: ToolErrorOwnerContext & {
     toolName: string
@@ -4668,8 +4684,16 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
 
         // Prevent overlapping execution for tools that are not concurrency-safe.
         if (!meta.isConcurrencySafe && running > 0) {
+          const busyError = `Tool "${name}" is already running and does not support concurrent execution. Please wait for the current call to finish.`
+          recordToolErrorMemory({
+            ...errorContext,
+            toolName: name,
+            input: args,
+            error: busyError,
+            errorSource: 'returned',
+          })
           logger.warn(`[ToolExec:Busy] ${name} is not concurrency-safe`, { tool: name, running })
-          return `Tool "${name}" is already running and does not support concurrent execution. Please wait for the current call to finish.`
+          return busyError
         }
 
         runningCounts.set(name, running + 1)
@@ -4683,8 +4707,17 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
           const shouldBypassNestedConfirm = effectiveMode === 'bypassPermissions' || (effectiveMode === 'acceptEdits' && !meta.isDestructive)
           const requiresWrapperConfirmation = effectiveMode === 'default' && meta.requiresConfirmation
           if (requiresWrapperConfirmation && !(await confirmIfNeeded(`${name}\n${inputLog}`))) {
+            const cancelledError = 'Cancelled by user confirmation policy.'
             logger.warn(`[ToolExec:Cancelled] ${name} denied by confirmation policy`, { tool: name })
-            return 'Cancelled by user confirmation policy.'
+            recordToolErrorMemory({
+              ...errorContext,
+              toolName: name,
+              input: args,
+              error: cancelledError,
+              durationMs: Math.round(performance.now() - startTime),
+              errorSource: 'returned',
+            })
+            return cancelledError
           }
 
           const executeOriginal = () => (originalExecute as (args: Record<string, unknown>) => Promise<string>)(args)
@@ -4694,13 +4727,7 @@ function instrumentToolSet(tools: ToolSet, agentPermissionMode?: string, errorCo
           const durationMs = Math.round(performance.now() - startTime)
           const duration = String(durationMs)
           const resultStr = typeof result === 'string' ? result : JSON.stringify(result)
-          const isErrorResult = typeof result === 'string' && (
-            result.startsWith('Error:') ||
-            result.startsWith('[Custom tool error]') ||
-            result.startsWith('Path blocked') ||
-            result.startsWith('Command blocked') ||
-            result.startsWith('Cancelled by')
-          )
+          const isErrorResult = typeof result === 'string' && isToolErrorResult(result)
 
           if (isErrorResult) {
             recordToolErrorMemory({

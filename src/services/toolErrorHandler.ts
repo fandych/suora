@@ -74,7 +74,7 @@ function normalizeErrorPattern(error: string): string {
 function classifyErrorText(error: string): Pick<ToolErrorClassification, 'category' | 'retryable' | 'hint' | 'solution'> {
   const normalized = error.toLowerCase()
 
-  if (/cancelled by|canceled|cancelled|abort/.test(normalized)) {
+  if (/cancelled by|canceled|cancelled|abort|denied by confirmation/.test(normalized)) {
     return {
       category: 'cancelled',
       retryable: false,
@@ -82,7 +82,7 @@ function classifyErrorText(error: string): Pick<ToolErrorClassification, 'catego
       solution: 'Ask for explicit user approval or choose a read-only alternative before calling the tool again.',
     }
   }
-  if (/sandbox|path blocked|not allowed|permission denied|forbidden/.test(normalized)) {
+  if (/sandbox|path blocked|outside allowed|not allowed|permission denied|forbidden/.test(normalized)) {
     return {
       category: normalized.includes('path') || normalized.includes('sandbox') ? 'path' : 'permission',
       retryable: false,
@@ -98,7 +98,7 @@ function classifyErrorText(error: string): Pick<ToolErrorClassification, 'catego
       solution: 'Wait for the running tool call to finish, then retry the same action once.',
     }
   }
-  if (/schema|validation|invalid|required|missing/.test(normalized)) {
+  if (/schema|validation|invalid|required|missing|parse tool|tool input/.test(normalized)) {
     return {
       category: 'validation',
       retryable: false,
@@ -146,7 +146,7 @@ function classifyErrorText(error: string): Pick<ToolErrorClassification, 'catego
       solution: 'Wait briefly, reduce call frequency, then retry.',
     }
   }
-  if (/error:|exception|failed/.test(normalized)) {
+  if (/error:|exception|failed|tool invocation/.test(normalized)) {
     return {
       category: 'execution',
       retryable: false,
@@ -204,10 +204,13 @@ export function buildToolErrorMemoryDraft(context: ToolErrorContext): ToolErrorM
   const inputKeys = Object.keys(context.input ?? {})
   const sourceLabel = context.source ? `Source: ${context.source}\n` : ''
   const durationLabel = context.durationMs !== undefined ? `Duration: ${context.durationMs}ms\n` : ''
+  const ownerLabel = classification.targetId ? `${classification.scope}:${classification.targetId}` : classification.scope
   const content = [
     '[Tool error solution]',
     `Tool: ${context.toolName}`,
     `Category: ${classification.category}`,
+    `Owner: ${ownerLabel}`,
+    `Error source: ${context.errorSource ?? 'unknown'}`,
     `Retryable: ${classification.retryable ? 'yes' : 'no'}`,
     `${sourceLabel}${durationLabel}Error: ${sanitizedError}`,
     `Recommended fix: ${classification.solution}`,
@@ -222,7 +225,10 @@ export function buildToolErrorMemoryDraft(context: ToolErrorContext): ToolErrorM
       'tool-error',
       `tool:${context.toolName}`,
       `error:${classification.category}`,
+      `scope:${classification.scope}`,
+      `retryable:${classification.retryable ? 'yes' : 'no'}`,
       `fingerprint:${classification.fingerprint}`,
+      ...(context.source ? [`source:${context.source}`] : []),
     ],
   }
 }
