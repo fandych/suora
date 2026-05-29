@@ -74,7 +74,7 @@ function normalizeErrorPattern(error: string): string {
 function classifyErrorText(error: string): Pick<ToolErrorClassification, 'category' | 'retryable' | 'hint' | 'solution'> {
   const normalized = error.toLowerCase()
 
-  if (/cancelled by|canceled|cancelled|abort|denied by confirmation/.test(normalized)) {
+  if (/cancelled by|canceled|abort|denied by confirmation/.test(normalized)) {
     return {
       category: 'cancelled',
       retryable: false,

@@ -156,8 +156,11 @@ describe('builtin tool guidance', () => {
       },
     })
 
-    const executeEnvManage = (input: { action: string }, options: ToolExecutionOptions): Promise<string> =>
-      tools.env_manage.execute?.(input as never, options) as Promise<string>
+    const envManageTool = tools.env_manage as typeof builtinToolDefs.env_manage
+    const executeEnvManage = (
+      input: Parameters<NonNullable<typeof envManageTool.execute>>[0],
+      options: ToolExecutionOptions,
+    ): Promise<string> => envManageTool.execute?.(input, options) as Promise<string>
 
     const firstCall = executeEnvManage({ action: 'list' }, { toolCallId: 'tool-call-1', messages: [] })
     await expect(executeEnvManage({ action: 'list' }, { toolCallId: 'tool-call-2', messages: [] })).resolves.toContain('already running')
