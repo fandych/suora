@@ -115,8 +115,73 @@ describe('builtin tool guidance', () => {
       targetId: 'session-1',
     })
     expect(sessions[0].memories?.[0].content).toContain('Tool: read_file')
+    expect(sessions[0].memories?.[0].content).toContain('Owner: session:session-1')
+    expect(sessions[0].memories?.[0].content).toContain('Error source: returned')
     expect(sessions[0].memories?.[0].content).toContain('Recommended fix:')
-    expect(sessions[0].memories?.[0].tags).toEqual(expect.arrayContaining(['tool-error', 'tool:read_file', 'error:path']))
+    expect(sessions[0].memories?.[0].tags).toEqual(expect.arrayContaining([
+      'tool-error',
+      'tool:read_file',
+      'error:path',
+      'scope:session',
+      'retryable:no',
+      'source:chat',
+    ]))
+  })
+
+  it('records concurrency guard failures as agent memories', async () => {
+    const liveState: Record<string, unknown> = {
+      workspacePath: '/workspace',
+      activeSessionId: 'session-1',
+      sessions: [],
+      agents: [{ id: 'agent-1', memories: [] }],
+      skills: [],
+      envVariables: [],
+      toolSecurity: {
+        sandboxMode: 'strict',
+        requireConfirmation: false,
+        allowedDirectories: ['/workspace'],
+        blockedCommands: [],
+      },
+    }
+    setLiveStoreAccessor(() => liveState)
+    setLiveStoreWriter((updater) => {
+      updater(liveState)
+    })
+
+    const tools = getToolsForAgent([], [], {
+      allowedTools: ['env_manage'],
+      errorContext: {
+        agentId: 'agent-1',
+        source: 'agent-test',
+      },
+    })
+
+    const envManageTool = tools.env_manage as typeof builtinToolDefs.env_manage
+    const executeEnvManage = (
+      input: Parameters<NonNullable<typeof envManageTool.execute>>[0],
+      options: ToolExecutionOptions,
+    ): Promise<string> => envManageTool.execute?.(input, options) as Promise<string>
+
+    const firstCall = executeEnvManage({ action: 'list' }, { toolCallId: 'tool-call-1', messages: [] })
+    await expect(executeEnvManage({ action: 'list' }, { toolCallId: 'tool-call-2', messages: [] })).resolves.toContain('already running')
+    await firstCall
+
+    const agents = liveState.agents as Array<{ memories?: Array<{ content: string; scope: string; targetId?: string; tags?: string[] }> }>
+    expect(agents[0].memories).toHaveLength(1)
+    expect(agents[0].memories?.[0]).toMatchObject({
+      scope: 'agent',
+      targetId: 'agent-1',
+    })
+    expect(agents[0].memories?.[0].content).toContain('Category: concurrency')
+    expect(agents[0].memories?.[0].content).toContain('Owner: agent:agent-1')
+    expect(agents[0].memories?.[0].tags).toEqual(expect.arrayContaining([
+      'tool-error',
+      'tool:env_manage',
+      'error:concurrency',
+      'scope:agent',
+      'retryable:yes',
+      'source:agent-test',
+    ]))
   })
 
   it('instructs auto-learning agents to store reusable tool failure corrections', () => {
