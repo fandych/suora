@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import type { ToolExecutionOptions } from 'ai'
 import type { Agent, DocumentGroup, DocumentNode, Model, Skill } from '@/types'
 import { delegateToAgent } from '@/services/agentCommunication'
 import { buildSystemPrompt, buildToolHints, builtinToolDefs, fetchMarketplaceSkills, getSkillSystemPrompts, getToolsForAgent, setLiveStoreAccessor, setLiveStoreWriter } from './tools'
@@ -101,7 +102,8 @@ describe('builtin tool guidance', () => {
       },
     })
 
-    const executeReadFile = tools.read_file.execute as unknown as (input: { path: string }, options: { toolCallId: string; messages: [] }) => Promise<string>
+    const executeReadFile = (input: { path: string }, options: ToolExecutionOptions): Promise<string> =>
+      tools.read_file.execute?.(input as never, options) as Promise<string>
 
     await expect(executeReadFile({ path: '/outside/file.txt' }, { toolCallId: 'tool-call-1', messages: [] })).resolves.toContain('Path blocked')
     await expect(executeReadFile({ path: '/outside/file.txt' }, { toolCallId: 'tool-call-2', messages: [] })).resolves.toContain('Path blocked')

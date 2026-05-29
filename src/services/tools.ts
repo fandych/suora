@@ -631,6 +631,8 @@ async function writeTodos(key: string, todos: TodoItem[]): Promise<void> {
 }
 
 type BuiltinToolExecute = (args: Record<string, unknown>, options?: unknown) => Promise<unknown> | unknown
+const UNKNOWN_TOOL_ERROR_CONFIDENCE = 0.5
+const CLASSIFIED_TOOL_ERROR_CONFIDENCE = 0.75
 
 function hasToolErrorFingerprint(memories: PersistedMemoryEntry[] | undefined, fingerprint: string): boolean {
   return (memories ?? []).some((memory) => memory.tags?.includes(`fingerprint:${fingerprint}`))
@@ -646,7 +648,7 @@ export function recordToolErrorMemory(
   },
 ): void {
   const draft = buildToolErrorMemoryDraft(context)
-  const activeSessionId = context.sessionId || getPersistedStoreState().activeSessionId || 'unknown'
+  const activeSessionId = context.sessionId || getPersistedStoreState().activeSessionId || 'no-session'
   const memory: PersistedMemoryEntry = {
     id: draft.id,
     content: draft.content,
@@ -656,7 +658,7 @@ export function recordToolErrorMemory(
     source: activeSessionId,
     ...(draft.targetId ? { targetId: draft.targetId } : {}),
     tags: draft.tags,
-    confidence: draft.category === 'unknown' ? 0.5 : 0.75,
+    confidence: draft.category === 'unknown' ? UNKNOWN_TOOL_ERROR_CONFIDENCE : CLASSIFIED_TOOL_ERROR_CONFIDENCE,
     reviewed: false,
     autoRecall: true,
   }

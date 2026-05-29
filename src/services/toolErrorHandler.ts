@@ -50,6 +50,9 @@ export interface ToolErrorMemoryDraft extends ToolErrorClassification {
 }
 
 function hashText(value: string): string {
+  // Non-cryptographic fingerprint only for local deduplication of repeated
+  // sanitized error patterns. Collisions merely merge similar suggestions, not
+  // security decisions, so a tiny deterministic hash is sufficient here.
   let hash = 0
   for (let index = 0; index < value.length; index += 1) {
     hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
@@ -161,6 +164,8 @@ function classifyErrorText(error: string): Pick<ToolErrorClassification, 'catego
 }
 
 function chooseScope(context: ToolErrorContext, category: ToolErrorCategory): Pick<ToolErrorClassification, 'scope' | 'targetId'> {
+  // Built-in self-evolution tool names are grouped by prefix in tools.ts.
+  // Prefer those explicit families before falling back to runtime context.
   if (context.toolName.startsWith('skill_') && context.skillIds?.length === 1) {
     return { scope: 'skill', targetId: context.skillIds[0] }
   }
