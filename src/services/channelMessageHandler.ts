@@ -2,7 +2,9 @@ import { useAppStore } from '@/store/appStore'
 import { streamResponseWithTools, initializeProvider, validateModelConfig } from './aiService'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt, runWithToolConfirmationBypass } from './tools'
 import { parseChatControlCommand, resolveAgentControlReference, resolveModelControlReference } from './chatControlCommands'
-import type { ChannelConfig, ChannelMessage, ChannelHistoryMessage, ChannelUser, ChannelUserConversationMessage } from '@/types'
+import { buildShortcutCommandPrompt, parseShortcutCommand, type ShortcutCommand } from './shortcutCommands'
+import { buildSlashCommandHelp, formatSlashMessage } from './slashCommandDispatcher'
+import type { ChannelConfig, ChannelMessage, ChannelHistoryMessage, ChannelUser, ChannelUserConversationMessage, Agent } from '@/types'
 import type { ModelMessage } from 'ai'
 import { logger } from './logger'
 
@@ -325,29 +327,47 @@ export async function handleChannelMessage(
     if (controlCommand) {
       if (controlCommand.type === 'clear') {
         updateChannelUserContext(channel.id, message.senderId, { conversationHistory: [] })
-        return '上下文已清除。'
+        return formatSlashMessage('slash.contextCleared')
+      }
+
+      if (controlCommand.type === 'help') {
+        return buildSlashCommandHelp()
       }
 
       if (controlCommand.type === 'model') {
         const model = resolveModelControlReference(controlCommand.reference, state.models)
-        if (!model) return `找不到模型：${controlCommand.reference}`
+        if (!model) return formatSlashMessage('slash.modelNotFound', { reference: controlCommand.reference })
         updateChannelUserContext(channel.id, message.senderId, { modelId: model.id })
-        return `已切换模型：${model.name}`
+        return formatSlashMessage('slash.modelSwitched', { name: model.name })
       }
 
       const agent = resolveAgentControlReference(controlCommand.reference, state.agents)
-      if (!agent) return `找不到 Agent：${controlCommand.reference}`
+      if (!agent) return formatSlashMessage('slash.agentNotFound', { reference: controlCommand.reference })
       updateChannelUserContext(channel.id, message.senderId, { agentId: agent.id })
-      return `已固定使用 Agent：${agent.name}`
+      return formatSlashMessage('slash.agentFixed', { name: agent.name })
     }
-    // Get the agent configured for this channel
+
+    // Builder-style shortcut commands like `/pipeline create ...` route this
+    // single message through a specialized builder agent without changing the
+    // channel user's pinned agent.
+    const shortcutCommand: ShortcutCommand | null = parseShortcutCommand(message.content)
+    let shortcutAgentOverride: Agent | null = null
+    if (shortcutCommand) {
+      shortcutAgentOverride =
+        state.agents.find((a) => a.id === shortcutCommand.agentId && a.enabled !== false) ?? null
+      if (!shortcutAgentOverride) {
+        return formatSlashMessage('slash.builderUnavailable', { domain: shortcutCommand.domain })
+      }
+    }
+
     // Get the agent configured for this channel
     const currentUser = state.channelUsers[user.id]
     if (!currentUser) {
       logger.warn('Channel user not found after tracking', { userId: user.id })
       return '抱歉，当前用户上下文不可用。'
     }
-    const agent = state.agents.find((a) => a.id === (currentUser.agentId ?? channel.replyAgentId))
+    const agent = shortcutAgentOverride
+      ?? state.agents.find((a) => a.id === (currentUser.agentId ?? channel.replyAgentId))
 
     if (!agent) {
       logger.warn('Agent not found for channel', { agentId: channel.replyAgentId })
@@ -388,6 +408,9 @@ export async function handleChannelMessage(
 
     // Build conversation messages with per-user context for multi-turn conversations
     const formattedContent = formatNonTextContent(message)
+    const effectiveUserContent = shortcutCommand
+      ? buildShortcutCommandPrompt(shortcutCommand)
+      : formattedContent
 
     // Include prior conversation history for this specific user
     const conversationMessages: ModelMessage[] = [
@@ -397,11 +420,13 @@ export async function handleChannelMessage(
       })),
       {
         role: 'user' as const,
-        content: formattedContent,
+        content: effectiveUserContent,
       },
     ]
 
-    // Store the user's message in their conversation history
+    // Store the user's *original* message in their conversation history so
+    // that subsequent turns see what the user actually typed, not the
+    // builder-routing prompt.
     appendUserConversation(channel.id, message.senderId, {
       role: 'user',
       content: formattedContent,

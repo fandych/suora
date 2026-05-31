@@ -2470,6 +2470,25 @@ const translations: Record<string, TranslationMap> = {
     'onboarding.exploreFeaturesDesc': 'Discover agents, skills, timers, and channels.',
     'onboarding.ready': 'You\'re All Set!',
     'onboarding.readyDesc': 'Start chatting with your AI assistant.',
+
+    // Slash commands
+    'slash.contextCleared': 'Context cleared.',
+    'slash.modelSwitched': 'Switched model to {name}.',
+    'slash.modelNotFound': 'Model not found: {reference}',
+    'slash.agentUsing': 'Using agent {name}.',
+    'slash.agentFixed': 'Pinned agent: {name}.',
+    'slash.agentNotFound': 'Agent not found: {reference}',
+    'slash.builderUnavailable': 'Builder agent for /{domain} is unavailable or disabled.',
+    'slash.helpHeading': 'Available slash commands',
+    'slash.helpControl': 'Session controls',
+    'slash.helpClear': '/clear — clear the current context',
+    'slash.helpModel': '/model use <name|id> — switch model (also accepts /model user X)',
+    'slash.helpAgent': '/agent use <name|id> — pin the active agent',
+    'slash.helpShortcut': 'Builder shortcuts',
+    'slash.helpShortcutLine': '/{domain} {action} <description> — run the {domain} builder agent for this request',
+    'slash.helpDomains': 'Domains: agent, channel, document, pipeline, timer',
+    'slash.helpActions': 'Actions: create, update, delete, list, manage',
+    'slash.helpFooter': 'Type /help to see this list again.',
   },
 
   zh: {
@@ -4936,6 +4955,25 @@ const translations: Record<string, TranslationMap> = {
     'onboarding.exploreFeaturesDesc': '发现智能体、技能、定时任务和渠道。',
     'onboarding.ready': '准备就绪！',
     'onboarding.readyDesc': '开始与您的 AI 助手对话吧。',
+
+    // Slash commands
+    'slash.contextCleared': '上下文已清除。',
+    'slash.modelSwitched': '已切换模型：{name}',
+    'slash.modelNotFound': '找不到模型：{reference}',
+    'slash.agentUsing': '已使用 Agent：{name}',
+    'slash.agentFixed': '已固定使用 Agent：{name}',
+    'slash.agentNotFound': '找不到 Agent：{reference}',
+    'slash.builderUnavailable': '/{domain} 对应的构建 Agent 不可用或已禁用。',
+    'slash.helpHeading': '可用的斜杠命令',
+    'slash.helpControl': '会话控制',
+    'slash.helpClear': '/clear — 清除当前上下文',
+    'slash.helpModel': '/model use <名称|ID> — 切换模型（也支持 /model user X）',
+    'slash.helpAgent': '/agent use <名称|ID> — 固定使用某个 Agent',
+    'slash.helpShortcut': '构建快捷指令',
+    'slash.helpShortcutLine': '/{domain} {action} <描述> — 本次回复交给 {domain} 构建 Agent 处理',
+    'slash.helpDomains': '资源域：agent、channel、document、pipeline、timer',
+    'slash.helpActions': '动作：create、update、delete、list、manage',
+    'slash.helpFooter': '输入 /help 可再次查看。',
   },
 
   ja: {

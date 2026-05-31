@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Agent, ChannelConfig, ChannelMessage, Model } from '@/types'
 import { useAppStore } from '@/store/appStore'
 import { buildWeChatXMLReply, handleChannelMessage, parseWeChatXML, restoreChannelRuntime } from './channelMessageHandler'
+import { setI18nLocale } from './i18n'
 
 function createChannel(overrides: Partial<ChannelConfig> = {}): ChannelConfig {
   return {
@@ -103,6 +104,7 @@ describe('channelMessageHandler WeChat XML', () => {
   })
 
   it('handles channel control commands for clearing context and fixing model or agent', async () => {
+    setI18nLocale('zh')
     const channel = createChannel()
     const message: ChannelMessage = {
       id: 'msg-1',
@@ -160,5 +162,36 @@ describe('channelMessageHandler WeChat XML', () => {
 
     await expect(handleChannelMessage(channel, { ...message, id: 'msg-3', content: '/agent use $Research Agent' })).resolves.toBe('已固定使用 Agent：Research Agent')
     expect(useAppStore.getState().channelUsers[`${channel.id}:user-1`]?.agentId).toBe('agent-1')
+
+    const helpReply = await handleChannelMessage(channel, { ...message, id: 'msg-4', content: '/help' })
+    expect(helpReply).toContain('/clear')
+    expect(helpReply).toContain('/pipeline')
+    setI18nLocale('en')
+  })
+
+  it('reports a friendly error when a builder shortcut targets a missing builder agent', async () => {
+    setI18nLocale('en')
+    const channel = createChannel()
+    const message: ChannelMessage = {
+      id: 'msg-shortcut-missing',
+      channelId: channel.id,
+      platform: channel.platform,
+      senderId: 'user-shortcut',
+      senderName: 'User Shortcut',
+      content: '/pipeline create morning summary',
+      timestamp: Date.now(),
+      messageType: 'text',
+    }
+    useAppStore.setState({
+      agents: [],
+      models: [],
+      selectedModel: null,
+      channelUsers: {},
+    })
+
+    const reply = await handleChannelMessage(channel, message)
+    expect(reply).toContain('Builder agent for /pipeline')
+    // Importantly: no per-user pinned agent has been written.
+    expect(useAppStore.getState().channelUsers[`${channel.id}:user-shortcut`]?.agentId).toBeUndefined()
   })
 })
