@@ -1,0 +1,51 @@
+---
+id: slash-commands
+title: 斜杠命令
+---
+
+# 斜杠命令
+
+Suora 支持两类斜杠命令。它们在 **Chat** 工作台和挂在 **Channel**（飞书、
+Slack、微信等）上的回复 Agent 中行为一致。把命令写在消息的最前面即可。
+
+## 会话控制
+
+| 命令 | 效果 |
+| --- | --- |
+| `/clear` | 清除当前上下文。在 Chat 中清空当前会话消息；在 Channel 中清空该用户的对话历史。 |
+| `/help` 或 `/?` | 输出本列表（自动跟随当前 UI 语言）。 |
+| `/model use <名称或 ID>` | 切换模型。也接受 `/model user X`。在 Chat 中会更新全局选中的模型及当前会话；在 Channel 中只更新该用户的上下文。 |
+| `/agent use <名称或 ID>` | 固定 Agent。在 Chat 中设为当前会话的 Agent（并采用其首选模型）。在 Channel 中将该用户后续消息固定到该 Agent，直至再次切换。 |
+
+`/model` 与 `/agent` 接受的动词：`use`、`switch`、`select`、`set`
+（`/model` 还接受 `user`）。
+
+## 构建快捷指令
+
+这类命令让本条消息**临时**交给某个专门的**构建 Agent** 处理，
+不会改变你固定的 Agent —— 下一条消息会回到原 Agent。
+
+```
+/<资源域> <动作> <描述>
+```
+
+- **资源域**：`agent`、`channel`、`document`、`pipeline`、`timer`
+- **动作**：`create`、`update`、`delete`、`list`、`manage`
+
+示例：
+
+```
+/pipeline create 每日 standup 摘要，从 #standup 拉取
+/timer create 每天 9 点提醒我处理 PR 队列
+/agent create 一个按风格指南审稿的 reviewer
+/document create v2 上线方案
+/channel update 飞书告警同步转发到 Slack
+```
+
+如果对应的构建 Agent 已被禁用或删除，Suora 会回复一条友好提示，
+而不会默默地把请求转给其它 Agent。
+
+## 优先级
+
+当命令存在歧义时，调度器**先**按会话控制处理，**后**按构建快捷指令处理。
+这保证 `/agent use X` 永远表示「固定 Agent」，不会被误解为构建请求。

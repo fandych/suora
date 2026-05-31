@@ -2,8 +2,16 @@ import type { Agent, Model } from '@/types'
 
 export type ChatControlCommand =
   | { type: 'clear'; raw: string }
+  | { type: 'help'; raw: string }
   | { type: 'model'; raw: string; reference: string }
   | { type: 'agent'; raw: string; reference: string }
+
+const MODEL_VERBS = ['use', 'user', 'switch', 'select', 'set'] as const
+
+function isVerb(value: string, verbs: readonly string[]): boolean {
+  const normalized = value.trim().toLowerCase()
+  return verbs.includes(normalized as never)
+}
 
 function cleanReference(value: string): string {
   return value
@@ -21,17 +29,30 @@ export function parseChatControlCommand(input: string): ChatControlCommand | nul
     return { type: 'clear', raw: trimmed }
   }
 
-  // Support "user" as an alias for "use" because channel users may type
-  // `/model user x` when asking to use a model.
-  const modelMatch = trimmed.match(/^\/model(?:\s+(?:use|user|switch|select|set))?\s+(.+)$/i)
-  if (modelMatch?.[1]) {
-    const reference = cleanReference(modelMatch[1])
+  if (/^\/(?:help|\?)$/i.test(trimmed)) {
+    return { type: 'help', raw: trimmed }
+  }
+
+  // Two shapes:
+  //   /model <verb> <reference>   (verb is required to disambiguate)
+  //   /model <reference>          (no verb — reference must not itself be a verb)
+  const modelVerb = trimmed.match(/^\/model\s+(use|user|switch|select|set)\s+(.+)$/i)
+  if (modelVerb?.[2]) {
+    const reference = cleanReference(modelVerb[2])
+    return reference ? { type: 'model', raw: trimmed, reference } : null
+  }
+  const modelBare = trimmed.match(/^\/model\s+(.+)$/i)
+  if (modelBare?.[1]) {
+    const raw = modelBare[1].trim()
+    // Reject `/model use` (verb only) — the user probably forgot the name.
+    if (isVerb(raw, MODEL_VERBS)) return null
+    const reference = cleanReference(raw)
     return reference ? { type: 'model', raw: trimmed, reference } : null
   }
 
-  const agentMatch = trimmed.match(/^\/agent\s+(?:use|switch|select|set)\s+(.+)$/i)
-  if (agentMatch?.[1]) {
-    const reference = cleanReference(agentMatch[1])
+  const agentMatch = trimmed.match(/^\/agent\s+(use|switch|select|set)\s+(.+)$/i)
+  if (agentMatch?.[2]) {
+    const reference = cleanReference(agentMatch[2])
     return reference ? { type: 'agent', raw: trimmed, reference } : null
   }
 

@@ -14,6 +14,7 @@ import { buildPipelineExecutionNotificationMessage } from '@/services/pipelineEx
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
 import { parseChatControlCommand, resolveAgentControlReference, resolveModelControlReference } from '@/services/chatControlCommands'
 import { buildShortcutCommandPrompt, parseShortcutCommand } from '@/services/shortcutCommands'
+import { buildSlashCommandHelp, formatSlashMessage } from '@/services/slashCommandDispatcher'
 import { t } from '@/services/i18n'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt, recordToolErrorMemory } from '@/services/tools'
 import { logger } from '@/services/logger'
@@ -324,17 +325,19 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         return
       }
 
-      const controlResult = controlCommand.type === 'model'
+      const controlResult = controlCommand.type === 'help'
+        ? { content: buildSlashCommandHelp(), isError: false }
+        : controlCommand.type === 'model'
         ? (() => {
             const model = resolveModelControlReference(controlCommand.reference, store.models)
-            if (!model) return { content: `Model not found: ${controlCommand.reference}`, isError: true }
+            if (!model) return { content: formatSlashMessage('slash.modelNotFound', { reference: controlCommand.reference }), isError: true }
             store.setSelectedModel(model)
             store.updateSession(activeSession.id, { modelId: model.id })
-            return { content: `Switched model to ${model.name}.`, isError: false }
+            return { content: formatSlashMessage('slash.modelSwitched', { name: model.name }), isError: false }
           })()
         : (() => {
             const agent = resolveAgentControlReference(controlCommand.reference, store.agents)
-            if (!agent) return { content: `Agent not found: ${controlCommand.reference}`, isError: true }
+            if (!agent) return { content: formatSlashMessage('slash.agentNotFound', { reference: controlCommand.reference }), isError: true }
             const preferredModel = agent.modelId
               ? store.models.find((model) => model.id === agent.modelId && model.enabled)
               : null
@@ -344,7 +347,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
               agentId: agent.id,
               modelId: preferredModel?.id ?? activeSession.modelId,
             })
-            return { content: `Using agent ${agent.name}.`, isError: false }
+            return { content: formatSlashMessage('slash.agentUsing', { name: agent.name }), isError: false }
           })()
 
       store.updateSession(activeSession.id, {

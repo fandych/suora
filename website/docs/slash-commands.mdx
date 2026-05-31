@@ -1,0 +1,54 @@
+---
+id: slash-commands
+title: Slash commands
+---
+
+# Slash commands
+
+Suora supports two families of slash commands. They work the same way in the
+**Chat** workbench and in any reply Agent attached to a **Channel** (Feishu,
+Slack, WeChat, etc.). Type the command as the first thing in your message.
+
+## Session controls
+
+| Command | Effect |
+| --- | --- |
+| `/clear` | Clears the active context. In Chat this empties the current session's messages; in a channel it resets the per-user conversation history. |
+| `/help` or `/?` | Prints this list (auto-localized to your UI language). |
+| `/model use <name or id>` | Switches the model. `/model user X` is also accepted. In Chat it updates the global selected model and the session; in a channel it updates only that user's context. |
+| `/agent use <name or id>` | Pins an agent. In Chat it sets the session agent (and adopts its preferred model). In a channel it pins the agent for that user — every subsequent message from them runs through it until they switch again. |
+
+Verbs accepted by `/model` and `/agent`: `use`, `switch`, `select`, `set`
+(`/model` also accepts `user`).
+
+## Builder shortcuts
+
+These run a single message through a specialized **builder agent** without
+changing your pinned agent — the next message goes back to your normal
+agent.
+
+```
+/<domain> <action> <description>
+```
+
+- **Domains**: `agent`, `channel`, `document`, `pipeline`, `timer`
+- **Actions**: `create`, `update`, `delete`, `list`, `manage`
+
+Examples:
+
+```
+/pipeline create morning standup digest pulling from #standup
+/timer create remind me at 9am to review the PR queue
+/agent create reviewer that grades my drafts against the style guide
+/document create launch plan for v2 onboarding
+/channel update Feishu alerts to also forward to Slack
+```
+
+If the corresponding builder agent has been disabled or removed, Suora replies
+with a friendly notice instead of silently routing to a fallback agent.
+
+## Precedence
+
+When a command is ambiguous the dispatcher always treats it as a session
+control first, then as a builder shortcut. That guarantees `/agent use X`
+pins the agent and is never re-interpreted as a builder request.

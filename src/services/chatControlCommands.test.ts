@@ -30,6 +30,8 @@ const agents: Agent[] = [
 describe('chatControlCommands', () => {
   it('parses clear, model, and fixed agent commands', () => {
     expect(parseChatControlCommand('/clear')).toEqual({ type: 'clear', raw: '/clear' })
+    expect(parseChatControlCommand('/help')).toEqual({ type: 'help', raw: '/help' })
+    expect(parseChatControlCommand('/?')).toEqual({ type: 'help', raw: '/?' })
     expect(parseChatControlCommand('/model user GPT Test')).toMatchObject({
       type: 'model',
       reference: 'GPT Test',
@@ -42,6 +44,22 @@ describe('chatControlCommands', () => {
       type: 'agent',
       reference: 'Research Agent',
     })
+    expect(parseChatControlCommand('/AGENT  USE   research agent')).toMatchObject({
+      type: 'agent',
+      reference: 'research agent',
+    })
+  })
+
+  it('rejects model commands that only contain a verb with no reference', () => {
+    expect(parseChatControlCommand('/model use')).toBeNull()
+    expect(parseChatControlCommand('/model set')).toBeNull()
+    expect(parseChatControlCommand('/model')).toBeNull()
+  })
+
+  it('does not parse shortcut-style agent actions as control commands', () => {
+    expect(parseChatControlCommand('/agent create research bot')).toBeNull()
+    expect(parseChatControlCommand('/agent update Research Agent')).toBeNull()
+    expect(parseChatControlCommand('/agent delete Research Agent')).toBeNull()
   })
 
   it('resolves models and agents by id or name', () => {
