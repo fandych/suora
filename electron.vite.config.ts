@@ -27,6 +27,13 @@ export default defineConfig({
     root: '.',
     build: {
       outDir: 'out/renderer',
+      // Electron ships with a recent Chromium; targeting a modern baseline
+      // skips unnecessary transpilation and shrinks the bundle.
+      target: 'chrome120',
+      // Production sourcemaps are not needed in the packaged renderer; they
+      // slow down the build and inflate the output.
+      sourcemap: false,
+      cssCodeSplit: true,
       rollupOptions: {
         input: resolve(__dirname, 'index.html'),
         output: {
@@ -35,6 +42,17 @@ export default defineConfig({
             'vendor-ai': ['ai', '@ai-sdk/anthropic', '@ai-sdk/openai', '@ai-sdk/openai-compatible'],
             'vendor-markdown': ['react-markdown', 'remark-gfm'],
             'vendor-zod': ['zod'],
+            'vendor-flow': ['@xyflow/react', 'dagre'],
+            'vendor-mermaid': ['mermaid'],
+            'vendor-tiptap': [
+              '@tiptap/react',
+              '@tiptap/starter-kit',
+              '@tiptap/extension-image',
+              '@tiptap/extension-link',
+              '@tiptap/extension-placeholder',
+            ],
+            'vendor-katex': ['katex', 'rehype-katex', 'remark-math'],
+            'vendor-icons': ['@iconify/react', '@iconify/utils'],
           },
         },
       },
