@@ -1,6 +1,7 @@
 import { useAppStore } from '@/store/appStore'
 import { streamResponseWithTools, initializeProvider, validateModelConfig } from './aiService'
 import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, buildSystemPrompt, runWithToolConfirmationBypass } from './tools'
+import { parseChatControlCommand, resolveAgentControlReference, resolveModelControlReference } from './chatControlCommands'
 import type { ChannelConfig, ChannelMessage, ChannelHistoryMessage, ChannelUser, ChannelUserConversationMessage } from '@/types'
 import type { ModelMessage } from 'ai'
 import { logger } from './logger'
@@ -71,6 +72,18 @@ function appendUserConversation(channelId: string, senderId: string, entry: Chan
     ].slice(-MAX_USER_CONVERSATION_HISTORY), // Keep only recent entries
   }
   state.upsertChannelUser(updated)
+}
+
+function updateChannelUserContext(channelId: string, senderId: string, patch: Partial<Pick<ChannelUser, 'agentId' | 'modelId' | 'conversationHistory'>>): void {
+  const state = useAppStore.getState()
+  const userKey = `${channelId}:${senderId}`
+  const user = state.channelUsers[userKey]
+  if (!user) return
+
+  state.upsertChannelUser({
+    ...user,
+    ...patch,
+  })
 }
 
 // ─── Non-Text Message Processing ───────────────────────────────────
@@ -306,10 +319,35 @@ export async function handleChannelMessage(
 
     // Track the user and get their conversation history
     const user = trackChannelUser(channel, message)
-
-    // Get the agent configured for this channel
     const state = useAppStore.getState()
-    const agent = state.agents.find((a) => a.id === channel.replyAgentId)
+
+    const controlCommand = parseChatControlCommand(message.content)
+    if (controlCommand) {
+      if (controlCommand.type === 'clear') {
+        updateChannelUserContext(channel.id, message.senderId, { conversationHistory: [] })
+        return '上下文已清除。'
+      }
+
+      if (controlCommand.type === 'model') {
+        const model = resolveModelControlReference(controlCommand.reference, state.models)
+        if (!model) return `找不到模型：${controlCommand.reference}`
+        updateChannelUserContext(channel.id, message.senderId, { modelId: model.id })
+        return `已切换模型：${model.name}`
+      }
+
+      const agent = resolveAgentControlReference(controlCommand.reference, state.agents)
+      if (!agent) return `找不到 Agent：${controlCommand.reference}`
+      updateChannelUserContext(channel.id, message.senderId, { agentId: agent.id })
+      return `已固定使用 Agent：${agent.name}`
+    }
+    // Get the agent configured for this channel
+    // Get the agent configured for this channel
+    const currentUser = state.channelUsers[user.id]
+    if (!currentUser) {
+      logger.warn('Channel user not found after tracking', { userId: user.id })
+      return '抱歉，当前用户上下文不可用。'
+    }
+    const agent = state.agents.find((a) => a.id === (currentUser.agentId ?? channel.replyAgentId))
 
     if (!agent) {
       logger.warn('Agent not found for channel', { agentId: channel.replyAgentId })
@@ -317,9 +355,13 @@ export async function handleChannelMessage(
     }
 
     // Get the model for this agent or use the default
-    const model = agent.modelId
+    const userModel = currentUser.modelId
+      ? state.models.find((m) => m.id === currentUser.modelId && m.enabled)
+      : null
+    const agentModel = agent.modelId
       ? state.models.find((m) => m.id === agent.modelId) || state.selectedModel
       : state.selectedModel
+    const model = userModel ?? agentModel
 
     if (!model) {
       logger.warn('No model available')
