@@ -69,16 +69,50 @@ export default function App() {
 
   // Initialize channel message listener on mount
   useEffect(() => {
+    // Must run synchronously: IPC listener has to be registered before any
+    // channel messages arrive, and so does the renderer runtime logger.
     const cleanupRuntimeLogging = initRendererRuntimeLogging()
     const cleanup = initChannelMessageListener()
-    const cleanupTimerRuntime = initTimerRuntimeListener()
-    const cleanupEventAutomation = initEventAutomationRuntime()
-    preloadPopularCollections().catch(console.error)
+
+    // Non-critical runtimes (timer + event automation) are deferred to idle
+    // time so they don't compete with first paint. Icon collections are even
+    // less urgent and are also pre-loaded lazily.
+    type IdleCallback = (cb: () => void) => number
+    const win = window as unknown as {
+      requestIdleCallback?: IdleCallback
+      cancelIdleCallback?: (handle: number) => void
+    }
+    const requestIdle = (cb: () => void): { cancel: () => void } => {
+      if (typeof win.requestIdleCallback === 'function') {
+        const handle = win.requestIdleCallback(cb)
+        return {
+          cancel: () => {
+            if (typeof win.cancelIdleCallback === 'function') win.cancelIdleCallback(handle)
+          },
+        }
+      }
+      const handle = window.setTimeout(cb, 2000)
+      return { cancel: () => window.clearTimeout(handle) }
+    }
+
+    let cleanupTimerRuntime: (() => void) | null = null
+    let cleanupEventAutomation: (() => void) | null = null
+
+    const idleRuntime = requestIdle(() => {
+      cleanupTimerRuntime = initTimerRuntimeListener()
+      cleanupEventAutomation = initEventAutomationRuntime()
+    })
+    const idleIcons = requestIdle(() => {
+      preloadPopularCollections().catch(console.error)
+    })
+
     return () => {
+      idleRuntime.cancel()
+      idleIcons.cancel()
       cleanup()
       cleanupRuntimeLogging()
-      cleanupTimerRuntime()
-      cleanupEventAutomation()
+      cleanupTimerRuntime?.()
+      cleanupEventAutomation?.()
     }
   }, [])
 

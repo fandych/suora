@@ -345,6 +345,8 @@ async function createWindow() {
     minWidth: 1200,
     minHeight: 700,
     autoHideMenuBar: true,
+    show: false,
+    backgroundColor: '#0b0b10',
     icon: path.join(__dirname, '../../resources/icons/icon-256x256.png'),
     webPreferences: {
       preload: preloadPath,
@@ -359,6 +361,14 @@ async function createWindow() {
   }
 
   mainWindow.setMenuBarVisibility(false)
+
+  // Avoid a visible white flash by showing only once the renderer has
+  // produced its first frame.
+  mainWindow.once('ready-to-show', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show()
+    }
+  })
 
   // Security: deny popups and external navigations from the renderer.
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -3374,24 +3384,69 @@ ipcMain.handle('perf:getMetrics', () => {
 let updateCheckTimeout: ReturnType<typeof setTimeout> | null = null
 
 app.whenReady().then(async () => {
-  if (!(await acquireInitialWorkspaceLock())) {
+  // Acquire the workspace lock in parallel with constructing the main window.
+  // The lock check involves fs IO; opening the BrowserWindow can begin in the
+  // meantime so the first frame is ready sooner. We still abort if the lock
+  // was not granted.
+  const [lockAcquired] = await Promise.all([
+    acquireInitialWorkspaceLock(),
+    createWindow(),
+  ])
+
+  if (!lockAcquired) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.destroy()
+      mainWindow = null
+    }
     app.quit()
     return
   }
-  await createWindow()
-  createTray()
-  registerGlobalShortcuts()
-  startTimerEngine()
-  // Check for updates after 10s delay (non-blocking)
-  if (!isDev) {
-    updateCheckTimeout = setTimeout(() => {
-      updateCheckTimeout = null
-      checkForUpdates().then((update) => {
-        if (update && mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('updater:available', update)
-        }
-      }).catch(() => {})
-    }, 10000)
+
+  // Defer non-critical startup work until the window has actually painted,
+  // so tray/shortcut/timer registration doesn't compete with first frame.
+  const scheduleDeferredStartup = () => {
+    try {
+      createTray()
+    } catch (err) {
+      logger.error('Failed to create tray', { error: err instanceof Error ? err.message : String(err) })
+    }
+    try {
+      registerGlobalShortcuts()
+    } catch (err) {
+      logger.error('Failed to register global shortcuts', { error: err instanceof Error ? err.message : String(err) })
+    }
+    try {
+      startTimerEngine()
+    } catch (err) {
+      logger.error('Failed to start timer engine', { error: err instanceof Error ? err.message : String(err) })
+    }
+    // Check for updates after a short delay (non-blocking).
+    if (!isDev) {
+      updateCheckTimeout = setTimeout(() => {
+        updateCheckTimeout = null
+        checkForUpdates().then((update) => {
+          if (update && mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('updater:available', update)
+          }
+        }).catch(() => {})
+      }, 10000)
+    }
+  }
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    // If the window has already shown by the time we get here, run immediately;
+    // otherwise wait for the first paint.
+    if (mainWindow.isVisible()) {
+      scheduleDeferredStartup()
+    } else {
+      mainWindow.once('show', scheduleDeferredStartup)
+      // Safety net: if `show` somehow never fires, still schedule after 5s.
+      setTimeout(() => {
+        if (!tray) scheduleDeferredStartup()
+      }, 5000)
+    }
+  } else {
+    scheduleDeferredStartup()
   }
 })
 
