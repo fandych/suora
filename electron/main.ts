@@ -3404,7 +3404,10 @@ app.whenReady().then(async () => {
 
   // Defer non-critical startup work until the window has actually painted,
   // so tray/shortcut/timer registration doesn't compete with first frame.
+  let deferredStartupRan = false
   const scheduleDeferredStartup = () => {
+    if (deferredStartupRan) return
+    deferredStartupRan = true
     try {
       createTray()
     } catch (err) {
@@ -3440,10 +3443,9 @@ app.whenReady().then(async () => {
       scheduleDeferredStartup()
     } else {
       mainWindow.once('show', scheduleDeferredStartup)
-      // Safety net: if `show` somehow never fires, still schedule after 5s.
-      setTimeout(() => {
-        if (!tray) scheduleDeferredStartup()
-      }, 5000)
+      // Safety net: if `show` somehow never fires (e.g. window destroyed early),
+      // still schedule after 5s. The flag above guarantees a single execution.
+      setTimeout(scheduleDeferredStartup, 5000)
     }
   } else {
     scheduleDeferredStartup()

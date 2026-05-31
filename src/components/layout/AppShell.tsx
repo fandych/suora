@@ -74,19 +74,19 @@ export function AppShell() {
         if (cancelled) return
 
         // Run the rest in parallel; failures are isolated per task.
-        const results = await Promise.allSettled([
-          loadSettingsFromWorkspace(),
-          loadSessionsFromWorkspace(),
-          loadExternalSkillsAndAgents(),
-          restorePluginsFromStore(),
-        ])
+        const parallelTasks: ReadonlyArray<{ label: string; run: () => Promise<unknown> }> = [
+          { label: 'loadSettingsFromWorkspace', run: loadSettingsFromWorkspace },
+          { label: 'loadSessionsFromWorkspace', run: loadSessionsFromWorkspace },
+          { label: 'loadExternalSkillsAndAgents', run: loadExternalSkillsAndAgents },
+          { label: 'restorePluginsFromStore', run: restorePluginsFromStore },
+        ]
+        const results = await Promise.allSettled(parallelTasks.map((task) => task.run()))
 
         if (cancelled) return
 
         results.forEach((result, index) => {
           if (result.status === 'rejected') {
-            const labels = ['loadSettingsFromWorkspace', 'loadSessionsFromWorkspace', 'loadExternalSkillsAndAgents', 'restorePluginsFromStore']
-            console.error(`Startup task ${labels[index]} failed:`, result.reason)
+            console.error(`Startup task ${parallelTasks[index].label} failed:`, result.reason)
           }
         })
 
