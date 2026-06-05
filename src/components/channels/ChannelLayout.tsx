@@ -142,6 +142,17 @@ function ChannelDetail({
     : health.isHealthy
       ? 'border-green-500/20 bg-green-500/10 text-green-400'
       : 'border-red-500/20 bg-red-500/10 text-red-400'
+  const wechatPersonalBindingStatus = channel.wechatPersonalBindingStatus || 'unbound'
+  const wechatPersonalBindingTone = wechatPersonalBindingStatus === 'bound'
+    ? 'border-green-500/20 bg-green-500/10 text-green-400'
+    : wechatPersonalBindingStatus === 'pending'
+      ? 'border-yellow-500/20 bg-yellow-500/10 text-yellow-500'
+      : 'border-border-subtle/60 bg-surface-2/80 text-text-muted'
+  const wechatPersonalBindingLabel = wechatPersonalBindingStatus === 'bound'
+    ? t('channels.bindingStatusBound', 'Bound')
+    : wechatPersonalBindingStatus === 'pending'
+      ? t('channels.bindingStatusPending', 'Waiting for scan')
+      : t('channels.bindingStatusUnbound', 'Not bound')
 
   const tabMeta: Array<{ id: ChannelTab; label: string; icon: string }> = [
     { id: 'config', label: t('channels.config', 'Config'), icon: 'ui-clipboard' },
@@ -301,6 +312,42 @@ function ChannelDetail({
                 </div>
               )}
             </DetailSection>
+
+            {channel.platform === 'wechat_personal' && (
+              <DetailSection
+                eyebrow={getPlatformDisplayName('wechat_personal')}
+                title={t('channels.wechatPersonalBindingTitle', 'QR Binding')}
+                description={t('channels.wechatPersonalBindingTitleHint', 'Personal WeChat channels depend on a bridge session. Keep the QR code handy for re-binding and confirm the bridge endpoint before going live.')}
+              >
+                <div className="space-y-3">
+                  <DetailRow
+                    label={t('channels.wechatPersonalBindingStatus', 'Binding Status')}
+                    value={<span className={`rounded-full border px-3 py-1 text-[11px] ${wechatPersonalBindingTone}`}>{wechatPersonalBindingLabel}</span>}
+                  />
+                  <DetailRow
+                    label={t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')}
+                    value={channel.wechatPersonalWebhookUrl
+                      ? <code className="break-all rounded-lg bg-surface-3/60 px-2 py-1 text-xs text-accent">{channel.wechatPersonalWebhookUrl}</code>
+                      : t('common.noData', 'No data')}
+                  />
+                  {channel.wechatPersonalQrCodeUrl ? (
+                    <div className="rounded-3xl border border-border-subtle/45 bg-surface-0/55 p-4">
+                      <div className="text-[12px] font-medium text-text-primary">{t('channels.wechatPersonalScanTitle', 'Scan to bind')}</div>
+                      <p className="mt-1 text-[11px] leading-5 text-text-secondary/78">{t('channels.wechatPersonalScanHint', 'Open WeChat on the target account, scan this QR code, then switch the binding status to Bound once the bridge confirms the session.')}</p>
+                      <img
+                        src={channel.wechatPersonalQrCodeUrl}
+                        alt={t('channels.wechatPersonalQrPreview', 'Personal WeChat QR')}
+                        className="mt-4 h-48 w-48 rounded-3xl border border-border-subtle/55 bg-white object-contain p-3 shadow-sm"
+                      />
+                    </div>
+                  ) : (
+                    <div className="rounded-3xl border border-dashed border-border-subtle/55 bg-surface-0/40 p-4 text-[12px] leading-6 text-text-secondary/80">
+                      {t('channels.wechatPersonalAwaitingQr', 'Add the bridge QR code URL to preview the binding code here for operators.')}
+                    </div>
+                  )}
+                </div>
+              </DetailSection>
+            )}
           </div>
 
           <div className="space-y-6">

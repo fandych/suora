@@ -790,6 +790,7 @@ export interface WorkspaceSettings {
 
 export type ChannelPlatform =
   | 'wechat'              // WeChat Work (企业微信)
+  | 'wechat_personal'     // Personal WeChat via QR-bound bridge (个人微信)
   | 'wechat_official'     // WeChat Official Account (微信公众号)
   | 'wechat_miniprogram'  // WeChat Mini Program (微信小程序)
   | 'feishu'              // Feishu / Lark (飞书)
@@ -816,6 +817,7 @@ export interface ChannelMessage {
 }
 
 export type ChannelConnectionMode = 'webhook' | 'stream'
+export type WeChatPersonalBindingStatus = 'unbound' | 'pending' | 'bound'
 
 // ─── Email Channel Filter & Action Types ──────────────────────────
 
@@ -887,6 +889,12 @@ export interface ChannelConfig {
   wechatOfficialAppId?: string   // Official Account AppID
   wechatOfficialAppSecret?: string
   wechatOfficialToken?: string   // Token for message verification
+
+  // Personal WeChat bridge config
+  wechatPersonalWebhookUrl?: string     // Bridge endpoint for outgoing replies
+  wechatPersonalAuthToken?: string      // Optional bearer/shared token for bridge auth
+  wechatPersonalQrCodeUrl?: string      // QR code image/data URL shown to the operator for binding
+  wechatPersonalBindingStatus?: WeChatPersonalBindingStatus
 
   // Custom channel config (user-defined webhook integration)
   customWebhookUrl?: string      // URL to send outgoing messages to

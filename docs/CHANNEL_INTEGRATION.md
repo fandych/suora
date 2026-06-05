@@ -9,6 +9,7 @@ The current channel editor supports these platforms:
 | Platform | Code | Notes |
 | --- | --- | --- |
 | WeChat Work | `wechat` | Enterprise WeChat integration |
+| Personal WeChat | `wechat_personal` | QR-bound bridge integration for personal accounts |
 | WeChat Official Account | `wechat_official` | Public account callback flow |
 | WeChat Mini Program | `wechat_miniprogram` | Mini program messaging flow |
 | Feishu / Lark | `feishu` | Token and encrypt-key verification |
@@ -75,7 +76,7 @@ Recommended fields:
 
 Choose `stream` when you want the desktop app to keep a live connection without exposing a public HTTP endpoint.
 
-### WeChat Work / Official / Mini Program
+### WeChat Work / Personal / Official / Mini Program
 
 Depending on the WeChat surface, you may need:
 
@@ -85,6 +86,15 @@ Depending on the WeChat surface, you may need:
 - encrypt key fields
 
 When using webhook delivery, configure the callback URL exactly as shown in the channel detail panel.
+
+For `wechat_personal`, Suora now treats the integration as a bridge-backed channel:
+
+- `wechatPersonalQrCodeUrl` lets operators scan a QR code in WeChat to bind the personal account
+- `wechatPersonalBindingStatus` tracks whether the bridge session is still waiting, bound, or unbound
+- `wechatPersonalWebhookUrl` is used for outbound replies after the bridge is bound
+- `wechatPersonalAuthToken` is sent with a bearer `Authorization` header when the bridge requires authentication
+
+Because personal WeChat does not expose the same official API surface as enterprise channels, this mode expects an external bridge to handle the actual login session and forward inbound messages into Suora's webhook endpoint.
 
 ### Slack
 
