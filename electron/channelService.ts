@@ -63,6 +63,13 @@ interface WeChatPersonalQrCodeResponse {
   qrcode_img_content?: string
 }
 
+export function normalizeWeChatPersonalQrCodeUrl(value?: string): string | undefined {
+  const trimmed = value?.trim()
+  if (!trimmed) return undefined
+  if (/^(?:data:|https?:\/\/|blob:|file:)/i.test(trimmed)) return trimmed
+  return `data:image/png;base64,${trimmed}`
+}
+
 interface WeChatPersonalQrStatusResponse {
   status?: WeChatPersonalQrStatus
   bot_token?: string
@@ -1513,20 +1520,21 @@ export class ChannelService {
 
     try {
       const qr = await fetchWeChatPersonalQrCode(this.getWeChatPersonalLocalTokenList())
-      if (!qr.qrcode || !qr.qrcode_img_content) {
+      const qrCodeUrl = normalizeWeChatPersonalQrCodeUrl(qr.qrcode_img_content)
+      if (!qr.qrcode || !qrCodeUrl) {
         return { success: false, message: '未能获取微信登录二维码。' }
       }
       const sessionKey = crypto.randomUUID()
       this.weChatPersonalLoginSessions.set(sessionKey, {
         sessionKey,
         qrcode: qr.qrcode,
-        qrcodeUrl: qr.qrcode_img_content,
+        qrcodeUrl: qrCodeUrl,
         startedAt: Date.now(),
         currentApiBaseUrl: WECHAT_PERSONAL_DEFAULT_BASE_URL,
       })
       return {
         success: true,
-        qrCodeUrl: qr.qrcode_img_content,
+        qrCodeUrl: qrCodeUrl,
         sessionKey,
         message: '请使用手机微信扫码完成绑定。',
       }
@@ -1585,9 +1593,10 @@ export class ChannelService {
             }
           case 'expired': {
             const qr = await fetchWeChatPersonalQrCode(this.getWeChatPersonalLocalTokenList())
-            if (qr.qrcode && qr.qrcode_img_content) {
+              const qrCodeUrl = normalizeWeChatPersonalQrCodeUrl(qr.qrcode_img_content)
+              if (qr.qrcode && qrCodeUrl) {
               session.qrcode = qr.qrcode
-              session.qrcodeUrl = qr.qrcode_img_content
+                session.qrcodeUrl = qrCodeUrl
               session.startedAt = Date.now()
               session.currentApiBaseUrl = WECHAT_PERSONAL_DEFAULT_BASE_URL
               session.pendingVerifyCode = undefined
@@ -1595,7 +1604,7 @@ export class ChannelService {
                 success: true,
                 status: 'expired',
                 sessionKey,
-                qrCodeUrl: qr.qrcode_img_content,
+                  qrCodeUrl: qrCodeUrl,
                 message: '二维码已刷新，请重新扫码。',
               }
             }

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { IconPicker } from '@/components/icons/IconPicker'
 import { useI18n } from '@/hooks/useI18n'
@@ -30,6 +30,109 @@ function EditorSection({
 
 const INPUT_CLASS = 'w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 px-3.5 py-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20'
 const TEXTAREA_CLASS = `${INPUT_CLASS} min-h-36 resize-y font-mono text-xs leading-6`
+const WECHAT_QR_SCREENSHOT_RETRY_DELAYS_MS = [0, 1800, 3500]
+
+function normalizeWeChatPersonalQrPreviewUrl(value?: string): string {
+  const trimmed = value?.trim() || ''
+  if (!trimmed) return ''
+  if (/^(?:data:|https?:\/\/|blob:|file:)/i.test(trimmed)) return trimmed
+  return `data:image/png;base64,${trimmed}`
+}
+
+function toDataUrl(base64: string, format?: string): string {
+  const mime = format?.trim().toLowerCase() === 'jpeg' || format?.trim().toLowerCase() === 'jpg'
+    ? 'image/jpeg'
+    : 'image/png'
+  return `data:${mime};base64,${base64}`
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const image = new Image()
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('Failed to load preview image'))
+    image.src = src
+  })
+}
+
+async function buildWeChatQrScreenshotPreview(base64: string, format?: string): Promise<{ dataUrl: string; shouldRetry: boolean }> {
+  const fullDataUrl = toDataUrl(base64, format)
+  if (typeof document === 'undefined' || typeof Image === 'undefined') {
+    return { dataUrl: fullDataUrl, shouldRetry: false }
+  }
+
+  try {
+    const image = await loadImage(fullDataUrl)
+    const canvas = document.createElement('canvas')
+    canvas.width = image.naturalWidth
+    canvas.height = image.naturalHeight
+    const context = canvas.getContext('2d', { willReadFrequently: true })
+    if (!context) return { dataUrl: fullDataUrl, shouldRetry: false }
+
+    context.drawImage(image, 0, 0)
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+    let minX = canvas.width
+    let maxX = -1
+    let minY = canvas.height
+    let maxY = -1
+
+    for (let y = 0; y < canvas.height; y += 2) {
+      for (let x = 0; x < canvas.width; x += 2) {
+        const index = (y * canvas.width + x) * 4
+        const alpha = pixels[index + 3] ?? 0
+        if (alpha < 220) continue
+        const red = pixels[index] ?? 255
+        const green = pixels[index + 1] ?? 255
+        const blue = pixels[index + 2] ?? 255
+        const luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
+        if (luminance > 245) continue
+        minX = Math.min(minX, x)
+        maxX = Math.max(maxX, x)
+        minY = Math.min(minY, y)
+        maxY = Math.max(maxY, y)
+      }
+    }
+
+    if (maxX < minX || maxY < minY) {
+      return { dataUrl: fullDataUrl, shouldRetry: true }
+    }
+
+    const contentWidth = maxX - minX + 1
+    const contentHeight = maxY - minY + 1
+    if (Math.max(contentWidth, contentHeight) < 180 || contentWidth * contentHeight < 45000) {
+      return { dataUrl: fullDataUrl, shouldRetry: true }
+    }
+
+    const centerX = minX + contentWidth / 2
+    const centerY = minY + contentHeight * 0.72
+    const cropSize = Math.round(Math.max(contentWidth * 1.18, contentHeight * 0.68, 260))
+    const cropLeft = clamp(Math.round(centerX - cropSize / 2), 0, Math.max(0, canvas.width - cropSize))
+    const cropTop = clamp(Math.round(centerY - cropSize / 2), 0, Math.max(0, canvas.height - cropSize))
+    const outputSize = Math.max(512, cropSize)
+    const outputCanvas = document.createElement('canvas')
+    outputCanvas.width = outputSize
+    outputCanvas.height = outputSize
+    const outputContext = outputCanvas.getContext('2d')
+    if (!outputContext) return { dataUrl: fullDataUrl, shouldRetry: false }
+
+    outputContext.imageSmoothingEnabled = false
+    outputContext.drawImage(canvas, cropLeft, cropTop, cropSize, cropSize, 0, 0, outputSize, outputSize)
+    return {
+      dataUrl: outputCanvas.toDataURL(format?.trim().toLowerCase() === 'jpeg' || format?.trim().toLowerCase() === 'jpg' ? 'image/jpeg' : 'image/png'),
+      shouldRetry: false,
+    }
+  } catch {
+    return { dataUrl: fullDataUrl, shouldRetry: false }
+  }
+}
 
 export function ChannelEditor({
   channel,
@@ -53,6 +156,8 @@ export function ChannelEditor({
   const [wechatVerifyRequired, setWechatVerifyRequired] = useState(false)
   const [wechatVerifyCode, setWechatVerifyCode] = useState('')
   const [wechatLoginSessionKey, setWechatLoginSessionKey] = useState('')
+  const [wechatQrPreviewFallback, setWechatQrPreviewFallback] = useState<{ source: string; dataUrl: string } | null>(null)
+  const [wechatQrPreviewResolvingSource, setWechatQrPreviewResolvingSource] = useState('')
   const isValid = draft.name.trim().length > 0
   const selectableAgents = useMemo(
     () => agents.filter((agent) => agent.enabled !== false || agent.id === draft.replyAgentId),
@@ -64,6 +169,18 @@ export function ChannelEditor({
   const selectedAgent = agents.find((agent) => agent.id === draft.replyAgentId)
   const supportsAppCredentials = draft.platform === 'feishu' || draft.platform === 'dingtalk' || draft.platform === 'wechat' || draft.platform === 'wechat_official' || draft.platform === 'wechat_miniprogram'
   const modeLabel = draft.connectionMode === 'stream' ? t('channels.stream', 'Stream') : t('channels.webhook', 'Webhook')
+  const normalizedWeChatQrSource = draft.wechatPersonalQrCodeUrl?.trim() || ''
+  const wechatPersonalQrPreviewUrl = wechatQrPreviewFallback?.source === normalizedWeChatQrSource
+    ? wechatQrPreviewFallback.dataUrl
+    : normalizeWeChatPersonalQrPreviewUrl(draft.wechatPersonalQrCodeUrl)
+
+  useEffect(() => {
+    setWechatQrPreviewFallback((current) => {
+      if (!current) return current
+      return current.source === normalizedWeChatQrSource ? current : null
+    })
+    setWechatQrPreviewResolvingSource((current) => (current === normalizedWeChatQrSource ? current : ''))
+  }, [normalizedWeChatQrSource])
 
   const handleSave = () => {
     setSaveError('')
@@ -205,6 +322,43 @@ export function ChannelEditor({
     if (wechatLoginBusy || !wechatLoginSessionKey || !wechatVerifyCode.trim()) return
     void waitForWeChatLogin(wechatLoginSessionKey, wechatVerifyCode.trim())
   }, [wechatLoginBusy, wechatLoginSessionKey, wechatVerifyCode, waitForWeChatLogin])
+
+  const handleWeChatQrPreviewError = useCallback(async () => {
+    const source = normalizedWeChatQrSource
+    if (!source || !/^https?:\/\//i.test(source)) return
+    if (wechatQrPreviewFallback?.source === source) return
+    if (wechatQrPreviewResolvingSource === source) return
+
+    setWechatQrPreviewResolvingSource(source)
+
+    try {
+      let fallbackDataUrl = ''
+      for (const delayMs of WECHAT_QR_SCREENSHOT_RETRY_DELAYS_MS) {
+        if (delayMs > 0) {
+          await wait(delayMs)
+        }
+        const result = await window.electron.invoke('browser:screenshot', source) as {
+          image?: string
+          format?: string
+          error?: string
+        }
+        if (!result.image || result.error) continue
+        const preview = await buildWeChatQrScreenshotPreview(result.image, result.format)
+        fallbackDataUrl = preview.dataUrl
+        if (!preview.shouldRetry) break
+      }
+
+      if (!fallbackDataUrl) return
+      setWechatQrPreviewFallback({
+        source,
+        dataUrl: fallbackDataUrl,
+      })
+    } catch {
+      // Keep the original source when the automation screenshot fallback is unavailable.
+    } finally {
+      setWechatQrPreviewResolvingSource((current) => (current === source ? '' : current))
+    }
+  }, [normalizedWeChatQrSource, wechatQrPreviewFallback, wechatQrPreviewResolvingSource])
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
@@ -758,9 +912,12 @@ export function ChannelEditor({
                   <div className="text-[12px] font-medium text-text-primary">{t('channels.wechatPersonalScanTitle', 'Scan to bind')}</div>
                   <p className="mt-1 text-[11px] leading-5 text-text-secondary/78">{t('channels.wechatPersonalScanHint', 'Open WeChat on the target account, scan this QR code, and keep this editor open until Suora finishes the binding flow.')}</p>
                   <img
-                    src={draft.wechatPersonalQrCodeUrl}
+                    src={wechatPersonalQrPreviewUrl}
                     alt={t('channels.wechatPersonalQrPreview', 'Personal WeChat QR')}
-                    className="mt-4 h-48 w-48 rounded-3xl border border-border-subtle/55 bg-white object-contain p-3 shadow-sm"
+                    onError={() => {
+                      void handleWeChatQrPreviewError()
+                    }}
+                    className="mt-4 h-72 w-72 rounded-3xl border border-border-subtle/55 bg-white object-contain p-2 shadow-sm md:h-80 md:w-80"
                   />
                 </div>
               ) : (

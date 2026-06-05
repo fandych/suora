@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ChannelEditor } from './ChannelEditor'
@@ -68,6 +68,59 @@ describe('ChannelEditor', () => {
     await user.type(screen.getByLabelText(/qr code url/i), 'https://bridge.example.com/qr.png')
 
     expect(screen.getByRole('img', { name: /personal wechat qr/i })).toHaveAttribute('src', 'https://bridge.example.com/qr.png')
+  })
+
+  it('previews bare base64 personal WeChat QR payloads as data URLs', async () => {
+    const user = userEvent.setup()
+
+    render(
+      <ChannelEditor
+        channel={baseChannel}
+        agents={[{ id: 'agent-1', name: 'Support Agent', enabled: true }]}
+        isNew
+        onSave={() => {}}
+        onCancel={() => {}}
+      />,
+    )
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /platform/i }), 'wechat_personal')
+    await user.type(screen.getByLabelText(/qr code url/i), 'iVBORw0KGgoAAAANSUhEUgAAAAUA')
+
+    expect(screen.getByRole('img', { name: /personal wechat qr/i })).toHaveAttribute('src', 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA')
+  })
+
+  it('falls back to an Electron screenshot when the QR URL is an HTML page', async () => {
+    const user = userEvent.setup()
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel: string, ...args: unknown[]) => {
+      if (channel === 'browser:screenshot') {
+        expect(args[0]).toBe('https://liteapp.weixin.qq.com/q/demo')
+        return {
+          image: 'abc123',
+          format: 'png',
+        }
+      }
+      return { success: true }
+    })
+
+    render(
+      <ChannelEditor
+        channel={baseChannel}
+        agents={[{ id: 'agent-1', name: 'Support Agent', enabled: true }]}
+        isNew
+        onSave={() => {}}
+        onCancel={() => {}}
+      />,
+    )
+
+    await user.selectOptions(screen.getByRole('combobox', { name: /platform/i }), 'wechat_personal')
+    await user.type(screen.getByLabelText(/qr code url/i), 'https://liteapp.weixin.qq.com/q/demo')
+
+    const qrImage = screen.getByRole('img', { name: /personal wechat qr/i })
+    fireEvent.error(qrImage)
+
+    await waitFor(() => {
+      expect(window.electron.invoke).toHaveBeenCalledWith('browser:screenshot', 'https://liteapp.weixin.qq.com/q/demo')
+    })
   })
 
   it('stores native personal WeChat credentials after a successful QR login flow', async () => {

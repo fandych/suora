@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildWeChatSignature, parseWeChatWebhookPayload, weChatPersonalMessageToChannelMessage, weChatWebhookToChannelMessage } from './channelService'
+import { buildWeChatSignature, normalizeWeChatPersonalQrCodeUrl, parseWeChatWebhookPayload, weChatPersonalMessageToChannelMessage, weChatWebhookToChannelMessage } from './channelService'
 
 describe('channelService WeChat helpers', () => {
   it('parses XML webhook payloads', () => {
@@ -66,5 +66,11 @@ describe('channelService WeChat helpers', () => {
       messageType: 'text',
       content: 'hello from qr login',
     }))
+  })
+
+  it('normalizes bare personal WeChat QR payloads into data URLs', () => {
+    expect(normalizeWeChatPersonalQrCodeUrl('iVBORw0KGgoAAAANSUhEUgAAAAUA')).toBe('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA')
+    expect(normalizeWeChatPersonalQrCodeUrl(' https://ilink.example.com/qr.png ')).toBe('https://ilink.example.com/qr.png')
+    expect(normalizeWeChatPersonalQrCodeUrl('data:image/png;base64,abc')).toBe('data:image/png;base64,abc')
   })
 })
