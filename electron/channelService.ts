@@ -157,10 +157,15 @@ export function weChatWebhookToChannelMessage(
       messageType = 'file'
       break
     case 'location':
-      content = `[Location] ${payload.Label || 'Location'} (${payload.Location_X || ''}, ${payload.Location_Y || ''})`
+      content = `[Location] ${payload.Label || 'Location'}`
+      if (payload.Location_X || payload.Location_Y) {
+        content += ` (${payload.Location_X || ''}, ${payload.Location_Y || ''})`
+      }
       break
     case 'link':
-      content = `[Link] ${payload.Title || 'Link'}: ${payload.Url || ''}\n${payload.Description || ''}`
+      content = `[Link] ${payload.Title || 'Link'}`
+      if (payload.Url) content += `: ${payload.Url}`
+      if (payload.Description) content += `\n${payload.Description}`
       break
     case 'event':
       content = `[Event: ${payload.Event || 'unknown'}${payload.EventKey ? ` - ${payload.EventKey}` : ''}]`
