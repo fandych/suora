@@ -717,7 +717,9 @@ export async function restoreChannelRuntime(channels: ChannelConfig[]): Promise<
   await registerChannels(channels)
 
   const hasEnabledWebhookChannel = channels.some(
-    (channel) => channel.enabled && (channel.connectionMode ?? 'webhook') === 'webhook',
+    (channel) => channel.enabled
+      && (channel.connectionMode ?? 'webhook') === 'webhook'
+      && !(channel.platform === 'wechat_personal' && channel.wechatPersonalBotToken),
   )
 
   if (!hasEnabledWebhookChannel) return

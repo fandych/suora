@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildWeChatSignature, parseWeChatWebhookPayload, weChatWebhookToChannelMessage } from './channelService'
+import { buildWeChatSignature, parseWeChatWebhookPayload, weChatPersonalMessageToChannelMessage, weChatWebhookToChannelMessage } from './channelService'
 
 describe('channelService WeChat helpers', () => {
   it('parses XML webhook payloads', () => {
@@ -48,5 +48,23 @@ describe('channelService WeChat helpers', () => {
   it('builds plain and encrypted WeChat signatures', () => {
     expect(buildWeChatSignature('token', '123', '456')).toBe('8779cd22a93aad0cb09babdc953a6d114bbf1c53')
     expect(buildWeChatSignature('token', '123', '456', 'cipher')).toBe('ef11aae4402600fe59281e77370e1c93296727a3')
+  })
+
+  it('maps native personal WeChat updates into channel messages', () => {
+    const message = weChatPersonalMessageToChannelMessage({
+      message_id: 42,
+      from_user_id: 'user@im.wechat',
+      create_time_ms: 1710000002000,
+      item_list: [{ type: 1, text_item: { text: 'hello from qr login' } }],
+    }, 'channel-1')
+
+    expect(message).toEqual(expect.objectContaining({
+      channelId: 'channel-1',
+      platform: 'wechat_personal',
+      senderId: 'user@im.wechat',
+      chatId: 'user@im.wechat',
+      messageType: 'text',
+      content: 'hello from qr login',
+    }))
   })
 })

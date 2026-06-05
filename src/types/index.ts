@@ -895,6 +895,10 @@ export interface ChannelConfig {
   wechatPersonalAuthToken?: string      // Optional bearer/shared token for bridge auth
   wechatPersonalQrCodeUrl?: string      // QR code image/data URL shown to the operator for binding
   wechatPersonalBindingStatus?: WeChatPersonalBindingStatus
+  wechatPersonalBotToken?: string       // Native personal WeChat bot token obtained after QR binding
+  wechatPersonalBaseUrl?: string        // Native personal WeChat API base URL
+  wechatPersonalAccountId?: string      // Native personal WeChat bot account ID
+  wechatPersonalUserId?: string         // Last user ID reported by the QR binding flow
 
   // Custom channel config (user-defined webhook integration)
   customWebhookUrl?: string      // URL to send outgoing messages to
