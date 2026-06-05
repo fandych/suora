@@ -3197,16 +3197,32 @@ export const builtinToolDefs: ToolSet = {
     description: 'Create a saved channel integration. Never invent credential values; ask the user for missing secrets when required by the selected platform.',
     inputSchema: z.object({
       name: z.string().describe('Channel display name'),
-      platform: z.enum(['wechat', 'wechat_official', 'wechat_miniprogram', 'feishu', 'dingtalk', 'slack', 'telegram', 'discord', 'teams', 'email', 'custom']).default('feishu').describe('Channel platform'),
+      platform: z.enum(['wechat', 'wechat_personal', 'wechat_official', 'wechat_miniprogram', 'feishu', 'dingtalk', 'slack', 'telegram', 'discord', 'teams', 'email', 'custom']).default('feishu').describe('Channel platform'),
       connection_mode: z.enum(['webhook', 'stream']).optional().default('webhook').describe('Connection mode'),
       webhook_path: z.string().optional().describe('Webhook path. If omitted, a safe default path is generated.'),
       enabled: z.boolean().optional().default(false).describe('Whether the channel should be enabled immediately'),
       auto_reply: z.boolean().optional().default(true).describe('Whether Suora should automatically reply to incoming messages'),
       reply_agent_id: z.string().optional().describe('Agent id that handles messages from this channel'),
       custom_platform_name: z.string().optional().describe('Display name when platform is custom'),
+      wechat_personal_qr_code_url: z.string().optional().describe('QR code URL for binding a personal WeChat bridge'),
+      wechat_personal_binding_status: z.enum(['unbound', 'pending', 'bound']).optional().describe('Binding status for a personal WeChat bridge'),
+      wechat_personal_webhook_url: z.string().optional().describe('Outgoing webhook URL for a personal WeChat bridge'),
       reason: z.string().describe('Short reason for creating the channel, shown in confirmation/tool output'),
     }),
-    execute: async ({ name, platform, connection_mode, webhook_path, enabled, auto_reply, reply_agent_id, custom_platform_name, reason }) => {
+    execute: async ({
+      name,
+      platform,
+      connection_mode,
+      webhook_path,
+      enabled,
+      auto_reply,
+      reply_agent_id,
+      custom_platform_name,
+      wechat_personal_qr_code_url,
+      wechat_personal_binding_status,
+      wechat_personal_webhook_url,
+      reason,
+    }) => {
       try {
         const state = readStoreState()
         if (!state) return 'Error: Store not available'
@@ -3236,6 +3252,9 @@ export const builtinToolDefs: ToolSet = {
           createdAt: now,
           messageCount: 0,
           ...(custom_platform_name?.trim() ? { customPlatformName: custom_platform_name.trim() } : {}),
+          ...(wechat_personal_qr_code_url?.trim() ? { wechatPersonalQrCodeUrl: wechat_personal_qr_code_url.trim() } : {}),
+          ...(wechat_personal_binding_status ? { wechatPersonalBindingStatus: wechat_personal_binding_status } : {}),
+          ...(wechat_personal_webhook_url?.trim() ? { wechatPersonalWebhookUrl: wechat_personal_webhook_url.trim() } : {}),
         }
 
         if (!(await confirmIfNeeded(`channel_add\n${nextChannel.name}\nPlatform: ${nextChannel.platform}\nConnection: ${nextChannel.connectionMode}\nWebhook: ${nextChannel.webhookPath}\nReply agent: ${nextChannel.replyAgentId}\nReason: ${reason}`))) {
@@ -3265,9 +3284,25 @@ export const builtinToolDefs: ToolSet = {
       reply_agent_id: z.string().optional().describe('Agent id that handles messages from this channel'),
       connection_mode: z.enum(['webhook', 'stream']).optional().describe('New connection mode'),
       webhook_path: z.string().optional().describe('New webhook path'),
+      wechat_personal_qr_code_url: z.string().optional().describe('New QR code URL for a personal WeChat bridge'),
+      wechat_personal_binding_status: z.enum(['unbound', 'pending', 'bound']).optional().describe('New binding status for a personal WeChat bridge'),
+      wechat_personal_webhook_url: z.string().optional().describe('New outgoing webhook URL for a personal WeChat bridge'),
       reason: z.string().describe('Short reason for updating the channel, shown in confirmation/tool output'),
     }),
-    execute: async ({ channel_id, channel_name, name, enabled, auto_reply, reply_agent_id, connection_mode, webhook_path, reason }) => {
+    execute: async ({
+      channel_id,
+      channel_name,
+      name,
+      enabled,
+      auto_reply,
+      reply_agent_id,
+      connection_mode,
+      webhook_path,
+      wechat_personal_qr_code_url,
+      wechat_personal_binding_status,
+      wechat_personal_webhook_url,
+      reason,
+    }) => {
       try {
         const state = readStoreState()
         if (!state) return 'Error: Store not available'
@@ -3294,6 +3329,9 @@ export const builtinToolDefs: ToolSet = {
         if (reply_agent_id !== undefined) updates.replyAgentId = reply_agent_id.trim()
         if (connection_mode !== undefined) updates.connectionMode = connection_mode
         if (webhook_path !== undefined) updates.webhookPath = webhook_path.startsWith('/') ? webhook_path : `/${webhook_path}`
+        if (wechat_personal_qr_code_url !== undefined) updates.wechatPersonalQrCodeUrl = wechat_personal_qr_code_url.trim()
+        if (wechat_personal_binding_status !== undefined) updates.wechatPersonalBindingStatus = wechat_personal_binding_status
+        if (wechat_personal_webhook_url !== undefined) updates.wechatPersonalWebhookUrl = wechat_personal_webhook_url.trim()
         if (Object.keys(updates).length === 0) return 'Error: No updates were provided.'
 
         if (!(await confirmIfNeeded(`channel_update\n${resolved.channel.name} (${resolved.channel.id})\nFields: ${Object.keys(updates).join(', ')}\nReason: ${reason}`))) {

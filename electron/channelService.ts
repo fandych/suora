@@ -209,6 +209,17 @@ async function sendWeChatMessage(channel: ChannelConfig, chatId: string, content
   }
 }
 
+async function sendWeChatPersonalMessage(channel: ChannelConfig, chatId: string, content: string): Promise<{ success: boolean; error?: string }> {
+  if (!channel.wechatPersonalWebhookUrl) return { success: false, error: 'Missing personal WeChat bridge webhook URL' }
+  return sendCustomMessage({
+    ...channel,
+    customWebhookUrl: channel.wechatPersonalWebhookUrl,
+    customAuthHeader: channel.wechatPersonalAuthToken ? 'Authorization' : undefined,
+    customAuthValue: channel.wechatPersonalAuthToken ? 'Bearer ' + channel.wechatPersonalAuthToken : undefined,
+    customPayloadTemplate: channel.customPayloadTemplate || '{\n  "chat_id": "{{chatId}}",\n  "text": "{{content}}",\n  "platform": "wechat_personal"\n}',
+  }, chatId, content)
+}
+
 async function sendSlackMessage(channel: ChannelConfig, chatId: string, content: string): Promise<{ success: boolean; error?: string }> {
   if (!channel.slackBotToken) return { success: false, error: 'Missing Slack bot token' }
   try {
@@ -419,9 +430,12 @@ async function sendMessageForPlatform(channel: ChannelConfig, chatId: string, co
     case 'dingtalk':
       return sendDingTalkMessage(channel, chatId, content)
     case 'wechat':
+    case 'wechat_personal':
     case 'wechat_official':
     case 'wechat_miniprogram':
-      return sendWeChatMessage(channel, chatId, content)
+      return channel.platform === 'wechat_personal'
+        ? sendWeChatPersonalMessage(channel, chatId, content)
+        : sendWeChatMessage(channel, chatId, content)
     case 'slack':
       return sendSlackMessage(channel, chatId, content)
     case 'telegram':
@@ -924,9 +938,12 @@ export class ChannelService {
             await this.handleDingTalkWebhook(req, res, channel)
             break
           case 'wechat':
+          case 'wechat_personal':
           case 'wechat_official':
           case 'wechat_miniprogram':
-            await this.handleWeChatWebhook(req, res, channel)
+            await (platform === 'wechat_personal'
+              ? this.handleWeChatPersonalWebhook(req, res, channel)
+              : this.handleWeChatWebhook(req, res, channel))
             break
           case 'slack':
             await this.handleSlackWebhook(req, res, channel)
@@ -1412,6 +1429,42 @@ export class ChannelService {
     res.json({ ok: true })
   }
 
+  private async handleWeChatPersonalWebhook(req: Request, res: Response, channel: ChannelConfig) {
+    const body = req.body
+
+    if (channel.webhookSecret) {
+      const providedSecret = req.headers['x-webhook-secret'] || req.query.secret
+      if (providedSecret !== channel.webhookSecret) {
+        return res.status(401).json({ error: 'Invalid webhook secret' })
+      }
+    }
+
+    const senderId = body.senderId || body.sender_id || body.user_id || body.from?.id || 'unknown'
+    const senderName = body.senderName || body.sender_name || body.user_name || body.from?.name || senderId
+    const content = body.content || body.text || body.message || body.msg || ''
+    const chatId = body.chatId || body.chat_id || body.conversation_id || body.channel_id || senderId
+
+    if (!content) {
+      return res.status(200).json({ ok: true, skipped: 'empty content' })
+    }
+
+    const message: ChannelMessage = {
+      id: body.id || body.message_id || `wechat-personal-${Date.now()}`,
+      channelId: channel.id,
+      platform: 'wechat_personal',
+      senderId,
+      senderName,
+      content,
+      timestamp: (() => { const ts = body.timestamp ? new Date(body.timestamp).getTime() : NaN; return Number.isNaN(ts) ? Date.now() : ts })(),
+      messageType: 'text',
+      chatId,
+      chatType: body.chatType || body.chat_type || 'private',
+    }
+
+    await this.emitMessage(channel, message, body)
+    res.json({ ok: true })
+  }
+
   private verifyFeishuSignature(
     timestamp: string,
     nonce: string,
@@ -1711,8 +1764,10 @@ export class ChannelService {
           token = await getDingTalkAccessToken(channel.appId, channel.appSecret)
           break
         case 'wechat':
+        case 'wechat_personal':
         case 'wechat_official':
         case 'wechat_miniprogram':
+          if (channel.platform === 'wechat_personal') return null
           if (!channel.appId || !channel.appSecret) return null
           token = await getWeChatAccessToken(channel.appId, channel.appSecret)
           break
@@ -1778,6 +1833,16 @@ export class ChannelService {
 
     const start = Date.now()
     try {
+      if (channel.platform === 'wechat_personal') {
+        if (!channel.wechatPersonalWebhookUrl) {
+          return { isHealthy: false, latencyMs: Date.now() - start, error: 'Missing personal WeChat bridge webhook URL' }
+        }
+        if ((channel.wechatPersonalBindingStatus || 'unbound') !== 'bound') {
+          return { isHealthy: false, latencyMs: Date.now() - start, error: 'Personal WeChat QR binding is not complete' }
+        }
+        return { isHealthy: true, latencyMs: Date.now() - start }
+      }
+
       // Try to get access token as a health indicator
       if (channel.appId && channel.appSecret) {
         await this.getAccessToken(channelId)

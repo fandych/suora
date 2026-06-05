@@ -428,6 +428,7 @@ export function useSkillIconsReady(): boolean {
 export function getChannelIconName(platform: string): string {
   const mapping: Record<string, string> = {
     'wechat':             'simple-icons:wechat',
+    'wechat_personal':    'simple-icons:wechat',
     'wechat_official':    'ri:wechat-channels-fill',
     'wechat_miniprogram': 'ri:mini-program-fill',
     'feishu':             'channel-feishu',

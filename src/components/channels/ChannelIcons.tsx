@@ -26,6 +26,7 @@ const CHANNEL_ICONS: Record<string, ChannelIconDef> = {
   feishu:              { icon: 'channel-feishu',               color: '#3370FF' },
   dingtalk:            { icon: 'channel-dingtalk',             color: '#0089FF' },
   wechat:              { icon: 'simple-icons:wechat',          color: '#07C160', collection: 'simple-icons' },
+  wechat_personal:     { icon: 'simple-icons:wechat',          color: '#07C160', collection: 'simple-icons' },
   wechat_official:     { icon: 'ri:wechat-channels-fill',      color: '#07C160', collection: 'ri' },
   wechat_miniprogram:  { icon: 'ri:mini-program-fill',         color: '#07C160', collection: 'ri' },
   slack:               { icon: 'simple-icons:slack',            color: '#4A154B', collection: 'simple-icons' },
@@ -125,6 +126,7 @@ export function getPlatformDisplayName(platform: string): string {
     case 'feishu': return translate('channels.platformFeishu', 'Feishu / Lark')
     case 'dingtalk': return translate('channels.platformDingTalk', 'DingTalk')
     case 'wechat': return translate('channels.platformWeChatWork', 'WeChat Work')
+    case 'wechat_personal': return translate('channels.platformWeChatPersonal', 'Personal WeChat')
     case 'wechat_official': return translate('channels.platformWeChatOfficial', 'WeChat Official Account')
     case 'wechat_miniprogram': return translate('channels.platformWeChatMiniProgram', 'WeChat Mini Program')
     case 'slack': return translate('channels.platformSlack', 'Slack')
