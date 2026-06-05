@@ -33,7 +33,8 @@ describe('channelService WeChat helpers', () => {
     })
 
     expect(payload).not.toBeNull()
-    const message = weChatWebhookToChannelMessage(payload!, 'channel-1', 'wechat_official')
+    if (!payload) throw new Error('Expected payload to be parsed')
+    const message = weChatWebhookToChannelMessage(payload, 'channel-1', 'wechat_official')
     expect(message).toEqual(expect.objectContaining({
       channelId: 'channel-1',
       platform: 'wechat_official',
