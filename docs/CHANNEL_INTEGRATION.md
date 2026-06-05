@@ -89,12 +89,17 @@ When using webhook delivery, configure the callback URL exactly as shown in the 
 
 For `wechat_personal`, Suora now treats the integration as a bridge-backed channel:
 
+- `wechatPersonalBotToken` stores the native personal WeChat bot token after a QR login
+- `wechatPersonalBaseUrl` stores the compatible API host used for long-poll updates and replies
+- `wechatPersonalAccountId` and `wechatPersonalUserId` capture the linked account identifiers returned by the QR flow
 - `wechatPersonalQrCodeUrl` lets operators scan a QR code in WeChat to bind the personal account
 - `wechatPersonalBindingStatus` tracks whether the bridge session is still waiting, bound, or unbound
 - `wechatPersonalWebhookUrl` is used for outbound replies after the bridge is bound
 - `wechatPersonalAuthToken` is sent with a bearer `Authorization` header when the bridge requires authentication
 
-Because personal WeChat does not expose the same official API surface as enterprise channels, this mode expects an external bridge to handle the actual login session and forward inbound messages into Suora's webhook endpoint.
+Suora can now bind a personal WeChat account directly from the channel editor by generating a QR code, waiting for the Tencent iLink login flow to finish, and then saving the returned bot token locally. Once bound, the desktop runtime uses long-poll updates for inbound messages and the native send-message API for replies.
+
+If you still rely on an external bridge, the older webhook URL and auth token fields remain available as a fallback path.
 
 ### Slack
 

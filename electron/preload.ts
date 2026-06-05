@@ -85,6 +85,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'channel:healthCheck',
   'channel:streamStatus',
   'channel:debugSend',
+  'channel:wechatPersonalLoginStart',
+  'channel:wechatPersonalLoginWait',
   'updater:check',
   'updater:getVersion',
   'updater:getState',

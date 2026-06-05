@@ -2687,6 +2687,29 @@ ipcMain.handle('channel:debugSend', async (_event, channelId: string, mockMessag
   }
 })
 
+ipcMain.handle('channel:wechatPersonalLoginStart', async (_event, force?: boolean) => {
+  try {
+    const channelService = getChannelService()
+    return await channelService.startWeChatPersonalLogin(Boolean(force))
+  } catch (error: unknown) {
+    return { success: false, message: error instanceof Error ? error.message : String(error) }
+  }
+})
+
+ipcMain.handle('channel:wechatPersonalLoginWait', async (_event, sessionKey: string, verifyCode?: string, timeoutMs?: number) => {
+  try {
+    const channelService = getChannelService()
+    return await channelService.waitForWeChatPersonalLogin(sessionKey, verifyCode, timeoutMs)
+  } catch (error: unknown) {
+    return {
+      success: false,
+      status: 'error',
+      sessionKey,
+      message: error instanceof Error ? error.message : String(error),
+    }
+  }
+})
+
 // ─── IPC Handlers: Logging ──────────────────────────────────────────
 
 ipcMain.handle('log:write', (_event, level: unknown, message: unknown, meta?: unknown) => {

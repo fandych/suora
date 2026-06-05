@@ -91,6 +91,24 @@ describe('channelMessageHandler WeChat XML', () => {
     expect(window.electron.invoke).not.toHaveBeenCalledWith('channel:start')
   })
 
+  it('does not start the webhook server for native personal WeChat channels with a bound token', async () => {
+    vi.mocked(window.electron.invoke).mockResolvedValue({ success: true })
+
+    await restoreChannelRuntime([
+      createChannel({
+        platform: 'wechat_personal',
+        connectionMode: 'webhook',
+        wechatPersonalBotToken: 'bot-token',
+        wechatPersonalBindingStatus: 'bound',
+      }),
+    ])
+
+    expect(window.electron.invoke).toHaveBeenCalledWith('channel:register', [
+      expect.objectContaining({ platform: 'wechat_personal', wechatPersonalBotToken: 'bot-token' }),
+    ])
+    expect(window.electron.invoke).not.toHaveBeenCalledWith('channel:start')
+  })
+
   it('does not start the webhook server when it is already running', async () => {
     vi.mocked(window.electron.invoke).mockImplementation(async (channel: string) => {
       if (channel === 'channel:status') return { running: true }

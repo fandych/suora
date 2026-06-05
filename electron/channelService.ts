@@ -3,6 +3,9 @@ import { createServer, type Server } from 'http'
 import crypto from 'crypto'
 import https from 'https'
 import http from 'http'
+import os from 'os'
+import path from 'path'
+import { promises as fs } from 'fs'
 import { getLogger } from './logger.js'
 import { DingTalkStreamClient, replyViaDingTalkSessionWebhook } from './dingtalkStream.js'
 import type { ChannelConfig, ChannelMessage, ChannelPlatform } from '../src/types/index.js'
@@ -29,6 +32,387 @@ const STATIC_TOKEN_EXPIRY_MS = 365 * 24 * 3600000
 
 // Max age for Slack request timestamps (5 minutes) to prevent replay attacks
 const SLACK_REQUEST_MAX_AGE_SECONDS = 300
+const WECHAT_XML_CONTENT_TYPES = ['text/xml', 'application/xml', 'application/*+xml']
+const WECHAT_PERSONAL_DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com'
+const WECHAT_PERSONAL_QR_BOT_TYPE = '3'
+const WECHAT_PERSONAL_LOGIN_TTL_MS = 5 * 60 * 1000
+const WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS = 35000
+const WECHAT_PERSONAL_API_TIMEOUT_MS = 15000
+
+type WeChatPersonalQrStatus =
+  | 'wait'
+  | 'scaned'
+  | 'confirmed'
+  | 'expired'
+  | 'scaned_but_redirect'
+  | 'need_verifycode'
+  | 'verify_code_blocked'
+  | 'binded_redirect'
+
+interface WeChatPersonalLoginSession {
+  sessionKey: string
+  qrcode: string
+  qrcodeUrl: string
+  startedAt: number
+  currentApiBaseUrl: string
+  pendingVerifyCode?: string
+}
+
+interface WeChatPersonalQrCodeResponse {
+  qrcode?: string
+  qrcode_img_content?: string
+}
+
+interface WeChatPersonalQrStatusResponse {
+  status?: WeChatPersonalQrStatus
+  bot_token?: string
+  ilink_bot_id?: string
+  baseurl?: string
+  ilink_user_id?: string
+  redirect_host?: string
+}
+
+interface WeChatPersonalLoginWaitResult {
+  success: boolean
+  status: 'connected' | 'already_bound' | 'need_verifycode' | 'verify_code_blocked' | 'expired' | 'timeout' | 'error'
+  message: string
+  qrCodeUrl?: string
+  sessionKey: string
+  botToken?: string
+  accountId?: string
+  baseUrl?: string
+  userId?: string
+}
+
+interface WeChatPersonalMessageItem {
+  type?: number
+  text_item?: { text?: string }
+  image_item?: unknown
+  voice_item?: unknown
+  file_item?: unknown
+  video_item?: unknown
+}
+
+interface WeChatPersonalInboundMessage {
+  seq?: number
+  message_id?: number | string
+  from_user_id?: string
+  to_user_id?: string
+  create_time_ms?: number
+  session_id?: string
+  context_token?: string
+  item_list?: WeChatPersonalMessageItem[]
+}
+
+interface WeChatPersonalUpdatesResponse {
+  ret?: number
+  errcode?: number
+  errmsg?: string
+  msgs?: WeChatPersonalInboundMessage[]
+  get_updates_buf?: string
+  longpolling_timeout_ms?: number
+}
+
+function isFreshWeChatPersonalLogin(session: WeChatPersonalLoginSession): boolean {
+  return Date.now() - session.startedAt < WECHAT_PERSONAL_LOGIN_TTL_MS
+}
+
+function getWeChatPersonalBaseUrl(channel: ChannelConfig): string {
+  return channel.wechatPersonalBaseUrl?.trim() || WECHAT_PERSONAL_DEFAULT_BASE_URL
+}
+
+function buildWeChatPersonalBaseInfo() {
+  return {
+    channel_version: 'suora',
+    bot_agent: 'Suora',
+  }
+}
+
+function isValidWeChatPersonalToken(token: string): boolean {
+  return token.length > 0 && token.length <= 4096 && !/[\r\n]/.test(token)
+}
+
+function buildWeChatPersonalHeaders(token?: string): Record<string, string> {
+  const randomUin = crypto.randomBytes(4).readUInt32BE(0)
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    AuthorizationType: 'ilink_bot_token',
+    'X-WECHAT-UIN': Buffer.from(String(randomUin), 'utf-8').toString('base64'),
+  }
+  if (token?.trim()) headers.Authorization = 'Bearer ' + token.trim()
+  return headers
+}
+
+async function postWeChatPersonalJson<T>(
+  baseUrl: string,
+  endpoint: string,
+  body: Record<string, unknown>,
+  options: { token?: string; timeoutMs?: number; query?: Record<string, string>; signal?: AbortSignal } = {},
+): Promise<T> {
+  const url = new URL(endpoint, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`)
+  for (const [key, value] of Object.entries(options.query || {})) {
+    url.searchParams.set(key, value)
+  }
+  const payload = JSON.stringify(body)
+  const timeoutMs = options.timeoutMs ?? WECHAT_PERSONAL_API_TIMEOUT_MS
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+  const abortListener = () => controller.abort()
+  options.signal?.addEventListener('abort', abortListener, { once: true })
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: buildWeChatPersonalHeaders(options.token),
+      body: payload,
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    if (!response.ok) throw new Error(`HTTP ${response.status}: ${text}`)
+    return JSON.parse(text) as T
+  } finally {
+    clearTimeout(timeout)
+    options.signal?.removeEventListener('abort', abortListener)
+  }
+}
+
+function buildWeChatPersonalClientId(): string {
+  return `suora-wechat-${crypto.randomUUID()}`
+}
+
+function extractWeChatPersonalMessageContent(items: WeChatPersonalMessageItem[] | undefined): { content: string; messageType: ChannelMessage['messageType'] } | null {
+  if (!items || items.length === 0) return null
+  for (const item of items) {
+    switch (item.type) {
+      case 1:
+        return { content: item.text_item?.text || '', messageType: 'text' }
+      case 2:
+        return { content: '[Image]', messageType: 'image' }
+      case 3:
+        return { content: '[Voice]', messageType: 'voice' }
+      case 4:
+        return { content: '[File]', messageType: 'file' }
+      case 5:
+        return { content: '[Video]', messageType: 'file' }
+      default:
+        break
+    }
+  }
+  return null
+}
+
+export function weChatPersonalMessageToChannelMessage(message: WeChatPersonalInboundMessage, channelId: string): ChannelMessage | null {
+  const parsed = extractWeChatPersonalMessageContent(message.item_list)
+  if (!parsed || !message.from_user_id) return null
+  const timestamp = typeof message.create_time_ms === 'number' && Number.isFinite(message.create_time_ms)
+    ? message.create_time_ms
+    : Date.now()
+  return {
+    id: String(message.message_id || `${message.from_user_id}:${timestamp}`),
+    channelId,
+    platform: 'wechat_personal',
+    senderId: message.from_user_id,
+    senderName: message.from_user_id,
+    content: parsed.content,
+    timestamp,
+    messageType: parsed.messageType,
+    chatId: message.from_user_id,
+    chatType: 'private',
+  }
+}
+
+async function ensureWeChatPersonalStateDir(): Promise<string> {
+  const dir = path.join(os.homedir(), '.suora', 'channel-state', 'wechat-personal')
+  await fs.mkdir(dir, { recursive: true })
+  return dir
+}
+
+async function readWeChatPersonalSyncCursor(channelId: string): Promise<string> {
+  try {
+    const dir = await ensureWeChatPersonalStateDir()
+    const file = path.join(dir, `${channelId}.sync`)
+    return await fs.readFile(file, 'utf-8')
+  } catch {
+    return ''
+  }
+}
+
+async function writeWeChatPersonalSyncCursor(channelId: string, cursor: string): Promise<void> {
+  const dir = await ensureWeChatPersonalStateDir()
+  const file = path.join(dir, `${channelId}.sync`)
+  await fs.writeFile(file, cursor, 'utf-8')
+}
+
+export interface WeChatWebhookPayload {
+  ToUserName: string
+  FromUserName: string
+  CreateTime: number
+  MsgType?: 'text' | 'image' | 'voice' | 'video' | 'location' | 'link' | 'event'
+  Content?: string
+  PicUrl?: string
+  MediaId?: string
+  Format?: string
+  Recognition?: string
+  ThumbMediaId?: string
+  Location_X?: string
+  Location_Y?: string
+  Label?: string
+  Title?: string
+  Description?: string
+  Url?: string
+  Event?: string
+  EventKey?: string
+  MsgId?: string
+  AgentID?: string
+  Encrypt?: string
+}
+
+function getWeChatXmlTag(xml: string, tag: string): string | undefined {
+  const escapedTag = tag.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&')
+  const cdataMatch = xml.match(new RegExp(`<${escapedTag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${escapedTag}>`))
+  if (cdataMatch) return cdataMatch[1]
+  const plainMatch = xml.match(new RegExp(`<${escapedTag}>([^<]*)</${escapedTag}>`))
+  return plainMatch ? plainMatch[1] : undefined
+}
+
+function getWeChatStringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function getWeChatNumberValue(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number.parseInt(String(value ?? '0'), 10)
+  return Number.isFinite(num) ? num : 0
+}
+
+export function parseWeChatWebhookPayload(body: unknown): WeChatWebhookPayload | null {
+  if (typeof body === 'string') {
+    const xml = body.trim()
+    if (!xml.startsWith('<xml>') || !xml.endsWith('</xml>')) return null
+    const msgType = getWeChatXmlTag(xml, 'MsgType')?.trim() as WeChatWebhookPayload['MsgType'] | undefined
+    return {
+      ToUserName: getWeChatXmlTag(xml, 'ToUserName') || '',
+      FromUserName: getWeChatXmlTag(xml, 'FromUserName') || '',
+      CreateTime: getWeChatNumberValue(getWeChatXmlTag(xml, 'CreateTime')),
+      MsgType: msgType,
+      Content: getWeChatXmlTag(xml, 'Content'),
+      PicUrl: getWeChatXmlTag(xml, 'PicUrl'),
+      MediaId: getWeChatXmlTag(xml, 'MediaId'),
+      Format: getWeChatXmlTag(xml, 'Format'),
+      Recognition: getWeChatXmlTag(xml, 'Recognition'),
+      ThumbMediaId: getWeChatXmlTag(xml, 'ThumbMediaId'),
+      Location_X: getWeChatXmlTag(xml, 'Location_X'),
+      Location_Y: getWeChatXmlTag(xml, 'Location_Y'),
+      Label: getWeChatXmlTag(xml, 'Label'),
+      Title: getWeChatXmlTag(xml, 'Title'),
+      Description: getWeChatXmlTag(xml, 'Description'),
+      Url: getWeChatXmlTag(xml, 'Url'),
+      Event: getWeChatXmlTag(xml, 'Event'),
+      EventKey: getWeChatXmlTag(xml, 'EventKey'),
+      MsgId: getWeChatXmlTag(xml, 'MsgId'),
+      AgentID: getWeChatXmlTag(xml, 'AgentID'),
+      Encrypt: getWeChatXmlTag(xml, 'Encrypt'),
+    }
+  }
+
+  if (!body || typeof body !== 'object') return null
+  const record = body as Record<string, unknown>
+  const msgType = getWeChatStringValue(record.MsgType)?.trim() as WeChatWebhookPayload['MsgType'] | undefined
+  return {
+    ToUserName: getWeChatStringValue(record.ToUserName) || '',
+    FromUserName: getWeChatStringValue(record.FromUserName) || '',
+    CreateTime: getWeChatNumberValue(record.CreateTime),
+    MsgType: msgType,
+    Content: getWeChatStringValue(record.Content),
+    PicUrl: getWeChatStringValue(record.PicUrl),
+    MediaId: getWeChatStringValue(record.MediaId),
+    Format: getWeChatStringValue(record.Format),
+    Recognition: getWeChatStringValue(record.Recognition),
+    ThumbMediaId: getWeChatStringValue(record.ThumbMediaId),
+    Location_X: getWeChatStringValue(record.Location_X),
+    Location_Y: getWeChatStringValue(record.Location_Y),
+    Label: getWeChatStringValue(record.Label),
+    Title: getWeChatStringValue(record.Title),
+    Description: getWeChatStringValue(record.Description),
+    Url: getWeChatStringValue(record.Url),
+    Event: getWeChatStringValue(record.Event),
+    EventKey: getWeChatStringValue(record.EventKey),
+    MsgId: getWeChatStringValue(record.MsgId),
+    AgentID: getWeChatStringValue(record.AgentID),
+    Encrypt: getWeChatStringValue(record.Encrypt),
+  }
+}
+
+export function buildWeChatSignature(token: string, timestamp: string, nonce: string, encrypted?: string): string {
+  const parts = encrypted ? [token, timestamp, nonce, encrypted] : [token, timestamp, nonce]
+  return crypto.createHash('sha1').update(parts.sort().join('')).digest('hex')
+}
+
+export function weChatWebhookToChannelMessage(
+  payload: WeChatWebhookPayload,
+  channelId: string,
+  platform: ChannelPlatform
+): ChannelMessage {
+  let content = ''
+  let messageType: ChannelMessage['messageType'] = 'text'
+
+  switch (payload.MsgType) {
+    case 'image':
+      content = payload.PicUrl || payload.MediaId || '[Image]'
+      messageType = 'image'
+      break
+    case 'voice':
+      content = payload.Recognition || payload.MediaId || '[Voice]'
+      messageType = 'voice'
+      break
+    case 'video':
+      content = payload.ThumbMediaId || payload.MediaId || '[Video]'
+      messageType = 'file'
+      break
+    case 'location':
+      content = `[Location] ${payload.Label || 'Location'}`
+      if (payload.Location_X || payload.Location_Y) {
+        content += ` (${payload.Location_X || ''}, ${payload.Location_Y || ''})`
+      }
+      break
+    case 'link':
+      content = `[Link] ${payload.Title || 'Link'}`
+      if (payload.Url) content += `: ${payload.Url}`
+      if (payload.Description) content += `\n${payload.Description}`
+      break
+    case 'event':
+      content = `[Event: ${payload.Event || 'unknown'}${payload.EventKey ? ` - ${payload.EventKey}` : ''}]`
+      break
+    case 'text':
+    default:
+      content = payload.Content || ''
+      break
+  }
+
+  const fallbackIdParts = [
+    platform,
+    payload.FromUserName || 'unknown',
+    payload.CreateTime || Date.now(),
+    payload.Event || payload.MsgType || 'message',
+  ]
+
+  return {
+    id: payload.MsgId || fallbackIdParts.join(':'),
+    channelId,
+    platform,
+    senderId: payload.FromUserName,
+    senderName: payload.FromUserName,
+    content,
+    timestamp: (payload.CreateTime || Math.floor(Date.now() / 1000)) * 1000,
+    messageType,
+    chatId: payload.FromUserName,
+    chatType: 'private',
+  }
+}
+
+function getWeChatVerificationToken(channel: ChannelConfig): string | undefined {
+  if (channel.platform === 'wechat_official') return channel.wechatOfficialToken || channel.verificationToken
+  return channel.verificationToken
+}
 
 async function httpRequest(url: string, options: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
@@ -139,6 +523,93 @@ async function getTeamsAccessToken(appId: string, appPassword: string): Promise<
   return data.access_token
 }
 
+async function fetchWeChatPersonalQrCode(localTokenList: string[]): Promise<WeChatPersonalQrCodeResponse> {
+  return postWeChatPersonalJson<WeChatPersonalQrCodeResponse>(
+    WECHAT_PERSONAL_DEFAULT_BASE_URL,
+    'ilink/bot/get_bot_qrcode',
+    { local_token_list: localTokenList },
+    {
+      query: { bot_type: WECHAT_PERSONAL_QR_BOT_TYPE },
+      timeoutMs: WECHAT_PERSONAL_API_TIMEOUT_MS,
+    },
+  )
+}
+
+async function pollWeChatPersonalQrStatus(
+  baseUrl: string,
+  qrcode: string,
+  verifyCode?: string,
+): Promise<WeChatPersonalQrStatusResponse> {
+  return postWeChatPersonalJson<WeChatPersonalQrStatusResponse>(
+    baseUrl,
+    'ilink/bot/get_qrcode_status',
+    {},
+    {
+      query: {
+        qrcode,
+        ...(verifyCode ? { verify_code: verifyCode } : {}),
+      },
+      timeoutMs: WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS,
+    },
+  )
+}
+
+async function fetchWeChatPersonalUpdates(
+  channel: ChannelConfig,
+  cursor: string,
+  signal?: AbortSignal,
+): Promise<WeChatPersonalUpdatesResponse> {
+  return postWeChatPersonalJson<WeChatPersonalUpdatesResponse>(
+    getWeChatPersonalBaseUrl(channel),
+    'ilink/bot/getupdates',
+    {
+      get_updates_buf: cursor,
+      base_info: buildWeChatPersonalBaseInfo(),
+    },
+    {
+      token: channel.wechatPersonalBotToken,
+      timeoutMs: WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS,
+      signal,
+    },
+  )
+}
+
+async function sendWeChatPersonalNativeMessage(
+  channel: ChannelConfig,
+  chatId: string,
+  content: string,
+  contextToken?: string,
+): Promise<{ success: boolean; error?: string }> {
+  if (!channel.wechatPersonalBotToken) {
+    return { success: false, error: 'Missing personal WeChat bot token' }
+  }
+  try {
+    await postWeChatPersonalJson(
+      getWeChatPersonalBaseUrl(channel),
+      'ilink/bot/sendmessage',
+      {
+        msg: {
+          from_user_id: '',
+          to_user_id: chatId,
+          client_id: buildWeChatPersonalClientId(),
+          message_type: 2,
+          message_state: 2,
+          item_list: [{ type: 1, text_item: { text: content } }],
+          ...(contextToken ? { context_token: contextToken } : {}),
+        },
+        base_info: buildWeChatPersonalBaseInfo(),
+      },
+      {
+        token: channel.wechatPersonalBotToken,
+        timeoutMs: WECHAT_PERSONAL_API_TIMEOUT_MS,
+      },
+    )
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) }
+  }
+}
+
 // ─── Message Sending ───────────────────────────────────────────────
 
 async function sendFeishuMessage(channel: ChannelConfig, chatId: string, content: string): Promise<{ success: boolean; error?: string }> {
@@ -210,6 +681,9 @@ async function sendWeChatMessage(channel: ChannelConfig, chatId: string, content
 }
 
 async function sendWeChatPersonalMessage(channel: ChannelConfig, chatId: string, content: string): Promise<{ success: boolean; error?: string }> {
+  if (channel.wechatPersonalBotToken) {
+    return sendWeChatPersonalNativeMessage(channel, chatId, content)
+  }
   if (!channel.wechatPersonalWebhookUrl) return { success: false, error: 'Missing personal WeChat bridge webhook URL' }
   return sendCustomMessage({
     ...channel,
@@ -878,6 +1352,9 @@ export class ChannelService {
   private channels: Map<string, ChannelConfig> = new Map()
   private messageHandler: ChannelEventHandler | null = null
   private streamClients: Map<string, DingTalkStreamClient> = new Map()
+  private weChatPersonalPollers: Map<string, AbortController> = new Map()
+  private weChatPersonalLoginSessions: Map<string, WeChatPersonalLoginSession> = new Map()
+  private weChatPersonalContextTokens: Map<string, string> = new Map()
   // Track session webhooks for stream mode replies (channelId:chatId -> webhook URL)
   private sessionWebhooks: Map<string, { url: string; expiresAt: number }> = new Map()
   // Dedup: track processed message IDs to prevent duplicate handling
@@ -896,6 +1373,7 @@ export class ChannelService {
   }
 
   private setupMiddleware() {
+    this.app.use(express.text({ type: WECHAT_XML_CONTENT_TYPES }))
     // Parse JSON payloads
     this.app.use(express.json())
     // Parse URL-encoded payloads
@@ -916,6 +1394,36 @@ export class ChannelService {
     // Health check
     this.app.get('/health', (_req: Request, res: Response) => {
       res.json({ status: 'ok', timestamp: Date.now() })
+    })
+
+    this.app.get('/webhook/:platform/:channelId', async (req: Request, res: Response) => {
+      const platform = req.params.platform as string
+      const channelId = req.params.channelId as string
+
+      try {
+        const channel = this.channels.get(channelId)
+        if (!channel || !channel.enabled) {
+          return res.status(404).json({ error: 'Channel not found or disabled' })
+        }
+
+        switch (platform as ChannelPlatform) {
+          case 'wechat':
+          case 'wechat_official':
+          case 'wechat_miniprogram':
+            await this.handleWeChatWebhook(req, res, channel)
+            break
+          default:
+            res.status(405).json({ error: 'GET not supported for this platform' })
+            break
+        }
+      } catch (error) {
+        getLogger().error('GET webhook handling failed', {
+          error,
+          platform,
+          channelId,
+        })
+        res.status(500).json({ error: 'Webhook handling failed' })
+      }
     })
 
     // Generic webhook endpoint - routes to platform-specific handlers
@@ -972,6 +1480,175 @@ export class ChannelService {
         res.status(500).json({ error: 'Internal server error' })
       }
     })
+  }
+
+  private purgeExpiredWeChatPersonalLogins() {
+    for (const [sessionKey, session] of this.weChatPersonalLoginSessions) {
+      if (!isFreshWeChatPersonalLogin(session)) {
+        this.weChatPersonalLoginSessions.delete(sessionKey)
+      }
+    }
+  }
+
+  private getWeChatPersonalLocalTokenList(): string[] {
+    return Array.from(this.channels.values())
+      .map((channel) => channel.wechatPersonalBotToken?.trim())
+      .filter((token): token is string => Boolean(token && isValidWeChatPersonalToken(token)))
+      // Match the upstream login flow, which only forwards a small recent token set.
+      .slice(-10)
+  }
+
+  public async startWeChatPersonalLogin(force = false): Promise<{ success: boolean; qrCodeUrl?: string; sessionKey?: string; message: string }> {
+    this.purgeExpiredWeChatPersonalLogins()
+
+    const existing = Array.from(this.weChatPersonalLoginSessions.values()).find((session) => isFreshWeChatPersonalLogin(session))
+    if (!force && existing) {
+      return {
+        success: true,
+        qrCodeUrl: existing.qrcodeUrl,
+        sessionKey: existing.sessionKey,
+        message: '二维码已生成，请继续扫码绑定。',
+      }
+    }
+
+    try {
+      const qr = await fetchWeChatPersonalQrCode(this.getWeChatPersonalLocalTokenList())
+      if (!qr.qrcode || !qr.qrcode_img_content) {
+        return { success: false, message: '未能获取微信登录二维码。' }
+      }
+      const sessionKey = crypto.randomUUID()
+      this.weChatPersonalLoginSessions.set(sessionKey, {
+        sessionKey,
+        qrcode: qr.qrcode,
+        qrcodeUrl: qr.qrcode_img_content,
+        startedAt: Date.now(),
+        currentApiBaseUrl: WECHAT_PERSONAL_DEFAULT_BASE_URL,
+      })
+      return {
+        success: true,
+        qrCodeUrl: qr.qrcode_img_content,
+        sessionKey,
+        message: '请使用手机微信扫码完成绑定。',
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : String(error),
+      }
+    }
+  }
+
+  public async waitForWeChatPersonalLogin(sessionKey: string, verifyCode?: string, timeoutMs = WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS): Promise<WeChatPersonalLoginWaitResult> {
+    this.purgeExpiredWeChatPersonalLogins()
+    const session = this.weChatPersonalLoginSessions.get(sessionKey)
+    if (!session) {
+      return { success: false, status: 'error', sessionKey, message: '当前没有进行中的微信绑定会话。' }
+    }
+    if (!isFreshWeChatPersonalLogin(session)) {
+      this.weChatPersonalLoginSessions.delete(sessionKey)
+      return { success: false, status: 'expired', sessionKey, message: '二维码已过期，请重新生成。' }
+    }
+    if (verifyCode?.trim()) {
+      session.pendingVerifyCode = verifyCode.trim()
+    }
+
+    const deadline = Date.now() + Math.max(timeoutMs, 1000)
+    while (Date.now() < deadline) {
+      try {
+        const status = await pollWeChatPersonalQrStatus(session.currentApiBaseUrl, session.qrcode, session.pendingVerifyCode)
+        switch (status.status) {
+          case 'wait':
+          case 'scaned':
+            await new Promise((resolve) => setTimeout(resolve, 1000))
+            break
+          case 'scaned_but_redirect':
+            if (status.redirect_host) {
+              session.currentApiBaseUrl = `https://${status.redirect_host}`
+            }
+            break
+          case 'need_verifycode':
+            return {
+              success: true,
+              status: 'need_verifycode',
+              sessionKey,
+              qrCodeUrl: session.qrcodeUrl,
+              message: '请输入手机微信上显示的数字验证码。',
+            }
+          case 'verify_code_blocked':
+            session.pendingVerifyCode = undefined
+            return {
+              success: false,
+              status: 'verify_code_blocked',
+              sessionKey,
+              qrCodeUrl: session.qrcodeUrl,
+              message: '验证码输入错误次数过多，请重新生成二维码。',
+            }
+          case 'expired': {
+            const qr = await fetchWeChatPersonalQrCode(this.getWeChatPersonalLocalTokenList())
+            if (qr.qrcode && qr.qrcode_img_content) {
+              session.qrcode = qr.qrcode
+              session.qrcodeUrl = qr.qrcode_img_content
+              session.startedAt = Date.now()
+              session.currentApiBaseUrl = WECHAT_PERSONAL_DEFAULT_BASE_URL
+              session.pendingVerifyCode = undefined
+              return {
+                success: true,
+                status: 'expired',
+                sessionKey,
+                qrCodeUrl: qr.qrcode_img_content,
+                message: '二维码已刷新，请重新扫码。',
+              }
+            }
+            return {
+              success: false,
+              status: 'expired',
+              sessionKey,
+              message: '二维码已过期，请重新生成。',
+            }
+          }
+          case 'binded_redirect':
+            this.weChatPersonalLoginSessions.delete(sessionKey)
+            return {
+              success: true,
+              status: 'already_bound',
+              sessionKey,
+              qrCodeUrl: session.qrcodeUrl,
+              message: '该微信已绑定，无需重复登录。',
+            }
+          case 'confirmed':
+            this.weChatPersonalLoginSessions.delete(sessionKey)
+            return {
+              success: true,
+              status: 'connected',
+              sessionKey,
+              qrCodeUrl: session.qrcodeUrl,
+              botToken: status.bot_token,
+              accountId: status.ilink_bot_id,
+              baseUrl: status.baseurl || session.currentApiBaseUrl,
+              userId: status.ilink_user_id,
+              message: '微信扫码绑定成功。',
+            }
+          default:
+            break
+        }
+      } catch (error) {
+        return {
+          success: false,
+          status: 'error',
+          sessionKey,
+          qrCodeUrl: session.qrcodeUrl,
+          message: error instanceof Error ? error.message : String(error),
+        }
+      }
+    }
+
+    return {
+      success: true,
+      status: 'timeout',
+      sessionKey,
+      qrCodeUrl: session.qrcodeUrl,
+      message: '正在等待扫码确认。',
+    }
   }
 
   /**
@@ -1070,45 +1747,51 @@ export class ChannelService {
    * WeChat Work webhook handler
    */
   private async handleWeChatWebhook(req: Request, res: Response, channel: ChannelConfig) {
-    const body = req.body
+    const token = getWeChatVerificationToken(channel)
+    const signature = (req.query.msg_signature || req.query.signature) as string | undefined
+    const timestamp = req.query.timestamp as string | undefined
+    const nonce = req.query.nonce as string | undefined
+    const parsedBody = parseWeChatWebhookPayload(req.body)
+    const encrypted = parsedBody?.Encrypt
 
-    // Handle echo verification (first-time setup)
     if (req.query.echostr) {
-      return res.send(req.query.echostr)
+      if (token && signature && timestamp && nonce) {
+        const valid = this.verifyWeChatSignature(token, timestamp, nonce, signature, encrypted)
+        if (!valid) {
+          getLogger().warn('WeChat verification signature failed', { channelId: channel.id, platform: channel.platform })
+          return res.status(403).send('Invalid signature')
+        }
+      }
+      return res.type('text/plain').send(String(req.query.echostr))
     }
 
-    // Verify signature if configured
-    if (channel.verificationToken) {
-      const signature = req.query.msg_signature as string
-      const timestamp = req.query.timestamp as string
-      const nonce = req.query.nonce as string
-
-      if (!this.verifyWeChatSignature(channel.verificationToken, timestamp, nonce, body, signature)) {
-        getLogger().warn('WeChat signature verification failed', { channelId: channel.id })
+    if (token && signature && timestamp && nonce) {
+      if (!this.verifyWeChatSignature(token, timestamp, nonce, signature, encrypted)) {
+        getLogger().warn('WeChat signature verification failed', { channelId: channel.id, platform: channel.platform })
         return res.status(403).json({ error: 'Invalid signature' })
       }
     }
 
-    // Parse WeChat XML message (simplified - in production use xml parser)
-    // For now, assume JSON mode or pre-parsed
-    if (body.MsgType === 'text') {
-      const message: ChannelMessage = {
-        id: body.MsgId || `${Date.now()}`,
+    if (!parsedBody) {
+      getLogger().warn('Unsupported WeChat webhook payload', {
         channelId: channel.id,
-        platform: 'wechat',
-        senderId: body.FromUserName,
-        senderName: body.FromUserName,
-        content: body.Content || '',
-        timestamp: parseInt(body.CreateTime, 10) * 1000,
-        messageType: 'text',
-        chatId: body.FromUserName,
-        chatType: 'private',
-      }
-
-      await this.emitMessage(channel, message, body)
+        platform: channel.platform,
+        bodyType: typeof req.body,
+      })
+      return res.status(400).json({ error: 'Invalid WeChat payload' })
     }
 
-    res.json({ success: true })
+    if (parsedBody.Encrypt && !parsedBody.MsgType) {
+      getLogger().warn('Encrypted WeChat payload received without decrypt support', {
+        channelId: channel.id,
+        platform: channel.platform,
+      })
+      return res.type('text/plain').send('success')
+    }
+
+    const message = weChatWebhookToChannelMessage(parsedBody, channel.id, channel.platform)
+    await this.emitMessage(channel, message, parsedBody)
+    res.type('text/plain').send('success')
   }
 
   /**
@@ -1506,12 +2189,10 @@ export class ChannelService {
     token: string,
     timestamp: string,
     nonce: string,
-    body: unknown,
-    receivedSignature: string
+    receivedSignature: string,
+    encrypted?: string
   ): boolean {
-    const arr = [token, timestamp, nonce, JSON.stringify(body)].sort()
-    const str = arr.join('')
-    const hash = crypto.createHash('sha1').update(str).digest('hex')
+    const hash = buildWeChatSignature(token, timestamp, nonce, encrypted)
     return this.timingSafeCompare(hash, receivedSignature)
   }
 
@@ -1609,6 +2290,7 @@ export class ChannelService {
     }
     // Manage stream connections for DingTalk stream-mode channels
     await this.syncStreamClients()
+    await this.syncWeChatPersonalPollers()
     // Manage email IMAP pollers
     this.syncEmailPollers()
   }
@@ -1654,6 +2336,11 @@ export class ChannelService {
       getLogger().info('DingTalk stream client disconnected on stop', { channelId: id })
     }
     this.streamClients.clear()
+    for (const controller of this.weChatPersonalPollers.values()) {
+      controller.abort()
+    }
+    this.weChatPersonalPollers.clear()
+    this.weChatPersonalContextTokens.clear()
     this.sessionWebhooks.clear()
     this.processedMessageIds.clear()
     this.stopDedupCleanup()
@@ -1687,8 +2374,9 @@ export class ChannelService {
   public isRunning(): boolean {
     const httpRunning = this.server !== null && this.server.listening
     const streamsActive = this.streamClients.size > 0
+    const weChatPersonalActive = this.weChatPersonalPollers.size > 0
     const emailPollersActive = this.emailPollers.size > 0
-    return httpRunning || streamsActive || emailPollersActive
+    return httpRunning || streamsActive || weChatPersonalActive || emailPollersActive
   }
 
   /**
@@ -1701,6 +2389,10 @@ export class ChannelService {
     if (channel.platform === 'dingtalk' && channel.connectionMode === 'stream') {
       const client = this.streamClients.get(channelId)
       return { connected: client?.isConnected() || false, mode: 'stream' }
+    }
+
+    if (channel.platform === 'wechat_personal' && channel.wechatPersonalBotToken) {
+      return { connected: this.weChatPersonalPollers.has(channelId), mode: 'stream' }
     }
 
     return { connected: this.server !== null && this.server.listening, mode: 'webhook' }
@@ -1731,6 +2423,10 @@ export class ChannelService {
         return replyViaDingTalkSessionWebhook(session.url, content)
       }
       // Fallback to normal API if session webhook expired
+    }
+
+    if (channel.platform === 'wechat_personal' && channel.wechatPersonalBotToken) {
+      return sendWeChatPersonalNativeMessage(channel, chatId, content, this.weChatPersonalContextTokens.get(`${channelId}:${chatId}`))
     }
 
     return sendMessageForPlatform(channel, chatId, content)
@@ -1767,7 +2463,10 @@ export class ChannelService {
         case 'wechat_personal':
         case 'wechat_official':
         case 'wechat_miniprogram':
-          if (channel.platform === 'wechat_personal') return null
+          if (channel.platform === 'wechat_personal') {
+            if (!channel.wechatPersonalBotToken) return null
+            return { token: channel.wechatPersonalBotToken, expiresAt: Date.now() + STATIC_TOKEN_EXPIRY_MS }
+          }
           if (!channel.appId || !channel.appSecret) return null
           token = await getWeChatAccessToken(channel.appId, channel.appSecret)
           break
@@ -1834,6 +2533,15 @@ export class ChannelService {
     const start = Date.now()
     try {
       if (channel.platform === 'wechat_personal') {
+        if (channel.wechatPersonalBotToken) {
+          return {
+            isHealthy: (channel.wechatPersonalBindingStatus || 'bound') === 'bound',
+            latencyMs: Date.now() - start,
+            error: (channel.wechatPersonalBindingStatus || 'bound') === 'bound'
+              ? undefined
+              : 'Personal WeChat QR binding is not complete',
+          }
+        }
         if (!channel.wechatPersonalWebhookUrl) {
           return { isHealthy: false, latencyMs: Date.now() - start, error: 'Missing personal WeChat bridge webhook URL' }
         }
@@ -1904,6 +2612,87 @@ export class ChannelService {
         await client.disconnect()
         this.streamClients.delete(id)
         getLogger().info('DingTalk stream client removed', { channelId: id })
+      }
+    }
+  }
+
+  private async syncWeChatPersonalPollers() {
+    const activeChannelIds = new Set<string>()
+
+    for (const [id, channel] of this.channels) {
+      if (channel.platform === 'wechat_personal' && channel.enabled && channel.wechatPersonalBotToken) {
+        activeChannelIds.add(id)
+        if (!this.weChatPersonalPollers.has(id)) {
+          const controller = new AbortController()
+          this.weChatPersonalPollers.set(id, controller)
+          this.runWeChatPersonalPoller(channel, controller).catch((error) => {
+            if (controller.signal.aborted) return
+            getLogger().error('Personal WeChat poller failed', {
+              channelId: id,
+              error: error instanceof Error ? error.message : String(error),
+            })
+          })
+        }
+      }
+    }
+
+    for (const [id, controller] of this.weChatPersonalPollers) {
+      if (!activeChannelIds.has(id)) {
+        controller.abort()
+        this.weChatPersonalPollers.delete(id)
+        const prefix = `${id}:`
+        for (const key of this.weChatPersonalContextTokens.keys()) {
+          if (key.startsWith(prefix)) this.weChatPersonalContextTokens.delete(key)
+        }
+        getLogger().info('Personal WeChat poller removed', { channelId: id })
+      }
+    }
+  }
+
+  private async runWeChatPersonalPoller(initialChannel: ChannelConfig, controller: AbortController) {
+    let cursor = await readWeChatPersonalSyncCursor(initialChannel.id)
+    let pollTimeoutMs = WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS
+
+    try {
+      while (!controller.signal.aborted) {
+        const channel = this.channels.get(initialChannel.id)
+        if (!channel || !channel.enabled || !channel.wechatPersonalBotToken) {
+          return
+        }
+
+        try {
+          const response = await fetchWeChatPersonalUpdates(channel, cursor, controller.signal)
+          if (response.get_updates_buf && response.get_updates_buf !== cursor) {
+            cursor = response.get_updates_buf
+            await writeWeChatPersonalSyncCursor(channel.id, cursor)
+          }
+          if (response.longpolling_timeout_ms && response.longpolling_timeout_ms > 0) {
+            pollTimeoutMs = response.longpolling_timeout_ms
+          }
+          if ((response.ret && response.ret !== 0) || (response.errcode && response.errcode !== 0)) {
+            throw new Error(response.errmsg || `ret=${response.ret ?? 'n/a'}, errcode=${response.errcode ?? 'n/a'}`)
+          }
+
+          for (const rawMessage of response.msgs || []) {
+            if (rawMessage.context_token && rawMessage.from_user_id) {
+              this.weChatPersonalContextTokens.set(`${channel.id}:${rawMessage.from_user_id}`, rawMessage.context_token)
+            }
+            const message = weChatPersonalMessageToChannelMessage(rawMessage, channel.id)
+            if (!message) continue
+            await this.emitMessage(channel, message, rawMessage)
+          }
+        } catch (error) {
+          if (controller.signal.aborted) return
+          getLogger().warn('Personal WeChat poll cycle failed', {
+            channelId: initialChannel.id,
+            error: error instanceof Error ? error.message : String(error),
+          })
+          await new Promise((resolve) => setTimeout(resolve, Math.min(pollTimeoutMs, 5000)))
+        }
+      }
+    } finally {
+      if (this.weChatPersonalPollers.get(initialChannel.id) === controller) {
+        this.weChatPersonalPollers.delete(initialChannel.id)
       }
     }
   }

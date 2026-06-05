@@ -317,23 +317,38 @@ function ChannelDetail({
               <DetailSection
                 eyebrow={getPlatformDisplayName('wechat_personal')}
                 title={t('channels.wechatPersonalBindingTitle', 'QR Binding')}
-                description={t('channels.wechatPersonalBindingTitleHint', 'Personal WeChat channels depend on a bridge session. Keep the QR code handy for re-binding and confirm the bridge endpoint before going live.')}
+                description={t('channels.wechatPersonalBindingTitleHint', 'Keep the QR code handy for re-binding. Native personal WeChat channels use the saved bot token and API host, while older bridge-based channels can still fall back to the webhook endpoint.')}
               >
                 <div className="space-y-3">
                   <DetailRow
                     label={t('channels.wechatPersonalBindingStatus', 'Binding Status')}
                     value={<span className={`rounded-full border px-3 py-1 text-[11px] ${wechatPersonalBindingTone}`}>{wechatPersonalBindingLabel}</span>}
                   />
-                  <DetailRow
-                    label={t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')}
-                    value={channel.wechatPersonalWebhookUrl
-                      ? <code className="break-all rounded-lg bg-surface-3/60 px-2 py-1 text-xs text-accent">{channel.wechatPersonalWebhookUrl}</code>
-                      : t('common.noData', 'No data')}
-                  />
+                  {channel.wechatPersonalBotToken ? (
+                    <>
+                      <DetailRow
+                        label={t('channels.wechatPersonalBaseUrl', 'API Base URL')}
+                        value={channel.wechatPersonalBaseUrl
+                          ? <code className="break-all rounded-lg bg-surface-3/60 px-2 py-1 text-xs text-accent">{channel.wechatPersonalBaseUrl}</code>
+                          : t('common.noData', 'No data')}
+                      />
+                      <DetailRow
+                        label={t('channels.wechatPersonalAccountId', 'Bound Account ID')}
+                        value={channel.wechatPersonalAccountId || t('common.noData', 'No data')}
+                      />
+                    </>
+                  ) : (
+                    <DetailRow
+                      label={t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')}
+                      value={channel.wechatPersonalWebhookUrl
+                        ? <code className="break-all rounded-lg bg-surface-3/60 px-2 py-1 text-xs text-accent">{channel.wechatPersonalWebhookUrl}</code>
+                        : t('common.noData', 'No data')}
+                    />
+                  )}
                   {channel.wechatPersonalQrCodeUrl ? (
                     <div className="rounded-3xl border border-border-subtle/45 bg-surface-0/55 p-4">
                       <div className="text-[12px] font-medium text-text-primary">{t('channels.wechatPersonalScanTitle', 'Scan to bind')}</div>
-                      <p className="mt-1 text-[11px] leading-5 text-text-secondary/78">{t('channels.wechatPersonalScanHint', 'Open WeChat on the target account, scan this QR code, then switch the binding status to Bound once the bridge confirms the session.')}</p>
+                      <p className="mt-1 text-[11px] leading-5 text-text-secondary/78">{t('channels.wechatPersonalScanHint', 'Open WeChat on the target account, scan this QR code, and keep Suora open until the binding flow reports success.')}</p>
                       <img
                         src={channel.wechatPersonalQrCodeUrl}
                         alt={t('channels.wechatPersonalQrPreview', 'Personal WeChat QR')}
