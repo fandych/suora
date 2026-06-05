@@ -92,6 +92,7 @@ For `wechat_personal`, Suora now treats the integration as a bridge-backed chann
 - `wechatPersonalQrCodeUrl` lets operators scan a QR code in WeChat to bind the personal account
 - `wechatPersonalBindingStatus` tracks whether the bridge session is still waiting, bound, or unbound
 - `wechatPersonalWebhookUrl` is used for outbound replies after the bridge is bound
+- `wechatPersonalAuthToken` is sent with a bearer `Authorization` header when the bridge requires authentication
 
 Because personal WeChat does not expose the same official API surface as enterprise channels, this mode expects an external bridge to handle the actual login session and forward inbound messages into Suora's webhook endpoint.
 

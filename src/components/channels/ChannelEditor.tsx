@@ -506,6 +506,7 @@ export function ChannelEditor({
                     placeholder={t('channels.wechatPersonalAuthTokenPlaceholder', 'Optional bearer or shared token')}
                     className={INPUT_CLASS}
                   />
+                  <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalAuthTokenHint', 'When provided, Suora sends it with a bearer Authorization header to the bridge endpoint.')}</p>
                 </label>
               </div>
 
