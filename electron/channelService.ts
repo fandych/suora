@@ -128,6 +128,10 @@ function buildWeChatPersonalBaseInfo() {
   }
 }
 
+function isValidWeChatPersonalToken(token: string): boolean {
+  return token.length > 0 && token.length <= 4096 && !/[\r\n]/.test(token)
+}
+
 function buildWeChatPersonalHeaders(token?: string): Record<string, string> {
   const randomUin = crypto.randomBytes(4).readUInt32BE(0)
   const headers: Record<string, string> = {
@@ -1489,7 +1493,8 @@ export class ChannelService {
   private getWeChatPersonalLocalTokenList(): string[] {
     return Array.from(this.channels.values())
       .map((channel) => channel.wechatPersonalBotToken?.trim())
-      .filter((token): token is string => Boolean(token))
+      .filter((token): token is string => Boolean(token && isValidWeChatPersonalToken(token)))
+      // Match the upstream login flow, which only forwards a small recent token set.
       .slice(-10)
   }
 
@@ -1554,6 +1559,7 @@ export class ChannelService {
         switch (status.status) {
           case 'wait':
           case 'scaned':
+            await new Promise((resolve) => setTimeout(resolve, 1000))
             break
           case 'scaned_but_redirect':
             if (status.redirect_host) {
@@ -2664,7 +2670,7 @@ export class ChannelService {
             pollTimeoutMs = response.longpolling_timeout_ms
           }
           if ((response.ret && response.ret !== 0) || (response.errcode && response.errcode !== 0)) {
-            throw new Error(response.errmsg || `ret=${response.ret ?? response.errcode}`)
+            throw new Error(response.errmsg || `ret=${response.ret ?? 'n/a'}, errcode=${response.errcode ?? 'n/a'}`)
           }
 
           for (const rawMessage of response.msgs || []) {

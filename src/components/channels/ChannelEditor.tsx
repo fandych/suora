@@ -167,6 +167,7 @@ export function ChannelEditor({
   }, [t])
 
   const handleStartWeChatLogin = useCallback(async () => {
+    if (wechatLoginBusy) return
     setWechatLoginBusy(true)
     setWechatLoginError('')
     setWechatVerifyRequired(false)
@@ -198,12 +199,12 @@ export function ChannelEditor({
       setWechatLoginBusy(false)
       setWechatLoginError(error instanceof Error ? error.message : String(error))
     }
-  }, [t, waitForWeChatLogin])
+  }, [t, waitForWeChatLogin, wechatLoginBusy])
 
   const handleSubmitWeChatVerifyCode = useCallback(() => {
-    if (!wechatLoginSessionKey || !wechatVerifyCode.trim()) return
+    if (wechatLoginBusy || !wechatLoginSessionKey || !wechatVerifyCode.trim()) return
     void waitForWeChatLogin(wechatLoginSessionKey, wechatVerifyCode.trim())
-  }, [wechatLoginSessionKey, wechatVerifyCode, waitForWeChatLogin])
+  }, [wechatLoginBusy, wechatLoginSessionKey, wechatVerifyCode, waitForWeChatLogin])
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
