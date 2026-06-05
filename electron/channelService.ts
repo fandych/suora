@@ -29,6 +29,173 @@ const STATIC_TOKEN_EXPIRY_MS = 365 * 24 * 3600000
 
 // Max age for Slack request timestamps (5 minutes) to prevent replay attacks
 const SLACK_REQUEST_MAX_AGE_SECONDS = 300
+const WECHAT_XML_CONTENT_TYPES = ['text/xml', 'application/xml', 'application/*+xml']
+
+export interface WeChatWebhookPayload {
+  ToUserName: string
+  FromUserName: string
+  CreateTime: number
+  MsgType?: 'text' | 'image' | 'voice' | 'video' | 'location' | 'link' | 'event'
+  Content?: string
+  PicUrl?: string
+  MediaId?: string
+  Format?: string
+  Recognition?: string
+  ThumbMediaId?: string
+  Location_X?: string
+  Location_Y?: string
+  Label?: string
+  Title?: string
+  Description?: string
+  Url?: string
+  Event?: string
+  EventKey?: string
+  MsgId?: string
+  AgentID?: string
+  Encrypt?: string
+}
+
+function getWeChatXmlTag(xml: string, tag: string): string | undefined {
+  const escapedTag = tag.replace(/[-.*+?^${}()|[\]\\]/g, '\\$&')
+  const cdataMatch = xml.match(new RegExp(`<${escapedTag}><!\\[CDATA\\[([\\s\\S]*?)\\]\\]></${escapedTag}>`))
+  if (cdataMatch) return cdataMatch[1]
+  const plainMatch = xml.match(new RegExp(`<${escapedTag}>([^<]*)</${escapedTag}>`))
+  return plainMatch ? plainMatch[1] : undefined
+}
+
+function getWeChatStringValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined
+}
+
+function getWeChatNumberValue(value: unknown): number {
+  const num = typeof value === 'number' ? value : Number.parseInt(String(value ?? '0'), 10)
+  return Number.isFinite(num) ? num : 0
+}
+
+export function parseWeChatWebhookPayload(body: unknown): WeChatWebhookPayload | null {
+  if (typeof body === 'string') {
+    const xml = body.trim()
+    if (!xml.startsWith('<xml>') || !xml.endsWith('</xml>')) return null
+    const msgType = getWeChatXmlTag(xml, 'MsgType')?.trim() as WeChatWebhookPayload['MsgType'] | undefined
+    return {
+      ToUserName: getWeChatXmlTag(xml, 'ToUserName') || '',
+      FromUserName: getWeChatXmlTag(xml, 'FromUserName') || '',
+      CreateTime: getWeChatNumberValue(getWeChatXmlTag(xml, 'CreateTime')),
+      MsgType: msgType,
+      Content: getWeChatXmlTag(xml, 'Content'),
+      PicUrl: getWeChatXmlTag(xml, 'PicUrl'),
+      MediaId: getWeChatXmlTag(xml, 'MediaId'),
+      Format: getWeChatXmlTag(xml, 'Format'),
+      Recognition: getWeChatXmlTag(xml, 'Recognition'),
+      ThumbMediaId: getWeChatXmlTag(xml, 'ThumbMediaId'),
+      Location_X: getWeChatXmlTag(xml, 'Location_X'),
+      Location_Y: getWeChatXmlTag(xml, 'Location_Y'),
+      Label: getWeChatXmlTag(xml, 'Label'),
+      Title: getWeChatXmlTag(xml, 'Title'),
+      Description: getWeChatXmlTag(xml, 'Description'),
+      Url: getWeChatXmlTag(xml, 'Url'),
+      Event: getWeChatXmlTag(xml, 'Event'),
+      EventKey: getWeChatXmlTag(xml, 'EventKey'),
+      MsgId: getWeChatXmlTag(xml, 'MsgId'),
+      AgentID: getWeChatXmlTag(xml, 'AgentID'),
+      Encrypt: getWeChatXmlTag(xml, 'Encrypt'),
+    }
+  }
+
+  if (!body || typeof body !== 'object') return null
+  const record = body as Record<string, unknown>
+  const msgType = getWeChatStringValue(record.MsgType)?.trim() as WeChatWebhookPayload['MsgType'] | undefined
+  return {
+    ToUserName: getWeChatStringValue(record.ToUserName) || '',
+    FromUserName: getWeChatStringValue(record.FromUserName) || '',
+    CreateTime: getWeChatNumberValue(record.CreateTime),
+    MsgType: msgType,
+    Content: getWeChatStringValue(record.Content),
+    PicUrl: getWeChatStringValue(record.PicUrl),
+    MediaId: getWeChatStringValue(record.MediaId),
+    Format: getWeChatStringValue(record.Format),
+    Recognition: getWeChatStringValue(record.Recognition),
+    ThumbMediaId: getWeChatStringValue(record.ThumbMediaId),
+    Location_X: getWeChatStringValue(record.Location_X),
+    Location_Y: getWeChatStringValue(record.Location_Y),
+    Label: getWeChatStringValue(record.Label),
+    Title: getWeChatStringValue(record.Title),
+    Description: getWeChatStringValue(record.Description),
+    Url: getWeChatStringValue(record.Url),
+    Event: getWeChatStringValue(record.Event),
+    EventKey: getWeChatStringValue(record.EventKey),
+    MsgId: getWeChatStringValue(record.MsgId),
+    AgentID: getWeChatStringValue(record.AgentID),
+    Encrypt: getWeChatStringValue(record.Encrypt),
+  }
+}
+
+export function buildWeChatSignature(token: string, timestamp: string, nonce: string, encrypted?: string): string {
+  const parts = encrypted ? [token, timestamp, nonce, encrypted] : [token, timestamp, nonce]
+  return crypto.createHash('sha1').update(parts.sort().join('')).digest('hex')
+}
+
+export function weChatWebhookToChannelMessage(
+  payload: WeChatWebhookPayload,
+  channelId: string,
+  platform: ChannelPlatform
+): ChannelMessage {
+  let content = ''
+  let messageType: ChannelMessage['messageType'] = 'text'
+
+  switch (payload.MsgType) {
+    case 'image':
+      content = payload.PicUrl || payload.MediaId || '[Image]'
+      messageType = 'image'
+      break
+    case 'voice':
+      content = payload.Recognition || payload.MediaId || '[Voice]'
+      messageType = 'voice'
+      break
+    case 'video':
+      content = payload.ThumbMediaId || payload.MediaId || '[Video]'
+      messageType = 'file'
+      break
+    case 'location':
+      content = `[Location] ${payload.Label || 'Location'} (${payload.Location_X || ''}, ${payload.Location_Y || ''})`
+      break
+    case 'link':
+      content = `[Link] ${payload.Title || 'Link'}: ${payload.Url || ''}\n${payload.Description || ''}`
+      break
+    case 'event':
+      content = `[Event: ${payload.Event || 'unknown'}${payload.EventKey ? ` - ${payload.EventKey}` : ''}]`
+      break
+    case 'text':
+    default:
+      content = payload.Content || ''
+      break
+  }
+
+  const fallbackIdParts = [
+    platform,
+    payload.FromUserName || 'unknown',
+    payload.CreateTime || Date.now(),
+    payload.Event || payload.MsgType || 'message',
+  ]
+
+  return {
+    id: payload.MsgId || fallbackIdParts.join(':'),
+    channelId,
+    platform,
+    senderId: payload.FromUserName,
+    senderName: payload.FromUserName,
+    content,
+    timestamp: (payload.CreateTime || Math.floor(Date.now() / 1000)) * 1000,
+    messageType,
+    chatId: payload.FromUserName,
+    chatType: 'private',
+  }
+}
+
+function getWeChatVerificationToken(channel: ChannelConfig): string | undefined {
+  if (channel.platform === 'wechat_official') return channel.wechatOfficialToken || channel.verificationToken
+  return channel.verificationToken
+}
 
 async function httpRequest(url: string, options: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
@@ -896,6 +1063,7 @@ export class ChannelService {
   }
 
   private setupMiddleware() {
+    this.app.use(express.text({ type: WECHAT_XML_CONTENT_TYPES }))
     // Parse JSON payloads
     this.app.use(express.json())
     // Parse URL-encoded payloads
@@ -916,6 +1084,36 @@ export class ChannelService {
     // Health check
     this.app.get('/health', (_req: Request, res: Response) => {
       res.json({ status: 'ok', timestamp: Date.now() })
+    })
+
+    this.app.get('/webhook/:platform/:channelId', async (req: Request, res: Response) => {
+      const platform = req.params.platform as string
+      const channelId = req.params.channelId as string
+
+      try {
+        const channel = this.channels.get(channelId)
+        if (!channel || !channel.enabled) {
+          return res.status(404).json({ error: 'Channel not found or disabled' })
+        }
+
+        switch (platform as ChannelPlatform) {
+          case 'wechat':
+          case 'wechat_official':
+          case 'wechat_miniprogram':
+            await this.handleWeChatWebhook(req, res, channel)
+            break
+          default:
+            res.status(405).json({ error: 'GET not supported for this platform' })
+            break
+        }
+      } catch (error) {
+        getLogger().error('GET webhook handling failed', {
+          error,
+          platform,
+          channelId,
+        })
+        res.status(500).json({ error: 'Webhook handling failed' })
+      }
     })
 
     // Generic webhook endpoint - routes to platform-specific handlers
@@ -1070,45 +1268,51 @@ export class ChannelService {
    * WeChat Work webhook handler
    */
   private async handleWeChatWebhook(req: Request, res: Response, channel: ChannelConfig) {
-    const body = req.body
+    const token = getWeChatVerificationToken(channel)
+    const signature = (req.query.msg_signature || req.query.signature) as string | undefined
+    const timestamp = req.query.timestamp as string | undefined
+    const nonce = req.query.nonce as string | undefined
+    const parsedBody = parseWeChatWebhookPayload(req.body)
+    const encrypted = parsedBody?.Encrypt
 
-    // Handle echo verification (first-time setup)
     if (req.query.echostr) {
-      return res.send(req.query.echostr)
+      if (token && signature && timestamp && nonce) {
+        const valid = this.verifyWeChatSignature(token, timestamp, nonce, signature, encrypted)
+        if (!valid) {
+          getLogger().warn('WeChat verification signature failed', { channelId: channel.id, platform: channel.platform })
+          return res.status(403).send('Invalid signature')
+        }
+      }
+      return res.type('text/plain').send(String(req.query.echostr))
     }
 
-    // Verify signature if configured
-    if (channel.verificationToken) {
-      const signature = req.query.msg_signature as string
-      const timestamp = req.query.timestamp as string
-      const nonce = req.query.nonce as string
-
-      if (!this.verifyWeChatSignature(channel.verificationToken, timestamp, nonce, body, signature)) {
-        getLogger().warn('WeChat signature verification failed', { channelId: channel.id })
+    if (token && signature && timestamp && nonce) {
+      if (!this.verifyWeChatSignature(token, timestamp, nonce, signature, encrypted)) {
+        getLogger().warn('WeChat signature verification failed', { channelId: channel.id, platform: channel.platform })
         return res.status(403).json({ error: 'Invalid signature' })
       }
     }
 
-    // Parse WeChat XML message (simplified - in production use xml parser)
-    // For now, assume JSON mode or pre-parsed
-    if (body.MsgType === 'text') {
-      const message: ChannelMessage = {
-        id: body.MsgId || `${Date.now()}`,
+    if (!parsedBody) {
+      getLogger().warn('Unsupported WeChat webhook payload', {
         channelId: channel.id,
-        platform: 'wechat',
-        senderId: body.FromUserName,
-        senderName: body.FromUserName,
-        content: body.Content || '',
-        timestamp: parseInt(body.CreateTime, 10) * 1000,
-        messageType: 'text',
-        chatId: body.FromUserName,
-        chatType: 'private',
-      }
-
-      await this.emitMessage(channel, message, body)
+        platform: channel.platform,
+        bodyType: typeof req.body,
+      })
+      return res.status(400).json({ error: 'Invalid WeChat payload' })
     }
 
-    res.json({ success: true })
+    if (parsedBody.Encrypt && !parsedBody.MsgType) {
+      getLogger().warn('Encrypted WeChat payload received without decrypt support', {
+        channelId: channel.id,
+        platform: channel.platform,
+      })
+      return res.type('text/plain').send('success')
+    }
+
+    const message = weChatWebhookToChannelMessage(parsedBody, channel.id, channel.platform)
+    await this.emitMessage(channel, message, parsedBody)
+    res.type('text/plain').send('success')
   }
 
   /**
@@ -1506,12 +1710,10 @@ export class ChannelService {
     token: string,
     timestamp: string,
     nonce: string,
-    body: unknown,
-    receivedSignature: string
+    receivedSignature: string,
+    encrypted?: string
   ): boolean {
-    const arr = [token, timestamp, nonce, JSON.stringify(body)].sort()
-    const str = arr.join('')
-    const hash = crypto.createHash('sha1').update(str).digest('hex')
+    const hash = buildWeChatSignature(token, timestamp, nonce, encrypted)
     return this.timingSafeCompare(hash, receivedSignature)
   }
 
