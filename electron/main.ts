@@ -2055,8 +2055,7 @@ function getLoadedAutomationWindow(url?: string, reveal = false): BrowserWindow 
   const win = getAutomationWindow()
   if (reveal) showAutomationWindow(win)
   const currentUrl = win.webContents.getURL()
-  if (url) return win
-  if (!currentUrl || currentUrl === 'about:blank') {
+  if (!url && (!currentUrl || currentUrl === 'about:blank')) {
     throw new Error('No automation window available. Navigate to a URL first.')
   }
   return win

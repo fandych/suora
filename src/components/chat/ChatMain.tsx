@@ -149,7 +149,7 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
         <div className="mt-3 rounded-2xl border border-border-subtle/45 bg-surface-0/48 px-3 py-2.5">
           <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('chat.browserCurrentPage', 'Current page')}</div>
           <div className="mt-1 truncate text-[13px] font-semibold text-text-primary">{state?.title || t('chat.browserAwaitingPage', 'Waiting for AI to open a page')}</div>
-          <div className="mt-1 truncate font-(--font-code) text-[11px] text-text-muted/72">{state?.url || t('chat.browserNoPageYet', 'No page loaded yet')}</div>
+          <div className="mt-1 truncate font-[var(--font-code)] text-[11px] text-text-muted/72">{state?.url || t('chat.browserNoPageYet', 'No page loaded yet')}</div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
