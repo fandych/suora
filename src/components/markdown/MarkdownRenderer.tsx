@@ -5,6 +5,7 @@ import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
+import type { PluggableList } from 'unified'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import 'katex/dist/katex.min.css'
@@ -123,7 +124,7 @@ export function MarkdownRenderer({
   content: string
   allowHtml?: boolean
 }) {
-  const rehypePlugins = useMemo(
+  const rehypePlugins = useMemo<PluggableList>(
     () => allowHtml
       ? [rehypeRaw, [rehypeSanitize, MARKDOWN_SANITIZE_SCHEMA], rehypeKatex]
       : [rehypeKatex],
