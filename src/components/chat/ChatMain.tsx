@@ -92,11 +92,27 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
   const [busy, setBusy] = useState(false)
   const hasElectron = typeof window !== 'undefined' && typeof window.electron?.invoke === 'function'
 
-  const refreshState = useCallback(async () => {
+  const refreshState = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!hasElectron) return
+    if (!silent) setBusy(true)
+    try {
+      const result = await window.electron.invoke('browser:getState') as BrowserWorkbenchState & { error?: string }
+      if (result.error) throw new Error(result.error)
+      setState(result)
+    } catch (error) {
+      if (!silent) {
+        toast.error(t('chat.browserUnavailable', 'Browser unavailable'), error instanceof Error ? error.message : String(error))
+      }
+    } finally {
+      if (!silent) setBusy(false)
+    }
+  }, [hasElectron, t])
+
+  const runBrowserAction = useCallback(async (channel: 'browser:show' | 'browser:hide') => {
     if (!hasElectron) return
     setBusy(true)
     try {
-      const result = await window.electron.invoke('browser:getState') as BrowserWorkbenchState & { error?: string }
+      const result = await window.electron.invoke(channel) as BrowserWorkbenchState & { error?: string }
       if (result.error) throw new Error(result.error)
       setState(result)
     } catch (error) {
@@ -107,27 +123,58 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
   }, [hasElectron, t])
 
   const openBrowser = useCallback(async () => {
-    if (!hasElectron) return
-    setBusy(true)
-    try {
-      const result = await window.electron.invoke('browser:show') as BrowserWorkbenchState & { error?: string }
-      if (result.error) throw new Error(result.error)
-      setState(result)
-    } catch (error) {
-      toast.error(t('chat.browserUnavailable', 'Browser unavailable'), error instanceof Error ? error.message : String(error))
-    } finally {
-      setBusy(false)
-    }
-  }, [hasElectron, t])
+    await runBrowserAction('browser:show')
+  }, [runBrowserAction])
+
+  const hideBrowser = useCallback(async () => {
+    await runBrowserAction('browser:hide')
+  }, [runBrowserAction])
 
   useEffect(() => {
-    void refreshState()
+    void refreshState({ silent: true })
+    const refresh = () => void refreshState({ silent: true })
+    const intervalId = window.setInterval(refresh, 4000)
+    const handleVisibilityChange = () => {
+      if (!document.hidden) refresh()
+    }
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
   }, [refreshState])
 
   if (!hasElectron) return null
 
-  const isReady = Boolean(state?.url)
-  const actionLabel = state?.visible ? t('chat.focusBrowser', 'Focus browser') : t('chat.openBrowser', 'Open browser')
+  const hasBrowserWindow = Boolean(state?.available)
+  const isVisible = Boolean(state?.visible)
+  const hasPage = Boolean(state?.url)
+  const isReady = isVisible && hasPage
+  const isLoading = busy || state?.loading
+  const actionLabel = isVisible ? t('chat.focusBrowser', 'Focus browser') : t('chat.openBrowser', 'Open browser')
+  const statusLabel = isLoading
+    ? t('chat.browserLoading', 'Loading')
+    : isReady
+      ? t('chat.browserReady', 'Ready')
+      : isVisible
+        ? t('chat.browserOpen', 'Open')
+        : hasBrowserWindow
+          ? t('chat.browserHidden', 'Hidden')
+          : t('chat.browserIdle', 'Idle')
+  const statusClass = isReady
+    ? 'border-success/20 bg-success/10 text-success'
+    : isLoading
+      ? 'border-warning/20 bg-warning/10 text-warning'
+      : 'border-border-subtle/60 bg-surface-0/45 text-text-muted'
+  const dotClass = isLoading
+    ? 'bg-warning animate-pulse'
+    : isReady
+      ? 'bg-success'
+      : hasBrowserWindow
+        ? 'bg-accent'
+        : 'bg-text-muted/55'
 
   return (
     <div className={`relative overflow-hidden rounded-[28px] border border-accent/20 bg-[radial-gradient(circle_at_top_right,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-4 text-left shadow-[0_18px_44px_rgba(var(--t-accent-rgb),0.10)] ${className}`}>
@@ -138,9 +185,9 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
             <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/50">{t('chat.browserCollabEyebrow', 'Agent + Human browser')}</div>
             <h3 className="mt-1 text-[16px] font-semibold text-text-primary">{t('chat.browserCollabTitle', 'Collaborative Browser')}</h3>
           </div>
-          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${isReady ? 'border-success/20 bg-success/10 text-success' : 'border-border-subtle/60 bg-surface-0/45 text-text-muted'}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${busy || state?.loading ? 'bg-warning animate-pulse' : isReady ? 'bg-success' : 'bg-text-muted/55'}`} />
-            {busy || state?.loading ? t('chat.browserLoading', 'Loading') : isReady ? t('chat.browserReady', 'Ready') : t('chat.browserIdle', 'Idle')}
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${statusClass}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+            {statusLabel}
           </span>
         </div>
         <p className="mt-2 text-[12px] leading-5 text-text-secondary/78">
@@ -161,6 +208,17 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
             <IconifyIcon name="ui-external-link" size={14} color="currentColor" />
             {actionLabel}
           </button>
+          {isVisible && (
+            <button
+              type="button"
+              onClick={() => void hideBrowser()}
+              disabled={busy}
+              className="inline-flex items-center gap-2 rounded-2xl border border-border-subtle/50 bg-surface-0/48 px-3 py-2 text-[12px] font-semibold text-text-secondary transition-colors hover:bg-surface-2/55 hover:text-text-primary disabled:opacity-50"
+            >
+              <IconifyIcon name="ui-close" size={14} color="currentColor" />
+              {t('chat.hideBrowser', 'Hide browser')}
+            </button>
+          )}
           <button
             type="button"
             onClick={() => void refreshState()}
