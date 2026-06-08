@@ -2044,6 +2044,24 @@ function getAutomationWindow(): BrowserWindow {
   return automationWindow
 }
 
+function showAutomationWindow(win = getAutomationWindow()): BrowserWindow {
+  if (!win.isVisible()) win.show()
+  if (win.isMinimized()) win.restore()
+  win.focus()
+  return win
+}
+
+function getLoadedAutomationWindow(url?: string, reveal = false): BrowserWindow {
+  const win = getAutomationWindow()
+  if (reveal) showAutomationWindow(win)
+  const currentUrl = win.webContents.getURL()
+  if (url) return win
+  if (!currentUrl || currentUrl === 'about:blank') {
+    throw new Error('No automation window available. Navigate to a URL first.')
+  }
+  return win
+}
+
 function validateBrowserUrl(url: string): void {
   const parsed = new URL(url)
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
@@ -2051,12 +2069,13 @@ function validateBrowserUrl(url: string): void {
   }
 }
 
-async function navigateAutomationWindow(url: string): Promise<BrowserWindow> {
+async function navigateAutomationWindow(url: string, reveal = false): Promise<BrowserWindow> {
   validateBrowserUrl(url)
   // Best-effort DNS rebinding protection for browser navigation: resolve
   // the hostname and reject if any A/AAAA points at a private/loopback IP.
   await validatePublicHttpUrlWithDns(url)
   const win = getAutomationWindow()
+  if (reveal) showAutomationWindow(win)
   await Promise.race([
     win.loadURL(url),
     new Promise((_, reject) => setTimeout(() => reject(new Error('Navigation timed out')), BROWSER_TIMEOUT)),
@@ -2064,9 +2083,29 @@ async function navigateAutomationWindow(url: string): Promise<BrowserWindow> {
   return win
 }
 
+function getAutomationWindowState() {
+  if (!automationWindow || automationWindow.isDestroyed()) {
+    return {
+      available: false,
+      visible: false,
+      loading: false,
+      title: '',
+      url: '',
+    }
+  }
+
+  return {
+    available: true,
+    visible: automationWindow.isVisible(),
+    loading: automationWindow.webContents.isLoading(),
+    title: automationWindow.webContents.getTitle(),
+    url: automationWindow.webContents.getURL() === 'about:blank' ? '' : automationWindow.webContents.getURL(),
+  }
+}
+
 ipcMain.handle('browser:navigate', async (_event, url: string) => {
   try {
-    const win = await navigateAutomationWindow(url)
+    const win = await navigateAutomationWindow(url, true)
     const title = win.webContents.getTitle()
     const text = await win.webContents.executeJavaScript(
       `document.body ? document.body.innerText.slice(0, 8000) : ''`
@@ -2077,15 +2116,43 @@ ipcMain.handle('browser:navigate', async (_event, url: string) => {
   }
 })
 
+ipcMain.handle('browser:show', async (_event, url?: string) => {
+  try {
+    const win = url ? await navigateAutomationWindow(url, true) : showAutomationWindow()
+    return {
+      success: true,
+      ...getAutomationWindowState(),
+      title: win.webContents.getTitle(),
+      url: win.webContents.getURL() === 'about:blank' ? '' : win.webContents.getURL(),
+    }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('browser:hide', async () => {
+  try {
+    if (automationWindow && !automationWindow.isDestroyed()) automationWindow.hide()
+    return { success: true, ...getAutomationWindowState() }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('browser:getState', async () => {
+  try {
+    return getAutomationWindowState()
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
 ipcMain.handle('browser:screenshot', async (_event, url?: string) => {
   try {
     if (url) {
       await navigateAutomationWindow(url)
     }
-    const win = getAutomationWindow()
-    if (win.isDestroyed()) {
-      return { error: 'No automation window available. Navigate to a URL first.' }
-    }
+    const win = getLoadedAutomationWindow(url)
     const image = await win.webContents.capturePage()
     const base64 = image.toPNG().toString('base64')
     return { image: base64, format: 'png' }
@@ -2094,15 +2161,15 @@ ipcMain.handle('browser:screenshot', async (_event, url?: string) => {
   }
 })
 
-ipcMain.handle('browser:evaluate', async (_event, url: string, expression: string) => {
+ipcMain.handle('browser:evaluate', async (_event, url: string | undefined, expression: string) => {
   try {
-    validatePublicHttpUrl(url)
+    if (url) validatePublicHttpUrl(url)
     const script = SAFE_BROWSER_EVALUATIONS[expression]
     if (!script) {
       return { error: `Unsupported browser evaluation: ${expression}. Allowed: ${Object.keys(SAFE_BROWSER_EVALUATIONS).join(', ')}` }
     }
-    await navigateAutomationWindow(url)
-    const win = getAutomationWindow()
+    if (url) await navigateAutomationWindow(url)
+    const win = getLoadedAutomationWindow(url)
     const result = await Promise.race([
       win.webContents.executeJavaScript(script),
       new Promise((_, reject) => setTimeout(() => reject(new Error('Script execution timed out')), BROWSER_TIMEOUT)),
@@ -2113,10 +2180,10 @@ ipcMain.handle('browser:evaluate', async (_event, url: string, expression: strin
   }
 })
 
-ipcMain.handle('browser:extractLinks', async (_event, url: string) => {
+ipcMain.handle('browser:extractLinks', async (_event, url?: string) => {
   try {
-    await navigateAutomationWindow(url)
-    const win = getAutomationWindow()
+    if (url) await navigateAutomationWindow(url)
+    const win = getLoadedAutomationWindow(url)
     const links = await win.webContents.executeJavaScript(`
       Array.from(document.querySelectorAll('a[href]')).map(a => ({
         text: a.textContent.trim().slice(0, 200),
@@ -2129,10 +2196,10 @@ ipcMain.handle('browser:extractLinks', async (_event, url: string) => {
   }
 })
 
-ipcMain.handle('browser:extractText', async (_event, url: string) => {
+ipcMain.handle('browser:extractText', async (_event, url?: string) => {
   try {
-    await navigateAutomationWindow(url)
-    const win = getAutomationWindow()
+    if (url) await navigateAutomationWindow(url)
+    const win = getLoadedAutomationWindow(url)
     const text = await win.webContents.executeJavaScript(
       `document.body ? document.body.innerText : ''`
     )
@@ -2142,10 +2209,10 @@ ipcMain.handle('browser:extractText', async (_event, url: string) => {
   }
 })
 
-ipcMain.handle('browser:fillForm', async (_event, url: string, selector: string, value: string) => {
+ipcMain.handle('browser:fillForm', async (_event, url: string | undefined, selector: string, value: string) => {
   try {
-    await navigateAutomationWindow(url)
-    const win = getAutomationWindow()
+    if (url) await navigateAutomationWindow(url, true)
+    const win = getLoadedAutomationWindow(url, true)
     const filled = await win.webContents.executeJavaScript(`
       (() => {
         const sel = ${JSON.stringify(selector)};
@@ -2164,10 +2231,10 @@ ipcMain.handle('browser:fillForm', async (_event, url: string, selector: string,
   }
 })
 
-ipcMain.handle('browser:click', async (_event, url: string, selector: string) => {
+ipcMain.handle('browser:click', async (_event, url: string | undefined, selector: string) => {
   try {
-    await navigateAutomationWindow(url)
-    const win = getAutomationWindow()
+    if (url) await navigateAutomationWindow(url, true)
+    const win = getLoadedAutomationWindow(url, true)
     const clicked = await win.webContents.executeJavaScript(`
       (() => {
         const sel = ${JSON.stringify(selector)};

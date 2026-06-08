@@ -221,6 +221,29 @@ describe('DocumentsLayout', () => {
       selectedDocumentId: script.id,
     })
 
+    it('renders markdown preview with tables, math, and safe HTML', async () => {
+      const user = userEvent.setup()
+      const group = createDocumentGroup('Docs')
+      const doc = createDocument(group.id, null, 'Reference')
+      doc.markdown = '# Preview\n\n| Name | Value |\n| --- | --- |\n| alpha | beta |\n\nInline $E=mc^2$\n\n<div>Trusted HTML block</div>\n\n$$\n\\int_0^1 x^2 dx\n$$'
+
+      useAppStore.setState({
+        locale: 'en',
+        documentGroups: [group],
+        documentNodes: [doc],
+        selectedDocumentGroupId: group.id,
+        selectedDocumentId: doc.id,
+      })
+
+      const { container } = render(<DocumentsLayout />)
+
+      await user.click(screen.getByRole('button', { name: 'Preview' }))
+
+      expect(screen.getByRole('table')).toBeVisible()
+      expect(screen.getByText('Trusted HTML block')).toBeVisible()
+      expect(container.querySelector('.katex')).toBeTruthy()
+    })
+
     render(<DocumentsLayout />)
 
     const sourceEditor = screen.getByRole('textbox', { name: 'Source editor' }) as HTMLTextAreaElement

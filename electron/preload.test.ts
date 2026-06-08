@@ -28,5 +28,7 @@ describe('preload IPC allowlist', () => {
     expect(allowedInvokeChannels).toContain('ai:fetch:start')
     expect(allowedInvokeChannels).toContain('ai:fetch:abort')
     expect(allowedInvokeChannels).toContain('shell:openPath')
+    expect(allowedInvokeChannels).toContain('browser:getState')
+    expect(allowedInvokeChannels).toContain('browser:show')
   })
 })

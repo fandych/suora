@@ -762,7 +762,7 @@ const todoManageInputSchema = z.object({
 })
 
 const browserExtractInputSchema = z.object({
-  url: z.string().url().describe('The URL to read with the headless browser'),
+  url: z.string().url().optional().describe('Optional URL to read. If omitted, uses the current page in Suora\'s collaborative browser window.'),
   mode: z.enum(['text', 'links', 'title', 'location', 'headings']).default('text').describe('What to extract from the page'),
 })
 
@@ -1562,7 +1562,7 @@ export const builtinToolDefs: ToolSet = {
   // ─── Browser Automation Tools ────────────────────────────────────
 
   browser_navigate: tool({
-    description: 'Navigate a headless browser to a URL and return the page title and text content. Use this for pages that require JavaScript rendering.',
+    description: 'Navigate Suora\'s collaborative browser to a URL, reveal the browser window for human handoff when needed, and return the page title and text content.',
     inputSchema: z.object({
       url: z.string().url().describe('The URL to navigate to (must be http or https)'),
     }),
@@ -1580,9 +1580,9 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   browser_screenshot: tool({
-    description: 'Take a screenshot of a web page. Returns a base64-encoded PNG image. If no URL is provided, screenshots the currently loaded page.',
+    description: 'Take a screenshot of the collaborative browser. If no URL is provided, screenshots the current page so AI can continue after a manual login handoff.',
     inputSchema: z.object({
-      url: z.string().url().optional().describe('URL to screenshot. If omitted, screenshots the current page.'),
+      url: z.string().url().optional().describe('Optional URL to screenshot. If omitted, screenshots the current collaborative browser page.'),
     }),
     execute: async ({ url }) => {
       if (url && !(await confirmIfNeeded(`browser_screenshot\n${url}`))) return 'Cancelled by user confirmation policy.'
@@ -1597,13 +1597,13 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   browser_evaluate: tool({
-    description: 'Run a safe, predefined read-only browser evaluation on a web page and return the result. Use browser_extract_text or browser_extract_links for general page reading.',
+    description: 'Run a safe, predefined read-only browser evaluation on a web page. If no URL is provided, uses the current collaborative browser page.',
     inputSchema: z.object({
-      url: z.string().url().describe('The URL to navigate to before executing the script'),
+      url: z.string().url().optional().describe('Optional URL to navigate to before executing the script. If omitted, uses the current collaborative browser page.'),
       expression: z.enum(['title', 'location', 'text', 'links', 'headings']).describe('Safe read-only expression to evaluate'),
     }),
     execute: async ({ url, expression }) => {
-      if (!(await confirmIfNeeded(`browser_evaluate\n${url}\n${expression}`))) return 'Cancelled by user confirmation policy.'
+      if (!(await confirmIfNeeded(`browser_evaluate\n${url ?? '[current collaborative browser page]'}\n${expression}`))) return 'Cancelled by user confirmation policy.'
       const result = (await electronInvoke('browser:evaluate', url, expression)) as {
         result?: string
         error?: string
@@ -1614,12 +1614,12 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   browser_extract_links: tool({
-    description: 'Extract all links (anchor tags) from a web page. Returns an array of objects with text and href.',
+    description: 'Extract all links (anchor tags) from a web page. If no URL is provided, reads the current collaborative browser page.',
     inputSchema: z.object({
-      url: z.string().url().describe('The URL to extract links from'),
+      url: z.string().url().optional().describe('Optional URL to extract links from. If omitted, uses the current collaborative browser page.'),
     }),
     execute: async ({ url }) => {
-      if (!(await confirmIfNeeded(`browser_extract_links\n${url}`))) return 'Cancelled by user confirmation policy.'
+      if (!(await confirmIfNeeded(`browser_extract_links\n${url ?? '[current collaborative browser page]'}`))) return 'Cancelled by user confirmation policy.'
       const result = (await electronInvoke('browser:extractLinks', url)) as {
         links?: { text: string; href: string }[]
         count?: number
@@ -1632,12 +1632,12 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   browser_extract_text: tool({
-    description: 'Extract all visible text content from a web page. Useful for pages that require JavaScript rendering.',
+    description: 'Extract all visible text content from a web page. If no URL is provided, reads the current collaborative browser page.',
     inputSchema: z.object({
-      url: z.string().url().describe('The URL to extract text from'),
+      url: z.string().url().optional().describe('Optional URL to extract text from. If omitted, uses the current collaborative browser page.'),
     }),
     execute: async ({ url }) => {
-      if (!(await confirmIfNeeded(`browser_extract_text\n${url}`))) return 'Cancelled by user confirmation policy.'
+      if (!(await confirmIfNeeded(`browser_extract_text\n${url ?? '[current collaborative browser page]'}`))) return 'Cancelled by user confirmation policy.'
       const result = (await electronInvoke('browser:extractText', url)) as {
         text?: string
         truncated?: boolean
@@ -1650,7 +1650,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   browser_extract: tool({
-    description: 'Extract readable information from a JavaScript-rendered web page. Replaces browser_extract_text, browser_extract_links, and simple browser_evaluate read modes.',
+    description: 'Extract readable information from a JavaScript-rendered web page or the current collaborative browser page.',
     inputSchema: browserExtractInputSchema,
     execute: async ({ url, mode }, options) => {
       if (mode === 'text') return executeBuiltinTool('browser_extract_text', { url }, options)
@@ -1660,14 +1660,14 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   browser_fill_form: tool({
-    description: 'Fill a form field on a web page by CSS selector. Navigates to the URL first, then sets the value.',
+    description: 'Fill a form field by CSS selector. If URL is omitted, continues on the current collaborative browser page after a human login handoff.',
     inputSchema: z.object({
-      url: z.string().url().describe('The URL containing the form'),
+      url: z.string().url().optional().describe('Optional URL containing the form. If omitted, uses the current collaborative browser page.'),
       selector: z.string().describe('CSS selector for the form field (e.g. "#username", "input[name=email]")'),
       value: z.string().describe('The value to fill into the form field'),
     }),
     execute: async ({ url, selector, value }) => {
-      if (!(await confirmIfNeeded(`browser_fill_form\n${url}\n${selector} = ${value.slice(0, PREVIEW_LENGTH)}`))) return 'Cancelled by user confirmation policy.'
+      if (!(await confirmIfNeeded(`browser_fill_form\n${url ?? '[current collaborative browser page]'}\n${selector} = ${value.slice(0, PREVIEW_LENGTH)}`))) return 'Cancelled by user confirmation policy.'
       const result = (await electronInvoke('browser:fillForm', url, selector, value)) as {
         success?: boolean
         tag?: string
@@ -1680,13 +1680,13 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   browser_click: tool({
-    description: 'Click an element on a web page by CSS selector. Navigates to the URL first, then clicks the element.',
+    description: 'Click an element by CSS selector. If URL is omitted, continues on the current collaborative browser page after a human login handoff.',
     inputSchema: z.object({
-      url: z.string().url().describe('The URL of the page'),
+      url: z.string().url().optional().describe('Optional URL of the page. If omitted, uses the current collaborative browser page.'),
       selector: z.string().describe('CSS selector of the element to click (e.g. "#submit-btn", "button.primary")'),
     }),
     execute: async ({ url, selector }) => {
-      if (!(await confirmIfNeeded(`browser_click\n${url}\n${selector}`))) return 'Cancelled by user confirmation policy.'
+      if (!(await confirmIfNeeded(`browser_click\n${url ?? '[current collaborative browser page]'}\n${selector}`))) return 'Cancelled by user confirmation policy.'
       const result = (await electronInvoke('browser:click', url, selector)) as {
         success?: boolean
         tag?: string

@@ -78,6 +78,104 @@ function PromptActionCard({
   )
 }
 
+interface BrowserWorkbenchState {
+  available: boolean
+  visible: boolean
+  loading: boolean
+  title: string
+  url: string
+}
+
+function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
+  const { t } = useI18n()
+  const [state, setState] = useState<BrowserWorkbenchState | null>(null)
+  const [busy, setBusy] = useState(false)
+  const hasElectron = typeof window !== 'undefined' && typeof window.electron?.invoke === 'function'
+
+  const refreshState = useCallback(async () => {
+    if (!hasElectron) return
+    setBusy(true)
+    try {
+      const result = await window.electron.invoke('browser:getState') as BrowserWorkbenchState & { error?: string }
+      if (result.error) throw new Error(result.error)
+      setState(result)
+    } catch (error) {
+      toast.error(t('chat.browserUnavailable', 'Browser unavailable'), error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }, [hasElectron, t])
+
+  const openBrowser = useCallback(async () => {
+    if (!hasElectron) return
+    setBusy(true)
+    try {
+      const result = await window.electron.invoke('browser:show') as BrowserWorkbenchState & { error?: string }
+      if (result.error) throw new Error(result.error)
+      setState(result)
+    } catch (error) {
+      toast.error(t('chat.browserUnavailable', 'Browser unavailable'), error instanceof Error ? error.message : String(error))
+    } finally {
+      setBusy(false)
+    }
+  }, [hasElectron, t])
+
+  useEffect(() => {
+    void refreshState()
+  }, [refreshState])
+
+  if (!hasElectron) return null
+
+  const isReady = Boolean(state?.url)
+  const actionLabel = state?.visible ? t('chat.focusBrowser', 'Focus browser') : t('chat.openBrowser', 'Open browser')
+
+  return (
+    <div className={`relative overflow-hidden rounded-[28px] border border-accent/20 bg-[radial-gradient(circle_at_top_right,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-4 text-left shadow-[0_18px_44px_rgba(var(--t-accent-rgb),0.10)] ${className}`}>
+      <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:14px_14px]" />
+      <div className="relative z-10">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/50">{t('chat.browserCollabEyebrow', 'Agent + Human browser')}</div>
+            <h3 className="mt-1 text-[16px] font-semibold text-text-primary">{t('chat.browserCollabTitle', 'Collaborative Browser')}</h3>
+          </div>
+          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${isReady ? 'border-success/20 bg-success/10 text-success' : 'border-border-subtle/60 bg-surface-0/45 text-text-muted'}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${busy || state?.loading ? 'bg-warning animate-pulse' : isReady ? 'bg-success' : 'bg-text-muted/55'}`} />
+            {busy || state?.loading ? t('chat.browserLoading', 'Loading') : isReady ? t('chat.browserReady', 'Ready') : t('chat.browserIdle', 'Idle')}
+          </span>
+        </div>
+        <p className="mt-2 text-[12px] leading-5 text-text-secondary/78">
+          {t('chat.browserCollabBody', 'AI can open a site here, you complete any login or CAPTCHA manually, then the agent continues on the same page without restarting the flow.')}
+        </p>
+        <div className="mt-3 rounded-2xl border border-border-subtle/45 bg-surface-0/48 px-3 py-2.5">
+          <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('chat.browserCurrentPage', 'Current page')}</div>
+          <div className="mt-1 truncate text-[13px] font-semibold text-text-primary">{state?.title || t('chat.browserAwaitingPage', 'Waiting for AI to open a page')}</div>
+          <div className="mt-1 truncate font-(--font-code) text-[11px] text-text-muted/72">{state?.url || t('chat.browserNoPageYet', 'No page loaded yet')}</div>
+        </div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void openBrowser()}
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-2xl border border-accent/24 bg-accent/10 px-3 py-2 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/15 disabled:opacity-50"
+          >
+            <IconifyIcon name="ui-external-link" size={14} color="currentColor" />
+            {actionLabel}
+          </button>
+          <button
+            type="button"
+            onClick={() => void refreshState()}
+            disabled={busy}
+            className="inline-flex items-center gap-2 rounded-2xl border border-border-subtle/50 bg-surface-0/48 px-3 py-2 text-[12px] font-semibold text-text-secondary transition-colors hover:bg-surface-2/55 hover:text-text-primary disabled:opacity-50"
+          >
+            <IconifyIcon name="ui-refresh" size={14} color="currentColor" />
+            {t('common.refresh', 'Refresh')}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function ModelDropdown({
   models,
   providerNameById,
@@ -637,6 +735,7 @@ export function ChatMain() {
                   value={selectedModel?.id ?? ''}
                   onChange={handleModelChange}
                 />
+                <BrowserWorkbenchCard className="sm:col-span-2" />
               </div>
             </div>
           </div>
@@ -733,6 +832,7 @@ export function ChatMain() {
                     {t('common.clear', 'Clear')}
                   </button>
                 )}
+                <BrowserWorkbenchCard className="sm:col-span-2" />
               </div>
             </div>
 
