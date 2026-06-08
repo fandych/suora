@@ -13,6 +13,7 @@ import { TodoProgress } from './TodoProgress'
 import { AgentStateDebug } from '@/components/debug/AgentStateDebug'
 
 const MAX_RENDERED_MESSAGES = 120
+const BROWSER_STATE_POLL_INTERVAL_MS = 4000
 
 function formatRelativeLabel(ts: number, locale = 'en'): string {
   const diffSeconds = Math.round((ts - Date.now()) / 1000)
@@ -86,6 +87,26 @@ interface BrowserWorkbenchState {
   url: string
 }
 
+function getBrowserWorkbenchStatus({
+  hasBrowserWindow,
+  isLoading,
+  isReady,
+  isVisible,
+  t,
+}: {
+  hasBrowserWindow: boolean
+  isLoading: boolean
+  isReady: boolean
+  isVisible: boolean
+  t: ReturnType<typeof useI18n>['t']
+}) {
+  if (isLoading) return t('chat.browserLoading', 'Loading')
+  if (isReady) return t('chat.browserReady', 'Ready')
+  if (isVisible) return t('chat.browserOpen', 'Open')
+  if (hasBrowserWindow) return t('chat.browserHidden', 'Hidden')
+  return t('chat.browserIdle', 'Idle')
+}
+
 function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
   const { t } = useI18n()
   const [state, setState] = useState<BrowserWorkbenchState | null>(null)
@@ -131,9 +152,9 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
   }, [runBrowserAction])
 
   useEffect(() => {
-    void refreshState({ silent: true })
     const refresh = () => void refreshState({ silent: true })
-    const intervalId = window.setInterval(refresh, 4000)
+    refresh()
+    const intervalId = window.setInterval(refresh, BROWSER_STATE_POLL_INTERVAL_MS)
     const handleVisibilityChange = () => {
       if (!document.hidden) refresh()
     }
@@ -152,17 +173,9 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
   const isVisible = Boolean(state?.visible)
   const hasPage = Boolean(state?.url)
   const isReady = isVisible && hasPage
-  const isLoading = busy || state?.loading
+  const isLoading = busy || Boolean(state?.loading)
   const actionLabel = isVisible ? t('chat.focusBrowser', 'Focus browser') : t('chat.openBrowser', 'Open browser')
-  const statusLabel = isLoading
-    ? t('chat.browserLoading', 'Loading')
-    : isReady
-      ? t('chat.browserReady', 'Ready')
-      : isVisible
-        ? t('chat.browserOpen', 'Open')
-        : hasBrowserWindow
-          ? t('chat.browserHidden', 'Hidden')
-          : t('chat.browserIdle', 'Idle')
+  const statusLabel = getBrowserWorkbenchStatus({ hasBrowserWindow, isLoading, isReady, isVisible, t })
   const statusClass = isReady
     ? 'border-success/20 bg-success/10 text-success'
     : isLoading
