@@ -107,7 +107,7 @@ function getBrowserWorkbenchStatus({
   return t('chat.browserIdle', 'Idle')
 }
 
-function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
+function BrowserWorkbenchCard({ className = '', density = 'card' }: { className?: string; density?: 'card' | 'bar' }) {
   const { t } = useI18n()
   const [state, setState] = useState<BrowserWorkbenchState | null>(null)
   const [busy, setBusy] = useState(false)
@@ -174,6 +174,10 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
   const hasPage = Boolean(state?.url)
   const isReady = isVisible && hasPage
   const isLoading = busy || Boolean(state?.loading)
+  const shouldShowBrowserWorkbench = isLoading || hasBrowserWindow || hasPage
+
+  if (!shouldShowBrowserWorkbench) return null
+
   const actionLabel = isVisible ? t('chat.focusBrowser', 'Focus browser') : t('chat.openBrowser', 'Open browser')
   const statusLabel = getBrowserWorkbenchStatus({ hasBrowserWindow, isLoading, isReady, isVisible, t })
   const statusClass = isReady
@@ -189,58 +193,134 @@ function BrowserWorkbenchCard({ className = '' }: { className?: string }) {
         ? 'bg-accent'
         : 'bg-text-muted/55'
 
-  return (
-    <div className={`relative overflow-hidden rounded-[28px] border border-accent/20 bg-[radial-gradient(circle_at_top_right,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] p-4 text-left shadow-[0_18px_44px_rgba(var(--t-accent-rgb),0.10)] ${className}`}>
-      <div className="absolute inset-0 opacity-50 [background-image:linear-gradient(rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.04)_1px,transparent_1px)] [background-size:14px_14px]" />
-      <div className="relative z-10">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/50">{t('chat.browserCollabEyebrow', 'Agent + Human browser')}</div>
-            <h3 className="mt-1 text-[16px] font-semibold text-text-primary">{t('chat.browserCollabTitle', 'Collaborative Browser')}</h3>
+  if (density === 'bar') {
+    return (
+      <div className={`overflow-hidden rounded-md border border-border-subtle/55 bg-surface-0/72 text-left shadow-sm backdrop-blur-xl ${className}`}>
+        <div className="flex min-w-0 flex-col gap-2.5 p-2.5 lg:flex-row lg:items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-accent/18 bg-accent/10 text-accent shadow-sm">
+              <IconifyIcon name="ui-computer" size={16} color="currentColor" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-wrap items-center gap-2">
+                <h3 className="truncate text-[12.5px] font-semibold text-text-primary">{t('chat.browserCollabTitle', 'Collaborative Browser')}</h3>
+                <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusClass}`}>
+                  <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+                  {statusLabel}
+                </span>
+              </div>
+              <div className="mt-0.5 truncate font-(--font-code) text-[10.5px] text-text-muted/72">
+                {state?.url || t('chat.browserNoPageYet', 'No page loaded yet')}
+              </div>
+            </div>
           </div>
-          <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-semibold ${statusClass}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
-            {statusLabel}
-          </span>
+
+          <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center lg:min-w-96">
+            <div className="min-w-0 flex-1 rounded-md border border-border-subtle/42 bg-surface-1/54 px-3 py-1.5">
+              <div className="truncate text-[12px] font-semibold text-text-primary">
+                {state?.title || t('chat.browserAwaitingPage', 'Waiting for AI to open a page')}
+              </div>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => void openBrowser()}
+                disabled={busy}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-accent/24 bg-accent/10 px-3 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/15 disabled:opacity-50"
+              >
+                <IconifyIcon name="ui-export" size={14} color="currentColor" />
+                {actionLabel}
+              </button>
+              {isVisible && (
+                <button
+                  type="button"
+                  onClick={() => void hideBrowser()}
+                  disabled={busy}
+                  className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border-subtle/50 bg-surface-1/58 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:bg-surface-2/70 hover:text-text-primary disabled:opacity-50"
+                >
+                  <IconifyIcon name="ui-close" size={13} color="currentColor" />
+                  {t('chat.hideBrowser', 'Hide browser')}
+                </button>
+              )}
+              <button
+                type="button"
+                title={t('common.refresh', 'Refresh')}
+                aria-label={t('common.refresh', 'Refresh')}
+                onClick={() => void refreshState()}
+                disabled={busy}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border-subtle/50 bg-surface-1/58 text-text-secondary transition-colors hover:bg-surface-2/70 hover:text-text-primary disabled:opacity-50"
+              >
+                <IconifyIcon name="ui-refresh" size={14} color="currentColor" />
+              </button>
+            </div>
+          </div>
         </div>
-        <p className="mt-2 text-[12px] leading-5 text-text-secondary/78">
-          {t('chat.browserCollabBody', 'AI can open a site here, you complete any login or CAPTCHA manually, then the agent continues on the same page without restarting the flow.')}
-        </p>
-        <div className="mt-3 rounded-2xl border border-border-subtle/45 bg-surface-0/48 px-3 py-2.5">
-          <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('chat.browserCurrentPage', 'Current page')}</div>
-          <div className="mt-1 truncate text-[13px] font-semibold text-text-primary">{state?.title || t('chat.browserAwaitingPage', 'Waiting for AI to open a page')}</div>
-          <div className="mt-1 truncate font-[var(--font-code)] text-[11px] text-text-muted/72">{state?.url || t('chat.browserNoPageYet', 'No page loaded yet')}</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`h-full overflow-hidden rounded-md border border-border-subtle/55 bg-surface-0/58 text-left shadow-sm backdrop-blur-xl ${className}`}>
+      <div className="flex h-full flex-col gap-2.5 p-3">
+        <div className="flex min-w-0 items-start gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-accent/18 bg-accent/10 text-accent shadow-sm">
+            <IconifyIcon name="ui-computer" size={17} color="currentColor" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <h3 className="truncate text-[13px] font-semibold text-text-primary">{t('chat.browserCollabTitle', 'Collaborative Browser')}</h3>
+              <span className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${statusClass}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} />
+                {statusLabel}
+              </span>
+            </div>
+            <div className="mt-1 min-w-0 truncate font-(--font-code) text-[11px] text-text-muted/72">
+              {state?.url || t('chat.browserNoPageYet', 'No page loaded yet')}
+            </div>
+          </div>
         </div>
-        <div className="mt-3 flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => void openBrowser()}
-            disabled={busy}
-            className="inline-flex items-center gap-2 rounded-2xl border border-accent/24 bg-accent/10 px-3 py-2 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/15 disabled:opacity-50"
-          >
-            <IconifyIcon name="ui-external-link" size={14} color="currentColor" />
-            {actionLabel}
-          </button>
-          {isVisible && (
+
+        <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <div className="min-w-0 rounded-md border border-border-subtle/42 bg-surface-1/54 px-3 py-2">
+            <div className="truncate text-[12.5px] font-semibold text-text-primary">
+              {state?.title || t('chat.browserAwaitingPage', 'Waiting for AI to open a page')}
+            </div>
+          </div>
+
+          <div className="flex shrink-0 items-center gap-1.5">
             <button
               type="button"
-              onClick={() => void hideBrowser()}
+              onClick={() => void openBrowser()}
               disabled={busy}
-              className="inline-flex items-center gap-2 rounded-2xl border border-border-subtle/50 bg-surface-0/48 px-3 py-2 text-[12px] font-semibold text-text-secondary transition-colors hover:bg-surface-2/55 hover:text-text-primary disabled:opacity-50"
+              className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-accent/24 bg-accent/10 px-3 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/15 disabled:opacity-50"
             >
-              <IconifyIcon name="ui-close" size={14} color="currentColor" />
-              {t('chat.hideBrowser', 'Hide browser')}
+              <IconifyIcon name="ui-export" size={14} color="currentColor" />
+              {actionLabel}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => void refreshState()}
-            disabled={busy}
-            className="inline-flex items-center gap-2 rounded-2xl border border-border-subtle/50 bg-surface-0/48 px-3 py-2 text-[12px] font-semibold text-text-secondary transition-colors hover:bg-surface-2/55 hover:text-text-primary disabled:opacity-50"
-          >
-            <IconifyIcon name="ui-refresh" size={14} color="currentColor" />
-            {t('common.refresh', 'Refresh')}
-          </button>
+            {isVisible && (
+              <button
+                type="button"
+                onClick={() => void hideBrowser()}
+                disabled={busy}
+                className="inline-flex h-8 items-center justify-center gap-1.5 rounded-md border border-border-subtle/50 bg-surface-1/58 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:bg-surface-2/70 hover:text-text-primary disabled:opacity-50"
+              >
+                <IconifyIcon name="ui-close" size={13} color="currentColor" />
+                {t('chat.hideBrowser', 'Hide browser')}
+              </button>
+            )}
+            <button
+              type="button"
+              title={t('common.refresh', 'Refresh')}
+              aria-label={t('common.refresh', 'Refresh')}
+              onClick={() => void refreshState()}
+              disabled={busy}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-border-subtle/50 bg-surface-1/58 text-text-secondary transition-colors hover:bg-surface-2/70 hover:text-text-primary disabled:opacity-50"
+            >
+              <IconifyIcon name="ui-refresh" size={14} color="currentColor" />
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -879,7 +959,7 @@ export function ChatMain() {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 xl:w-xl">
+              <div className="grid gap-2 sm:grid-cols-2 xl:w-136">
                 <AgentDropdown
                   agents={agents}
                   selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''}
@@ -897,13 +977,12 @@ export function ChatMain() {
                     onClick={clearMessages}
                     disabled={isStreaming}
                     title={t('chat.clearConversation', 'Clear conversation')}
-                    className="sm:col-span-2 inline-flex items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 py-2 text-[12px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-35"
+                    className="sm:col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-35"
                   >
                     <IconifyIcon name="ui-trash" size={15} color="currentColor" />
                     {t('common.clear', 'Clear')}
                   </button>
                 )}
-                <BrowserWorkbenchCard className="sm:col-span-2" />
               </div>
             </div>
 
@@ -1015,6 +1094,12 @@ export function ChatMain() {
       </div>
 
       <StreamingStatus isStreaming={isStreaming} messages={messages} />
+
+      <div className="px-5 pb-2 xl:px-6">
+        <div className="mx-auto max-w-384">
+          <BrowserWorkbenchCard density="bar" />
+        </div>
+      </div>
 
       <div className="px-5 pb-5 xl:px-6">
         <ChatInput

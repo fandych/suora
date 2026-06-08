@@ -486,6 +486,28 @@ describe('ChatMain', () => {
     expect(screen.queryByText('Hidden pipeline draft')).not.toBeInTheDocument()
   })
 
+  it('hides the collaborative browser control while the automation browser is idle', async () => {
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel) => {
+      if (channel === 'browser:getState') {
+        return {
+          available: false,
+          visible: false,
+          loading: false,
+          title: '',
+          url: '',
+        }
+      }
+      return undefined
+    })
+
+    render(<ChatMain />)
+
+    await waitFor(() => expect(window.electron.invoke).toHaveBeenCalledWith('browser:getState'))
+
+    expect(screen.queryByText('Collaborative Browser')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open browser' })).not.toBeInTheDocument()
+  })
+
   it('shows collaborative browser status and lets chat open and hide the browser window', async () => {
     const user = userEvent.setup()
     let browserState = {
