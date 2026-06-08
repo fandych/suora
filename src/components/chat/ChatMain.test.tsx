@@ -486,26 +486,26 @@ describe('ChatMain', () => {
     expect(screen.queryByText('Hidden pipeline draft')).not.toBeInTheDocument()
   })
 
-  it('shows collaborative browser status and opens the browser window from chat', async () => {
+  it('shows collaborative browser status and lets chat open and hide the browser window', async () => {
     const user = userEvent.setup()
+    let browserState = {
+      available: true,
+      visible: false,
+      loading: false,
+      title: 'Example Login',
+      url: 'https://example.com/login',
+    }
     vi.mocked(window.electron.invoke).mockImplementation(async (channel) => {
       if (channel === 'browser:getState') {
-        return {
-          available: true,
-          visible: false,
-          loading: false,
-          title: 'Example Login',
-          url: 'https://example.com/login',
-        }
+        return browserState
       }
       if (channel === 'browser:show') {
-        return {
-          available: true,
-          visible: true,
-          loading: false,
-          title: 'Example Login',
-          url: 'https://example.com/login',
-        }
+        browserState = { ...browserState, visible: true }
+        return browserState
+      }
+      if (channel === 'browser:hide') {
+        browserState = { ...browserState, visible: false }
+        return browserState
       }
       return undefined
     })
@@ -518,5 +518,11 @@ describe('ChatMain', () => {
     await user.click(screen.getByRole('button', { name: 'Open browser' }))
 
     expect(window.electron.invoke).toHaveBeenCalledWith('browser:show')
+    expect(await screen.findByRole('button', { name: 'Hide browser' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Hide browser' }))
+
+    expect(window.electron.invoke).toHaveBeenCalledWith('browser:hide')
+    expect(await screen.findByRole('button', { name: 'Open browser' })).toBeInTheDocument()
   })
 })
