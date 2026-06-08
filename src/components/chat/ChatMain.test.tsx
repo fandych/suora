@@ -485,4 +485,38 @@ describe('ChatMain', () => {
     expect(screen.getAllByText('Visible chat').length).toBeGreaterThan(0)
     expect(screen.queryByText('Hidden pipeline draft')).not.toBeInTheDocument()
   })
+
+  it('shows collaborative browser status and opens the browser window from chat', async () => {
+    const user = userEvent.setup()
+    vi.mocked(window.electron.invoke).mockImplementation(async (channel) => {
+      if (channel === 'browser:getState') {
+        return {
+          available: true,
+          visible: false,
+          loading: false,
+          title: 'Example Login',
+          url: 'https://example.com/login',
+        }
+      }
+      if (channel === 'browser:show') {
+        return {
+          available: true,
+          visible: true,
+          loading: false,
+          title: 'Example Login',
+          url: 'https://example.com/login',
+        }
+      }
+      return undefined
+    })
+
+    render(<ChatMain />)
+
+    expect(await screen.findByText('Collaborative Browser')).toBeInTheDocument()
+    expect(screen.getByText('Example Login')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Open browser' }))
+
+    expect(window.electron.invoke).toHaveBeenCalledWith('browser:show')
+  })
 })

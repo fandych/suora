@@ -9,6 +9,7 @@ import { ResizeHandle } from '@/components/layout/ResizeHandle'
 import { useResizablePanel } from '@/hooks/useResizablePanel'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
 import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
 import { DocumentsAssistantDrawer } from '@/components/documents/DocumentsAssistantDrawer'
 import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions'
@@ -992,7 +993,7 @@ export function DocumentsLayout() {
   const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
   const [editingGroupName, setEditingGroupName] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [mode, setMode] = useState<'editor' | 'source' | 'graph'>('editor')
+  const [mode, setMode] = useState<'editor' | 'source' | 'preview' | 'graph'>('editor')
   const [assistantState, setAssistantState] = useState<{ mode: 'create' | 'edit'; documentId?: string } | null>(null)
   const [isExportingCorpus, setIsExportingCorpus] = useState(false)
   const [exportStatus, setExportStatus] = useState<ExportCorpusStatus | null>(null)
@@ -1254,7 +1255,7 @@ export function DocumentsLayout() {
   useEffect(() => {
     if (!activeDocument) return
     setSelectedFolderId(activeDocument.parentId)
-    if (!isMarkdownDocumentTitle(activeDocument.title) && mode === 'editor') {
+    if (!isMarkdownDocumentTitle(activeDocument.title) && (mode === 'editor' || mode === 'preview')) {
       setMode('source')
     }
 
@@ -1678,8 +1679,9 @@ export function DocumentsLayout() {
                   {activeDocumentKindLabel}
                 </span>
                 <div className="flex rounded-2xl border border-border-subtle/55 bg-surface-0/45 p-1">
-                  {(['editor', 'source', 'graph'] as const).map((value) => {
-                    const isEditorUnavailable = value === 'editor' && !activeDocumentIsMarkdown
+                  {(['editor', 'source', 'preview', 'graph'] as const).map((value) => {
+                    const markdownOnlyMode = value === 'editor' || value === 'preview'
+                    const isEditorUnavailable = markdownOnlyMode && !activeDocumentIsMarkdown
                     return (
                       <button
                         key={value}
@@ -1689,7 +1691,7 @@ export function DocumentsLayout() {
                         title={isEditorUnavailable ? t('documents.markdownEditorOnly', 'Rich editor is available for Markdown files only.') : undefined}
                         className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : isEditorUnavailable ? 'cursor-not-allowed text-text-muted/35' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
                       >
-                        {value === 'editor' ? t('documents.editor', 'Editor') : value === 'source' ? t('documents.source', 'Source') : t('documents.graph', 'Graph')}
+                        {value === 'editor' ? t('documents.editor', 'Editor') : value === 'source' ? t('documents.source', 'Source') : value === 'preview' ? t('settings.preview', 'Preview') : t('documents.graph', 'Graph')}
                       </button>
                     )
                   })}
@@ -1721,6 +1723,12 @@ export function DocumentsLayout() {
                     kindLabel={activeDocumentKindLabel}
                     extension={activeDocumentExtension}
                   />
+                ) : mode === 'preview' ? (
+                  <div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <article className="document-prose markdown-body min-h-full text-text-primary">
+                      <MarkdownRenderer content={activeDocument.markdown} allowHtml />
+                    </article>
+                  </div>
                 ) : (
                   <DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument} />
                 )}

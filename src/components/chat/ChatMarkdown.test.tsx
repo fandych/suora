@@ -24,4 +24,14 @@ describe('MarkdownContent', () => {
     expect(screen.getByText('beta')).toBeVisible()
     expect(screen.getByRole('checkbox')).toBeChecked()
   })
+
+  it('renders sanitized HTML blocks inside chat content', () => {
+    const { container } = render(
+      <MarkdownContent content={'<section><h2>HTML Preview</h2><p>Rendered safely.</p><script>alert("xss")</script></section>'} />,
+    )
+
+    expect(screen.getByRole('heading', { name: 'HTML Preview' })).toBeVisible()
+    expect(screen.getByText('Rendered safely.')).toBeVisible()
+    expect(container.querySelector('script')).toBeNull()
+  })
 })
