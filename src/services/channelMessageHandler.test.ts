@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Agent, ChannelConfig, ChannelMessage, Model } from '@/types'
 import { useAppStore } from '@/store/appStore'
+const streamResponseWithTools = vi.fn()
+const initializeProvider = vi.fn()
+
+vi.mock('./aiService', () => ({
+  initializeProvider: (...args: unknown[]) => initializeProvider(...args),
+  validateModelConfig: vi.fn(() => ({ valid: true })),
+  streamResponseWithTools: (...args: unknown[]) => streamResponseWithTools(...args),
+}))
+
 import { buildWeChatXMLReply, handleChannelMessage, parseWeChatXML, restoreChannelRuntime } from './channelMessageHandler'
 import { setI18nLocale } from './i18n'
 
@@ -24,6 +33,8 @@ function createChannel(overrides: Partial<ChannelConfig> = {}): ChannelConfig {
 describe('channelMessageHandler WeChat XML', () => {
   beforeEach(() => {
     vi.mocked(window.electron.invoke).mockReset()
+    streamResponseWithTools.mockReset()
+    initializeProvider.mockReset()
     localStorage.clear()
   })
 
@@ -211,5 +222,75 @@ describe('channelMessageHandler WeChat XML', () => {
     expect(reply).toContain('Builder agent for /pipeline')
     // Importantly: no per-user pinned agent has been written.
     expect(useAppStore.getState().channelUsers[`${channel.id}:user-shortcut`]?.agentId).toBeUndefined()
+  })
+
+  it('reuses the previous OpenAI response id for per-user channel conversations', async () => {
+    const channel = createChannel({ platform: 'slack' })
+    const baseMessage: ChannelMessage = {
+      id: 'msg-1',
+      channelId: channel.id,
+      platform: channel.platform,
+      senderId: 'user-1',
+      senderName: 'User One',
+      content: 'hello',
+      timestamp: Date.now(),
+      messageType: 'text',
+    }
+    const testModel: Model = {
+      id: 'model-1',
+      name: 'GPT Test',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-test',
+      apiKey: 'test-key',
+      enabled: true,
+    }
+    const testAgent: Agent = {
+      id: 'default-assistant',
+      name: 'Assistant',
+      systemPrompt: 'Be helpful',
+      modelId: 'model-1',
+      skills: [],
+      enabled: true,
+      memories: [],
+      autoLearn: false,
+    }
+
+    useAppStore.setState({
+      agents: [testAgent],
+      models: [testModel],
+      selectedModel: testModel,
+      channelUsers: {},
+    })
+
+    streamResponseWithTools
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'first reply' }
+        yield { type: 'response-metadata', providerResponseId: 'resp-channel-1', cachedPromptTokens: 64 }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'second reply' }
+      })
+
+    await expect(handleChannelMessage(channel, baseMessage)).resolves.toBe('first reply')
+    await expect(handleChannelMessage(channel, { ...baseMessage, id: 'msg-2', content: 'follow up' })).resolves.toBe('second reply')
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(2)
+    expect(streamResponseWithTools.mock.calls[0]?.[2]).toMatchObject({
+      providerType: 'openai',
+      cacheKey: 'channel:channel-1:user-1',
+    })
+    expect(streamResponseWithTools.mock.calls[1]?.[2]).toMatchObject({
+      previousResponseId: 'resp-channel-1',
+      cacheKey: 'channel:channel-1:user-1',
+    })
+    expect(streamResponseWithTools.mock.calls[1]?.[1]).toEqual([
+      { role: 'user', content: 'follow up' },
+    ])
+
+    const history = useAppStore.getState().channelUsers['channel-1:user-1']?.conversationHistory ?? []
+    const firstAssistantEntry = history.find((entry) => entry.role === 'assistant')
+    expect(firstAssistantEntry?.providerResponseId).toBe('resp-channel-1')
+    expect(firstAssistantEntry?.cachedPromptTokens).toBe(64)
   })
 })

@@ -24,6 +24,15 @@ export function estimateTokens(value: string): number {
   return Math.ceil(value.length / 4)
 }
 
+function shouldPreferAttachmentSummary(attachment: MessageAttachment): boolean {
+  if (!attachment.summary) return false
+  return attachment.type === 'audio' || attachment.truncated === true || attachment.size > MAX_TEXT_ATTACHMENT_CHARS
+}
+
+function formatAttachmentSummary(label: string, name: string, summary: string): string {
+  return `[${label}: ${name}]\n${summary}`
+}
+
 function clampTextAttachment(name: string, data: string): string {
   if (data.length <= MAX_TEXT_ATTACHMENT_CHARS) return `[File content: ${name}]\n${data}`
   return `[File content: ${name}]\n${data.slice(0, MAX_TEXT_ATTACHMENT_CHARS)}\n\n[Attachment truncated: ${data.length - MAX_TEXT_ATTACHMENT_CHARS} characters omitted]`
@@ -73,7 +82,12 @@ function messageTokenCost(message: Message): number {
   let text = message.content || ''
   for (const attachment of message.attachments ?? []) {
     text += `\n${attachment.name} ${attachment.mimeType} ${attachment.size}`
-    if (attachment.type === 'file') text += `\n${attachment.data}`
+    if (attachment.type === 'file') {
+      text += `\n${shouldPreferAttachmentSummary(attachment) ? attachment.summary : attachment.data}`
+    }
+    if (attachment.type === 'audio' && attachment.summary) {
+      text += `\n${attachment.summary}`
+    }
   }
   for (const call of message.toolCalls ?? []) {
     text += `\n${call.outputEnvelope?.summary ?? call.output ?? ''}`
@@ -130,6 +144,19 @@ function compactMessageWithCharBudget(message: Message, charBudget: number): Mes
     const attachmentBudget = Math.max(240, Math.floor(charBudget * 0.35))
     const perAttachmentBudget = Math.max(120, Math.floor(attachmentBudget / message.attachments.length))
     nextMessage.attachments = message.attachments.map((attachment) => {
+      if (attachment.type === 'file' && shouldPreferAttachmentSummary(attachment)) {
+        return {
+          ...attachment,
+          data: '',
+          summary: assignChunk(attachment.summary ?? '', `Attachment summary ${attachment.name}`, perAttachmentBudget),
+        }
+      }
+      if (attachment.type === 'audio' && attachment.summary) {
+        return {
+          ...attachment,
+          summary: assignChunk(attachment.summary, `Audio summary ${attachment.name}`, perAttachmentBudget),
+        }
+      }
       if (attachment.type !== 'file') return attachment
       return {
         ...attachment,
@@ -292,10 +319,20 @@ export function toModelMessages(messages: Message[], tokenBudget = DEFAULT_MODEL
             }
             parts.push({ type: 'image', image: attachment.data, mediaType: attachment.mimeType })
           } else if (attachment.type === 'file') {
-            parts.push({ type: 'text', text: clampTextAttachment(attachment.name, attachment.data) })
+            parts.push({
+              type: 'text',
+              text: shouldPreferAttachmentSummary(attachment)
+                ? formatAttachmentSummary('File summary', attachment.name, attachment.summary ?? '')
+                : clampTextAttachment(attachment.name, attachment.data),
+            })
           } else if (attachment.type === 'audio') {
             const duration = attachment.duration ? ` (${attachment.duration}s)` : ''
-            parts.push({ type: 'text', text: `[Audio attachment: ${attachment.name}${duration}]` })
+            parts.push({
+              type: 'text',
+              text: attachment.summary
+                ? formatAttachmentSummary('Audio summary', `${attachment.name}${duration}`, attachment.summary)
+                : `[Audio attachment: ${attachment.name}${duration}]`,
+            })
           }
         }
         result.push({ role: 'user', content: parts } satisfies UserModelMessage)

@@ -38,6 +38,86 @@ describe('chatContext', () => {
     expect(JSON.stringify(modelMessages[0].content)).toContain('truncated')
   })
 
+  it('prefers a file attachment summary over raw content when available for large files', () => {
+    const modelMessages = toModelMessages([
+      {
+        id: 'm1',
+        role: 'user',
+        content: 'Use the summarized file',
+        timestamp: 1,
+        attachments: [{
+          id: 'att-1',
+          type: 'file',
+          name: 'transcript.txt',
+          mimeType: 'text/plain',
+          data: 'x'.repeat(30_000),
+          size: 30_000,
+          summary: 'Meeting transcript summary: decision A, action B.',
+          truncated: true,
+        }],
+      },
+    ])
+
+    const serialized = JSON.stringify(modelMessages[0].content)
+    expect(serialized).toContain('File summary')
+    expect(serialized).toContain('Meeting transcript summary')
+    expect(serialized).not.toContain('xxxxxxxxxxxxxxxx')
+  })
+
+  it('includes audio summaries instead of a bare audio placeholder when available', () => {
+    const modelMessages = toModelMessages([
+      {
+        id: 'm1',
+        role: 'user',
+        content: 'Review this recording',
+        timestamp: 1,
+        attachments: [{
+          id: 'att-1',
+          type: 'audio',
+          name: 'note.webm',
+          mimeType: 'audio/webm',
+          data: 'base64-audio',
+          size: 8_000,
+          duration: 12,
+          summary: 'Caller confirmed the order ships tomorrow.',
+        }],
+      },
+    ])
+
+    const serialized = JSON.stringify(modelMessages[0].content)
+    expect(serialized).toContain('Audio summary')
+    expect(serialized).toContain('ships tomorrow')
+  })
+
+  it('uses attachment summaries when compacting oversized history', () => {
+    const messages = [
+      {
+        id: 'm1',
+        role: 'user' as const,
+        content: 'See attached',
+        timestamp: 1,
+        attachments: [{
+          id: 'att-1',
+          type: 'file' as const,
+          name: 'notes.txt',
+          mimeType: 'text/plain',
+          data: 'x'.repeat(30_000),
+          size: 30_000,
+          summary: 'Key points only.',
+          truncated: true,
+        }],
+      },
+      message('m2', 'assistant', 'acknowledged'),
+      message('m3', 'user', 'latest question'),
+    ]
+
+    const selected = selectMessagesForModel(messages, 800)
+    const firstAttachment = selected.find((entry) => entry.id === 'm1')?.attachments?.[0]
+
+    expect(firstAttachment?.summary).toContain('Key points only')
+    expect(firstAttachment?.data).toBe('')
+  })
+
   it('uses structured tool envelopes for model tool results', () => {
     const modelMessages = toModelMessages([
       {

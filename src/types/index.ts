@@ -151,6 +151,8 @@ export interface RuntimeSnapshot {
   modelName?: string
   toolNames?: string[]
   systemPromptHash?: string
+  providerResponseId?: string
+  cachedPromptTokens?: number
   startedAt: number
 }
 
@@ -1003,6 +1005,8 @@ export interface ChannelUserConversationMessage {
   role: 'user' | 'assistant'
   content: string
   timestamp: number
+  providerResponseId?: string
+  cachedPromptTokens?: number
 }
 
 // ─── Plugin System ─────────────────────────────────────────────────

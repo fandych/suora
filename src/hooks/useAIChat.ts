@@ -125,6 +125,20 @@ function hashText(value: string): string {
   return Math.abs(hash).toString(16)
 }
 
+function getPreviousOpenAIResponseId(messages: Message[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role !== 'assistant') continue
+    const providerResponseId = message.runtime?.providerResponseId
+    if (providerResponseId) return providerResponseId
+  }
+  return undefined
+}
+
+interface SendMessageOptions {
+  continuationResponseId?: string
+}
+
 function looksLikeToolFailureOutput(output: string): boolean {
   const normalized = output.trim().toLowerCase()
   if (!normalized) return false
@@ -304,7 +318,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     }
   }, [cancelStream])
 
-  const sendMessage = useCallback(async (userMessage: string, attachments?: MessageAttachment[]) => {
+  const sendMessage = useCallback(async (userMessage: string, attachments?: MessageAttachment[], options?: SendMessageOptions) => {
     // Guard against accidental whitespace-only sends. If there are no attachments
     // either, do nothing — there is nothing to send.
     if ((!userMessage || !userMessage.trim()) && !attachments?.length) return
@@ -729,10 +743,17 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         ? { ...userMsg, content: buildShortcutCommandPrompt(shortcutCommand) }
         : userMsg
       const contextMessages = [...contextMessagesAtSend, effectiveUserMsg]
-      const modelMessages = buildModelMessages(contextMessages)
+      const previousResponseId = model.providerType === 'openai'
+        ? (options?.continuationResponseId ?? getPreviousOpenAIResponseId(contextMessagesAtSend))
+        : undefined
+      const requestMessages = previousResponseId ? [effectiveUserMsg] : contextMessages
+      const modelMessages = buildModelMessages(requestMessages)
       const contextSummary = buildContextSummary(contextMessages)
 
-      logger.info(`[Chat:Start] prevMessages=${prevMessages.length} → modelMessages=${modelMessages.length}`)
+      logger.info(`[Chat:Start] prevMessages=${prevMessages.length} → modelMessages=${modelMessages.length}`, {
+        previousResponseId,
+        requestMode: previousResponseId ? 'openai-response-chain' : 'full-history',
+      })
 
       const mergedSkills = sessionAgent ? mergeSkillsWithBuiltins(skills) : []
 
@@ -847,6 +868,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         baseUrl: model.baseUrl,
         providerType: model.providerType,
         cacheKey,
+        previousResponseId,
       })) {
         if (abortController.signal.aborted) break
         resetInactivityTimer()
@@ -1005,6 +1027,11 @@ export function useAIChat(options: UseAIChatOptions = {}) {
               totalTokens: event.totalTokens,
             }
             break
+
+          case 'response-metadata':
+            runtimeSnapshot.providerResponseId = event.providerResponseId ?? runtimeSnapshot.providerResponseId
+            runtimeSnapshot.cachedPromptTokens = event.cachedPromptTokens ?? runtimeSnapshot.cachedPromptTokens
+            break
         }
 
         // Throttled flush for text-delta
@@ -1131,6 +1158,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     // or be cancelled first so we don't double-fire requests.
     if (lastMsg.isStreaming) return
 
+    const continuationResponseId = lastMsg.runtime?.providerResponseId
     let userText = ''
     let userAttachments: MessageAttachment[] | undefined
     for (let i = session.messages.length - 2; i >= 0; i--) {
@@ -1145,7 +1173,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     const cleaned = session.messages.slice(0, -2)
     store.updateSession(session.id, { messages: cleaned })
 
-    sendMessage(userText, userAttachments)
+    sendMessage(userText, userAttachments, { continuationResponseId })
   }, [resolveTargetSession, sendMessage])
 
   const deleteMessage = useCallback((messageId: string) => {
@@ -1186,9 +1214,10 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     const cleaned = session.messages.slice(0, msgIndex)
     // Also remove the user message (sendMessage will re-add it)
     const withoutUser = cleaned.slice(0, -1)
+    const continuationResponseId = session.messages[msgIndex]?.runtime?.providerResponseId
     store.updateSession(session.id, { messages: withoutUser })
 
-    sendMessage(userText, userAttachments)
+    sendMessage(userText, userAttachments, { continuationResponseId })
   }, [resolveTargetSession, sendMessage])
 
   const clearMessages = useCallback(() => {

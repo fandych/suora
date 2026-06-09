@@ -407,7 +407,16 @@ export type AppStreamEvent =
   | { type: 'tool-error'; toolCallId: string; toolName: string; error: string }
   | { type: 'finish-step'; finishReason: string }
   | { type: 'usage'; promptTokens: number; completionTokens: number; totalTokens: number }
+  | { type: 'response-metadata'; providerResponseId?: string; cachedPromptTokens?: number }
   | { type: 'error'; error: string }
+
+type ProviderOptionBuildParams = {
+  providerType?: string
+  modelId?: string
+  cacheKey?: string
+  previousResponseId?: string
+  enableAnthropicContextManagement?: boolean
+}
 
 // ─── Provider management ───────────────────────────────────────────
 
@@ -671,7 +680,18 @@ function resolveModel(modelId: string, apiKey?: string, baseUrl?: string, provid
   return (providerInstance as (modelName: string) => LanguageModel)(modelName)
 }
 
-function buildProviderOptions(providerType?: string, modelId?: string, cacheKey?: string): SharedV3ProviderOptions | undefined {
+function isOpenAIExtendedPromptCacheModel(modelId: string): boolean {
+  const normalized = modelId.toLowerCase()
+  return normalized.includes('gpt-5.1')
+}
+
+function buildProviderOptions({
+  providerType,
+  modelId,
+  cacheKey,
+  previousResponseId,
+  enableAnthropicContextManagement,
+}: ProviderOptionBuildParams): SharedV3ProviderOptions | undefined {
   const providerOptions: SharedV3ProviderOptions = {}
 
   if (providerType === 'anthropic') {
@@ -680,12 +700,34 @@ function buildProviderOptions(providerType?: string, modelId?: string, cacheKey?
         type: 'ephemeral',
         ttl: '1h',
       },
+      ...(enableAnthropicContextManagement
+        ? {
+            contextManagement: {
+              edits: [
+                {
+                  type: 'clear_tool_uses_20250919',
+                  trigger: { type: 'tool_uses', value: 6 },
+                  keep: { type: 'tool_uses', value: 2 },
+                  clearAtLeast: { type: 'input_tokens', value: 6_000 },
+                },
+              ],
+            },
+            taskBudget: {
+              type: 'tokens',
+              total: 120_000,
+            },
+          }
+        : {}),
     }
   }
 
   if (providerType === 'openai' && cacheKey && modelId) {
     providerOptions.openai = {
       promptCacheKey: `suora:${cacheKey}:${modelId}`,
+      ...(isOpenAIExtendedPromptCacheModel(modelId)
+        ? { promptCacheRetention: '24h' }
+        : {}),
+      ...(previousResponseId ? { previousResponseId } : {}),
     }
   }
 
@@ -737,7 +779,7 @@ export async function generateResponse(
   cacheKey?: string,
 ) {
   const model = resolveModel(modelId, apiKey, baseUrl, providerType)
-  const providerOptions = buildProviderOptions(providerType, modelId, cacheKey)
+  const providerOptions = buildProviderOptions({ providerType, modelId, cacheKey })
 
   const result = await generateText({
     model,
@@ -771,10 +813,17 @@ export async function* streamResponseWithTools(
     baseUrl?: string
     providerType?: string
     cacheKey?: string
+    previousResponseId?: string
   }
 ): AsyncGenerator<AppStreamEvent> {
   const model = resolveModel(modelId, options?.apiKey, options?.baseUrl, options?.providerType)
-  const providerOptions = buildProviderOptions(options?.providerType, modelId, options?.cacheKey)
+  const providerOptions = buildProviderOptions({
+    providerType: options?.providerType,
+    modelId,
+    cacheKey: options?.cacheKey,
+    previousResponseId: options?.previousResponseId,
+    enableAnthropicContextManagement: options?.providerType === 'anthropic' && !!options?.tools && Object.keys(options.tools).length > 0,
+  })
 
   const hasTools = !!options?.tools && Object.keys(options.tools).length > 0
   const requestedStepLimit = Math.max(1, options?.maxSteps ?? 20)
@@ -1040,6 +1089,20 @@ export async function* streamResponseWithTools(
         totalTokens: accumulatedTotalTokens || (accumulatedInputTokens + accumulatedOutputTokens),
       }
     }
+  }
+
+  try {
+    const providerMetadata = await result.providerMetadata
+    const openAI = (providerMetadata as { openai?: { responseId?: string | null; cachedPromptTokens?: number } } | undefined)?.openai
+    if (openAI?.responseId || typeof openAI?.cachedPromptTokens === 'number') {
+      yield {
+        type: 'response-metadata',
+        providerResponseId: openAI?.responseId ?? undefined,
+        cachedPromptTokens: finiteNumber(openAI?.cachedPromptTokens),
+      }
+    }
+  } catch {
+    // provider metadata is optional; usage emission above is the primary signal
   }
 
   // Surface suppressed API errors (skip if tool calls were made — tool-only responses are valid)

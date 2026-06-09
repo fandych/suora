@@ -64,6 +64,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     requiresApiKey: true,
     defaultModels: [
       { modelId: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', enabled: true },
+      { modelId: 'claude-opus-4-8', name: 'Claude Opus 4.8', enabled: false },
     ],
   },
   {

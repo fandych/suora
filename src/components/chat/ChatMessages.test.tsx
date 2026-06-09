@@ -31,4 +31,29 @@ describe('MessageBubble', () => {
 
     expect(screen.getAllByText('run_command')).toHaveLength(1)
   })
+
+  it('renders response-chain and cached prompt badges from runtime metadata', () => {
+    const message: Message = {
+      id: 'msg-2',
+      role: 'assistant',
+      content: 'Done',
+      timestamp: Date.now(),
+      runtime: {
+        runId: 'run-1',
+        startedAt: Date.now(),
+        providerResponseId: 'resp-123',
+        cachedPromptTokens: 256,
+      },
+      tokenUsage: {
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+      },
+    }
+
+    render(<MessageBubble message={message} />)
+
+    expect(screen.getByText('response chain')).toBeInTheDocument()
+    expect(screen.getByText('256 cached')).toBeInTheDocument()
+  })
 })

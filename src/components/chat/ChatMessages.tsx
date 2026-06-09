@@ -673,6 +673,10 @@ export function MessageBubble({
                   <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{t('chat.runBadge', 'run {id}').replace('{id}', message.runtime.runId)}</span>
                   {message.runtime.agentName && <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{message.runtime.agentName}</span>}
                   {message.runtime.toolNames?.length ? <span className="rounded-full bg-surface-2/70 px-2 py-0.5">{t('chat.toolsUsedBadge', '{count} tools').replace('{count}', String(message.runtime.toolNames.length))}</span> : null}
+                  {message.runtime.providerResponseId ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-300">{t('chat.responseChainBadge', 'response chain')}</span> : null}
+                  {message.runtime.cachedPromptTokens && message.runtime.cachedPromptTokens > 0
+                    ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-emerald-300">{t('chat.cachedPromptTokensBadge', '{count} cached').replace('{count}', String(message.runtime.cachedPromptTokens))}</span>
+                    : null}
                   {message.contextSummary && <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-amber-300">{t('chat.contextPruned', 'context pruned')}</span>}
                 </div>
               )}

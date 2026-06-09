@@ -255,6 +255,40 @@ describe('useAIChat', () => {
     expect(streamResponseWithTools.mock.calls[0]?.[2]).toMatchObject({ cacheKey: 'chat:session-1' })
   })
 
+  it('reuses the previous OpenAI response id and sends only the incremental user turn', async () => {
+    streamResponseWithTools
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'first reply' }
+        yield { type: 'response-metadata', providerResponseId: 'resp-1', cachedPromptTokens: 128 }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'second reply' }
+      })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('hello')
+    })
+
+    await act(async () => {
+      await result.current.sendMessage('follow up')
+    })
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(2)
+    expect(streamResponseWithTools.mock.calls[1]?.[2]).toMatchObject({
+      previousResponseId: 'resp-1',
+      cacheKey: 'chat:session-1',
+    })
+    expect(streamResponseWithTools.mock.calls[1]?.[1]).toEqual([
+      { role: 'user', content: 'follow up' },
+    ])
+
+    const assistantMessages = useAppStore.getState().sessions[0]?.messages.filter((message) => message.role === 'assistant') ?? []
+    expect(assistantMessages[0]?.runtime?.providerResponseId).toBe('resp-1')
+    expect(assistantMessages[0]?.runtime?.cachedPromptTokens).toBe(128)
+  })
+
   it('routes natural-language pipeline requests through the model instead of executing directly', async () => {
     streamResponseWithTools.mockImplementation(async function* () {
       yield { type: 'text-delta', text: 'I can help plan that pipeline run.' }
@@ -467,11 +501,81 @@ describe('useAIChat', () => {
     })
 
     await waitFor(() => expect(streamResponseWithTools).toHaveBeenCalledTimes(2))
+    expect(streamResponseWithTools.mock.calls[1]?.[2]).toMatchObject({ previousResponseId: undefined })
     await waitFor(() => {
       const last = useAppStore.getState().sessions[0]?.messages.at(-1)
       expect(last?.role).toBe('assistant')
       expect(last?.content).toBe('retry-ok')
       expect(last?.isError).toBeFalsy()
+    })
+  })
+
+  it('reuses the previous response id even when the prior assistant message is marked as error', async () => {
+    streamResponseWithTools
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'tool failed, but continueable' }
+        yield { type: 'response-metadata', providerResponseId: 'resp-error-1', cachedPromptTokens: 32 }
+        yield { type: 'error', error: 'Tool failed' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'continued after error' }
+      })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('first turn')
+    })
+
+    await waitFor(() => {
+      const last = useAppStore.getState().sessions[0]?.messages.at(-1)
+      expect(last?.isError).toBe(true)
+      expect(last?.runtime?.providerResponseId).toBe('resp-error-1')
+    })
+
+    await act(async () => {
+      await result.current.sendMessage('continue please')
+    })
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(2)
+    expect(streamResponseWithTools.mock.calls[1]?.[2]).toMatchObject({
+      previousResponseId: 'resp-error-1',
+    })
+    expect(streamResponseWithTools.mock.calls[1]?.[1]).toEqual([
+      { role: 'user', content: 'continue please' },
+    ])
+  })
+
+  it('passes the failing assistant response id into retryLastError continuation', async () => {
+    streamResponseWithTools
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'partial answer' }
+        yield { type: 'response-metadata', providerResponseId: 'resp-retry-1', cachedPromptTokens: 48 }
+        yield { type: 'error', error: 'Provider error' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'retry continuation' }
+      })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('needs retry')
+    })
+
+    await waitFor(() => {
+      const last = useAppStore.getState().sessions[0]?.messages.at(-1)
+      expect(last?.isError).toBe(true)
+      expect(last?.runtime?.providerResponseId).toBe('resp-retry-1')
+    })
+
+    await act(async () => {
+      result.current.retryLastError()
+    })
+
+    await waitFor(() => expect(streamResponseWithTools).toHaveBeenCalledTimes(2))
+    expect(streamResponseWithTools.mock.calls[1]?.[2]).toMatchObject({
+      previousResponseId: 'resp-retry-1',
     })
   })
 

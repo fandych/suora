@@ -88,6 +88,15 @@ function updateChannelUserContext(channelId: string, senderId: string, patch: Pa
   })
 }
 
+function getPreviousOpenAIChannelResponseId(history: ChannelUserConversationMessage[]): string | undefined {
+  for (let index = history.length - 1; index >= 0; index -= 1) {
+    const entry = history[index]
+    if (entry.role !== 'assistant') continue
+    if (entry.providerResponseId) return entry.providerResponseId
+  }
+  return undefined
+}
+
 // ─── Non-Text Message Processing ───────────────────────────────────
 
 function formatNonTextContent(message: ChannelMessage): string {
@@ -411,18 +420,28 @@ export async function handleChannelMessage(
     const effectiveUserContent = shortcutCommand
       ? buildShortcutCommandPrompt(shortcutCommand)
       : formattedContent
+    const previousResponseId = model.providerType === 'openai'
+      ? getPreviousOpenAIChannelResponseId(user.conversationHistory)
+      : undefined
 
     // Include prior conversation history for this specific user
-    const conversationMessages: ModelMessage[] = [
-      ...user.conversationHistory.map((h) => ({
-        role: h.role as 'user' | 'assistant',
-        content: h.content,
-      })),
-      {
-        role: 'user' as const,
-        content: effectiveUserContent,
-      },
-    ]
+    const conversationMessages: ModelMessage[] = previousResponseId
+      ? [
+          {
+            role: 'user' as const,
+            content: effectiveUserContent,
+          },
+        ]
+      : [
+          ...user.conversationHistory.map((h) => ({
+            role: h.role as 'user' | 'assistant',
+            content: h.content,
+          })),
+          {
+            role: 'user' as const,
+            content: effectiveUserContent,
+          },
+        ]
 
     // Store the user's *original* message in their conversation history so
     // that subsequent turns see what the user actually typed, not the
@@ -485,6 +504,8 @@ export async function handleChannelMessage(
 
     // Stream the response and collect it
     let fullResponse = ''
+    let providerResponseId: string | undefined
+    let cachedPromptTokens: number | undefined
 
     try {
       await runWithToolConfirmationBypass(async () => {
@@ -497,6 +518,9 @@ export async function handleChannelMessage(
             maxSteps: Math.max(2, Math.min(agent.maxTurns ?? 20, 50)),
             apiKey: model.apiKey,
             baseUrl: model.baseUrl,
+            providerType: model.providerType,
+            cacheKey: `channel:${channel.id}:${message.senderId}`,
+            previousResponseId,
           }
         )) {
           switch (event.type) {
@@ -514,6 +538,10 @@ export async function handleChannelMessage(
               break
             case 'error':
               logger.error('Channel stream error', { error: event.error })
+              break
+            case 'response-metadata':
+              providerResponseId = event.providerResponseId ?? providerResponseId
+              cachedPromptTokens = event.cachedPromptTokens ?? cachedPromptTokens
               break
           }
         }
@@ -542,6 +570,8 @@ export async function handleChannelMessage(
       role: 'assistant',
       content: fullResponse,
       timestamp: Date.now(),
+      providerResponseId,
+      cachedPromptTokens,
     })
 
     logger.info('Channel message processed successfully', {

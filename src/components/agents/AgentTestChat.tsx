@@ -8,6 +8,15 @@ import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import type { Agent, Message } from '@/types'
 import type { ModelMessage, UserModelMessage, AssistantModelMessage } from 'ai'
 
+function getPreviousOpenAIResponseId(messages: Message[]): string | undefined {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index]
+    if (message.role !== 'assistant') continue
+    if (message.runtime?.providerResponseId) return message.runtime.providerResponseId
+  }
+  return undefined
+}
+
 function HarnessStat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
     <div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/65'}`}>
@@ -82,7 +91,11 @@ export function AgentTestChat({ agent, onClose }: { agent: Agent; onClose: () =>
 
     const modelIdentifier = `${model.provider}:${model.modelId}`
     const allMsgs: Message[] = [...messages, userMsg]
-    const modelMessages: ModelMessage[] = allMsgs.map((m) =>
+    const previousResponseId = model.providerType === 'openai'
+      ? getPreviousOpenAIResponseId(messages)
+      : undefined
+    const requestMessages = previousResponseId ? [userMsg] : allMsgs
+    const modelMessages: ModelMessage[] = requestMessages.map((m) =>
       m.role === 'user'
         ? { role: 'user', content: m.content } satisfies UserModelMessage
         : { role: 'assistant', content: m.content } satisfies AssistantModelMessage
@@ -111,8 +124,21 @@ export function AgentTestChat({ agent, onClose }: { agent: Agent; onClose: () =>
     })
 
     const assistantId = generateId('msg')
+    const runId = generateId('run')
     let fullContent = ''
-    setMessages((prev) => [...prev, { id: assistantId, role: 'assistant', content: '', timestamp: Date.now(), isStreaming: true }])
+    let providerResponseId: string | undefined
+    let cachedPromptTokens: number | undefined
+    setMessages((prev) => [...prev, {
+      id: assistantId,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      isStreaming: true,
+      runtime: {
+        runId,
+        startedAt: Date.now(),
+      },
+    }])
 
     try {
       for await (const event of streamResponseWithTools(modelIdentifier, modelMessages, {
@@ -122,6 +148,9 @@ export function AgentTestChat({ agent, onClose }: { agent: Agent; onClose: () =>
         abortSignal: abortController.signal,
         apiKey: model.apiKey,
         baseUrl: model.baseUrl,
+        providerType: model.providerType,
+        cacheKey: `agent-test:${agent.id}`,
+        previousResponseId,
       })) {
         if (event.type === 'text-delta') {
           fullContent += event.text
@@ -129,6 +158,9 @@ export function AgentTestChat({ agent, onClose }: { agent: Agent; onClose: () =>
         } else if (event.type === 'error') {
           fullContent += `\n${event.error}`
           setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: fullContent, isError: true } : m))
+        } else if (event.type === 'response-metadata') {
+          providerResponseId = event.providerResponseId ?? providerResponseId
+          cachedPromptTokens = event.cachedPromptTokens ?? cachedPromptTokens
         }
       }
     } catch (err) {
@@ -137,7 +169,24 @@ export function AgentTestChat({ agent, onClose }: { agent: Agent; onClose: () =>
       }
     }
 
-    setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: fullContent || '(empty response)', isStreaming: false } : m))
+    setMessages((prev) => prev.map((m) => {
+      if (m.id !== assistantId) return m
+
+      const runtime = m.runtime
+        ? {
+            ...m.runtime,
+            ...(providerResponseId ? { providerResponseId } : {}),
+            ...(cachedPromptTokens !== undefined ? { cachedPromptTokens } : {}),
+          }
+        : undefined
+
+      return {
+        ...m,
+        content: fullContent || '(empty response)',
+        isStreaming: false,
+        ...(runtime ? { runtime } : {}),
+      }
+    }))
     setIsStreaming(false)
     abortRef.current = null
   }, [activeModel, input, isStreaming, messages, agent, skills, t])

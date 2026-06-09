@@ -212,6 +212,68 @@ describe('aiService', () => {
       }))
     })
 
+    it('passes previousResponseId through to OpenAI responses models', async () => {
+      vi.mocked(streamText).mockReturnValueOnce({
+        fullStream: (async function* () {
+          yield { type: 'text-delta' as const, text: 'continued' }
+        })(),
+        totalUsage: Promise.resolve(undefined),
+        text: Promise.resolve('continued'),
+      } as never)
+
+      initializeProvider('openai', 'sk-test')
+
+      for await (const _event of streamResponseWithTools(
+        'openai:test-model',
+        [{ role: 'user', content: 'follow up' }],
+        { providerType: 'openai', previousResponseId: 'resp-123', cacheKey: 'chat:session-1' },
+      )) {
+        // drain stream
+      }
+
+      expect(streamText).toHaveBeenCalledWith(expect.objectContaining({
+        providerOptions: {
+          openai: {
+            promptCacheKey: 'suora:chat:session-1:openai:test-model',
+            previousResponseId: 'resp-123',
+          },
+        },
+      }))
+    })
+
+    it('emits response metadata from OpenAI responses provider metadata', async () => {
+      vi.mocked(streamText).mockReturnValueOnce({
+        fullStream: (async function* () {
+          yield { type: 'text-delta' as const, text: 'cached' }
+        })(),
+        totalUsage: Promise.resolve(undefined),
+        text: Promise.resolve('cached'),
+        providerMetadata: Promise.resolve({
+          openai: {
+            responseId: 'resp-42',
+            cachedPromptTokens: 256,
+          },
+        }),
+      } as never)
+
+      initializeProvider('openai', 'sk-test')
+
+      const events = []
+      for await (const event of streamResponseWithTools(
+        'openai:test-model',
+        [{ role: 'user', content: 'hello' }],
+        { providerType: 'openai', cacheKey: 'chat:session-1' },
+      )) {
+        events.push(event)
+      }
+
+      expect(events).toContainEqual({
+        type: 'response-metadata',
+        providerResponseId: 'resp-42',
+        cachedPromptTokens: 256,
+      })
+    })
+
     it('enables Anthropic prompt caching for generated responses', async () => {
       vi.mocked(generateText).mockResolvedValueOnce({ text: 'done' } as never)
 
