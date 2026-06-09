@@ -63,7 +63,7 @@ export const PROVIDER_PRESETS: ProviderPreset[] = [
     description: 'Claude models from Anthropic.',
     requiresApiKey: true,
     defaultModels: [
-      { modelId: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5', enabled: true },
+      { modelId: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6', enabled: true },
     ],
   },
   {

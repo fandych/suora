@@ -1,9 +1,9 @@
 import { beforeEach, describe, it, expect, vi } from 'vitest'
-import { streamText, stepCountIs } from 'ai'
+import { generateText, streamText, stepCountIs } from 'ai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
-import { validateModelConfig, initializeProvider, streamResponseWithTools } from './aiService'
+import { generateResponse, validateModelConfig, initializeProvider, streamResponseWithTools } from './aiService'
 
 // Mock AI SDK modules
 vi.mock('@ai-sdk/anthropic', () => ({
@@ -23,6 +23,7 @@ vi.mock('ai', () => ({
 
 describe('aiService', () => {
   beforeEach(() => {
+    vi.mocked(generateText).mockReset()
     vi.mocked(streamText).mockReset()
     vi.mocked(stepCountIs).mockClear()
     vi.mocked(createAnthropic).mockClear()
@@ -183,6 +184,61 @@ describe('aiService', () => {
   })
 
   describe('streamResponseWithTools', () => {
+    it('passes an OpenAI prompt cache key when chat caching is enabled', async () => {
+      vi.mocked(streamText).mockReturnValueOnce({
+        fullStream: (async function* () {
+          yield { type: 'text-delta' as const, text: 'cached' }
+        })(),
+        totalUsage: Promise.resolve(undefined),
+        text: Promise.resolve('cached'),
+      } as never)
+
+      initializeProvider('openai', 'sk-test')
+
+      for await (const _event of streamResponseWithTools(
+        'openai:test-model',
+        [{ role: 'user', content: 'hello' }],
+        { providerType: 'openai', cacheKey: 'chat:session-1' },
+      )) {
+        // drain stream
+      }
+
+      expect(streamText).toHaveBeenCalledWith(expect.objectContaining({
+        providerOptions: {
+          openai: {
+            promptCacheKey: 'suora:chat:session-1:openai:test-model',
+          },
+        },
+      }))
+    })
+
+    it('enables Anthropic prompt caching for generated responses', async () => {
+      vi.mocked(generateText).mockResolvedValueOnce({ text: 'done' } as never)
+
+      initializeProvider('anthropic', 'sk-test')
+
+      const text = await generateResponse(
+        'anthropic:test-model',
+        [{ role: 'user', content: 'hello' }],
+        undefined,
+        'sk-test',
+        undefined,
+        'anthropic',
+      )
+
+      expect(text).toBe('done')
+      expect(generateText).toHaveBeenCalledWith(expect.objectContaining({
+        providerOptions: {
+          anthropic: {
+            cacheControl: {
+              type: 'ephemeral',
+              ttl: '1h',
+            },
+          },
+        },
+      }))
+    })
+
     it('resolves Ollama providers initialized without an API key', async () => {
       vi.mocked(streamText).mockReturnValueOnce({
         fullStream: (async function* () {

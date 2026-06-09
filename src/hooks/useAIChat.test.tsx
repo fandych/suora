@@ -240,6 +240,21 @@ describe('useAIChat', () => {
     expect(streamResponseWithTools.mock.calls[0]?.[2]).toMatchObject({ maxSteps: 4 })
   })
 
+  it('passes a stable chat cache key for the active session', async () => {
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'cached' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('hello')
+    })
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(1)
+    expect(streamResponseWithTools.mock.calls[0]?.[2]).toMatchObject({ cacheKey: 'chat:session-1' })
+  })
+
   it('routes natural-language pipeline requests through the model instead of executing directly', async () => {
     streamResponseWithTools.mockImplementation(async function* () {
       yield { type: 'text-delta', text: 'I can help plan that pipeline run.' }

@@ -834,6 +834,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       resetInactivityTimer()
 
       const toolStepBudget = Math.max(2, Math.min((sessionAgent?.maxTurns ?? defaultAgent?.maxTurns ?? 30) + 1, MAX_CHAT_TOOL_STEPS))
+      const cacheKey = `chat:${activeSession.branchRootSessionId ?? activeSession.id}`
 
       for await (const event of streamResponseWithTools(modelIdentifier, modelMessages, {
         systemPrompt,
@@ -845,6 +846,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         apiKey: model.apiKey,
         baseUrl: model.baseUrl,
         providerType: model.providerType,
+        cacheKey,
       })) {
         if (abortController.signal.aborted) break
         resetInactivityTimer()
