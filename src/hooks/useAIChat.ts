@@ -834,7 +834,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       resetInactivityTimer()
 
       const toolStepBudget = Math.max(2, Math.min((sessionAgent?.maxTurns ?? defaultAgent?.maxTurns ?? 30) + 1, MAX_CHAT_TOOL_STEPS))
-      const cacheKey = `chat:${activeSession.branchRootSessionId ?? activeSession.id}`
+      const cacheKey = `chat:${activeSession.parentSessionId ?? activeSession.id}`
 
       for await (const event of streamResponseWithTools(modelIdentifier, modelMessages, {
         systemPrompt,

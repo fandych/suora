@@ -1,5 +1,5 @@
 // AI SDK v6 integration service
-import { generateText, streamText, stepCountIs, type ToolSet, type ModelMessage, type LanguageModel, type ProviderOptions } from 'ai'
+import { generateText, streamText, stepCountIs, type ToolSet, type ModelMessage, type LanguageModel } from 'ai'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
@@ -670,8 +670,8 @@ function resolveModel(modelId: string, apiKey?: string, baseUrl?: string, provid
   return (providerInstance as (modelName: string) => LanguageModel)(modelName)
 }
 
-function buildProviderOptions(providerType?: string, modelId?: string, cacheKey?: string): ProviderOptions | undefined {
-  const providerOptions: ProviderOptions = {}
+function buildProviderOptions(providerType?: string, modelId?: string, cacheKey?: string): Record<string, unknown> | undefined {
+  const providerOptions: Record<string, unknown> = {}
 
   if (providerType === 'anthropic') {
     providerOptions.anthropic = {
