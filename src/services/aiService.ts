@@ -1,5 +1,6 @@
 // AI SDK v6 integration service
 import { generateText, streamText, stepCountIs, type ToolSet, type ModelMessage, type LanguageModel } from 'ai'
+import type { SharedV3ProviderOptions } from '@ai-sdk/provider'
 import { createAnthropic } from '@ai-sdk/anthropic'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible'
@@ -659,8 +660,36 @@ function resolveModel(modelId: string, apiKey?: string, baseUrl?: string, provid
     throw new Error(`Provider "${getProviderTypeName(provider)}" not initialized. Please configure API key in Models settings.`)
   }
 
+  if (
+    providerType === 'openai'
+    && typeof (providerInstance as { responses?: (name: string) => LanguageModel }).responses === 'function'
+  ) {
+    return (providerInstance as { responses: (name: string) => LanguageModel }).responses(modelName)
+  }
+
   // Provider instance is a function that takes modelName and returns a language model
   return (providerInstance as (modelName: string) => LanguageModel)(modelName)
+}
+
+function buildProviderOptions(providerType?: string, modelId?: string, cacheKey?: string): SharedV3ProviderOptions | undefined {
+  const providerOptions: SharedV3ProviderOptions = {}
+
+  if (providerType === 'anthropic') {
+    providerOptions.anthropic = {
+      cacheControl: {
+        type: 'ephemeral',
+        ttl: '1h',
+      },
+    }
+  }
+
+  if (providerType === 'openai' && cacheKey && modelId) {
+    providerOptions.openai = {
+      promptCacheKey: `suora:${cacheKey}:${modelId}`,
+    }
+  }
+
+  return Object.keys(providerOptions).length > 0 ? providerOptions : undefined
 }
 
 // ─── Text generation (non-streaming) ──────────────────────────────
@@ -705,13 +734,16 @@ export async function generateResponse(
   apiKey?: string,
   baseUrl?: string,
   providerType?: string,
+  cacheKey?: string,
 ) {
   const model = resolveModel(modelId, apiKey, baseUrl, providerType)
+  const providerOptions = buildProviderOptions(providerType, modelId, cacheKey)
 
   const result = await generateText({
     model,
     messages,
     system: systemPrompt,
+    ...(providerOptions ? { providerOptions } : {}),
   })
 
   return result.text
@@ -738,9 +770,11 @@ export async function* streamResponseWithTools(
     apiKey?: string
     baseUrl?: string
     providerType?: string
+    cacheKey?: string
   }
 ): AsyncGenerator<AppStreamEvent> {
   const model = resolveModel(modelId, options?.apiKey, options?.baseUrl, options?.providerType)
+  const providerOptions = buildProviderOptions(options?.providerType, modelId, options?.cacheKey)
 
   const hasTools = !!options?.tools && Object.keys(options.tools).length > 0
   const requestedStepLimit = Math.max(1, options?.maxSteps ?? 20)
@@ -775,6 +809,7 @@ export async function* streamResponseWithTools(
     model,
     messages,
     system: options?.systemPrompt,
+    ...(providerOptions ? { providerOptions } : {}),
     ...(hasTools && options?.tools ? {
       tools: options.tools,
       stopWhen: stepCountIs(stepLimit),

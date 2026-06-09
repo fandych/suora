@@ -9,27 +9,29 @@ const PROVIDER_TYPES: ProviderConfig['providerType'][] = ['openai', 'anthropic',
 
 const PRESET_MODELS: Partial<Record<ProviderConfig['providerType'], { modelId: string; name: string }[]>> = {
   anthropic: [
-    { modelId: 'claude-sonnet-4-20250514', name: 'Claude Sonnet 4' },
-    { modelId: 'claude-3-5-sonnet-20241022', name: 'Claude 3.5 Sonnet' },
-    { modelId: 'claude-3-opus-20240229', name: 'Claude 3 Opus' },
-    { modelId: 'claude-3-5-haiku-20241022', name: 'Claude 3.5 Haiku' },
+    { modelId: 'claude-opus-4-7', name: 'Claude Opus 4.7' },
+    { modelId: 'claude-opus-4-6', name: 'Claude Opus 4.6' },
+    { modelId: 'claude-sonnet-4-6', name: 'Claude Sonnet 4.6' },
+    { modelId: 'claude-sonnet-4-5', name: 'Claude Sonnet 4.5' },
+    { modelId: 'claude-haiku-4-5', name: 'Claude Haiku 4.5' },
   ],
   openai: [
-    { modelId: 'gpt-4o', name: 'GPT-4o' },
-    { modelId: 'gpt-4-turbo', name: 'GPT-4 Turbo' },
-    { modelId: 'gpt-4o-mini', name: 'GPT-4o Mini' },
-    { modelId: 'o1', name: 'o1' },
-    { modelId: 'o1-mini', name: 'o1 Mini' },
+    { modelId: 'gpt-5.4', name: 'GPT-5.4' },
+    { modelId: 'gpt-5.4-mini', name: 'GPT-5.4 Mini' },
+    { modelId: 'gpt-5', name: 'GPT-5' },
+    { modelId: 'gpt-4.1', name: 'GPT-4.1' },
+    { modelId: 'o4-mini', name: 'o4-mini' },
   ],
   google: [
+    { modelId: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro' },
+    { modelId: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
     { modelId: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
-    { modelId: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
-    { modelId: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash' },
   ],
   ollama: [
-    { modelId: 'llama3', name: 'Llama 3' },
+    { modelId: 'llama3.1', name: 'Llama 3.1' },
+    { modelId: 'qwen3', name: 'Qwen 3' },
     { modelId: 'mistral', name: 'Mistral' },
-    { modelId: 'codellama', name: 'Code Llama' },
+    { modelId: 'deepseek-r1', name: 'DeepSeek R1' },
   ],
 }
 
