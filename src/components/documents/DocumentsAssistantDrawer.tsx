@@ -134,7 +134,7 @@ export function DocumentsAssistantDrawer({
   const contextKeyRef = useRef<string | null>(null)
   const processedToolCallsRef = useRef<Set<string>>(new Set())
   const messagesEndRef = useRef<HTMLDivElement>(null)
-  const { sendMessage, cancelStream, retryLastError, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat({ sessionId })
+  const { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat({ sessionId })
   const cancelStreamRef = useRef<() => void>(() => {})
   const initialSessionRef = useRef<Session | null>(null)
 
@@ -351,9 +351,10 @@ export function DocumentsAssistantDrawer({
                 <MessageBubble
                   key={message.id}
                   message={message}
-                  onRetry={message.isError ? () => retryLastError() : undefined}
+                  onRetry={message.isError || message.failedMidStream ? () => retryLastError() : undefined}
+                  onResume={message.failedMidStream ? () => resumeFromMessage(message.id) : undefined}
                   onDelete={() => deleteMessage(message.id)}
-                  onRegenerate={message.role === 'assistant' && !message.isStreaming ? () => regenerateMessage(message.id) : undefined}
+                  onRegenerate={message.role === 'assistant' && !message.isStreaming && !message.failedMidStream ? () => regenerateMessage(message.id) : undefined}
                 />
               ))}
               <div ref={messagesEndRef} />

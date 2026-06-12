@@ -591,6 +591,7 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   retryLastError,
+  resumeFromMessage,
   deleteMessage,
   regenerateMessage,
   updateMessage,
@@ -599,6 +600,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }: {
   message: import('@/types').Message
   retryLastError: () => void
+  resumeFromMessage: (messageId: string) => void
   deleteMessage: (messageId: string) => void
   regenerateMessage: (messageId: string) => void
   updateMessage: (messageId: string, patch: Partial<import('@/types').Message>) => void
@@ -606,6 +608,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   setMessageFeedback: (messageId: string, feedback: 'positive' | 'negative' | undefined) => void
 }) {
   const handleRetry = useCallback(() => retryLastError(), [retryLastError])
+  const handleResume = useCallback(() => resumeFromMessage(message.id), [message.id, resumeFromMessage])
   const handleDelete = useCallback(() => deleteMessage(message.id), [deleteMessage, message.id])
   const handleRegenerate = useCallback(() => regenerateMessage(message.id), [message.id, regenerateMessage])
   const handleEdit = useCallback((content: string) => updateMessage(message.id, { content }), [message.id, updateMessage])
@@ -616,9 +619,10 @@ const ChatMessageRow = memo(function ChatMessageRow({
   return (
     <MessageBubble
       message={message}
-      onRetry={message.isError ? handleRetry : undefined}
+      onRetry={message.isError || message.failedMidStream ? handleRetry : undefined}
+      onResume={message.failedMidStream ? handleResume : undefined}
       onDelete={handleDelete}
-      onRegenerate={message.role === 'assistant' && !message.isStreaming ? handleRegenerate : undefined}
+      onRegenerate={message.role === 'assistant' && !message.isStreaming && !message.failedMidStream ? handleRegenerate : undefined}
       onEdit={message.role === 'user' && !message.isStreaming ? handleEdit : undefined}
       onTogglePin={!message.isStreaming ? handleTogglePin : undefined}
       onBranch={!message.isStreaming ? handleBranch : undefined}
@@ -628,6 +632,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }, (prevProps, nextProps) => (
   prevProps.message === nextProps.message
   && prevProps.retryLastError === nextProps.retryLastError
+  && prevProps.resumeFromMessage === nextProps.resumeFromMessage
   && prevProps.deleteMessage === nextProps.deleteMessage
   && prevProps.regenerateMessage === nextProps.regenerateMessage
   && prevProps.updateMessage === nextProps.updateMessage
@@ -648,7 +653,7 @@ export function ChatMain() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
   const [showDebug, setShowDebug] = useState(false)
-  const { sendMessage, cancelStream, retryLastError, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat()
+  const { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat()
   const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions])
   const chatSessionIds = useMemo(() => new Set(chatSessions.map((session) => session.id)), [chatSessions])
 
@@ -1098,6 +1103,7 @@ export function ChatMain() {
                           key={msg.id}
                           message={msg}
                           retryLastError={retryLastError}
+                          resumeFromMessage={resumeFromMessage}
                           deleteMessage={deleteMessage}
                           regenerateMessage={regenerateMessage}
                           updateMessage={updateMessage}

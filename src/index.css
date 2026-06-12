@@ -502,6 +502,75 @@ code, pre, .font-mono, kbd, samp {
   margin: 0.5rem 0;
 }
 
+/* ── Table rendering ────────────────────────────────────────────────────── */
+
+.document-prose table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.9em;
+  overflow-x: auto;
+  display: block;
+}
+
+.document-prose thead tr {
+  background: color-mix(in srgb, var(--t-surface-2) 80%, transparent);
+}
+
+.document-prose th,
+.document-prose td {
+  border: 1px solid var(--t-border-subtle);
+  padding: 0.45rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.document-prose th {
+  font-weight: 600;
+  color: var(--t-text-secondary);
+  background: color-mix(in srgb, var(--t-surface-2) 60%, transparent);
+}
+
+.document-prose tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--t-surface-1) 40%, transparent);
+}
+
+/* ── Task list rendering ────────────────────────────────────────────────── */
+
+.document-prose ul[data-type="taskList"] {
+  list-style: none;
+  padding-left: 0.25rem;
+}
+
+.document-prose ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.document-prose ul[data-type="taskList"] li > label {
+  flex-shrink: 0;
+  margin-top: 0.25rem;
+}
+
+.document-prose ul[data-type="taskList"] li > label input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--t-accent);
+  width: 0.95rem;
+  height: 0.95rem;
+}
+
+.document-prose ul[data-type="taskList"] li > div {
+  flex: 1;
+}
+
+/* ── Strikethrough ──────────────────────────────────────────────────────── */
+
+.document-prose s,
+.document-prose del {
+  color: var(--t-text-muted);
+}
+
 /* ── Math rendering ─────────────────────────────────────────────────────── */
 
 .document-math-block {

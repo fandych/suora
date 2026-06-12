@@ -698,6 +698,42 @@ function serializeNode(node: TiptapNode, listPrefix = ''): string {
       return `\`\`\`mermaid\n${code}\n\`\`\`\n\n`
     }
 
+    case 'table': {
+      const rows = children
+      if (!rows.length) return ''
+      const [header, ...body] = rows
+      const headerMd = serializeNode(header, '__tableHeader__')
+      const separator = (header.content ?? []).map(() => '| --- ').join('') + '|\n'
+      const bodyMd = body.map((row) => serializeNode(row, '__tableRow__')).join('')
+      return `${headerMd}${separator}${bodyMd}\n`
+    }
+
+    case 'tableRow': {
+      const cells = children.map((cell) => {
+        const cellText = (cell.content ?? []).map((child) => serializeNode(child)).join('').replace(/\n+$/, '')
+        return ` ${cellText} `
+      }).join('|')
+      return `|${cells}|\n`
+    }
+
+    case 'tableHeader':
+    case 'tableCell': {
+      return children.map((child) => serializeNode(child)).join('').replace(/\n+$/, '')
+    }
+
+    case 'taskList':
+      return children.map((child) => serializeNode(child, '- ')).join('') + '\n'
+
+    case 'taskItem': {
+      const checked = (node.attrs?.checked as boolean) ?? false
+      const checkbox = checked ? '[x]' : '[ ]'
+      const first = children[0]
+      const rest = children.slice(1)
+      const firstText = first ? serializeNode(first, `- ${checkbox} `) : ''
+      const restText = rest.map((child) => serializeNode(child)).join('')
+      return firstText + restText
+    }
+
     default:
       return children.map((child) => serializeNode(child)).join('')
   }

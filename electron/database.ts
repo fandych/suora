@@ -450,6 +450,8 @@ export function getDatabasePath(workspacePath: string): string {
 
 export class SuoraDatabase {
   readonly path: string
+  /** Serializes concurrent savePersistedStore calls to prevent prune/write races */
+  private _saveMutex: Promise<void> = Promise.resolve()
 
   constructor(workspacePath: string) {
     this.path = path.resolve(workspacePath)
@@ -515,20 +517,27 @@ export class SuoraDatabase {
   }
 
   async savePersistedStore(key: string, serializedValue: string, version: number): Promise<void> {
-    // Renderer persistence writes this value via safeStringify; split-store
-    // payloads are parsed below when they are decomposed into workspace files.
-    if (key !== SPLIT_STORE_NAME) {
-      const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
-      const stores = asObject(settings._persistedStores)
-      stores[key] = serializedValue
-      settings._persistedStores = stores
-      await writeJson(this.file('settings.json'), settings)
-      return
+    // Serialize all save calls through a mutex to prevent concurrent saveSplitState
+    // calls from racing each other: one call's pruneChildDirectories can delete session
+    // directories that another concurrent call just created, causing ENOENT/EPERM on rename.
+    const run = async () => {
+      if (key !== SPLIT_STORE_NAME) {
+        const settings = await readJson<Record<string, unknown>>(this.file('settings.json'), {})
+        const stores = asObject(settings._persistedStores)
+        stores[key] = serializedValue
+        settings._persistedStores = stores
+        await writeJson(this.file('settings.json'), settings)
+        return
+      }
+
+      const parsed = parsePersistedStore(serializedValue)
+      if (!isRecord(parsed.state)) return
+      await this.saveSplitState(parsed.state, Number.isFinite(version) ? Math.trunc(version) : (parsed.version ?? 0))
     }
 
-    const parsed = parsePersistedStore(serializedValue)
-    if (!isRecord(parsed.state)) return
-    await this.saveSplitState(parsed.state, Number.isFinite(version) ? Math.trunc(version) : (parsed.version ?? 0))
+    // Chain onto the mutex so saves execute one at a time, latest value wins
+    this._saveMutex = this._saveMutex.then(run, run)
+    await this._saveMutex
   }
 
   async deletePersistedStore(key: string): Promise<void> {

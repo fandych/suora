@@ -498,11 +498,71 @@ function FileCard({ attachment }: { attachment: MessageAttachment }) {
   )
 }
 
+// ─── Mid-stream failure banner ─────────────────────────────────────
+
+function FailedMidStreamBanner({ message, onResume, onRetry }: { message: Message; onResume?: () => void; onRetry?: () => void }) {
+  const { t } = useI18n()
+  const [showDetail, setShowDetail] = useState(false)
+  const toolsDone = (message.toolCalls ?? []).filter((tc) => tc.status === 'completed' || tc.status === 'error').length
+  const hasProgress = (message.content?.length ?? 0) > 0 || toolsDone > 0
+
+  return (
+    <div className="mt-3 rounded-xl border border-amber-500/25 bg-amber-500/8 p-3">
+      <div className="flex items-start gap-2.5">
+        <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-amber-500/16 text-[10px] font-bold text-amber-400">!</div>
+        <div className="min-w-0 flex-1">
+          <p className="text-[12px] font-semibold text-amber-400">
+            {hasProgress
+              ? t('chat.failedMidStreamWithProgress', 'Interrupted mid-response — progress preserved')
+              : t('chat.failedMidStream', 'Response interrupted')}
+          </p>
+          {message.autoRetryCount
+            ? <p className="mt-0.5 text-[11px] text-text-muted">{t('chat.autoRetriedN', 'Auto-retried {n} time(s) before failing').replace('{n}', String(message.autoRetryCount))}</p>
+            : null}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            {onResume && hasProgress && (
+              <button
+                type="button"
+                onClick={onResume}
+                className="rounded-md bg-accent/12 px-3 py-1.5 text-[12px] font-semibold text-accent transition-colors hover:bg-accent/20"
+              >
+                ▶ {t('chat.resumeFromHere', 'Continue from here')}
+              </button>
+            )}
+            {onRetry && (
+              <button
+                type="button"
+                onClick={onRetry}
+                className="rounded-md bg-surface-2/60 px-3 py-1.5 text-[12px] font-medium text-text-secondary transition-colors hover:bg-surface-3/60 hover:text-text-primary"
+              >
+                ↻ {t('chat.retryFresh', 'Retry from scratch')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowDetail((v) => !v)}
+              className="rounded-md px-2.5 py-1.5 text-[11px] text-text-muted transition-colors hover:text-text-secondary"
+            >
+              {showDetail ? t('chat.hideDetail', 'Hide detail') : t('chat.showDetail', 'Show detail')}
+            </button>
+          </div>
+          {showDetail && message.streamError && (
+            <pre className="mt-2 overflow-x-auto whitespace-pre-wrap rounded-lg border border-amber-500/15 bg-surface-0/40 p-2.5 text-[10px] text-text-muted font-[JetBrains_Mono,monospace]">
+              {message.streamError}
+            </pre>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Message Bubble ────────────────────────────────────────────────
 
 export function MessageBubble({
   message,
   onRetry,
+  onResume,
   onDelete,
   onRegenerate,
   onFeedback,
@@ -512,6 +572,7 @@ export function MessageBubble({
 }: {
   message: Message
   onRetry?: () => void
+  onResume?: () => void
   onDelete?: () => void
   onRegenerate?: () => void
   onFeedback?: (feedback: 'positive' | 'negative' | undefined) => void
@@ -658,6 +719,13 @@ export function MessageBubble({
                 <div className="space-y-3 text-[14.5px] leading-7">
                   {assistantBody}
                   {renderAttachments()}
+                  {message.failedMidStream && (
+                    <FailedMidStreamBanner
+                      message={message}
+                      onResume={onResume}
+                      onRetry={onRetry}
+                    />
+                  )}
                 </div>
               )}
 

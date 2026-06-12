@@ -11,6 +11,7 @@ vi.mock('@/services/aiService', () => ({
   initializeProvider: (...args: unknown[]) => initializeProvider(...args),
   validateModelConfig: vi.fn(() => ({ valid: true })),
   streamResponseWithTools: (...args: unknown[]) => streamResponseWithTools(...args),
+  classifyAppError: vi.fn(() => ({ category: 'unknown', retryable: false, hint: '' })),
 }))
 
 vi.mock('@/services/agentSelection', () => ({

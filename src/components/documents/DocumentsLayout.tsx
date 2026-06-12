@@ -3,6 +3,12 @@ import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Image from '@tiptap/extension-image'
+import { Table } from '@tiptap/extension-table'
+import { TableRow } from '@tiptap/extension-table-row'
+import { TableHeader } from '@tiptap/extension-table-header'
+import { TableCell } from '@tiptap/extension-table-cell'
+import { TaskList } from '@tiptap/extension-task-list'
+import { TaskItem } from '@tiptap/extension-task-item'
 import { useAppStore } from '@/store/appStore'
 import { SidePanel } from '@/components/layout/SidePanel'
 import { ResizeHandle } from '@/components/layout/ResizeHandle'
@@ -124,6 +130,7 @@ function inlineMarkdown(value: string) {
   let result = escapeHtml(tokenized)
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/~~([^~]+)~~/g, '<s>$1</s>')
     .replace(/\*([^*]+)\*/g, '<em>$1</em>')
     .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`)
     .replace(/\[\[([^\]\n]+)\]\]/g, (_, target: string) => `<a href="#doc:${escapeAttr(target)}">${escapeHtml(target)}</a>`)
@@ -137,20 +144,51 @@ function inlineMarkdown(value: string) {
   return result
 }
 
+function parseTableRow(line: string): string[] {
+  return line
+    .replace(/^\||\|$/g, '')
+    .split('|')
+    .map((cell) => cell.trim())
+}
+
+function isTableSeparator(line: string): boolean {
+  return /^\|?[\s|:-]+\|?$/.test(line) && /[-]/.test(line)
+}
+
 function markdownToTiptapHtml(markdown: string) {
   const lines = markdown.split('\n')
   const html: string[] = []
-  let list: 'ul' | 'ol' | null = null
+  let list: 'ul' | 'ol' | 'ul[data-type="taskList"]' | null = null
   let inCode = false
   let codeLang = ''
   let code: string[] = []
   let inMath = false
   let math: string[] = []
+  // Table state: buffer pending rows until separator is confirmed
+  let tablePending: string[] = []
+  let inTable = false
 
   const closeList = () => {
     if (list) {
-      html.push(`</${list}>`)
+      html.push(`</${list === 'ul[data-type="taskList"]' ? 'ul' : list}>`)
       list = null
+    }
+  }
+
+  const flushTable = () => {
+    if (inTable) {
+      html.push('</tbody></table>')
+      inTable = false
+    }
+  }
+
+  const flushPendingTable = () => {
+    if (tablePending.length > 0) {
+      // Not a real table — emit as paragraphs
+      for (const pending of tablePending) {
+        html.push(`<p>${inlineMarkdown(pending)}</p>`)
+      }
+      tablePending = []
     }
   }
 
@@ -168,6 +206,8 @@ function markdownToTiptapHtml(markdown: string) {
         inCode = false
       } else {
         closeList()
+        flushTable()
+        flushPendingTable()
         codeLang = line.trim().slice(3).trim()
         inCode = true
       }
@@ -187,6 +227,8 @@ function markdownToTiptapHtml(markdown: string) {
         inMath = false
       } else {
         closeList()
+        flushTable()
+        flushPendingTable()
         inMath = true
       }
       return
@@ -197,11 +239,78 @@ function markdownToTiptapHtml(markdown: string) {
       return
     }
 
+    // ── GFM Tables ────────────────────────────────────────────────────────
+    const isTableLine = line.trim().startsWith('|') || (line.includes('|') && !line.trim().startsWith('#'))
+
+    if (inTable) {
+      if (isTableSeparator(line) || !line.trim()) {
+        // Empty line ends the table
+        if (!line.trim()) {
+          flushTable()
+          return
+        }
+        return
+      }
+      if (line.trim().startsWith('|') || line.includes('|')) {
+        const cells = parseTableRow(line)
+        const row = cells.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join('')
+        html.push(`<tr>${row}</tr>`)
+        return
+      }
+      flushTable()
+    }
+
+    if (!inTable && tablePending.length === 0 && isTableLine && line.trim().startsWith('|')) {
+      // Could be a table header row — buffer it
+      tablePending.push(line)
+      return
+    }
+
+    if (tablePending.length > 0) {
+      if (isTableSeparator(line)) {
+        // Confirmed table
+        closeList()
+        const headerCells = parseTableRow(tablePending[0])
+        const headerRow = headerCells.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join('')
+        html.push(`<table><thead><tr>${headerRow}</tr></thead><tbody>`)
+        inTable = true
+        tablePending = []
+        return
+
+      } else {
+        // Not a table — flush buffered line
+        flushPendingTable()
+      }
+    }
+
     // ── Normal inline content ──────────────────────────────────────────────
-    const heading = /^(#{1,3})\s+(.*)$/.exec(line)
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line)
     if (heading) {
       closeList()
       html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`)
+      return
+    }
+
+    // Task list items
+    const taskUnchecked = /^\s*[-*]\s+\[ \]\s+(.*)$/.exec(line)
+    if (taskUnchecked) {
+      if (list !== 'ul[data-type="taskList"]') {
+        closeList()
+        list = 'ul[data-type="taskList"]'
+        html.push('<ul data-type="taskList">')
+      }
+      html.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div><p>${inlineMarkdown(taskUnchecked[1])}</p></div></li>`)
+      return
+    }
+
+    const taskChecked = /^\s*[-*]\s+\[x\]\s+(.*)$/i.exec(line)
+    if (taskChecked) {
+      if (list !== 'ul[data-type="taskList"]') {
+        closeList()
+        list = 'ul[data-type="taskList"]'
+        html.push('<ul data-type="taskList">')
+      }
+      html.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked /></label><div><p>${inlineMarkdown(taskChecked[1])}</p></div></li>`)
       return
     }
 
@@ -238,6 +347,8 @@ function markdownToTiptapHtml(markdown: string) {
   })
 
   closeList()
+  flushTable()
+  flushPendingTable()
   if (inCode) {
     if (codeLang === 'mermaid') {
       html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`)
@@ -262,6 +373,12 @@ function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; 
       StarterKit,
       Placeholder.configure({ placeholder: 'Start writing…' }),
       Image.configure({ inline: true }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TaskList,
+      TaskItem.configure({ nested: true }),
       MathBlock,
       InlineMath,
       MermaidBlock,

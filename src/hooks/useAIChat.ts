@@ -6,7 +6,7 @@
 // - Stream events use v6 field names (input/output, finish-step, tool-error)
 
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { streamResponseWithTools, initializeProvider, validateModelConfig } from '@/services/aiService'
+import { streamResponseWithTools, initializeProvider, validateModelConfig, classifyAppError } from '@/services/aiService'
 import { executeAgentPipeline, listSavedPipelines, resolvePipelineByReference, type AgentPipelineProgressStep } from '@/services/agentPipelineService'
 import { loadPipelineExecutionsFromDisk } from '@/services/pipelineFiles'
 import { parseSlashPipelineChatCommand } from '@/services/pipelineChatCommands'
@@ -734,6 +734,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     const perfStart = performance.now()
     let tokenUsage: { promptTokens: number; completionTokens: number; totalTokens: number } | undefined
     let hasError = false
+    let autoRetryCount = 0
     let inactivityTimer: ReturnType<typeof setTimeout> | null = null
     try {
       const modelIdentifier = `${model.provider}:${model.modelId}`
@@ -857,188 +858,263 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       const toolStepBudget = Math.max(2, Math.min((sessionAgent?.maxTurns ?? defaultAgent?.maxTurns ?? 30) + 1, MAX_CHAT_TOOL_STEPS))
       const cacheKey = `chat:${activeSession.parentSessionId ?? activeSession.id}`
 
-      for await (const event of streamResponseWithTools(modelIdentifier, modelMessages, {
-        systemPrompt,
-        tools: filteredTools,
-        // Agent maxTurns is a tool-action budget; the model still needs one
-        // extra step to turn the final tool result into an answer.
-        maxSteps: toolStepBudget,
-        abortSignal: abortController.signal,
-        apiKey: model.apiKey,
-        baseUrl: model.baseUrl,
-        providerType: model.providerType,
-        cacheKey,
-        previousResponseId,
-      })) {
-        if (abortController.signal.aborted) break
-        resetInactivityTimer()
+      // Auto-retry config for transient errors (rate limit, network, server)
+      const MAX_AUTO_RETRIES = 3
+      const RETRY_DELAYS_MS: Record<string, number[]> = {
+        'rate-limit': [5000, 15000, 40000],
+        'network-offline': [2000, 5000, 12000],
+        'network-refused': [2000, 5000, 12000],
+        'timeout': [3000, 8000, 20000],
+        'server': [3000, 8000, 20000],
+      }
 
-        switch (event.type) {
-          case 'text-delta':
-            if (event.text != null) {
-              fullContent += event.text
-              // Append to existing text part or create a new one
-              const lastPart = contentParts[contentParts.length - 1]
-              if (lastPart && lastPart.type === 'text') {
-                lastPart.text += event.text
-              } else {
-                contentParts.push({ type: 'text', text: event.text })
+      const runStreamAttempt = async () => {
+        for await (const event of streamResponseWithTools(modelIdentifier, modelMessages, {
+          systemPrompt,
+          tools: filteredTools,
+          // Agent maxTurns is a tool-action budget; the model still needs one
+          // extra step to turn the final tool result into an answer.
+          maxSteps: toolStepBudget,
+          abortSignal: abortController.signal,
+          apiKey: model.apiKey,
+          baseUrl: model.baseUrl,
+          providerType: model.providerType,
+          cacheKey,
+          previousResponseId,
+        })) {
+          if (abortController.signal.aborted) return
+          resetInactivityTimer()
+
+          switch (event.type) {
+            case 'text-delta':
+              if (event.text != null) {
+                fullContent += event.text
+                // Append to existing text part or create a new one
+                const lastPart = contentParts[contentParts.length - 1]
+                if (lastPart && lastPart.type === 'text') {
+                  lastPart.text += event.text
+                } else {
+                  contentParts.push({ type: 'text', text: event.text })
+                }
+                // Throttle UI updates for text-delta to avoid state-overwrite races
+                const now = Date.now()
+                if (now - lastFlush > STREAM_FLUSH_INTERVAL) {
+                  if (!flushToStore(false)) return
+                  lastFlush = now
+                }
               }
-              // Throttle UI updates for text-delta to avoid state-overwrite races
-              const now = Date.now()
-              if (now - lastFlush > STREAM_FLUSH_INTERVAL) {
-                if (!flushToStore(false)) break
-                lastFlush = now
-              }
-            }
-            break
+              break
 
-          case 'tool-call': {
-            logger.info(`[Chat:ToolCall] ${event.toolName} | id=${event.toolCallId}`, {
-              toolCallId: event.toolCallId,
-              toolName: event.toolName,
-              inputKeys: Object.keys(event.input ?? {}),
-            })
-            currentToolCalls = [
-              ...currentToolCalls.filter((t) => t.id !== event.toolCallId),
-              { id: event.toolCallId, toolName: event.toolName, input: event.input, status: 'running', startedAt: Date.now() },
-            ]
-            // Add tool-call part to ordered content
-            if (!contentParts.some((part) => part.type === 'tool-call' && part.toolCallId === event.toolCallId)) {
-              contentParts.push({ type: 'tool-call', toolCallId: event.toolCallId })
-            }
-            if (!flushToStore(false)) break
-            lastFlush = Date.now()
-            continue
-          }
-
-          case 'tool-result': {
-            const matchingCall = currentToolCalls.find(t => t.id === event.toolCallId)
-            const toolFailed = looksLikeToolFailureOutput(event.output)
-            const normalizedOutput = toolFailed ? sanitizeToolError(event.output) : event.output
-            const duration = matchingCall?.startedAt ? `${Date.now() - matchingCall.startedAt}ms` : '?'
-            const outputLen = normalizedOutput?.length ?? 0
-            logger.info(`[Chat:ToolResult] ${event.toolName} | id=${event.toolCallId} | duration=${duration} | outputLen=${outputLen}`, {
-              toolCallId: event.toolCallId,
-              toolName: event.toolName,
-              durationMs: duration,
-              output: outputLen <= 4000 ? normalizedOutput : normalizedOutput.slice(0, 4000) + `... [truncated]`,
-            })
-            if (toolFailed) {
-              logger.warn(`[Chat:ToolResultReclassified] ${event.toolName} | id=${event.toolCallId} returned an error-shaped result payload`, {
+            case 'tool-call': {
+              logger.info(`[Chat:ToolCall] ${event.toolName} | id=${event.toolCallId}`, {
                 toolCallId: event.toolCallId,
                 toolName: event.toolName,
+                inputKeys: Object.keys(event.input ?? {}),
+              })
+              currentToolCalls = [
+                ...currentToolCalls.filter((t) => t.id !== event.toolCallId),
+                { id: event.toolCallId, toolName: event.toolName, input: event.input, status: 'running', startedAt: Date.now() },
+              ]
+              // Add tool-call part to ordered content
+              if (!contentParts.some((part) => part.type === 'tool-call' && part.toolCallId === event.toolCallId)) {
+                contentParts.push({ type: 'tool-call', toolCallId: event.toolCallId })
+              }
+              if (!flushToStore(false)) return
+              lastFlush = Date.now()
+              continue
+            }
+
+            case 'tool-result': {
+              const matchingCall = currentToolCalls.find(t => t.id === event.toolCallId)
+              const toolFailed = looksLikeToolFailureOutput(event.output)
+              const normalizedOutput = toolFailed ? sanitizeToolError(event.output) : event.output
+              const duration = matchingCall?.startedAt ? `${Date.now() - matchingCall.startedAt}ms` : '?'
+              const outputLen = normalizedOutput?.length ?? 0
+              logger.info(`[Chat:ToolResult] ${event.toolName} | id=${event.toolCallId} | duration=${duration} | outputLen=${outputLen}`, {
+                toolCallId: event.toolCallId,
+                toolName: event.toolName,
+                durationMs: duration,
+                output: outputLen <= 4000 ? normalizedOutput : normalizedOutput.slice(0, 4000) + `... [truncated]`,
+              })
+              if (toolFailed) {
+                logger.warn(`[Chat:ToolResultReclassified] ${event.toolName} | id=${event.toolCallId} returned an error-shaped result payload`, {
+                  toolCallId: event.toolCallId,
+                  toolName: event.toolName,
+                })
+              }
+              // Cap persisted tool output at 50KB to avoid bloating the session
+              // store (tool outputs can be very large when they wrap file contents
+              // or API responses). The original length is kept as metadata so the
+              // UI can show an accurate "view full output" affordance once we add
+              // an external store for large payloads.
+              const PERSISTED_TOOL_OUTPUT_MAX = 50_000
+              const persistedOutput = outputLen > PERSISTED_TOOL_OUTPUT_MAX
+                ? normalizedOutput.slice(0, PERSISTED_TOOL_OUTPUT_MAX) + `\n\n... [${(outputLen - PERSISTED_TOOL_OUTPUT_MAX).toLocaleString()} characters truncated — total ${outputLen.toLocaleString()} chars]`
+                : normalizedOutput
+              const completedAt = Date.now()
+              const durationMs = matchingCall?.startedAt ? completedAt - matchingCall.startedAt : undefined
+              const envelope = await createToolOutputEnvelope({
+                status: toolFailed ? 'error' : 'completed',
+                output: normalizedOutput,
+                durationMs,
+                workspacePath: store.workspacePath,
+                runId,
+                toolCallId: event.toolCallId,
+              })
+              currentToolCalls = currentToolCalls.map((t) =>
+                t.id === event.toolCallId
+                  ? {
+                      ...t,
+                      status: toolFailed ? 'error' : 'completed',
+                      output: persistedOutput,
+                      outputEnvelope: envelope,
+                      completedAt,
+                      durationMs,
+                    }
+                  : t
+              )
+              if (!flushToStore(false)) return
+              lastFlush = Date.now()
+              continue
+            }
+
+            case 'tool-error': {
+              const errMatchingCall = currentToolCalls.find(t => t.id === event.toolCallId)
+              const errDuration = errMatchingCall?.startedAt ? `${Date.now() - errMatchingCall.startedAt}ms` : '?'
+              const sanitizedError = sanitizeToolError(event.error)
+              logger.error(`[Chat:ToolError] ${event.toolName} | id=${event.toolCallId} | duration=${errDuration}`, {
+                toolCallId: event.toolCallId,
+                toolName: event.toolName,
+                durationMs: errDuration,
+                inputKeys: errMatchingCall?.input ? Object.keys(errMatchingCall.input) : [],
+                error: sanitizedError,
+              })
+              recordToolErrorMemory({
+                sessionId: activeSession.id,
+                agentId: sessionAgent?.id,
+                skillIds: sessionAgent?.skills,
+                source: 'chat-stream',
+                toolName: event.toolName,
+                input: errMatchingCall?.input,
+                error: sanitizedError,
+                durationMs: errMatchingCall?.startedAt ? Date.now() - errMatchingCall.startedAt : undefined,
+                errorSource: 'stream',
+              })
+              currentToolCalls = currentToolCalls.map((t) =>
+                t.id === event.toolCallId
+                  ? {
+                      ...t,
+                      status: 'error',
+                      output: sanitizedError,
+                      outputEnvelope: {
+                        status: 'error',
+                        summary: sanitizedError,
+                        durationMs: t.startedAt ? Date.now() - t.startedAt : undefined,
+                        outputChars: sanitizedError.length,
+                      },
+                      completedAt: Date.now(),
+                    }
+                  : t
+              )
+              if (!flushToStore(false)) return
+              lastFlush = Date.now()
+              continue
+            }
+
+            case 'finish-step': {
+              logger.info(`[Chat:StepFinished] reason=${event.finishReason} | textLen=${fullContent.length} | tools=${currentToolCalls.length}`)
+              continue
+            }
+
+            case 'error':
+              hasError = true
+              logger.error(`[Chat:Error]`, { error: sanitizeToolError(event.error) })
+              fullContent += `\n\n[Tool Error] ${sanitizeToolError(event.error)}`
+              break
+
+            case 'usage':
+              tokenUsage = {
+                promptTokens: event.promptTokens,
+                completionTokens: event.completionTokens,
+                totalTokens: event.totalTokens,
+              }
+              break
+
+            case 'response-metadata':
+              runtimeSnapshot.providerResponseId = event.providerResponseId ?? runtimeSnapshot.providerResponseId
+              runtimeSnapshot.cachedPromptTokens = event.cachedPromptTokens ?? runtimeSnapshot.cachedPromptTokens
+              break
+          }
+
+          // Throttled flush for text-delta
+          const now = Date.now()
+          if (now - lastFlush >= STREAM_FLUSH_INTERVAL) {
+            lastFlush = now
+            if (!flushToStore(false)) return
+          }
+        }
+      }
+
+      // Stream with exponential-backoff auto-retry for transient errors
+      let streamDone = false
+      while (!streamDone && !abortController.signal.aborted) {
+        try {
+          await runStreamAttempt()
+          streamDone = true
+        } catch (streamErr) {
+          if (abortController.signal.aborted) break
+
+          const classification = classifyAppError(streamErr)
+          // Only auto-retry if there is no partial content yet — retrying mid-stream
+          // would cause duplicate tool calls; the user can manually continue instead.
+          const hasPartialProgress = fullContent.length > 0
+            || currentToolCalls.some((tc) => tc.status === 'completed' || tc.status === 'error')
+
+          if (
+            !hasPartialProgress
+            && classification.retryable
+            && autoRetryCount < MAX_AUTO_RETRIES
+          ) {
+            autoRetryCount++
+            const delays = RETRY_DELAYS_MS[classification.category] ?? RETRY_DELAYS_MS['server']
+            const delayMs = delays[Math.min(autoRetryCount - 1, delays.length - 1)]
+            const countdownSec = Math.round(delayMs / 1000)
+            logger.warn(`[Chat:AutoRetry] attempt=${autoRetryCount}/${MAX_AUTO_RETRIES} delay=${delayMs}ms category=${classification.category}`)
+
+            // Show a countdown notice inside the (still-streaming) message
+            const retryNotice = t(
+              'chat.autoRetrying',
+              'Auto-retrying in {s}s (attempt {n}/{max}) — {hint}',
+            )
+              .replace('{s}', String(countdownSec))
+              .replace('{n}', String(autoRetryCount))
+              .replace('{max}', String(MAX_AUTO_RETRIES))
+              .replace('{hint}', classification.hint)
+            updateSessionMessage(activeSession.id, assistantMsg.id, {
+              content: retryNotice,
+              isStreaming: true,
+              autoRetryCount,
+            })
+
+            await new Promise<void>((resolve) => {
+              // Respect abort while waiting
+              const tid = setTimeout(resolve, delayMs)
+              abortController.signal.addEventListener('abort', () => { clearTimeout(tid); resolve() }, { once: true })
+            })
+
+            if (!abortController.signal.aborted) {
+              // Clear the retry notice before the next attempt
+              updateSessionMessage(activeSession.id, assistantMsg.id, {
+                content: '',
+                isStreaming: true,
+                autoRetryCount,
               })
             }
-            // Cap persisted tool output at 50KB to avoid bloating the session
-            // store (tool outputs can be very large when they wrap file contents
-            // or API responses). The original length is kept as metadata so the
-            // UI can show an accurate "view full output" affordance once we add
-            // an external store for large payloads.
-            const PERSISTED_TOOL_OUTPUT_MAX = 50_000
-            const persistedOutput = outputLen > PERSISTED_TOOL_OUTPUT_MAX
-              ? normalizedOutput.slice(0, PERSISTED_TOOL_OUTPUT_MAX) + `\n\n... [${(outputLen - PERSISTED_TOOL_OUTPUT_MAX).toLocaleString()} characters truncated — total ${outputLen.toLocaleString()} chars]`
-              : normalizedOutput
-            const completedAt = Date.now()
-            const durationMs = matchingCall?.startedAt ? completedAt - matchingCall.startedAt : undefined
-            const envelope = await createToolOutputEnvelope({
-              status: toolFailed ? 'error' : 'completed',
-              output: normalizedOutput,
-              durationMs,
-              workspacePath: store.workspacePath,
-              runId,
-              toolCallId: event.toolCallId,
-            })
-            currentToolCalls = currentToolCalls.map((t) =>
-              t.id === event.toolCallId
-                ? {
-                    ...t,
-                    status: toolFailed ? 'error' : 'completed',
-                    output: persistedOutput,
-                    outputEnvelope: envelope,
-                    completedAt,
-                    durationMs,
-                  }
-                : t
-            )
-            if (!flushToStore(false)) break
-            lastFlush = Date.now()
             continue
           }
 
-          case 'tool-error': {
-            const errMatchingCall = currentToolCalls.find(t => t.id === event.toolCallId)
-            const errDuration = errMatchingCall?.startedAt ? `${Date.now() - errMatchingCall.startedAt}ms` : '?'
-            const sanitizedError = sanitizeToolError(event.error)
-            logger.error(`[Chat:ToolError] ${event.toolName} | id=${event.toolCallId} | duration=${errDuration}`, {
-              toolCallId: event.toolCallId,
-              toolName: event.toolName,
-              durationMs: errDuration,
-              inputKeys: errMatchingCall?.input ? Object.keys(errMatchingCall.input) : [],
-              error: sanitizedError,
-            })
-            recordToolErrorMemory({
-              sessionId: activeSession.id,
-              agentId: sessionAgent?.id,
-              skillIds: sessionAgent?.skills,
-              source: 'chat-stream',
-              toolName: event.toolName,
-              input: errMatchingCall?.input,
-              error: sanitizedError,
-              durationMs: errMatchingCall?.startedAt ? Date.now() - errMatchingCall.startedAt : undefined,
-              errorSource: 'stream',
-            })
-            currentToolCalls = currentToolCalls.map((t) =>
-              t.id === event.toolCallId
-                ? {
-                    ...t,
-                    status: 'error',
-                    output: sanitizedError,
-                    outputEnvelope: {
-                      status: 'error',
-                      summary: sanitizedError,
-                      durationMs: t.startedAt ? Date.now() - t.startedAt : undefined,
-                      outputChars: sanitizedError.length,
-                    },
-                    completedAt: Date.now(),
-                  }
-                : t
-            )
-            if (!flushToStore(false)) break
-            lastFlush = Date.now()
-            continue
-          }
-
-          case 'finish-step': {
-            logger.info(`[Chat:StepFinished] reason=${event.finishReason} | textLen=${fullContent.length} | tools=${currentToolCalls.length}`)
-            continue
-          }
-
-          case 'error':
-            hasError = true
-            logger.error(`[Chat:Error]`, { error: sanitizeToolError(event.error) })
-            fullContent += `\n\n[Tool Error] ${sanitizeToolError(event.error)}`
-            break
-
-          case 'usage':
-            tokenUsage = {
-              promptTokens: event.promptTokens,
-              completionTokens: event.completionTokens,
-              totalTokens: event.totalTokens,
-            }
-            break
-
-          case 'response-metadata':
-            runtimeSnapshot.providerResponseId = event.providerResponseId ?? runtimeSnapshot.providerResponseId
-            runtimeSnapshot.cachedPromptTokens = event.cachedPromptTokens ?? runtimeSnapshot.cachedPromptTokens
-            break
-        }
-
-        // Throttled flush for text-delta
-        const now = Date.now()
-        if (now - lastFlush >= STREAM_FLUSH_INTERVAL) {
-          lastFlush = now
-          if (!flushToStore(false)) break
+          // Cannot auto-retry — propagate to outer catch
+          throw streamErr
         }
       }
 
@@ -1089,25 +1165,48 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         }
       } else {
         const errorContent = err instanceof Error ? err.message : 'An unknown error occurred'
+        const classification = classifyAppError(err)
         setError(errorContent)
         try {
           const latest = useAppStore.getState().sessions.find((s) => s.id === activeSession.id)
           if (latest) {
+            const currentMsg = latest.messages.find((message) => message.id === assistantMsg.id)
+            // If partial content was generated, preserve it and mark as mid-stream failure
+            // so the user can resume without starting over from scratch.
+            const hasPartialProgress = (currentMsg?.content?.length ?? 0) > 0
+              || (currentMsg?.toolCalls ?? []).some((tc) => tc.status === 'completed' || tc.status === 'error')
             useAppStore.getState().updateSession(activeSession.id, {
               messages: latest.messages.map((message) => message.id === assistantMsg.id
-                ? {
-                    ...message,
-                    content: errorContent,
-                    isStreaming: false,
-                    isError: true,
-                    errorInfo: {
-                      category: 'provider',
-                      retryable: true,
-                      hint: 'Retry the message, switch model, or check provider settings.',
-                      rawSanitized: sanitizeToolError(errorContent),
-                      source: model.providerType,
-                    },
-                  }
+                ? hasPartialProgress
+                  ? {
+                      ...message,
+                      isStreaming: false,
+                      isError: false,
+                      failedMidStream: true,
+                      streamError: sanitizeToolError(errorContent),
+                      autoRetryCount: autoRetryCount > 0 ? autoRetryCount : undefined,
+                      errorInfo: {
+                        category: 'provider',
+                        retryable: classification.retryable,
+                        hint: classification.hint || 'Check your API quota and network, then continue or retry.',
+                        rawSanitized: sanitizeToolError(errorContent),
+                        source: model.providerType,
+                      },
+                    }
+                  : {
+                      ...message,
+                      content: errorContent,
+                      isStreaming: false,
+                      isError: true,
+                      autoRetryCount: autoRetryCount > 0 ? autoRetryCount : undefined,
+                      errorInfo: {
+                        category: 'provider',
+                        retryable: classification.retryable,
+                        hint: classification.hint || 'Retry the message, switch model, or check provider settings.',
+                        rawSanitized: sanitizeToolError(errorContent),
+                        source: model.providerType,
+                      },
+                    }
                 : message),
             })
           }
@@ -1153,7 +1252,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     if (!session || session.messages.length < 2) return
 
     const lastMsg = session.messages[session.messages.length - 1]
-    if (!lastMsg?.isError) return
+    if (!lastMsg?.isError && !lastMsg?.failedMidStream) return
     // Don't retry a message that is still streaming — wait for it to complete
     // or be cancelled first so we don't double-fire requests.
     if (lastMsg.isStreaming) return
@@ -1227,8 +1326,47 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     store.updateSession(session.id, { messages: [] })
   }, [resolveTargetSession])
 
+  /**
+   * Resume after a mid-stream failure (failedMidStream === true).
+   * The partial message is kept as context; we send a continuation prompt
+   * so the model picks up where it left off without wasting the work already done.
+   */
+  const resumeFromMessage = useCallback((messageId: string) => {
+    const store = useAppStore.getState()
+    const session = resolveTargetSession(store)
+    if (!session || activeStreamsRef.current.has(session.id)) return
+
+    const msgIndex = session.messages.findIndex((m) => m.id === messageId)
+    if (msgIndex < 0) return
+    const failedMsg = session.messages[msgIndex]
+    if (!failedMsg?.failedMidStream) return
+
+    // Clear the failure markers so the message looks like a completed turn
+    const fixedMsg = {
+      ...failedMsg,
+      failedMidStream: undefined as boolean | undefined,
+      streamError: undefined as string | undefined,
+      isError: false,
+      isStreaming: false,
+    }
+
+    store.updateSession(session.id, {
+      messages: session.messages.map((m) => m.id === messageId ? fixedMsg : m),
+    })
+
+    // Detect language from prior messages to pick the right continuation prompt
+    const hasChinese = session.messages
+      .slice(0, msgIndex)
+      .some((m) => /[\u4e00-\u9fff]/.test(m.content))
+    const continuePrompt = hasChinese
+      ? '请从上次中断的地方继续，无需重复已完成的步骤。'
+      : 'Please continue from where you left off. Do not repeat steps already completed.'
+
+    sendMessage(continuePrompt)
+  }, [resolveTargetSession, sendMessage])
+
   const loadingSessionId = targetSessionId ?? useAppStore.getState().activeSessionId
   const isLoading = Boolean(loadingSessionId && activeStreamsRef.current.has(loadingSessionId))
 
-  return { sendMessage, cancelStream, retryLastError, deleteMessage, regenerateMessage, clearMessages, isLoading, error }
+  return { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading, error }
 }

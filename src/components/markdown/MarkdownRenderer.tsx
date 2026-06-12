@@ -109,12 +109,20 @@ const MD_COMPONENTS = {
   h1: ({ children, ...props }: ComponentPropsWithoutRef<'h1'>) => <h1 className="text-base font-bold mt-3 mb-1.5" {...props}>{children}</h1>,
   h2: ({ children, ...props }: ComponentPropsWithoutRef<'h2'>) => <h2 className="text-[15px] font-bold mt-2.5 mb-1" {...props}>{children}</h2>,
   h3: ({ children, ...props }: ComponentPropsWithoutRef<'h3'>) => <h3 className="text-[14px] font-semibold mt-2 mb-1" {...props}>{children}</h3>,
+  h4: ({ children, ...props }: ComponentPropsWithoutRef<'h4'>) => <h4 className="text-[13.5px] font-semibold mt-2 mb-0.5" {...props}>{children}</h4>,
+  h5: ({ children, ...props }: ComponentPropsWithoutRef<'h5'>) => <h5 className="text-[13px] font-semibold mt-1.5 mb-0.5 text-text-secondary" {...props}>{children}</h5>,
+  h6: ({ children, ...props }: ComponentPropsWithoutRef<'h6'>) => <h6 className="text-[12.5px] font-semibold mt-1.5 mb-0.5 text-text-muted" {...props}>{children}</h6>,
   blockquote: ({ children, ...props }: ComponentPropsWithoutRef<'blockquote'>) => <blockquote className="border-l-2 border-accent/30 pl-3 my-2 text-text-secondary italic" {...props}>{children}</blockquote>,
   table: ({ children, ...props }: ComponentPropsWithoutRef<'table'>) => <div className="overflow-x-auto my-2"><table className="w-full text-[12.5px] border-collapse" {...props}>{children}</table></div>,
-  th: ({ children, ...props }: ComponentPropsWithoutRef<'th'>) => <th className="border border-border px-2 py-1.5 bg-surface-2 text-left font-semibold text-text-secondary" {...props}>{children}</th>,
+  thead: ({ children, ...props }: ComponentPropsWithoutRef<'thead'>) => <thead className="bg-surface-2/60" {...props}>{children}</thead>,
+  tbody: ({ children, ...props }: ComponentPropsWithoutRef<'tbody'>) => <tbody {...props}>{children}</tbody>,
+  tr: ({ children, ...props }: ComponentPropsWithoutRef<'tr'>) => <tr className="even:bg-surface-1/40 border-b border-border/40" {...props}>{children}</tr>,
+  th: ({ children, ...props }: ComponentPropsWithoutRef<'th'>) => <th className="border border-border px-2 py-1.5 bg-surface-2/80 text-left font-semibold text-text-secondary" {...props}>{children}</th>,
   td: ({ children, ...props }: ComponentPropsWithoutRef<'td'>) => <td className="border border-border px-2 py-1.5 text-text-primary" {...props}>{children}</td>,
   a: ({ children, ...props }: ComponentPropsWithoutRef<'a'>) => <a className="text-accent underline underline-offset-2 hover:text-accent-hover" target="_blank" rel="noopener noreferrer" {...props}>{children}</a>,
   hr: (props: ComponentPropsWithoutRef<'hr'>) => <hr className="my-3 border-border" {...props} />,
+  del: ({ children, ...props }: ComponentPropsWithoutRef<'del'>) => <del className="text-text-muted" {...props}>{children}</del>,
+  input: ({ ...props }: ComponentPropsWithoutRef<'input'>) => <input className="mr-1 accent-accent" {...props} />,
 } as const
 
 export function MarkdownRenderer({

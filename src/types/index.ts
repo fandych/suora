@@ -178,7 +178,10 @@ export interface Message {
   modelUsed?: string
   agentId?: string
   isStreaming?: boolean
-  isError?: boolean            // true when message represents an API error
+  isError?: boolean            // true when message represents an API error (no partial content)
+  failedMidStream?: boolean    // error occurred after partial content was generated
+  streamError?: string         // error detail for failedMidStream messages
+  autoRetryCount?: number      // how many auto-retries were performed before surfacing error
   toolCalls?: ToolCall[]       // tool invocations by the assistant
   contentParts?: ContentPart[] // ordered segments (text + tool-calls interleaved)
   attachments?: MessageAttachment[]  // image attachments for vision models
