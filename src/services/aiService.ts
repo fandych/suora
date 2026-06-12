@@ -185,6 +185,9 @@ function getProviderFetch(): typeof fetch | undefined {
 
     const headers = withAiRequestHeaders(Object.fromEntries(request.headers.entries()))
     const bodyPayload = await serializeRequestBody(request.clone())
+    if (request.signal.aborted) {
+      throw createAbortError()
+    }
     const payload: AiFetchStartPayload = {
       url: request.url,
       method: request.method,
@@ -274,6 +277,9 @@ function getProviderFetch(): typeof fetch | undefined {
 
       on('ai:fetch:event', handleEvent)
       request.signal.addEventListener('abort', handleAbort, { once: true })
+      if (request.signal.aborted) {
+        handleAbort()
+      }
 
       try {
         const startResult = await invoke('ai:fetch:start', payload) as AiFetchStartResult
@@ -281,6 +287,13 @@ function getProviderFetch(): typeof fetch | undefined {
           throw new Error('AI fetch proxy did not return a request ID')
         }
         requestId = startResult.requestId
+        // If the caller aborted while the main process was still assigning the
+        // request ID, replay that abort now that we know which proxied request
+        // should be cancelled.
+        if (request.signal.aborted) {
+          void invoke('ai:fetch:abort', requestId).catch(() => {})
+          fail(createAbortError())
+        }
       } catch (error: unknown) {
         fail(error instanceof Error ? error : new Error(String(error)))
       }

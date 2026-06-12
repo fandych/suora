@@ -1746,6 +1746,14 @@ type AiFetchEventPayload =
   | { requestId: string; type: 'error'; error: string }
 
 const activeAiFetchRequests = new Map<string, ClientRequest>()
+const knownAiFetchRequests = new Set<string>()
+const pendingAiFetchAborts = new Set<string>()
+
+function clearAiFetchRequestTracking(requestId: string): void {
+  activeAiFetchRequests.delete(requestId)
+  knownAiFetchRequests.delete(requestId)
+  pendingAiFetchAborts.delete(requestId)
+}
 
 function serializeResponseHeaders(headers: IncomingMessage['headers']): Record<string, string> {
   const result: Record<string, string> = {}
@@ -1769,10 +1777,18 @@ function beginAiFetch(
 ): void {
   void (async () => {
     try {
+      if (pendingAiFetchAborts.delete(requestId)) {
+        knownAiFetchRequests.delete(requestId)
+        return
+      }
       const parsed = await validatePublicHttpUrlWithDns(payload.url)
+      if (pendingAiFetchAborts.delete(requestId)) {
+        knownAiFetchRequests.delete(requestId)
+        return
+      }
       startAiFetchRequest(target, requestId, parsed.toString(), payload, redirectsLeft)
     } catch (err: unknown) {
-      activeAiFetchRequests.delete(requestId)
+      clearAiFetchRequestTracking(requestId)
       sendAiFetchEvent(target, {
         requestId,
         type: 'error',
@@ -1789,6 +1805,11 @@ function startAiFetchRequest(
   payload: AiFetchStartPayload,
   redirectsLeft: number,
 ): void {
+  if (pendingAiFetchAborts.delete(requestId)) {
+    knownAiFetchRequests.delete(requestId)
+    return
+  }
+
   const method = (payload.method ?? 'GET').toUpperCase()
   const reqModule = url.startsWith('https:') ? https : http
   const body = payload.bodyBase64
@@ -1848,12 +1869,12 @@ function startAiFetchRequest(
       })
 
       res.on('end', () => {
-        activeAiFetchRequests.delete(requestId)
+        clearAiFetchRequestTracking(requestId)
         sendAiFetchEvent(target, { requestId, type: 'end' })
       })
 
       res.on('error', (err: Error) => {
-        activeAiFetchRequests.delete(requestId)
+        clearAiFetchRequestTracking(requestId)
         sendAiFetchEvent(target, {
           requestId,
           type: 'error',
@@ -1866,7 +1887,7 @@ function startAiFetchRequest(
   activeAiFetchRequests.set(requestId, req)
 
   req.on('error', (err: Error) => {
-    activeAiFetchRequests.delete(requestId)
+    clearAiFetchRequestTracking(requestId)
     sendAiFetchEvent(target, {
       requestId,
       type: 'error',
@@ -1981,7 +2002,8 @@ ipcMain.handle('ai:fetch:start', (event, payload: AiFetchStartPayload) => {
   }
 
   const requestId = crypto.randomUUID()
-  setTimeout(() => beginAiFetch(event.sender, requestId, payload), 0)
+  knownAiFetchRequests.add(requestId)
+  beginAiFetch(event.sender, requestId, payload)
   return { requestId }
 })
 
@@ -1994,6 +2016,8 @@ ipcMain.handle('ai:fetch:abort', (_event, requestId: string) => {
   if (request) {
     activeAiFetchRequests.delete(requestId)
     request.destroy(new Error('Request aborted'))
+  } else if (knownAiFetchRequests.has(requestId)) {
+    pendingAiFetchAborts.add(requestId)
   }
 
   return { success: true }
@@ -2104,7 +2128,7 @@ function getAutomationWindowState() {
 
 ipcMain.handle('browser:navigate', async (_event, url: string) => {
   try {
-    const win = await navigateAutomationWindow(url, true)
+    const win = await navigateAutomationWindow(url)
     const title = win.webContents.getTitle()
     const text = await win.webContents.executeJavaScript(
       `document.body ? document.body.innerText.slice(0, 8000) : ''`

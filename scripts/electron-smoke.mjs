@@ -84,6 +84,49 @@ async function clickNav(target) {
   }
 }
 
+await record('chat launch controls', async () => {
+  await clickNav({ label: 'Chat', name: /^(Chat|对话)$/ })
+
+  const agentSelector = page.getByRole('button', { name: /Select agent|选择智能体|选择代理/i })
+  const modelSelector = page.getByRole('button', { name: /Select model|选择模型/i })
+  const composer = page.locator('textarea').last()
+
+  await Promise.all([
+    agentSelector.waitFor({ state: 'visible', timeout: 5000 }),
+    modelSelector.waitFor({ state: 'visible', timeout: 5000 }),
+    composer.waitFor({ state: 'visible', timeout: 5000 }),
+  ])
+
+  const agentText = (await agentSelector.textContent())?.trim()
+  const modelText = (await modelSelector.textContent())?.trim()
+
+  if (agentText && agentText.length > 120) {
+    throw new Error(`Agent selector summary is too verbose (${agentText.length} chars): ${agentText}`)
+  }
+  if (modelText && modelText.length > 90) {
+    throw new Error(`Model selector summary is too verbose (${modelText.length} chars): ${modelText}`)
+  }
+
+  return {
+    agentText,
+    modelText,
+    composerPlaceholder: await composer.getAttribute('placeholder'),
+  }
+})
+
+await record('chat browser hidden by default', async () => {
+  await clickNav({ label: 'Chat', name: /^(Chat|对话)$/ })
+
+  const browserLabels = await page.getByText(/Collaborative Browser|协作浏览器/i).count()
+  const browserActionButtons = await page.getByRole('button', { name: /Open browser|Hide browser|Focus browser|打开浏览器|隐藏浏览器/i }).count()
+
+  if (browserLabels > 0 || browserActionButtons > 0) {
+    throw new Error(`Expected browser controls to stay hidden by default, got labels=${browserLabels}, actions=${browserActionButtons}`)
+  }
+
+  return { browserLabels, browserActionButtons }
+})
+
 const navigationTargets = [
   { label: 'Chat', name: /^(Chat|对话)$/ },
   { label: 'Documents', name: /^(Documents|文档)$/ },

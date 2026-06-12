@@ -1,41 +1,186 @@
 ---
 name: tailwind-design-system
-description: Build scalable Tailwind CSS v4 design systems with CSS-first tokens, accessible component patterns, responsive layouts, dark mode, and migration guidance. Use this skill whenever the user asks to create or standardize a component library, define design tokens, implement reusable UI patterns, improve Tailwind architecture, migrate Tailwind v3 to v4, or make a Tailwind UI more consistent and accessible.
+description: Build scalable design systems with Tailwind CSS v4, design tokens, component libraries, and responsive patterns. Use when creating component libraries, implementing design systems, or standardizing UI patterns.
 ---
 
 # Tailwind Design System (v4)
 
-Use this skill to produce production-ready Tailwind CSS v4 design systems. Favor CSS-first configuration, semantic tokens, accessible components, and responsive patterns that can scale across a codebase.
+Build production-ready design systems with Tailwind CSS v4, including CSS-first configuration, design tokens, component variants, responsive patterns, and accessibility.
 
-## Workflow
+> **Note**: This skill targets Tailwind CSS v4 (2024+). For v3 projects, refer to the [upgrade guide](https://tailwindcss.com/docs/upgrade-guide).
 
-1. Inspect the project stack and Tailwind version before recommending implementation details.
-2. Define the design-system intent: brand/tone, supported themes, component scope, accessibility requirements, and migration constraints.
-3. Establish token hierarchy before components: brand tokens → semantic tokens → component tokens.
-4. Build components from base styles, variants, sizes, states, then controlled overrides.
-5. Validate both light and dark themes, keyboard/focus states, responsive behavior, and TypeScript ergonomics.
+## When to Use This Skill
 
-## Tailwind v4 defaults
+- Creating a component library with Tailwind v4
+- Implementing design tokens and theming with CSS-first configuration
+- Building responsive and accessible components
+- Standardizing UI patterns across a codebase
+- Migrating from Tailwind v3 to v4
+- Setting up dark mode with native CSS features
 
-- Use `@import "tailwindcss"` instead of `@tailwind base/components/utilities`.
-- Use CSS `@theme` blocks instead of `tailwind.config.ts` for tokens.
-- Use `@custom-variant dark (&:where(.dark, .dark *))` for class-based dark mode.
-- Put animation tokens and keyframes in CSS; avoid adding animation plugins unless the project already uses them.
-- Prefer semantic utilities such as `bg-primary` over hardcoded palette classes.
-- Prefer `size-*` for equal width/height.
-- For React 19, accept `ref` as a prop instead of adding `forwardRef` for new components.
+## Key v4 Changes
 
-## Bundled references
+| v3 Pattern                            | v4 Pattern                                                            |
+| ------------------------------------- | --------------------------------------------------------------------- |
+| `tailwind.config.ts`                  | `@theme` in CSS                                                       |
+| `@tailwind base/components/utilities` | `@import "tailwindcss"`                                               |
+| `darkMode: "class"`                   | `@custom-variant dark (&:where(.dark, .dark *))`                      |
+| `theme.extend.colors`                 | `@theme { --color-*: value }`                                         |
+| `require("tailwindcss-animate")`      | CSS `@keyframes` in `@theme` + `@starting-style` for entry animations |
 
-Read only the reference needed for the current task:
+## Quick Start
 
-- `references/tailwind-v4-foundation.md` — CSS-first setup, token hierarchy, dark mode, and core utilities.
-- `references/component-patterns.md` — Button, Card, form, grid, dialog/animation, and theme-provider patterns.
-- `references/migration-checklist.md` — Tailwind v3 to v4 migration checklist and best practices.
+```css
+/* app.css - Tailwind v4 CSS-first configuration */
+@import "tailwindcss";
 
-## Output expectations
+/* Define your theme with @theme */
+@theme {
+  /* Semantic color tokens using OKLCH for better color perception */
+  --color-background: oklch(100% 0 0);
+  --color-foreground: oklch(14.5% 0.025 264);
 
-- Explain the design-system structure before making broad changes.
-- Keep tokens semantic and document where each token belongs.
-- Reuse project conventions and dependencies; do not add `class-variance-authority`, `tailwind-merge`, Radix, or form libraries unless they already exist or the user explicitly asks.
-- Include accessibility behavior as part of component design, not as an afterthought.
+  --color-primary: oklch(14.5% 0.025 264);
+  --color-primary-foreground: oklch(98% 0.01 264);
+
+  --color-secondary: oklch(96% 0.01 264);
+  --color-secondary-foreground: oklch(14.5% 0.025 264);
+
+  --color-muted: oklch(96% 0.01 264);
+  --color-muted-foreground: oklch(46% 0.02 264);
+
+  --color-accent: oklch(96% 0.01 264);
+  --color-accent-foreground: oklch(14.5% 0.025 264);
+
+  --color-destructive: oklch(53% 0.22 27);
+  --color-destructive-foreground: oklch(98% 0.01 264);
+
+  --color-border: oklch(91% 0.01 264);
+  --color-ring: oklch(14.5% 0.025 264);
+
+  --color-card: oklch(100% 0 0);
+  --color-card-foreground: oklch(14.5% 0.025 264);
+
+  /* Ring offset for focus states */
+  --color-ring-offset: oklch(100% 0 0);
+
+  /* Radius tokens */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* Animation tokens - keyframes inside @theme are output when referenced by --animate-* variables */
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-fade-out: fade-out 0.2s ease-in;
+  --animate-slide-in: slide-in 0.3s ease-out;
+  --animate-slide-out: slide-out 0.3s ease-in;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fade-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes slide-in {
+    from {
+      transform: translateY(-0.5rem);
+      opacity: 0;
+    }
+    to {
+      transform: translateY(0);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-out {
+    from {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    to {
+      transform: translateY(-0.5rem);
+      opacity: 0;
+    }
+  }
+}
+
+/* Dark mode variant - use @custom-variant for class-based dark mode */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Dark mode theme overrides */
+.dark {
+  --color-background: oklch(14.5% 0.025 264);
+  --color-foreground: oklch(98% 0.01 264);
+
+  --color-primary: oklch(98% 0.01 264);
+  --color-primary-foreground: oklch(14.5% 0.025 264);
+
+  --color-secondary: oklch(22% 0.02 264);
+  --color-secondary-foreground: oklch(98% 0.01 264);
+
+  --color-muted: oklch(22% 0.02 264);
+  --color-muted-foreground: oklch(65% 0.02 264);
+
+  --color-accent: oklch(22% 0.02 264);
+  --color-accent-foreground: oklch(98% 0.01 264);
+
+  --color-destructive: oklch(42% 0.15 27);
+  --color-destructive-foreground: oklch(98% 0.01 264);
+
+  --color-border: oklch(22% 0.02 264);
+  --color-ring: oklch(83% 0.02 264);
+
+  --color-card: oklch(14.5% 0.025 264);
+  --color-card-foreground: oklch(98% 0.01 264);
+
+  --color-ring-offset: oklch(14.5% 0.025 264);
+}
+
+/* Base styles */
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+}
+```
+
+## Core Concepts
+
+### 1. Design Token Hierarchy
+
+```
+Brand Tokens (abstract)
+    └── Semantic Tokens (purpose)
+        └── Component Tokens (specific)
+
+Example:
+    oklch(45% 0.2 260) → --color-primary → bg-primary
+```
+
+### 2. Component Architecture
+
+```
+Base styles → Variants → Sizes → States → Overrides
+```
+
+## Detailed patterns and worked examples
+
+Detailed pattern documentation lives in `references/details.md`. Read that file when the navigation tier above is insufficient.
+

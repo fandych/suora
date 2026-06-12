@@ -1562,7 +1562,7 @@ export const builtinToolDefs: ToolSet = {
   // ─── Browser Automation Tools ────────────────────────────────────
 
   browser_navigate: tool({
-    description: 'Navigate Suora\'s collaborative browser to a URL, reveal the browser window for human handoff when needed, and return the page title and text content.',
+    description: 'Navigate Suora\'s collaborative browser to a URL in the background and return the page title and text content. Open the browser window separately only when human handoff is needed.',
     inputSchema: z.object({
       url: z.string().url().describe('The URL to navigate to (must be http or https)'),
     }),

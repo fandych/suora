@@ -181,6 +181,51 @@ describe('aiService', () => {
         }),
       }))
     })
+
+    it('replays an abort to the Electron AI fetch bridge when the request id arrives late', async () => {
+      let resolveStart: ((value: { requestId: string }) => void) | undefined
+      let markStartInvoked: (() => void) | undefined
+      const startInvoked = new Promise<void>((resolve) => {
+        markStartInvoked = resolve
+      })
+
+      vi.mocked(window.electron.invoke).mockImplementation((async (channel) => {
+        if (channel === 'ai:fetch:start') {
+          markStartInvoked?.()
+          return await new Promise<{ requestId: string }>((resolve) => {
+            resolveStart = resolve
+          })
+        }
+
+        if (channel === 'ai:fetch:abort') {
+          return { success: true }
+        }
+
+        return undefined
+      }) as typeof window.electron.invoke)
+
+      initializeProvider('openai-compatible', 'test-key', 'https://api.example.com', 'provider-fetch-race-test')
+
+      const options = vi.mocked(createOpenAICompatible).mock.calls.at(-1)?.[0] as { fetch?: typeof fetch }
+      expect(options.fetch).toBeTypeOf('function')
+
+      const controller = new AbortController()
+      const fetchPromise = options.fetch?.('https://api.example.com/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'qwen-test' }),
+        signal: controller.signal,
+      })
+
+      await startInvoked
+      controller.abort()
+      resolveStart?.({ requestId: 'req-late-abort' })
+
+      await expect(fetchPromise).rejects.toMatchObject({ name: 'AbortError' })
+      await Promise.resolve()
+
+      expect(window.electron.invoke).toHaveBeenCalledWith('ai:fetch:abort', 'req-late-abort')
+    })
   })
 
   describe('streamResponseWithTools', () => {

@@ -373,7 +373,7 @@ function ModelDropdown({
             </div>
             <div className="min-w-0">
               <div className="truncate text-[13px] font-semibold text-text-primary">{current?.name ?? t('chat.selectModel', '-- Select Model --')}</div>
-              <div className="truncate text-[11px] text-text-muted/68">{current ? `${currentProvider} / ${current.modelId}` : t('chat.availableModelsCount', '{count} available models').replace('{count}', String(models.length))}</div>
+              <div className="truncate text-[11px] text-text-muted/68">{currentProvider || t('chat.availableModelsCount', '{count} available models').replace('{count}', String(models.length))}</div>
             </div>
           </div>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted/45"><polyline points="6 9 12 15 18 9"/></svg>
@@ -553,7 +553,7 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
             </div>
             <div className="min-w-0">
               <div className="truncate text-[13px] font-semibold text-text-primary">{currentLabel ?? t('common.select', 'Select')}</div>
-              <div className="truncate text-[11px] text-text-muted/68">{current?.whenToUse || t('chat.agentReady', 'Routing and behavior')}</div>
+              <div className="truncate text-[11px] text-text-muted/68">{t('chat.agentReady', 'Routing and behavior')}</div>
             </div>
           </div>
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted/45"><polyline points="6 9 12 15 18 9"/></svg>
@@ -860,73 +860,94 @@ export function ChatMain() {
   if (!activeSession) {
     return (
       <div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
-        <div className="border-b border-border-subtle/55 bg-surface-1/72 px-5 py-4 xl:px-6">
-          <div className="mx-auto max-w-384">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-              <div className="max-w-3xl">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.workbench', '企业 AI 工作台')}</div>
-                <h1 className="mt-1.5 text-[24px] font-semibold text-text-primary">{t('chat.desktopAssistant', 'Suora 内部助手')}</h1>
-                <p className="mt-1.5 max-w-2xl text-[13px] leading-5 text-text-secondary/78">{t('chat.selectOrCreate', '选择会话或创建新任务，开始处理内部知识问答、流程执行和文档分析。')}</p>
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <SurfaceBadge>{t('chat.multimodalWorkspace', '文件、语音和智能体路由集中处理')}</SurfaceBadge>
-                </div>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-2 xl:w-136">
-                <AgentDropdown
-                  agents={agents}
-                  selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''}
-                  onSelect={(agent) => {
-                    setSelectedAgent(agent)
-                  }}
-                />
-                <ModelDropdown
-                  models={enabledModels}
-                  providerNameById={providerNameById}
-                  value={selectedModel?.id ?? ''}
-                  onChange={handleModelChange}
-                />
-                <BrowserWorkbenchCard className="sm:col-span-2" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-4 xl:px-6">
-          <div className="mx-auto max-w-384">
+        <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 py-5 xl:px-6">
+          <div className="mx-auto max-w-384 space-y-4">
             <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/45 bg-surface-1/42">
-              <div className="relative z-10 p-4 xl:p-5">
-                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-accent/10 text-accent">
-                  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                </div>
-                <div className="mt-4 max-w-2xl">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.startHere', '开始处理')}</div>
-                  <h2 className="mt-1.5 text-[22px] font-semibold text-text-primary">{t('chat.mainPrompt', '选择一个会话，或从下方输入框发起新的内部任务。')}</h2>
-                  <p className="mt-2 text-[13px] leading-5 text-text-secondary/78">{t('chat.welcomeBody', '选择智能体与模型后，可以进行知识解释、文档撰写、代码分析或任务拆解，所有上下文都保留在当前工作区。')}</p>
+              <div className="relative z-10 grid gap-5 p-4 xl:grid-cols-[minmax(0,1.12fr)_20rem] xl:p-6">
+                <div>
+                  <div className="flex flex-wrap gap-2">
+                    <SurfaceBadge tone="accent">{t('chat.workbench', '企业 AI 工作台')}</SurfaceBadge>
+                    <SurfaceBadge>{t('chat.multimodalWorkspace', '文件、语音和智能体路由集中处理')}</SurfaceBadge>
+                  </div>
+
+                  <div className="mt-4 max-w-3xl">
+                    <h1 className="text-[28px] font-semibold leading-tight text-text-primary xl:text-[32px]">{t('chat.desktopAssistant', 'Suora 内部助手')}</h1>
+                    <p className="mt-2 max-w-2xl text-[13px] leading-6 text-text-secondary/80">{t('chat.selectOrCreate', '选择会话或创建新任务，开始处理内部知识问答、流程执行和文档分析。')}</p>
+                  </div>
+
+                  <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                    {starterPrompts.map((prompt) => (
+                      <PromptActionCard
+                        key={prompt.label}
+                        icon={prompt.icon}
+                        title={prompt.label}
+                        detail={prompt.detail}
+                        onClick={() => createSessionAndSend(prompt.prompt)}
+                      />
+                    ))}
+                  </div>
                 </div>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  {starterPrompts.map((prompt) => (
-                    <PromptActionCard
-                      key={prompt.label}
-                      icon={prompt.icon}
-                      title={prompt.label}
-                      detail={prompt.detail}
-                      onClick={() => createSessionAndSend(prompt.prompt)}
-                    />
-                  ))}
+                <aside className="space-y-3">
+                  <div className="rounded-md border border-border-subtle/40 bg-surface-0/38 p-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.context', '上下文')}</div>
+                    <div className="mt-3 grid gap-3">
+                      <AgentDropdown
+                        agents={agents}
+                        selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''}
+                        onSelect={(agent) => {
+                          setSelectedAgent(agent)
+                        }}
+                      />
+                      <ModelDropdown
+                        models={enabledModels}
+                        providerNameById={providerNameById}
+                        value={selectedModel?.id ?? ''}
+                        onChange={handleModelChange}
+                      />
+                    </div>
+                    {!selectedModel && (
+                      <div className="mt-3">
+                        <SurfaceBadge tone="warning">
+                          <IconifyIcon name="ui-warning" size={13} color="currentColor" />
+                          {t('chat.selectModelToChat', 'Please select a model to start chatting')}
+                        </SurfaceBadge>
+                      </div>
+                    )}
+                  </div>
+
+                  <BrowserWorkbenchCard />
+
+                  <div className="rounded-md border border-border-subtle/40 bg-surface-0/32 p-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.hints', '提示')}</div>
+                    <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-text-secondary/78">
+                      <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')}</div>
+                      <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            </section>
+
+            <section className="rounded-md border border-border-subtle/45 bg-surface-1/38 p-3 xl:p-4">
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
+                <div className="max-w-2xl">
+                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.startHere', '开始处理')}</div>
+                  <h2 className="mt-1 text-[18px] font-semibold text-text-primary">{t('chat.mainPrompt', '选择一个会话，或从下方输入框发起新的内部任务。')}</h2>
+                  <p className="mt-1 text-[12.5px] leading-5 text-text-secondary/78">{t('chat.welcomeBody', '选择智能体与模型后，可以进行知识解释、文档撰写、代码分析或任务拆解，所有上下文都保留在当前工作区。')}</p>
                 </div>
+                <SurfaceBadge>{t('chat.multimodalWorkspace', '文件、语音和智能体路由集中处理')}</SurfaceBadge>
+              </div>
+
+              <div className="mt-3">
+                <ChatInput
+                  onSend={createSessionAndSend}
+                  disabled={false}
+                  noModel={!selectedModel}
+                />
               </div>
             </section>
           </div>
-        </div>
-
-        <div className="px-5 pb-4 xl:px-6">
-          <ChatInput
-            onSend={createSessionAndSend}
-            disabled={false}
-            noModel={!selectedModel}
-          />
         </div>
       </div>
     )
@@ -939,7 +960,6 @@ export function ChatMain() {
       <div
         ref={messagesContainerRef}
         onScroll={handleScroll}
-        role="log"
         aria-label={t('chat.messagesAria', 'Chat messages')}
         aria-live="polite"
         className="module-canvas min-h-0 flex-1 overflow-y-auto"
@@ -1000,7 +1020,7 @@ export function ChatMain() {
         <div className="px-5 pb-4 pt-4 xl:px-6">
           <div className="mx-auto max-w-384">
             {messages.length === 0 ? (
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_16rem]">
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
                 <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/45 bg-surface-1/42">
                   <div className="relative z-10 p-4 xl:p-5">
                     <div className="flex h-12 w-12 items-center justify-center rounded-md bg-accent/10 text-accent">
@@ -1027,8 +1047,8 @@ export function ChatMain() {
                   </div>
                 </section>
 
-                <aside className="hidden xl:block">
-                  <div className="sticky top-4 space-y-3">
+                <aside>
+                  <div className="space-y-3 xl:sticky xl:top-4">
                     <div className="rounded-md border border-border-subtle/35 bg-surface-1/34 p-3">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.context', '上下文')}</div>
                       <div className="mt-3 flex items-center gap-2.5">
@@ -1049,6 +1069,8 @@ export function ChatMain() {
                         </div>
                       )}
                     </div>
+
+                    <BrowserWorkbenchCard />
 
                     <div className="rounded-md border border-border-subtle/35 bg-surface-1/34 p-3">
                       <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.hints', '提示')}</div>
@@ -1095,11 +1117,13 @@ export function ChatMain() {
 
       <StreamingStatus isStreaming={isStreaming} messages={messages} />
 
-      <div className="px-5 pb-2 xl:px-6">
-        <div className="mx-auto max-w-384">
-          <BrowserWorkbenchCard density="bar" />
+      {messages.length > 0 && (
+        <div className="px-5 pb-2 xl:px-6">
+          <div className="mx-auto max-w-384">
+            <BrowserWorkbenchCard density="bar" />
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="px-5 pb-5 xl:px-6">
         <ChatInput

@@ -219,6 +219,48 @@ describe('useAIChat', () => {
     unmount()
   })
 
+  it('stops applying further stream deltas after user cancellation', async () => {
+    let releaseSecondDelta: (() => void) | undefined
+    streamResponseWithTools.mockImplementation(async function* () {
+      yield { type: 'text-delta', text: 'first' }
+      await new Promise<void>((resolve) => { releaseSecondDelta = resolve })
+      yield { type: 'text-delta', text: ' second' }
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      void result.current.sendMessage('stop me')
+    })
+
+    await waitFor(() => {
+      expect(useAppStore.getState().sessions[0]?.messages.at(-1)?.content).toBe('first')
+    })
+
+    act(() => {
+      result.current.cancelStream()
+    })
+
+    await waitFor(() => {
+      const assistantMessage = useAppStore.getState().sessions[0]?.messages.at(-1)
+      expect(assistantMessage?.isStreaming).toBe(false)
+      expect(assistantMessage?.content).toBe('first')
+      expect(assistantMessage?.cancellation?.cancelReason).toContain('Cancelled by user')
+    })
+
+    await act(async () => {
+      releaseSecondDelta?.()
+      await Promise.resolve()
+    })
+
+    await waitFor(() => {
+      const assistantMessage = useAppStore.getState().sessions[0]?.messages.at(-1)
+      expect(assistantMessage?.content).toBe('first')
+      expect(assistantMessage?.isStreaming).toBe(false)
+      expect(result.current.isLoading).toBe(false)
+    })
+  })
+
   it('adds one reply step of headroom on top of the agent tool-turn budget', async () => {
     const selectedAgent = agent({ id: 'agent-tools', maxTurns: 3 })
     useAppStore.setState({

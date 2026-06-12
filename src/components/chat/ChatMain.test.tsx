@@ -24,7 +24,12 @@ vi.mock('./ChatMessages', () => ({
 }))
 
 vi.mock('./ChatInput', () => ({
-  ChatInput: () => <div>input</div>,
+  ChatInput: ({ isStreaming, onStop }: { isStreaming?: boolean; onStop?: () => void }) => (
+    <div>
+      <div>input</div>
+      {isStreaming ? <button type="button" onClick={onStop}>Stop generating</button> : null}
+    </div>
+  ),
 }))
 
 vi.mock('./TodoProgress', () => ({
@@ -389,6 +394,53 @@ describe('ChatMain', () => {
     render(<ChatMain />)
 
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' })
+  })
+
+  it('wires the chat stop button to cancel the active stream', async () => {
+    const user = userEvent.setup()
+    mockUseAIChatState.isLoading = true
+
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const session: Session = {
+      id: 'session-1',
+      title: 'Streaming chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: [
+        {
+          id: 'msg-1',
+          role: 'assistant',
+          content: 'partial response',
+          timestamp: Date.now(),
+          isStreaming: true,
+        },
+      ],
+    }
+
+    useAppStore.setState({
+      sessions: [session],
+      activeSessionId: session.id,
+      openSessionTabs: [session.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    await user.click(screen.getByRole('button', { name: 'Stop generating' }))
+
+    expect(mockUseAIChatState.cancelStream).toHaveBeenCalledTimes(1)
   })
 
   it('does not cancel generation when switching main chat sessions', async () => {

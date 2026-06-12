@@ -89,7 +89,7 @@ export function OnboardingWizard() {
       title: t('onboarding.skipConfirm.title', 'Skip setup?'),
       body: t(
         'onboarding.skipConfirm.body',
-        "You can re-run this walkthrough any time from Settings > System.",
+        'You can re-run this walkthrough any time from Settings > System.',
       ),
       confirmText: t('onboarding.skip', 'Skip setup'),
       cancelText: t('common.cancel', 'Cancel'),
@@ -98,7 +98,7 @@ export function OnboardingWizard() {
   }
 
   return (
-    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-surface-0/78 px-4 py-6 backdrop-blur-md">
       <div
         ref={dialogRef}
         role="dialog"
@@ -106,86 +106,144 @@ export function OnboardingWizard() {
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         tabIndex={-1}
-        className="bg-surface-1 rounded-2xl border border-border shadow-2xl w-full max-w-md overflow-hidden animate-fade-in focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+        className="chat-stage-panel w-full max-w-3xl overflow-hidden rounded-md border border-border-subtle/55 bg-surface-1/92 shadow-2xl animate-fade-in focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
       >
-        {/* Progress bar */}
-        <div className="h-1 bg-surface-3">
-          {/* Dynamic width requires inline style for runtime-computed percentage */}
+        <div className="h-1 bg-surface-3/90">
           <div
             className="h-full bg-accent transition-all duration-300"
-            {...{
-              style: { width: `${((step + 1) / STEPS.length) * 100}%` },
-              'aria-valuenow': step + 1,
-              'aria-valuemin': 1,
-              'aria-valuemax': STEPS.length,
-              'aria-valuetext': `${t('onboarding.stepPrefix', 'Step')} ${step + 1} / ${STEPS.length}`,
-            }}
+            style={{ width: `${((step + 1) / STEPS.length) * 100}%` }}
+            aria-valuenow={step + 1}
+            aria-valuemin={1}
+            aria-valuemax={STEPS.length}
+            aria-valuetext={`${t('onboarding.stepPrefix', 'Step')} ${step + 1} / ${STEPS.length}`}
             role="progressbar"
             aria-label={t('onboarding.progress', 'Onboarding progress')}
           />
         </div>
 
-        <div className="p-8 text-center">
-          <div className="text-5xl mb-6">{ICON_DATA[currentStep.icon] ? <IconifyIcon name={currentStep.icon} size={48} /> : currentStep.icon}</div>
-          <h2 id={titleId} className="text-lg font-semibold text-text-primary mb-3 text-balance">
-            {t(currentStep.titleKey, currentStep.titleDefault)}
-          </h2>
-          <p id={descriptionId} className="text-sm text-text-secondary leading-relaxed mb-8 text-pretty">
-            {t(currentStep.descriptionKey, currentStep.descriptionDefault)}
-          </p>
+        <div className="grid gap-0 xl:grid-cols-[minmax(0,1.15fr)_18rem]">
+          <div className="p-5 xl:p-7">
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center rounded-full border border-accent/18 bg-accent/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-accent">
+                {t('onboarding.stepPrefix', 'Step')} {step + 1} / {STEPS.length}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-border-subtle/50 bg-surface-0/46 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/72">
+                Suora setup
+              </span>
+            </div>
 
-          {/* Step indicators */}
-          <div aria-hidden="true" className="flex justify-center gap-1.5 mb-6">
-            {STEPS.map((_, i) => (
-              <div
-                key={i}
-                className={`w-2 h-2 rounded-full transition-all ${
-                  i === step ? 'bg-accent w-6' : i < step ? 'bg-accent/40' : 'bg-surface-3'
-                }`}
-              />
-            ))}
-          </div>
+            <div className="mt-5 flex h-14 w-14 items-center justify-center rounded-md border border-accent/18 bg-accent/10 text-accent shadow-sm">
+              {ICON_DATA[currentStep.icon] ? <IconifyIcon name={currentStep.icon} size={30} /> : currentStep.icon}
+            </div>
 
-          <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={skip}
-              className="text-xs text-text-muted hover:text-text-secondary transition-colors"
-            >
-              {t('onboarding.skip', 'Skip setup')}
-            </button>
-            <div className="flex items-center gap-2">
-              {step > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setOnboarding({ currentStep: step - 1 })}
-                  className="px-4 py-2.5 rounded-xl bg-surface-3 text-text-secondary text-sm font-medium hover:bg-surface-3/80 transition-colors"
+            <h2 id={titleId} className="mt-5 max-w-2xl text-[24px] font-semibold leading-tight text-text-primary text-balance xl:text-[28px]">
+              {t(currentStep.titleKey, currentStep.titleDefault)}
+            </h2>
+            <p id={descriptionId} className="mt-3 max-w-2xl text-[13px] leading-6 text-text-secondary/82 text-pretty">
+              {t(currentStep.descriptionKey, currentStep.descriptionDefault)}
+            </p>
+
+            <div aria-hidden="true" className="mt-6 flex flex-wrap gap-2">
+              {STEPS.map((item, index) => (
+                <div
+                  key={item.titleKey}
+                  className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-medium transition-all ${
+                    index === step
+                      ? 'border-accent/20 bg-accent/12 text-accent'
+                      : index < step
+                        ? 'border-success/20 bg-success/10 text-success'
+                        : 'border-border-subtle/45 bg-surface-0/34 text-text-muted/72'
+                  }`}
                 >
-                  {t('onboarding.back', 'Back')}
-                </button>
-              )}
-              {isLast && (
-                <button
-                  type="button"
-                  onClick={() => complete('models')}
-                  className="px-4 py-2.5 rounded-xl bg-surface-3 text-text-secondary text-sm font-medium hover:bg-surface-3/80 transition-colors"
-                >
-                  {t('onboarding.openModels', 'Open Models')}
-                </button>
-              )}
+                  {index + 1}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-border-subtle/40 pt-4">
               <button
                 type="button"
-                onClick={next}
-                className={`text-sm font-medium transition-colors ${
-                  isLast
-                    ? 'px-4 py-2.5 rounded-xl bg-accent text-white hover:bg-accent/90'
-                    : 'px-6 py-2.5 rounded-xl bg-accent text-white hover:bg-accent/90'
-                }`}
+                onClick={skip}
+                className="text-[12px] font-medium text-text-muted transition-colors hover:text-text-secondary"
               >
-                {isLast ? t('onboarding.getStarted', 'Get Started') : t('onboarding.next', 'Next')}
+                {t('onboarding.skip', 'Skip setup')}
               </button>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {step > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setOnboarding({ currentStep: step - 1 })}
+                    className="rounded-md border border-border-subtle/55 bg-surface-0/58 px-4 py-2.5 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-2/72"
+                  >
+                    {t('onboarding.back', 'Back')}
+                  </button>
+                )}
+                {isLast && (
+                  <button
+                    type="button"
+                    onClick={() => complete('models')}
+                    className="rounded-md border border-border-subtle/55 bg-surface-0/58 px-4 py-2.5 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-2/72"
+                  >
+                    {t('onboarding.openModels', 'Open Models')}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={next}
+                  className="rounded-md border border-accent/24 bg-accent px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-accent/90"
+                >
+                  {isLast ? t('onboarding.getStarted', 'Get Started') : t('onboarding.next', 'Next')}
+                </button>
+              </div>
             </div>
           </div>
+
+          <aside className="border-t border-border-subtle/40 bg-surface-0/34 p-5 xl:border-l xl:border-t-0 xl:p-6">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">
+              Setup flow
+            </div>
+            <div className="mt-3 space-y-2.5">
+              {STEPS.map((item, index) => {
+                const isCurrent = index === step
+                const isCompleted = index < step
+                return (
+                  <div
+                    key={item.titleKey}
+                    className={`rounded-md border px-3 py-2.5 ${
+                      isCurrent
+                        ? 'border-accent/20 bg-accent/10'
+                        : isCompleted
+                          ? 'border-success/18 bg-success/8'
+                          : 'border-border-subtle/45 bg-surface-0/28'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div
+                        className={`mt-0.5 inline-flex h-5 min-w-5 items-center justify-center rounded-full text-[10px] font-semibold ${
+                          isCurrent
+                            ? 'bg-accent text-white'
+                            : isCompleted
+                              ? 'bg-success text-surface-0'
+                              : 'bg-surface-2 text-text-muted'
+                        }`}
+                      >
+                        {index + 1}
+                      </div>
+                      <div className="min-w-0">
+                        <div className={`text-[12px] font-semibold ${isCurrent ? 'text-text-primary' : 'text-text-secondary'}`}>
+                          {t(item.titleKey, item.titleDefault)}
+                        </div>
+                        <div className="mt-1 text-[11px] leading-5 text-text-muted/78">
+                          {t(item.descriptionKey, item.descriptionDefault)}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </aside>
         </div>
       </div>
     </div>
