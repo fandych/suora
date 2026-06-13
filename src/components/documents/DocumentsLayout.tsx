@@ -22,6 +22,8 @@ import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/Docu
 import { WorkbenchEmptyState } from '@/components/ui/Primitives'
 import { confirm } from '@/services/confirmDialog'
 import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus'
+import { exportDocument, type ExportFormat } from '@/services/exportUtils'
+import { toast } from '@/services/toast'
 import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
 import { computeDocumentGroupStatistics, computeDocumentStatistics } from '@/services/documentStatistics'
 import { analyzeDocumentGraphInsights, buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
@@ -1114,6 +1116,9 @@ export function DocumentsLayout() {
   const [assistantState, setAssistantState] = useState<{ mode: 'create' | 'edit'; documentId?: string } | null>(null)
   const [isExportingCorpus, setIsExportingCorpus] = useState(false)
   const [exportStatus, setExportStatus] = useState<ExportCorpusStatus | null>(null)
+  const [showDocExportMenu, setShowDocExportMenu] = useState(false)
+  const [isExportingDoc, setIsExportingDoc] = useState(false)
+  const docExportMenuRef = useRef<HTMLDivElement>(null)
   const {
     documentGroups,
     documentNodes,
@@ -1588,6 +1593,40 @@ export function DocumentsLayout() {
     if (ok) removeDocumentNode(activeDocument.id)
   }
 
+  const handleDocExport = async (format: ExportFormat) => {
+    if (!activeDocument) return
+    setShowDocExportMenu(false)
+    setIsExportingDoc(true)
+    try {
+      const result = await exportDocument({
+        title: activeDocument.title,
+        markdown: activeDocument.markdown,
+        format,
+      })
+      if (!result.success && result.message) {
+        setExportStatus({ type: 'error', message: result.message })
+      } else if (result.success) {
+        toast.success(
+          t('documents.exportSuccess', 'Exported'),
+          t('documents.exportSuccessDetail', '"{name}" exported as {format}.').replace('{name}', activeDocument.title).replace('{format}', format.toUpperCase()),
+        )
+      }
+    } finally {
+      setIsExportingDoc(false)
+    }
+  }
+
+  useEffect(() => {
+    if (!showDocExportMenu) return
+    const handler = (e: MouseEvent) => {
+      if (docExportMenuRef.current && !docExportMenuRef.current.contains(e.target as Node)) {
+        setShowDocExportMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showDocExportMenu])
+
   const deleteNode = async (node: DocumentNode) => {
     const isFolder = node.type === 'folder'
     const ok = await confirm({
@@ -1816,6 +1855,37 @@ export function DocumentsLayout() {
                 <button type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
                   {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
                 </button>
+                <div className="relative" ref={docExportMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowDocExportMenu((v) => !v)}
+                    disabled={isExportingDoc}
+                    className="flex items-center gap-1.5 rounded-2xl border border-border-subtle/55 bg-surface-2/60 px-3 py-2 text-[11px] font-semibold text-text-secondary hover:border-accent/24 hover:bg-accent/10 hover:text-accent disabled:opacity-50"
+                    title={t('documents.exportDocument', 'Export document')}
+                  >
+                    <IconifyIcon name="ui-export" size={13} color="currentColor" />
+                    {isExportingDoc ? t('common.exporting', 'Exporting…') : t('documents.export', 'Export')}
+                  </button>
+                  {showDocExportMenu && (
+                    <div className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
+                      {([
+                        { format: 'markdown' as ExportFormat, label: 'Markdown (.md)', icon: 'ui-file' },
+                        { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)', icon: 'ui-file' },
+                        { format: 'docx' as ExportFormat, label: 'Word (.docx)', icon: 'ui-file' },
+                      ]).map(({ format, label, icon }) => (
+                        <button
+                          key={format}
+                          type="button"
+                          onClick={() => void handleDocExport(format)}
+                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
+                        >
+                          <IconifyIcon name={icon} size={13} color="currentColor" />
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button type="button" onClick={deleteActiveDocument} aria-label={t('documents.deleteCurrentDocument', 'Delete current document')} className="rounded-2xl border border-danger/20 bg-danger/10 px-3 py-2 text-[11px] font-semibold text-danger/90 hover:bg-danger/15">
                   {t('common.delete', 'Delete')}
                 </button>

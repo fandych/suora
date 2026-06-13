@@ -133,7 +133,7 @@ export function DocumentsAssistantDrawer({
   const sessionIdRef = useRef<string | null>(null)
   const contextKeyRef = useRef<string | null>(null)
   const processedToolCallsRef = useRef<Set<string>>(new Set())
-  const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesScrollRef = useRef<HTMLDivElement>(null)
   const { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat({ sessionId })
   const cancelStreamRef = useRef<() => void>(() => {})
   const initialSessionRef = useRef<Session | null>(null)
@@ -235,9 +235,9 @@ export function DocumentsAssistantDrawer({
   }, [sendMessage, sessionId])
 
   useEffect(() => {
-    if (typeof messagesEndRef.current?.scrollIntoView === 'function') {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' })
-    }
+    const container = messagesScrollRef.current
+    if (!container) return
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
   }, [messages])
 
   useEffect(() => {
@@ -309,7 +309,7 @@ export function DocumentsAssistantDrawer({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-5 py-4">
+        <div ref={messagesScrollRef} className="flex-1 overflow-y-auto px-5 py-4">
           {messages.length === 0 ? (
             <div className="space-y-4">
               <div className="rounded-[26px] border border-border-subtle/55 bg-linear-to-br from-surface-1/94 via-surface-1/86 to-surface-2/72 p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
@@ -357,7 +357,7 @@ export function DocumentsAssistantDrawer({
                   onRegenerate={message.role === 'assistant' && !message.isStreaming && !message.failedMidStream ? () => regenerateMessage(message.id) : undefined}
                 />
               ))}
-              <div ref={messagesEndRef} />
+
             </div>
           )}
         </div>

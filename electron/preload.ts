@@ -104,6 +104,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'iconify:listCollections',
   'iconify:loadCollection',
   'iconify:getIconNames',
+  'export:saveFileDialog',
+  'export:printToPDF',
 ]
 
 export const allowedInvokeChannels = Object.freeze([...ALLOWED_INVOKE_CHANNELS])

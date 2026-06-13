@@ -2910,6 +2910,65 @@ ipcMain.handle('fs:watch:stop', async (_event, dirPath: string) => {
   return { success: true }
 })
 
+// ─── IPC Handlers: Export (Save Dialog) ────────────────────────────
+
+interface ExportSaveOptions {
+  defaultName: string
+  filters: { name: string; extensions: string[] }[]
+  content: string
+  encoding: 'utf8' | 'base64'
+}
+
+ipcMain.handle('export:saveFileDialog', async (_event, options: ExportSaveOptions) => {
+  try {
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      defaultPath: options.defaultName,
+      filters: options.filters,
+    })
+    if (canceled || !filePath) return { canceled: true }
+
+    if (options.encoding === 'base64') {
+      const buffer = Buffer.from(options.content, 'base64')
+      await fs.writeFile(filePath, buffer)
+    } else {
+      await fs.writeFile(filePath, options.content, 'utf8')
+    }
+    return { success: true, filePath }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('export:printToPDF', async (_event, htmlContent: string, defaultName: string) => {
+  try {
+    const { filePath, canceled } = await dialog.showSaveDialog({
+      defaultPath: defaultName,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
+    })
+    if (canceled || !filePath) return { canceled: true }
+
+    const pdfWin = new BrowserWindow({
+      show: false,
+      webPreferences: { javascript: true },
+    })
+
+    await pdfWin.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(htmlContent)}`,
+    )
+
+    const pdfBuffer = await pdfWin.webContents.printToPDF({
+      printBackground: true,
+      margins: { marginType: 'default' },
+    })
+    pdfWin.destroy()
+
+    await fs.writeFile(filePath, pdfBuffer)
+    return { success: true, filePath }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
 // ─── Window State Persistence ──────────────────────────────────────
 
 function getWindowStatePath(): string {

@@ -11,6 +11,7 @@ import { MessageBubble } from './ChatMessages'
 import { ChatInput } from './ChatInput'
 import { TodoProgress } from './TodoProgress'
 import { AgentStateDebug } from '@/components/debug/AgentStateDebug'
+import { exportChat, type ExportFormat } from '@/services/exportUtils'
 
 const MAX_RENDERED_MESSAGES = 120
 const BROWSER_STATE_POLL_INTERVAL_MS = 4000
@@ -653,6 +654,9 @@ export function ChatMain() {
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const isNearBottomRef = useRef(true)
   const [showDebug, setShowDebug] = useState(false)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const [isExportingChat, setIsExportingChat] = useState(false)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
   const { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat()
   const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions])
   const chatSessionIds = useMemo(() => new Set(chatSessions.map((session) => session.id)), [chatSessions])
@@ -862,6 +866,39 @@ export function ChatMain() {
     updateSession(activeSession.id, patch)
   }, [activeSession, models, recordAgentSelectionPreference, setSelectedAgent, setSelectedModel, updateSession])
 
+  const handleExportChat = useCallback(async (format: ExportFormat, scope: 'all' | 'single', singleMessageId?: string) => {
+    if (!activeSession) return
+    setShowExportMenu(false)
+    setIsExportingChat(true)
+    try {
+      const result = await exportChat({
+        session: activeSession,
+        messages: activeSession.messages,
+        format,
+        scope,
+        singleMessageId,
+      })
+      if (!result.success && result.message) {
+        toast.error(t('chat.exportFailed', 'Export failed'), result.message)
+      }
+    } catch (err) {
+      toast.error(t('chat.exportFailed', 'Export failed'), err instanceof Error ? err.message : String(err))
+    } finally {
+      setIsExportingChat(false)
+    }
+  }, [activeSession, t])
+
+  useEffect(() => {
+    if (!showExportMenu) return
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showExportMenu])
+
   if (!activeSession) {
     return (
       <div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
@@ -1007,6 +1044,64 @@ export function ChatMain() {
                     <IconifyIcon name="ui-trash" size={15} color="currentColor" />
                     {t('common.clear', 'Clear')}
                   </button>
+                )}
+                {messages.length > 0 && (
+                  <div className="relative sm:col-span-2" ref={exportMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowExportMenu((v) => !v)}
+                      disabled={isExportingChat}
+                      className="inline-flex w-full min-h-10 items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent disabled:opacity-35"
+                    >
+                      <IconifyIcon name="ui-export" size={15} color="currentColor" />
+                      {isExportingChat ? t('common.exporting', 'Exporting…') : t('chat.exportConversation', 'Export')}
+                    </button>
+                    {showExportMenu && (
+                      <div className="absolute right-0 top-full z-50 mt-1.5 w-56 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
+                        <div className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportAllMessages', '完整对话')}</div>
+                        {([
+                          { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
+                          { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
+                          { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
+                        ]).map(({ format, label }) => (
+                          <button
+                            key={format}
+                            type="button"
+                            onClick={() => void handleExportChat(format, 'all')}
+                            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
+                          >
+                            <IconifyIcon name="ui-file" size={13} color="currentColor" />
+                            {label}
+                          </button>
+                        ))}
+                        {(() => {
+                          const lastAiMsg = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isStreaming && m.content.trim())
+                          if (!lastAiMsg) return null
+                          return (
+                            <>
+                              <div className="mx-3 my-1.5 border-t border-border-subtle/40" />
+                              <div className="px-3.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportLastReply', '最后一条回复')}</div>
+                              {([
+                                { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
+                                { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
+                                { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
+                              ]).map(({ format, label }) => (
+                                <button
+                                  key={`single-${format}`}
+                                  type="button"
+                                  onClick={() => void handleExportChat(format, 'single', lastAiMsg.id)}
+                                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
+                                >
+                                  <IconifyIcon name="ui-file" size={13} color="currentColor" />
+                                  {label}
+                                </button>
+                              ))}
+                            </>
+                          )
+                        })()}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
