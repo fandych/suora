@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PIPELINE_BUILDER_AGENT_ID, useAppStore } from '@/store/appStore'
 import type { AgentPipeline, Message, Model, ToolCall } from '@/types'
@@ -143,5 +143,35 @@ describe('PipelineAssistantDrawer', () => {
     })
 
     await waitFor(() => expect(onPipelineMutated).toHaveBeenCalledTimes(1))
+  })
+
+  it('allows selecting a different model for the current pipeline assistant session', async () => {
+    const alternateModel: Model = {
+      id: 'model-2',
+      name: 'GPT Alt',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4.1-mini',
+      enabled: true,
+    }
+
+    useAppStore.setState((state) => ({
+      ...state,
+      models: [model, alternateModel],
+    }))
+
+    render(
+      <PipelineAssistantDrawer
+        mode="create"
+        onClose={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(useAppStore.getState().sessions).toHaveLength(1))
+    expect(useAppStore.getState().sessions[0]?.modelId).toBe('model-1')
+
+    fireEvent.change(screen.getByLabelText('Assistant model'), { target: { value: 'model-2' } })
+
+    await waitFor(() => expect(useAppStore.getState().sessions[0]?.modelId).toBe('model-2'))
   })
 })

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOCUMENT_EDITOR_AGENT_ID, useAppStore } from '@/store/appStore'
 import type { Agent, Message, Model, ToolCall } from '@/types'
@@ -92,6 +92,37 @@ describe('DocumentsAssistantDrawer', () => {
     await waitFor(() => expect(useAppStore.getState().sessions).toHaveLength(1))
     expect(useAppStore.getState().sessions[0]?.agentId).toBe(DOCUMENT_EDITOR_AGENT_ID)
     expect(useAppStore.getState().sessions[0]?.contextPrompt).toContain('create_document')
+  })
+
+  it('allows selecting a different model for the current document assistant session', async () => {
+    const alternateModel: Model = {
+      id: 'model-2',
+      name: 'GPT Alt',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4.1-mini',
+      enabled: true,
+    }
+
+    useAppStore.setState((state) => ({
+      ...state,
+      models: [model, alternateModel],
+    }))
+
+    render(
+      <DocumentsAssistantDrawer
+        mode="create"
+        group={group}
+        onClose={vi.fn()}
+      />,
+    )
+
+    await waitFor(() => expect(useAppStore.getState().sessions).toHaveLength(1))
+    expect(useAppStore.getState().sessions[0]?.modelId).toBe('model-1')
+
+    fireEvent.change(screen.getByLabelText('Assistant model'), { target: { value: 'model-2' } })
+
+    await waitFor(() => expect(useAppStore.getState().sessions[0]?.modelId).toBe('model-2'))
   })
 
   it('renders the drawer in Chinese when locale is zh', async () => {

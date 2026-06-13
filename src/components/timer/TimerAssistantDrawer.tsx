@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { ChatInput } from '@/components/chat/ChatInput'
 import { MessageBubble } from '@/components/chat/ChatMessages'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
@@ -226,6 +226,14 @@ export function TimerAssistantDrawer({
     ? models.find((model) => model.id === session.modelId) ?? null
     : selectedModel
 
+  const selectableModels = useMemo(() => models.filter((model) => model.enabled), [models])
+
+  const handleSessionModelChange = useCallback((event: ChangeEvent<HTMLSelectElement>) => {
+    if (!sessionId) return
+    const nextModelId = event.target.value || undefined
+    updateSession(sessionId, { modelId: nextModelId })
+  }, [sessionId, updateSession])
+
   const starterPrompts = useMemo(() => {
     if (mode === 'edit') {
       return [
@@ -250,7 +258,11 @@ export function TimerAssistantDrawer({
   useEffect(() => {
     const container = messagesScrollRef.current
     if (!container) return
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+    if (typeof container.scrollTo === 'function') {
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+      return
+    }
+    container.scrollTop = container.scrollHeight
   }, [messages])
 
   useEffect(() => {
@@ -312,6 +324,24 @@ export function TimerAssistantDrawer({
         </div>
 
         <div className="border-b border-border-subtle/55 px-5 py-4">
+          <div className="mb-3">
+            <label htmlFor="timer-assistant-model" className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">
+              {t('timer.assistantModelPicker', 'Assistant model')}
+            </label>
+            <select
+              id="timer-assistant-model"
+              aria-label={t('timer.assistantModelPicker', 'Assistant model')}
+              value={session?.modelId ?? ''}
+              onChange={handleSessionModelChange}
+              disabled={isStreaming || selectableModels.length === 0}
+              className="mt-2 w-full rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2 text-[12px] text-text-primary outline-none transition-colors focus:border-accent/30"
+            >
+              <option value="">{t('chat.selectModel', '-- Select Model --')}</option>
+              {selectableModels.map((model) => (
+                <option key={model.id} value={model.id}>{model.name}</option>
+              ))}
+            </select>
+          </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <ContextChip label={t('timer.assistantMode', 'Mode')} value={mode === 'edit' ? t('timer.assistantModeEdit', 'Edit existing timer') : t('timer.assistantModeCreate', 'Create new timer')} />
             <ContextChip label={t('timer.assistantModel', 'Model')} value={sessionModel?.name || t('timer.assistantNoModelSelected', 'No model selected')} />
