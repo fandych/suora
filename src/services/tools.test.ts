@@ -332,7 +332,12 @@ describe('builtin tool guidance', () => {
   })
 
   it('delegates to agents resolved from live store state', async () => {
-    const toolOptions = {} as Parameters<NonNullable<typeof builtinToolDefs.agent_delegate.execute>>[1]
+    const controller = new AbortController()
+    const toolOptions = {
+      toolCallId: 'tool-call-1',
+      messages: [],
+      abortSignal: controller.signal,
+    } as Parameters<NonNullable<typeof builtinToolDefs.agent_delegate.execute>>[1]
     setLiveStoreAccessor(() => ({
       selectedAgent: { id: 'agent-source' },
       agents: [
@@ -352,7 +357,62 @@ describe('builtin tool guidance', () => {
       'agent-target',
       'Check the launch notes',
       'Use workspace docs',
+      { abortSignal: controller.signal },
     )
+  })
+
+  it('rethrows delegated agent aborts so chat stop can cancel nested work', async () => {
+    const controller = new AbortController()
+    const toolOptions = {
+      toolCallId: 'tool-call-2',
+      messages: [],
+      abortSignal: controller.signal,
+    } as Parameters<NonNullable<typeof builtinToolDefs.agent_delegate.execute>>[1]
+
+    vi.mocked(delegateToAgent).mockRejectedValueOnce(new DOMException('The operation was aborted.', 'AbortError'))
+
+    setLiveStoreAccessor(() => ({
+      selectedAgent: { id: 'agent-source' },
+      agents: [
+        { id: 'agent-source', name: 'Assistant', enabled: true },
+        { id: 'agent-target', name: 'Research Analyst', enabled: true },
+      ],
+    }))
+
+    await expect(builtinToolDefs.agent_delegate.execute?.({
+      agent_name: 'research',
+      task: 'Check the launch notes',
+      context: 'Use workspace docs',
+    }, toolOptions)).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  it('cancels delegated agent tools even when the underlying tool promise does not handle abort', async () => {
+    const controller = new AbortController()
+    const toolOptions = {
+      toolCallId: 'tool-call-3',
+      messages: [],
+      abortSignal: controller.signal,
+    } as Parameters<NonNullable<typeof builtinToolDefs.agent_delegate.execute>>[1]
+
+    vi.mocked(delegateToAgent).mockImplementationOnce(() => new Promise<string>(() => {}))
+
+    setLiveStoreAccessor(() => ({
+      selectedAgent: { id: 'agent-source' },
+      agents: [
+        { id: 'agent-source', name: 'Assistant', enabled: true },
+        { id: 'agent-target', name: 'Research Analyst', enabled: true },
+      ],
+    }))
+
+    const execution = builtinToolDefs.agent_delegate.execute?.({
+      agent_name: 'research',
+      task: 'Check the launch notes',
+      context: 'Use workspace docs',
+    }, toolOptions)
+
+    controller.abort()
+
+    await expect(execution).rejects.toMatchObject({ name: 'AbortError' })
   })
 
   it('creates and improves skills through live store state', async () => {

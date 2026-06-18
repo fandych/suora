@@ -441,6 +441,7 @@ describe('ChatMain', () => {
     await user.click(screen.getByRole('button', { name: 'Stop generating' }))
 
     expect(mockUseAIChatState.cancelStream).toHaveBeenCalledTimes(1)
+    expect(mockUseAIChatState.cancelStream).toHaveBeenCalledWith('session-1')
   })
 
   it('does not cancel generation when switching main chat sessions', async () => {

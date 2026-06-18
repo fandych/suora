@@ -346,6 +346,29 @@ describe('aiService', () => {
       }))
     })
 
+    it('passes abortSignal through generateResponse', async () => {
+      const controller = new AbortController()
+      vi.mocked(generateText).mockResolvedValueOnce({ text: 'done' } as never)
+
+      initializeProvider('openai', 'sk-test')
+
+      const text = await generateResponse(
+        'openai:test-model',
+        [{ role: 'user', content: 'hello' }],
+        undefined,
+        'sk-test',
+        undefined,
+        'openai',
+        undefined,
+        controller.signal,
+      )
+
+      expect(text).toBe('done')
+      expect(generateText).toHaveBeenCalledWith(expect.objectContaining({
+        abortSignal: controller.signal,
+      }))
+    })
+
     it('resolves Ollama providers initialized without an API key', async () => {
       vi.mocked(streamText).mockReturnValueOnce({
         fullStream: (async function* () {

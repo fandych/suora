@@ -14,6 +14,12 @@ import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, readL
 
 const MAX_DELEGATION_DEPTH = 3
 
+function isAbortLikeError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') return true
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /aborterror|abortsignal|aborted|canceled|cancelled/i.test(message)
+}
+
 function translateTemplate(key: string, fallback: string, values: Record<string, string | number> = {}): string {
   let message = t(key, fallback)
   for (const [name, value] of Object.entries(values)) {
@@ -106,8 +112,10 @@ export async function delegateToAgent(
   toAgentId: string,
   task: string,
   context?: string,
-  depth: number = 0,
+  options: { depth?: number; abortSignal?: AbortSignal } = {},
 ): Promise<string> {
+  const { depth = 0, abortSignal } = options
+
   if (depth >= MAX_DELEGATION_DEPTH) {
     return translateTemplate('agents.delegateDepthReached', 'Maximum delegation depth ({depth}) reached. Cannot delegate further.', { depth: MAX_DELEGATION_DEPTH })
   }
@@ -203,6 +211,7 @@ export async function delegateToAgent(
         systemPrompt,
         tools,
         maxSteps: Math.max(2, Math.min(targetAgent.maxTurns ?? 5, 50)),
+        abortSignal,
       })) {
         if (event.type === 'text-delta') {
           chunks.push(event.text)
@@ -211,7 +220,7 @@ export async function delegateToAgent(
       }
       result = chunks.join('')
     } else {
-      result = await generateResponse(modelId, messages, systemPrompt)
+      result = await generateResponse(modelId, messages, systemPrompt, undefined, undefined, undefined, undefined, abortSignal)
     }
 
     // Log the response
@@ -233,6 +242,12 @@ export async function delegateToAgent(
 
     return result
   } catch (err) {
+    if (abortSignal?.aborted || isAbortLikeError(err)) {
+      requestMsg.status = 'failed'
+      requestMsg.result = 'Cancelled by user'
+      throw err
+    }
+
     const errMsg = err instanceof Error ? err.message : String(err)
     requestMsg.status = 'failed'
     requestMsg.result = `Error: ${errMsg}`

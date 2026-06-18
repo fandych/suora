@@ -6,7 +6,7 @@
 // - Tools filtered by agent's allowedTools (allowlist) and disallowedTools (denylist)
 // - Skills are tool groupings with optional system prompt
 
-import { tool, type ToolSet } from 'ai'
+import { tool, type ToolExecutionOptions, type ToolSet } from 'ai'
 import { z } from 'zod'
 import type { Agent, AgentPipeline, AgentPipelineBudget, AgentPipelineStep, AgentPipelineVariable, ChannelConfig, ChannelConnectionMode, ChannelPlatform, DocumentFolder, DocumentGroup, DocumentItem, DocumentNode, MemoryScope, Model, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
 import { getPluginTools } from '@/services/pluginSystem'
@@ -144,6 +144,50 @@ function electronInvoke(channel: string, ...args: unknown[]): Promise<unknown> {
     return Promise.reject(new Error('Electron IPC not available — running in browser mode'))
   }
   return electron.invoke(channel, ...args)
+}
+
+function getToolAbortSignal(options?: ToolExecutionOptions | unknown): AbortSignal | undefined {
+  if (!options || typeof options !== 'object' || !('abortSignal' in options)) return undefined
+  return (options as { abortSignal?: AbortSignal }).abortSignal
+}
+
+function createToolAbortError(): DOMException {
+  return new DOMException('The operation was aborted.', 'AbortError')
+}
+
+async function runAbortableToolExecution<T>(
+  executor: () => Promise<T> | T,
+  options?: ToolExecutionOptions | unknown,
+): Promise<T> {
+  const abortSignal = getToolAbortSignal(options)
+  if (!abortSignal) return await executor()
+  if (abortSignal.aborted) throw createToolAbortError()
+
+  return await new Promise<T>((resolve, reject) => {
+    const handleAbort = () => {
+      abortSignal.removeEventListener('abort', handleAbort)
+      reject(createToolAbortError())
+    }
+
+    abortSignal.addEventListener('abort', handleAbort, { once: true })
+
+    Promise.resolve()
+      .then(executor)
+      .then((value) => {
+        abortSignal.removeEventListener('abort', handleAbort)
+        resolve(value)
+      })
+      .catch((error) => {
+        abortSignal.removeEventListener('abort', handleAbort)
+        reject(error)
+      })
+  })
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') return true
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return /aborterror|abortsignal|aborted|canceled|cancelled/i.test(message)
 }
 
 function splitGitPathspecInput(value: string): string[] {
@@ -2475,12 +2519,13 @@ export const builtinToolDefs: ToolSet = {
       task: z.string().describe('The task description to delegate'),
       context: z.string().optional().describe('Optional additional context for the target agent'),
     }),
-    execute: async ({ agent_name, task, context }) => {
+    execute: async ({ agent_name, task, context }, options) => {
       try {
         const state = readStoreState()
         if (!state) return 'Error: Store not available'
         const selectedAgent = state.selectedAgent as { id?: string } | undefined
         const fromAgentId = selectedAgent?.id ?? 'unknown'
+        const abortSignal = getToolAbortSignal(options)
         const agentList = Array.isArray(state.agents) ? state.agents as PersistedAgentEntry[] : []
         if (!agentList.length) return 'Error: No agents available'
 
@@ -2494,9 +2539,10 @@ export const builtinToolDefs: ToolSet = {
         if (!target) return `Error: No enabled agent matching "${agent_name}" found. Use agent_list to see available agents.`
         if (target.id === fromAgentId) return 'Error: An agent cannot delegate to itself.'
 
-        const result = await delegateToAgent(fromAgentId, target.id, task, context)
+        const result = await delegateToAgent(fromAgentId, target.id, task, context, { abortSignal })
         return result || '(empty response from delegated agent)'
       } catch (err) {
+        if (isAbortLikeError(err)) throw err
         return `Error delegating task: ${err instanceof Error ? err.message : String(err)}`
       }
     },
@@ -4337,6 +4383,19 @@ const envVarTools: ToolSet = {
 
 // Merge env var tools into main builtinToolDefs
 Object.assign(builtinToolDefs, envVarTools)
+
+for (const definition of Object.values(builtinToolDefs)) {
+  const entry = definition as typeof definition & {
+    execute?: (input: unknown, options?: ToolExecutionOptions) => Promise<unknown> | unknown
+    __suoraAbortWrapped?: boolean
+  }
+
+  if (!entry.execute || entry.__suoraAbortWrapped) continue
+
+  const originalExecute = entry.execute
+  entry.execute = (input, options) => runAbortableToolExecution(() => originalExecute(input, options), options)
+  entry.__suoraAbortWrapped = true
+}
 
 const DEFAULT_AGENT_HIDDEN_TOOL_ALIASES = new Set([
   'todo_list',

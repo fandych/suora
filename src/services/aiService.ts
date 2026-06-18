@@ -790,6 +790,7 @@ export async function generateResponse(
   baseUrl?: string,
   providerType?: string,
   cacheKey?: string,
+  abortSignal?: AbortSignal,
 ) {
   const model = resolveModel(modelId, apiKey, baseUrl, providerType)
   const providerOptions = buildProviderOptions({ providerType, modelId, cacheKey })
@@ -799,6 +800,7 @@ export async function generateResponse(
     messages,
     system: systemPrompt,
     ...(providerOptions ? { providerOptions } : {}),
+    abortSignal,
   })
 
   return result.text

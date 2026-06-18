@@ -598,6 +598,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   updateMessage,
   branchFromMessage,
   setMessageFeedback,
+  exportMessage,
 }: {
   message: import('@/types').Message
   retryLastError: () => void
@@ -607,6 +608,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   updateMessage: (messageId: string, patch: Partial<import('@/types').Message>) => void
   branchFromMessage: (messageId: string) => void
   setMessageFeedback: (messageId: string, feedback: 'positive' | 'negative' | undefined) => void
+  exportMessage: (format: ExportFormat, messageId: string) => void
 }) {
   const handleRetry = useCallback(() => retryLastError(), [retryLastError])
   const handleResume = useCallback(() => resumeFromMessage(message.id), [message.id, resumeFromMessage])
@@ -616,6 +618,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   const handleTogglePin = useCallback(() => updateMessage(message.id, { pinned: !message.pinned }), [message.id, message.pinned, updateMessage])
   const handleBranch = useCallback(() => branchFromMessage(message.id), [branchFromMessage, message.id])
   const handleFeedback = useCallback((feedback: 'positive' | 'negative' | undefined) => setMessageFeedback(message.id, feedback), [message.id, setMessageFeedback])
+  const handleExport = useCallback((format: ExportFormat) => exportMessage(format, message.id), [exportMessage, message.id])
 
   return (
     <MessageBubble
@@ -628,6 +631,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
       onTogglePin={!message.isStreaming ? handleTogglePin : undefined}
       onBranch={!message.isStreaming ? handleBranch : undefined}
       onFeedback={message.role === 'assistant' ? handleFeedback : undefined}
+      onExport={handleExport}
     />
   )
 }, (prevProps, nextProps) => (
@@ -639,6 +643,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   && prevProps.updateMessage === nextProps.updateMessage
   && prevProps.branchFromMessage === nextProps.branchFromMessage
   && prevProps.setMessageFeedback === nextProps.setMessageFeedback
+  && prevProps.exportMessage === nextProps.exportMessage
 ))
 
 function getCurrentChatSession() {
@@ -656,6 +661,8 @@ export function ChatMain() {
   const [showDebug, setShowDebug] = useState(false)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const [isExportingChat, setIsExportingChat] = useState(false)
+  const [showScrollToTop, setShowScrollToTop] = useState(false)
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement>(null)
   const { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat()
   const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions])
@@ -722,11 +729,30 @@ export function ChatMain() {
     isNearBottomRef.current = true
   }, [activeSessionId])
 
-  const handleScroll = useCallback(() => {
+  const updateScrollControls = useCallback(() => {
     const el = messagesContainerRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+    const distanceFromTop = el.scrollTop
     isNearBottomRef.current = distanceFromBottom < 120
+    setShowScrollToTop(distanceFromTop > 220)
+    setShowScrollToBottom(distanceFromBottom > 220)
+  }, [])
+
+  const handleScroll = useCallback(() => {
+    updateScrollControls()
+  }, [updateScrollControls])
+
+  const scrollToTop = useCallback(() => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    el.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  const scrollToBottom = useCallback(() => {
+    const el = messagesContainerRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
   }, [])
 
   useEffect(() => {
@@ -734,6 +760,11 @@ export function ChatMain() {
       messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' })
     }
   }, [isStreaming, messages])
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => updateScrollControls())
+    return () => window.cancelAnimationFrame(id)
+  }, [activeSessionId, messages, updateScrollControls])
 
   const starterPrompts = useMemo(() => ([
     {
@@ -866,6 +897,11 @@ export function ChatMain() {
     updateSession(activeSession.id, patch)
   }, [activeSession, models, recordAgentSelectionPreference, setSelectedAgent, setSelectedModel, updateSession])
 
+  const handleStopStreaming = useCallback(() => {
+    if (!activeSession) return
+    cancelStream(activeSession.id)
+  }, [activeSession, cancelStream])
+
   const handleExportChat = useCallback(async (format: ExportFormat, scope: 'all' | 'single', singleMessageId?: string) => {
     if (!activeSession) return
     setShowExportMenu(false)
@@ -887,6 +923,10 @@ export function ChatMain() {
       setIsExportingChat(false)
     }
   }, [activeSession, t])
+
+  const handleExportSingleMessage = useCallback((format: ExportFormat, messageId: string) => {
+    void handleExportChat(format, 'single', messageId)
+  }, [handleExportChat])
 
   useEffect(() => {
     if (!showExportMenu) return
@@ -1204,6 +1244,7 @@ export function ChatMain() {
                           updateMessage={updateMessage}
                           branchFromMessage={branchFromMessage}
                           setMessageFeedback={setMessageFeedback}
+                          exportMessage={handleExportSingleMessage}
                         />
                       ))}
                     </div>
@@ -1214,6 +1255,33 @@ export function ChatMain() {
             )}
           </div>
         </div>
+
+        {(showScrollToTop || showScrollToBottom) && (
+          <div className="pointer-events-none sticky bottom-5 z-30 ml-auto mr-5 flex w-fit flex-col gap-2 xl:mr-6">
+            {showScrollToTop && (
+              <button
+                type="button"
+                onClick={scrollToTop}
+                title={t('chat.scrollToTop', '回到顶部')}
+                aria-label={t('chat.scrollToTop', '回到顶部')}
+                className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle/60 bg-surface-0/88 text-text-secondary shadow-lg backdrop-blur transition-colors hover:border-accent/22 hover:bg-accent/10 hover:text-accent"
+              >
+                <IconifyIcon name="ui-chevron-up" size={16} color="currentColor" />
+              </button>
+            )}
+            {showScrollToBottom && (
+              <button
+                type="button"
+                onClick={scrollToBottom}
+                title={t('chat.scrollToBottom', '回到底部')}
+                aria-label={t('chat.scrollToBottom', '回到底部')}
+                className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle/60 bg-surface-0/88 text-text-secondary shadow-lg backdrop-blur transition-colors hover:border-accent/22 hover:bg-accent/10 hover:text-accent"
+              >
+                <IconifyIcon name="ui-chevron-down" size={16} color="currentColor" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <StreamingStatus isStreaming={isStreaming} messages={messages} />
@@ -1231,7 +1299,7 @@ export function ChatMain() {
           onSend={handleSend}
           disabled={isStreaming}
           isStreaming={isStreaming}
-          onStop={cancelStream}
+          onStop={handleStopStreaming}
           noModel={!sessionModel}
         />
       </div>

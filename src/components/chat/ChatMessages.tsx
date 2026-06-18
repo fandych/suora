@@ -6,6 +6,7 @@ import { getLocale, t as translate } from '@/services/i18n'
 import { isSpeechSynthesisAvailable, loadVoiceSettings, speak } from '@/services/voiceInteraction'
 import { CopyButton, MarkdownContent } from './ChatMarkdown'
 import { useI18n } from '@/hooks/useI18n'
+import { type ExportFormat } from '@/services/exportUtils'
 
 // ─── Helpers ───────────────────────────────────────────────────────
 
@@ -569,6 +570,7 @@ export function MessageBubble({
   onEdit,
   onTogglePin,
   onBranch,
+  onExport,
 }: {
   message: Message
   onRetry?: () => void
@@ -579,6 +581,7 @@ export function MessageBubble({
   onEdit?: (content: string) => void
   onTogglePin?: () => void
   onBranch?: () => void
+  onExport?: (format: ExportFormat) => void
 }) {
   const { t, locale } = useI18n()
   const isUser = message.role === 'user'
@@ -586,6 +589,19 @@ export function MessageBubble({
   const [lightboxSrc, setLightboxSrc] = useState<{ src: string; alt: string } | null>(null)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(message.content)
+  const [showExportMenu, setShowExportMenu] = useState(false)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!showExportMenu) return
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showExportMenu])
 
   if (message.isError) return <ErrorBubble message={message} onRetry={onRetry} />
 
@@ -794,6 +810,38 @@ export function MessageBubble({
               </>
             )}
 
+            {onExport && !message.isStreaming && message.content && (
+              <div className="relative" ref={exportMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowExportMenu((v) => !v)}
+                  title={t('chat.exportMessage', 'Export this message')}
+                  aria-label={t('chat.exportMessage', 'Export this message')}
+                  className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent"
+                >
+                  <IconifyIcon name="ui-export" size={15} color="currentColor" />
+                </button>
+                {showExportMenu && (
+                  <div className={`absolute z-50 w-36 overflow-hidden rounded-xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-xl backdrop-blur-xl bottom-full mb-1 ${isUser ? 'right-0' : 'left-0'}`}>
+                    {([
+                      { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
+                      { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
+                      { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
+                    ]).map(({ format, label }) => (
+                      <button
+                        key={format}
+                        type="button"
+                        onClick={() => { onExport(format); setShowExportMenu(false) }}
+                        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
+                      >
+                        <IconifyIcon name="ui-file" size={12} color="currentColor" />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {onDelete && !message.isStreaming && <button type="button" onClick={onDelete} title={t('chat.deleteMessage', 'Delete message')} aria-label={t('chat.deleteMessage', 'Delete message')} className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-colors hover:border-danger/18 hover:bg-danger/10 hover:text-danger"><IconifyIcon name="ui-trash" size={15} color="currentColor" /></button>}
           </div>
         </div>
