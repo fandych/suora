@@ -1,94 +1,83 @@
-import { useParams, useNavigate } from 'react-router-dom'
-import { SidePanel } from '@/components/layout/SidePanel'
-import { ResizeHandle } from '@/components/layout/ResizeHandle'
-import { useResizablePanel } from '@/hooks/useResizablePanel'
-import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons'
-import { useI18n } from '@/hooks/useI18n'
-import { useAppStore } from '@/store/appStore'
-import { GeneralSettings } from './GeneralSettings'
-import { SecuritySettings } from './SecuritySettings'
-import { VoiceSettings } from './VoiceSettings'
-import { ShortcutsSettings } from './ShortcutsSettings'
-import { DataSettings } from './DataSettings'
-import { LogsSettings } from './LogsSettings'
-import { SystemSettings } from './SystemSettings'
-
+import { useParams, useNavigate } from 'react-router-dom';
+import { SidePanel } from '@/components/layout/SidePanel';
+import { ResizeHandle } from '@/components/layout/ResizeHandle';
+import { useResizablePanel } from '@/hooks/useResizablePanel';
+import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons';
+import { useI18n } from '@/hooks/useI18n';
+import { useAppStore } from '@/store/appStore';
+import { GeneralSettings } from './GeneralSettings';
+import { SecuritySettings } from './SecuritySettings';
+import { VoiceSettings } from './VoiceSettings';
+import { ShortcutsSettings } from './ShortcutsSettings';
+import { DataSettings } from './DataSettings';
+import { LogsSettings } from './LogsSettings';
+import { SystemSettings } from './SystemSettings';
+import { Button as UiButton } from "@/components/catalyst-ui/button";
 const SETTING_SECTIONS = [
-  { id: 'general', i18nKey: 'settings.general', fallback: 'General', icon: 'settings-general', descKey: 'settings.generalDesc', descFallback: 'Appearance, language, startup, and workspace defaults.' },
-  { id: 'security', i18nKey: 'settings.security', fallback: 'Security', icon: 'settings-security', descKey: 'settings.securityDesc', descFallback: 'Keys, privacy, and safety defaults for the desktop workspace.' },
-  { id: 'voice', i18nKey: 'settings.voice', fallback: 'Voice', icon: 'settings-voice', descKey: 'settings.voiceDesc', descFallback: 'Speech input, voice output, and audio behavior.' },
-  { id: 'shortcuts', i18nKey: 'settings.shortcuts', fallback: 'Shortcuts', icon: 'settings-shortcuts', descKey: 'settings.shortcutsDescLong', descFallback: 'Keyboard bindings for chat, navigation, and panel control.' },
-  { id: 'data', i18nKey: 'settings.data', fallback: 'Data', icon: 'settings-data', descKey: 'settings.dataDescLong', descFallback: 'Backups, imports, retention rules, and destructive cleanup actions.' },
-  { id: 'logs', i18nKey: 'settings.logs', fallback: 'Logs', icon: 'settings-logs', descKey: 'settings.logsDesc', descFallback: 'Runtime diagnostics, log files, and crash evidence.' },
-  { id: 'system', i18nKey: 'settings.system', fallback: 'System', icon: 'settings-performance', descKey: 'settings.systemDesc', descFallback: 'Onboarding, app health, and runtime performance metrics.' },
-]
-
+    { id: 'general', i18nKey: 'settings.general', fallback: 'General', icon: 'settings-general', descKey: 'settings.generalDesc', descFallback: 'Appearance, language, startup, and workspace defaults.' },
+    { id: 'security', i18nKey: 'settings.security', fallback: 'Security', icon: 'settings-security', descKey: 'settings.securityDesc', descFallback: 'Keys, privacy, and safety defaults for the desktop workspace.' },
+    { id: 'voice', i18nKey: 'settings.voice', fallback: 'Voice', icon: 'settings-voice', descKey: 'settings.voiceDesc', descFallback: 'Speech input, voice output, and audio behavior.' },
+    { id: 'shortcuts', i18nKey: 'settings.shortcuts', fallback: 'Shortcuts', icon: 'settings-shortcuts', descKey: 'settings.shortcutsDescLong', descFallback: 'Keyboard bindings for chat, navigation, and panel control.' },
+    { id: 'data', i18nKey: 'settings.data', fallback: 'Data', icon: 'settings-data', descKey: 'settings.dataDescLong', descFallback: 'Backups, imports, retention rules, and destructive cleanup actions.' },
+    { id: 'logs', i18nKey: 'settings.logs', fallback: 'Logs', icon: 'settings-logs', descKey: 'settings.logsDesc', descFallback: 'Runtime diagnostics, log files, and crash evidence.' },
+    { id: 'system', i18nKey: 'settings.system', fallback: 'System', icon: 'settings-performance', descKey: 'settings.systemDesc', descFallback: 'Onboarding, app health, and runtime performance metrics.' },
+];
 const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
-  general: GeneralSettings,
-  security: SecuritySettings,
-  voice: VoiceSettings,
-  shortcuts: ShortcutsSettings,
-  data: DataSettings,
-  logs: LogsSettings,
-  system: SystemSettings,
-}
-
-function SummaryStat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className={`rounded-2xl border px-3.5 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
+    general: GeneralSettings,
+    security: SecuritySettings,
+    voice: VoiceSettings,
+    shortcuts: ShortcutsSettings,
+    data: DataSettings,
+    logs: LogsSettings,
+    system: SystemSettings,
+};
+function SummaryStat({ label, value, accent = false }: {
+    label: string;
+    value: string;
+    accent?: boolean;
+}) {
+    return (<div className={`rounded-2xl border px-3.5 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
       <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
       <div className={`mt-1.5 text-sm font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
-    </div>
-  )
+    </div>);
 }
-
 export function SettingsLayout() {
-  const { t } = useI18n()
-  const [panelWidth, setPanelWidth] = useResizablePanel('settings', 280)
-  const { section } = useParams<{ section: string }>()
-  const navigate = useNavigate()
-  const { workspacePath } = useAppStore()
-  const activeSection = section && SECTION_COMPONENTS[section] ? section : 'general'
-  const ActiveComponent = SECTION_COMPONENTS[activeSection]
-  const sectionMeta = SETTING_SECTIONS.find((s) => s.id === activeSection)
-  const sectionIndex = Math.max(0, SETTING_SECTIONS.findIndex((s) => s.id === activeSection))
-
-  return (
-    <>
+    const { t } = useI18n();
+    const [panelWidth, setPanelWidth] = useResizablePanel('settings', 280);
+    const { section } = useParams<{
+        section: string;
+    }>();
+    const navigate = useNavigate();
+    const { workspacePath } = useAppStore();
+    const activeSection = section && SECTION_COMPONENTS[section] ? section : 'general';
+    const ActiveComponent = SECTION_COMPONENTS[activeSection];
+    const sectionMeta = SETTING_SECTIONS.find((s) => s.id === activeSection);
+    const sectionIndex = Math.max(0, SETTING_SECTIONS.findIndex((s) => s.id === activeSection));
+    return (<>
       <SidePanel title={t('settings.title', 'Settings')} width={panelWidth}>
         <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
           <div className="space-y-2">
-            {SETTING_SECTIONS.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => navigate(`/settings/${s.id}`)}
-                className={`group w-full rounded-3xl border px-3.5 py-3 text-left transition-all duration-200 ${
-                  activeSection === s.id
-                    ? 'border-accent/20 bg-accent/10 text-text-primary shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
-                    : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60'
-                }`}
-              >
+            {SETTING_SECTIONS.map((s) => (<UiButton unstyled key={s.id} onClick={() => navigate(`/settings/${s.id}`)} className={`group w-full rounded-3xl border px-3.5 py-3 text-left transition-all duration-200 ${activeSection === s.id
+                ? 'border-accent/20 bg-accent/10 text-text-primary shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
+                : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60'}`}>
                 <div className="flex items-start gap-3">
                   <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 text-accent shadow-sm">
-                    {ICON_DATA[s.icon] ? <IconifyIcon name={s.icon} size={16} /> : s.icon}
+                    {ICON_DATA[s.icon] ? <IconifyIcon name={s.icon} size={16}/> : s.icon}
                   </span>
                   <div className="min-w-0 flex-1">
                     <div className="text-[13px] font-semibold text-text-primary">{t(s.i18nKey, s.fallback)}</div>
                     <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/78">{t(s.descKey, s.descFallback)}</p>
                   </div>
                 </div>
-              </button>
-            ))}
+              </UiButton>))}
           </div>
 
-          {workspacePath && (
-            <div className="rounded-2xl border border-border-subtle/55 bg-surface-0/45 px-4 py-3 text-[11px] text-text-muted">
+          {workspacePath && (<div className="rounded-2xl border border-border-subtle/55 bg-surface-0/45 px-4 py-3 text-[11px] text-text-muted">
               <div>{workspacePath}</div>
-            </div>
-          )}
+            </div>)}
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360}/>
 
       <div className="module-canvas flex-1 overflow-y-auto px-5 py-5 xl:px-8 xl:py-6">
         <div className="module-content mx-auto max-w-7xl space-y-5">
@@ -96,7 +85,7 @@ export function SettingsLayout() {
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 items-start gap-3.5">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-accent/12 bg-accent/10 text-accent shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.1)]">
-                  {sectionMeta?.icon && ICON_DATA[sectionMeta.icon] ? <IconifyIcon name={sectionMeta.icon} size={18} /> : <span className="text-sm font-semibold">{t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback).slice(0, 2)}</span>}
+                  {sectionMeta?.icon && ICON_DATA[sectionMeta.icon] ? <IconifyIcon name={sectionMeta.icon} size={18}/> : <span className="text-sm font-semibold">{t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback).slice(0, 2)}</span>}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.title', 'Settings')}</div>
@@ -109,9 +98,9 @@ export function SettingsLayout() {
               </div>
 
               <div className="grid gap-2 sm:grid-cols-3 xl:w-[22rem]">
-                <SummaryStat label={t('settings.section', 'Section')} value={`${sectionIndex + 1}/${SETTING_SECTIONS.length}`} accent />
-                <SummaryStat label={t('settings.category', 'Category')} value={t('settings.preferences', 'Preferences')} />
-                <SummaryStat label={t('settings.scope', 'Scope')} value={workspacePath ? t('settings.workspace', 'Workspace') : t('settings.local', 'Local')} />
+                <SummaryStat label={t('settings.section', 'Section')} value={`${sectionIndex + 1}/${SETTING_SECTIONS.length}`} accent/>
+                <SummaryStat label={t('settings.category', 'Category')} value={t('settings.preferences', 'Preferences')}/>
+                <SummaryStat label={t('settings.scope', 'Scope')} value={workspacePath ? t('settings.workspace', 'Workspace') : t('settings.local', 'Local')}/>
               </div>
             </div>
           </section>
@@ -119,6 +108,6 @@ export function SettingsLayout() {
           <ActiveComponent />
         </div>
       </div>
-    </>
-  )
+    </>);
 }
+

@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Button } from '@/components/catalyst-ui/button'
 import { useAppStore } from '@/store/appStore'
 import type { ScheduledTask } from '@/types'
 import { TimerLayout } from './TimerLayout'
@@ -33,7 +34,7 @@ vi.mock('./TimerDetail', () => ({
   TimerDetail: ({ timer, onOpenAssistant }: { timer: ScheduledTask; onOpenAssistant?: () => void }) => (
     <div>
       <div>{timer.name}</div>
-      <button type="button" onClick={onOpenAssistant}>open-ai-edit</button>
+      <Button type="button" unstyled onClick={onOpenAssistant}>open-ai-edit</Button>
     </div>
   ),
 }))

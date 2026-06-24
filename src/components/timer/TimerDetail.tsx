@@ -1,132 +1,114 @@
-import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { useAppStore } from '@/store/appStore'
-import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
-import { useI18n } from '@/hooks/useI18n'
-import { buildPipelineExecutionPath } from '@/services/pipelineNavigation'
-import type { ScheduledTask, TimerExecution } from '@/types'
-import { electronInvoke, formatRelative, formatDateTime } from './timerHelpers'
-
-function InfoCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-surface-1 rounded-lg p-3 border border-border-subtle">
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAppStore } from '@/store/appStore';
+import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons';
+import { useI18n } from '@/hooks/useI18n';
+import { buildPipelineExecutionPath } from '@/services/pipelineNavigation';
+import type { ScheduledTask, TimerExecution } from '@/types';
+import { electronInvoke, formatRelative, formatDateTime } from './timerHelpers';
+import { Button as UiButton } from "@/components/catalyst-ui/button";
+function InfoCard({ label, value }: {
+    label: string;
+    value: string;
+}) {
+    return (<div className="bg-surface-1 rounded-lg p-3 border border-border-subtle">
       <span className="text-[10px] text-text-muted uppercase tracking-wide block mb-0.5">{label}</span>
       <span className="text-xs text-text-primary">{value}</span>
-    </div>
-  )
+    </div>);
 }
-
 export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle, onRunNow }: {
-  timer: ScheduledTask
-  onEdit: () => void
-  onOpenAssistant?: () => void
-  onDelete: () => void
-  onToggle: () => void
-  onRunNow?: () => void
+    timer: ScheduledTask;
+    onEdit: () => void;
+    onOpenAssistant?: () => void;
+    onDelete: () => void;
+    onToggle: () => void;
+    onRunNow?: () => void;
 }) {
-  const { agents, agentPipelines, setActiveModule } = useAppStore()
-  const { t } = useI18n()
-  const aiEditLabel = t('timer.aiEditCurrent', 'AI Edit')
-  const navigate = useNavigate()
-  const [history, setHistory] = useState<TimerExecution[]>([])
-  const [showHistory, setShowHistory] = useState(false)
-  const agent = timer.agentId ? agents.find((a) => a.id === timer.agentId) : null
-  const pipeline = timer.pipelineId ? agentPipelines.find((item) => item.id === timer.pipelineId) : null
-  const scheduleValue = timer.type === 'once'
-    ? formatDateTime(new Date(timer.schedule).getTime())
-    : timer.type === 'cron'
-      ? timer.schedule
-      : t('timer.assistantEveryMinutes', 'Every {minutes} minutes').replace('{minutes}', timer.schedule)
-  const retriesValue = `${t('timer.max', 'Max')}: ${timer.maxRetries ?? 0}, ${t('timer.interval', 'Interval')}: ${timer.retryIntervalMinutes ?? 5} ${t('timer.minutes', 'minutes')}`
-  const missedRunsValue = timer.missedRunPolicy === 'run-once'
-    ? t('timer.runOnce', 'Run once')
-    : timer.missedRunPolicy === 'run-all'
-      ? t('timer.runAll', 'Run all')
-      : t('timer.skipMissed', 'Skip')
-  const calendarValue = timer.calendarRule === 'weekdays'
-    ? t('timer.weekdays', 'Weekdays')
-    : timer.calendarRule === 'weekends'
-      ? t('timer.weekends', 'Weekends')
-      : t('timer.allDays', 'All days')
-
-  useEffect(() => {
-    if (showHistory) {
-      electronInvoke('timer:history', timer.id)
-        .then((res) => {
-          const r = res as { history?: TimerExecution[] }
-          if (r.history) setHistory([...r.history].reverse())
-        })
-        .catch(() => { /* ignore */ })
-    }
-  }, [showHistory, timer.id])
-
-  const openPipelineExecution = (execution: TimerExecution) => {
-    if (!execution.pipelineId) return
-
-    setActiveModule('pipeline')
-    navigate(buildPipelineExecutionPath({
-      pipelineId: execution.pipelineId,
-      timerId: execution.timerId,
-      firedAt: execution.firedAt,
-      executionId: execution.pipelineExecutionId,
-    }))
-  }
-
-  return (
-    <div className="module-canvas flex-1 overflow-y-auto px-5 py-6 animate-fade-in xl:px-8 xl:py-8">
+    const { agents, agentPipelines, setActiveModule } = useAppStore();
+    const { t } = useI18n();
+    const aiEditLabel = t('timer.aiEditCurrent', 'AI Edit');
+    const navigate = useNavigate();
+    const [history, setHistory] = useState<TimerExecution[]>([]);
+    const [showHistory, setShowHistory] = useState(false);
+    const agent = timer.agentId ? agents.find((a) => a.id === timer.agentId) : null;
+    const pipeline = timer.pipelineId ? agentPipelines.find((item) => item.id === timer.pipelineId) : null;
+    const scheduleValue = timer.type === 'once'
+        ? formatDateTime(new Date(timer.schedule).getTime())
+        : timer.type === 'cron'
+            ? timer.schedule
+            : t('timer.assistantEveryMinutes', 'Every {minutes} minutes').replace('{minutes}', timer.schedule);
+    const retriesValue = `${t('timer.max', 'Max')}: ${timer.maxRetries ?? 0}, ${t('timer.interval', 'Interval')}: ${timer.retryIntervalMinutes ?? 5} ${t('timer.minutes', 'minutes')}`;
+    const missedRunsValue = timer.missedRunPolicy === 'run-once'
+        ? t('timer.runOnce', 'Run once')
+        : timer.missedRunPolicy === 'run-all'
+            ? t('timer.runAll', 'Run all')
+            : t('timer.skipMissed', 'Skip');
+    const calendarValue = timer.calendarRule === 'weekdays'
+        ? t('timer.weekdays', 'Weekdays')
+        : timer.calendarRule === 'weekends'
+            ? t('timer.weekends', 'Weekends')
+            : t('timer.allDays', 'All days');
+    useEffect(() => {
+        if (showHistory) {
+            electronInvoke('timer:history', timer.id)
+                .then((res) => {
+                const r = res as {
+                    history?: TimerExecution[];
+                };
+                if (r.history)
+                    setHistory([...r.history].reverse());
+            })
+                .catch(() => { });
+        }
+    }, [showHistory, timer.id]);
+    const openPipelineExecution = (execution: TimerExecution) => {
+        if (!execution.pipelineId)
+            return;
+        setActiveModule('pipeline');
+        navigate(buildPipelineExecutionPath({
+            pipelineId: execution.pipelineId,
+            timerId: execution.timerId,
+            firedAt: execution.firedAt,
+            executionId: execution.pipelineExecutionId,
+        }));
+    };
+    return (<div className="module-canvas flex-1 overflow-y-auto px-5 py-6 animate-fade-in xl:px-8 xl:py-8">
       <div className="module-content mx-auto max-w-6xl space-y-6">
         <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
               <div className="flex h-18 w-18 items-center justify-center rounded-[26px] border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
-                <IconifyIcon name={timer.type === 'once' ? 'ui-timer-once' : 'ui-repeat'} size={30} color="currentColor" />
+                <IconifyIcon name={timer.type === 'once' ? 'ui-timer-once' : 'ui-repeat'} size={30} color="currentColor"/>
               </div>
               <div className="min-w-0 flex-1">
                 <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.detail', 'Detail')}</div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{timer.name}</h2>
                 <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
-                  <span className="inline-flex items-center gap-1.5">{timer.type === 'once' ? <><IconifyIcon name="ui-timer-once" size={12} /> {t('timer.oneTime', 'One-time')}</> : <><IconifyIcon name="ui-repeat" size={12} /> {t('timer.repeating', 'Repeating')}</>}</span>
+                  <span className="inline-flex items-center gap-1.5">{timer.type === 'once' ? <><IconifyIcon name="ui-timer-once" size={12}/> {t('timer.oneTime', 'One-time')}</> : <><IconifyIcon name="ui-repeat" size={12}/> {t('timer.repeating', 'Repeating')}</>}</span>
                   <span className="mx-2 text-text-muted/40">·</span>
-                  <span className="inline-flex items-center gap-1.5">{timer.action === 'notify' ? <><IconifyIcon name="ui-notification" size={12} /> {t('timer.notification', 'Notification')}</> : timer.action === 'pipeline' ? <><IconifyIcon name="skill-agent-comm" size={12} /> {t('timer.pipeline', 'Pipeline')}</> : <><IconifyIcon name="agent-robot" size={12} /> {t('timer.agentPrompt', 'Agent Prompt')}</>}</span>
-                  {agent && <span className="ml-2 inline-flex items-center gap-1.5">· <AgentAvatar avatar={agent.avatar} size={12} /> {agent.name}</span>}
-                  {pipeline && <span className="ml-2 inline-flex items-center gap-1.5">· <IconifyIcon name="skill-agent-comm" size={12} /> {pipeline.name}</span>}
+                  <span className="inline-flex items-center gap-1.5">{timer.action === 'notify' ? <><IconifyIcon name="ui-notification" size={12}/> {t('timer.notification', 'Notification')}</> : timer.action === 'pipeline' ? <><IconifyIcon name="skill-agent-comm" size={12}/> {t('timer.pipeline', 'Pipeline')}</> : <><IconifyIcon name="agent-robot" size={12}/> {t('timer.agentPrompt', 'Agent Prompt')}</>}</span>
+                  {agent && <span className="ml-2 inline-flex items-center gap-1.5">· <AgentAvatar avatar={agent.avatar} size={12}/> {agent.name}</span>}
+                  {pipeline && <span className="ml-2 inline-flex items-center gap-1.5">· <IconifyIcon name="skill-agent-comm" size={12}/> {pipeline.name}</span>}
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-3 xl:max-w-100 xl:justify-end">
-              <button
-                onClick={onToggle}
-                className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${timer.enabled ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`}
-              >
+              <UiButton unstyled onClick={onToggle} className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${timer.enabled ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`}>
                 {timer.enabled ? t('timer.enabled', '● Enabled') : t('timer.disabled', '○ Disabled')}
-              </button>
-              <button
-                onClick={onRunNow}
-                className="px-4 py-2.5 rounded-2xl bg-accent/15 text-accent text-sm font-semibold hover:bg-accent/25 transition-colors"
-              >
+              </UiButton>
+              <UiButton unstyled onClick={onRunNow} className="px-4 py-2.5 rounded-2xl bg-accent/15 text-accent text-sm font-semibold hover:bg-accent/25 transition-colors">
                 {t('timer.runNow', 'Run now')}
-              </button>
-              {onOpenAssistant && (
-                <button
-                  onClick={onOpenAssistant}
-                  className="px-4 py-2.5 rounded-2xl bg-accent text-white text-sm font-semibold hover:bg-accent-hover transition-colors"
-                >
+              </UiButton>
+              {onOpenAssistant && (<UiButton unstyled onClick={onOpenAssistant} className="px-4 py-2.5 rounded-2xl bg-accent text-white text-sm font-semibold hover:bg-accent-hover transition-colors">
                   {aiEditLabel}
-                </button>
-              )}
-              <button
-                onClick={onEdit}
-                className="px-4 py-2.5 rounded-2xl bg-surface-2 text-text-muted text-sm font-semibold hover:text-text-secondary transition-colors"
-              >
+                </UiButton>)}
+              <UiButton unstyled onClick={onEdit} className="px-4 py-2.5 rounded-2xl bg-surface-2 text-text-muted text-sm font-semibold hover:text-text-secondary transition-colors">
                 {t('common.edit', 'Edit')}
-              </button>
-              <button
-                onClick={onDelete}
-                className="px-4 py-2.5 rounded-2xl bg-red-500/10 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-colors"
-              >
+              </UiButton>
+              <UiButton unstyled onClick={onDelete} className="px-4 py-2.5 rounded-2xl bg-red-500/10 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-colors">
                 {t('common.delete', 'Delete')}
-              </button>
+              </UiButton>
             </div>
           </div>
         </section>
@@ -141,33 +123,28 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
-                <InfoCard label={t('timer.schedule', 'Schedule')} value={scheduleValue} />
-                <InfoCard label={t('timer.nextRun', 'Next Run')} value={timer.nextRun ? `${formatDateTime(timer.nextRun)} (${formatRelative(timer.nextRun)})` : t('timer.notScheduled', 'Not scheduled')} />
-                <InfoCard label={t('timer.lastRun', 'Last Run')} value={timer.lastRun ? formatDateTime(timer.lastRun) : t('timer.never', 'Never')} />
-                <InfoCard label={t('timer.created', 'Created')} value={formatDateTime(timer.createdAt)} />
-                <InfoCard label={t('timer.timezone', 'Timezone')} value={timer.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone} />
-                <InfoCard label={t('timer.retries', 'Retries')} value={retriesValue} />
-                <InfoCard label={t('timer.missedRuns', 'Missed runs')} value={missedRunsValue} />
-                <InfoCard label={t('timer.calendar', 'Calendar')} value={calendarValue} />
+                <InfoCard label={t('timer.schedule', 'Schedule')} value={scheduleValue}/>
+                <InfoCard label={t('timer.nextRun', 'Next Run')} value={timer.nextRun ? `${formatDateTime(timer.nextRun)} (${formatRelative(timer.nextRun)})` : t('timer.notScheduled', 'Not scheduled')}/>
+                <InfoCard label={t('timer.lastRun', 'Last Run')} value={timer.lastRun ? formatDateTime(timer.lastRun) : t('timer.never', 'Never')}/>
+                <InfoCard label={t('timer.created', 'Created')} value={formatDateTime(timer.createdAt)}/>
+                <InfoCard label={t('timer.timezone', 'Timezone')} value={timer.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone}/>
+                <InfoCard label={t('timer.retries', 'Retries')} value={retriesValue}/>
+                <InfoCard label={t('timer.missedRuns', 'Missed runs')} value={missedRunsValue}/>
+                <InfoCard label={t('timer.calendar', 'Calendar')} value={calendarValue}/>
               </div>
             </section>
 
-            {(timer.prompt || pipeline) && (
-              <section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+            {(timer.prompt || pipeline) && (<section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
                 <div className="mb-5">
                   <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.payload', 'Payload')}</div>
                   <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{timer.action === 'pipeline' ? t('timer.pipeline', 'Pipeline') : timer.action === 'notify' ? t('timer.notificationBody', 'Notification Body') : t('timer.promptText', 'Prompt')}</h3>
                 </div>
                 <p className="rounded-3xl border border-border-subtle bg-surface-2/75 p-4 text-sm leading-7 text-text-secondary whitespace-pre-wrap">{timer.action === 'pipeline' ? (pipeline?.name || timer.pipelineId || 'Unknown pipeline') : timer.prompt}</p>
-              </section>
-            )}
+              </section>)}
           </div>
 
           <section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6 h-fit">
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="w-full text-left"
-            >
+            <UiButton unstyled onClick={() => setShowHistory(!showHistory)} className="w-full text-left">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.executionHistory', 'Execution History')}</div>
@@ -176,37 +153,25 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
                 </div>
                 <span className={`inline-flex transition-transform text-text-muted ${showHistory ? 'rotate-90' : ''}`}>▶</span>
               </div>
-            </button>
+            </UiButton>
 
-            {showHistory && (
-              <div className="mt-4 space-y-2 max-h-112 overflow-y-auto">
-                {history.length === 0 ? (
-                  <p className="rounded-3xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('timer.noExecutions', 'No executions recorded yet.')}</p>
-                ) : (
-                  history.map((exec) => {
-                    const savedPipeline = exec.pipelineId ? agentPipelines.find((item) => item.id === exec.pipelineId) : null
-                    const canOpenPipeline = Boolean(exec.pipelineId)
-                    const statusClassName = exec.status === 'success'
-                      ? 'bg-green-500/15 text-green-400'
-                      : exec.status === 'error'
+            {showHistory && (<div className="mt-4 space-y-2 max-h-112 overflow-y-auto">
+                {history.length === 0 ? (<p className="rounded-3xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('timer.noExecutions', 'No executions recorded yet.')}</p>) : (history.map((exec) => {
+                const savedPipeline = exec.pipelineId ? agentPipelines.find((item) => item.id === exec.pipelineId) : null;
+                const canOpenPipeline = Boolean(exec.pipelineId);
+                const statusClassName = exec.status === 'success'
+                    ? 'bg-green-500/15 text-green-400'
+                    : exec.status === 'error'
                         ? 'bg-red-500/15 text-red-400'
-                        : 'bg-amber-500/15 text-amber-300'
-                    const statusDotClassName = exec.status === 'success'
-                      ? 'bg-green-400'
-                      : exec.status === 'error'
+                        : 'bg-amber-500/15 text-amber-300';
+                const statusDotClassName = exec.status === 'success'
+                    ? 'bg-green-400'
+                    : exec.status === 'error'
                         ? 'bg-red-400'
-                        : 'bg-amber-300'
-
-                    return (
-                      <button
-                        key={exec.id}
-                        type="button"
-                        onClick={() => canOpenPipeline && openPipelineExecution(exec)}
-                        disabled={!canOpenPipeline}
-                        className={`w-full rounded-[22px] border px-3.5 py-3 text-left text-xs transition-colors ${canOpenPipeline ? 'bg-surface-1 hover:border-accent/30 hover:bg-accent/5' : 'bg-surface-1 border-border-subtle'} border-border-subtle disabled:cursor-default`}
-                      >
+                        : 'bg-amber-300';
+                return (<UiButton unstyled key={exec.id} type="button" onClick={() => canOpenPipeline && openPipelineExecution(exec)} disabled={!canOpenPipeline} className={`w-full rounded-[22px] border px-3.5 py-3 text-left text-xs transition-colors ${canOpenPipeline ? 'bg-surface-1 hover:border-accent/30 hover:bg-accent/5' : 'bg-surface-1 border-border-subtle'} border-border-subtle disabled:cursor-default`}>
                         <div className="flex items-start gap-3">
-                          <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${statusDotClassName}`} />
+                          <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${statusDotClassName}`}/>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-2 text-text-muted">
                               <span>{formatDateTime(exec.firedAt)}</span>
@@ -215,36 +180,31 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
                             </div>
                             <div className="mt-1 text-text-secondary">
                               {exec.action === 'notify'
-                                ? <IconifyIcon name="ui-notification" size={12} />
-                                : exec.action === 'pipeline'
-                                  ? <IconifyIcon name="skill-agent-comm" size={12} />
-                                  : <IconifyIcon name="agent-robot" size={12} />}
+                        ? <IconifyIcon name="ui-notification" size={12}/>
+                        : exec.action === 'pipeline'
+                            ? <IconifyIcon name="skill-agent-comm" size={12}/>
+                            : <IconifyIcon name="agent-robot" size={12}/>}
                               {exec.agentId && (() => {
-                                const a = agents.find((ag) => ag.id === exec.agentId)
-                                return a ? ` ${a.name}` : ''
-                              })()}
+                        const a = agents.find((ag) => ag.id === exec.agentId);
+                        return a ? ` ${a.name}` : '';
+                    })()}
                               {exec.pipelineId && (() => {
-                                return savedPipeline ? ` ${savedPipeline.name}` : ''
-                              })()}
+                        return savedPipeline ? ` ${savedPipeline.name}` : '';
+                    })()}
                             </div>
                             {exec.result && <div className="mt-2 whitespace-pre-wrap wrap-break-word text-[11px] leading-5 text-text-secondary/85">{exec.result}</div>}
                             {exec.error && <div className="mt-2 truncate text-[10px] text-red-400">{exec.error}</div>}
                           </div>
-                          {canOpenPipeline && (
-                            <span className="shrink-0 rounded-full bg-accent/10 px-2 py-1 text-[10px] font-medium text-accent">
+                          {canOpenPipeline && (<span className="shrink-0 rounded-full bg-accent/10 px-2 py-1 text-[10px] font-medium text-accent">
                               {t('timer.viewPipelineRun', 'View run')}
-                            </span>
-                          )}
+                            </span>)}
                         </div>
-                      </button>
-                    )
-                  })
-                )}
-              </div>
-            )}
+                      </UiButton>);
+            }))}
+              </div>)}
           </section>
         </div>
       </div>
-    </div>
-  )
+    </div>);
 }
+

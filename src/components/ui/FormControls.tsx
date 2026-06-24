@@ -18,8 +18,24 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
+import clsx from 'clsx'
+import { Input as CatalystInput } from '@/components/catalyst-ui/input'
+import { Select as CatalystSelect } from '@/components/catalyst-ui/select'
+import { Textarea as CatalystTextarea } from '@/components/catalyst-ui/textarea'
 
 export type ControlSize = 'sm' | 'md'
+
+const NATIVE_INPUT_TYPES = new Set([
+  'checkbox',
+  'color',
+  'file',
+  'hidden',
+  'image',
+  'radio',
+  'range',
+  'reset',
+  'submit',
+])
 
 const SIZE_BASE: Record<ControlSize, string> = {
   md: 'rounded-md px-3 py-2.5 text-sm',
@@ -52,8 +68,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
   { size = 'md', invalid, className, ...rest },
   ref,
 ) {
+  if (rest.type && NATIVE_INPUT_TYPES.has(rest.type)) {
+    return <input ref={ref} className={controlClass(size, invalid, className)} {...rest} />
+  }
+
   return (
-    <input ref={ref} className={controlClass(size, invalid, className)} {...rest} />
+    <CatalystInput ref={ref} invalid={invalid} className={controlClass(size, invalid, className)} {...rest} />
   )
 })
 
@@ -76,13 +96,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(function Select
   ref,
 ) {
   return (
-    <select
+    <CatalystSelect
       ref={ref}
+      invalid={invalid}
       className={`${SELECT_CHEVRON} ${controlClass(size, invalid, className)}`}
       {...rest}
     >
       {children}
-    </select>
+    </CatalystSelect>
   )
 })
 
@@ -110,9 +131,11 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextAreaProps>(function 
     return <textarea ref={ref} className={[TEXTAREA_GHOST, className].filter(Boolean).join(' ')} {...rest} />
   }
   return (
-    <textarea
+    <CatalystTextarea
       ref={ref}
-      className={`${controlClass(size, invalid, className)} resize-y leading-6 min-h-24`}
+      invalid={invalid}
+      className={clsx(controlClass(size, invalid, className), 'min-h-24 leading-6')}
+      resizable
       {...rest}
     />
   )

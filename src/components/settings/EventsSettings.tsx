@@ -1,128 +1,114 @@
-import { useEffect, useMemo, useState } from 'react'
-import { useI18n } from '@/hooks/useI18n'
-import { useAppStore } from '@/store/appStore'
-import { IconifyIcon } from '@/components/icons/IconifyIcons'
-import { loadTriggers, addTrigger, removeTrigger, resolvePromptTemplate, updateTrigger } from '@/services/eventAutomation'
-import { generateId } from '@/utils/helpers'
-import type { EventTrigger } from '@/types'
-import { SettingsSection, SettingsStat, settingsInputClass, settingsTextAreaClass } from './panelUi'
-
+import { useEffect, useMemo, useState } from 'react';
+import { useI18n } from '@/hooks/useI18n';
+import { useAppStore } from '@/store/appStore';
+import { IconifyIcon } from '@/components/icons/IconifyIcons';
+import { loadTriggers, addTrigger, removeTrigger, resolvePromptTemplate, updateTrigger } from '@/services/eventAutomation';
+import { generateId } from '@/utils/helpers';
+import type { EventTrigger } from '@/types';
+import { SettingsSection, SettingsStat } from './panelUi';
+import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
 function getTriggerTypeLabel(type: EventTrigger['type'], t: (key: string, fallback: string) => string) {
-  switch (type) {
-    case 'clipboard_change':
-      return t('settings.clipboardChange', 'Clipboard Change')
-    case 'file_change':
-      return t('settings.fileChange', 'File Change')
-    case 'app_start':
-      return t('settings.appStart', 'App Start')
-    case 'schedule':
-      return t('settings.schedule', 'Schedule')
-    default:
-      return type
-  }
+    switch (type) {
+        case 'clipboard_change':
+            return t('settings.clipboardChange', 'Clipboard Change');
+        case 'file_change':
+            return t('settings.fileChange', 'File Change');
+        case 'app_start':
+            return t('settings.appStart', 'App Start');
+        case 'schedule':
+            return t('settings.schedule', 'Schedule');
+        default:
+            return type;
+    }
 }
-
 function formatRelativeTime(value: number | undefined, t: (key: string, fallback: string) => string) {
-  if (!value) return t('settings.relativeNever', 'Never')
-  const diff = Date.now() - value
-  if (diff < 60_000) return t('settings.relativeJustNow', 'just now')
-  if (diff < 3_600_000) return t('settings.relativeMinutesAgo', '{count}m ago').replace('{count}', String(Math.max(1, Math.floor(diff / 60_000))))
-  if (diff < 86_400_000) return t('settings.relativeHoursAgo', '{count}h ago').replace('{count}', String(Math.max(1, Math.floor(diff / 3_600_000))))
-  if (diff < 604_800_000) return t('settings.relativeDaysAgo', '{count}d ago').replace('{count}', String(Math.max(1, Math.floor(diff / 86_400_000))))
-  return new Date(value).toLocaleDateString()
+    if (!value)
+        return t('settings.relativeNever', 'Never');
+    const diff = Date.now() - value;
+    if (diff < 60000)
+        return t('settings.relativeJustNow', 'just now');
+    if (diff < 3600000)
+        return t('settings.relativeMinutesAgo', '{count}m ago').replace('{count}', String(Math.max(1, Math.floor(diff / 60000))));
+    if (diff < 86400000)
+        return t('settings.relativeHoursAgo', '{count}h ago').replace('{count}', String(Math.max(1, Math.floor(diff / 3600000))));
+    if (diff < 604800000)
+        return t('settings.relativeDaysAgo', '{count}d ago').replace('{count}', String(Math.max(1, Math.floor(diff / 86400000))));
+    return new Date(value).toLocaleDateString();
 }
-
 export function EventsSettings() {
-  const { t } = useI18n()
-  const { agents } = useAppStore()
-  const [triggers, setTriggers] = useState<EventTrigger[]>([])
-  const enabledAgents = useMemo(() => agents.filter((agent) => agent.enabled !== false), [agents])
-  const [triggerForm, setTriggerForm] = useState({
-    name: '',
-    type: 'clipboard_change' as EventTrigger['type'],
-    pattern: '',
-    agentId: '',
-    promptTemplate: '',
-  })
-
-  const reloadTriggers = () => setTriggers(loadTriggers())
-
-  useEffect(() => {
-    reloadTriggers()
-  }, [])
-
-  useEffect(() => {
-    if (triggerForm.agentId || enabledAgents.length === 0) return
-    setTriggerForm((prev) => (prev.agentId ? prev : { ...prev, agentId: enabledAgents[0]?.id || '' }))
-  }, [enabledAgents, triggerForm.agentId])
-
-  const totalTriggers = triggers.length
-  const enabledTriggers = triggers.filter((trigger) => trigger.enabled).length
-  const activeSchedules = triggers.filter((trigger) => trigger.type === 'schedule').length
-  const agentNameMap = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.name])), [agents])
-  const preview = triggerForm.promptTemplate
-    ? resolvePromptTemplate(triggerForm.promptTemplate, {
-        content: t('settings.sampleContent', '(sample content)'),
-        file: t('settings.sampleFilePath', '/path/to/file.ts'),
-        previous: t('settings.samplePreviousContent', '(previous content)'),
-      })
-    : t('common.empty', 'Empty')
-
-  const createTrigger = () => {
-    if (!triggerForm.name || !triggerForm.agentId || !triggerForm.promptTemplate) return
-
-    addTrigger({
-      id: generateId('evt'),
-      name: triggerForm.name,
-      type: triggerForm.type,
-      pattern: triggerForm.pattern || undefined,
-      agentId: triggerForm.agentId,
-      promptTemplate: triggerForm.promptTemplate,
-      enabled: true,
-      createdAt: Date.now(),
-    })
-    reloadTriggers()
-    setTriggerForm({
-      name: '',
-      type: 'clipboard_change',
-      pattern: '',
-      agentId: enabledAgents[0]?.id || '',
-      promptTemplate: '',
-    })
-  }
-
-  return (
-    <div className="space-y-6">
-      <SettingsSection
-        eyebrow={t('settings.eventTriggers', 'Event Triggers')}
-        title={t('settings.automationRules', 'Automation Rules')}
-        description={t('settings.eventTriggersDesc', 'Create triggers that automatically send prompts to agents when specific desktop events occur.')}
-      >
+    const { t } = useI18n();
+    const { agents } = useAppStore();
+    const [triggers, setTriggers] = useState<EventTrigger[]>([]);
+    const enabledAgents = useMemo(() => agents.filter((agent) => agent.enabled !== false), [agents]);
+    const [triggerForm, setTriggerForm] = useState({
+        name: '',
+        type: 'clipboard_change' as EventTrigger['type'],
+        pattern: '',
+        agentId: '',
+        promptTemplate: '',
+    });
+    const reloadTriggers = () => setTriggers(loadTriggers());
+    useEffect(() => {
+        reloadTriggers();
+    }, []);
+    useEffect(() => {
+        if (triggerForm.agentId || enabledAgents.length === 0)
+            return;
+        setTriggerForm((prev) => (prev.agentId ? prev : { ...prev, agentId: enabledAgents[0]?.id || '' }));
+    }, [enabledAgents, triggerForm.agentId]);
+    const totalTriggers = triggers.length;
+    const enabledTriggers = triggers.filter((trigger) => trigger.enabled).length;
+    const activeSchedules = triggers.filter((trigger) => trigger.type === 'schedule').length;
+    const agentNameMap = useMemo(() => new Map(agents.map((agent) => [agent.id, agent.name])), [agents]);
+    const preview = triggerForm.promptTemplate
+        ? resolvePromptTemplate(triggerForm.promptTemplate, {
+            content: t('settings.sampleContent', '(sample content)'),
+            file: t('settings.sampleFilePath', '/path/to/file.ts'),
+            previous: t('settings.samplePreviousContent', '(previous content)'),
+        })
+        : t('common.empty', 'Empty');
+    const createTrigger = () => {
+        if (!triggerForm.name || !triggerForm.agentId || !triggerForm.promptTemplate)
+            return;
+        addTrigger({
+            id: generateId('evt'),
+            name: triggerForm.name,
+            type: triggerForm.type,
+            pattern: triggerForm.pattern || undefined,
+            agentId: triggerForm.agentId,
+            promptTemplate: triggerForm.promptTemplate,
+            enabled: true,
+            createdAt: Date.now(),
+        });
+        reloadTriggers();
+        setTriggerForm({
+            name: '',
+            type: 'clipboard_change',
+            pattern: '',
+            agentId: enabledAgents[0]?.id || '',
+            promptTemplate: '',
+        });
+    };
+    return (<div className="space-y-6">
+      <SettingsSection eyebrow={t('settings.eventTriggers', 'Event Triggers')} title={t('settings.automationRules', 'Automation Rules')} description={t('settings.eventTriggersDesc', 'Create triggers that automatically send prompts to agents when specific desktop events occur.')}>
         <div className="grid gap-3 sm:grid-cols-3">
-          <SettingsStat label={t('common.total', 'Total')} value={String(totalTriggers)} accent />
-          <SettingsStat label={t('settings.enabled', 'Enabled')} value={String(enabledTriggers)} />
-          <SettingsStat label={t('settings.schedule', 'Schedule')} value={String(activeSchedules)} />
+          <SettingsStat label={t('common.total', 'Total')} value={String(totalTriggers)} accent/>
+          <SettingsStat label={t('settings.enabled', 'Enabled')} value={String(enabledTriggers)}/>
+          <SettingsStat label={t('settings.schedule', 'Schedule')} value={String(activeSchedules)}/>
         </div>
       </SettingsSection>
 
-      <SettingsSection
-        eyebrow={t('settings.currentRules', 'Current Rules')}
-        title={t('settings.liveTriggers', 'Live Triggers')}
-        description={t('settings.liveTriggersHint', 'Each trigger maps a system event to an agent prompt, so you can automate routine reactions without opening chat manually.')}
-      >
-        {triggers.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+      <SettingsSection eyebrow={t('settings.currentRules', 'Current Rules')} title={t('settings.liveTriggers', 'Live Triggers')} description={t('settings.liveTriggersHint', 'Each trigger maps a system event to an agent prompt, so you can automate routine reactions without opening chat manually.')}>
+        {triggers.length === 0 ? (<div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
             <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
-              <IconifyIcon name="ui-gear" size={18} color="currentColor" />
+              <IconifyIcon name="ui-gear" size={18} color="currentColor"/>
             </div>
             <p className="text-[12px] leading-relaxed text-text-muted">{t('settings.noTriggers', 'No event triggers configured.')}</p>
-          </div>
-        ) : (
-          <div className="space-y-3">
+          </div>) : (<div className="space-y-3">
             {triggers.map((trigger) => {
-              const typeLabel = getTriggerTypeLabel(trigger.type, t)
-              return (
-                <div key={trigger.id} className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                const typeLabel = getTriggerTypeLabel(trigger.type, t);
+                return (<div key={trigger.id} className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
@@ -137,109 +123,57 @@ export function EventsSettings() {
                       <div className="mt-3 rounded-2xl border border-border-subtle/45 bg-surface-2/70 px-3 py-2 text-[11px] leading-6 text-text-secondary">{trigger.promptTemplate}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => { updateTrigger(trigger.id, { enabled: !trigger.enabled }); reloadTriggers() }}
-                        className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors ${trigger.enabled ? 'border-green-500/18 bg-green-500/10 text-green-400 hover:bg-green-500/16' : 'border-border-subtle/55 bg-surface-2/70 text-text-muted hover:bg-surface-3'}`}
-                      >
+                      <UiButton unstyled type="button" onClick={() => { updateTrigger(trigger.id, { enabled: !trigger.enabled }); reloadTriggers(); }} className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors ${trigger.enabled ? 'border-green-500/18 bg-green-500/10 text-green-400 hover:bg-green-500/16' : 'border-border-subtle/55 bg-surface-2/70 text-text-muted hover:bg-surface-3'}`}>
                         {trigger.enabled ? t('settings.pause', 'Pause') : t('settings.enable', 'Enable')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { removeTrigger(trigger.id); reloadTriggers() }}
-                        className="rounded-xl border border-red-500/18 bg-red-500/8 px-3 py-2 text-[11px] font-semibold text-red-400 transition-colors hover:bg-red-500/14"
-                      >
+                      </UiButton>
+                      <UiButton unstyled type="button" onClick={() => { removeTrigger(trigger.id); reloadTriggers(); }} className="rounded-xl border border-red-500/18 bg-red-500/8 px-3 py-2 text-[11px] font-semibold text-red-400 transition-colors hover:bg-red-500/14">
                         {t('settings.delete', 'Delete')}
-                      </button>
+                      </UiButton>
                     </div>
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-text-muted/70">
                     <span>{t('settings.created', 'Created')}: {new Date(trigger.createdAt).toLocaleString()}</span>
                     <span>{t('settings.lastTriggered', 'Last triggered')}: {formatRelativeTime(trigger.lastTriggered, t)}</span>
                   </div>
-                </div>
-              )
+                </div>);
             })}
-          </div>
-        )}
+          </div>)}
       </SettingsSection>
 
-      <SettingsSection
-        eyebrow={t('settings.newTrigger', 'New Trigger')}
-        title={t('settings.composeTrigger', 'Compose Trigger')}
-        description={t('settings.composeTriggerHint', 'Choose an event source, select the receiving agent, and define the prompt template that should be sent when the rule fires.')}
-        action={
-          <button
-            type="button"
-            onClick={createTrigger}
-            disabled={!triggerForm.name || !triggerForm.agentId || !triggerForm.promptTemplate}
-            className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover disabled:opacity-40"
-          >
+      <SettingsSection eyebrow={t('settings.newTrigger', 'New Trigger')} title={t('settings.composeTrigger', 'Compose Trigger')} description={t('settings.composeTriggerHint', 'Choose an event source, select the receiving agent, and define the prompt template that should be sent when the rule fires.')} action={<UiButton unstyled type="button" onClick={createTrigger} disabled={!triggerForm.name || !triggerForm.agentId || !triggerForm.promptTemplate} className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover disabled:opacity-40">
             {t('settings.addTrigger', 'Add Trigger')}
-          </button>
-        }
-      >
+          </UiButton>}>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.triggerName', 'Trigger name')}</span>
-            <input
-              value={triggerForm.name}
-              onChange={(event) => setTriggerForm({ ...triggerForm, name: event.target.value })}
-              placeholder={t('settings.triggerName', 'Trigger name')}
-              className={settingsInputClass}
-            />
+            <UiInput value={triggerForm.name} onChange={(event) => setTriggerForm({ ...triggerForm, name: event.target.value })} placeholder={t('settings.triggerName', 'Trigger name')}/>
           </label>
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.triggerType', 'Trigger type')}</span>
-            <select
-              value={triggerForm.type}
-              onChange={(event) => setTriggerForm({ ...triggerForm, type: event.target.value as EventTrigger['type'] })}
-              aria-label={t('settings.triggerType', 'Trigger type')}
-              className={settingsInputClass}
-            >
+            <UiSelect value={triggerForm.type} onChange={(event) => setTriggerForm({ ...triggerForm, type: event.target.value as EventTrigger['type'] })} aria-label={t('settings.triggerType', 'Trigger type')}>
               <option value="clipboard_change">{t('settings.clipboardChange', 'Clipboard Change')}</option>
               <option value="file_change">{t('settings.fileChange', 'File Change')}</option>
               <option value="app_start">{t('settings.appStart', 'App Start')}</option>
               <option value="schedule">{t('settings.schedule', 'Schedule')}</option>
-            </select>
+            </UiSelect>
           </label>
         </div>
 
-        {(triggerForm.type === 'file_change' || triggerForm.type === 'schedule') && (
-          <label className="block">
+        {(triggerForm.type === 'file_change' || triggerForm.type === 'schedule') && (<label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{triggerForm.type === 'file_change' ? t('settings.filePattern', 'File pattern') : t('settings.cronExpression', 'Cron expression')}</span>
-            <input
-              value={triggerForm.pattern}
-              onChange={(event) => setTriggerForm({ ...triggerForm, pattern: event.target.value })}
-              placeholder={triggerForm.type === 'file_change' ? t('settings.filePatternPlaceholder', 'File pattern (e.g., *.json)') : t('settings.cronExpressionPlaceholder', 'Cron expression')}
-              className={settingsInputClass}
-            />
-          </label>
-        )}
+            <UiInput value={triggerForm.pattern} onChange={(event) => setTriggerForm({ ...triggerForm, pattern: event.target.value })} placeholder={triggerForm.type === 'file_change' ? t('settings.filePatternPlaceholder', 'File pattern (e.g., *.json)') : t('settings.cronExpressionPlaceholder', 'Cron expression')}/>
+          </label>)}
 
         <label className="block">
           <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.targetAgent', 'Target agent')}</span>
-          <select
-            value={triggerForm.agentId}
-            onChange={(event) => setTriggerForm({ ...triggerForm, agentId: event.target.value })}
-            aria-label={t('settings.targetAgent', 'Target agent')}
-            className={settingsInputClass}
-          >
-            {enabledAgents.map((agent) => (
-              <option key={agent.id} value={agent.id}>{agent.name}</option>
-            ))}
-          </select>
+          <UiSelect value={triggerForm.agentId} onChange={(event) => setTriggerForm({ ...triggerForm, agentId: event.target.value })} aria-label={t('settings.targetAgent', 'Target agent')}>
+            {enabledAgents.map((agent) => (<option key={agent.id} value={agent.id}>{agent.name}</option>))}
+          </UiSelect>
         </label>
 
         <label className="block">
           <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.promptTemplate', 'Prompt template')}</span>
-          <textarea
-            value={triggerForm.promptTemplate}
-            onChange={(event) => setTriggerForm({ ...triggerForm, promptTemplate: event.target.value })}
-            placeholder={t('settings.promptTemplatePlaceholder', 'Prompt template (use {{content}}, {{file}}, {{previous}} placeholders)')}
-            rows={4}
-            className={settingsTextAreaClass}
-          />
+          <UiTextArea value={triggerForm.promptTemplate} onChange={(event) => setTriggerForm({ ...triggerForm, promptTemplate: event.target.value })} placeholder={t('settings.promptTemplatePlaceholder', 'Prompt template (use {{content}}, {{file}}, {{previous}} placeholders)')} rows={4} className="min-h-32 leading-6"/>
         </label>
 
         <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 text-[12px] leading-6 text-text-secondary/80">
@@ -249,6 +183,7 @@ export function EventsSettings() {
           <div className="mt-2 rounded-2xl border border-border-subtle/45 bg-surface-2/70 px-3 py-2 text-[11px] text-text-secondary">{preview}</div>
         </div>
       </SettingsSection>
-    </div>
-  )
+    </div>);
 }
+
+

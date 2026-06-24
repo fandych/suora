@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Button } from '@/components/catalyst-ui/button'
 import { ChatMain } from './ChatMain'
 import { useAppStore } from '@/store/appStore'
 import type { Agent, Model, Session } from '@/types'
@@ -28,7 +29,7 @@ vi.mock('./ChatInput', () => ({
     <div>
       <div>input</div>
       {footer}
-      {isStreaming ? <button type="button" onClick={onStop}>Stop generating</button> : null}
+      {isStreaming ? <Button type="button" unstyled onClick={onStop}>Stop generating</Button> : null}
     </div>
   ),
 }))
@@ -598,3 +599,4 @@ describe('ChatMain', () => {
     expect(await screen.findByRole('button', { name: 'Open browser' })).toBeInTheDocument()
   })
 })
+

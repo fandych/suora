@@ -17,17 +17,10 @@ import {
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
-  settingsCheckboxClass,
-  settingsFieldCardClass,
-  settingsHintClass,
-  settingsInputClass,
-  settingsLabelClass,
-  settingsPrimaryButtonClass,
-  settingsRangeClass,
-  settingsSelectClass,
-  settingsSecondaryButtonClass,
-  settingsSurfaceCardClass,
 } from './panelUi'
+import { Checkbox } from '@/components/catalyst-ui/checkbox'
+import { Button as UiButton } from '@/components/catalyst-ui/button'
+import { Input as UiInput, Select as UiSelect } from '@/components/catalyst-ui/form-controls'
 
 export function VoiceSettings() {
   const { t } = useI18n()
@@ -92,7 +85,7 @@ export function VoiceSettings() {
         description={t('settings.captureAndPlaybackDesc', 'Configure the speech language, active synthesized voice, and sending behavior used by chat composition and spoken responses.')}
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,1fr)]">
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <SettingsToggleRow
               label={t('settings.enableVoice', 'Enable Voice Interaction')}
               description={t('settings.enableVoiceDesc', 'Turn on speech capture and text-to-speech capabilities across the chat workbench.')}
@@ -102,49 +95,46 @@ export function VoiceSettings() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={settingsLabelClass}>{t('settings.language', 'Language')}</label>
-                <select
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.language', 'Language')}</label>
+                <UiSelect
                   value={voiceSettings.language}
                   onChange={(e) => updateSettings({ language: e.target.value })}
                   aria-label={t('settings.language', 'Language')}
-                  className={settingsSelectClass}
                 >
                   {voiceLanguageOptions.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
                   ))}
-                </select>
+                </UiSelect>
               </div>
 
               <div>
-                <label className={settingsLabelClass}>{t('settings.voiceName', 'Voice')}</label>
-                <select
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.voiceName', 'Voice')}</label>
+                <UiSelect
                   value={voiceSettings.voiceName || ''}
                   onChange={(e) => updateSettings({ voiceName: e.target.value || undefined })}
                   aria-label={t('settings.voiceName', 'Voice')}
-                  className={settingsSelectClass}
                 >
                   <option value="">{t('settings.default', 'Default')}</option>
                   {voices.map((voice) => (
                     <option key={voice.name} value={voice.name}>{voice.name} ({voice.lang})</option>
                   ))}
-                </select>
+                </UiSelect>
               </div>
             </div>
 
-            <label className={`${settingsSurfaceCardClass} flex items-center gap-3 cursor-pointer`}>
-              <input
-                type="checkbox"
+            <label className="rounded-md border border-border-subtle bg-surface-2/55 p-3 flex items-center gap-3 cursor-pointer">
+              <Checkbox
                 checked={voiceSettings.autoSend}
-                onChange={(e) => updateSettings({ autoSend: e.target.checked })}
-                className={settingsCheckboxClass}
+                onChange={(v) => updateSettings({ autoSend: v })}
+                color="blue"
               />
               <span className="text-sm text-text-secondary">{t('settings.autoSendSpeech', 'Auto-send after speech recognition')}</span>
             </label>
           </div>
 
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div>
-              <label className={settingsLabelClass}>{t('settings.speechRate', 'Speech Rate')} ({voiceSettings.rate.toFixed(1)})</label>
+              <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.speechRate', 'Speech Rate')} ({voiceSettings.rate.toFixed(1)})</label>
               <input
                 type="range"
                 min="0.5"
@@ -153,7 +143,7 @@ export function VoiceSettings() {
                 value={voiceSettings.rate}
                 onChange={(e) => updateSettings({ rate: parseFloat(e.target.value) })}
                 aria-label={t('settings.speechRate', 'Speech Rate')}
-                className={settingsRangeClass}
+                className="w-full cursor-pointer accent-accent"
               />
               <div className="mt-2 flex justify-between text-[10px] text-text-muted">
                 <span>{t('settings.slower', 'Slower')}</span>
@@ -162,7 +152,7 @@ export function VoiceSettings() {
             </div>
 
             <div>
-              <label className={settingsLabelClass}>{t('settings.pitch', 'Pitch')} ({voiceSettings.pitch.toFixed(1)})</label>
+              <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.pitch', 'Pitch')} ({voiceSettings.pitch.toFixed(1)})</label>
               <input
                 type="range"
                 min="0"
@@ -171,7 +161,7 @@ export function VoiceSettings() {
                 value={voiceSettings.pitch}
                 onChange={(e) => updateSettings({ pitch: parseFloat(e.target.value) })}
                 aria-label={t('settings.pitch', 'Pitch')}
-                className={settingsRangeClass}
+                className="w-full cursor-pointer accent-accent"
               />
               <div className="mt-2 flex justify-between text-[10px] text-text-muted">
                 <span>{t('settings.lower', 'Lower')}</span>
@@ -179,7 +169,7 @@ export function VoiceSettings() {
               </div>
             </div>
 
-            <p className={settingsHintClass}>{t('settings.voiceFineTuneHint', 'These controls affect synthesized playback only, so you can tune response cadence without changing recognition settings.')}</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('settings.voiceFineTuneHint', 'These controls affect synthesized playback only, so you can tune response cadence without changing recognition settings.')}</p>
           </div>
         </div>
       </SettingsSection>
@@ -190,7 +180,7 @@ export function VoiceSettings() {
         description={t('settings.runtimeReadinessDesc', 'Check what the current Electron runtime can actually support before assuming speech capture or playback is available.')}
       >
         <div className="grid gap-4 md:grid-cols-3">
-          <div className={settingsFieldCardClass}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
             <div className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${recognitionAvailable ? 'bg-success' : 'bg-danger'}`} />
               <span className="text-sm font-medium text-text-primary">{t('settings.speechRecognition', 'Speech Recognition')}</span>
@@ -200,7 +190,7 @@ export function VoiceSettings() {
             </p>
           </div>
 
-          <div className={settingsFieldCardClass}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
             <div className="flex items-center gap-2">
               <span className={`h-2.5 w-2.5 rounded-full ${voiceAvailable ? 'bg-success' : 'bg-danger'}`} />
               <span className="text-sm font-medium text-text-primary">{t('settings.speechSynthesis', 'Speech Synthesis')}</span>
@@ -210,7 +200,7 @@ export function VoiceSettings() {
             </p>
           </div>
 
-          <div className={settingsFieldCardClass}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
             <div className="text-sm font-medium text-text-primary">{t('settings.availableVoices', 'Available voices')}</div>
             <p className="mt-3 text-[28px] font-semibold tracking-tight text-text-primary">{voices.length}</p>
             <p className="mt-1 text-[12px] text-text-muted">{selectedVoiceLabel}</p>
@@ -223,20 +213,20 @@ export function VoiceSettings() {
         title={t('settings.speechLab', 'Speech Lab')}
         description={t('settings.speechLabDesc', 'Run a quick playback test with the exact language, pitch, and rate you configured above before enabling voice in real workflows.')}
       >
-        <div className={`${settingsFieldCardClass} space-y-4`}>
+        <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
           <div>
-            <label className={settingsLabelClass}>{t('settings.testSpeech', 'Test Speech')}</label>
-            <input
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.testSpeech', 'Test Speech')}</label>
+            <UiInput
               value={testText}
               onChange={(e) => setTestText(e.target.value)}
               placeholder={t('settings.testSpeechPlaceholder', 'Type text to speak…')}
-              className={settingsInputClass}
             />
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <button
+            <UiButton
               type="button"
+              color="blue"
               onClick={() => {
                 if (!testText) return
                 setTtsError('')
@@ -244,14 +234,13 @@ export function VoiceSettings() {
                   setTtsError(err instanceof Error ? err.message : t('settings.speechSynthesisFailed', 'Speech synthesis failed'))
                 })
               }}
-              className={settingsPrimaryButtonClass}
             >
               <IconifyIcon name="ui-speaker" size={14} color="currentColor" />
               {t('settings.speak', 'Speak')}
-            </button>
-            <button type="button" onClick={stopSpeaking} className={settingsSecondaryButtonClass}>
+            </UiButton>
+            <UiButton type="button" outline onClick={stopSpeaking}>
               {t('settings.stop', 'Stop')}
-            </button>
+            </UiButton>
           </div>
 
           {ttsError && <p className="text-sm text-danger">{ttsError}</p>}

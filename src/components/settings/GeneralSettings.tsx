@@ -8,17 +8,10 @@ import {
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
-  settingsCheckboxClass,
-  settingsFieldCardClass,
-  settingsHintClass,
-  settingsInputClass,
-  settingsLabelClass,
-  settingsPrimaryButtonClass,
-  settingsSecondaryButtonClass,
-  settingsSelectClass,
-  settingsSoftButtonClass,
-  settingsSurfaceCardClass,
 } from './panelUi'
+import { Checkbox } from '@/components/catalyst-ui/checkbox'
+import { Button as UiButton } from '@/components/catalyst-ui/button'
+import { Input as UiInput, Select as UiSelect } from '@/components/catalyst-ui/form-controls'
 import type { AppLocale, BubbleStyle, CodeFont, FontSize, ThemeMode } from '@/types'
 
 const ACCENT_SWATCH_STYLES = {
@@ -97,75 +90,70 @@ function ProxySection() {
 
       {proxySettings.enabled && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.95fr)]">
-          <div className={settingsFieldCardClass}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
             <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.endpoint', 'Endpoint')}</div>
             <div className="grid gap-4 md:grid-cols-4">
               <div>
-                <label className={settingsLabelClass}>{t('settings.protocol', 'Protocol')}</label>
-                <select
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.protocol', 'Protocol')}</label>
+                <UiSelect
                   value={proxySettings.type}
                   onChange={(e) => setProxySettings({ type: e.target.value as 'http' | 'https' | 'socks5' })}
                   aria-label={t('settings.protocol', 'Protocol')}
-                  className={settingsSelectClass}
                 >
                   <option value="http">{t('settings.protocolHttp')}</option>
                   <option value="https">{t('settings.protocolHttps')}</option>
                   <option value="socks5">{t('settings.protocolSocks5')}</option>
-                </select>
+                </UiSelect>
               </div>
               <div className="md:col-span-2">
-                <label className={settingsLabelClass}>{t('settings.host', 'Host')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.host', 'Host')}</label>
+                <UiInput
                   value={proxySettings.host}
                   onChange={(e) => setProxySettings({ host: e.target.value })}
                   placeholder="127.0.0.1"
-                  className={settingsInputClass}
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.port', 'Port')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.port', 'Port')}</label>
+                <UiInput
                   type="number"
                   value={proxySettings.port || ''}
                   onChange={(e) => setProxySettings({ port: parseInt(e.target.value, 10) || 0 })}
                   placeholder="7890"
-                  className={settingsInputClass}
                 />
               </div>
             </div>
           </div>
 
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.credentials', 'Credentials')}</div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={settingsLabelClass}>{t('settings.usernameOptional', 'Username (optional)')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.usernameOptional', 'Username (optional)')}</label>
+                <UiInput
                   value={proxySettings.username || ''}
                   onChange={(e) => setProxySettings({ username: e.target.value })}
                   aria-label={t('settings.usernameOptional', 'Username (optional)')}
-                  className={settingsInputClass}
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.passwordOptional', 'Password (optional)')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.passwordOptional', 'Password (optional)')}</label>
+                <UiInput
                   type="password"
                   value={proxySettings.password || ''}
                   onChange={(e) => setProxySettings({ password: e.target.value })}
                   aria-label={t('settings.passwordOptional', 'Password (optional)')}
-                  className={settingsInputClass}
                 />
               </div>
             </div>
 
             {proxySettings.host && proxySettings.port > 0 ? (
-              <div className={settingsSurfaceCardClass}>
+              <div className="rounded-md border border-border-subtle bg-surface-2/55 p-3">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.proxyUrl', 'Proxy URL')}</div>
                 <code className="mt-2 block wrap-break-word text-[12px] text-accent">{proxySettings.type}://{proxySettings.host}:{proxySettings.port}</code>
               </div>
             ) : (
-              <p className={settingsHintClass}>{t('settings.proxyHint', 'Set host and port to preview the resolved endpoint and apply it consistently across the app.')}</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('settings.proxyHint', 'Set host and port to preview the resolved endpoint and apply it consistently across the app.')}</p>
             )}
           </div>
         </div>
@@ -191,36 +179,32 @@ function EmailSection() {
 
       {emailConfig.enabled && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,1fr)]">
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.deliveryPath', 'Delivery Path')}</div>
             <div className="grid gap-4 md:grid-cols-4">
               <div className="md:col-span-2">
-                <label className={settingsLabelClass}>{t('settings.smtpHost', 'SMTP Host')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.smtpHost', 'SMTP Host')}</label>
+                <UiInput
                   type="text"
                   value={emailConfig.smtpHost}
                   onChange={(e) => setEmailConfig({ smtpHost: e.target.value })}
                   placeholder="smtp.gmail.com"
-                  className={settingsInputClass}
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.smtpPort', 'SMTP Port')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.smtpPort', 'SMTP Port')}</label>
+                <UiInput
                   type="number"
                   value={emailConfig.smtpPort}
                   onChange={(e) => setEmailConfig({ smtpPort: parseInt(e.target.value, 10) || 587 })}
                   title={t('settings.smtpPort', 'SMTP Port')}
-                  className={settingsInputClass}
                 />
               </div>
-              <label className={`${settingsSurfaceCardClass} flex items-center gap-3 self-end cursor-pointer`}>
-                <input
-                  type="checkbox"
+              <label className="rounded-md border border-border-subtle bg-surface-2/55 p-3 flex items-center gap-3 self-end cursor-pointer">
+                <Checkbox
                   checked={emailConfig.secure}
-                  onChange={(e) => setEmailConfig({ secure: e.target.checked })}
-                  className={settingsCheckboxClass}
-                  title={t('settings.useTls', 'Use TLS')}
+                  onChange={(value) => setEmailConfig({ secure: value })}
+                  color="blue"
                 />
                 <span className="text-sm text-text-secondary">{t('settings.useTls', 'Use TLS')}</span>
               </label>
@@ -228,55 +212,51 @@ function EmailSection() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={settingsLabelClass}>{t('settings.username', 'Username')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.username', 'Username')}</label>
+                <UiInput
                   type="text"
                   value={emailConfig.username}
                   onChange={(e) => setEmailConfig({ username: e.target.value })}
                   placeholder="your@email.com"
-                  className={settingsInputClass}
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.password', 'Password / App Password')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.password', 'Password / App Password')}</label>
+                <UiInput
                   type="password"
                   value={emailConfig.password}
                   onChange={(e) => setEmailConfig({ password: e.target.value })}
                   placeholder="••••••••"
-                  className={settingsInputClass}
                 />
               </div>
             </div>
           </div>
 
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.identity', 'Identity')}</div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={settingsLabelClass}>{t('settings.fromName', 'From Name')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.fromName', 'From Name')}</label>
+                <UiInput
                   type="text"
                   value={emailConfig.fromName}
                   onChange={(e) => setEmailConfig({ fromName: e.target.value })}
                   placeholder="Suora"
-                  className={settingsInputClass}
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.fromAddress', 'From Address')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.fromAddress', 'From Address')}</label>
+                <UiInput
                   type="email"
                   value={emailConfig.fromAddress}
                   onChange={(e) => setEmailConfig({ fromAddress: e.target.value })}
                   placeholder="assistant@example.com"
-                  className={settingsInputClass}
                 />
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
+              <UiButton
                 type="button"
                 onClick={async () => {
                   setEmailTestStatus('testing')
@@ -307,10 +287,10 @@ function EmailSection() {
                   }
                 }}
                 disabled={emailTestStatus === 'testing' || !emailConfig.smtpHost}
-                className={settingsSoftButtonClass}
+                color="blue"
               >
                 {emailTestStatus === 'testing' ? t('settings.testing', 'Testing...') : t('settings.testConnection', 'Test Connection')}
-              </button>
+              </UiButton>
 
               {emailTestStatus === 'success' && (
                 <span className="inline-flex items-center gap-1.5 text-xs text-green-500">
@@ -412,11 +392,11 @@ export function GeneralSettings() {
         description={t('settings.interfaceToneDesc', 'Choose the app mood, highlight color, and reading defaults so every workspace starts from a consistent visual language.')}
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.95fr)]">
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.theme', 'Theme')}</label>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.theme', 'Theme')}</label>
             <div className="grid gap-2 sm:grid-cols-3">
               {(['dark', 'light', 'system'] as ThemeMode[]).map((mode) => (
-                <button
+                <UiButton
                   key={mode}
                   type="button"
                   onClick={() => setTheme(mode)}
@@ -424,16 +404,16 @@ export function GeneralSettings() {
                 >
                   {mode === 'dark' ? <IconifyIcon name="ui-moon" size={14} color="currentColor" /> : mode === 'light' ? <IconifyIcon name="ui-sun" size={14} color="currentColor" /> : <IconifyIcon name="ui-computer" size={14} color="currentColor" />}
                   {mode === 'dark' ? t('settings.dark', 'Dark') : mode === 'light' ? t('settings.light', 'Light') : t('settings.system', 'System')}
-                </button>
+                </UiButton>
               ))}
             </div>
           </div>
 
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.accentColor', 'Accent Color')}</label>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.accentColor', 'Accent Color')}</label>
             <div className="flex flex-wrap gap-2.5">
               {accentOptions.map((option) => (
-                <button
+                <UiButton
                   key={option.value}
                   type="button"
                   onClick={() => setAccentColor(option.value)}
@@ -447,35 +427,33 @@ export function GeneralSettings() {
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
-                </button>
+                </UiButton>
               ))}
             </div>
-            <p className={settingsHintClass}>{t('settings.accentHint', 'This accent color is reused by navigation rails, stats, and form focus states across the workbench.')}</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('settings.accentHint', 'This accent color is reused by navigation rails, stats, and form focus states across the workbench.')}</p>
           </div>
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.fontSize', 'Font Size')}</label>
-            <select
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.fontSize', 'Font Size')}</label>
+            <UiSelect
               aria-label={t('settings.fontSize', 'Font Size')}
               value={fontSize}
               onChange={(e) => setFontSize(e.target.value as FontSize)}
-              className={settingsSelectClass}
             >
               <option value="small">{t('settings.fontSizeSmall', 'Small')}</option>
               <option value="medium">{t('settings.fontSizeMedium', 'Medium')}</option>
               <option value="large">{t('settings.fontSizeLarge', 'Large')}</option>
-            </select>
+            </UiSelect>
           </div>
 
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.codeFont', 'Code Font')}</label>
-            <select
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.codeFont', 'Code Font')}</label>
+            <UiSelect
               aria-label={t('settings.codeFont', 'Code Font')}
               value={codeFont}
               onChange={(e) => setCodeFont(e.target.value as CodeFont)}
-              className={settingsSelectClass}
             >
               <option value="default">{t('settings.codeFontDefault', 'System Default')}</option>
               <option value="fira-code">Fira Code</option>
@@ -483,22 +461,21 @@ export function GeneralSettings() {
               <option value="source-code-pro">Source Code Pro</option>
               <option value="cascadia-code">Cascadia Code</option>
               <option value="consolas">Consolas</option>
-            </select>
+            </UiSelect>
           </div>
 
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.bubbleStyle', 'Bubble Style')}</label>
-            <select
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.bubbleStyle', 'Bubble Style')}</label>
+            <UiSelect
               aria-label={t('settings.bubbleStyle', 'Bubble Style')}
               value={bubbleStyle}
               onChange={(e) => setBubbleStyle(e.target.value as BubbleStyle)}
-              className={settingsSelectClass}
             >
               <option value="default">{t('settings.bubbleDefault', 'Default')}</option>
               <option value="minimal">{t('settings.bubbleMinimal', 'Minimal')}</option>
               <option value="bordered">{t('settings.bubbleBordered', 'Bordered')}</option>
               <option value="glassmorphism">{t('settings.bubbleGlass', 'Glass')}</option>
-            </select>
+            </UiSelect>
           </div>
         </div>
       </SettingsSection>
@@ -509,17 +486,16 @@ export function GeneralSettings() {
         description={t('settings.regionAndLocalizationDesc', 'Choose the primary app language used by navigation, settings, and system messaging across the desktop shell.')}
       >
         <div className="max-w-md">
-          <label className={settingsLabelClass}>{t('settings.language', 'Language')}</label>
-          <select
+          <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.language', 'Language')}</label>
+          <UiSelect
             aria-label={t('settings.language', 'Language')}
             value={locale}
             onChange={(e) => setLocale(e.target.value as AppLocale)}
-            className={settingsSelectClass}
           >
             {LOCALE_VALUES.map((value) => (
               <option key={value} value={value}>{localeLabels[value]}</option>
             ))}
-          </select>
+          </UiSelect>
         </div>
       </SettingsSection>
 
@@ -529,17 +505,17 @@ export function GeneralSettings() {
         description={t('settings.workspaceDefaultsDesc', 'Point Suora at the right workspace directory and decide how aggressively it saves and boots itself in the background.')}
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,1fr)]">
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div>
-              <label className={settingsLabelClass}>{t('settings.workspaceDir', 'Workspace Directory')}</label>
+              <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.workspaceDir', 'Workspace Directory')}</label>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <input
+                <UiInput
                   value={workspacePath}
                   onChange={(e) => setWorkspacePath(e.target.value)}
                   placeholder="~/.suora"
-                  className={`${settingsInputClass} flex-1`}
+                  className="flex-1"
                 />
-                <button
+                <UiButton
                   type="button"
                   onClick={() => {
                     const electron = getElectron()
@@ -547,12 +523,12 @@ export function GeneralSettings() {
                       void electron.invoke('system:ensureDirectory', workspacePath)
                     }
                   }}
-                  className={settingsSoftButtonClass}
+                  color="blue"
                 >
                   {t('settings.apply', 'Apply')}
-                </button>
+                </UiButton>
               </div>
-              <p className={settingsHintClass}>{t('settings.workspaceDirDesc', 'Agent memory, logs, plugin files, and pipeline snapshots are stored here.')}</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('settings.workspaceDirDesc', 'Agent memory, logs, plugin files, and pipeline snapshots are stored here.')}</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -566,7 +542,7 @@ export function GeneralSettings() {
             </div>
           </div>
 
-          <div className={`${settingsFieldCardClass} grid gap-3 sm:grid-cols-2`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 grid gap-3 sm:grid-cols-2">
             <SettingsStat label={t('settings.theme', 'Theme')} value={themeLabel} accent />
             <SettingsStat label={t('settings.language', 'Language')} value={localeLabels[locale]} />
             <SettingsStat label={t('settings.proxy', 'Proxy')} value={proxySettings.enabled ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} />
@@ -598,7 +574,7 @@ export function GeneralSettings() {
         action={saved ? <span className="inline-flex items-center gap-1.5 text-sm text-green-500"><IconifyIcon name="ui-check" size={14} color="currentColor" /> {t('settings.saved', 'Settings saved')}</span> : null}
       >
         <div className="flex flex-wrap gap-3">
-          <button
+          <UiButton
             type="button"
             onClick={async () => {
               const ok = await saveSettingsToWorkspace()
@@ -606,11 +582,11 @@ export function GeneralSettings() {
               setSaved(true)
               setTimeout(() => setSaved(false), 2000)
             }}
-            className={settingsPrimaryButtonClass}
+            color="blue"
           >
             {saved ? t('settings.saved', 'Settings saved') : t('settings.save', 'Save')}
-          </button>
-          <button
+          </UiButton>
+          <UiButton
             type="button"
             onClick={() => {
               const electron = getElectron()
@@ -618,10 +594,10 @@ export function GeneralSettings() {
                 void electron.invoke('system:ensureDirectory', workspacePath)
               }
             }}
-            className={settingsSecondaryButtonClass}
+            outline
           >
             {t('settings.verifyWorkspace', 'Verify Workspace Path')}
-          </button>
+          </UiButton>
         </div>
       </SettingsSection>
     </div>

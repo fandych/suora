@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Switch } from '@/components/catalyst-ui/switch'
 
 export function SettingsSection({
   eyebrow,
@@ -71,17 +72,17 @@ export const settingsLabelClass = 'mb-1.5 block text-[12px] font-medium text-tex
 export const settingsHintClass = 'mt-2 text-[11px] leading-relaxed text-text-muted'
 export const settingsFieldCardClass = 'rounded-lg border border-border-subtle bg-surface-0/45 p-3'
 export const settingsSurfaceCardClass = 'rounded-md border border-border-subtle bg-surface-2/55 p-3'
-export const settingsInputClass = 'w-full rounded-md border border-border-subtle bg-surface-1 px-3 py-2.5 text-sm text-text-primary placeholder-text-muted/55 transition-colors focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-50'
-export const settingsSelectClass = settingsInputClass
+export const settingsInputClass = 'relative block w-full appearance-none rounded-lg border border-zinc-950/10 bg-white px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-sm/6 text-zinc-950 shadow-sm transition-colors placeholder:text-zinc-500 hover:border-zinc-950/20 focus:outline-hidden sm:px-[calc(--spacing(3)-1px)] sm:py-[calc(--spacing(1.5)-1px)] dark:border-white/10 dark:bg-white/5 dark:text-white dark:hover:border-white/20'
+export const settingsSelectClass = `${settingsInputClass} pr-[calc(--spacing(10)-1px)]`
 export const settingsMonoInputClass = `${settingsInputClass} font-mono`
 export const settingsTextAreaClass = `${settingsInputClass} min-h-32 resize-y leading-6`
-export const settingsCheckboxClass = 'h-4 w-4 rounded border-border bg-surface-2 text-accent focus:ring-accent/30'
-export const settingsRadioClass = 'h-4 w-4 border-border bg-surface-2 text-accent focus:ring-accent/30'
+export const settingsCheckboxClass = 'size-4 rounded-[0.3125rem] border border-zinc-950/15 bg-white text-accent shadow-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500/40 dark:border-white/15 dark:bg-white/5'
+export const settingsRadioClass = 'size-4 border border-zinc-950/15 bg-white text-accent shadow-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500/40 dark:border-white/15 dark:bg-white/5'
 export const settingsRangeClass = 'w-full cursor-pointer accent-accent'
-export const settingsPrimaryButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-accent bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50'
-export const settingsSoftButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-accent/25 bg-accent/10 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50'
-export const settingsSecondaryButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-border-subtle bg-surface-1 px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-border hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50'
-export const settingsDangerButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-danger/25 bg-danger/10 px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/15 disabled:cursor-not-allowed disabled:opacity-50'
+export const settingsPrimaryButtonClass = 'relative inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-700/90 bg-blue-600 px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-sm/6 font-semibold text-white shadow-sm transition data-[hover=true]:bg-blue-500 hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50'
+export const settingsSoftButtonClass = 'relative inline-flex items-center justify-center gap-1.5 rounded-lg border border-blue-500/20 bg-blue-500/10 px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-sm/6 font-semibold text-blue-700 transition hover:bg-blue-500/15 dark:text-blue-300 disabled:cursor-not-allowed disabled:opacity-50'
+export const settingsSecondaryButtonClass = 'relative inline-flex items-center justify-center gap-1.5 rounded-lg border border-zinc-950/10 bg-white px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-sm/6 font-semibold text-zinc-950 shadow-sm transition hover:bg-zinc-950/2.5 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50'
+export const settingsDangerButtonClass = 'relative inline-flex items-center justify-center gap-1.5 rounded-lg border border-red-700/90 bg-red-600 px-[calc(--spacing(3.5)-1px)] py-[calc(--spacing(2.5)-1px)] text-sm/6 font-semibold text-white shadow-sm transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50'
 
 export function SettingsToggleRow({
   label,
@@ -100,16 +101,7 @@ export function SettingsToggleRow({
         <div className="text-[13px] font-medium text-text-primary">{label}</div>
         {description && <p className="mt-1 text-[12px] leading-6 text-text-muted">{description}</p>}
       </div>
-      <button
-        type="button"
-        onClick={onChange}
-        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border transition-colors ${checked ? 'border-accent/30 bg-accent/20' : 'border-border-subtle bg-surface-2'}`}
-        aria-label={label}
-      >
-        <span
-          className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`}
-        />
-      </button>
+      <Switch checked={checked} onChange={onChange} color="blue" aria-label={label} className="shrink-0" />
     </div>
   )
 }
