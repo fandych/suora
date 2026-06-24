@@ -4,6 +4,7 @@ import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import type { EnvVariable } from '@/types'
 import {
+  SettingsOverview,
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
@@ -286,25 +287,19 @@ export function SecuritySettings() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="max-w-3xl">
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.security', 'Security')}</div>
-            <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{t('settings.guardrailsAndSecrets', 'Guardrails & Secrets')}</h2>
-            <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
-              {t('settings.guardrailsAndSecretsDesc', 'Constrain tool execution, lock down risky shell patterns, and keep environment values available to agents without leaking them into prompt text.')}
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:w-lg xl:grid-cols-5">
+      <SettingsOverview
+        description={t('settings.guardrailsAndSecretsDesc', 'Constrain tool execution, lock down risky shell patterns, and keep environment values available to agents without leaking them into prompt text.')}
+        statsClassName="grid gap-2 sm:grid-cols-2 xl:w-lg xl:grid-cols-5"
+        stats={(
+          <>
             <SettingsStat label={t('settings.confirmation', 'Confirmation')} value={toolSecurity.requireConfirmation ? t('settings.required', 'Required') : t('settings.relaxed', 'Relaxed')} accent />
             <SettingsStat label={t('settings.sandbox', 'Sandbox')} value={relaxedSandbox ? t('settings.relaxed', 'Relaxed') : t('settings.workspace', 'Workspace')} />
             <SettingsStat label={t('settings.allowedDirs', 'Allowed Dirs')} value={String(toolSecurity.allowedDirectories.length)} />
             <SettingsStat label={t('settings.blockedPatterns', 'Blocked')} value={String(toolSecurity.blockedCommands.length)} />
             <SettingsStat label={t('settings.envVars', 'Env Vars')} value={String(envVariables.length)} />
-          </div>
-        </div>
-      </section>
+          </>
+        )}
+      />
 
       <SettingsSection
         eyebrow={t('settings.toolExecution', 'Tool Execution')}

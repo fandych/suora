@@ -24,9 +24,10 @@ vi.mock('./ChatMessages', () => ({
 }))
 
 vi.mock('./ChatInput', () => ({
-  ChatInput: ({ isStreaming, onStop }: { isStreaming?: boolean; onStop?: () => void }) => (
+  ChatInput: ({ isStreaming, onStop, footer }: { isStreaming?: boolean; onStop?: () => void; footer?: React.ReactNode }) => (
     <div>
       <div>input</div>
+      {footer}
       {isStreaming ? <button type="button" onClick={onStop}>Stop generating</button> : null}
     </div>
   ),
@@ -299,12 +300,8 @@ describe('ChatMain', () => {
     // Agent selector button should be visible
     expect(screen.getByRole('button', { name: /Select agent/i })).toBeInTheDocument()
     
-    // Agent label and Model label should be visible in toolbar
-    // These are in the toolbar, verifying toolbar is rendered
-    const agentLabel = screen.getAllByText(/agent/i).find(el => el.textContent?.toLowerCase() === 'agent')
-    const modelLabel = screen.getAllByText(/model/i).find(el => el.textContent?.toLowerCase() === 'model')
-    expect(agentLabel).toBeInTheDocument()
-    expect(modelLabel).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Select agent/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Select model/i })).toBeInTheDocument()
 
     // Welcome screen content should still be visible
     expect(screen.getByText(/Select or create a conversation/i)).toBeInTheDocument()

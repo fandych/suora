@@ -958,10 +958,14 @@ interface ParsedEmail {
  * Uses raw IMAP commands over TLS/TCP to avoid external dependencies.
  */
 async function fetchNewEmails(channel: ChannelConfig, lastSeenUid: number): Promise<ParsedEmail[]> {
-  const host = channel.emailImapHost!
+  if (!channel.emailImapHost || !channel.emailImapUser || !channel.emailImapPassword) {
+    return []
+  }
+
+  const host = channel.emailImapHost
   const port = channel.emailImapPort || 993
-  const user = channel.emailImapUser!
-  const pass = channel.emailImapPassword!
+  const user = channel.emailImapUser
+  const pass = channel.emailImapPassword
   const useTls = channel.emailImapTls !== false
   const mailbox = channel.emailImapMailbox || 'INBOX'
 

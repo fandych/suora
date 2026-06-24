@@ -37,6 +37,36 @@ export function SettingsStat({ label, value, accent = false }: { label: string; 
   )
 }
 
+export function SettingsOverview({
+  description,
+  details,
+  action,
+  stats,
+  statsClassName = 'grid gap-2 sm:grid-cols-2 xl:w-md xl:grid-cols-4',
+}: {
+  description: ReactNode
+  details?: ReactNode
+  action?: ReactNode
+  stats: ReactNode
+  statsClassName?: string
+}) {
+  return (
+    <section className="rounded-3xl border border-border-subtle/55 bg-surface-1/78 p-4 shadow-[0_14px_36px_rgba(15,23,42,0.06)] xl:p-5">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+        <div className="min-w-0 flex-1">
+          <p className="max-w-3xl text-[13px] leading-6 text-text-secondary/80">{description}</p>
+          {details ? <div className="mt-3 flex flex-wrap items-center gap-2">{details}</div> : null}
+        </div>
+
+        <div className="flex flex-col gap-3 xl:items-end">
+          {action ? <div className="flex flex-wrap gap-2 xl:justify-end">{action}</div> : null}
+          <div className={statsClassName}>{stats}</div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export const settingsLabelClass = 'mb-1.5 block text-[12px] font-medium text-text-secondary'
 export const settingsHintClass = 'mt-2 text-[11px] leading-relaxed text-text-muted'
 export const settingsFieldCardClass = 'rounded-lg border border-border-subtle bg-surface-0/45 p-3'

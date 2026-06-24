@@ -5,7 +5,7 @@ import type { Agent, ProviderConfig, Skill, Session } from '@/types'
 import { confirm } from '@/services/confirmDialog'
 import { toast } from '@/services/toast'
 import { safeParse, safeStringify } from '@/utils/safeJson'
-import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
+import { SettingsOverview, SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
 
 const PROVIDER_TYPES = new Set<ProviderConfig['providerType']>([
   'anthropic',
@@ -205,18 +205,18 @@ export function DataSettings() {
 
   return (
     <div className="space-y-6">
-      <SettingsSection
-        eyebrow={t('settings.data', 'Data')}
-        title={t('settings.backupRetentionAndCleanup', 'Backup, Retention & Cleanup')}
+      <SettingsOverview
         description={t('settings.backupRetentionAndCleanupHint', 'Move data safely between workspaces, keep history under control, and make destructive actions unmistakably explicit.')}
-      >
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SettingsStat label={t('settings.agents', 'Agents')} value={String(customAgentCount)} accent />
-          <SettingsStat label={t('settings.skills', 'Skills')} value={String(customSkillCount)} />
-          <SettingsStat label={t('settings.sessions', 'Sessions')} value={String(sessions.length)} />
-          <SettingsStat label={t('settings.providers', 'Providers')} value={String(providerConfigs.length)} />
-        </div>
-      </SettingsSection>
+        statsClassName="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+        stats={(
+          <>
+            <SettingsStat label={t('settings.agents', 'Agents')} value={String(customAgentCount)} accent />
+            <SettingsStat label={t('settings.skills', 'Skills')} value={String(customSkillCount)} />
+            <SettingsStat label={t('settings.sessions', 'Sessions')} value={String(sessions.length)} />
+            <SettingsStat label={t('settings.providers', 'Providers')} value={String(providerConfigs.length)} />
+          </>
+        )}
+      />
 
       <SettingsSection
         eyebrow={t('settings.backups', 'Backups')}

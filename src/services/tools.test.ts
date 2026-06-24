@@ -9,7 +9,7 @@ vi.mock('@/services/agentCommunication', () => ({
   delegateToAgent: vi.fn(async () => 'Delegated response'),
 }))
 
-function getDescription(toolName: 'web_search' | 'list_documents' | 'query_document_graph' | 'read_document' | 'write_file' | 'append_file') {
+function getDescription(toolName: 'list_documents' | 'query_document_graph' | 'read_document' | 'write_file' | 'append_file' | 'fetch_webpage') {
   return (builtinToolDefs[toolName] as { description?: string }).description ?? ''
 }
 
@@ -32,16 +32,16 @@ describe('builtin tool guidance', () => {
     vi.mocked(delegateToAgent).mockClear()
   })
 
-  it('prioritizes local documents before web search for local knowledge questions', () => {
+  it('prioritizes local documents for local knowledge questions', () => {
     expect(getDescription('list_documents')).toContain('Use this first')
-    expect(getDescription('list_documents')).toContain('before using web_search')
     expect(getDescription('query_document_graph')).toContain('knowledge graph')
-    expect(getDescription('read_document')).toContain('prefer it over web_search')
-    expect(getDescription('web_search')).toContain('Do not use this for facts likely stored in the user\'s Suora documents')
+    expect(getDescription('read_document')).toContain('local document knowledge')
+    expect(getDescription('fetch_webpage')).not.toContain('web_search')
+    expect(builtinToolDefs).not.toHaveProperty('web_search')
 
-    const hints = buildToolHints(['query_document_graph', 'list_documents', 'read_document', 'web_search'])
+    const hints = buildToolHints(['query_document_graph', 'list_documents', 'read_document'])
     expect(hints).toContain('start with query_document_graph')
-    expect(hints).toContain('before web_search')
+    expect(hints).toContain('use local document tools before replying')
   })
 
   it('hides merged legacy tool aliases from default agent tools while preserving explicit allowlists', () => {

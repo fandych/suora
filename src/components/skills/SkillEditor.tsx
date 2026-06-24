@@ -1296,7 +1296,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                       updateFrontmatter({ allowedTools: tools.length > 0 ? tools : undefined })
                       updateForm({ allowedTools: tools.length > 0 ? tools : undefined })
                     }}
-                    placeholder={t('skills.allowedToolsPlaceholder', 'Leave empty = agent decides. Or: read_file, web_search, ...')}
+                    placeholder={t('skills.allowedToolsPlaceholder', 'Leave empty = agent decides. Or: read_file, fetch_webpage, ...')}
                     className={skillMonoInputClass}
                   />
                   <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('skills.optional', 'Optional')}: {t('skills.allowedToolsOptionalHint', 'Use this only when the skill needs a clearly bounded tool surface.')}</p>

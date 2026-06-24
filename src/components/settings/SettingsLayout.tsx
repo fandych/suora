@@ -35,9 +35,9 @@ const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
 
 function SummaryStat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
+    <div className={`rounded-2xl border px-3.5 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
       <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
-      <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+      <div className={`mt-1.5 text-sm font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
     </div>
   )
 }
@@ -90,22 +90,25 @@ export function SettingsLayout() {
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360} />
 
-      <div className="module-canvas flex-1 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
-        <div className="module-content mx-auto max-w-7xl space-y-6">
-          <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
-            <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-              <div className="flex min-w-0 items-start gap-4">
-                <div className="flex h-18 w-18 shrink-0 items-center justify-center rounded-4xl border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
-                  {sectionMeta?.icon && ICON_DATA[sectionMeta.icon] ? <IconifyIcon name={sectionMeta.icon} size={28} /> : <span className="text-xl font-semibold">{t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback).slice(0, 2)}</span>}
+      <div className="module-canvas flex-1 overflow-y-auto px-5 py-5 xl:px-8 xl:py-6">
+        <div className="module-content mx-auto max-w-7xl space-y-5">
+          <section className="rounded-3xl border border-border-subtle/55 bg-surface-1/78 px-5 py-4 shadow-[0_14px_36px_rgba(15,23,42,0.06)] xl:px-6">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex min-w-0 items-start gap-3.5">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-accent/12 bg-accent/10 text-accent shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.1)]">
+                  {sectionMeta?.icon && ICON_DATA[sectionMeta.icon] ? <IconifyIcon name={sectionMeta.icon} size={18} /> : <span className="text-sm font-semibold">{t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback).slice(0, 2)}</span>}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.title', 'Settings')}</div>
-                  <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback)} {t('settings.title', 'Settings')}</h2>
-                  <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">{t(sectionMeta?.descKey ?? '', sectionMeta?.descFallback)}</p>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.title', 'Settings')}</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <h2 className="text-[22px] font-semibold tracking-tight text-text-primary">{t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback)}</h2>
+                    <span className="rounded-full border border-border-subtle/55 bg-surface-0/72 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-text-muted/78">{t('settings.preferences', 'Preferences')}</span>
+                  </div>
+                  <p className="mt-1.5 max-w-3xl text-[13px] leading-6 text-text-secondary/80">{t(sectionMeta?.descKey ?? '', sectionMeta?.descFallback)}</p>
                 </div>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-3 xl:w-[24rem] xl:grid-cols-1">
+              <div className="grid gap-2 sm:grid-cols-3 xl:w-[22rem]">
                 <SummaryStat label={t('settings.section', 'Section')} value={`${sectionIndex + 1}/${SETTING_SECTIONS.length}`} accent />
                 <SummaryStat label={t('settings.category', 'Category')} value={t('settings.preferences', 'Preferences')} />
                 <SummaryStat label={t('settings.scope', 'Scope')} value={workspacePath ? t('settings.workspace', 'Workspace') : t('settings.local', 'Local')} />

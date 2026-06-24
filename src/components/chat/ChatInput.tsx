@@ -232,12 +232,13 @@ function AttachmentTile({
   )
 }
 
-export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
+export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, footer }: {
   onSend: (text: string, attachments?: MessageAttachment[]) => void
   disabled: boolean
   isStreaming?: boolean
   onStop?: () => void
   noModel?: boolean
+  footer?: ReactNode
 }) {
   const { t } = useI18n()
   const [input, setInput] = useState('')
@@ -422,7 +423,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
   return (
     <div className="mx-auto w-full max-w-384">
       <div
-        className={`relative overflow-hidden rounded-md ${
+        className={`relative overflow-visible rounded-md ${
           isDragging ? 'border border-accent/45 bg-accent/5' : 'bg-surface-1/32'
         }`}
         onDragOver={handleDragOver}
@@ -562,6 +563,8 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel }: {
                     active={voiceState === 'listening'}
                   />
                 )}
+
+                {footer}
               </div>
 
               <div className="flex flex-wrap items-center justify-end gap-2">

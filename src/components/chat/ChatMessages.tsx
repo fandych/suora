@@ -591,6 +591,8 @@ export function MessageBubble({
   const [draft, setDraft] = useState(message.content)
   const [showExportMenu, setShowExportMenu] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement>(null)
+  const exportMenuPanelRef = useRef<HTMLDivElement>(null)
+  const [exportMenuPlacement, setExportMenuPlacement] = useState<'top' | 'bottom'>('top')
 
   useEffect(() => {
     if (!showExportMenu) return
@@ -601,6 +603,28 @@ export function MessageBubble({
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
+  }, [showExportMenu])
+
+  useEffect(() => {
+    if (!showExportMenu) return
+
+    const updatePlacement = () => {
+      const triggerRect = exportMenuRef.current?.getBoundingClientRect()
+      const menuHeight = Math.min(exportMenuPanelRef.current?.scrollHeight ?? 0, 320) || 180
+      if (!triggerRect) return
+
+      const spaceBelow = window.innerHeight - triggerRect.bottom
+      const spaceAbove = triggerRect.top
+      setExportMenuPlacement(spaceAbove < menuHeight && spaceBelow > spaceAbove ? 'bottom' : 'top')
+    }
+
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    window.addEventListener('scroll', updatePlacement, true)
+    return () => {
+      window.removeEventListener('resize', updatePlacement)
+      window.removeEventListener('scroll', updatePlacement, true)
+    }
   }, [showExportMenu])
 
   if (message.isError) return <ErrorBubble message={message} onRetry={onRetry} />
@@ -822,7 +846,12 @@ export function MessageBubble({
                   <IconifyIcon name="ui-export" size={15} color="currentColor" />
                 </button>
                 {showExportMenu && (
-                  <div className={`absolute z-50 w-36 overflow-hidden rounded-xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-xl backdrop-blur-xl bottom-full mb-1 ${isUser ? 'right-0' : 'left-0'}`}>
+                  <div
+                    ref={exportMenuPanelRef}
+                    className={`absolute z-50 w-36 max-h-80 overflow-y-auto rounded-xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-xl backdrop-blur-xl ${
+                      exportMenuPlacement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1'
+                    } ${isUser ? 'right-0' : 'left-0'}`}
+                  >
                     {([
                       { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
                       { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },

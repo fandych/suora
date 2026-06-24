@@ -333,17 +333,43 @@ function ModelDropdown({
   providerNameById,
   value,
   onChange,
+  compact = false,
 }: {
   models: Model[]
   providerNameById: Map<string, string>
   value: string
   onChange: (value: string) => void
+  compact?: boolean
 }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom')
   const current = models.find((model) => model.id === value) ?? null
   const currentProvider = current ? (providerNameById.get(current.provider) || current.provider) : null
+
+  useEffect(() => {
+    if (!open) return
+
+    const updatePlacement = () => {
+      const triggerRect = ref.current?.getBoundingClientRect()
+      const menuHeight = Math.min(menuRef.current?.scrollHeight ?? 0, 384) || 320
+      if (!triggerRect) return
+
+      const spaceBelow = window.innerHeight - triggerRect.bottom
+      const spaceAbove = triggerRect.top
+      setPlacement(spaceBelow < menuHeight && spaceAbove > spaceBelow ? 'top' : 'bottom')
+    }
+
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    window.addEventListener('scroll', updatePlacement, true)
+    return () => {
+      window.removeEventListener('resize', updatePlacement)
+      window.removeEventListener('scroll', updatePlacement, true)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -356,16 +382,20 @@ function ModelDropdown({
 
   return (
     <div className="relative min-w-0" ref={ref}>
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.model', 'Model')}</div>
+      {!compact && <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted/45">{t('chat.model', 'Model')}</div>}
       <div className="relative">
         <button
           type="button"
           aria-label={t('chat.selectModelAria', 'Select model')}
           onClick={() => setOpen(!open)}
-          className="flex w-full min-w-56 items-center justify-between gap-3 rounded-2xl border border-border-subtle/55 bg-surface-0/70 px-3.5 py-3 text-left shadow-sm transition-all hover:border-accent/18 hover:bg-surface-0/90 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/20"
+          className={compact
+            ? 'flex h-8 min-w-0 max-w-full items-center gap-2 rounded-md border border-border-subtle/55 bg-surface-0/65 px-2.5 text-left text-text-secondary transition-all hover:border-accent/18 hover:bg-accent/10 hover:text-accent focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/16'
+            : 'flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border-subtle/55 bg-surface-0/68 px-3 py-2.5 text-left transition-all hover:border-accent/18 hover:bg-surface-0/82 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/16'}
         >
-          <div className="min-w-0 flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm">
+          <div className="min-w-0 flex items-center gap-2">
+            <div className={compact
+              ? 'flex h-5 w-5 shrink-0 items-center justify-center text-current'
+              : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-2/80 text-accent'}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <rect x="4" y="4" width="16" height="16" rx="3" />
                 <rect x="9" y="9" width="6" height="6" rx="1.5" />
@@ -373,28 +403,39 @@ function ModelDropdown({
               </svg>
             </div>
             <div className="min-w-0">
-              <div className="truncate text-[13px] font-semibold text-text-primary">{current?.name ?? t('chat.selectModel', '-- Select Model --')}</div>
-              <div className="truncate text-[11px] text-text-muted/68">{currentProvider || t('chat.availableModelsCount', '{count} available models').replace('{count}', String(models.length))}</div>
+              {compact ? (
+                <div className="truncate text-[12px] font-medium text-current">{current?.name ?? t('chat.model', 'Model')}</div>
+              ) : (
+                <>
+                  <div className="truncate text-[12.5px] font-semibold text-text-primary">{current?.name ?? t('chat.selectModel', '-- Select Model --')}</div>
+                  <div className="truncate text-[10.5px] text-text-muted/68">{currentProvider || t('chat.availableModelsCount', '{count} available models').replace('{count}', String(models.length))}</div>
+                </>
+              )}
             </div>
           </div>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted/45"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={compact ? 'shrink-0 text-current/65' : 'shrink-0 text-text-muted/45'}><polyline points="6 9 12 15 18 9"/></svg>
         </button>
 
         {open && (
-          <div className="absolute left-0 top-full z-50 mt-2 w-76 max-h-96 overflow-y-auto rounded-2xl border border-border-subtle/70 bg-surface-2/95 p-2 shadow-2xl backdrop-blur-xl animate-fade-in-scale">
+          <div
+            ref={menuRef}
+            className={`absolute left-0 z-50 min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${
+              placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+            }`}
+          >
             <button
               type="button"
               onClick={() => { onChange(''); setOpen(false) }}
-              className={`w-full rounded-[18px] px-3.5 py-3 text-left transition-colors ${
+              className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${
                 !value ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'
               }`}
             >
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/70 text-accent shadow-sm">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70 text-accent">
                   <IconifyIcon name="ui-close" size={14} color="currentColor" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-semibold text-text-primary">{t('chat.selectModel', '-- Select Model --')}</div>
+                  <div className="truncate text-[12.5px] font-semibold text-text-primary">{t('chat.selectModel', '-- Select Model --')}</div>
                   <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-text-muted/72">{t('chat.modelFallbackHint', 'Clear the pinned model and fall back to the session or agent default.')}</div>
                 </div>
               </div>
@@ -408,16 +449,16 @@ function ModelDropdown({
                   type="button"
                   key={model.id}
                   onClick={() => { onChange(model.id); setOpen(false) }}
-                  className={`w-full rounded-[18px] px-3.5 py-3 text-left transition-colors ${
+                  className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${
                     model.id === value ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'
                   }`}
                 >
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/70 text-accent shadow-sm">
+                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70 text-accent">
                       <span className="text-[10px] font-semibold uppercase tracking-[0.08em]">{providerName.slice(0, 2)}</span>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold text-text-primary">{model.name}</div>
+                      <div className="truncate text-[12.5px] font-semibold text-text-primary">{model.name}</div>
                       <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-text-muted/72">{providerName} / {model.modelId}</div>
                     </div>
                   </div>
@@ -515,19 +556,44 @@ function ChatTabBar() {
   )
 }
 
-function AgentDropdown({ agents, selectedAgentId, onSelect }: {
+function AgentDropdown({ agents, selectedAgentId, onSelect, compact = false }: {
   agents: Agent[]
   selectedAgentId: string
   onSelect: (agent: Agent | null) => void
+  compact?: boolean
 }) {
   const { t } = useI18n()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [placement, setPlacement] = useState<'top' | 'bottom'>('bottom')
   const enabledAgents = agents.filter((a) => a.enabled !== false)
   const current = enabledAgents.find((a) => a.id === selectedAgentId) ?? enabledAgents[0] ?? null
   const currentLabel = current?.id === 'default-assistant'
     ? t('chat.assistant', current.name || 'Assistant')
     : current?.name
+
+  useEffect(() => {
+    if (!open) return
+
+    const updatePlacement = () => {
+      const triggerRect = ref.current?.getBoundingClientRect()
+      const menuHeight = Math.min(menuRef.current?.scrollHeight ?? 0, 384) || 320
+      if (!triggerRect) return
+
+      const spaceBelow = window.innerHeight - triggerRect.bottom
+      const spaceAbove = triggerRect.top
+      setPlacement(spaceBelow < menuHeight && spaceAbove > spaceBelow ? 'top' : 'bottom')
+    }
+
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    window.addEventListener('scroll', updatePlacement, true)
+    return () => {
+      window.removeEventListener('resize', updatePlacement)
+      window.removeEventListener('scroll', updatePlacement, true)
+    }
+  }, [open])
 
   useEffect(() => {
     if (!open) return
@@ -540,43 +606,58 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
 
   return (
     <div className="relative min-w-0" ref={ref}>
-      <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.agent', 'Agent')}</div>
+      {!compact && <div className="mb-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted/45">{t('chat.agent', 'Agent')}</div>}
       <div className="relative">
         <button
           type="button"
           aria-label={t('chat.selectAgent', 'Select agent')}
           onClick={() => setOpen(!open)}
-          className="flex w-full min-w-56 items-center justify-between gap-3 rounded-2xl border border-border-subtle/55 bg-surface-0/70 px-3.5 py-3 text-left shadow-sm transition-all hover:border-accent/18 hover:bg-surface-0/90 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/20"
+          className={compact
+            ? 'flex h-8 min-w-0 max-w-full items-center gap-2 rounded-md border border-border-subtle/55 bg-surface-0/65 px-2.5 text-left text-text-secondary transition-all hover:border-accent/18 hover:bg-accent/10 hover:text-accent focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/16'
+            : 'flex w-full min-w-0 items-center justify-between gap-3 rounded-md border border-border-subtle/55 bg-surface-0/68 px-3 py-2.5 text-left transition-all hover:border-accent/18 hover:bg-surface-0/82 focus:border-accent/24 focus:outline-none focus:ring-2 focus:ring-accent/16'}
         >
-          <div className="min-w-0 flex items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle/45 bg-surface-2/80 text-accent shadow-sm">
-              {current && <AgentAvatar avatar={current.avatar} size={18} />}
+          <div className="min-w-0 flex items-center gap-2">
+            <div className={compact
+              ? 'flex h-5 w-5 shrink-0 items-center justify-center text-current'
+              : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-2/80 text-accent'}>
+              {current && <AgentAvatar avatar={current.avatar} size={compact ? 16 : 18} />}
             </div>
             <div className="min-w-0">
-              <div className="truncate text-[13px] font-semibold text-text-primary">{currentLabel ?? t('common.select', 'Select')}</div>
-              <div className="truncate text-[11px] text-text-muted/68">{t('chat.agentReady', 'Routing and behavior')}</div>
+              {compact ? (
+                <div className="truncate text-[12px] font-medium text-current">{currentLabel ?? t('chat.agent', 'Agent')}</div>
+              ) : (
+                <>
+                  <div className="truncate text-[12.5px] font-semibold text-text-primary">{currentLabel ?? t('common.select', 'Select')}</div>
+                  <div className="truncate text-[10.5px] text-text-muted/68">{t('chat.agentReady', 'Routing and behavior')}</div>
+                </>
+              )}
             </div>
           </div>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-text-muted/45"><polyline points="6 9 12 15 18 9"/></svg>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={compact ? 'shrink-0 text-current/65' : 'shrink-0 text-text-muted/45'}><polyline points="6 9 12 15 18 9"/></svg>
         </button>
 
         {open && (
-          <div className="absolute left-0 top-full z-50 mt-2 w-76 max-h-96 overflow-y-auto rounded-2xl border border-border-subtle/70 bg-surface-2/95 p-2 shadow-2xl backdrop-blur-xl animate-fade-in-scale">
+          <div
+            ref={menuRef}
+            className={`absolute left-0 z-50 min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${
+              placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+            }`}
+          >
             {enabledAgents.map((a) => (
               <button
                 type="button"
                 key={a.id}
                 onClick={() => { onSelect(a); setOpen(false) }}
-                className={`w-full rounded-[18px] px-3.5 py-3 text-left transition-colors ${
+                className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${
                   a.id === selectedAgentId ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'
                 }`}
               >
                 <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/70 shadow-sm">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70">
                     <AgentAvatar avatar={a.avatar} size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-semibold text-text-primary">{a.id === 'default-assistant' ? t('chat.assistant', a.name || 'Assistant') : a.name}</div>
+                    <div className="truncate text-[12.5px] font-semibold text-text-primary">{a.id === 'default-assistant' ? t('chat.assistant', a.name || 'Assistant') : a.name}</div>
                     <div className="mt-1 line-clamp-2 text-[11px] leading-5 text-text-muted/72">{a.whenToUse || t('chat.agentReady', 'Routing and behavior')}</div>
                   </div>
                 </div>
@@ -585,6 +666,48 @@ function AgentDropdown({ agents, selectedAgentId, onSelect }: {
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function ComposerContextFooter({
+  agents,
+  selectedAgentId,
+  onSelectAgent,
+  models,
+  providerNameById,
+  selectedModelId,
+  onSelectModel,
+  status,
+  actions,
+}: {
+  agents: Agent[]
+  selectedAgentId: string
+  onSelectAgent: (agent: Agent | null) => void
+  models: Model[]
+  providerNameById: Map<string, string>
+  selectedModelId: string
+  onSelectModel: (modelId: string) => void
+  status?: ReactNode
+  actions?: ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <AgentDropdown
+        agents={agents}
+        selectedAgentId={selectedAgentId}
+        onSelect={onSelectAgent}
+        compact
+      />
+      <ModelDropdown
+        models={models}
+        providerNameById={providerNameById}
+        value={selectedModelId}
+        onChange={onSelectModel}
+        compact
+      />
+      {status}
+      {actions}
     </div>
   )
 }
@@ -664,6 +787,8 @@ export function ChatMain() {
   const [showScrollToTop, setShowScrollToTop] = useState(false)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement>(null)
+  const exportMenuPanelRef = useRef<HTMLDivElement>(null)
+  const [exportMenuPlacement, setExportMenuPlacement] = useState<'top' | 'bottom'>('bottom')
   const { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat()
   const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions])
   const chatSessionIds = useMemo(() => new Set(chatSessions.map((session) => session.id)), [chatSessions])
@@ -928,6 +1053,89 @@ export function ChatMain() {
     void handleExportChat(format, 'single', messageId)
   }, [handleExportChat])
 
+  const missingModelBadge = !selectedModel ? (
+    <SurfaceBadge tone="warning">
+      <IconifyIcon name="ui-warning" size={13} color="currentColor" />
+      {t('chat.selectModelToChat', 'Please select a model to start chatting')}
+    </SurfaceBadge>
+  ) : null
+
+  const sessionContextActions = messages.length > 0 ? (
+    <>
+      <button
+        type="button"
+        onClick={clearMessages}
+        disabled={isStreaming}
+        title={t('chat.clearConversation', 'Clear conversation')}
+        className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-35"
+      >
+        <IconifyIcon name="ui-trash" size={15} color="currentColor" />
+        {t('common.clear', 'Clear')}
+      </button>
+
+      <div className="relative" ref={exportMenuRef}>
+        <button
+          type="button"
+          onClick={() => setShowExportMenu((v) => !v)}
+          disabled={isExportingChat}
+          className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent disabled:opacity-35"
+        >
+          <IconifyIcon name="ui-export" size={15} color="currentColor" />
+          {isExportingChat ? t('common.exporting', 'Exporting…') : t('chat.exportConversation', 'Export')}
+        </button>
+        {showExportMenu && (
+          <div
+            ref={exportMenuPanelRef}
+            className={`absolute right-0 z-50 w-56 max-h-96 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl ${
+              exportMenuPlacement === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'
+            }`}
+          >
+            <div className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportAllMessages', '完整对话')}</div>
+            {([
+              { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
+              { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
+              { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
+            ]).map(({ format, label }) => (
+              <button
+                key={format}
+                type="button"
+                onClick={() => void handleExportChat(format, 'all')}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
+              >
+                <IconifyIcon name="ui-file" size={13} color="currentColor" />
+                {label}
+              </button>
+            ))}
+            {(() => {
+              const lastAiMsg = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isStreaming && m.content.trim())
+              if (!lastAiMsg) return null
+              return (
+                <>
+                  <div className="mt-1 border-t border-border-subtle/55 px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportLatestReply', '最新回复')}</div>
+                  {([
+                    { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
+                    { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
+                    { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
+                  ]).map(({ format, label }) => (
+                    <button
+                      key={`single-${format}`}
+                      type="button"
+                      onClick={() => void handleExportChat(format, 'single', lastAiMsg.id)}
+                      className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
+                    >
+                      <IconifyIcon name="ui-file" size={13} color="currentColor" />
+                      {label}
+                    </button>
+                  ))}
+                </>
+              )
+            })()}
+          </div>
+        )}
+      </div>
+    </>
+  ) : null
+
   useEffect(() => {
     if (!showExportMenu) return
     const handler = (e: MouseEvent) => {
@@ -939,13 +1147,35 @@ export function ChatMain() {
     return () => document.removeEventListener('mousedown', handler)
   }, [showExportMenu])
 
+  useEffect(() => {
+    if (!showExportMenu) return
+
+    const updatePlacement = () => {
+      const triggerRect = exportMenuRef.current?.getBoundingClientRect()
+      const menuHeight = Math.min(exportMenuPanelRef.current?.scrollHeight ?? 0, 384) || 260
+      if (!triggerRect) return
+
+      const spaceBelow = window.innerHeight - triggerRect.bottom
+      const spaceAbove = triggerRect.top
+      setExportMenuPlacement(spaceBelow < menuHeight && spaceAbove > spaceBelow ? 'top' : 'bottom')
+    }
+
+    updatePlacement()
+    window.addEventListener('resize', updatePlacement)
+    window.addEventListener('scroll', updatePlacement, true)
+    return () => {
+      window.removeEventListener('resize', updatePlacement)
+      window.removeEventListener('scroll', updatePlacement, true)
+    }
+  }, [showExportMenu])
+
   if (!activeSession) {
     return (
       <div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
         <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 py-5 xl:px-6">
-          <div className="mx-auto max-w-384 space-y-4">
-            <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/45 bg-surface-1/42">
-              <div className="relative z-10 grid gap-5 p-4 xl:grid-cols-[minmax(0,1.12fr)_20rem] xl:p-6">
+          <div className="mx-auto max-w-384 space-y-3">
+            <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/35 bg-surface-1/28">
+              <div className="relative z-10 p-4 xl:p-5">
                 <div>
                   <div className="flex flex-wrap gap-2">
                     <SurfaceBadge tone="accent">{t('chat.workbench', '企业 AI 工作台')}</SurfaceBadge>
@@ -969,49 +1199,9 @@ export function ChatMain() {
                     ))}
                   </div>
                 </div>
-
-                <aside className="space-y-3">
-                  <div className="rounded-md border border-border-subtle/40 bg-surface-0/38 p-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.context', '上下文')}</div>
-                    <div className="mt-3 grid gap-3">
-                      <AgentDropdown
-                        agents={agents}
-                        selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''}
-                        onSelect={(agent) => {
-                          setSelectedAgent(agent)
-                        }}
-                      />
-                      <ModelDropdown
-                        models={enabledModels}
-                        providerNameById={providerNameById}
-                        value={selectedModel?.id ?? ''}
-                        onChange={handleModelChange}
-                      />
-                    </div>
-                    {!selectedModel && (
-                      <div className="mt-3">
-                        <SurfaceBadge tone="warning">
-                          <IconifyIcon name="ui-warning" size={13} color="currentColor" />
-                          {t('chat.selectModelToChat', 'Please select a model to start chatting')}
-                        </SurfaceBadge>
-                      </div>
-                    )}
-                  </div>
-
-                  <BrowserWorkbenchCard />
-
-                  <div className="rounded-md border border-border-subtle/40 bg-surface-0/32 p-3">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.hints', '提示')}</div>
-                    <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-text-secondary/78">
-                      <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')}</div>
-                      <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
-                    </div>
-                  </div>
-                </aside>
               </div>
             </section>
-
-            <section className="rounded-md border border-border-subtle/45 bg-surface-1/38 p-3 xl:p-4">
+            <section className="rounded-md border border-border-subtle/35 bg-surface-1/22 p-3 xl:p-4">
               <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
                 <div className="max-w-2xl">
                   <div className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.startHere', '开始处理')}</div>
@@ -1026,9 +1216,34 @@ export function ChatMain() {
                   onSend={createSessionAndSend}
                   disabled={false}
                   noModel={!selectedModel}
+                  footer={(
+                    <ComposerContextFooter
+                      agents={agents}
+                      selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''}
+                      onSelectAgent={(agent) => {
+                        setSelectedAgent(agent)
+                      }}
+                      models={enabledModels}
+                      providerNameById={providerNameById}
+                      selectedModelId={selectedModel?.id ?? ''}
+                      onSelectModel={handleModelChange}
+                      status={missingModelBadge}
+                    />
+                  )}
                 />
               </div>
             </section>
+
+            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
+              <div className="rounded-md border border-border-subtle/35 bg-surface-1/18 p-3 text-[12px] leading-5 text-text-secondary/78">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted/45">{t('chat.hints', '提示')}</div>
+                <div className="mt-2 space-y-1.5">
+                  <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')}</div>
+                  <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
+                </div>
+              </div>
+              <BrowserWorkbenchCard />
+            </div>
           </div>
         </div>
       </div>
@@ -1048,120 +1263,25 @@ export function ChatMain() {
       >
         <div className="sticky top-0 z-20 border-b border-border-subtle/45 bg-surface-0/94 px-5 py-3 xl:px-6">
           <div className="mx-auto max-w-384">
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-              <div className="min-w-0 max-w-3xl">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.liveSession', '当前会话')}</div>
-                <h1 className="mt-1 truncate text-[20px] font-semibold text-text-primary">{activeSession.title}</h1>
-                <p className="mt-1 line-clamp-1 max-w-2xl text-[12px] leading-5 text-text-secondary/76">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {displayAgentName && <SurfaceBadge tone="accent">{displayAgentName}</SurfaceBadge>}
-                  <SurfaceBadge>{sessionModel?.name ?? t('chat.selectModel', '-- Select Model --')}</SurfaceBadge>
-                  <SurfaceBadge>{messages.length} {t('sessions.msgs', 'msgs')}</SurfaceBadge>
-                  {lastUpdated && <SurfaceBadge>{t('chat.updated', 'Updated')} {lastUpdated}</SurfaceBadge>}
-                </div>
-              </div>
-
-              <div className="grid gap-2 sm:grid-cols-2 xl:w-136">
-                <AgentDropdown
-                  agents={agents}
-                  selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''}
-                  onSelect={handleAgentSelect}
-                />
-                <ModelDropdown
-                  models={enabledModels}
-                  providerNameById={providerNameById}
-                  value={sessionModel?.id ?? selectedModel?.id ?? ''}
-                  onChange={handleModelChange}
-                />
-                {messages.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={clearMessages}
-                    disabled={isStreaming}
-                    title={t('chat.clearConversation', 'Clear conversation')}
-                    className="sm:col-span-2 inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-35"
-                  >
-                    <IconifyIcon name="ui-trash" size={15} color="currentColor" />
-                    {t('common.clear', 'Clear')}
-                  </button>
-                )}
-                {messages.length > 0 && (
-                  <div className="relative sm:col-span-2" ref={exportMenuRef}>
-                    <button
-                      type="button"
-                      onClick={() => setShowExportMenu((v) => !v)}
-                      disabled={isExportingChat}
-                      className="inline-flex w-full min-h-10 items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent disabled:opacity-35"
-                    >
-                      <IconifyIcon name="ui-export" size={15} color="currentColor" />
-                      {isExportingChat ? t('common.exporting', 'Exporting…') : t('chat.exportConversation', 'Export')}
-                    </button>
-                    {showExportMenu && (
-                      <div className="absolute right-0 top-full z-50 mt-1.5 w-56 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
-                        <div className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportAllMessages', '完整对话')}</div>
-                        {([
-                          { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
-                          { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
-                          { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
-                        ]).map(({ format, label }) => (
-                          <button
-                            key={format}
-                            type="button"
-                            onClick={() => void handleExportChat(format, 'all')}
-                            className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
-                          >
-                            <IconifyIcon name="ui-file" size={13} color="currentColor" />
-                            {label}
-                          </button>
-                        ))}
-                        {(() => {
-                          const lastAiMsg = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isStreaming && m.content.trim())
-                          if (!lastAiMsg) return null
-                          return (
-                            <>
-                              <div className="mx-3 my-1.5 border-t border-border-subtle/40" />
-                              <div className="px-3.5 pb-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportLastReply', '最后一条回复')}</div>
-                              {([
-                                { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
-                                { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
-                                { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
-                              ]).map(({ format, label }) => (
-                                <button
-                                  key={`single-${format}`}
-                                  type="button"
-                                  onClick={() => void handleExportChat(format, 'single', lastAiMsg.id)}
-                                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
-                                >
-                                  <IconifyIcon name="ui-file" size={13} color="currentColor" />
-                                  {label}
-                                </button>
-                              ))}
-                            </>
-                          )
-                        })()}
-                      </div>
-                    )}
-                  </div>
-                )}
+            <div className="min-w-0 max-w-3xl">
+              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.liveSession', '当前会话')}</div>
+              <h1 className="mt-1 truncate text-[20px] font-semibold text-text-primary">{activeSession.title}</h1>
+              <p className="mt-1 line-clamp-1 max-w-2xl text-[12px] leading-5 text-text-secondary/76">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {displayAgentName && <SurfaceBadge tone="accent">{displayAgentName}</SurfaceBadge>}
+                <SurfaceBadge>{sessionModel?.name ?? t('chat.selectModel', '-- Select Model --')}</SurfaceBadge>
+                <SurfaceBadge>{messages.length} {t('sessions.msgs', 'msgs')}</SurfaceBadge>
+                {lastUpdated && <SurfaceBadge>{t('chat.updated', 'Updated')} {lastUpdated}</SurfaceBadge>}
               </div>
             </div>
-
-            {!sessionModel && (
-              <div className="mt-3">
-                <SurfaceBadge tone="warning">
-                  <IconifyIcon name="ui-warning" size={13} color="currentColor" />
-                  {t('chat.selectModelToChat', 'Please select a model to start chatting')}
-                </SurfaceBadge>
-              </div>
-            )}
           </div>
         </div>
 
         <div className="px-5 pb-4 pt-4 xl:px-6">
           <div className="mx-auto max-w-384">
             {messages.length === 0 ? (
-              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/45 bg-surface-1/42">
+              <div className="space-y-3">
+                <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/35 bg-surface-1/28">
                   <div className="relative z-10 p-4 xl:p-5">
                     <div className="flex h-12 w-12 items-center justify-center rounded-md bg-accent/10 text-accent">
                       <AgentAvatar avatar={sessionAgent?.avatar ?? 'ui-sparkles'} size={32} />
@@ -1187,71 +1307,45 @@ export function ChatMain() {
                   </div>
                 </section>
 
-                <aside>
-                  <div className="space-y-3 xl:sticky xl:top-4">
-                    <div className="rounded-md border border-border-subtle/35 bg-surface-1/34 p-3">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.context', '上下文')}</div>
-                      <div className="mt-3 flex items-center gap-2.5">
-                        <div className="flex h-9 w-9 items-center justify-center rounded-md bg-surface-2/70">
-                          {sessionAgent ? <AgentAvatar avatar={sessionAgent.avatar} size={20} /> : <IconifyIcon name="ui-sparkles" size={16} color="currentColor" className="text-accent" />}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="truncate text-[14px] font-semibold text-text-primary">{displayAgentName ?? t('chat.assistant', 'Assistant')}</div>
-                          <div className="truncate text-[12px] text-text-muted/72">{sessionModel?.name ?? t('chat.selectModel', '-- Select Model --')}</div>
-                        </div>
-                      </div>
-                      {!sessionModel && (
-                        <div className="mt-4">
-                          <SurfaceBadge tone="warning">
-                            <IconifyIcon name="ui-warning" size={13} color="currentColor" />
-                            {t('chat.selectModelToChat', 'Please select a model to start chatting')}
-                          </SurfaceBadge>
-                        </div>
-                      )}
-                    </div>
-
-                    <BrowserWorkbenchCard />
-
-                    <div className="rounded-md border border-border-subtle/35 bg-surface-1/34 p-3">
-                      <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.hints', '提示')}</div>
-                      <div className="mt-2 space-y-1.5 text-[12px] leading-5 text-text-secondary/78">
-                        <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')}</div>
-                        <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
-                      </div>
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
+                  <div className="rounded-md border border-border-subtle/35 bg-surface-1/18 p-3 text-[12px] leading-5 text-text-secondary/78">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted/45">{t('chat.hints', '提示')}</div>
+                    <div className="mt-2 space-y-1.5">
+                      <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')}</div>
+                      <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
                     </div>
                   </div>
-                </aside>
+                  <BrowserWorkbenchCard />
+                </div>
               </div>
             ) : (
-              <div>
-                <section className="relative overflow-visible">
-                  <div className="relative z-10 px-1 py-1 sm:px-2 xl:px-3">
-                    <TodoProgress />
-                    {hiddenMessageCount > 0 && (
-                      <div className="mb-3 rounded-2xl border border-amber-500/18 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-200">
-                        {t('chat.hiddenOlderMessages', '{count} older messages are hidden to keep long chats responsive.').replace('{count}', hiddenMessageCount.toLocaleString())}
-                      </div>
-                    )}
-                    <div className="space-y-0.5">
-                      {visibleMessages.map((msg) => (
-                        <ChatMessageRow
-                          key={msg.id}
-                          message={msg}
-                          retryLastError={retryLastError}
-                          resumeFromMessage={resumeFromMessage}
-                          deleteMessage={deleteMessage}
-                          regenerateMessage={regenerateMessage}
-                          updateMessage={updateMessage}
-                          branchFromMessage={branchFromMessage}
-                          setMessageFeedback={setMessageFeedback}
-                          exportMessage={handleExportSingleMessage}
-                        />
-                      ))}
+              <section className="relative overflow-visible">
+                <div className="relative z-10 px-1 py-1 sm:px-2 xl:px-3">
+                  <TodoProgress />
+                  {hiddenMessageCount > 0 && (
+                    <div className="mb-3 rounded-2xl border border-amber-500/18 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-200">
+                      {t('chat.hiddenOlderMessages', '{count} older messages are hidden to keep long chats responsive.').replace('{count}', hiddenMessageCount.toLocaleString())}
                     </div>
-                    <div ref={messagesEndRef} />
+                  )}
+                  <div className="space-y-0.5">
+                    {visibleMessages.map((msg) => (
+                      <ChatMessageRow
+                        key={msg.id}
+                        message={msg}
+                        retryLastError={retryLastError}
+                        resumeFromMessage={resumeFromMessage}
+                        deleteMessage={deleteMessage}
+                        regenerateMessage={regenerateMessage}
+                        updateMessage={updateMessage}
+                        branchFromMessage={branchFromMessage}
+                        setMessageFeedback={setMessageFeedback}
+                        exportMessage={handleExportSingleMessage}
+                      />
+                    ))}
                   </div>
-                </section>
-              </div>
+                  <div ref={messagesEndRef} />
+                </div>
+              </section>
             )}
           </div>
         </div>
@@ -1301,6 +1395,19 @@ export function ChatMain() {
           isStreaming={isStreaming}
           onStop={handleStopStreaming}
           noModel={!sessionModel}
+          footer={(
+            <ComposerContextFooter
+              agents={agents}
+              selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''}
+              onSelectAgent={handleAgentSelect}
+              models={enabledModels}
+              providerNameById={providerNameById}
+              selectedModelId={sessionModel?.id ?? selectedModel?.id ?? ''}
+              onSelectModel={handleModelChange}
+              status={!sessionModel ? missingModelBadge : undefined}
+              actions={sessionContextActions}
+            />
+          )}
         />
       </div>
 

@@ -615,7 +615,7 @@ code, pre, .font-mono, kbd, samp {
 /* ── Compact desktop workbench density ── */
 .workbench-density {
   --workbench-card-radius: 0.375rem;
-  --workbench-panel-bg: color-mix(in srgb, var(--t-surface-1) 68%, transparent);
+  --workbench-panel-bg: color-mix(in srgb, var(--t-surface-1) 42%, transparent);
 }
 
 .workbench-density [class*="rounded-4xl"],
@@ -629,22 +629,21 @@ code, pre, .font-mono, kbd, samp {
 }
 
 .workbench-density [class*="shadow-"] {
-  box-shadow: 0 16px 46px rgba(0, 0, 0, 0.18) !important;
+  box-shadow: none !important;
 }
 
 .workbench-density [class*="bg-linear-to-br"],
 .workbench-density [class*="bg-[radial-gradient"],
 .workbench-density .chat-stage-panel {
   background-image:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.018)),
-    radial-gradient(circle at 18% 8%, rgba(var(--t-accent-rgb), 0.12), transparent 20rem) !important;
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 86%, transparent), color-mix(in srgb, var(--t-surface-0) 94%, transparent)) !important;
   background-color: var(--workbench-panel-bg) !important;
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  -webkit-backdrop-filter: blur(8px) saturate(1.02);
+  backdrop-filter: blur(8px) saturate(1.02);
 }
 
 .workbench-density section {
-  padding: 0.75rem !important;
+  padding: 0.625rem !important;
 }
 
 .workbench-density h1,
@@ -685,29 +684,29 @@ code, pre, .font-mono, kbd, samp {
 .workbench-density .p-7,
 .workbench-density .p-6,
 .workbench-density .p-5 {
-  padding: 0.75rem !important;
+  padding: 0.625rem !important;
 }
 
 .workbench-density .py-8,
 .workbench-density .py-6,
 .workbench-density .py-5 {
-  padding-top: 0.75rem !important;
-  padding-bottom: 0.75rem !important;
+  padding-top: 0.625rem !important;
+  padding-bottom: 0.625rem !important;
 }
 
 .workbench-density .px-10,
 .workbench-density .px-8,
 .workbench-density .px-6,
 .workbench-density .px-5 {
-  padding-left: 0.75rem !important;
-  padding-right: 0.75rem !important;
+  padding-left: 0.625rem !important;
+  padding-right: 0.625rem !important;
 }
 
 .workbench-density .gap-8,
 .workbench-density .gap-7,
 .workbench-density .gap-6,
 .workbench-density .gap-5 {
-  gap: 0.75rem !important;
+  gap: 0.625rem !important;
 }
 
 .workbench-density .space-y-8 > :not([hidden]) ~ :not([hidden]),
@@ -715,8 +714,8 @@ code, pre, .font-mono, kbd, samp {
 .workbench-density .space-y-6 > :not([hidden]) ~ :not([hidden]),
 .workbench-density .space-y-5 > :not([hidden]) ~ :not([hidden]) {
   --tw-space-y-reverse: 0 !important;
-  margin-top: calc(0.75rem * calc(1 - var(--tw-space-y-reverse))) !important;
-  margin-bottom: calc(0.75rem * var(--tw-space-y-reverse)) !important;
+  margin-top: calc(0.625rem * calc(1 - var(--tw-space-y-reverse))) !important;
+  margin-bottom: calc(0.625rem * var(--tw-space-y-reverse)) !important;
 }
 
 .workbench-density [class*="max-w-352"],

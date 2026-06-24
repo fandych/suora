@@ -13,6 +13,7 @@ import {
   DEFAULT_VOICE_SETTINGS,
 } from '@/services/voiceInteraction'
 import {
+  SettingsOverview,
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
@@ -72,24 +73,18 @@ export function VoiceSettings() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="max-w-3xl">
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.voiceSettings', 'Voice Settings')}</div>
-            <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{t('settings.voiceWorkbench', 'Speech Workbench')}</h2>
-            <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
-              {t('settings.voiceWorkbenchDesc', 'Tune speech recognition, output voice, cadence, and quick test playback so voice interactions feel intentional instead of bolted on.')}
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
+      <SettingsOverview
+        description={t('settings.voiceWorkbenchDesc', 'Tune speech recognition, output voice, cadence, and quick test playback so voice interactions feel intentional instead of bolted on.')}
+        statsClassName="grid gap-2 sm:grid-cols-2 xl:w-md xl:grid-cols-4"
+        stats={(
+          <>
             <SettingsStat label={t('settings.voice', 'Voice')} value={voiceSettings.enabled ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} accent />
             <SettingsStat label={t('settings.language', 'Language')} value={selectedLanguageLabel} />
             <SettingsStat label={t('settings.voiceName', 'Voice')} value={selectedVoiceLabel} />
             <SettingsStat label={t('settings.availableVoices', 'Voices')} value={String(voices.length)} />
-          </div>
-        </div>
-      </section>
+          </>
+        )}
+      />
 
       <SettingsSection
         eyebrow={t('settings.voiceSettings', 'Voice Settings')}

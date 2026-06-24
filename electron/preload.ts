@@ -46,7 +46,6 @@ const ALLOWED_INVOKE_CHANNELS = [
   'shell:exec',
   'shell:openPath',
   'shell:openUrl',
-  'web:search',
   'web:fetch',
   'web:fetchJson',
   'web:fetchText',

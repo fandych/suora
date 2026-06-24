@@ -99,12 +99,13 @@ related: ["GPT-4", "Anthropic"]
 
     const fm = parseDocumentFrontmatter(markdown)
     expect(fm).not.toBeNull()
-    expect(fm!.type).toBe('entity')
-    expect(fm!.title).toBe('OpenAI')
-    expect(fm!.tags).toEqual(['ai', 'research', 'deep learning'])
-    expect(fm!.created).toBe('2024-01-15')
-    expect(fm!.sources).toEqual([])
-    expect(fm!.related).toEqual(['GPT-4', 'Anthropic'])
+    if (!fm) throw new Error('Expected frontmatter to be parsed')
+    expect(fm.type).toBe('entity')
+    expect(fm.title).toBe('OpenAI')
+    expect(fm.tags).toEqual(['ai', 'research', 'deep learning'])
+    expect(fm.created).toBe('2024-01-15')
+    expect(fm.sources).toEqual([])
+    expect(fm.related).toEqual(['GPT-4', 'Anthropic'])
   })
 
   it('returns null when no frontmatter is present', () => {
@@ -449,9 +450,10 @@ describe('document export', () => {
     const readme = result.files.find((f) => f.path === 'README.md')
 
     expect(readme).toBeDefined()
-    expect(readme!.content).toContain('# My Wiki')
-    expect(readme!.content).toContain('Architecture')
-    expect(readme!.content).toContain('LLM Notes')
+    if (!readme) throw new Error('Expected README export file to exist')
+    expect(readme.content).toContain('# My Wiki')
+    expect(readme.content).toContain('Architecture')
+    expect(readme.content).toContain('LLM Notes')
   })
 
   it('preserves existing frontmatter without duplicating', () => {
@@ -459,8 +461,9 @@ describe('document export', () => {
     const archFile = result.files.find((f) => f.path.includes('Architecture'))
 
     expect(archFile).toBeDefined()
+    if (!archFile) throw new Error('Expected Architecture export file to exist')
     // Should not have double frontmatter
-    const frontmatterCount = (archFile!.content.match(/^---$/gm) ?? []).length
+    const frontmatterCount = (archFile.content.match(/^---$/gm) ?? []).length
     expect(frontmatterCount).toBe(2) // opening and closing
   })
 
@@ -469,8 +472,9 @@ describe('document export', () => {
     const llmFile = result.files.find((f) => f.path.includes('LLM Notes'))
 
     expect(llmFile).toBeDefined()
-    expect(llmFile!.content).toContain('---')
-    expect(llmFile!.content).toContain('title: "LLM Notes"')
+    if (!llmFile) throw new Error('Expected LLM Notes export file to exist')
+    expect(llmFile.content).toContain('---')
+    expect(llmFile.content).toContain('title: "LLM Notes"')
   })
 
   it('skips frontmatter when disabled', () => {
@@ -478,8 +482,9 @@ describe('document export', () => {
     const llmFile = result.files.find((f) => f.path.includes('LLM Notes'))
 
     expect(llmFile).toBeDefined()
-    expect(llmFile!.content).not.toContain('---')
-    expect(llmFile!.content.startsWith('# LLM Notes')).toBe(true)
+    if (!llmFile) throw new Error('Expected LLM Notes export file to exist')
+    expect(llmFile.content).not.toContain('---')
+    expect(llmFile.content.startsWith('# LLM Notes')).toBe(true)
   })
 
   it('skips index when disabled', () => {

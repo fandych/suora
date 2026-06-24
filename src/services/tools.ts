@@ -1438,49 +1438,8 @@ export const builtinToolDefs: ToolSet = {
     },
   }),
 
-  web_search: tool({
-    description: 'Search the public web using DuckDuckGo for external, current, or public internet information. Do not use this for facts likely stored in the user\'s Suora documents, workspace files, or notes until you have checked those local sources. Returns an instant answer (if any) plus up to 8 search results with titles, URLs, and snippets. Use fetch_webpage to read the full content of a specific result.',
-    inputSchema: z.object({
-      query: z.string().describe('The search query'),
-    }),
-    execute: async ({ query }) => {
-      const result = (await electronInvoke('web:search', query)) as {
-        query: string
-        instant_answer?: string
-        instant_answer_type?: string
-        instant_answer_source?: string
-        instant_answer_url?: string
-        results?: { title: string; url: string; snippet: string }[]
-        error?: string
-      }
-      if (result.error) return `Search error: ${result.error}`
-
-      const lines: string[] = []
-
-      if (result.instant_answer) {
-        const src = result.instant_answer_source ? ` (${result.instant_answer_source})` : ''
-        const url = result.instant_answer_url ? `\nSource: ${result.instant_answer_url}` : ''
-        lines.push(`[Instant Answer${src}]: ${result.instant_answer}${url}`)
-      }
-
-      const results = result.results ?? []
-      if (results.length > 0) {
-        lines.push(`\nSearch results for "${query}":`)
-        results.forEach((r, i) => {
-          lines.push(`\n${i + 1}. ${r.title}\n   URL: ${r.url}\n   ${r.snippet}`)
-        })
-      }
-
-      if (lines.length === 0) {
-        return `No results found for "${query}". Try rephrasing your query.`
-      }
-
-      return lines.join('\n')
-    },
-  }),
-
   fetch_webpage: tool({
-    description: 'Fetch and read the text content of a webpage. Strips HTML tags and returns readable text (up to 8000 characters). Use this after web_search to read specific pages.',
+    description: 'Fetch and read the text content of a webpage from a specific URL. Strips HTML tags and returns readable text (up to 8000 characters).',
     inputSchema: z.object({
       url: z.string().url().describe('The URL to fetch (must be http or https)'),
     }),
@@ -3896,7 +3855,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   list_documents: tool({
-    description: 'Search and list editable Markdown documents stored in Suora. Use this first for questions about local notes, project plans, specs, budgets, schedules, people, or any knowledge likely stored in the user\'s documents before using web_search.',
+    description: 'Search and list editable Markdown documents stored in Suora. Use this first for questions about local notes, project plans, specs, budgets, schedules, people, or any knowledge likely stored in the user\'s documents.',
     inputSchema: z.object({
       query: z.string().optional().describe('Optional title/content search query'),
       group_id: z.string().optional().describe('Optional document group ID to filter by'),
@@ -3990,7 +3949,7 @@ export const builtinToolDefs: ToolSet = {
   }),
 
   read_document: tool({
-    description: 'Read the full Markdown content of a Suora document by ID or title. Use this after list_documents when answering from local document knowledge, and prefer it over web_search for facts that may exist in the user\'s notes.',
+    description: 'Read the full Markdown content of a Suora document by ID or title. Use this after list_documents when answering from local document knowledge.',
     inputSchema: z.object({
       document_id: z.string().describe('Document ID or exact/partial title'),
     }),
@@ -4522,7 +4481,6 @@ export const TOOL_META: Record<string, ToolMeta> = {
   shell:                 { userFacingName: 'Run command', isReadOnly: false, isDestructive: true, isConcurrencySafe: false, requiresConfirmation: true, searchHint: 'execute shell command terminal' },
 
   // ── Network tools ──
-  web_search:            { userFacingName: 'Web search', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'search internet web' },
   fetch_webpage:         { userFacingName: 'Fetch page', isReadOnly: true, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: false, searchHint: 'fetch read webpage url' },
   open_url:              { userFacingName: 'Open URL', isReadOnly: false, isDestructive: false, isConcurrencySafe: true, requiresConfirmation: true },
   browser_navigate:      { userFacingName: 'Navigate browser', isReadOnly: true, isDestructive: false, isConcurrencySafe: false, requiresConfirmation: false, searchHint: 'headless browser navigate' },
@@ -4582,7 +4540,6 @@ export function buildToolHints(toolNames: string[]): string {
   const hasDocumentSearch = toolNames.includes('list_documents')
   const hasDocumentGraph = toolNames.includes('query_document_graph')
   const hasDocumentRead = toolNames.includes('read_document')
-  const hasWebSearch = toolNames.includes('web_search')
   const hasWriteFile = toolNames.includes('write_file')
   const hasAppendFile = toolNames.includes('append_file')
 
@@ -4604,15 +4561,12 @@ export function buildToolHints(toolNames: string[]): string {
     lines.push(`Tools that may be gated by confirmation policy: ${confirmRequired.join(', ')}`)
   }
   if (hasDocumentGraph || hasDocumentSearch || hasDocumentRead) {
-    lines.push('Local document routing: for questions about notes, plans, specs, budgets, schedules, project knowledge, or people likely stored in Suora documents, use local document tools before web_search.')
+    lines.push('Local document routing: for questions about notes, plans, specs, budgets, schedules, project knowledge, or people likely stored in Suora documents, use local document tools before replying.')
     if (hasDocumentGraph) {
       lines.push('When the answer may span multiple connected documents or the document corpus is large, start with query_document_graph, then use read_document on the most relevant documents.')
     } else if (hasDocumentSearch && hasDocumentRead) {
       lines.push('When answering from local documents, start with list_documents, then use read_document for the strongest matches before replying.')
     }
-  }
-  if (hasWebSearch && (hasDocumentGraph || hasDocumentSearch)) {
-    lines.push('Only use web_search after local document tools are insufficient or when the question is clearly about external/public information.')
   }
   if (hasWriteFile && hasAppendFile) {
     lines.push('Large file writes: do not send a very large file body in one write_file call. Write the first chunk with write_file, then continue with append_file until the file is complete.')

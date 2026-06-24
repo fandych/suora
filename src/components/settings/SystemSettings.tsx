@@ -6,6 +6,7 @@ import { sanitizeReleaseNotesHtml } from '@/services/releaseNotes'
 import { useAppStore } from '@/store/appStore'
 import { getElectron } from './shared'
 import {
+  SettingsOverview,
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
@@ -226,24 +227,18 @@ export function SystemSettings() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="max-w-3xl">
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.system', 'System')}</div>
-            <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{t('settings.systemWorkbench', 'Runtime & Diagnostics')}</h2>
-            <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
-              {t('settings.systemWorkbenchDesc', 'Inspect the desktop runtime, replay onboarding, monitor resource usage, and clean up crash traces from the current machine.')}
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
+      <SettingsOverview
+        description={t('settings.systemWorkbenchDesc', 'Inspect the desktop runtime, replay onboarding, monitor resource usage, and clean up crash traces from the current machine.')}
+        statsClassName="grid gap-2 sm:grid-cols-2 xl:w-md xl:grid-cols-4"
+        stats={(
+          <>
             <SettingsStat label={t('settings.runtime', 'Runtime')} value={electron ? t('settings.runtimeElectron', 'Electron') : t('settings.runtimeBrowser', 'Browser')} accent />
             <SettingsStat label={t('settings.rss', 'RSS')} value={rssValue} />
             <SettingsStat label={t('settings.uptime', 'Uptime')} value={uptimeValue} />
             <SettingsStat label={t('settings.crashLogs', 'Crash Logs')} value={String(crashLogs.length)} />
-          </div>
-        </div>
-      </section>
+          </>
+        )}
+      />
 
       <SettingsSection
         eyebrow={t('settings.about', 'About')}

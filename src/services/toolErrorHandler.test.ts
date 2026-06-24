@@ -44,7 +44,7 @@ describe('toolErrorHandler', () => {
     })).toMatchObject({ scope: 'session', targetId: 'session-1' })
 
     const global = classifyToolError({
-      toolName: 'web_search',
+      toolName: 'fetch_webpage',
       error: 'Error: failed',
     })
     expect(global.scope).toBe('global')

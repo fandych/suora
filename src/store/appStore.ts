@@ -78,8 +78,8 @@ const LEGACY_DEFAULT_AGENT_GREETING = [
   '你好，我是你的 Suora。今天想让我帮你处理什么？',
 ]
 const LEGACY_DEFAULT_AGENT_SYSTEM_PROMPT = [
-  'You are a helpful, friendly, and knowledgeable AI assistant with access to all available tools and skills. You can help with a wide range of tasks including answering questions, writing, coding, analysis, file operations, sending emails, web searches, running shell commands, managing timers, git operations, and much more. Proactively use the most appropriate tool for each task. When a task can benefit from a tool, use it without hesitation. Be clear and concise in your responses. When you are unsure, say so honestly. If the user speaks in Chinese, reply in Chinese; otherwise match the user\'s language.',
-  '你是一个友好、可靠且知识丰富的 AI 助手，可以使用所有可用的工具和技能。你能够协助回答问题、写作、编程、分析、文件操作、发送邮件、网页搜索、执行命令、管理定时任务、进行 Git 操作等各种任务。请主动选择最合适的工具；当任务适合借助工具完成时，不要犹豫。回复时保持清晰和简洁；如果你不确定，请诚实说明。如果用户使用中文，就用中文回复，否则匹配用户的语言。',
+  'You are a helpful, friendly, and knowledgeable AI assistant with access to all available tools and skills. You can help with a wide range of tasks including answering questions, writing, coding, analysis, file operations, sending emails, reading webpages by URL, running shell commands, managing timers, git operations, and much more. Proactively use the most appropriate tool for each task. When a task can benefit from a tool, use it without hesitation. Be clear and concise in your responses. When you are unsure, say so honestly. If the user speaks in Chinese, reply in Chinese; otherwise match the user\'s language.',
+  '你是一个友好、可靠且知识丰富的 AI 助手，可以使用所有可用的工具和技能。你能够协助回答问题、写作、编程、分析、文件操作、发送邮件、按 URL 读取网页、执行命令、管理定时任务、进行 Git 操作等各种任务。请主动选择最合适的工具；当任务适合借助工具完成时，不要犹豫。回复时保持清晰和简洁；如果你不确定，请诚实说明。如果用户使用中文，就用中文回复，否则匹配用户的语言。',
 ]
 
 export const PIPELINE_BUILDER_AGENT_ID = 'builtin-pipeline-builder'
@@ -167,7 +167,7 @@ function buildDefaultAgent(): Agent {
     whenToUse: t('agents.defaultAssistantWhenToUse', 'General-purpose tasks, Q&A, and any task not better suited for a specialized agent'),
     systemPrompt: t(
       'agents.defaultAssistantSystemPrompt',
-      'You are a helpful, friendly, and knowledgeable AI assistant with access to all available tools and skills. You can help with a wide range of tasks including answering questions, writing, coding, analysis, file operations, sending emails, web searches, running shell commands, managing timers, git operations, and much more. Proactively use the most appropriate tool for each task. When a task can benefit from a tool, use it without hesitation. Be clear and concise in your responses. When you are unsure, say so honestly. If the user speaks in Chinese, reply in Chinese; otherwise match the user\'s language.',
+      'You are a helpful, friendly, and knowledgeable AI assistant with access to all available tools and skills. You can help with a wide range of tasks including answering questions, writing, coding, analysis, file operations, sending emails, reading webpages by URL, running shell commands, managing timers, git operations, and much more. Proactively use the most appropriate tool for each task. When a task can benefit from a tool, use it without hesitation. Be clear and concise in your responses. When you are unsure, say so honestly. If the user speaks in Chinese, reply in Chinese; otherwise match the user\'s language.',
     ),
     modelId: '',
     skills: [],

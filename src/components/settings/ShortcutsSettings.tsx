@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useAppStore } from '@/store/appStore'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
+import { SettingsOverview, SettingsStat } from './panelUi'
 
 function formatKeyCombo(e: KeyboardEvent): string {
   const parts: string[] = []
@@ -13,15 +14,6 @@ function formatKeyCombo(e: KeyboardEvent): string {
     parts.push(key.length === 1 ? key.toUpperCase() : key)
   }
   return parts.join(' + ')
-}
-
-function SummaryStat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
-      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
-      <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
-    </div>
-  )
 }
 
 function buildShortcutMonogram(action: string) {
@@ -112,29 +104,25 @@ export function ShortcutsSettings() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="max-w-2xl">
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.shortcuts', 'Shortcuts')}</div>
-            <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('settings.keyboardBindings', 'Keyboard Bindings')}</h3>
-            <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('settings.shortcutsDesc', 'Click a shortcut to record a new key binding. Press Escape to cancel.')}</p>
-            {recordingLabel && <span className="mt-4 inline-flex rounded-full bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent">{t('settings.recordingShortcut', 'Recording')}: {recordingLabel}</span>}
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-3 xl:w-[24rem] xl:grid-cols-1">
-            <SummaryStat label={t('settings.bindings', 'Bindings')} value={String(shortcutEntries.length)} accent />
-            <SummaryStat label={t('settings.recording', 'Recording')} value={recordingLabel || t('settings.idle', 'Idle')} />
+      <SettingsOverview
+        description={t('settings.shortcutsDesc', 'Click a shortcut to record a new key binding. Press Escape to cancel.')}
+        details={recordingLabel ? <span className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent">{t('settings.recordingShortcut', 'Recording')}: {recordingLabel}</span> : undefined}
+        statsClassName="grid gap-2 sm:grid-cols-3 xl:w-[24rem]"
+        stats={(
+          <>
+            <SettingsStat label={t('settings.bindings', 'Bindings')} value={String(shortcutEntries.length)} accent />
+            <SettingsStat label={t('settings.recording', 'Recording')} value={recordingLabel || t('settings.idle', 'Idle')} />
             <button
               type="button"
               onClick={resetShortcuts}
-              className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-3 text-left transition-colors hover:border-accent/20 hover:bg-accent/8"
+              className="rounded-lg border border-border-subtle bg-surface-0/45 px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-accent/8"
             >
-              <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.resetAll', 'Reset All')}</div>
-              <div className="mt-2 text-sm font-semibold text-text-primary">{t('settings.restoreDefaults', 'Restore Defaults')}</div>
+              <div className="text-[11px] text-text-muted">{t('settings.resetAll', 'Reset All')}</div>
+              <div className="mt-1 text-base font-semibold text-text-primary">{t('settings.restoreDefaults', 'Restore Defaults')}</div>
             </button>
-          </div>
-        </div>
-      </section>
+          </>
+        )}
+      />
 
       <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
         <div className="mb-5 flex items-center justify-between gap-3">

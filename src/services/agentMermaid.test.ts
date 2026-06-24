@@ -14,7 +14,7 @@ function createAgent(patch: Partial<Agent> = {}): Agent {
     maxTokens: 4096,
     enabled: true,
     responseStyle: 'detailed',
-    allowedTools: ['web_search'],
+    allowedTools: ['fetch_webpage'],
     disallowedTools: ['shell'],
     maxTurns: 8,
     permissionMode: 'default',
@@ -29,7 +29,7 @@ describe('agentMermaid', () => {
     const source = buildAgentMermaidSource(createAgent(), {
       modelLabel: 'OpenAI / GPT 4.1',
       skillNames: ['Research'],
-      availableToolNames: ['web_search'],
+      availableToolNames: ['fetch_webpage'],
     })
 
     expect(source).toContain('flowchart TD')

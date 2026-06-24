@@ -4,6 +4,7 @@ import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { getElectron } from './shared'
 import {
+  SettingsOverview,
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
@@ -392,24 +393,18 @@ export function GeneralSettings() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
-          <div className="max-w-3xl">
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.general', 'General')}</div>
-            <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{t('settings.generalWorkbench', 'Workspace Defaults')}</h2>
-            <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
-              {t('settings.generalWorkbenchDesc', 'Set the visual baseline, language, storage path, and outbound connectivity defaults that shape every other page in the app.')}
-            </p>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2 xl:w-md xl:grid-cols-4">
+      <SettingsOverview
+        description={t('settings.generalWorkbenchDesc', 'Set the visual baseline, language, storage path, and outbound connectivity defaults that shape every other page in the app.')}
+        statsClassName="grid gap-2 sm:grid-cols-2 xl:w-md xl:grid-cols-4"
+        stats={(
+          <>
             <SettingsStat label={t('settings.theme', 'Theme')} value={themeLabel} accent />
             <SettingsStat label={t('settings.language', 'Language')} value={localeLabels[locale]} />
             <SettingsStat label={t('settings.accentColor', 'Accent')} value={activeAccent} />
             <SettingsStat label={t('settings.email', 'Email')} value={emailConfig.enabled ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} />
-          </div>
-        </div>
-      </section>
+          </>
+        )}
+      />
 
       <SettingsSection
         eyebrow={t('settings.appearance', 'Appearance')}

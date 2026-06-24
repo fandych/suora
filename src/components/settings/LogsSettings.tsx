@@ -2,7 +2,7 @@ import { useCallback, useDeferredValue, useEffect, useMemo, useState } from 'rea
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { clearAuditLog, getAuditLog } from '@/services/skillSecurity'
-import { SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
+import { SettingsOverview, SettingsSection, SettingsStat, settingsInputClass } from './panelUi'
 import { getElectron } from './shared'
 
 type AuditLogStatus = 'success' | 'error' | 'blocked'
@@ -202,36 +202,32 @@ export function LogsSettings() {
 
   return (
     <div className="space-y-6">
-      <SettingsSection
-        eyebrow={t('settings.logs', 'Logs')}
-        title={t('settings.auditAndRuntimeEvidence', 'Audit & Runtime Evidence')}
+      <SettingsOverview
         description={t('settings.auditAndRuntimeEvidenceHint', 'Review tool execution history, runtime log files, and recent failures so it is easier to trace what the workspace actually did.')}
-        action={
-          <div className="flex flex-wrap gap-2">
-            {([
-              { id: 'overview' as const, label: t('settings.auditDashboard', 'Overview') },
-              { id: 'audit' as const, label: t('settings.auditLogs', 'Audit Logs') },
-              { id: 'runtime' as const, label: t('settings.runtimeLogs', 'Runtime Logs') },
-            ]).map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => setTab(item.id)}
-                className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors ${tab === item.id ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </div>
-        }
-      >
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <SettingsStat label={t('settings.totalCalls', 'Total')} value={String(stats.total)} accent />
-          <SettingsStat label={t('settings.last24h', '24h')} value={String(stats.last24h)} />
-          <SettingsStat label={t('settings.runtimeFiles', 'Runtime Files')} value={String(runtimeFiles.length)} />
-          <SettingsStat label={t('settings.logSize', 'Log Size')} value={formatBytes(stats.runtimeBytes)} />
-        </div>
-      </SettingsSection>
+        action={([
+          { id: 'overview' as const, label: t('settings.auditDashboard', 'Overview') },
+          { id: 'audit' as const, label: t('settings.auditLogs', 'Audit Logs') },
+          { id: 'runtime' as const, label: t('settings.runtimeLogs', 'Runtime Logs') },
+        ]).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => setTab(item.id)}
+            className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors ${tab === item.id ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}
+          >
+            {item.label}
+          </button>
+        ))}
+        statsClassName="grid gap-2 sm:grid-cols-2 xl:grid-cols-4"
+        stats={(
+          <>
+            <SettingsStat label={t('settings.totalCalls', 'Total')} value={String(stats.total)} accent />
+            <SettingsStat label={t('settings.last24h', '24h')} value={String(stats.last24h)} />
+            <SettingsStat label={t('settings.runtimeFiles', 'Runtime Files')} value={String(runtimeFiles.length)} />
+            <SettingsStat label={t('settings.logSize', 'Log Size')} value={formatBytes(stats.runtimeBytes)} />
+          </>
+        )}
+      />
 
       {tab === 'overview' && (
         <SettingsSection

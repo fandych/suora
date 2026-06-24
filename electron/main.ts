@@ -1520,183 +1520,6 @@ ipcMain.handle('system:info', async () => {
   }
 })
 
-// ─── IPC Handlers: Web Search ──────────────────────────────────────
-
-interface SearchResult {
-  title: string
-  url: string
-  snippet: string
-}
-
-interface WebSearchResponse {
-  query: string
-  instant_answer?: string
-  instant_answer_type?: string
-  instant_answer_source?: string
-  instant_answer_url?: string
-  results: SearchResult[]
-  error?: string
-}
-
-/**
- * Parse DuckDuckGo HTML search results page to extract real web search results.
- * Uses the HTML-lite endpoint which returns actual search results (unlike the
- * Instant Answer JSON API which only returns Wikipedia-style topics).
- */
-function parseDDGHtml(html: string, query: string): WebSearchResponse {
-  const results: SearchResult[] = []
-
-  // DuckDuckGo HTML results are in <div class="result ..."> blocks
-  // Each contains <a class="result__a"> for title/URL and <a class="result__snippet"> for snippet
-  const resultBlockRegex = /<div[^>]*class="[^"]*result(?:__body|s_links_deep)[^"]*"[^>]*>([\s\S]*?)(?=<div[^>]*class="[^"]*result(?:__body|s_links_deep)|$)/gi
-  const titleRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/i
-  const snippetRegex = /<a[^>]*class="[^"]*result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/i
-
-  // Also try a simpler pattern that matches the actual DDG HTML structure
-  const simpleResultRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
-  const snippetResults: { url: string; title: string }[] = []
-  let match: RegExpExecArray | null
-
-  while ((match = simpleResultRegex.exec(html)) !== null) {
-    let url = match[1]
-    const title = match[2].replace(/<[^>]+>/g, '').trim()
-    if (!url || !title) continue
-
-    // DDG wraps URLs in a redirect: //duckduckgo.com/l/?uddg=ENCODED_URL&...
-    const uddgMatch = url.match(/[?&]uddg=([^&]+)/)
-    if (uddgMatch) {
-      try {
-        url = decodeURIComponent(uddgMatch[1])
-      } catch {
-        // Skip malformed URL
-        continue
-      }
-    }
-    // Skip ad links and internal DDG links
-    if (url.startsWith('https://duckduckgo.com') || url.startsWith('//duckduckgo.com')) continue
-    if (!url.startsWith('http')) continue
-
-    snippetResults.push({ url, title })
-  }
-
-  // Now find snippets by scanning for result__snippet near each result
-  const snippetBlockRegex = /<a[^>]*class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi
-  const snippets: string[] = []
-  while ((match = snippetBlockRegex.exec(html)) !== null) {
-    snippets.push(match[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim())
-  }
-
-  for (let i = 0; i < snippetResults.length && results.length < 10; i++) {
-    results.push({
-      title: snippetResults[i].title,
-      url: snippetResults[i].url,
-      snippet: snippets[i] || '',
-    })
-  }
-
-  // If the simple regex didn't work, try matching full result blocks
-  if (results.length === 0) {
-    let blockMatch: RegExpExecArray | null
-    while ((blockMatch = resultBlockRegex.exec(html)) !== null && results.length < 10) {
-      const block = blockMatch[1]
-      const tMatch = titleRegex.exec(block)
-      const sMatch = snippetRegex.exec(block)
-      if (!tMatch) continue
-
-      let url = tMatch[1]
-      const title = tMatch[2].replace(/<[^>]+>/g, '').trim()
-      const snippet = sMatch ? sMatch[1].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim() : ''
-
-      const uddgMatch = url.match(/[?&]uddg=([^&]+)/)
-      if (uddgMatch) url = decodeURIComponent(uddgMatch[1])
-      if (!url.startsWith('http')) continue
-
-      results.push({ title, url, snippet })
-    }
-  }
-
-  return { query, results }
-}
-
-/** Make an HTTPS request that follows redirects (up to 5) and returns the response body */
-function httpsRequest(
-  url: string,
-  options: { method?: string; headers?: Record<string, string>; body?: string; timeout?: number },
-  maxRedirects = 5,
-): Promise<{ statusCode: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const reqModule = url.startsWith('https') ? https : http
-    const method = options.method ?? 'GET'
-    const reqOptions: https.RequestOptions = {
-      method,
-      headers: options.headers ?? {},
-      lookup: safeDnsLookup,
-    }
-
-    const req = reqModule.request(url, reqOptions, (res: IncomingMessage) => {
-      // Follow redirects
-      const redirectLocation = Array.isArray(res.headers.location) ? res.headers.location[0] : res.headers.location
-      if ((res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 303) && redirectLocation && maxRedirects > 0) {
-        let redirectUrl = redirectLocation
-        if (redirectUrl.startsWith('/')) {
-          const parsed = new URL(url)
-          redirectUrl = `${parsed.protocol}//${parsed.host}${redirectUrl}`
-        }
-        res.destroy()
-        httpsRequest(redirectUrl, options, maxRedirects - 1).then(resolve).catch(reject)
-        return
-      }
-
-      const MAX_BODY = 1024 * 1024 // 1 MB
-      let body = ''
-      let overflow = false
-      res.on('data', (chunk: Buffer | string) => {
-        body += chunk.toString()
-        if (body.length > MAX_BODY) {
-          overflow = true
-          res.destroy()
-        }
-      })
-      res.on('end', () => {
-        if (overflow) {
-          reject(new Error('Response too large'))
-          return
-        }
-        resolve({ statusCode: res.statusCode ?? 0, body })
-      })
-    })
-    req.on('error', (err: Error) => reject(err))
-    req.setTimeout(options.timeout ?? 15_000, () => {
-      req.destroy()
-      reject(new Error('Request timed out'))
-    })
-    if (options.body) req.write(options.body)
-    req.end()
-  })
-}
-
-ipcMain.handle('web:search', async (_event, query: string) => {
-  try {
-    // Use DuckDuckGo HTML-lite search for real web search results
-    const searchUrl = 'https://html.duckduckgo.com/html/'
-    const body = `q=${encodeURIComponent(query)}`
-
-    const response = await httpsRequest(searchUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-      },
-      body,
-      timeout: 15_000,
-    })
-
-    return parseDDGHtml(response.body, query)
-  } catch (err: unknown) {
-    return { query, results: [], error: err instanceof Error ? err.message : String(err) } as WebSearchResponse
-  }
-})
-
 // ─── IPC Handlers: Fetch Webpage ───────────────────────────────────
 
 function stripHtml(html: string): string {
@@ -3320,6 +3143,8 @@ ipcMain.handle('email:send', async (
       host: config.smtpHost,
       port: config.smtpPort,
       secure: config.secure,
+      disableFileAccess: true,
+      disableUrlAccess: true,
       auth: {
         user: config.username,
         pass: config.password,
@@ -3371,6 +3196,8 @@ ipcMain.handle('email:test', async (
       host: config.smtpHost,
       port: config.smtpPort,
       secure: config.secure,
+      disableFileAccess: true,
+      disableUrlAccess: true,
       auth: {
         user: config.username,
         pass: config.password,
