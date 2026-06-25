@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react'
 
-const DEFAULT_MIN_WIDTH = 224
-const DEFAULT_MAX_WIDTH = 360
+const DEFAULT_MIN_WIDTH = 280
+const DEFAULT_MAX_WIDTH = 420
 
 function clampPanelWidth(width: number): number {
   return Math.min(DEFAULT_MAX_WIDTH, Math.max(DEFAULT_MIN_WIDTH, Math.round(width)))
@@ -12,7 +12,7 @@ function clampPanelWidth(width: number): number {
  */
 export function useResizablePanel(
   key: string,
-  defaultWidth: number = 280,
+  defaultWidth: number = 320,
 ): [number, (width: number) => void] {
   const [width, setWidthState] = useState<number>(() => {
     try {

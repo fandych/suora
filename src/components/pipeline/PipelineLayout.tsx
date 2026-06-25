@@ -23,7 +23,9 @@ import type { AgentPipeline, AgentPipelineBudget, AgentPipelineExecution, AgentP
 import { generateId } from '@/utils/helpers';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Checkbox } from '@/components/catalyst-ui/checkbox';
+import { Dialog, DialogBody, DialogTitle } from '@/components/catalyst-ui/dialog';
 import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 const PIPELINE_HEADER_BACKGROUND = 'bg-[radial-gradient(circle_at_top_left,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_55%)]';
 function formatDuration(durationMs?: number, t?: (key: string, defaultValue?: string) => string) {
     if (durationMs === undefined)
@@ -158,7 +160,7 @@ function getValidExecutionId(currentId: string | null, executions: AgentPipeline
 export function PipelineLayout() {
     const { t, locale } = useI18n();
     const [searchParams, setSearchParams] = useSearchParams();
-    const [panelWidth, setPanelWidth] = useResizablePanel('pipeline', 280);
+    const [panelWidth, setPanelWidth] = useResizablePanel('pipeline', 340);
     const [searchQuery, setSearchQuery] = useState('');
     const [assistantState, setAssistantState] = useState<{
         mode: 'create' | 'edit';
@@ -171,6 +173,7 @@ export function PipelineLayout() {
     const [variableValues, setVariableValues] = useState<Record<string, string>>({});
     const [diagramView, setDiagramView] = useState<'flow' | 'list' | 'source'>('flow');
     const [copiedMermaid, setCopiedMermaid] = useState(false);
+    const [diagramDialogOpen, setDiagramDialogOpen] = useState(false);
     const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([]);
     const [optimizationIterations, setOptimizationIterations] = useState<PipelineOptimizationIteration[] | null>(null);
     const [running, setRunning] = useState(false);
@@ -857,22 +860,35 @@ export function PipelineLayout() {
             });
         }
     };
+      const renderDiagramContent = (expanded = false) => {
+        if (diagramView === 'flow') {
+          return (<PipelineFlowCanvas steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap} className={expanded ? 'h-[70vh]' : undefined}/>);
+        }
+        if (diagramView === 'list') {
+          return (<div className={expanded ? 'max-h-[70vh] overflow-y-auto' : undefined}>
+            <PipelineFlowDiagram steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap}/>
+          </div>);
+        }
+        return (<pre className={`${expanded ? 'h-[70vh]' : 'max-h-96'} overflow-auto rounded-2xl border border-border-subtle bg-surface-0/45 p-4 text-[11px] leading-relaxed text-text-secondary`}>
+          <code>{mermaidSource}</code>
+          </pre>);
+      };
     return (<>
       <SidePanel title={t('agents.pipeline', 'Pipeline')} width={panelWidth} action={<div className="flex items-center gap-2">
-            <UiButton unstyled type="button" onClick={openAssistantCreate} className="rounded-xl bg-accent px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-accent-hover">
+            <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarPrimaryActionClass}>
               {t('timer.aiCreate', 'AI Create')}
             </UiButton>
-            <UiButton unstyled type="button" onClick={resetPipelineEditor} className="rounded-xl bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/20">
+            <UiButton unstyled type="button" onClick={resetPipelineEditor} className={workbenchSidebarAccentActionClass}>
               + {t('common.new', 'New')}
             </UiButton>
           </div>}>
         <div className="module-sidebar-stack p-3 space-y-3">
-          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+          <div className={workbenchSidebarCardClass}>
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted"/>
-              <UiInput value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('agents.searchPipelines', 'Search pipelines...')} className="w-full rounded-2xl border border-border bg-surface-2 py-2.5 pl-9 pr-3 text-xs text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+              <UiInput value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('agents.searchPipelines', 'Search pipelines...')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass.replace('pr-10', 'pr-3').replace('pl-10', 'pl-9')}/>
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+            <div className={workbenchSidebarMetaClass}>
               <span>{filteredPipelines.length} {t('common.results', 'results')}</span>
               {searchQuery.trim() && <span>{agentPipelines.length} {t('common.total', 'total')}</span>}
             </div>
@@ -883,17 +899,15 @@ export function PipelineLayout() {
                 {t('agents.pipelineSavedList', 'Saved pipelines')}
               </div>)}
 
-            {filteredPipelines.length === 0 ? (<div className="rounded-3xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">
+            {filteredPipelines.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
                 {searchQuery.trim()
                 ? t('agents.noMatchingPipelines', 'No matching pipelines.')
                 : t('agents.noSavedPipelines', 'No saved pipelines yet.')}
-              </div>) : (filteredPipelines.map((savedPipeline) => (<UiButton unstyled key={savedPipeline.id} type="button" onClick={() => loadSavedPipeline(savedPipeline.id)} className={`w-full rounded-3xl border px-3.5 py-3.5 text-left transition-all ${selectedAgentPipelineId === savedPipeline.id
-                ? 'border-accent/30 bg-accent/10 text-text-primary shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.12)]'
-                : 'border-border-subtle bg-surface-1/70 text-text-secondary hover:border-border hover:bg-surface-2/70'}`}>
+              </div>) : (filteredPipelines.map((savedPipeline) => (<UiButton unstyled key={savedPipeline.id} type="button" onClick={() => loadSavedPipeline(savedPipeline.id)} className={workbenchSidebarItemClass(selectedAgentPipelineId === savedPipeline.id, 'border-border-subtle bg-surface-1/70 text-text-secondary hover:border-border hover:bg-surface-2/70')}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <div className="truncate text-[13px] font-medium">{savedPipeline.name}</div>
+                        <div className={workbenchSidebarTitleClass}>{savedPipeline.name}</div>
                         {selectedAgentPipelineId === savedPipeline.id && <span className="rounded-full bg-accent/15 px-1.5 py-0.5 text-[9px] text-accent">{t('agents.open', 'Open')}</span>}
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
@@ -901,12 +915,12 @@ export function PipelineLayout() {
                         <span className="h-1 w-1 rounded-full bg-border"/>
                         <span>{formatRelativeTime(savedPipeline.lastRunAt)}</span>
                       </div>
-                      {savedPipeline.description && <div className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{savedPipeline.description}</div>}
+                      {savedPipeline.description && <div className={workbenchSidebarDescriptionClass}>{savedPipeline.description}</div>}
                       <div className="mt-2 flex flex-wrap gap-1.5 text-[10px] text-text-muted">
-                        <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{savedPipeline.lastRunAt ? t('agents.pipelineRecentRun', 'Recent run') : t('agents.pipelineAwaitingFirstRun', 'Awaiting first run')}</span>
+                        <span className={workbenchSidebarPillClass}>{savedPipeline.lastRunAt ? t('agents.pipelineRecentRun', 'Recent run') : t('agents.pipelineAwaitingFirstRun', 'Awaiting first run')}</span>
                       </div>
                     </div>
-                    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-3 text-accent">
+                    <span className={`${workbenchSidebarIconClass} mt-0.5 h-9 w-9`}>
                       <IconifyIcon name="skill-agent-comm" size={15} color="currentColor"/>
                     </span>
                   </div>
@@ -915,7 +929,7 @@ export function PipelineLayout() {
         </div>
       </SidePanel>
 
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360}/>
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
       <div className="module-workspace flex min-w-0 flex-1 flex-col">
         <div className={`module-hero-strip border-b border-border-subtle px-6 py-5 ${PIPELINE_HEADER_BACKGROUND}`}>
@@ -1030,12 +1044,12 @@ export function PipelineLayout() {
                 <div className="mt-5 space-y-4">
                   <div>
                     <label className="mb-2 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineName', 'Pipeline name')}</label>
-                    <UiInput value={agentPipelineName} onChange={(e) => setAgentPipelineName(e.target.value)} placeholder={t('agents.pipelineName', 'Pipeline name')} className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                    <UiInput value={agentPipelineName} onChange={(e) => setAgentPipelineName(e.target.value)} placeholder={t('agents.pipelineName', 'Pipeline name')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary"/>
                   </div>
 
                   <div>
                     <label className="mb-2 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineDescription', 'Description')}</label>
-                    <UiTextArea value={pipelineDescription} onChange={(event) => setPipelineDescription(event.target.value)} placeholder={t('agents.pipelineDescriptionPlaceholder', 'What this workflow prepares, checks, or hands off...')} rows={2} className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                    <UiTextArea value={pipelineDescription} onChange={(event) => setPipelineDescription(event.target.value)} placeholder={t('agents.pipelineDescriptionPlaceholder', 'What this workflow prepares, checks, or hands off...')} rows={2} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary"/>
                   </div>
 
                   <div className="rounded-2xl border border-border-subtle bg-surface-2/55 px-4 py-4">
@@ -1053,15 +1067,15 @@ export function PipelineLayout() {
                         {pipelineVariables.map((variable, index) => (<div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
                             <UiInput value={variable.name} onChange={(event) => {
                     renamePipelineVariable(index, event.target.value);
-                }} placeholder={t('agents.pipelineVariableName', 'name')} className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                      }} placeholder={t('agents.pipelineVariableName', 'name')} controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
                             <UiInput value={variable.label ?? ''} onChange={(event) => {
                     const next = event.target.value;
                     updatePipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: next } : item));
-                }} placeholder={t('agents.pipelineVariableLabel', 'Label (optional)')} className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                      }} placeholder={t('agents.pipelineVariableLabel', 'Label (optional)')} controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
                             <UiInput value={variable.defaultValue ?? ''} onChange={(event) => {
                     const next = event.target.value;
                     updatePipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, defaultValue: next } : item));
-                }} placeholder={t('agents.pipelineVariableDefault', 'Default value')} className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                      }} placeholder={t('agents.pipelineVariableDefault', 'Default value')} controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
                             <UiButton unstyled type="button" onClick={() => {
                     updatePipelineVariables((current) => current.filter((_, itemIndex) => itemIndex !== index));
                 }} className="rounded-xl border border-border-subtle bg-surface-1/80 px-2 py-1 text-[11px] font-medium text-text-muted transition-colors hover:border-red-500/30 hover:text-red-300">
@@ -1075,10 +1089,10 @@ export function PipelineLayout() {
                         <div className="mt-2 grid gap-2 sm:grid-cols-2">
                           {pipelineVariables.filter((variable) => variable.name.trim()).map((variable) => (<label key={variable.name} className="flex flex-col gap-1 text-xs text-text-secondary">
                               <span className="font-medium text-text-primary">{variable.label?.trim() || variable.name}</span>
-                              <UiInput value={variableValues[variable.name] ?? ''} onChange={(event) => {
+                                <UiInput value={variableValues[variable.name] ?? ''} onChange={(event) => {
                     const next = event.target.value;
                     setVariableValues((current) => ({ ...current, [variable.name]: next }));
-                }} placeholder={variable.defaultValue ?? ''} className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                        }} placeholder={variable.defaultValue ?? ''} controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
                             </label>))}
                         </div>
                       </div>)}
@@ -1101,7 +1115,7 @@ export function PipelineLayout() {
                 const next = { ...(current ?? {}), maxTotalDurationMs: parsed };
                 return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined;
             });
-        }} placeholder="0" className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                }} placeholder="0" controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
                       </label>
                       <label className="flex flex-col gap-1 text-xs text-text-secondary">
                         <span>{t('agents.pipelineBudgetMaxTokens', 'Max total tokens')}</span>
@@ -1112,7 +1126,7 @@ export function PipelineLayout() {
                 const next = { ...(current ?? {}), maxTotalTokens: parsed };
                 return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined;
             });
-        }} placeholder="0" className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                }} placeholder="0" controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
                       </label>
                       <label className="flex flex-col gap-1 text-xs text-text-secondary">
                         <span>{t('agents.pipelineBudgetMaxSteps', 'Max steps')}</span>
@@ -1123,7 +1137,7 @@ export function PipelineLayout() {
                 const next = { ...(current ?? {}), maxStepCount: parsed };
                 return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined;
             });
-        }} placeholder="0" className="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                }} placeholder="0" controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
                       </label>
                     </div>
                   </div>
@@ -1165,11 +1179,11 @@ export function PipelineLayout() {
                           </div>
 
                           <div className="space-y-3">
-                            <UiInput value={step.name ?? ''} onChange={(e) => updateStep(idx, { name: e.target.value })} placeholder={t('agents.pipelineStepNamePlaceholder', 'Optional step label')} className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
-                            <UiSelect value={step.agentId} onChange={(e) => updateStep(idx, { agentId: e.target.value })} aria-label={t('agents.pipelineAgent', 'Pipeline agent')} className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20">
+                            <UiInput value={step.name ?? ''} onChange={(e) => updateStep(idx, { name: e.target.value })} placeholder={t('agents.pipelineStepNamePlaceholder', 'Optional step label')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary"/>
+                            <UiSelect value={step.agentId} onChange={(e) => updateStep(idx, { agentId: e.target.value })} aria-label={t('agents.pipelineAgent', 'Pipeline agent')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary">
                               {enabledAgents.map((agent) => <option key={agent.id} value={agent.id}>{agentNameMap[agent.id] ?? agent.name}</option>)}
                             </UiSelect>
-                            <UiTextArea value={step.task} onChange={(e) => updateStep(idx, { task: e.target.value })} placeholder={t('agents.taskDesc', 'Task description...')} rows={3} className="w-full rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                            <UiTextArea value={step.task} onChange={(e) => updateStep(idx, { task: e.target.value })} placeholder={t('agents.taskDesc', 'Task description...')} rows={3} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary"/>
 
                             <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                               <Checkbox checked={step.enabled !== false} onChange={(v) => updateStep(idx, { enabled: v })} color="blue" />
@@ -1181,7 +1195,7 @@ export function PipelineLayout() {
                               <div className="mt-3 space-y-3">
                                 <div>
                                   <label className="mb-1 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineRunIf', 'Run if (condition)')}</label>
-                                  <UiInput value={step.runIf ?? ''} onChange={(event) => updateStep(idx, { runIf: event.target.value })} placeholder={t('agents.pipelineRunIfPlaceholder', "step1.status == 'success' && previous.output contains 'approved'")} className="w-full rounded-2xl border border-border bg-surface-1 px-3 py-2 font-mono text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                  <UiInput value={step.runIf ?? ''} onChange={(event) => updateStep(idx, { runIf: event.target.value })} placeholder={t('agents.pipelineRunIfPlaceholder', "step1.status == 'success' && previous.output contains 'approved'")} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-1 px-3 py-2 font-mono text-xs text-text-primary"/>
                                   <div className="mt-1 text-[11px] text-text-muted">{t('agents.pipelineRunIfHint', 'Skip this step when the condition is false. Supports step{N}.field, previous.field, vars.name, ==, !=, contains, not contains, matches, is empty, is not empty, combined with &&.')}</div>
                                 </div>
 
@@ -1192,7 +1206,7 @@ export function PipelineLayout() {
                                   </label>
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <span>{t('agents.pipelineRetryCount', 'Retries')}</span>
-                                    <UiInput type="number" min={0} max={3} value={normalizeRetryCount(step.retryCount)} onChange={(event) => updateStep(idx, { retryCount: normalizeRetryCount(Number(event.target.value)) })} className="h-8 w-16 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                    <UiInput type="number" min={0} max={3} value={normalizeRetryCount(step.retryCount)} onChange={(event) => updateStep(idx, { retryCount: normalizeRetryCount(Number(event.target.value)) })} wrapperClassName="w-16" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
                                   </label>
                                 </div>
 
@@ -1202,11 +1216,11 @@ export function PipelineLayout() {
                                     <UiInput type="number" min={0} max={60000} value={step.retryBackoffMs ?? ''} onChange={(event) => {
                     const raw = event.target.value;
                     updateStep(idx, { retryBackoffMs: raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw))) });
-                }} placeholder="0" className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                  }} placeholder="0" wrapperClassName="w-24" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
                                   </label>
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <span>{t('agents.pipelineRetryStrategy', 'Retry strategy')}</span>
-                                    <UiSelect value={step.retryBackoffStrategy ?? 'fixed'} onChange={(event) => updateStep(idx, { retryBackoffStrategy: event.target.value === 'exponential' ? 'exponential' : 'fixed' })} className="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20">
+                                    <UiSelect value={step.retryBackoffStrategy ?? 'fixed'} onChange={(event) => updateStep(idx, { retryBackoffStrategy: event.target.value === 'exponential' ? 'exponential' : 'fixed' })} controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary">
                                       <option value="fixed">{t('agents.pipelineRetryStrategyFixed', 'Fixed')}</option>
                                       <option value="exponential">{t('agents.pipelineRetryStrategyExponential', 'Exponential')}</option>
                                     </UiSelect>
@@ -1216,7 +1230,7 @@ export function PipelineLayout() {
                                 <div className="grid gap-2 sm:grid-cols-2">
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <span>{t('agents.pipelineStepModel', 'Model override')}</span>
-                                    <UiSelect value={step.modelId ?? ''} onChange={(event) => updateStep(idx, { modelId: event.target.value || undefined })} className="h-8 max-w-40 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20">
+                                    <UiSelect value={step.modelId ?? ''} onChange={(event) => updateStep(idx, { modelId: event.target.value || undefined })} wrapperClassName="max-w-40" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary">
                                       <option value="">{t('agents.pipelineStepModelDefault', 'Use agent default')}</option>
                                       {models.map((modelOption) => (<option key={modelOption.id} value={modelOption.id} disabled={modelOption.enabled === false}>
                                           {modelOption.name}{modelOption.enabled === false ? ` (${t('common.disabled', 'disabled')})` : ''}
@@ -1232,7 +1246,7 @@ export function PipelineLayout() {
                         // Clear the path when leaving json-path mode.
                         ...(next !== 'json-path' ? { outputTransformPath: undefined } : {}),
                     });
-                }} className="h-8 max-w-40 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20">
+                          }} wrapperClassName="max-w-40" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary">
                                       <option value="">{t('agents.pipelineStepOutputTransformNone', 'None')}</option>
                                       <option value="trim">{t('agents.pipelineStepOutputTransformTrim', 'Trim whitespace')}</option>
                                       <option value="first-line">{t('agents.pipelineStepOutputTransformFirstLine', 'First line')}</option>
@@ -1245,29 +1259,29 @@ export function PipelineLayout() {
                                 {step.outputTransform === 'json-path' && (<div>
                                     <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                       <span>{t('agents.pipelineStepOutputTransformPath', 'JSON path')}</span>
-                                      <UiInput type="text" value={step.outputTransformPath ?? ''} onChange={(event) => updateStep(idx, { outputTransformPath: event.target.value || undefined })} placeholder="data.items.0.name" className="h-8 w-56 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                      <UiInput type="text" value={step.outputTransformPath ?? ''} onChange={(event) => updateStep(idx, { outputTransformPath: event.target.value || undefined })} placeholder="data.items.0.name" wrapperClassName="w-56" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
                                     </label>
                                   </div>)}
 
                                 <div>
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <span>{t('agents.pipelineStepExportVar', 'Export to variable')}</span>
-                                    <UiInput type="text" value={step.exportVar ?? ''} onChange={(event) => updateStep(idx, { exportVar: event.target.value || undefined })} placeholder={t('agents.pipelineStepExportVarPlaceholder', 'e.g. topic')} className="h-8 w-56 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                    <UiInput type="text" value={step.exportVar ?? ''} onChange={(event) => updateStep(idx, { exportVar: event.target.value || undefined })} placeholder={t('agents.pipelineStepExportVarPlaceholder', 'e.g. topic')} wrapperClassName="w-56" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
                                   </label>
                                 </div>
 
                                 <div className="grid gap-2 sm:grid-cols-3">
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <span>{t('agents.pipelineStepTimeout', 'Timeout ms')}</span>
-                                    <UiInput type="number" min={1000} value={step.timeoutMs ?? ''} onChange={(event) => updateStep(idx, { timeoutMs: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="300000" className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                    <UiInput type="number" min={1000} value={step.timeoutMs ?? ''} onChange={(event) => updateStep(idx, { timeoutMs: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="300000" wrapperClassName="w-24" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
                                   </label>
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <span>{t('agents.pipelineMaxInput', 'Max input')}</span>
-                                    <UiInput type="number" min={1000} value={step.maxInputChars ?? ''} onChange={(event) => updateStep(idx, { maxInputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="80000" className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                    <UiInput type="number" min={1000} value={step.maxInputChars ?? ''} onChange={(event) => updateStep(idx, { maxInputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="80000" wrapperClassName="w-24" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
                                   </label>
                                   <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
                                     <span>{t('agents.pipelineMaxOutput', 'Max output')}</span>
-                                    <UiInput type="number" min={1000} value={step.maxOutputChars ?? ''} onChange={(event) => updateStep(idx, { maxOutputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="32000" className="h-8 w-24 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                    <UiInput type="number" min={1000} value={step.maxOutputChars ?? ''} onChange={(event) => updateStep(idx, { maxOutputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="32000" wrapperClassName="w-24" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
                                   </label>
                                 </div>
 
@@ -1375,10 +1389,16 @@ export function PipelineLayout() {
                       <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineWorkflowDiagram', 'Workflow diagram')}</h2>
                       <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineWorkflowDiagramHint', 'Preview the pipeline as Mermaid, or copy the source into docs and markdown notes.')}</p>
                     </div>
-                    <UiButton unstyled type="button" onClick={() => void copyMermaidSource()} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-accent">
-                      <IconifyIcon name={copiedMermaid ? 'ui-check' : 'ui-copy'} size={13} color="currentColor"/>
-                      {copiedMermaid ? t('common.copied', 'Copied') : t('agents.copyMermaid', 'Copy Mermaid')}
-                    </UiButton>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <UiButton unstyled type="button" onClick={() => setDiagramDialogOpen(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-accent">
+                        <IconifyIcon name="ui-export" size={13} color="currentColor"/>
+                        {t('common.expand', 'Expand')}
+                      </UiButton>
+                      <UiButton unstyled type="button" onClick={() => void copyMermaidSource()} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-accent">
+                        <IconifyIcon name={copiedMermaid ? 'ui-check' : 'ui-copy'} size={13} color="currentColor"/>
+                        {copiedMermaid ? t('common.copied', 'Copied') : t('agents.copyMermaid', 'Copy Mermaid')}
+                      </UiButton>
+                    </div>
                   </div>
 
                   <div className="mt-4 inline-flex rounded-2xl border border-border-subtle bg-surface-2/60 p-1">
@@ -1394,13 +1414,26 @@ export function PipelineLayout() {
                   </div>
 
                   <div className="mt-4">
-                    {diagramView === 'flow' && (<PipelineFlowCanvas steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap}/>)}
-                    {diagramView === 'list' && (<PipelineFlowDiagram steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap}/>)}
-                    {diagramView === 'source' && (<pre className="max-h-96 overflow-auto rounded-2xl border border-border-subtle bg-surface-0/45 p-4 text-[11px] leading-relaxed text-text-secondary">
-                        <code>{mermaidSource}</code>
-                      </pre>)}
+                    {renderDiagramContent()}
                   </div>
                 </section>
+
+                {diagramDialogOpen && (<Dialog open={diagramDialogOpen} onClose={setDiagramDialogOpen} size="5xl" className="w-[min(96vw,1280px)] max-w-none overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 p-0 text-text-primary shadow-2xl ring-0">
+                    <DialogBody className="mt-0">
+                      <div className="flex items-center justify-between gap-3 border-b border-border-subtle/70 px-5 py-4">
+                        <div>
+                          <DialogTitle className="text-base font-semibold text-text-primary">{t('agents.pipelineWorkflowDiagram', 'Workflow diagram')}</DialogTitle>
+                          <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineWorkflowDiagramHint', 'Preview the pipeline as Mermaid, or copy the source into docs and markdown notes.')}</p>
+                        </div>
+                        <UiButton unstyled type="button" onClick={() => setDiagramDialogOpen(false)} className="flex h-9 w-9 items-center justify-center rounded-xl border border-border-subtle/55 bg-surface-0/72 text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent" aria-label={t('common.close', 'Close')}>
+                          <IconifyIcon name="ui-close" size={14} color="currentColor"/>
+                        </UiButton>
+                      </div>
+                      <div className="px-5 py-4">
+                        {renderDiagramContent(true)}
+                      </div>
+                    </DialogBody>
+                  </Dialog>)}
 
                 <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
                   <div className="flex items-center justify-between gap-3">

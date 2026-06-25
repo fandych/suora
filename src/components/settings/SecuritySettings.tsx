@@ -43,7 +43,7 @@ function ListEditor({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={placeholder}
-          className="flex-1"
+          wrapperClassName="flex-1"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               commitValue()
@@ -149,7 +149,7 @@ function EnvVarsSection() {
                 setKeyError('')
               }}
               placeholder="API_KEY"
-              className="font-mono"
+              controlClassName="font-mono"
             />
             {keyError && <p className="mt-2 text-[11px] text-red-500">{keyError}</p>}
           </div>
@@ -160,7 +160,7 @@ function EnvVarsSection() {
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
               placeholder="••••••••"
-              className="font-mono"
+              controlClassName="font-mono"
             />
           </div>
         </div>
@@ -201,7 +201,7 @@ function EnvVarsSection() {
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     aria-label={t('settings.envValue', 'Value')}
-                    className="font-mono"
+                    controlClassName="font-mono"
                   />
                   <UiInput
                     value={editDesc}

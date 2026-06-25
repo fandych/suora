@@ -9,6 +9,7 @@ import type { Agent, MessageAttachment, Session, Skill } from '@/types';
 import { generateId } from '@/utils/helpers';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Select as UiSelect } from "@/components/catalyst-ui/form-controls";
+import { workbenchSectionEyebrowClass, workbenchSidebarSubtleActionClass } from '@/components/catalyst-ui/workbench';
 type AgentAssistantMode = 'create' | 'edit';
 type Translate = (key: string, fallback: string) => string;
 function ContextChip({ label, value }: {
@@ -221,7 +222,7 @@ export function AgentAssistantDrawer({ mode, agent, onClose, onAgentMutated, }: 
         <div className="border-b border-border-subtle/55 px-5 py-4">
           <div className="flex items-start justify-between gap-4">
             <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.assistantSection', 'Side chat')}</div>
+              <div className={workbenchSectionEyebrowClass}>{t('timer.assistantSection', 'Side chat')}</div>
               <h2 className="mt-1 text-[20px] font-semibold text-text-primary">
                 {mode === 'edit' ? t('agents.agentAssistantTitleEdit', 'AI Edit Agent') : t('agents.agentAssistantTitleCreate', 'AI Create Agent')}
               </h2>
@@ -230,7 +231,7 @@ export function AgentAssistantDrawer({ mode, agent, onClose, onAgentMutated, }: 
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {messages.length > 0 && (<UiButton unstyled type="button" onClick={clearMessages} disabled={isStreaming} className="rounded-2xl border border-border-subtle/55 bg-surface-0/70 px-3 py-2 text-[11px] font-semibold text-text-secondary transition-colors hover:border-danger/18 hover:bg-danger/8 hover:text-danger disabled:opacity-45">
+                            {messages.length > 0 && (<UiButton unstyled type="button" onClick={clearMessages} disabled={isStreaming} className={`${workbenchSidebarSubtleActionClass} disabled:opacity-45`}>
                   {t('timer.assistantClear', 'Clear')}
                 </UiButton>)}
               <UiButton unstyled type="button" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-2xl border border-border-subtle/55 bg-surface-0/70 text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent" aria-label={t('agents.agentAssistantClose', 'Close agent assistant')} title={t('common.close', 'Close')}>
@@ -245,7 +246,7 @@ export function AgentAssistantDrawer({ mode, agent, onClose, onAgentMutated, }: 
             <label htmlFor="agent-assistant-model" className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">
               {t('agents.agentAssistantModelPicker', 'Assistant model')}
             </label>
-            <UiSelect id="agent-assistant-model" aria-label={t('agents.agentAssistantModelPicker', 'Assistant model')} value={session?.modelId ?? ''} onChange={handleSessionModelChange} disabled={isStreaming || selectableModels.length === 0} className="mt-2 w-full rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2 text-[12px] text-text-primary outline-none transition-colors focus:border-accent/30">
+            <UiSelect id="agent-assistant-model" aria-label={t('agents.agentAssistantModelPicker', 'Assistant model')} value={session?.modelId ?? ''} onChange={handleSessionModelChange} disabled={isStreaming || selectableModels.length === 0} wrapperClassName="mt-2" controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2 text-[12px] text-text-primary">
               <option value="">{t('chat.selectModel', '-- Select Model --')}</option>
               {selectableModels.map((model) => (<option key={model.id} value={model.id}>{model.name}</option>))}
             </UiSelect>

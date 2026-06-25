@@ -6,6 +6,7 @@ import { ChannelPlatformIcon, getPlatformDisplayName } from './ChannelIcons';
 import { ChannelMessageBubble, formatChannelAbsoluteTime, formatChannelRelativeTime, normalizeChannelDirection } from './ChannelComponents';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Input as UiInput, Select as UiSelect } from "@/components/catalyst-ui/form-controls";
+import { workbenchDetailSectionClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
 function PanelShell({ eyebrow, title, description, action, children, }: {
     eyebrow: string;
     title: string;
@@ -13,12 +14,12 @@ function PanelShell({ eyebrow, title, description, action, children, }: {
     action?: ReactNode;
     children: ReactNode;
 }) {
-    return (<section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)]">
+    return (<section className={workbenchDetailSectionClass}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{eyebrow}</div>
-          <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{title}</h3>
-          {description && <p className="mt-2 max-w-3xl text-[13px] leading-6 text-text-secondary/80">{description}</p>}
+          <div className={workbenchSectionEyebrowClass}>{eyebrow}</div>
+          <h3 className={workbenchSectionTitleClass}>{title}</h3>
+          {description && <p className={`${workbenchSectionDescriptionClass} mt-2 max-w-3xl leading-6`}>{description}</p>}
         </div>
         {action}
       </div>
@@ -30,9 +31,9 @@ function PanelStat({ label, value, accent = false }: {
     value: string;
     accent?: boolean;
 }) {
-    return (<div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
-      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
-      <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    return (<div className={workbenchSummaryStatClass(accent)}>
+      <div className={workbenchSummaryLabelClass}>{label}</div>
+      <div className={`${workbenchSummaryValueClass} ${accent ? 'text-accent' : ''}`}>{value}</div>
     </div>);
 }
 function EmptyPanelState({ icon, title, description }: {
@@ -124,7 +125,7 @@ export function ChannelMessageHistory({ channelId }: {
           <label className="relative block">
             <span className="sr-only">{t('channels.searchMessages', 'Search messages')}</span>
             <IconifyIcon name="ui-search" size={15} color="currentColor" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55"/>
-            <UiInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('channels.searchMessagesPlaceholder', 'Search content, sender, status, or channel…')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-0/72 py-2.5 pl-9 pr-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+            <UiInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('channels.searchMessagesPlaceholder', 'Search content, sender, status, or channel…')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-0/72 py-2.5 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted/55"/>
           </label>
           <div className="flex flex-wrap gap-2 xl:justify-end">
           {(['all', 'incoming', 'outgoing'] as const).map((value) => (<UiButton unstyled key={value} type="button" onClick={() => setFilter(value)} className={`rounded-2xl border px-3.5 py-2 text-[10px] font-semibold transition-colors ${filter === value ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}>
@@ -136,7 +137,7 @@ export function ChannelMessageHistory({ channelId }: {
             </UiButton>))}
           {channelSenders.length > 1 && (<>
               <label className="sr-only" htmlFor="channel-user-filter">{t('channels.filterByUser', 'Filter by user')}</label>
-              <UiSelect id="channel-user-filter" value={userFilter} onChange={(e) => setUserFilter(e.target.value)} aria-label={t('channels.filterByUser', 'Filter by user')} className="max-w-44 rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2 text-[10px] text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20">
+              <UiSelect id="channel-user-filter" value={userFilter} onChange={(e) => setUserFilter(e.target.value)} aria-label={t('channels.filterByUser', 'Filter by user')} wrapperClassName="max-w-44" controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2 text-[10px] text-text-primary">
                 <option value="all">{t('channels.allUsers', 'All users')}</option>
                 {channelSenders.map((user) => (<option key={user.senderId} value={user.senderId}>
                     {user.senderName} ({user.messageCount})
@@ -351,13 +352,13 @@ export function ChannelDebugPanel({ defaultChannelId }: {
         </div>
 
         <div className="mt-5 grid gap-3 lg:grid-cols-[0.75fr_1.25fr_auto]">
-          <UiSelect value={selectedChannelId} onChange={(e) => setSelectedChannelId(e.target.value)} aria-label={t('channels.selectChannel', 'Select channel')} className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20">
+          <UiSelect value={selectedChannelId} onChange={(e) => setSelectedChannelId(e.target.value)} aria-label={t('channels.selectChannel', 'Select channel')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-3 text-sm text-text-primary">
             {channels.map((channel) => <option key={channel.id} value={channel.id}>{channel.name} ({getPlatformDisplayName(channel.platform)})</option>)}
           </UiSelect>
-          <UiInput value={mockMessage} onChange={(e) => setMockMessage(e.target.value)} placeholder={t('channels.mockMessagePlaceholder', 'Type a mock message...')} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+              <UiInput value={mockMessage} onChange={(e) => setMockMessage(e.target.value)} placeholder={t('channels.mockMessagePlaceholder', 'Type a mock message...')} wrapperClassName="w-full" onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
         e.preventDefault();
         void sendMock();
-    } }} className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+            } }} controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-3 text-sm text-text-primary placeholder:text-text-muted/55"/>
           <UiButton unstyled type="button" onClick={() => void sendMock()} disabled={sending || !mockMessage.trim() || !selectedChannelId} className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50">
             {sending ? t('common.sending', 'Sending…') : t('common.send', 'Send')}
           </UiButton>
@@ -367,7 +368,7 @@ export function ChannelDebugPanel({ defaultChannelId }: {
             <label className="relative block">
               <span className="sr-only">{t('channels.searchDebugLog', 'Search debug log')}</span>
               <IconifyIcon name="ui-search" size={15} color="currentColor" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55"/>
-              <UiInput value={logQuery} onChange={(event) => setLogQuery(event.target.value)} placeholder={t('channels.searchDebugLogPlaceholder', 'Search local trace…')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-0/72 py-2.5 pl-9 pr-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+              <UiInput value={logQuery} onChange={(event) => setLogQuery(event.target.value)} placeholder={t('channels.searchDebugLogPlaceholder', 'Search local trace…')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-0/72 py-2.5 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted/55"/>
             </label>
             <div className="flex flex-wrap gap-2 xl:justify-end">
               {(['all', 'info', 'success', 'error'] as const).map((tone) => (<UiButton unstyled key={tone} type="button" onClick={() => setLogToneFilter(tone)} className={`rounded-2xl border px-3.5 py-2 text-[10px] font-semibold transition-colors ${logToneFilter === tone ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}>

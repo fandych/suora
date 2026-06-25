@@ -13,20 +13,80 @@ import { Checkbox } from '@/components/catalyst-ui/checkbox'
 import { Button as UiButton } from '@/components/catalyst-ui/button'
 import { Input as UiInput, Select as UiSelect } from '@/components/catalyst-ui/form-controls'
 import type { AppLocale, BubbleStyle, CodeFont, FontSize, ThemeMode } from '@/types'
+import { ACCENT_PRESETS, type AccentColorId } from '@/theme/accentPresets'
 
 const ACCENT_SWATCH_STYLES = {
-  default: { fill: 'bg-[#C99A2E]', ring: 'ring-[#C99A2E]/45' },
-  sapphire: { fill: 'bg-[#0024D4]', ring: 'ring-[#0024D4]/45' },
-  emerald: { fill: 'bg-[#2DA66E]', ring: 'ring-[#2DA66E]/45' },
-  amethyst: { fill: 'bg-[#8B5CF6]', ring: 'ring-[#8B5CF6]/45' },
-  coral: { fill: 'bg-[#E06848]', ring: 'ring-[#E06848]/45' },
-  rose: { fill: 'bg-[#D44878]', ring: 'ring-[#D44878]/45' },
-  jade: { fill: 'bg-[#1C9B8E]', ring: 'ring-[#1C9B8E]/45' },
-  crimson: { fill: 'bg-[#CC3340]', ring: 'ring-[#CC3340]/45' },
-  copper: { fill: 'bg-[#C07840]', ring: 'ring-[#C07840]/45' },
-  arctic: { fill: 'bg-[#4AA8D0]', ring: 'ring-[#4AA8D0]/45' },
-  slate: { fill: 'bg-[#6B7B99]', ring: 'ring-[#6B7B99]/45' },
+  default: { fill: 'bg-[#0024D3]', ring: 'ring-[#0024D3]/45' },
+  amber: { fill: ACCENT_PRESETS.amber.swatchFill, ring: ACCENT_PRESETS.amber.swatchRing },
+  sapphire: { fill: ACCENT_PRESETS.sapphire.swatchFill, ring: ACCENT_PRESETS.sapphire.swatchRing },
+  emerald: { fill: ACCENT_PRESETS.emerald.swatchFill, ring: ACCENT_PRESETS.emerald.swatchRing },
+  amethyst: { fill: ACCENT_PRESETS.amethyst.swatchFill, ring: ACCENT_PRESETS.amethyst.swatchRing },
+  coral: { fill: ACCENT_PRESETS.coral.swatchFill, ring: ACCENT_PRESETS.coral.swatchRing },
+  rose: { fill: ACCENT_PRESETS.rose.swatchFill, ring: ACCENT_PRESETS.rose.swatchRing },
+  jade: { fill: ACCENT_PRESETS.jade.swatchFill, ring: ACCENT_PRESETS.jade.swatchRing },
+  crimson: { fill: ACCENT_PRESETS.crimson.swatchFill, ring: ACCENT_PRESETS.crimson.swatchRing },
+  copper: { fill: ACCENT_PRESETS.copper.swatchFill, ring: ACCENT_PRESETS.copper.swatchRing },
+  arctic: { fill: ACCENT_PRESETS.arctic.swatchFill, ring: ACCENT_PRESETS.arctic.swatchRing },
+  slate: { fill: ACCENT_PRESETS.slate.swatchFill, ring: ACCENT_PRESETS.slate.swatchRing },
 } as const
+
+const THEME_OPTION_STYLES: Record<ThemeMode, string> = {
+  dark: 'border-slate-700/80 bg-[linear-gradient(160deg,#08121d,#13253a)]',
+  light: 'border-slate-300/90 bg-[linear-gradient(160deg,#ffffff,#e9f0f7)]',
+  system: 'border-border-subtle/65 bg-[linear-gradient(90deg,#0b1622_0%,#0f2033_49%,#eef3f7_51%,#ffffff_100%)]',
+}
+
+function ThemePreview({ mode }: { mode: ThemeMode }) {
+  if (mode === 'system') {
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-[14px] border border-slate-700/70 bg-[linear-gradient(160deg,#08121d,#13253a)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-100/90" />
+            <span className="h-1.5 w-5 rounded-full bg-slate-100/20" />
+          </div>
+          <div className="space-y-1.5">
+            <div className="h-2 rounded-full bg-slate-100/16" />
+            <div className="h-6 rounded-xl border border-white/8 bg-white/7" />
+            <div className="h-3 w-7 rounded-full bg-accent/75" />
+          </div>
+        </div>
+        <div className="rounded-[14px] border border-slate-300/90 bg-[linear-gradient(160deg,#ffffff,#e9f0f7)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-700/80" />
+            <span className="h-1.5 w-5 rounded-full bg-slate-500/30" />
+          </div>
+          <div className="space-y-1.5">
+            <div className="h-2 rounded-full bg-slate-400/18" />
+            <div className="h-6 rounded-xl border border-slate-300/85 bg-white/95" />
+            <div className="h-3 w-7 rounded-full bg-accent/75" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const isDark = mode === 'dark'
+
+  return (
+    <div className={`rounded-[16px] border p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${THEME_OPTION_STYLES[mode]}`}>
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className={`h-1.5 w-1.5 rounded-full ${isDark ? 'bg-slate-100/90' : 'bg-slate-700/80'}`} />
+        <span className={`h-1.5 w-7 rounded-full ${isDark ? 'bg-slate-100/20' : 'bg-slate-500/30'}`} />
+      </div>
+      <div className="grid grid-cols-[1.1fr_0.9fr] gap-2">
+        <div className="space-y-1.5">
+          <div className={`h-2 rounded-full ${isDark ? 'bg-slate-100/16' : 'bg-slate-400/18'}`} />
+          <div className={`h-6 rounded-xl border ${isDark ? 'border-white/8 bg-white/7' : 'border-slate-300/85 bg-white/95'}`} />
+          <div className="h-3 w-9 rounded-full bg-accent/75" />
+        </div>
+        <div className={`rounded-xl border p-2 ${isDark ? 'border-white/8 bg-black/14' : 'border-slate-300/80 bg-slate-100/90'}`}>
+          <div className={`h-full rounded-lg ${isDark ? 'bg-white/6' : 'bg-white/92'}`} />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const LOCALE_VALUES: AppLocale[] = ['en', 'zh']
 
@@ -99,6 +159,7 @@ function ProxySection() {
                   value={proxySettings.type}
                   onChange={(e) => setProxySettings({ type: e.target.value as 'http' | 'https' | 'socks5' })}
                   aria-label={t('settings.protocol', 'Protocol')}
+                  wrapperClassName="w-full"
                 >
                   <option value="http">{t('settings.protocolHttp')}</option>
                   <option value="https">{t('settings.protocolHttps')}</option>
@@ -111,6 +172,7 @@ function ProxySection() {
                   value={proxySettings.host}
                   onChange={(e) => setProxySettings({ host: e.target.value })}
                   placeholder="127.0.0.1"
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
@@ -120,6 +182,7 @@ function ProxySection() {
                   value={proxySettings.port || ''}
                   onChange={(e) => setProxySettings({ port: parseInt(e.target.value, 10) || 0 })}
                   placeholder="7890"
+                  wrapperClassName="w-full"
                 />
               </div>
             </div>
@@ -134,6 +197,7 @@ function ProxySection() {
                   value={proxySettings.username || ''}
                   onChange={(e) => setProxySettings({ username: e.target.value })}
                   aria-label={t('settings.usernameOptional', 'Username (optional)')}
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
@@ -143,6 +207,7 @@ function ProxySection() {
                   value={proxySettings.password || ''}
                   onChange={(e) => setProxySettings({ password: e.target.value })}
                   aria-label={t('settings.passwordOptional', 'Password (optional)')}
+                  wrapperClassName="w-full"
                 />
               </div>
             </div>
@@ -189,6 +254,7 @@ function EmailSection() {
                   value={emailConfig.smtpHost}
                   onChange={(e) => setEmailConfig({ smtpHost: e.target.value })}
                   placeholder="smtp.gmail.com"
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
@@ -198,6 +264,7 @@ function EmailSection() {
                   value={emailConfig.smtpPort}
                   onChange={(e) => setEmailConfig({ smtpPort: parseInt(e.target.value, 10) || 587 })}
                   title={t('settings.smtpPort', 'SMTP Port')}
+                  wrapperClassName="w-full"
                 />
               </div>
               <label className="rounded-md border border-border-subtle bg-surface-2/55 p-3 flex items-center gap-3 self-end cursor-pointer">
@@ -218,6 +285,7 @@ function EmailSection() {
                   value={emailConfig.username}
                   onChange={(e) => setEmailConfig({ username: e.target.value })}
                   placeholder="your@email.com"
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
@@ -227,6 +295,7 @@ function EmailSection() {
                   value={emailConfig.password}
                   onChange={(e) => setEmailConfig({ password: e.target.value })}
                   placeholder="••••••••"
+                  wrapperClassName="w-full"
                 />
               </div>
             </div>
@@ -242,6 +311,7 @@ function EmailSection() {
                   value={emailConfig.fromName}
                   onChange={(e) => setEmailConfig({ fromName: e.target.value })}
                   placeholder="Suora"
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
@@ -251,6 +321,7 @@ function EmailSection() {
                   value={emailConfig.fromAddress}
                   onChange={(e) => setEmailConfig({ fromAddress: e.target.value })}
                   placeholder="assistant@example.com"
+                  wrapperClassName="w-full"
                 />
               </div>
             </div>
@@ -336,8 +407,9 @@ export function GeneralSettings() {
     emailConfig,
   } = useAppStore()
   const [saved, setSaved] = useState(false)
-  const accentOptions = [
-    { value: 'default', label: t('settings.accentAmber', 'Amber') },
+  const accentOptions: ReadonlyArray<{ value: AccentColorId; label: string }> = [
+    { value: 'default', label: t('settings.accentDefault', 'Workbench Blue') },
+    { value: 'amber', label: t('settings.accentAmber', 'Amber') },
     { value: 'sapphire', label: t('settings.accentSapphire', 'Sapphire') },
     { value: 'emerald', label: t('settings.accentEmerald', 'Emerald') },
     { value: 'amethyst', label: t('settings.accentAmethyst', 'Amethyst') },
@@ -348,7 +420,7 @@ export function GeneralSettings() {
     { value: 'copper', label: t('settings.accentCopper', 'Copper') },
     { value: 'arctic', label: t('settings.accentArctic', 'Arctic') },
     { value: 'slate', label: t('settings.accentSlate', 'Slate') },
-  ] as const
+  ]
   const localeLabels: Record<AppLocale, string> = {
     en: t('settings.localeEnglish', 'English'),
     zh: t('settings.localeChinese', '中文'),
@@ -364,7 +436,7 @@ export function GeneralSettings() {
     }
   }, [workspacePath, setWorkspacePath])
 
-  const activeAccent = accentOptions.find((option) => option.value === accentColor)?.label || t('settings.accentAmber', 'Amber')
+  const activeAccent = accentOptions.find((option) => option.value === accentColor)?.label || t('settings.accentDefault', 'Workbench Blue')
   const themeLabel = theme === 'dark'
     ? t('settings.dark', 'Dark')
     : theme === 'light'
@@ -398,12 +470,19 @@ export function GeneralSettings() {
               {(['dark', 'light', 'system'] as ThemeMode[]).map((mode) => (
                 <UiButton
                   key={mode}
+                  unstyled
                   type="button"
                   onClick={() => setTheme(mode)}
-                  className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-all ${theme === mode ? 'border-accent/25 bg-accent/12 text-accent shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.08)]' : 'border-border-subtle/55 bg-surface-0/70 text-text-secondary hover:border-accent/18 hover:bg-surface-0/90'}`}
+                  className={`flex flex-col items-stretch gap-3 rounded-[22px] border bg-surface-0/72 p-3 text-left text-sm font-medium text-text-secondary transition-all hover:border-accent/18 hover:bg-surface-0/88 ${theme === mode ? 'scale-[1.01] border-accent/40 text-text-primary shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.12)] ring-2 ring-accent/15' : 'border-border-subtle/55'}`}
                 >
-                  {mode === 'dark' ? <IconifyIcon name="ui-moon" size={14} color="currentColor" /> : mode === 'light' ? <IconifyIcon name="ui-sun" size={14} color="currentColor" /> : <IconifyIcon name="ui-computer" size={14} color="currentColor" />}
-                  {mode === 'dark' ? t('settings.dark', 'Dark') : mode === 'light' ? t('settings.light', 'Light') : t('settings.system', 'System')}
+                  <ThemePreview mode={mode} />
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2">
+                      {mode === 'dark' ? <IconifyIcon name="ui-moon" size={14} color="currentColor" /> : mode === 'light' ? <IconifyIcon name="ui-sun" size={14} color="currentColor" /> : <IconifyIcon name="ui-computer" size={14} color="currentColor" />}
+                      {mode === 'dark' ? t('settings.dark', 'Dark') : mode === 'light' ? t('settings.light', 'Light') : t('settings.system', 'System')}
+                    </span>
+                    {theme === mode && <IconifyIcon name="ui-check" size={14} color="currentColor" />}
+                  </span>
                 </UiButton>
               ))}
             </div>
@@ -415,10 +494,11 @@ export function GeneralSettings() {
               {accentOptions.map((option) => (
                 <UiButton
                   key={option.value}
+                  unstyled
                   type="button"
                   onClick={() => setAccentColor(option.value)}
                   title={option.label}
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${accentColor === option.value ? `border-text-primary scale-110 shadow-lg ring-2 ring-offset-2 ring-offset-surface-0 ${ACCENT_SWATCH_STYLES[option.value].ring}` : 'border-transparent hover:scale-105'}`}
+                  className={`relative flex h-9 w-9 items-center justify-center rounded-full border-2 bg-surface-0/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all ${accentColor === option.value ? `border-text-primary scale-110 shadow-lg ring-2 ring-offset-2 ring-offset-surface-0 ${ACCENT_SWATCH_STYLES[option.value].ring}` : 'border-border-subtle/35 hover:scale-105 hover:border-border-subtle/70'}`}
                   aria-label={t('settings.accentColorAria', 'Accent color: {name}').replace('{name}', option.label)}
                 >
                   <span className={`block h-full w-full rounded-full ${ACCENT_SWATCH_STYLES[option.value].fill}`} aria-hidden="true" />
@@ -441,6 +521,7 @@ export function GeneralSettings() {
               aria-label={t('settings.fontSize', 'Font Size')}
               value={fontSize}
               onChange={(e) => setFontSize(e.target.value as FontSize)}
+              wrapperClassName="w-full"
             >
               <option value="small">{t('settings.fontSizeSmall', 'Small')}</option>
               <option value="medium">{t('settings.fontSizeMedium', 'Medium')}</option>
@@ -454,6 +535,7 @@ export function GeneralSettings() {
               aria-label={t('settings.codeFont', 'Code Font')}
               value={codeFont}
               onChange={(e) => setCodeFont(e.target.value as CodeFont)}
+              wrapperClassName="w-full"
             >
               <option value="default">{t('settings.codeFontDefault', 'System Default')}</option>
               <option value="fira-code">Fira Code</option>
@@ -470,6 +552,7 @@ export function GeneralSettings() {
               aria-label={t('settings.bubbleStyle', 'Bubble Style')}
               value={bubbleStyle}
               onChange={(e) => setBubbleStyle(e.target.value as BubbleStyle)}
+              wrapperClassName="w-full"
             >
               <option value="default">{t('settings.bubbleDefault', 'Default')}</option>
               <option value="minimal">{t('settings.bubbleMinimal', 'Minimal')}</option>
@@ -491,6 +574,7 @@ export function GeneralSettings() {
             aria-label={t('settings.language', 'Language')}
             value={locale}
             onChange={(e) => setLocale(e.target.value as AppLocale)}
+            wrapperClassName="w-full"
           >
             {LOCALE_VALUES.map((value) => (
               <option key={value} value={value}>{localeLabels[value]}</option>
@@ -513,7 +597,7 @@ export function GeneralSettings() {
                   value={workspacePath}
                   onChange={(e) => setWorkspacePath(e.target.value)}
                   placeholder="~/.suora"
-                  className="flex-1"
+                  wrapperClassName="flex-1"
                 />
                 <UiButton
                   type="button"

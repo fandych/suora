@@ -59,7 +59,9 @@ function downloadBlob(content: string, filename: string, mimeType: string) {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
+  document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
 
@@ -69,7 +71,9 @@ function downloadBinaryBlob(buffer: Blob, filename: string) {
   const a = document.createElement('a')
   a.href = url
   a.download = filename
+  document.body.appendChild(a)
   a.click()
+  document.body.removeChild(a)
   URL.revokeObjectURL(url)
 }
 
@@ -692,6 +696,12 @@ export interface ChatExportRequest {
   singleMessageId?: string
 }
 
+function getChatExportMessages(req: ChatExportRequest): Message[] {
+  return req.scope === 'single'
+    ? req.messages.filter((m) => m.id === req.singleMessageId)
+    : req.messages.filter((m) => m.role !== 'tool')
+}
+
 function formatTimestamp(ts: number): string {
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric',
@@ -703,9 +713,7 @@ function formatTimestamp(ts: number): string {
 }
 
 function chatToMarkdown(req: ChatExportRequest): string {
-  const msgs = req.scope === 'single'
-    ? req.messages.filter((m) => m.id === req.singleMessageId)
-    : req.messages.filter((m) => m.role !== 'tool')
+  const msgs = getChatExportMessages(req)
 
   const lines: string[] = [
     `# ${req.session.title}`,
@@ -731,9 +739,7 @@ function chatToMarkdown(req: ChatExportRequest): string {
 }
 
 async function chatToHtml(req: ChatExportRequest): Promise<string> {
-  const msgs = req.scope === 'single'
-    ? req.messages.filter((m) => m.id === req.singleMessageId)
-    : req.messages.filter((m) => m.role !== 'tool')
+  const msgs = getChatExportMessages(req)
 
   const bodyParts: string[] = [
     `<h1>${escapeHtml(req.session.title)}</h1>`,
@@ -760,9 +766,7 @@ async function chatToHtml(req: ChatExportRequest): Promise<string> {
 }
 
 async function chatToDocx(req: ChatExportRequest): Promise<Blob> {
-  const msgs = req.scope === 'single'
-    ? req.messages.filter((m) => m.id === req.singleMessageId)
-    : req.messages.filter((m) => m.role !== 'tool')
+  const msgs = getChatExportMessages(req)
 
   const paragraphs: (Paragraph | Table)[] = []
 
@@ -790,6 +794,11 @@ async function chatToDocx(req: ChatExportRequest): Promise<Blob> {
 export async function exportChat(req: ChatExportRequest): Promise<{ success: boolean; message?: string }> {
   const safeName = (req.session.title || 'chat').replace(/[<>:"/\\|?*]/g, '_').trim()
   const isElectron = typeof window !== 'undefined' && typeof window.electron?.invoke === 'function'
+  const exportMessages = getChatExportMessages(req)
+
+  if (exportMessages.length === 0) {
+    return { success: false, message: 'Nothing to export for the selected scope.' }
+  }
 
   if (req.format === 'markdown') {
     const md = chatToMarkdown(req)

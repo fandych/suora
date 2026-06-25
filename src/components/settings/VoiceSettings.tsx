@@ -100,6 +100,7 @@ export function VoiceSettings() {
                   value={voiceSettings.language}
                   onChange={(e) => updateSettings({ language: e.target.value })}
                   aria-label={t('settings.language', 'Language')}
+                  wrapperClassName="w-full"
                 >
                   {voiceLanguageOptions.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -113,6 +114,7 @@ export function VoiceSettings() {
                   value={voiceSettings.voiceName || ''}
                   onChange={(e) => updateSettings({ voiceName: e.target.value || undefined })}
                   aria-label={t('settings.voiceName', 'Voice')}
+                  wrapperClassName="w-full"
                 >
                   <option value="">{t('settings.default', 'Default')}</option>
                   {voices.map((voice) => (
@@ -135,7 +137,7 @@ export function VoiceSettings() {
           <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div>
               <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.speechRate', 'Speech Rate')} ({voiceSettings.rate.toFixed(1)})</label>
-              <input
+              <UiInput
                 type="range"
                 min="0.5"
                 max="2"
@@ -153,7 +155,7 @@ export function VoiceSettings() {
 
             <div>
               <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.pitch', 'Pitch')} ({voiceSettings.pitch.toFixed(1)})</label>
-              <input
+              <UiInput
                 type="range"
                 min="0"
                 max="2"
@@ -220,6 +222,7 @@ export function VoiceSettings() {
               value={testText}
               onChange={(e) => setTestText(e.target.value)}
               placeholder={t('settings.testSpeechPlaceholder', 'Type text to speak…')}
+              wrapperClassName="w-full"
             />
           </div>
 

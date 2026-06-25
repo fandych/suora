@@ -45,7 +45,7 @@ export const PipelineEdge = memo(function PipelineEdge(props: EdgeProps<Pipeline
           >
             {data?.successOnly && <span className="text-emerald-400">✓</span>}
             {data?.condition && (
-              <span className="max-w-[140px] truncate text-violet-300">
+              <span className="max-w-35 truncate text-violet-300">
                 if {data.condition.length > 30 ? `${data.condition.slice(0, 29)}…` : data.condition}
               </span>
             )}

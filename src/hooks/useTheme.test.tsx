@@ -55,9 +55,9 @@ describe('useTheme', () => {
     render(<ThemeHarness />)
 
     await waitFor(() => {
-      expect(document.documentElement.style.getPropertyValue('--t-accent')).toBe('#0024D4')
-      expect(document.documentElement.style.getPropertyValue('--t-accent-rgb')).toBe('0,36,212')
-      expect(document.documentElement.style.getPropertyValue('--t-accent-glow')).toBe('rgba(0,36,212,0.24)')
+      expect(document.documentElement.style.getPropertyValue('--t-accent')).toBe('#215DFF')
+      expect(document.documentElement.style.getPropertyValue('--t-accent-rgb')).toBe('33,93,255')
+      expect(document.documentElement.style.getPropertyValue('--t-accent-glow')).toBe('rgba(33,93,255,0.22)')
     })
   })
 })

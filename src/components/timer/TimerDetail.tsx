@@ -7,11 +7,12 @@ import { buildPipelineExecutionPath } from '@/services/pipelineNavigation';
 import type { ScheduledTask, TimerExecution } from '@/types';
 import { electronInvoke, formatRelative, formatDateTime } from './timerHelpers';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { workbenchAccentButtonClass, workbenchDangerButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchInfoCardClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass } from '@/components/catalyst-ui/workbench';
 function InfoCard({ label, value }: {
     label: string;
     value: string;
 }) {
-    return (<div className="bg-surface-1 rounded-lg p-3 border border-border-subtle">
+    return (<div className={workbenchInfoCardClass}>
       <span className="text-[10px] text-text-muted uppercase tracking-wide block mb-0.5">{label}</span>
       <span className="text-xs text-text-primary">{value}</span>
     </div>);
@@ -74,14 +75,14 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
     };
     return (<div className="module-canvas flex-1 overflow-y-auto px-5 py-6 animate-fade-in xl:px-8 xl:py-8">
       <div className="module-content mx-auto max-w-6xl space-y-6">
-        <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+        <section className={workbenchHeroSectionClass}>
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
               <div className="flex h-18 w-18 items-center justify-center rounded-[26px] border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
                 <IconifyIcon name={timer.type === 'once' ? 'ui-timer-once' : 'ui-repeat'} size={30} color="currentColor"/>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.detail', 'Detail')}</div>
+                <div className={workbenchSectionEyebrowClass}>{t('timer.detail', 'Detail')}</div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{timer.name}</h2>
                 <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
                   <span className="inline-flex items-center gap-1.5">{timer.type === 'once' ? <><IconifyIcon name="ui-timer-once" size={12}/> {t('timer.oneTime', 'One-time')}</> : <><IconifyIcon name="ui-repeat" size={12}/> {t('timer.repeating', 'Repeating')}</>}</span>
@@ -97,16 +98,16 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
               <UiButton unstyled onClick={onToggle} className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${timer.enabled ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`}>
                 {timer.enabled ? t('timer.enabled', '● Enabled') : t('timer.disabled', '○ Disabled')}
               </UiButton>
-              <UiButton unstyled onClick={onRunNow} className="px-4 py-2.5 rounded-2xl bg-accent/15 text-accent text-sm font-semibold hover:bg-accent/25 transition-colors">
+              <UiButton unstyled onClick={onRunNow} className={workbenchAccentButtonClass}>
                 {t('timer.runNow', 'Run now')}
               </UiButton>
-              {onOpenAssistant && (<UiButton unstyled onClick={onOpenAssistant} className="px-4 py-2.5 rounded-2xl bg-accent text-white text-sm font-semibold hover:bg-accent-hover transition-colors">
+              {onOpenAssistant && (<UiButton unstyled onClick={onOpenAssistant} className={workbenchPrimaryButtonClass}>
                   {aiEditLabel}
                 </UiButton>)}
-              <UiButton unstyled onClick={onEdit} className="px-4 py-2.5 rounded-2xl bg-surface-2 text-text-muted text-sm font-semibold hover:text-text-secondary transition-colors">
+              <UiButton unstyled onClick={onEdit} className={workbenchNeutralButtonClass}>
                 {t('common.edit', 'Edit')}
               </UiButton>
-              <UiButton unstyled onClick={onDelete} className="px-4 py-2.5 rounded-2xl bg-red-500/10 text-red-400 text-sm font-semibold hover:bg-red-500/20 transition-colors">
+              <UiButton unstyled onClick={onDelete} className={workbenchDangerButtonClass}>
                 {t('common.delete', 'Delete')}
               </UiButton>
             </div>
@@ -115,11 +116,11 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(20rem,0.9fr)]">
           <div className="space-y-6">
-            <section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+            <section className={workbenchDetailSectionClass}>
               <div className="mb-5">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.overview', 'Overview')}</div>
-                <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('timer.scheduleAndState', 'Schedule & State')}</h3>
-                <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('timer.scheduleAndStateHint', 'Review when this timer runs next and how it has behaved so far before changing it.')}</p>
+                <div className={workbenchSectionEyebrowClass}>{t('timer.overview', 'Overview')}</div>
+                <h3 className={workbenchSectionTitleClass}>{t('timer.scheduleAndState', 'Schedule & State')}</h3>
+                <p className={workbenchSectionDescriptionClass}>{t('timer.scheduleAndStateHint', 'Review when this timer runs next and how it has behaved so far before changing it.')}</p>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -134,22 +135,22 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
               </div>
             </section>
 
-            {(timer.prompt || pipeline) && (<section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+            {(timer.prompt || pipeline) && (<section className={workbenchDetailSectionClass}>
                 <div className="mb-5">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.payload', 'Payload')}</div>
-                  <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{timer.action === 'pipeline' ? t('timer.pipeline', 'Pipeline') : timer.action === 'notify' ? t('timer.notificationBody', 'Notification Body') : t('timer.promptText', 'Prompt')}</h3>
+                  <div className={workbenchSectionEyebrowClass}>{t('timer.payload', 'Payload')}</div>
+                  <h3 className={workbenchSectionTitleClass}>{timer.action === 'pipeline' ? t('timer.pipeline', 'Pipeline') : timer.action === 'notify' ? t('timer.notificationBody', 'Notification Body') : t('timer.promptText', 'Prompt')}</h3>
                 </div>
                 <p className="rounded-3xl border border-border-subtle bg-surface-2/75 p-4 text-sm leading-7 text-text-secondary whitespace-pre-wrap">{timer.action === 'pipeline' ? (pipeline?.name || timer.pipelineId || 'Unknown pipeline') : timer.prompt}</p>
               </section>)}
           </div>
 
-          <section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6 h-fit">
+          <section className={`${workbenchDetailSectionClass} h-fit`}>
             <UiButton unstyled onClick={() => setShowHistory(!showHistory)} className="w-full text-left">
               <div className="flex items-center justify-between gap-3">
                 <div>
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.executionHistory', 'Execution History')}</div>
-                  <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('timer.runLog', 'Run Log')}</h3>
-                  <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('timer.runLogHint', 'Expand the history to inspect recent executions and jump into pipeline runs when available.')}</p>
+                  <div className={workbenchSectionEyebrowClass}>{t('timer.executionHistory', 'Execution History')}</div>
+                  <h3 className={workbenchSectionTitleClass}>{t('timer.runLog', 'Run Log')}</h3>
+                  <p className={workbenchSectionDescriptionClass}>{t('timer.runLogHint', 'Expand the history to inspect recent executions and jump into pipeline runs when available.')}</p>
                 </div>
                 <span className={`inline-flex transition-transform text-text-muted ${showHistory ? 'rotate-90' : ''}`}>▶</span>
               </div>

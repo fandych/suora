@@ -13,6 +13,7 @@ import { Button as UiButton } from '@/components/catalyst-ui/button';
 import { Checkbox } from '@/components/catalyst-ui/checkbox';
 import { createMcpServerDraft, parseKeyValueLines, stringifyKeyValueLines, testMcpServerConnection, validateMcpServerConfig, } from '@/services/mcpSystem';
 import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { workbenchDangerButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
 /* ── tiny helpers ─────────────────────────────────────────────── */
 const statusMeta: Record<string, {
     dot: string;
@@ -44,9 +45,9 @@ function SummaryStat({ label, value, accent = false }: {
     value: string;
     accent?: boolean;
 }) {
-    return (<div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
-      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
-      <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    return (<div className={workbenchSummaryStatClass(accent)}>
+      <div className={workbenchSummaryLabelClass}>{label}</div>
+      <div className={`${workbenchSummaryValueClass} ${accent ? 'text-accent' : ''}`}>{value}</div>
     </div>);
 }
 function EditorSection({ eyebrow, title, description, children, }: {
@@ -55,11 +56,11 @@ function EditorSection({ eyebrow, title, description, children, }: {
     description?: string;
     children: React.ReactNode;
 }) {
-    return (<section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+    return (<section className={workbenchDetailSectionClass}>
       <div className="mb-5">
-        <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{eyebrow}</div>
-        <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{title}</h3>
-        {description && <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{description}</p>}
+        <div className={workbenchSectionEyebrowClass}>{eyebrow}</div>
+        <h3 className={workbenchSectionTitleClass}>{title}</h3>
+        {description && <p className={workbenchSectionDescriptionClass}>{description}</p>}
       </div>
       {children}
     </section>);
@@ -80,7 +81,7 @@ const textareaCls = 'w-full px-4 py-3 rounded-3xl bg-surface-2/80 border border-
 /* ── component ────────────────────────────────────────────────── */
 export function MCPSettingsPanel() {
     const { t } = useI18n();
-    const [panelWidth, setPanelWidth] = useResizablePanel('mcp', 280);
+    const [panelWidth, setPanelWidth] = useResizablePanel('mcp', 340);
     const { mcpServers, addMcpServer, updateMcpServer, removeMcpServer, setMcpServerStatus, } = useAppStore();
     const [selectedId, setSelectedId] = useState<string | null>(mcpServers[0]?.id ?? null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -212,14 +213,14 @@ export function MCPSettingsPanel() {
         setTesting(false);
     };
     const detailView = selected && !form ? (<div className="space-y-6 animate-in fade-in duration-200">
-      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+      <section className={workbenchHeroSectionClass}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             <div className="flex h-18 w-18 shrink-0 items-center justify-center rounded-4xl border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
               <IconifyIcon name={transportIcons[selected.transport] || 'ui-plugin'} size={28} color="currentColor"/>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('mcp.serverOverview', 'Server Overview')}</div>
+              <div className={workbenchSectionEyebrowClass}>{t('mcp.serverOverview', 'Server Overview')}</div>
               <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{selected.name}</h2>
               <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">{t('mcp.serverOverviewHint', 'Inspect transport details, connection health, and discovered capabilities before exposing this server to the workspace runtime.')}</p>
               <div className="mt-4 flex flex-wrap items-center gap-2">
@@ -241,14 +242,14 @@ export function MCPSettingsPanel() {
           <UiButton unstyled type="button" onClick={() => updateMcpServer(selected.id, { enabled: !selected.enabled })} className={`rounded-2xl px-4 py-2.5 text-sm font-semibold transition-colors ${selected.enabled ? 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/25' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`}>
             {selected.enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')}
           </UiButton>
-          <UiButton unstyled type="button" onClick={() => startEdit(selected)} className="rounded-2xl bg-surface-2 px-4 py-2.5 text-sm font-semibold text-text-muted transition-colors hover:text-text-secondary">
+          <UiButton unstyled type="button" onClick={() => startEdit(selected)} className={workbenchNeutralButtonClass}>
             {t('common.edit', 'Edit')}
           </UiButton>
-          <UiButton unstyled type="button" onClick={() => void handleTest(selected)} disabled={testing} className="inline-flex items-center gap-2 rounded-2xl bg-accent px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50">
+          <UiButton unstyled type="button" onClick={() => void handleTest(selected)} disabled={testing} className={`inline-flex items-center gap-2 ${workbenchPrimaryButtonClass} disabled:opacity-50`}>
             <IconifyIcon name="ui-plugin" size={14} color="currentColor"/>
             {testing ? t('models.testing', 'Testing...') : t('mcp.testConnection', 'Test Connection')}
           </UiButton>
-          <UiButton unstyled type="button" onClick={() => void handleDelete(selected.id)} className="rounded-2xl bg-red-500/10 px-4 py-2.5 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/20">
+          <UiButton unstyled type="button" onClick={() => void handleDelete(selected.id)} className={workbenchDangerButtonClass}>
             {t('common.delete', 'Delete')}
           </UiButton>
         </div>
@@ -315,14 +316,14 @@ export function MCPSettingsPanel() {
       </div>
     </div>) : null;
     const formView = form ? (<div className="space-y-6 animate-in fade-in duration-200">
-      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+      <section className={workbenchHeroSectionClass}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             <div className="flex h-18 w-18 shrink-0 items-center justify-center rounded-4xl border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
               <IconifyIcon name="ui-plugin" size={28} color="currentColor"/>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{isExistingServerForm ? t('mcp.editServer', 'Edit MCP Server') : t('mcp.newServer', 'New MCP Server')}</div>
+              <div className={workbenchSectionEyebrowClass}>{isExistingServerForm ? t('mcp.editServer', 'Edit MCP Server') : t('mcp.newServer', 'New MCP Server')}</div>
               <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{form.name || t('mcp.newServer', 'New MCP Server')}</h2>
               <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">{t('mcp.formHeroHint', 'Describe the server, choose its transport, and capture enough runtime detail that testing and discovery can happen without guesswork.')}</p>
             </div>
@@ -342,18 +343,18 @@ export function MCPSettingsPanel() {
             <div className="grid gap-4 md:grid-cols-2">
               <FieldLabel>
                 {t('common.name', 'Name')}
-                <UiInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className={`mt-1.5 ${inputCls}`} placeholder={t('mcp.namePlaceholder', 'My MCP Server')}/>
+                <UiInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} wrapperClassName="mt-1.5" controlClassName={inputCls} placeholder={t('mcp.namePlaceholder', 'My MCP Server')}/>
               </FieldLabel>
               <FieldLabel>
                 {t('mcp.scope', 'Scope')}
-                <UiSelect value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value as MCPServerConfig['scope'] })} title={t('mcp.scope', 'Scope')} className={`mt-1.5 ${selectCls}`}>
+                <UiSelect value={form.scope} onChange={(e) => setForm({ ...form, scope: e.target.value as MCPServerConfig['scope'] })} title={t('mcp.scope', 'Scope')} wrapperClassName="mt-1.5" controlClassName={selectCls}>
                   <option value="workspace">{t('mcp.scopeWorkspace', 'workspace')}</option>
                   <option value="user">{t('mcp.scopeUser', 'user')}</option>
                 </UiSelect>
               </FieldLabel>
               <FieldLabel>
                 {t('mcp.transport', 'Transport')}
-                <UiSelect value={form.transport} onChange={(e) => setForm({ ...form, transport: e.target.value as MCPServerConfig['transport'] })} title={t('mcp.transport', 'Transport')} className={`mt-1.5 ${selectCls}`}>
+                <UiSelect value={form.transport} onChange={(e) => setForm({ ...form, transport: e.target.value as MCPServerConfig['transport'] })} title={t('mcp.transport', 'Transport')} wrapperClassName="mt-1.5" controlClassName={selectCls}>
                   <option value="stdio">{getTransportLabel('stdio')}</option>
                   <option value="http">{getTransportLabel('http')}</option>
                   <option value="sse">{getTransportLabel('sse')}</option>
@@ -374,24 +375,24 @@ export function MCPSettingsPanel() {
               {form.transport === 'stdio' ? (<>
                   <FieldLabel>
                     {t('mcp.command', 'Command')}
-                    <UiInput value={form.command || ''} onChange={(e) => setForm({ ...form, command: e.target.value })} placeholder={t('mcp.commandPlaceholder', 'npx')} className={`mt-1.5 ${inputCls}`}/>
+                    <UiInput value={form.command || ''} onChange={(e) => setForm({ ...form, command: e.target.value })} placeholder={t('mcp.commandPlaceholder', 'npx')} wrapperClassName="mt-1.5" controlClassName={inputCls}/>
                   </FieldLabel>
                   <FieldLabel>
                     {t('mcp.arguments', 'Arguments')} <span className="font-normal text-text-muted/60">({t('mcp.spaceSeparated', 'space separated')})</span>
-                    <UiInput value={(form.args || []).join(' ')} onChange={(e) => setForm({ ...form, args: e.target.value.trim() ? e.target.value.trim().split(/\s+/) : [] })} placeholder={t('mcp.argsPlaceholder', '-y @modelcontextprotocol/server-filesystem C:/workspace')} className={`mt-1.5 ${inputCls} font-mono text-xs`}/>
+                    <UiInput value={(form.args || []).join(' ')} onChange={(e) => setForm({ ...form, args: e.target.value.trim() ? e.target.value.trim().split(/\s+/) : [] })} placeholder={t('mcp.argsPlaceholder', '-y @modelcontextprotocol/server-filesystem C:/workspace')} wrapperClassName="mt-1.5" controlClassName={`${inputCls} font-mono text-xs`}/>
                   </FieldLabel>
                   <FieldLabel>
                     {t('mcp.environmentVariables', 'Environment Variables')} <span className="font-normal text-text-muted/60">({t('mcp.keyValuePerLine', 'KEY=VALUE per line')})</span>
-                    <UiTextArea value={envInput} onChange={(e) => setEnvInput(e.target.value)} rows={5} className={`mt-1.5 ${textareaCls}`} placeholder={t('mcp.envPlaceholder', 'API_KEY=sk-...\nNODE_ENV=production')}/>
+                    <UiTextArea value={envInput} onChange={(e) => setEnvInput(e.target.value)} rows={5} wrapperClassName="mt-1.5" controlClassName={textareaCls} placeholder={t('mcp.envPlaceholder', 'API_KEY=sk-...\nNODE_ENV=production')}/>
                   </FieldLabel>
                 </>) : (<>
                   <FieldLabel>
                     {t('mcp.url', 'URL')}
-                    <UiInput value={form.url || ''} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder={t('mcp.urlPlaceholder', 'https://mcp.example.com')} className={`mt-1.5 ${inputCls} font-mono text-xs`}/>
+                    <UiInput value={form.url || ''} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder={t('mcp.urlPlaceholder', 'https://mcp.example.com')} wrapperClassName="mt-1.5" controlClassName={`${inputCls} font-mono text-xs`}/>
                   </FieldLabel>
                   <FieldLabel>
                     {t('mcp.headers', 'Headers')} <span className="font-normal text-text-muted/60">({t('mcp.keyValuePerLine', 'KEY=VALUE per line')})</span>
-                    <UiTextArea value={headersInput} onChange={(e) => setHeadersInput(e.target.value)} rows={5} className={`mt-1.5 ${textareaCls}`} placeholder={t('mcp.headersPlaceholder', 'Authorization=Bearer token\nContent-Type=application/json')}/>
+                    <UiTextArea value={headersInput} onChange={(e) => setHeadersInput(e.target.value)} rows={5} wrapperClassName="mt-1.5" controlClassName={textareaCls} placeholder={t('mcp.headersPlaceholder', 'Authorization=Bearer token\nContent-Type=application/json')}/>
                   </FieldLabel>
                 </>)}
             </div>
@@ -427,23 +428,23 @@ export function MCPSettingsPanel() {
       </div>
     </div>) : null;
     return (<>
-      <SidePanel title={t('mcp.title', 'MCP Servers')} width={panelWidth} action={<UiButton unstyled type="button" onClick={startCreate} className="rounded-xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/25">
+      <SidePanel title={t('mcp.title', 'MCP Servers')} width={panelWidth} action={<UiButton unstyled type="button" onClick={startCreate} className={workbenchSidebarAccentActionClass}>
             + {t('common.add', 'Add')}
           </UiButton>}>
         <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
-          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+          <div className={workbenchSidebarCardClass}>
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none"/>
-              <UiInput value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('mcp.searchServers', 'Search servers...')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-3 text-[12px] text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+              <UiInput value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('mcp.searchServers', 'Search servers...')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass}/>
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+            <div className={workbenchSidebarMetaClass}>
               <span>{filteredServers.length} {t('common.results', 'results')}</span>
               {searchQuery.trim() && <span>{mcpServers.length} {t('common.total', 'total')}</span>}
             </div>
           </div>
 
           <div className="space-y-2">
-            {filteredServers.length === 0 ? (<div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+            {filteredServers.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
                   <IconifyIcon name="ui-plugin" size={18} color="currentColor"/>
                 </div>
@@ -452,22 +453,22 @@ export function MCPSettingsPanel() {
               </div>) : (filteredServers.map((server) => {
             const isActive = selectedId === server.id || form?.id === server.id;
             const toolsCount = server.tools?.length ?? 0;
-            return (<UiButton unstyled key={server.id} type="button" className={`w-full rounded-3xl border px-3.5 py-3.5 text-left transition-all duration-200 ${isActive ? 'border-accent/20 bg-accent/10 shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]' : 'border-transparent bg-surface-1/20 hover:bg-surface-3/55 hover:border-border-subtle/60'}`} onClick={() => { setSelectedId(server.id); setForm(null); }}>
+            return (<UiButton unstyled key={server.id} type="button" className={workbenchSidebarItemClass(isActive)} onClick={() => { setSelectedId(server.id); setForm(null); }}>
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex min-w-0 gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 text-accent shadow-sm">
+                        <div className={workbenchSidebarIconClass}>
                           <IconifyIcon name={transportIcons[server.transport] || 'ui-plugin'} size={16} color="currentColor"/>
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="truncate text-[13px] font-semibold text-text-primary">{server.name}</span>
+                            <span className={workbenchSidebarTitleClass}>{server.name}</span>
                             {!server.enabled && <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] text-text-muted">{t('common.off', 'Off')}</span>}
                           </div>
-                          <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{server.transport === 'stdio' ? server.command || t('mcp.commandMissing', 'Command not configured') : server.url || t('mcp.urlMissing', 'URL not configured')}</p>
+                          <p className={workbenchSidebarDescriptionClass}>{server.transport === 'stdio' ? server.command || t('mcp.commandMissing', 'Command not configured') : server.url || t('mcp.urlMissing', 'URL not configured')}</p>
                           <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
-                            <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{getTransportLabel(server.transport)}</span>
-                            <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{getScopeLabel(server.scope)}</span>
-                            <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{t('mcp.toolsCount', `${toolsCount} tools`).replace('{count}', String(toolsCount))}</span>
+                            <span className={workbenchSidebarPillClass}>{getTransportLabel(server.transport)}</span>
+                            <span className={workbenchSidebarPillClass}>{getScopeLabel(server.scope)}</span>
+                            <span className={workbenchSidebarPillClass}>{t('mcp.toolsCount', `${toolsCount} tools`).replace('{count}', String(toolsCount))}</span>
                           </div>
                         </div>
                       </div>
@@ -479,10 +480,10 @@ export function MCPSettingsPanel() {
         </div>
       </SidePanel>
 
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360}/>
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
       <div className="module-canvas flex-1 min-w-0 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
-        {!form && !selected ? (<WorkbenchEmptyState icon={<IconifyIcon name="ui-plugin" size={30} color="currentColor"/>} title={t('mcp.selectServer', 'Select a server or create a new one')} description={t('mcp.selectServerHint', 'Configure MCP servers to extend your AI\'s capabilities')} actions={(<UiButton unstyled type="button" onClick={startCreate} className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover">
+        {!form && !selected ? (<WorkbenchEmptyState icon={<IconifyIcon name="ui-plugin" size={30} color="currentColor"/>} title={t('mcp.selectServer', 'Select a server or create a new one')} description={t('mcp.selectServerHint', 'Configure MCP servers to extend your AI\'s capabilities')} actions={(<UiButton unstyled type="button" onClick={startCreate} className={workbenchSidebarPrimaryActionClass}>
                 + {t('common.add', 'Add')}
               </UiButton>)}/>) : (formView || detailView)}
       </div>

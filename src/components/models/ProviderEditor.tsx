@@ -7,6 +7,7 @@ import type { ProviderConfig, ProviderModelEntry } from '@/types';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Checkbox } from '@/components/catalyst-ui/checkbox';
 import { Input as UiInput, Select as UiSelect } from "@/components/catalyst-ui/form-controls";
+import { workbenchAccentButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
 const PROVIDER_TYPES: ProviderConfig['providerType'][] = ['openai', 'anthropic', 'google', 'ollama', 'openai-compatible'];
 const PRESET_MODELS: Partial<Record<ProviderConfig['providerType'], {
     modelId: string;
@@ -44,11 +45,11 @@ function EditorSection({ eyebrow, title, description, children, }: {
     description?: string;
     children: React.ReactNode;
 }) {
-    return (<section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+    return (<section className={workbenchDetailSectionClass}>
       <div className="mb-5">
-        <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{eyebrow}</div>
-        <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{title}</h3>
-        {description && <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{description}</p>}
+        <div className={workbenchSectionEyebrowClass}>{eyebrow}</div>
+        <h3 className={workbenchSectionTitleClass}>{title}</h3>
+        {description && <p className={workbenchSectionDescriptionClass}>{description}</p>}
       </div>
       {children}
     </section>);
@@ -58,9 +59,9 @@ function SummaryStat({ label, value, accent = false }: {
     value: string;
     accent?: boolean;
 }) {
-    return (<div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
-      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
-      <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    return (<div className={workbenchSummaryStatClass(accent)}>
+      <div className={workbenchSummaryLabelClass}>{label}</div>
+      <div className={`${workbenchSummaryValueClass} ${accent ? 'text-accent' : ''}`}>{value}</div>
     </div>);
 }
 export function ProviderEditor({ providerId, onSaved }: {
@@ -199,14 +200,14 @@ export function ProviderEditor({ providerId, onSaved }: {
                 : t('common.draft', 'Draft');
     return (<div className="flex-1 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+        <section className={workbenchHeroSectionClass}>
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
               <span className="flex h-18 w-18 shrink-0 items-center justify-center rounded-4xl border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)] text-xl font-bold">
                 {name.slice(0, 2).toUpperCase() || 'PR'}
               </span>
               <div className="min-w-0 flex-1">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.providerWorkspace', 'Provider Workspace')}</div>
+                <div className={workbenchSectionEyebrowClass}>{t('models.providerWorkspace', 'Provider Workspace')}</div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{name || t('models.newProvider', 'New Provider')}</h2>
                 <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">{t('models.providerWorkspaceHint', 'Configure the endpoint, shape the model catalog, and validate the connection before making this provider part of the default stack.')}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -230,11 +231,11 @@ export function ProviderEditor({ providerId, onSaved }: {
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.displayName', 'Display Name')}</label>
-                  <UiInput type="text" value={name} onChange={(e) => { setName(e.target.value); markDirty(); }} placeholder={t('models.displayNamePlaceholder', 'My Provider')} className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                  <UiInput type="text" value={name} onChange={(e) => { setName(e.target.value); markDirty(); }} placeholder={t('models.displayNamePlaceholder', 'My Provider')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted"/>
                 </div>
                 <div>
                   <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.providerType', 'Provider Type')}</label>
-                  <UiSelect value={providerType} onChange={(e) => { setProviderType(e.target.value as ProviderConfig['providerType']); markDirty(); }} aria-label={t('models.providerType', 'Provider Type')} className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20">
+                  <UiSelect value={providerType} onChange={(e) => { setProviderType(e.target.value as ProviderConfig['providerType']); markDirty(); }} aria-label={t('models.providerType', 'Provider Type')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary">
                     {PROVIDER_TYPES.map((item) => (<option key={item} value={item}>{getProviderTypeLabel(item)}</option>))}
                   </UiSelect>
                 </div>
@@ -245,12 +246,12 @@ export function ProviderEditor({ providerId, onSaved }: {
               <div className="space-y-4">
                 {!isOllama && (<div>
                     <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.apiKey', 'API Key')}</label>
-                    <UiInput type="password" value={apiKey} onChange={(e) => { setApiKey(e.target.value); markDirty(); }} placeholder={t('models.apiKeyPlaceholder', 'sk-...')} className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                    <UiInput type="password" value={apiKey} onChange={(e) => { setApiKey(e.target.value); markDirty(); }} placeholder={t('models.apiKeyPlaceholder', 'sk-...')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted"/>
                   </div>)}
 
                 <div>
                   <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.baseUrl', 'Base URL')} {!isOllama && <span className="normal-case">({t('models.optional', 'Optional')})</span>}</label>
-                  <UiInput type="text" value={baseUrl} onChange={(e) => { setBaseUrl(e.target.value); markDirty(); }} placeholder={isOllama ? t('models.ollamaBaseUrlPlaceholder', 'http://localhost:11434/v1') : t('models.baseUrlPlaceholder', 'https://api.example.com/v1')} className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                  <UiInput type="text" value={baseUrl} onChange={(e) => { setBaseUrl(e.target.value); markDirty(); }} placeholder={isOllama ? t('models.ollamaBaseUrlPlaceholder', 'http://localhost:11434/v1') : t('models.baseUrlPlaceholder', 'https://api.example.com/v1')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted"/>
                   <p className="mt-2 text-[11px] text-text-muted">{isOllama ? t('models.ollamaDefaultHint', 'Default: http://localhost:11434/v1') : t('models.defaultEndpointHint', 'Leave empty to use default endpoint.')}</p>
                 </div>
 
@@ -260,7 +261,7 @@ export function ProviderEditor({ providerId, onSaved }: {
                       <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted">{t('models.testConnection', 'Test Connection')}</div>
                       <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/80">{t('models.testConnectionHint', 'The test uses the first enabled model, so make sure at least one model is available below.')}</p>
                     </div>
-                    <UiButton unstyled type="button" disabled={testing || (!apiKey && !isOllama) || enabledModelCount === 0} onClick={async () => {
+                        <UiButton unstyled type="button" disabled={testing || (!apiKey && !isOllama) || enabledModelCount === 0} onClick={async () => {
             setTesting(true);
             setTestResult(null);
             const firstModel = models.find((m) => m.enabled);
@@ -271,7 +272,7 @@ export function ProviderEditor({ providerId, onSaved }: {
             const result = await testConnection(providerType, apiKey, baseUrl || undefined, firstModel.modelId, providerId);
             setTestResult(result);
             setTesting(false);
-        }} className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/30 bg-accent/15 px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/25 disabled:cursor-not-allowed disabled:opacity-40">
+        }} className={`${workbenchAccentButtonClass} inline-flex items-center gap-1.5 disabled:cursor-not-allowed disabled:opacity-40`}>
                       {testing ? t('models.testing', 'Testing...') : <><IconifyIcon name="ui-plugin" size={14} color="currentColor"/> {t('models.testConnection', 'Test Connection')}</>}
                     </UiButton>
                   </div>
@@ -295,7 +296,7 @@ export function ProviderEditor({ providerId, onSaved }: {
                 <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-3 text-sm text-text-secondary">
                   {t('models.modelsCount', '{enabled} enabled / {total} total').replace('{enabled}', String(enabledModelCount)).replace('{total}', String(models.length))}
                 </div>
-                {hasPresets && (<UiButton unstyled type="button" onClick={addPresetModels} className="rounded-2xl bg-accent/10 px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/20">
+                {hasPresets && (<UiButton unstyled type="button" onClick={addPresetModels} className={workbenchAccentButtonClass}>
                     + {t('models.addPresets', 'Add Presets')}
                   </UiButton>)}
               </div>
@@ -341,13 +342,13 @@ export function ProviderEditor({ providerId, onSaved }: {
               <div className="mt-5 rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4">
                 <div className="mb-3 text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.addModel', 'Add Model')}</div>
                 <div className="grid gap-3 md:grid-cols-2">
-                  <UiInput type="text" value={newModelId} onChange={(e) => setNewModelId(e.target.value)} placeholder={t('models.modelIdPlaceholder', 'Model ID (e.g. gpt-4o)')} className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"/>
-                  <UiInput type="text" value={newModelName} onChange={(e) => setNewModelName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                  <UiInput type="text" value={newModelId} onChange={(e) => setNewModelId(e.target.value)} placeholder={t('models.modelIdPlaceholder', 'Model ID (e.g. gpt-4o)')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted"/>
+                    <UiInput type="text" value={newModelName} onChange={(e) => setNewModelName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
         e.preventDefault();
         addModel();
-    } }} placeholder={t('models.displayNameOptional', 'Display Name (optional)')} className="w-full rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                  } }} placeholder={t('models.displayNameOptional', 'Display Name (optional)')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted"/>
                 </div>
-                <UiButton unstyled type="button" onClick={addModel} className="mt-3 rounded-2xl border border-accent/30 bg-accent/15 px-4 py-2.5 text-sm font-semibold text-accent transition-colors hover:bg-accent/25">
+                <UiButton unstyled type="button" onClick={addModel} className={`mt-3 ${workbenchAccentButtonClass}`}>
                   {t('common.add', 'Add')}
                 </UiButton>
               </div>
@@ -362,7 +363,7 @@ export function ProviderEditor({ providerId, onSaved }: {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <UiButton unstyled type="button" onClick={handleSave} disabled={saving} className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-accent-hover hover:shadow-[0_4px_20px_rgba(var(--t-accent-rgb),0.25)] disabled:cursor-not-allowed disabled:opacity-50">
+                  <UiButton unstyled type="button" onClick={handleSave} disabled={saving} className={`${workbenchPrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}>
                     {saving ? t('models.saving', 'Saving...') : t('models.saveConfiguration', 'Save Configuration')}
                   </UiButton>
                   {saved && <span className="text-sm font-medium text-green-500 animate-fade-in">{workspacePath ? t('models.savedToWorkspace', 'Saved to workspace') : t('models.saved', 'Saved')}</span>}

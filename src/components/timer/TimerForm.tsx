@@ -6,6 +6,7 @@ import type { ScheduledTask, TimerType } from '@/types';
 import { toLocalDatetimeValue, getNextCronExecutions, type TimerFormData } from './timerHelpers';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
 function getLocalTimezone() {
     return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
@@ -51,7 +52,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
         }
     }, [form.type, form.schedule]);
     // For 'once' type, show a datetime-local input. Pre-fill with schedule if editing.
-    const scheduleInput = form.type === 'once' ? (<UiInput type="datetime-local" aria-label={t('timer.scheduleDateTime', 'Schedule date and time')} className="w-full px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-accent" value={form.schedule ? toLocalDatetimeValue(form.schedule) : ''} onChange={(e) => {
+    const scheduleInput = form.type === 'once' ? (<UiInput type="datetime-local" aria-label={t('timer.scheduleDateTime', 'Schedule date and time')} wrapperClassName="w-full" controlClassName="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-primary" value={form.schedule ? toLocalDatetimeValue(form.schedule) : ''} onChange={(e) => {
             const d = new Date(e.target.value);
             if (!Number.isNaN(d.getTime())) {
                 setForm({ ...form, schedule: d.toISOString() });
@@ -60,10 +61,10 @@ export function TimerForm({ initial, onSave, onCancel }: {
                 setForm({ ...form, schedule: '' });
             }
         }}/>) : form.type === 'interval' ? (<div className="flex items-center gap-2">
-      <UiInput type="number" min="1" className="w-20 px-3 py-2 rounded-lg bg-surface-2 border border-border-subtle text-text-primary text-xs focus:outline-none focus:ring-1 focus:ring-accent" value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} placeholder={t('timer.intervalPlaceholder', '30')}/>
+      <UiInput type="number" min="1" wrapperClassName="w-20" controlClassName="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-primary" value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} placeholder={t('timer.intervalPlaceholder', '30')}/>
       <span className="text-xs text-text-muted">{t('timer.minutes', 'minutes')}</span>
     </div>) : (<div className="space-y-2">
-      <UiInput type="text" className={`w-full px-3 py-2 rounded-lg bg-surface-2 border ${cronError ? 'border-error' : 'border-border-subtle'} text-text-primary text-xs font-mono focus:outline-none focus:ring-1 focus:ring-accent`} value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} placeholder="0 9 * * 1-5"/>
+      <UiInput type="text" wrapperClassName="w-full" controlClassName={`rounded-lg border bg-surface-2 px-3 py-2 text-xs font-mono text-text-primary ${cronError ? 'border-error' : 'border-border-subtle'}`} value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} placeholder="0 9 * * 1-5"/>
       <p className="text-[10px] text-text-muted">
         Format: <code className="px-1 py-0.5 bg-surface-3 rounded">{t('timer.cronFormat', 'minute hour day month weekday')}</code>
       </p>
@@ -85,14 +86,14 @@ export function TimerForm({ initial, onSave, onCancel }: {
             : t('timer.notify', 'Notify');
     return (<div className="animate-fade-in px-5 py-6 xl:px-8 xl:py-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+        <section className={workbenchHeroSectionClass}>
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
               <div className="flex h-18 w-18 items-center justify-center rounded-[26px] border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
                 <IconifyIcon name={form.type === 'once' ? 'ui-timer-once' : 'ui-repeat'} size={30} color="currentColor"/>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{initial ? t('timer.editTimer', 'Edit Timer') : t('timer.newTimer', 'New Timer')}</div>
+                <div className={workbenchSectionEyebrowClass}>{initial ? t('timer.editTimer', 'Edit Timer') : t('timer.newTimer', 'New Timer')}</div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{form.name.trim() || t('timer.untitledTimer', 'Untitled Timer')}</h2>
                 <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">{t('timer.formHeroHint', 'Set the cadence, choose the destination, and keep the payload clear enough that the timer can run unattended.')}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -103,34 +104,34 @@ export function TimerForm({ initial, onSave, onCancel }: {
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3 xl:w-[24rem] xl:grid-cols-1">
-              <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('timer.type', 'Type')}</div>
-                <div className="mt-2 text-lg font-semibold text-text-primary">{form.type === 'once' ? t('timer.oneTime', 'One-time') : form.type === 'interval' ? t('timer.repeating', 'Repeating') : t('timer.cronLabel', 'Cron')}</div>
+              <div className={workbenchSummaryStatClass()}>
+                <div className={workbenchSummaryLabelClass}>{t('timer.type', 'Type')}</div>
+                <div className={workbenchSummaryValueClass}>{form.type === 'once' ? t('timer.oneTime', 'One-time') : form.type === 'interval' ? t('timer.repeating', 'Repeating') : t('timer.cronLabel', 'Cron')}</div>
               </div>
-              <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('timer.action', 'Action')}</div>
-                <div className="mt-2 text-lg font-semibold text-text-primary">{actionSummary}</div>
+              <div className={workbenchSummaryStatClass()}>
+                <div className={workbenchSummaryLabelClass}>{t('timer.action', 'Action')}</div>
+                <div className={workbenchSummaryValueClass}>{actionSummary}</div>
               </div>
-              <div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/60 p-4">
-                <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('common.status', 'Status')}</div>
-                <div className="mt-2 text-lg font-semibold text-text-primary">{initial ? t('common.editing', 'Editing') : t('common.draft', 'Draft')}</div>
+              <div className={workbenchSummaryStatClass()}>
+                <div className={workbenchSummaryLabelClass}>{t('common.status', 'Status')}</div>
+                <div className={workbenchSummaryValueClass}>{initial ? t('common.editing', 'Editing') : t('common.draft', 'Draft')}</div>
               </div>
             </div>
           </div>
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,0.95fr)]">
-          <section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+          <section className={workbenchDetailSectionClass}>
             <div className="mb-5">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.schedule', 'Schedule')}</div>
-              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('timer.scheduleSetup', 'Schedule Setup')}</h3>
-              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('timer.scheduleSetupHint', 'Choose how often the timer fires, then confirm the next expected run before saving it.')}</p>
+              <div className={workbenchSectionEyebrowClass}>{t('timer.schedule', 'Schedule')}</div>
+              <h3 className={workbenchSectionTitleClass}>{t('timer.scheduleSetup', 'Schedule Setup')}</h3>
+              <p className={workbenchSectionDescriptionClass}>{t('timer.scheduleSetupHint', 'Choose how often the timer fires, then confirm the next expected run before saving it.')}</p>
             </div>
 
             <div className="space-y-5">
               <div>
                 <label className="text-[11px] text-text-muted uppercase tracking-wide block mb-2">{t('timer.name', 'Name')}</label>
-                <UiInput type="text" className="w-full px-4 py-3 rounded-2xl bg-surface-2/75 border border-border-subtle text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/20" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('timer.reminderName', 'Reminder name')} autoFocus/>
+                <UiInput type="text" wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle bg-surface-2/75 px-4 py-3 text-sm text-text-primary" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder={t('timer.reminderName', 'Reminder name')} autoFocus/>
               </div>
 
               <div>
@@ -151,11 +152,11 @@ export function TimerForm({ initial, onSave, onCancel }: {
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+          <section className={workbenchDetailSectionClass}>
             <div className="mb-5">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.action', 'Action')}</div>
-              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('timer.deliveryAndPayload', 'Delivery & Payload')}</h3>
-              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('timer.deliveryAndPayloadHint', 'Choose what happens when the timer fires and supply the prompt, notification copy, or linked pipeline.')}</p>
+              <div className={workbenchSectionEyebrowClass}>{t('timer.action', 'Action')}</div>
+              <h3 className={workbenchSectionTitleClass}>{t('timer.deliveryAndPayload', 'Delivery & Payload')}</h3>
+              <p className={workbenchSectionDescriptionClass}>{t('timer.deliveryAndPayloadHint', 'Choose what happens when the timer fires and supply the prompt, notification copy, or linked pipeline.')}</p>
             </div>
 
             <div className="space-y-5">
@@ -176,7 +177,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
 
               {form.action === 'prompt' && (<div>
                   <label className="text-[11px] text-text-muted uppercase tracking-wide block mb-2">{t('chat.agent', 'Agent')}</label>
-                  <UiSelect aria-label={t('chat.agent', 'Agent')} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })} className="w-full px-4 py-3 rounded-2xl bg-surface-2/75 border border-border-subtle text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/20">
+                  <UiSelect aria-label={t('chat.agent', 'Agent')} value={form.agentId} onChange={(e) => setForm({ ...form, agentId: e.target.value })} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle bg-surface-2/75 px-4 py-3 text-sm text-text-primary">
                     <option value="">{t('timer.selectAgent', '-- Select Agent --')}</option>
                     {agents.filter((a) => a.enabled).map((a) => (<option key={a.id} value={a.id}>{ICON_DATA[a.avatar || ''] ? '●' : (a.avatar || '●')} {a.name}</option>))}
                   </UiSelect>
@@ -185,7 +186,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
 
               {form.action === 'pipeline' && (<div>
                   <label className="text-[11px] text-text-muted uppercase tracking-wide block mb-2">{t('agents.pipeline', 'Pipeline')}</label>
-                  <UiSelect aria-label={t('agents.pipeline', 'Pipeline')} value={form.pipelineId} onChange={(e) => setForm({ ...form, pipelineId: e.target.value })} className="w-full px-4 py-3 rounded-2xl bg-surface-2/75 border border-border-subtle text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/20">
+                  <UiSelect aria-label={t('agents.pipeline', 'Pipeline')} value={form.pipelineId} onChange={(e) => setForm({ ...form, pipelineId: e.target.value })} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle bg-surface-2/75 px-4 py-3 text-sm text-text-primary">
                     <option value="">{t('timer.selectPipeline', '-- Select Pipeline --')}</option>
                     {agentPipelines.map((pipeline) => (<option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>))}
                   </UiSelect>
@@ -196,7 +197,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
                 <label className="text-[11px] text-text-muted uppercase tracking-wide block mb-2">
                   {form.action === 'notify' ? t('timer.notificationBody', 'Notification Body') : t('timer.promptText', 'Prompt Text')}
                 </label>
-                <UiTextArea className="w-full px-4 py-3 rounded-3xl bg-surface-2/75 border border-border-subtle text-text-primary text-sm focus:outline-none focus:ring-2 focus:ring-accent/20 resize-none" rows={5} value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} placeholder={form.action === 'notify' ? t('timer.reminderText', 'Reminder text...') : t('timer.whatShouldAgentDo', 'What should the agent do?')}/>
+                <UiTextArea wrapperClassName="w-full" controlClassName="rounded-3xl border border-border-subtle bg-surface-2/75 px-4 py-3 text-sm text-text-primary resize-none" rows={5} value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} placeholder={form.action === 'notify' ? t('timer.reminderText', 'Reminder text...') : t('timer.whatShouldAgentDo', 'What should the agent do?')}/>
               </div>)}
 
               <div className="rounded-3xl border border-border-subtle/45 bg-surface-0/55 p-4">
@@ -208,20 +209,20 @@ export function TimerForm({ initial, onSave, onCancel }: {
             </div>
           </section>
 
-          <section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6 xl:col-span-2">
+          <section className={`${workbenchDetailSectionClass} xl:col-span-2`}>
             <div className="mb-5">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('timer.advanced', 'Advanced')}</div>
-              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('timer.reliabilityPolicy', 'Reliability Policy')}</h3>
-              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('timer.reliabilityPolicyHint', 'Control timezone, missed runs, retries, and calendar filters for unattended execution.')}</p>
+              <div className={workbenchSectionEyebrowClass}>{t('timer.advanced', 'Advanced')}</div>
+              <h3 className={workbenchSectionTitleClass}>{t('timer.reliabilityPolicy', 'Reliability Policy')}</h3>
+              <p className={workbenchSectionDescriptionClass}>{t('timer.reliabilityPolicyHint', 'Control timezone, missed runs, retries, and calendar filters for unattended execution.')}</p>
             </div>
             <div className="grid gap-4 md:grid-cols-5">
               <label className="block">
                 <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.timezone', 'Timezone')}</span>
-                <UiInput className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.timezone ?? ''} onChange={(e) => setForm({ ...form, timezone: e.target.value })}/>
+                <UiInput wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.timezone ?? ''} onChange={(e) => setForm({ ...form, timezone: e.target.value })}/>
               </label>
               <label className="block">
                 <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.missedRuns', 'Missed runs')}</span>
-                <UiSelect className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.missedRunPolicy} onChange={(e) => setForm({ ...form, missedRunPolicy: e.target.value as TimerFormData['missedRunPolicy'] })}>
+                <UiSelect wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.missedRunPolicy} onChange={(e) => setForm({ ...form, missedRunPolicy: e.target.value as TimerFormData['missedRunPolicy'] })}>
                   <option value="skip">{t('timer.skipMissed', 'Skip')}</option>
                   <option value="run-once">{t('timer.runOnce', 'Run once')}</option>
                   <option value="run-all">{t('timer.runAll', 'Run all')}</option>
@@ -229,15 +230,15 @@ export function TimerForm({ initial, onSave, onCancel }: {
               </label>
               <label className="block">
                 <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.maxRetries', 'Max retries')}</span>
-                <UiInput type="number" min={0} max={10} className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.maxRetries ?? 0} onChange={(e) => setForm({ ...form, maxRetries: Math.max(0, Number(e.target.value) || 0) })}/>
+                <UiInput type="number" min={0} max={10} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.maxRetries ?? 0} onChange={(e) => setForm({ ...form, maxRetries: Math.max(0, Number(e.target.value) || 0) })}/>
               </label>
               <label className="block">
                 <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.retryInterval', 'Retry interval')}</span>
-                <UiInput type="number" min={1} max={1440} className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.retryIntervalMinutes ?? 5} onChange={(e) => setForm({ ...form, retryIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })}/>
+                <UiInput type="number" min={1} max={1440} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.retryIntervalMinutes ?? 5} onChange={(e) => setForm({ ...form, retryIntervalMinutes: Math.max(1, Number(e.target.value) || 1) })}/>
               </label>
               <label className="block">
                 <span className="mb-2 block text-[11px] uppercase tracking-wide text-text-muted">{t('timer.calendar', 'Calendar')}</span>
-                <UiSelect className="w-full rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.calendarRule} onChange={(e) => setForm({ ...form, calendarRule: e.target.value as TimerFormData['calendarRule'] })}>
+                <UiSelect wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle bg-surface-2/75 px-3 py-2 text-xs text-text-primary" value={form.calendarRule} onChange={(e) => setForm({ ...form, calendarRule: e.target.value as TimerFormData['calendarRule'] })}>
                   <option value="all-days">{t('timer.allDays', 'All days')}</option>
                   <option value="weekdays">{t('timer.weekdays', 'Weekdays')}</option>
                   <option value="weekends">{t('timer.weekends', 'Weekends')}</option>
@@ -248,10 +249,10 @@ export function TimerForm({ initial, onSave, onCancel }: {
         </div>
 
         <div className="flex gap-3 pt-2">
-          <UiButton unstyled type="button" className="px-5 py-3 rounded-2xl bg-accent text-white text-sm font-semibold hover:bg-accent/90 transition-colors disabled:opacity-50" disabled={!form.name.trim() || !form.schedule || (form.type === 'cron' && !!cronError) || (form.action === 'pipeline' && !form.pipelineId)} onClick={() => onSave(form)}>
+          <UiButton unstyled type="button" className={`${workbenchPrimaryButtonClass} disabled:opacity-50`} disabled={!form.name.trim() || !form.schedule || (form.type === 'cron' && !!cronError) || (form.action === 'pipeline' && !form.pipelineId)} onClick={() => onSave(form)}>
             {initial ? t('common.saveChanges', 'Save Changes') : t('timer.createTimer', 'Create Timer')}
           </UiButton>
-          <UiButton unstyled type="button" className="px-5 py-3 rounded-2xl bg-surface-2 text-text-muted text-sm font-medium hover:text-text-secondary transition-colors" onClick={onCancel}>
+          <UiButton unstyled type="button" className={workbenchNeutralButtonClass} onClick={onCancel}>
             {t('common.cancel', 'Cancel')}
           </UiButton>
         </div>

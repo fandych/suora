@@ -230,7 +230,7 @@ export function DataSettings() {
           </UiButton>) : undefined}>
         <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
           <div className="flex flex-wrap items-center gap-3">
-            <UiInput type="number" min={0} max={3650} value={historyRetentionDays} onChange={(e) => setHistoryRetentionDays(Math.max(0, parseInt(e.target.value, 10) || 0))} aria-label={t('settings.historyRetentionInput', 'History retention days')} className="w-32"/>
+            <UiInput type="number" min={0} max={3650} value={historyRetentionDays} onChange={(e) => setHistoryRetentionDays(Math.max(0, parseInt(e.target.value, 10) || 0))} aria-label={t('settings.historyRetentionInput', 'History retention days')} wrapperClassName="w-32"/>
             <span className="text-sm text-text-muted">{t('settings.days', 'days')}</span>
           </div>
           {historyRetentionDays > 0 ? (<p className="mt-3 text-[12px] leading-6 text-text-muted">{t('settings.autoCleanDesc', 'Sessions will be auto-cleaned when you open the app.')}</p>) : (<p className="mt-3 text-[12px] leading-6 text-text-muted">{t('settings.keepEverything', 'Retention set to 0 means the app keeps all history until you delete it manually.')}</p>)}

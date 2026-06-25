@@ -146,11 +146,11 @@ export function EventsSettings() {
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.triggerName', 'Trigger name')}</span>
-            <UiInput value={triggerForm.name} onChange={(event) => setTriggerForm({ ...triggerForm, name: event.target.value })} placeholder={t('settings.triggerName', 'Trigger name')}/>
+            <UiInput value={triggerForm.name} onChange={(event) => setTriggerForm({ ...triggerForm, name: event.target.value })} placeholder={t('settings.triggerName', 'Trigger name')} wrapperClassName="w-full"/>
           </label>
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.triggerType', 'Trigger type')}</span>
-            <UiSelect value={triggerForm.type} onChange={(event) => setTriggerForm({ ...triggerForm, type: event.target.value as EventTrigger['type'] })} aria-label={t('settings.triggerType', 'Trigger type')}>
+            <UiSelect value={triggerForm.type} onChange={(event) => setTriggerForm({ ...triggerForm, type: event.target.value as EventTrigger['type'] })} aria-label={t('settings.triggerType', 'Trigger type')} wrapperClassName="w-full">
               <option value="clipboard_change">{t('settings.clipboardChange', 'Clipboard Change')}</option>
               <option value="file_change">{t('settings.fileChange', 'File Change')}</option>
               <option value="app_start">{t('settings.appStart', 'App Start')}</option>
@@ -161,19 +161,19 @@ export function EventsSettings() {
 
         {(triggerForm.type === 'file_change' || triggerForm.type === 'schedule') && (<label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{triggerForm.type === 'file_change' ? t('settings.filePattern', 'File pattern') : t('settings.cronExpression', 'Cron expression')}</span>
-            <UiInput value={triggerForm.pattern} onChange={(event) => setTriggerForm({ ...triggerForm, pattern: event.target.value })} placeholder={triggerForm.type === 'file_change' ? t('settings.filePatternPlaceholder', 'File pattern (e.g., *.json)') : t('settings.cronExpressionPlaceholder', 'Cron expression')}/>
+            <UiInput value={triggerForm.pattern} onChange={(event) => setTriggerForm({ ...triggerForm, pattern: event.target.value })} placeholder={triggerForm.type === 'file_change' ? t('settings.filePatternPlaceholder', 'File pattern (e.g., *.json)') : t('settings.cronExpressionPlaceholder', 'Cron expression')} wrapperClassName="w-full"/>
           </label>)}
 
         <label className="block">
           <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.targetAgent', 'Target agent')}</span>
-          <UiSelect value={triggerForm.agentId} onChange={(event) => setTriggerForm({ ...triggerForm, agentId: event.target.value })} aria-label={t('settings.targetAgent', 'Target agent')}>
+          <UiSelect value={triggerForm.agentId} onChange={(event) => setTriggerForm({ ...triggerForm, agentId: event.target.value })} aria-label={t('settings.targetAgent', 'Target agent')} wrapperClassName="w-full">
             {enabledAgents.map((agent) => (<option key={agent.id} value={agent.id}>{agent.name}</option>))}
           </UiSelect>
         </label>
 
         <label className="block">
           <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.promptTemplate', 'Prompt template')}</span>
-          <UiTextArea value={triggerForm.promptTemplate} onChange={(event) => setTriggerForm({ ...triggerForm, promptTemplate: event.target.value })} placeholder={t('settings.promptTemplatePlaceholder', 'Prompt template (use {{content}}, {{file}}, {{previous}} placeholders)')} rows={4} className="min-h-32 leading-6"/>
+          <UiTextArea value={triggerForm.promptTemplate} onChange={(event) => setTriggerForm({ ...triggerForm, promptTemplate: event.target.value })} placeholder={t('settings.promptTemplatePlaceholder', 'Prompt template (use {{content}}, {{file}}, {{previous}} placeholders)')} rows={4} controlClassName="min-h-32 leading-6"/>
         </label>
 
         <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 text-[12px] leading-6 text-text-secondary/80">

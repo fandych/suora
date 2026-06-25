@@ -13,6 +13,7 @@ import { RadioGroup, Radio } from '@/components/catalyst-ui/radio';
 import { Checkbox } from '@/components/catalyst-ui/checkbox';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryHintClass } from '@/components/catalyst-ui/workbench';
 const CATEGORIES = [
     'Frontend', 'Backend', 'Design', 'AI', 'Development', 'Automation',
     'Testing', 'DevOps', 'Documentation', 'Utility', 'Media', 'Other',
@@ -44,11 +45,11 @@ function EditorSection({ eyebrow, title, description, children, className = '', 
     children: ReactNode;
     className?: string;
 }) {
-    return (<section className={`rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6 ${className}`}>
+    return (<section className={`${workbenchDetailSectionClass} ${className}`}>
       <div className="mb-5">
-        <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{eyebrow}</div>
-        <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{title}</h3>
-        <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{description}</p>
+        <div className={workbenchSectionEyebrowClass}>{eyebrow}</div>
+        <h3 className={workbenchSectionTitleClass}>{title}</h3>
+        <p className={workbenchSectionDescriptionClass}>{description}</p>
       </div>
       {children}
     </section>);
@@ -61,7 +62,7 @@ function SummaryStat({ label, value, hint, }: {
     return (<div className="rounded-[22px] border border-border-subtle/50 bg-surface-0/60 px-4 py-3.5 shadow-sm">
       <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
       <div className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{value}</div>
-      <div className="mt-1 text-[11px] text-text-muted/70">{hint}</div>
+      <div className={workbenchSummaryHintClass}>{hint}</div>
     </div>);
 }
 function normalizeResourcePath(pathValue: string): string {
@@ -518,8 +519,8 @@ function ResourceTreePanel({ skill, onChange, }: {
         <div className="flex min-h-168 flex-1 flex-col">
           {/* search + upload */}
           <div className="mb-3 flex flex-wrap items-center gap-2">
-            <UiInput type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('skills.searchResources', 'Search files…')} className="min-w-40 flex-1 rounded-2xl border border-border-subtle/55 bg-surface-2/75 px-3 py-1.5 text-[12px] text-text-primary outline-none placeholder:text-text-muted/60"/>
-            <UiSelect aria-label={t('skills.uploadFolder', 'Upload target folder')} value={uploadFolder} onChange={(event) => setUploadFolder(event.target.value as SkillTopLevelFolder)} disabled={!skill.skillRoot} className="rounded-2xl border border-border-subtle/55 bg-surface-2/75 px-2 py-1.5 text-[11px] text-text-secondary outline-none disabled:opacity-50">
+            <UiInput type="text" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('skills.searchResources', 'Search files…')} wrapperClassName="min-w-40 flex-1" controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-2/75 px-3 py-1.5 text-[12px] text-text-primary placeholder:text-text-muted/60"/>
+            <UiSelect aria-label={t('skills.uploadFolder', 'Upload target folder')} value={uploadFolder} onChange={(event) => setUploadFolder(event.target.value as SkillTopLevelFolder)} disabled={!skill.skillRoot} controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-2/75 px-2 py-1.5 text-[11px] text-text-secondary disabled:opacity-50">
               {SKILL_TOP_LEVEL_FOLDERS.map((folder) => (<option key={folder} value={folder}>
                   {folder}/
                 </option>))}
@@ -566,7 +567,7 @@ function ResourceTreePanel({ skill, onChange, }: {
                         }
                         if (e.key === 'Escape')
                             cancelCreate();
-                    }} placeholder={t('skills.fileNamePlaceholder', 'name…')} className="min-w-0 flex-1 rounded-xl border border-accent/20 bg-surface-0 px-2 py-1 font-mono text-[11px] text-text-primary outline-none"/>
+                    }} placeholder={t('skills.fileNamePlaceholder', 'name…')} wrapperClassName="min-w-0 flex-1" controlClassName="rounded-xl border border-accent/20 bg-surface-0 px-2 py-1 font-mono text-[11px] text-text-primary"/>
                     <UiButton unstyled type="button" onClick={commitCreate} className="rounded-xl bg-accent/15 px-2 py-1 text-[10px] font-semibold text-accent hover:bg-accent/25">
                       {t('common.confirm', 'OK')}
                     </UiButton>
@@ -586,14 +587,14 @@ function ResourceTreePanel({ skill, onChange, }: {
                           <IconifyIcon name={resource.type === 'directory'
                                 ? 'lucide:folder'
                                 : getSkillFileIcon(resource.path, resource.executable)} size={12} color="currentColor" className="text-text-muted"/>
-                          {renamingPath === resource.path ? (<UiInput value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => {
+                            {renamingPath === resource.path ? (<UiInput value={renameValue} onChange={(event) => setRenameValue(event.target.value)} onKeyDown={(event) => {
                                     if (event.key === 'Enter') {
                                         event.preventDefault();
                                         commitRename(resource);
                                     }
                                     if (event.key === 'Escape')
                                         cancelRename();
-                                }} onBlur={() => commitRename(resource)} autoFocus aria-label={t('common.rename', 'Rename')} title={t('common.rename', 'Rename')} placeholder={t('common.rename', 'Rename')} className="min-w-0 flex-1 rounded-xl border border-accent/20 bg-surface-0 px-2 py-1 font-mono text-[11px] text-text-primary outline-none"/>) : resource.type === 'file' ? (<UiButton unstyled type="button" onClick={() => handleSelect(resource)} className={`min-w-0 flex-1 truncate text-left font-mono text-[11px] hover:text-accent ${isSelected ? 'text-accent' : 'text-text-secondary'}`}>
+                              }} onBlur={() => commitRename(resource)} autoFocus aria-label={t('common.rename', 'Rename')} title={t('common.rename', 'Rename')} placeholder={t('common.rename', 'Rename')} wrapperClassName="min-w-0 flex-1" controlClassName="rounded-xl border border-accent/20 bg-surface-0 px-2 py-1 font-mono text-[11px] text-text-primary"/>) : resource.type === 'file' ? (<UiButton unstyled type="button" onClick={() => handleSelect(resource)} className={`min-w-0 flex-1 truncate text-left font-mono text-[11px] hover:text-accent ${isSelected ? 'text-accent' : 'text-text-secondary'}`}>
                               {resource.path}
                             </UiButton>) : (<span className="min-w-0 flex-1 truncate font-mono text-[11px] text-text-secondary">
                               {resource.path}/
@@ -653,7 +654,7 @@ function ResourceTreePanel({ skill, onChange, }: {
                 </span>
               </div>
 
-              <UiTextArea aria-label={t('skills.fileContent', 'File content')} value={editorContent} onChange={(event) => setEditorContent(event.target.value)} className="min-h-112 flex-1 w-full resize-none rounded-3xl border border-border-subtle/55 bg-surface-2/75 p-4 font-mono text-[13px] leading-6 text-text-secondary outline-none focus:border-accent/50" spellCheck={false}/>
+              <UiTextArea aria-label={t('skills.fileContent', 'File content')} value={editorContent} onChange={(event) => setEditorContent(event.target.value)} wrapperClassName="min-h-112 flex-1 w-full" controlClassName="resize-none rounded-3xl border border-border-subtle/55 bg-surface-2/75 p-4 font-mono text-[13px] leading-6 text-text-secondary focus:border-accent/50" spellCheck={false}/>
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-[11px] text-text-muted">
@@ -766,7 +767,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
     } => Boolean(item?.value));
     return (<form onSubmit={handleSubmit} className="module-canvas flex-1 overflow-y-auto">
       <div className="module-content mx-auto flex w-full max-w-432 flex-col gap-6 px-5 py-6 xl:px-8 xl:py-8">
-        <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+        <section className={workbenchHeroSectionClass}>
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-start 2xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
               <UiButton unstyled type="button" onClick={() => setShowIconPicker(true)} title={t('skills.pickIcon', 'Pick icon')} className="flex h-20 w-20 shrink-0 items-center justify-center rounded-[28px] border border-accent/15 bg-surface-0/78 shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.14)] transition-colors hover:border-accent/30">
@@ -774,7 +775,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
               </UiButton>
 
               <div className="min-w-0 flex-1">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">
+                <div className={workbenchSectionEyebrowClass}>
                   {skill ? t('skills.editSkill', 'Edit Skill') : t('skills.addSkillTitle', 'New Skill')}
                 </div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{displayName}</h2>
@@ -844,26 +845,26 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div>
                       <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('common.name', 'Name')}</label>
-                      <UiInput type="text" value={form.frontmatter.name || form.name} onChange={(e) => updateFrontmatter({ name: e.target.value })} placeholder={t('skills.nameFieldPlaceholder', 'e.g., frontend-design')} className={skillInputClass}/>
+                      <UiInput type="text" value={form.frontmatter.name || form.name} onChange={(e) => updateFrontmatter({ name: e.target.value })} placeholder={t('skills.nameFieldPlaceholder', 'e.g., frontend-design')} controlClassName={skillInputClass}/>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('common.version', 'Version')}</label>
-                      <UiInput type="text" value={form.frontmatter.version || form.version || ''} onChange={(e) => updateFrontmatter({ version: e.target.value })} placeholder="1.0.0" className={skillInputClass}/>
+                      <UiInput type="text" value={form.frontmatter.version || form.version || ''} onChange={(e) => updateFrontmatter({ version: e.target.value })} placeholder="1.0.0" controlClassName={skillInputClass}/>
                     </div>
                     <div className="sm:col-span-2">
                       <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('common.description', 'Description')}</label>
-                      <UiInput type="text" value={form.frontmatter.description || form.description} onChange={(e) => updateFrontmatter({ description: e.target.value })} placeholder={t('skills.descriptionFieldPlaceholder', 'What does this skill do?')} className={skillInputClass}/>
+                      <UiInput type="text" value={form.frontmatter.description || form.description} onChange={(e) => updateFrontmatter({ description: e.target.value })} placeholder={t('skills.descriptionFieldPlaceholder', 'What does this skill do?')} controlClassName={skillInputClass}/>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('skills.category', 'Category')}</label>
-                      <UiSelect aria-label={t('skills.category', 'Category')} value={form.frontmatter.category || form.category || ''} onChange={(e) => updateFrontmatter({ category: e.target.value })} className={skillSelectClass}>
+                      <UiSelect aria-label={t('skills.category', 'Category')} value={form.frontmatter.category || form.category || ''} onChange={(e) => updateFrontmatter({ category: e.target.value })} controlClassName={skillSelectClass}>
                         <option value="">{t('skills.selectCategory', 'Select category...')}</option>
                         {CATEGORIES.map((cat) => (<option key={cat} value={cat}>{cat}</option>))}
                       </UiSelect>
                     </div>
                     <div>
                       <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('skills.author', 'Author')}</label>
-                      <UiInput type="text" value={form.frontmatter.author || form.author || ''} onChange={(e) => updateFrontmatter({ author: e.target.value })} placeholder={t('skills.authorPlaceholder', 'Your name or organization')} className={skillInputClass}/>
+                      <UiInput type="text" value={form.frontmatter.author || form.author || ''} onChange={(e) => updateFrontmatter({ author: e.target.value })} placeholder={t('skills.authorPlaceholder', 'Your name or organization')} controlClassName={skillInputClass}/>
                     </div>
                   </div>
                 </div>
@@ -872,7 +873,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
               <div className="space-y-6">
                 <EditorSection eyebrow={t('skills.activation', 'Activation')} title={t('skills.whenToUse', 'When to Use')} description={t('skills.whenToUseHint', 'Helps the AI decide when to activate this skill automatically.')}>
                   <div className="space-y-4">
-                    <UiTextArea value={form.frontmatter.whenToUse || form.whenToUse || ''} onChange={(e) => updateFrontmatter({ whenToUse: e.target.value })} placeholder={t('skills.whenToUsePlaceholder', 'Describe when this skill should be triggered...')} rows={4} className={`${skillTextAreaClass} resize-none`}/>
+                    <UiTextArea value={form.frontmatter.whenToUse || form.whenToUse || ''} onChange={(e) => updateFrontmatter({ whenToUse: e.target.value })} placeholder={t('skills.whenToUsePlaceholder', 'Describe when this skill should be triggered...')} rows={4} controlClassName={`${skillTextAreaClass} resize-none`}/>
 
                     <div>
                       <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('skills.executionContext', 'Execution Context')}</label>
@@ -903,7 +904,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
                 const tools = e.target.value.split(',').map((tool) => tool.trim()).filter(Boolean);
                 updateFrontmatter({ allowedTools: tools.length > 0 ? tools : undefined });
                 updateForm({ allowedTools: tools.length > 0 ? tools : undefined });
-            }} placeholder={t('skills.allowedToolsPlaceholder', 'Leave empty = agent decides. Or: read_file, fetch_webpage, ...')} className={skillMonoInputClass}/>
+                }} placeholder={t('skills.allowedToolsPlaceholder', 'Leave empty = agent decides. Or: read_file, fetch_webpage, ...')} controlClassName={skillMonoInputClass}/>
                   <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('skills.optional', 'Optional')}: {t('skills.allowedToolsOptionalHint', 'Use this only when the skill needs a clearly bounded tool surface.')}</p>
                 </EditorSection>
               </div>

@@ -4,6 +4,7 @@ import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import { confirm } from '@/services/confirmDialog';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
 interface OnboardingStepDef {
     titleKey: string;
     titleDefault: string;
@@ -132,13 +133,13 @@ export function OnboardingWizard() {
               </UiButton>
 
               <div className="flex flex-wrap items-center gap-2">
-                {step > 0 && (<UiButton unstyled type="button" onClick={() => setOnboarding({ currentStep: step - 1 })} className="rounded-md border border-border-subtle/55 bg-surface-0/58 px-4 py-2.5 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-2/72">
+                {step > 0 && (<UiButton unstyled type="button" onClick={() => setOnboarding({ currentStep: step - 1 })} className={workbenchNeutralButtonClass}>
                     {t('onboarding.back', 'Back')}
                   </UiButton>)}
-                {isLast && (<UiButton unstyled type="button" onClick={() => complete('models')} className="rounded-md border border-border-subtle/55 bg-surface-0/58 px-4 py-2.5 text-[13px] font-medium text-text-secondary transition-colors hover:bg-surface-2/72">
+                {isLast && (<UiButton unstyled type="button" onClick={() => complete('models')} className={workbenchNeutralButtonClass}>
                     {t('onboarding.openModels', 'Open Models')}
                   </UiButton>)}
-                <UiButton unstyled type="button" onClick={next} className="rounded-md border border-accent/24 bg-accent px-5 py-2.5 text-[13px] font-semibold text-white transition-colors hover:bg-accent/90">
+                <UiButton unstyled type="button" onClick={next} className={workbenchPrimaryButtonClass}>
                   {isLast ? t('onboarding.getStarted', 'Get Started') : t('onboarding.next', 'Next')}
                 </UiButton>
               </div>
@@ -146,7 +147,7 @@ export function OnboardingWizard() {
           </div>
 
           <aside className="border-t border-border-subtle/40 bg-surface-0/34 p-5 xl:border-l xl:border-t-0 xl:p-6">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">
+            <div className={workbenchSectionEyebrowClass}>
               Setup flow
             </div>
             <div className="mt-3 space-y-2.5">

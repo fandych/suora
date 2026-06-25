@@ -57,6 +57,10 @@ const styles = {
     '[--btn-icon:var(--color-zinc-500)] data-active:[--btn-icon:var(--color-zinc-700)] data-hover:[--btn-icon:var(--color-zinc-700)] dark:[--btn-icon:var(--color-zinc-500)] dark:data-active:[--btn-icon:var(--color-zinc-400)] dark:data-hover:[--btn-icon:var(--color-zinc-400)]',
   ],
   colors: {
+    accent: [
+      'text-white [--btn-bg:var(--color-accent)] [--btn-border:var(--color-accent-hover)]/90 [--btn-hover-overlay:var(--color-white)]/12',
+      '[--btn-icon:var(--color-white)]/75 data-active:[--btn-icon:var(--color-white)] data-hover:[--btn-icon:var(--color-white)]',
+    ],
     'dark/zinc': [
       'text-white [--btn-bg:var(--color-zinc-900)] [--btn-border:var(--color-zinc-950)]/90 [--btn-hover-overlay:var(--color-white)]/10',
       'dark:text-white dark:[--btn-bg:var(--color-zinc-600)] dark:[--btn-hover-overlay:var(--color-white)]/5',
@@ -180,7 +184,7 @@ function resolveVariantProps(variant: ButtonVariant | undefined): ButtonModeProp
   if (variant === 'secondary') return { outline: true }
   if (variant === 'ghost') return { plain: true }
   if (variant === 'danger') return { color: 'red' }
-  return { color: 'blue' }
+  return { color: 'accent' }
 }
 
 export const Button = forwardRef(function Button(
@@ -195,8 +199,8 @@ export const Button = forwardRef(function Button(
   if (unstyled) {
     const unstyledClasses = clsx(
       className,
-      'relative isolate inline-flex items-center justify-center gap-x-2 rounded-lg border border-transparent bg-transparent font-semibold transition-colors',
-      'focus:not-data-focus:outline-hidden data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-blue-500',
+      'relative isolate inline-flex items-center justify-center gap-x-2 transition-colors',
+      'focus:not-data-focus:outline-hidden data-focus:outline-2 data-focus:outline-offset-2 data-focus:outline-accent',
       'data-disabled:opacity-50',
     )
 
@@ -205,7 +209,7 @@ export const Button = forwardRef(function Button(
         <TouchTarget>{children}</TouchTarget>
       </Link>
     ) : (
-      <Headless.Button {...props} className={clsx(unstyledClasses, 'cursor-default')} ref={ref}>
+      <Headless.Button {...props} className={unstyledClasses} ref={ref}>
         <TouchTarget>{children}</TouchTarget>
       </Headless.Button>
     )
@@ -214,7 +218,7 @@ export const Button = forwardRef(function Button(
   let classes = clsx(
     className,
     styles.base,
-    resolvedOutline ? styles.outline : resolvedPlain ? styles.plain : clsx(styles.solid, styles.colors[resolvedColor ?? 'dark/zinc'])
+    resolvedOutline ? styles.outline : resolvedPlain ? styles.plain : clsx(styles.solid, styles.colors[resolvedColor ?? 'accent'])
   )
 
   return typeof props.href === 'string' ? (

@@ -109,7 +109,7 @@ const MD_COMPONENTS = {
     a: ({ children, ...props }: ComponentPropsWithoutRef<'a'>) => <a className="text-accent underline underline-offset-2 hover:text-accent-hover" target="_blank" rel="noopener noreferrer" {...props}>{children}</a>,
     hr: (props: ComponentPropsWithoutRef<'hr'>) => <hr className="my-3 border-border" {...props}/>,
     del: ({ children, ...props }: ComponentPropsWithoutRef<'del'>) => <del className="text-text-muted" {...props}>{children}</del>,
-    input: ({ size: _size, ...props }: ComponentPropsWithoutRef<'input'>) => <UiInput className="mr-1 accent-accent" {...props}/>,
+    input: ({ size: _size, ...props }: ComponentPropsWithoutRef<'input'>) => <UiInput className="mr-1" controlClassName="accent-accent" {...props}/>,
 } as const;
 export function MarkdownRenderer({ content, allowHtml = false, }: {
     content: string;

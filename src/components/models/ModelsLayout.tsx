@@ -16,6 +16,7 @@ import { PROVIDER_PRESETS } from '@/store/slices/modelConfigSlice';
 import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
 import { Button as UiButton } from '@/components/catalyst-ui/button';
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { workbenchSegmentButtonClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 type ModelsViewMode = 'providers' | 'models' | 'compare';
 const MODEL_VIEW_MODES = new Set<ModelsViewMode>(['providers', 'models', 'compare']);
 function generateId(): string {
@@ -27,7 +28,7 @@ export function ModelsLayout() {
     const { view } = useParams<{
         view: string;
     }>();
-    const [panelWidth, setPanelWidth] = useResizablePanel('models', 280);
+    const [panelWidth, setPanelWidth] = useResizablePanel('models', 340);
     const { providerConfigs, addProviderConfig, removeProviderConfig, updateProviderConfig, syncModelsFromConfigs, models, workspacePath } = useAppStore();
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [loaded, setLoaded] = useState(false);
@@ -99,6 +100,9 @@ export function ModelsLayout() {
         models: provider.models.filter((model) => model.enabled),
     }))
         .filter((entry) => entry.models.length > 0), [filteredProviderConfigs]);
+    const filteredEnabledModelsCount = useMemo(() => groupedEnabledModels.reduce((total, entry) => total + entry.models.length, 0), [groupedEnabledModels]);
+    const sidebarResultCount = viewMode === 'providers' ? filteredProviderConfigs.length : filteredEnabledModelsCount;
+    const sidebarTotalCount = viewMode === 'providers' ? providerConfigs.length : enabledModelsCount;
     const handleAddProvider = (presetId?: string) => {
         const preset = presetId ? PROVIDER_PRESETS.find((item) => item.id === presetId) : undefined;
         const newConfig: ProviderConfig = {
@@ -157,47 +161,47 @@ export function ModelsLayout() {
         }
     };
     return (<>
-      <SidePanel title={t('models.title', 'Models')} width={panelWidth} action={viewMode !== 'compare' ? (<UiButton unstyled type="button" onClick={() => handleAddProvider()} className="rounded-xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/25" title={t('models.addProvider', 'Add provider')}>
+      <SidePanel title={t('models.title', 'Models')} width={panelWidth} action={viewMode !== 'compare' ? (<UiButton unstyled type="button" onClick={() => handleAddProvider()} className={workbenchSidebarAccentActionClass} title={t('models.addProvider', 'Add provider')}>
               {t('models.addProvider', '+ Provider')}
             </UiButton>) : undefined}>
-        <div className="px-3 pb-3 pt-3 space-y-3">
+        <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
           <div className="flex gap-1.5 rounded-md border border-border-subtle/45 bg-surface-0/35 p-1">
               {([
             { value: 'providers', label: t('models.providers', 'Providers'), icon: 'ui-building' },
             { value: 'models', label: t('models.allModels', 'All Models'), icon: 'ui-clipboard' },
             { value: 'compare', label: t('models.compare', 'Compare'), icon: 'ui-scale' },
-        ] as const).map((mode) => (<UiButton unstyled key={mode.value} type="button" onClick={() => navigate(`/models/${mode.value}`)} className={`flex-1 rounded-md px-2 py-1.5 text-[11px] font-semibold transition-colors ${viewMode === mode.value ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-3/60'}`}>
+        ] as const).map((mode) => (<UiButton unstyled key={mode.value} type="button" onClick={() => navigate(`/models/${mode.value}`)} className={workbenchSegmentButtonClass(viewMode === mode.value)}>
                   <span className="inline-flex items-center gap-1.5"><IconifyIcon name={mode.icon} size={14} color="currentColor"/> {mode.label}</span>
                 </UiButton>))}
           </div>
 
-          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+          <div className={workbenchSidebarCardClass}>
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none"/>
-              <UiInput value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={viewMode === 'providers' ? t('models.searchProviders', 'Search providers or models...') : t('models.searchModels', 'Search models...')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-3 text-[12px] text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+              <UiInput value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={viewMode === 'providers' ? t('models.searchProviders', 'Search providers or models...') : t('models.searchModels', 'Search models...')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass}/>
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
-              <span>{filteredProviderConfigs.length} {t('common.results', 'results')}</span>
-              {searchQuery && <span>{providerConfigs.length} {t('common.total', 'total')}</span>}
+            <div className={workbenchSidebarMetaClass}>
+              <span>{sidebarResultCount} {t('common.results', 'results')}</span>
+              {searchQuery && <span>{sidebarTotalCount} {t('common.total', 'total')}</span>}
             </div>
           </div>
 
-          {viewMode === 'providers' && (<div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
-              <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('models.providerPresets', 'Provider presets')}</div>
-              <div className="grid grid-cols-2 gap-2">
-                {PROVIDER_PRESETS.map((preset) => (<UiButton unstyled key={preset.id} type="button" onClick={() => handleAddProvider(preset.id)} title={preset.description} className="rounded-2xl border border-border-subtle/45 bg-surface-2/60 px-2.5 py-2 text-left text-[11px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent">
-                    <span className="block truncate">{preset.name}</span>
-                    <span className="mt-0.5 block truncate text-[9px] font-normal text-text-muted">{preset.requiresApiKey ? t('models.apiKeyRequired', 'API key') : t('models.local', 'Local')}</span>
+          {viewMode === 'providers' && (<div className={workbenchSidebarCardClass}>
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-text-muted/60">{t('models.providerPresets', 'Provider presets')}</div>
+              <div className="space-y-2">
+                {PROVIDER_PRESETS.map((preset) => (<UiButton unstyled key={preset.id} type="button" onClick={() => handleAddProvider(preset.id)} title={preset.description} className="flex w-full items-center justify-between gap-3 rounded-2xl border border-border-subtle/45 bg-surface-2/60 px-3 py-2.5 text-left text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent">
+                    <span className="min-w-0 truncate">{preset.name}</span>
+                    <span className="shrink-0 rounded-full bg-surface-0/70 px-2 py-0.5 text-[10px] font-normal text-text-muted">{preset.requiresApiKey ? t('models.apiKeyRequired', 'API key') : t('models.local', 'Local')}</span>
                   </UiButton>))}
               </div>
             </div>)}
 
-          {viewMode === 'compare' ? (<div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+          {viewMode === 'compare' ? (<div className={workbenchSidebarEmptyClass}>
               <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
                 <IconifyIcon name="ui-scale" size={18} color="currentColor"/>
               </div>
               <p className="text-[12px] leading-relaxed text-text-muted">{t('models.compareSidebarHint', 'Comparison mode is open in the main panel. Switch back anytime to keep editing providers and parameters.')}</p>
-            </div>) : viewMode === 'providers' ? (filteredProviderConfigs.length === 0 ? (<div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+            </div>) : viewMode === 'providers' ? (filteredProviderConfigs.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
                   <IconifyIcon name="ui-building" size={18} color="currentColor"/>
                 </div>
@@ -215,31 +219,31 @@ export function ModelsLayout() {
                 return (<div key={provider.id} tabIndex={0} onClick={() => setSelectedId(provider.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     setSelectedId(provider.id);
-                } }} className={`group w-full rounded-3xl border px-3.5 py-3.5 text-left transition-all duration-200 cursor-pointer ${isActive ? 'border-accent/20 bg-accent/10 shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)] text-text-primary' : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30`}>
+                } }} className={`${workbenchSidebarItemClass(isActive)} cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30`}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex min-w-0 gap-3">
-                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 text-xs font-bold text-accent shadow-sm">
+                          <span className={`${workbenchSidebarIconClass} text-xs font-bold`}>
                             {provider.name.slice(0, 2).toUpperCase()}
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="truncate text-[13px] font-semibold text-text-primary">{provider.name}</span>
-                              <span className="rounded-full bg-surface-3/80 px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-text-muted">{provider.providerType}</span>
+                              <span className={workbenchSidebarTitleClass}>{provider.name}</span>
+                              <span className={`${workbenchSidebarPillClass} uppercase tracking-[0.08em]`}>{provider.providerType}</span>
                             </div>
-                            <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{provider.baseUrl || t('models.defaultEndpointHint', 'Leave empty to use default endpoint.')}</p>
+                            <p className={workbenchSidebarDescriptionClass}>{provider.baseUrl || t('models.defaultEndpointHint', 'Leave empty to use default endpoint.')}</p>
                             <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
-                              <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{enabledCount > 0 ? t('models.enabledModelsCount', '{count} enabled').replace('{count}', String(enabledCount)) : t('models.notConfigured', 'Not configured')}</span>
+                              <span className={workbenchSidebarPillClass}>{enabledCount > 0 ? t('models.enabledModelsCount', '{count} enabled').replace('{count}', String(enabledCount)) : t('models.notConfigured', 'Not configured')}</span>
                               <span className={`rounded-full px-2 py-0.5 ${status === 'connected' ? 'bg-green-500/15 text-green-400' : status === 'checking' ? 'bg-yellow-500/15 text-yellow-400' : 'bg-red-500/15 text-red-400'}`}>{statusLabel}</span>
                             </div>
                           </div>
                         </div>
-                        <UiButton unstyled type="button" onClick={(e) => { e.stopPropagation(); handleRemoveProvider(provider.id); }} aria-label={t('models.removeProvider', 'Remove provider')} className="h-8 w-8 shrink-0 rounded-xl text-text-muted hover:text-danger hover:bg-danger/10 flex items-center justify-center text-xs" title={t('models.removeProvider', 'Remove provider')}>
+                        <UiButton unstyled type="button" onClick={(e) => { e.stopPropagation(); handleRemoveProvider(provider.id); }} aria-label={t('models.removeProvider', 'Remove provider')} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-text-muted hover:bg-danger/10 hover:text-danger text-xs" title={t('models.removeProvider', 'Remove provider')}>
                           <IconifyIcon name="ui-close" size={14} color="currentColor"/>
                         </UiButton>
                       </div>
                     </div>);
             })}
-              </div>)) : (groupedEnabledModels.length === 0 ? (<div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+              </div>)) : (groupedEnabledModels.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
                   <IconifyIcon name="ui-clipboard" size={18} color="currentColor"/>
                 </div>
@@ -247,10 +251,10 @@ export function ModelsLayout() {
               </div>) : (<div className="space-y-3">
                 {groupedEnabledModels.map(({ provider, models: providerModels }) => {
                 const status = connectionStatus[provider.id];
-                return (<section key={provider.id} className="rounded-3xl border border-border-subtle/55 bg-surface-0/55 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+                return (<section key={provider.id} className={workbenchSidebarCardClass}>
                       <div className="flex items-center justify-between gap-3 px-1 pb-2">
                         <div>
-                          <div className="text-[12px] font-semibold text-text-primary">{provider.name}</div>
+                          <div className="text-[13px] font-semibold text-text-primary">{provider.name}</div>
                           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
                             <span>{providerModels.length} {t('models.enabled', 'enabled')}</span>
                             <span className={`h-1.5 w-1.5 rounded-full ${status === 'connected' ? 'bg-green-400' : status === 'checking' ? 'bg-yellow-400 animate-pulse' : 'bg-red-400'}`}/>
@@ -289,7 +293,7 @@ export function ModelsLayout() {
           </div>
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360}/>
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
       {viewMode === 'compare' ? (<ModelComparisonPanel onClose={() => navigate('/models/providers')}/>) : viewMode === 'providers' && selectedId ? (<ProviderEditor key={selectedId} providerId={selectedId} onSaved={handleProviderSaved}/>) : viewMode === 'models' ? ((() => {
             if (!editingModelKey) {
@@ -326,7 +330,7 @@ export function ModelsLayout() {
                         saveSettingsToWorkspace();
                 }} onClose={() => setEditingModelKey(null)}/>);
         })()) : (<div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
-          <WorkbenchEmptyState icon={<IconifyIcon name="ui-building" size={30} color="currentColor"/>} title={providerConfigs.length === 0 ? t('models.addProviderToBegin', 'Add a provider to begin') : t('models.selectProviderToConfigure', 'Select a provider to configure')} description={providerConfigs.length === 0 ? t('models.noProvidersConfigured', 'No providers configured. Click + Provider to add one.') : t('models.providerSelectionHint', 'Choose a provider from the left rail to edit credentials, endpoints, and model availability.')} actions={providerConfigs.length === 0 ? (<UiButton unstyled type="button" onClick={() => handleAddProvider()} className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover">
+          <WorkbenchEmptyState icon={<IconifyIcon name="ui-building" size={30} color="currentColor"/>} title={providerConfigs.length === 0 ? t('models.addProviderToBegin', 'Add a provider to begin') : t('models.selectProviderToConfigure', 'Select a provider to configure')} description={providerConfigs.length === 0 ? t('models.noProvidersConfigured', 'No providers configured. Click + Provider to add one.') : t('models.providerSelectionHint', 'Choose a provider from the left rail to edit credentials, endpoints, and model availability.')} actions={providerConfigs.length === 0 ? (<UiButton unstyled type="button" onClick={() => handleAddProvider()} className={workbenchSidebarPrimaryActionClass}>
                 {t('models.addProvider', '+ Provider')}
               </UiButton>) : undefined}/>
         </div>)}

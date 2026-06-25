@@ -196,7 +196,7 @@ export function DocumentGraphView({ graph, insights, selectedDocumentId, onSelec
           </div>
           <div className="relative w-56">
             <IconifyIcon name="ui-search" size={13} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/60"/>
-            <UiInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('documents.graphSearch', 'Filter graph…')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-0/70 py-2 pl-9 pr-3 text-[11px] text-text-primary outline-none focus:border-accent/30 focus:ring-2 focus:ring-accent/10"/>
+            <UiInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('documents.graphSearch', 'Filter graph…')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-0/70 py-2 pl-9 pr-3 text-[11px] text-text-primary"/>
           </div>
         </div>
 

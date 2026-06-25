@@ -15,6 +15,8 @@ import { confirm } from '@/services/confirmDialog';
 import { toast } from '@/services/toast';
 import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
 import { Button as UiButton } from '@/components/catalyst-ui/button';
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem, DropdownDivider } from '@/components/catalyst-ui/dropdown';
+import { workbenchSegmentButtonClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 import { safeParse, safeStringify } from '@/utils/safeJson';
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
 const DEFAULT_AGENT_ID = 'default-assistant';
@@ -146,13 +148,14 @@ function getAgentPreviewText(agent: Agent, t: (key: string, fallback?: string) =
     return `${agent.systemPrompt.slice(0, 40)}…`;
 }
 // ─── Agent List (sidebar sub-component) ────────────────────────────
-function AgentList({ agents, editingId, searchQuery, onSearchChange, onSelect, onContextMenu, }: {
+type AgentAction = { key: string; label: string; icon: string; tone?: 'danger'; separator?: boolean; onClick: () => void };
+function AgentList({ agents, editingId, searchQuery, onSearchChange, onSelect, getAgentActions, }: {
     agents: Agent[];
     editingId: string | null;
     searchQuery: string;
     onSearchChange: (q: string) => void;
     onSelect: (agent: Agent) => void;
-    onContextMenu: (e: React.MouseEvent, agent: Agent) => void;
+    getAgentActions: (agent: Agent) => AgentAction[];
 }) {
     const { t } = useI18n();
     const filteredAgents = searchQuery.trim()
@@ -161,12 +164,12 @@ function AgentList({ agents, editingId, searchQuery, onSearchChange, onSelect, o
         : agents;
     return (<div className="module-sidebar-stack px-3 pb-3 space-y-2.5">
       {/* Search */}
-      {agents.length > 3 && (<div className="rounded-[22px] border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+      {agents.length > 3 && (<div className={workbenchSidebarCardClass}>
           <div className="relative">
             <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none"/>
-            <UiInput value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} placeholder={t('agents.search', 'Search agents...')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-3 text-[12px] text-text-secondary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+            <UiInput value={searchQuery} onChange={(e) => onSearchChange(e.target.value)} placeholder={t('agents.search', 'Search agents...')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass}/>
           </div>
-          <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+          <div className={workbenchSidebarMetaClass}>
             <span>{filteredAgents.length} {t('common.results', 'results')}</span>
             {searchQuery && <span>{agents.length} {t('common.total', 'total')}</span>}
           </div>
@@ -192,14 +195,12 @@ function AgentList({ agents, editingId, searchQuery, onSearchChange, onSelect, o
                         e.preventDefault();
                         onSelect(agent);
                     }
-                }} onContextMenu={(e) => { e.preventDefault(); onContextMenu(e, agent); }} className={`group rounded-[22px] border px-3.5 py-3.5 cursor-pointer transition-all duration-200 ${isActive
-                    ? 'border-accent/20 bg-accent/10 text-text-primary shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
-                    : isDefault
-                        ? 'border-border-subtle/55 bg-linear-to-br from-surface-1/80 to-surface-2/55 text-text-secondary hover:border-accent/16 hover:text-text-primary'
-                        : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60 hover:text-text-primary'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30`}>
+                }} className={`${workbenchSidebarItemClass(isActive, isDefault
+                    ? 'border-border-subtle/55 bg-linear-to-br from-surface-1/80 to-surface-2/55 text-text-secondary hover:border-accent/16 hover:text-text-primary'
+                    : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60 hover:text-text-primary')} cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30`}>
             <div className="flex min-w-0 gap-3">
                 <div className="relative mt-0.5 shrink-0">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 shadow-sm">
+                  <div className={workbenchSidebarIconClass}>
                     <AgentAvatar avatar={agent.avatar} size={22}/>
                   </div>
                   {agent.color && (<svg viewBox="0 0 10 10" className="absolute -bottom-0.5 -right-0.5 h-3.5 w-3.5 rounded-full bg-surface-0 p-px" aria-hidden="true">
@@ -209,25 +210,35 @@ function AgentList({ agents, editingId, searchQuery, onSearchChange, onSelect, o
                 <div className="min-w-0 flex-1">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                      <span className="truncate text-[13px] font-semibold text-text-primary">{displayName}</span>
+                      <span className={workbenchSidebarTitleClass}>{displayName}</span>
                       {!agent.enabled && (<span className="shrink-0 rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] uppercase tracking-wider text-text-muted">{t('common.off', 'off')}</span>)}
                       {sourceBadge && (<span className="shrink-0 rounded-full border border-accent/20 bg-accent/10 px-1.5 py-0.5 text-[9px] text-accent">{t('agents.builtin', 'builtin')}</span>)}
                       {isDefault && (<span className="shrink-0 rounded-full border border-border-subtle/50 bg-surface-0/80 px-1.5 py-0.5 text-[9px] text-text-muted">{t('agents.default', 'default')}</span>)}
                     </div>
                     <div className={`flex items-center gap-1 shrink-0 transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`}>
-                      <UiButton unstyled type="button" onClick={(e) => {
-                    e.stopPropagation();
-                    onContextMenu(e, agent);
-                }} aria-label={t('common.actions', 'Actions')} aria-haspopup="menu" title={t('common.actions', 'Actions')} className="flex h-8 items-center gap-1 rounded-xl bg-surface-0/65 px-2.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-accent/8 hover:text-accent" tabIndex={isActive ? 0 : -1}>
-                        <span>{t('common.actions', 'Actions')}</span>
-                        <IconifyIcon name="ui-chevron-down" size={12} color="currentColor"/>
-                      </UiButton>
+                      <Dropdown>
+                        <DropdownButton as="button" type="button" onClick={(e: React.MouseEvent) => e.stopPropagation()} aria-label={t('common.actions', 'Actions')} title={t('common.actions', 'Actions')} className="flex h-8 items-center gap-1 rounded-xl bg-surface-0/65 px-2.5 text-[11px] font-medium text-text-muted transition-colors hover:bg-accent/8 hover:text-accent" tabIndex={isActive ? 0 : -1}>
+                          <span>{t('common.actions', 'Actions')}</span>
+                          <IconifyIcon name="ui-chevron-down" size={12} color="currentColor"/>
+                        </DropdownButton>
+                        <DropdownMenu anchor="bottom end" className="min-w-44 overflow-hidden rounded-2xl border border-border/60 bg-surface-2/95 py-1.5 shadow-2xl backdrop-blur-xl">
+                          {getAgentActions(agent).map((action) => (<>
+                            {action.separator && <DropdownDivider key={`sep-${action.key}`} className="mx-2 my-1"/>}
+                            <DropdownItem key={action.key} onClick={action.onClick} className={`flex items-center gap-2.5 px-4 py-2.5 text-[13px] ${action.tone === 'danger' ? 'text-danger' : 'text-text-secondary'}`}>
+                              <div className="col-span-full flex items-center gap-2.5 w-full">
+                                <IconifyIcon name={action.icon} size={14} color="currentColor"/>
+                                {action.label}
+                              </div>
+                            </DropdownItem>
+                          </>))}
+                        </DropdownMenu>
+                      </Dropdown>
                     </div>
                   </div>
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-text-secondary/80 line-clamp-2">{previewText}</p>
+                  <p className={workbenchSidebarDescriptionClass}>{previewText}</p>
                   <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                    <span className="rounded-full bg-surface-3/85 px-2 py-0.5 text-[10px] text-text-muted">{agent.skills.length} {t('agents.skills', 'skills')}</span>
-                    {!!agent.memories?.length && <span className="rounded-full bg-surface-3/85 px-2 py-0.5 text-[10px] text-text-muted">{agent.memories.length} {t('agents.memoriesCount', 'memories')}</span>}
+                    <span className={workbenchSidebarPillClass}>{agent.skills.length} {t('agents.skills', 'skills')}</span>
+                    {!!agent.memories?.length && <span className={workbenchSidebarPillClass}>{agent.memories.length} {t('agents.memoriesCount', 'memories')}</span>}
                     {agent.autoLearn && <span className="rounded-full bg-success/10 px-2 py-0.5 text-[10px] text-success">{t('agents.autoLearn', 'Auto-learn')}</span>}
                   </div>
                 </div>
@@ -239,7 +250,7 @@ function AgentList({ agents, editingId, searchQuery, onSearchChange, onSelect, o
 // ─── Agents Layout (main) ──────────────────────────────────────────
 export function AgentsLayout() {
     const { t } = useI18n();
-    const [panelWidth, setPanelWidth] = useResizablePanel('agents', 280);
+    const [panelWidth, setPanelWidth] = useResizablePanel('agents', 340);
     const { agents, addAgent, updateAgent, removeAgent, setSelectedAgent, addSession, setActiveSession, setActiveModule, addAgentVersion } = useAppStore();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
@@ -254,30 +265,6 @@ export function AgentsLayout() {
     const [sideTab, setSideTab] = useState<'local' | 'marketplace'>('local');
     const [marketSearch, setMarketSearch] = useState('');
     const fileInputRef = useRef<HTMLInputElement>(null);
-    const [ctxMenu, setCtxMenu] = useState<{
-        x: number;
-        y: number;
-        agent: Agent;
-    } | null>(null);
-    const ctxRef = useRef<HTMLDivElement>(null);
-    // Close context menu on outside click or Escape
-    useEffect(() => {
-        if (!ctxMenu)
-            return;
-        const handleClick = (e: MouseEvent) => {
-            if (ctxRef.current && !ctxRef.current.contains(e.target as Node))
-                setCtxMenu(null);
-        };
-        const handleKey = (e: KeyboardEvent) => { if (e.key === 'Escape')
-            setCtxMenu(null); };
-        document.addEventListener('mousedown', handleClick);
-        document.addEventListener('keydown', handleKey);
-        return () => { document.removeEventListener('mousedown', handleClick); document.removeEventListener('keydown', handleKey); };
-    }, [ctxMenu]);
-    const editingAgent = editingId ? agents.find((a) => a.id === editingId) ?? null : null;
-    const assistantAgent = assistantState?.agentId
-        ? agents.find((a) => a.id === assistantState.agentId) ?? null
-        : null;
     const marketplaceAgents = useMemo<MarketplaceAgentTemplate[]>(() => (MARKETPLACE_AGENT_SEEDS.map((seed) => ({
         ...seed,
         name: t(`agents.marketplace.${seed.id}.name`, seed.fallbackName),
@@ -437,18 +424,10 @@ export function AgentsLayout() {
     };
     const filteredMarketAgents = marketplaceAgents.filter((a) => !marketSearch || a.name.toLowerCase().includes(marketSearch.toLowerCase()) || a.category.toLowerCase().includes(marketSearch.toLowerCase()));
     const enabledAgentCount = agents.filter((agent) => agent.enabled).length;
-    const openAgentMenu = (event: React.MouseEvent, agent: Agent) => {
-        event.preventDefault();
-        const menuWidth = 176;
-        const menuHeight = agent.id === DEFAULT_AGENT_ID ? 196 : 236;
-        const x = Math.min(event.clientX, window.innerWidth - menuWidth - 8);
-        const y = Math.min(event.clientY, window.innerHeight - menuHeight - 8);
-        setCtxMenu({
-            x: Math.max(8, x),
-            y: Math.max(8, y),
-            agent,
-        });
-    };
+    const editingAgent = editingId ? agents.find((a) => a.id === editingId) ?? null : null;
+    const assistantAgent = assistantState?.agentId
+        ? agents.find((a) => a.id === assistantState.agentId) ?? null
+        : null;
     const editorHeader = (<div className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-border-subtle/60 bg-surface-0/70 px-4 py-3">
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/55">{t('timer.assistantSection', 'Side chat')}</div>
@@ -497,18 +476,18 @@ export function AgentsLayout() {
         setSideTab('local');
     };
     return (<>
-      <SidePanel title={t('agents.title', 'Agents')} width={panelWidth} action={<div className="flex items-center gap-1">
-            <UiButton unstyled type="button" onClick={() => setAssistantState({ mode: 'create', agentId: null })} title={t('timer.aiCreate', 'AI Create')} className="inline-flex items-center gap-1 rounded-lg bg-accent px-2.5 py-1 text-[11px] font-medium text-white transition-colors hover:bg-accent-hover">
+      <SidePanel title={t('agents.title', 'Agents')} width={panelWidth} action={<div className="flex items-center gap-1.5">
+            <UiButton unstyled type="button" onClick={() => setAssistantState({ mode: 'create', agentId: null })} title={t('timer.aiCreate', 'AI Create')} className={`${workbenchSidebarPrimaryActionClass} inline-flex items-center gap-1.5`}>
               <IconifyIcon name="ui-sparkles" size={13} color="currentColor"/>
               {t('timer.aiCreate', 'AI Create')}
             </UiButton>
-            <UiButton unstyled type="button" onClick={() => setShowHub(!showHub)} title={t('agents.agentHub', 'Agent Hub')} className={`text-[11px] px-2 py-1 rounded-lg transition-colors ${showHub ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-3/60'}`}>
+            <UiButton unstyled type="button" onClick={() => setShowHub(!showHub)} title={t('agents.agentHub', 'Agent Hub')} className={showHub ? workbenchSidebarAccentActionClass : workbenchSidebarSubtleActionClass}>
               <IconifyIcon name="ui-link" size={14} color="currentColor"/>
             </UiButton>
-            <UiButton unstyled type="button" onClick={() => fileInputRef.current?.click()} title={t('agents.importAgent', 'Import agent from JSON')} className="text-[11px] px-2 py-1 rounded-lg text-text-muted hover:bg-surface-3/60 transition-colors">
+            <UiButton unstyled type="button" onClick={() => fileInputRef.current?.click()} title={t('agents.importAgent', 'Import agent from JSON')} className={workbenchSidebarSubtleActionClass}>
               ↑
             </UiButton>
-            <UiButton unstyled type="button" onClick={() => { setIsAdding(true); setEditingId(null); }} className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium">
+            <UiButton unstyled type="button" onClick={() => { setIsAdding(true); setEditingId(null); }} className={workbenchSidebarAccentActionClass}>
               + {t('common.new', 'New')}
             </UiButton>
           </div>}>
@@ -516,50 +495,55 @@ export function AgentsLayout() {
 
         {/* Side panel tabs */}
         <div className="grid grid-cols-2 gap-1.5 px-3 pb-3 pt-1">
-          <UiButton unstyled type="button" onClick={() => setSideTab('local')} className={`text-xs py-2 rounded-xl font-semibold transition-all ${sideTab === 'local'
-            ? 'bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.14)]'
-            : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'}`}>
+          <UiButton unstyled type="button" onClick={() => setSideTab('local')} className={workbenchSegmentButtonClass(sideTab === 'local')}>
             {t('agents.local', 'Local')} ({agents.length})
           </UiButton>
-          <UiButton unstyled type="button" onClick={() => setSideTab('marketplace')} className={`text-xs py-2 rounded-xl font-semibold transition-all inline-flex items-center justify-center gap-1.5 ${sideTab === 'marketplace'
-            ? 'bg-accent/15 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.14)]'
-            : 'text-text-muted hover:text-text-secondary hover:bg-surface-3/60'}`}>
+          <UiButton unstyled type="button" onClick={() => setSideTab('marketplace')} className={`${workbenchSegmentButtonClass(sideTab === 'marketplace')} inline-flex items-center justify-center gap-1.5`}>
             <IconifyIcon name="ui-cart" size={14} color="currentColor"/> {t('agents.market', 'Market')}
           </UiButton>
         </div>
 
-        {sideTab === 'local' && (<AgentList agents={agents} editingId={editingId} searchQuery={searchQuery} onSearchChange={setSearchQuery} onSelect={(agent) => { setEditingId(agent.id); setIsAdding(false); }} onContextMenu={openAgentMenu}/>)}
+        {sideTab === 'local' && (<AgentList agents={agents} editingId={editingId} searchQuery={searchQuery} onSearchChange={setSearchQuery} onSelect={(agent) => { setEditingId(agent.id); setIsAdding(false); }} getAgentActions={(agent) => [
+              { key: 'chat', label: t('agents.startChat', 'Start Chat'), icon: 'ui-chat', onClick: () => handleStartChat(agent) },
+              { key: 'ai-edit', label: t('timer.aiEditCurrent', 'AI Edit'), icon: 'ui-sparkles', onClick: () => setAssistantState({ mode: 'edit', agentId: agent.id }) },
+              { key: 'edit', label: t('common.edit', 'Edit'), icon: 'ui-edit', onClick: () => { setEditingId(agent.id); setIsAdding(false); } },
+              { key: 'duplicate', label: t('common.duplicate', 'Duplicate'), icon: 'ui-copy', onClick: () => handleDuplicate(agent) },
+              { key: 'export', label: t('common.export', 'Export'), icon: 'ui-export', onClick: () => handleExport(agent) },
+              ...(agent.id !== DEFAULT_AGENT_ID ? [{ key: 'delete', label: t('common.delete', 'Delete'), icon: 'ui-trash', tone: 'danger' as const, separator: true, onClick: () => void handleDelete(agent.id) }] : []),
+            ]}/>)}
 
         {sideTab === 'marketplace' && (<div className="module-sidebar-stack px-3 pb-3 space-y-3">
-            <div className="relative">
+            <div className={workbenchSidebarCardClass}>
+              <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none"/>
-              <UiInput type="text" value={marketSearch} onChange={(e) => setMarketSearch(e.target.value)} placeholder={t('agents.search', 'Search agents...')} className="py-2.5 pl-10 pr-3 text-[12px]"/>
+              <UiInput type="text" value={marketSearch} onChange={(e) => setMarketSearch(e.target.value)} placeholder={t('agents.search', 'Search agents...')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass}/>
+              </div>
             </div>
             {filteredMarketAgents.map((tpl, idx) => {
                 const alreadyInstalled = agents.some((a) => a.avatar === tpl.avatar && tpl.skills.every((skillId) => a.skills.includes(skillId)));
-                return (<div key={idx} className="rounded-[22px] border border-border-subtle/60 bg-linear-to-br from-surface-1/92 to-surface-2/58 p-3.5 transition-all duration-200 hover:border-accent/18 hover:shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.05)]">
+                return (<div key={idx} className={`${workbenchSidebarCardClass} transition-all duration-200 hover:border-accent/18`}>
                   <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/70 shadow-sm">
+                    <div className={`${workbenchSidebarIconClass} mt-0.5`}>
                       <AgentAvatar avatar={tpl.avatar} size={22}/>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-[13px] font-semibold text-text-primary">{tpl.name}</span>
-                        <span className="rounded-full bg-surface-3/85 px-2 py-0.5 text-[10px] text-text-muted">{tpl.category}</span>
+                        <span className={workbenchSidebarTitleClass}>{tpl.name}</span>
+                        <span className={workbenchSidebarPillClass}>{tpl.category}</span>
                       </div>
-                      <p className="mt-1.5 text-[12px] leading-relaxed text-text-secondary/82 line-clamp-2">{tpl.description}</p>
+                      <p className={workbenchSidebarDescriptionClass}>{tpl.description}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px] text-text-muted">
-                        <span className="rounded-full bg-surface-3/75 px-2 py-0.5">⭐ {tpl.rating}</span>
-                        <span className="rounded-full bg-surface-3/75 px-2 py-0.5">↓ {tpl.downloads}</span>
-                        <span className="rounded-full bg-surface-3/75 px-2 py-0.5">{tpl.skills.length} {t('agents.skills', 'skills')}</span>
+                        <span className={workbenchSidebarPillClass}>⭐ {tpl.rating}</span>
+                        <span className={workbenchSidebarPillClass}>↓ {tpl.downloads}</span>
+                        <span className={workbenchSidebarPillClass}>{tpl.skills.length} {t('agents.skills', 'skills')}</span>
                       </div>
                       <div className="mt-3 flex items-center justify-between gap-3">
                         <div className="text-[10px] text-text-muted/65 line-clamp-1">
                           {tpl.systemPrompt}
                         </div>
-                        <UiButton unstyled type="button" onClick={() => installMarketAgent(tpl)} disabled={alreadyInstalled} className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold transition-colors shrink-0 ${alreadyInstalled
-                        ? 'bg-surface-3 text-text-muted cursor-not-allowed'
-                        : 'bg-accent/15 text-accent hover:bg-accent/25'}`}>
+                        <UiButton unstyled type="button" onClick={() => installMarketAgent(tpl)} disabled={alreadyInstalled} className={`shrink-0 ${alreadyInstalled
+                        ? workbenchSidebarSubtleActionClass
+                        : workbenchSidebarAccentActionClass}`}>
                           {alreadyInstalled ? t('common.installed', 'Installed') : t('common.install', 'Install')}
                         </UiButton>
                       </div>
@@ -569,32 +553,8 @@ export function AgentsLayout() {
             })}
           </div>)}
 
-        {/* Right-click context menu */}
-        {ctxMenu && (<div ref={ctxRef} className="fixed z-50 min-w-44 rounded-2xl border border-border/60 bg-surface-2/95 py-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale" {...{ style: { top: ctxMenu.y, left: ctxMenu.x } }} onClick={(e) => e.stopPropagation()}>
-            <UiButton unstyled type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { handleStartChat(ctxMenu.agent); setCtxMenu(null); }}>
-              <IconifyIcon name="ui-chat" size={14} color="currentColor"/> {t('agents.startChat', 'Start Chat')}
-            </UiButton>
-            <UiButton unstyled type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { setAssistantState({ mode: 'edit', agentId: ctxMenu.agent.id }); setCtxMenu(null); }}>
-              <IconifyIcon name="ui-sparkles" size={14} color="currentColor"/> {t('timer.aiEditCurrent', 'AI Edit')}
-            </UiButton>
-            <UiButton unstyled type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { setEditingId(ctxMenu.agent.id); setIsAdding(false); setCtxMenu(null); }}>
-              <IconifyIcon name="ui-edit" size={14} color="currentColor"/> {t('common.edit', 'Edit')}
-            </UiButton>
-            <UiButton unstyled type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { handleDuplicate(ctxMenu.agent); setCtxMenu(null); }}>
-              <IconifyIcon name="ui-copy" size={14} color="currentColor"/> {t('common.duplicate', 'Duplicate')}
-            </UiButton>
-            <UiButton unstyled type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-text-secondary transition-colors hover:bg-surface-3/50 hover:text-text-primary" onClick={() => { handleExport(ctxMenu.agent); setCtxMenu(null); }}>
-              <IconifyIcon name="ui-export" size={14} color="currentColor"/> {t('common.export', 'Export')}
-            </UiButton>
-            {ctxMenu.agent.id !== DEFAULT_AGENT_ID && (<>
-                <div className="separator-gradient mx-2 my-1"/>
-                <UiButton unstyled type="button" className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-danger transition-colors hover:bg-danger/10" onClick={() => { handleDelete(ctxMenu.agent.id); setCtxMenu(null); }}>
-                  <IconifyIcon name="ui-trash" size={14} color="currentColor"/> {t('common.delete', 'Delete')}
-                </UiButton>
-              </>)}
-          </div>)}
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360}/>
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
       {showHub ? (<AgentOrchestrationPanel agents={agents} title={t('agents.agentHub', 'Agent Hub')} allowedTabs={['communications', 'versions', 'performance']} initialTab="communications" onClose={() => setShowHub(false)}/>) : isAdding || editingId ? (<>
           <div className="min-h-0 min-w-0 flex flex-1 overflow-hidden">
@@ -605,13 +565,13 @@ export function AgentsLayout() {
             </div>)}
         </>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
           <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14H8a4 4 0 0 0-4 4v2h16v-2a4 4 0 0 0-4-4z"/></svg>} eyebrow={t('agents.studioWorkspace', 'Agent Workspace')} title={t('agents.selectToEdit', 'Select an agent to edit')} description={t('agents.emptyStateDetail', 'Build specialists with distinct prompts, curated skills, and guardrails. Pick an existing agent to refine it, or create a new one as a reusable starting point.')} actions={(<>
-                <UiButton unstyled type="button" onClick={() => setAssistantState({ mode: 'create', agentId: null })} className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover">
+                <UiButton unstyled type="button" onClick={() => setAssistantState({ mode: 'create', agentId: null })} className={workbenchSidebarPrimaryActionClass}>
                   {t('timer.aiCreate', 'AI Create')}
                 </UiButton>
-                <UiButton unstyled type="button" onClick={() => { setIsAdding(true); setEditingId(null); }} className="rounded-2xl border border-border-subtle/60 bg-surface-0/60 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-all hover:border-accent/20 hover:text-text-primary">
+                <UiButton unstyled type="button" onClick={() => { setIsAdding(true); setEditingId(null); }} className={workbenchSidebarSubtleActionClass}>
                   + {t('common.new', 'New')} {t('agents.title', 'Agents')}
                 </UiButton>
-                <UiButton unstyled type="button" onClick={() => setShowHub(true)} className="rounded-2xl border border-border-subtle/60 bg-surface-0/60 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-all hover:border-accent/20 hover:text-text-primary">
+                <UiButton unstyled type="button" onClick={() => setShowHub(true)} className={workbenchSidebarSubtleActionClass}>
                   {t('agents.agentHub', 'Agent Hub')}
                 </UiButton>
               </>)} metrics={[

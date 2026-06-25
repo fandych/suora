@@ -14,6 +14,7 @@ import { confirm } from '@/services/confirmDialog';
 import { Checkbox } from '@/components/catalyst-ui/checkbox';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { workbenchAccentButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryHintClass } from '@/components/catalyst-ui/workbench';
 const TOOL_DESCRIPTIONS = BUILTIN_TOOL_DESCRIPTIONS;
 const AVATARS: string[] = [...AGENT_ICON_NAMES];
 const editorInputClass = 'bg-surface-2/75';
@@ -27,11 +28,11 @@ function EditorSection({ eyebrow, title, description, children, }: {
     description: string;
     children: ReactNode;
 }) {
-    return (<section className="rounded-[28px] border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+    return (<section className={workbenchDetailSectionClass}>
       <div className="mb-5">
-        <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{eyebrow}</div>
-        <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{title}</h3>
-        <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{description}</p>
+        <div className={workbenchSectionEyebrowClass}>{eyebrow}</div>
+        <h3 className={workbenchSectionTitleClass}>{title}</h3>
+        <p className={workbenchSectionDescriptionClass}>{description}</p>
       </div>
       {children}
     </section>);
@@ -44,7 +45,7 @@ function SummaryStat({ label, value, hint, }: {
     return (<div className="rounded-[22px] border border-border-subtle/50 bg-surface-0/60 px-4 py-3.5 shadow-sm">
       <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
       <div className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{value}</div>
-      <div className="mt-1 text-[11px] text-text-muted/70">{hint}</div>
+      <div className={workbenchSummaryHintClass}>{hint}</div>
     </div>);
 }
 function getBuiltinSkillTranslationKey(skillNameOrId: string): string | null {
@@ -200,13 +201,13 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
         }
     };
     const actionButtons = (<div className="flex flex-wrap items-center gap-3">
-      <UiButton unstyled type="submit" className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white shadow-[0_10px_28px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover">
+      <UiButton unstyled type="submit" className={workbenchPrimaryButtonClass}>
         {agent ? t('common.saveChanges', 'Save Changes') : t('agents.createAgent', 'Create Agent')}
       </UiButton>
-      {agent && onTest && (<UiButton unstyled type="button" onClick={() => onTest(form)} className="inline-flex items-center gap-1.5 rounded-2xl border border-accent/25 bg-accent/8 px-5 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/12">
+      {agent && onTest && (<UiButton unstyled type="button" onClick={() => onTest(form)} className={`${workbenchAccentButtonClass} inline-flex items-center gap-1.5`}>
           <IconifyIcon name="ui-test-tube" size={14} color="currentColor"/> {t('common.test', 'Test')}
         </UiButton>)}
-      <UiButton unstyled type="button" onClick={handleCancel} className="rounded-2xl bg-surface-3 px-5 py-3 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-4">
+      <UiButton unstyled type="button" onClick={handleCancel} className={workbenchNeutralButtonClass}>
         {t('common.cancel', 'Cancel')}
       </UiButton>
     </div>);
@@ -215,7 +216,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
           {header}
         </div>)}
       <div className="module-content mx-auto flex w-full max-w-448 flex-col gap-6 px-5 py-6 xl:px-8 xl:py-8">
-        <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+        <section className={workbenchHeroSectionClass}>
           <div className="flex flex-col gap-6 2xl:flex-row 2xl:items-start 2xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
               <div className="relative shrink-0">
@@ -228,7 +229,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
               </div>
 
               <div className="min-w-0 flex-1">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">
+                <div className={workbenchSectionEyebrowClass}>
                   {agent ? t('agents.editAgent', 'Edit Agent') : t('agents.createAgent', 'Create Agent')}
                 </div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{heroTitle}</h2>
@@ -323,11 +324,11 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('common.name', 'Name')}</label>
-                    <UiInput type="text" value={form.name} onChange={(e) => updateForm({ name: e.target.value })} placeholder={t('agents.namePlaceholder', 'e.g., Code Expert')} className={editorInputClass}/>
+                    <UiInput type="text" value={form.name} onChange={(e) => updateForm({ name: e.target.value })} placeholder={t('agents.namePlaceholder', 'e.g., Code Expert')} controlClassName={editorInputClass}/>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('agents.model', 'Model')}</label>
-                    <UiSelect aria-label={t('agents.model', 'Model')} value={form.modelId} onChange={(e) => updateForm({ modelId: e.target.value })} className={editorSelectClass}>
+                    <UiSelect aria-label={t('agents.model', 'Model')} value={form.modelId} onChange={(e) => updateForm({ modelId: e.target.value })} controlClassName={editorSelectClass}>
                       <option value="">{t('agents.selectModel', '-- Select Model --')}</option>
                       {models.filter((m) => m.enabled).map((m) => {
             const providerName = providerConfigs.find((p) => p.id === m.provider)?.name || m.provider;
@@ -337,16 +338,16 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
                   </div>
                   <div className="sm:col-span-2">
                     <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('agents.greeting', 'Greeting')}</label>
-                    <UiInput type="text" value={form.greeting ?? ''} onChange={(e) => updateForm({ greeting: e.target.value })} placeholder={t('agents.greetingPlaceholder', 'Custom greeting for new chats')} className={editorInputClass}/>
+                    <UiInput type="text" value={form.greeting ?? ''} onChange={(e) => updateForm({ greeting: e.target.value })} placeholder={t('agents.greetingPlaceholder', 'Custom greeting for new chats')} controlClassName={editorInputClass}/>
                   </div>
                   <div className="sm:col-span-2">
                     <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('agents.whenToUse', 'When To Use')}</label>
-                    <UiInput type="text" value={form.whenToUse ?? ''} onChange={(e) => updateForm({ whenToUse: e.target.value })} placeholder={t('agents.whenToUsePlaceholder', 'e.g., When the user asks about code review or debugging')} className={editorInputClass}/>
+                    <UiInput type="text" value={form.whenToUse ?? ''} onChange={(e) => updateForm({ whenToUse: e.target.value })} placeholder={t('agents.whenToUsePlaceholder', 'e.g., When the user asks about code review or debugging')} controlClassName={editorInputClass}/>
                     <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('agents.whenToUseHint', 'Describes when this agent should be selected. Helps with automatic agent routing.')}</p>
                   </div>
                   <div className="sm:col-span-2">
                     <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('agents.responseStyle', 'Response Style')}</label>
-                    <UiSelect aria-label={t('agents.responseStyle', 'Response Style')} value={form.responseStyle ?? 'balanced'} onChange={(e) => updateForm({ responseStyle: e.target.value as Agent['responseStyle'] })} className={editorSelectClass}>
+                    <UiSelect aria-label={t('agents.responseStyle', 'Response Style')} value={form.responseStyle ?? 'balanced'} onChange={(e) => updateForm({ responseStyle: e.target.value as Agent['responseStyle'] })} controlClassName={editorSelectClass}>
                       <option value="concise">{t('agents.concise', 'Concise')}</option>
                       <option value="balanced">{t('agents.balanced', 'Balanced')}</option>
                       <option value="detailed">{t('agents.detailed', 'Detailed')}</option>
@@ -427,7 +428,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
             updateForm({
                 disallowedTools: val.trim() ? val.split(',').map((s) => s.trim()).filter(Boolean) : [],
             });
-        }} placeholder={t('agents.disallowedToolsPlaceholder', 'shell, delete_file, git_push')} className={editorMonoInputClass}/>
+              }} placeholder={t('agents.disallowedToolsPlaceholder', 'shell, delete_file, git_push')} controlClassName={editorMonoInputClass}/>
                     <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('agents.disallowedToolsHint', 'Comma-separated tool names that are always blocked for this agent.')}</p>
                   </div>
                 </div>
@@ -497,21 +498,21 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('agents.maxTokens', 'Max Tokens')}</label>
-                    <UiInput type="number" aria-label={t('agents.maxTokens', 'Max Tokens')} value={form.maxTokens ?? 4096} onChange={(e) => updateForm({ maxTokens: parseInt(e.target.value, 10) || 4096 })} min={256} max={128000} className={editorInputClass}/>
+                    <UiInput type="number" aria-label={t('agents.maxTokens', 'Max Tokens')} value={form.maxTokens ?? 4096} onChange={(e) => updateForm({ maxTokens: parseInt(e.target.value, 10) || 4096 })} min={256} max={128000} controlClassName={editorInputClass}/>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('agents.maxTurns', 'Max Turns')}</label>
                     <UiInput type="number" aria-label={t('agents.maxTurns', 'Max Turns')} value={Math.max(2, form.maxTurns ?? 20)} onChange={(e) => {
             const parsed = parseInt(e.target.value, 10);
             updateForm({ maxTurns: Number.isFinite(parsed) ? Math.max(2, parsed) : 20 });
-        }} min={2} max={100} className={editorInputClass}/>
+              }} min={2} max={100} controlClassName={editorInputClass}/>
                   </div>
                 </div>
                 <p className="-mt-2 text-[11px] leading-relaxed text-text-muted">{t('agents.maxTurnsHint', 'Max agentic tool-use turns per request. Tool-enabled agents need at least 2 turns to reply after a tool result.')}</p>
 
                 <div>
                   <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('agents.permissionMode', 'Permission Mode')}</label>
-                  <UiSelect aria-label={t('agents.permissionMode', 'Permission Mode')} value={form.permissionMode ?? 'default'} onChange={(e) => updateForm({ permissionMode: e.target.value as Agent['permissionMode'] })} className={editorSelectClass}>
+                  <UiSelect aria-label={t('agents.permissionMode', 'Permission Mode')} value={form.permissionMode ?? 'default'} onChange={(e) => updateForm({ permissionMode: e.target.value as Agent['permissionMode'] })} controlClassName={editorSelectClass}>
                     <option value="default">{t('agents.permDefault', 'Default — ask for dangerous ops')}</option>
                     <option value="acceptEdits">{t('agents.permAcceptEdits', 'Accept Edits — auto-accept writes')}</option>
                     <option value="plan">{t('agents.permPlan', 'Plan — require plan approval')}</option>
@@ -565,14 +566,14 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
                     </UiButton>
                   </div>
                   <div className="mb-3 grid gap-2 sm:grid-cols-2">
-                    <UiSelect aria-label={t('agents.memoryTypeFilter', 'Memory type filter')} value={memoryFilter} onChange={(e) => setMemoryFilter(e.target.value as 'all' | 'insight' | 'preference' | 'correction' | 'knowledge')} className={editorCompactControlClass}>
+                    <UiSelect aria-label={t('agents.memoryTypeFilter', 'Memory type filter')} value={memoryFilter} onChange={(e) => setMemoryFilter(e.target.value as 'all' | 'insight' | 'preference' | 'correction' | 'knowledge')} controlClassName={editorCompactControlClass}>
                       <option value="all">{t('agents.memoryTypeAll', 'All types')}</option>
                       <option value="insight">{t('agents.memoryTypeInsight', 'Insight')}</option>
                       <option value="preference">{t('agents.memoryTypePreference', 'Preference')}</option>
                       <option value="correction">{t('agents.memoryTypeCorrection', 'Correction')}</option>
                       <option value="knowledge">{t('agents.memoryTypeKnowledge', 'Knowledge')}</option>
                     </UiSelect>
-                    <UiInput value={memoryQuery} onChange={(e) => setMemoryQuery(e.target.value)} placeholder={t('agents.searchMemories', 'Search memories')} className={editorCompactControlClass}/>
+                    <UiInput value={memoryQuery} onChange={(e) => setMemoryQuery(e.target.value)} placeholder={t('agents.searchMemories', 'Search memories')} controlClassName={editorCompactControlClass}/>
                   </div>
                   <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                     {filteredMemories.map((memory) => (<div key={memory.id} className="rounded-[22px] border border-border-subtle/45 bg-surface-2/65 p-3 text-xs">
@@ -594,7 +595,7 @@ export function AgentEditor({ agent, onSave, onCancel, onTest, header }: {
                             <UiTextArea aria-label={t('agents.editMemory', 'Edit memory content')} value={memory.content} onChange={(e) => {
                         const updated = form.memories.map((m) => m.id === memory.id ? { ...m, content: e.target.value } : m);
                         updateForm({ memories: updated });
-                    }} rows={3} className={editorCompactTextAreaClass}/>
+                        }} rows={3} controlClassName={editorCompactTextAreaClass}/>
                             <UiButton unstyled type="button" onClick={() => {
                         if (agent) {
                             updateAgent(form.id, { memories: form.memories });

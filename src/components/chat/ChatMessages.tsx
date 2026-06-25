@@ -9,6 +9,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { type ExportFormat } from '@/services/exportUtils';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/catalyst-ui/dropdown';
 // ─── Helpers ───────────────────────────────────────────────────────
 export function formatFileSize(bytes: number): string {
     const locale = getLocale();
@@ -507,41 +508,7 @@ export function MessageBubble({ message, onRetry, onResume, onDelete, onRegenera
     } | null>(null);
     const [editing, setEditing] = useState(false);
     const [draft, setDraft] = useState(message.content);
-    const [showExportMenu, setShowExportMenu] = useState(false);
-    const exportMenuRef = useRef<HTMLDivElement>(null);
-    const exportMenuPanelRef = useRef<HTMLDivElement>(null);
-    const [exportMenuPlacement, setExportMenuPlacement] = useState<'top' | 'bottom'>('top');
-    useEffect(() => {
-        if (!showExportMenu)
-            return;
-        const handler = (e: MouseEvent) => {
-            if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-                setShowExportMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [showExportMenu]);
-    useEffect(() => {
-        if (!showExportMenu)
-            return;
-        const updatePlacement = () => {
-            const triggerRect = exportMenuRef.current?.getBoundingClientRect();
-            const menuHeight = Math.min(exportMenuPanelRef.current?.scrollHeight ?? 0, 320) || 180;
-            if (!triggerRect)
-                return;
-            const spaceBelow = window.innerHeight - triggerRect.bottom;
-            const spaceAbove = triggerRect.top;
-            setExportMenuPlacement(spaceAbove < menuHeight && spaceBelow > spaceAbove ? 'bottom' : 'top');
-        };
-        updatePlacement();
-        window.addEventListener('resize', updatePlacement);
-        window.addEventListener('scroll', updatePlacement, true);
-        return () => {
-            window.removeEventListener('resize', updatePlacement);
-            window.removeEventListener('scroll', updatePlacement, true);
-        };
-    }, [showExportMenu]);
+    
     if (message.isError)
         return <ErrorBubble message={message} onRetry={onRetry}/>;
     const showThinking = !isUser && message.isStreaming && !message.content && !message.toolCalls?.length;
@@ -620,7 +587,7 @@ export function MessageBubble({ message, onRetry, onResume, onDelete, onRegenera
 
               {showThinking ? (<ThinkingIndicator />) : isUser ? (<div className="space-y-3 text-[14.5px] leading-7">
                   {editing ? (<div className="space-y-2">
-                      <UiTextArea value={draft} placeholder={t('chat.enterMessage', 'Enter your message here...')} onChange={(event) => setDraft(event.target.value)} className="min-h-28 w-full resize-y rounded-2xl border border-accent/20 bg-surface-0/80 px-3 py-2 text-[13px] leading-6 text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                      <UiTextArea value={draft} placeholder={t('chat.enterMessage', 'Enter your message here...')} onChange={(event) => setDraft(event.target.value)} wrapperClassName="w-full" controlClassName="min-h-28 resize-y rounded-2xl border border-accent/20 bg-surface-0/80 px-3 py-2 text-[13px] leading-6 text-text-primary"/>
                       <div className="flex justify-end gap-2">
                         <UiButton unstyled type="button" onClick={() => { setDraft(message.content); setEditing(false); }} className="rounded-full border border-border-subtle/50 px-3 py-1 text-[11px] text-text-muted">{t('common.cancel', 'Cancel')}</UiButton>
                         <UiButton unstyled type="button" onClick={() => { onEdit?.(draft); setEditing(false); }} className="rounded-full bg-accent px-3 py-1 text-[11px] font-semibold text-white">{t('common.save', 'Save')}</UiButton>
@@ -678,21 +645,21 @@ export function MessageBubble({ message, onRetry, onResume, onDelete, onRegenera
                 <UiButton unstyled type="button" onClick={() => onFeedback(message.feedback === 'negative' ? undefined : 'negative')} title={t('chat.badResponse', 'Bad response')} aria-label={t('chat.badResponse', 'Bad response')} className={`flex h-8 w-8 items-center justify-center rounded-full border transition-colors ${message.feedback === 'negative' ? 'border-danger/18 bg-danger/10 text-danger' : 'border-border-subtle/50 bg-surface-0/55 text-text-muted hover:border-danger/18 hover:bg-danger/10 hover:text-danger'}`}><IconifyIcon name="ui-thumbs-down" size={15} color="currentColor"/></UiButton>
               </>)}
 
-            {onExport && !message.isStreaming && message.content && (<div className="relative" ref={exportMenuRef}>
-                <UiButton unstyled type="button" onClick={() => setShowExportMenu((v) => !v)} title={t('chat.exportMessage', 'Export this message')} aria-label={t('chat.exportMessage', 'Export this message')} className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent">
+            {onExport && !message.isStreaming && message.content && (<Dropdown>
+                <DropdownButton as="button" type="button" title={t('chat.exportMessage', 'Export this message')} aria-label={t('chat.exportMessage', 'Export this message')} className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-colors hover:border-accent/18 hover:bg-accent/10 hover:text-accent">
                   <IconifyIcon name="ui-export" size={15} color="currentColor"/>
-                </UiButton>
-                {showExportMenu && (<div ref={exportMenuPanelRef} className={`absolute z-50 w-36 max-h-80 overflow-y-auto rounded-xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-xl backdrop-blur-xl ${exportMenuPlacement === 'bottom' ? 'top-full mt-1' : 'bottom-full mb-1'} ${isUser ? 'right-0' : 'left-0'}`}>
-                    {([
+                </DropdownButton>
+                <DropdownMenu anchor={isUser ? 'bottom end' : 'bottom start'} className="w-36 overflow-hidden rounded-xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-xl backdrop-blur-xl">
+                  {([
                     { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
                     { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
                     { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
-                ]).map(({ format, label }) => (<UiButton unstyled key={format} type="button" onClick={() => { onExport(format); setShowExportMenu(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-[11.5px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary">
-                        <IconifyIcon name="ui-file" size={12} color="currentColor"/>
-                        {label}
-                      </UiButton>))}
-                  </div>)}
-              </div>)}
+                  ]).map(({ format, label }) => (<DropdownItem key={format} onClick={() => onExport(format)} className="flex items-center gap-2 px-3 py-2 text-[11.5px] text-text-secondary">
+                      <IconifyIcon name="ui-file" size={12} color="currentColor"/>
+                      {label}
+                    </DropdownItem>))}
+                </DropdownMenu>
+              </Dropdown>)}
             {onDelete && !message.isStreaming && <UiButton unstyled type="button" onClick={onDelete} title={t('chat.deleteMessage', 'Delete message')} aria-label={t('chat.deleteMessage', 'Delete message')} className="flex h-8 w-8 items-center justify-center rounded-full border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-colors hover:border-danger/18 hover:bg-danger/10 hover:text-danger"><IconifyIcon name="ui-trash" size={15} color="currentColor"/></UiButton>}
           </div>
         </div>

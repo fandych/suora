@@ -21,6 +21,11 @@ const sizeStyles = {
 
 type InputSize = keyof typeof sizeStyles
 
+function hasCustomAppearanceClasses(value?: string) {
+  if (!value) return false
+  return /(bg-|border|rounded|px-|py-|pl-|pr-|pt-|pb-|text-|placeholder:|font-|shadow|ring-|outline-|resize-|accent-)/.test(value)
+}
+
 export function InputGroup({ children }: React.ComponentPropsWithoutRef<'span'>) {
   return (
     <span
@@ -45,34 +50,42 @@ type NativeInputProps = Omit<React.ComponentPropsWithoutRef<'input'>, 'size'> & 
   size?: InputSize
   invalid?: boolean
   type?: React.ComponentPropsWithoutRef<'input'>['type'] | DateType
+  wrapperClassName?: string
+  controlClassName?: string
 }
 
 export const Input = forwardRef(function Input(
   {
     className,
+    wrapperClassName,
+    controlClassName,
     size = 'md',
     invalid,
     ...props
   }: NativeInputProps,
   ref: React.ForwardedRef<HTMLInputElement>
 ) {
+  const hasCustomControlAppearance = Boolean(controlClassName) || hasCustomAppearanceClasses(className)
+
   if (props.type && nativeInputTypes.has(props.type)) {
-    return <input ref={ref} {...props} className={clsx(className)} />
+    return <input ref={ref} {...props} className={clsx(className, wrapperClassName, controlClassName)} />
   }
 
   return (
     <span
       data-slot="control"
       className={clsx([
-        className,
+        wrapperClassName,
         // Basic layout
         'relative block w-full',
-        // Background color + shadow applied to inset pseudo element, so shadow blends with border in light mode
-        'before:absolute before:inset-px before:rounded-[calc(var(--radius-lg)-1px)] before:bg-white before:shadow-sm',
-        // Background color is moved to control and shadow is removed in dark mode so hide `before` pseudo
-        'dark:before:hidden',
+        !hasCustomControlAppearance && [
+          // Background color + shadow applied to inset pseudo element, so shadow blends with border in light mode
+          'before:absolute before:inset-px before:rounded-[calc(var(--radius-lg)-1px)] before:bg-surface-0 before:shadow-sm',
+          // Background color is moved to control and shadow is removed in dark mode so hide `before` pseudo
+          'dark:before:hidden',
+        ],
         // Focus ring
-        'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset sm:focus-within:after:ring-2 sm:focus-within:after:ring-blue-500',
+        'after:pointer-events-none after:absolute after:inset-0 after:rounded-lg after:ring-transparent after:ring-inset sm:focus-within:after:ring-2 sm:focus-within:after:ring-accent/35',
         // Disabled state
         'has-data-disabled:opacity-50 has-data-disabled:before:bg-zinc-950/5 has-data-disabled:before:shadow-none',
       ])}
@@ -98,23 +111,26 @@ export const Input = forwardRef(function Input(
               '[&::-webkit-datetime-edit-meridiem-field]:p-0',
             ],
           // Basic layout
-          'relative block w-full appearance-none rounded-lg',
-          sizeStyles[size],
+          'relative block w-full appearance-none',
+          !hasCustomControlAppearance && 'rounded-lg',
+          !hasCustomControlAppearance && sizeStyles[size],
           // Typography
-          'text-zinc-950 placeholder:text-zinc-500 dark:text-white',
+          !hasCustomControlAppearance && 'text-text-primary placeholder:text-text-muted/60',
           // Border
-          'border border-zinc-950/10 data-hover:border-zinc-950/20 dark:border-white/10 dark:data-hover:border-white/20',
+          !hasCustomControlAppearance && 'border border-border-subtle/70 data-hover:border-border/80',
           // Background color
-          'bg-transparent dark:bg-white/5',
+          !hasCustomControlAppearance && 'bg-surface-1/72',
           // Hide default focus styles
           'focus:outline-hidden',
           // Invalid state
           invalid && 'data-invalid',
-          'data-invalid:border-red-500 data-invalid:data-hover:border-red-500 dark:data-invalid:border-red-600 dark:data-invalid:data-hover:border-red-600',
+          !hasCustomControlAppearance && 'data-invalid:border-red-500 data-invalid:data-hover:border-red-500 dark:data-invalid:border-red-600 dark:data-invalid:data-hover:border-red-600',
           // Disabled state
-          'data-disabled:border-zinc-950/20 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5 dark:data-hover:data-disabled:border-white/15',
+          !hasCustomControlAppearance && 'data-disabled:border-zinc-950/20 dark:data-disabled:border-white/15 dark:data-disabled:bg-white/2.5 dark:data-hover:data-disabled:border-white/15',
           // System icons
-          'dark:scheme-dark',
+          !hasCustomControlAppearance && 'scheme-dark',
+          className,
+          controlClassName,
         ])}
       />
     </span>

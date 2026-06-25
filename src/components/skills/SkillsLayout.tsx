@@ -12,6 +12,7 @@ import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { SkillEditor } from './SkillEditor';
 import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
 import { Button as UiButton } from '@/components/catalyst-ui/button';
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 import { buildSkillFromDataTransferItems, buildSkillFromFolderFiles, downloadBlob, exportSkillToZipBlob, skillArchiveName } from '@/services/skillArchive';
 import { skillDirectorySegment } from '@/utils/pathSegments';
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
@@ -60,7 +61,7 @@ function countSkillsForDirectory(skills: Skill[], dirPath: string, fallbackSourc
     }).length;
 }
 export function SkillsLayout() {
-    const [panelWidth, setPanelWidth] = useResizablePanel('skills', 280);
+    const [panelWidth, setPanelWidth] = useResizablePanel('skills', 340);
     const { skills, addSkill, updateSkill, removeSkill, workspacePath, externalDirectories, addExternalDirectory, updateExternalDirectory, } = useAppStore();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
@@ -337,14 +338,14 @@ export function SkillsLayout() {
     };
     // ─── Render ────────────────────────────────────────────────────
     return (<>
-      <SidePanel title={t('skills.title', 'Skills')} width={panelWidth} action={<div className="flex items-center gap-1">
-            <UiButton unstyled onClick={() => fileInputRef.current?.click()} title={t('skills.importSkill', 'Import SKILL.md')} className="text-[11px] px-2 py-1 rounded-lg text-text-muted hover:bg-surface-3/60 transition-colors">
+            <SidePanel title={t('skills.title', 'Skills')} width={panelWidth} action={<div className="flex items-center gap-1.5">
+                        <UiButton unstyled onClick={() => fileInputRef.current?.click()} title={t('skills.importSkill', 'Import SKILL.md')} className={workbenchSidebarSubtleActionClass}>
               <IconifyIcon name="lucide:upload" size={14} color="currentColor"/>
             </UiButton>
-            <UiButton unstyled onClick={() => folderInputRef.current?.click()} title={t('skills.importSkillFolder', 'Import skill folder')} className="text-[11px] px-2 py-1 rounded-lg text-text-muted hover:bg-surface-3/60 transition-colors">
+                        <UiButton unstyled onClick={() => folderInputRef.current?.click()} title={t('skills.importSkillFolder', 'Import skill folder')} className={workbenchSidebarSubtleActionClass}>
               <IconifyIcon name="lucide:folder-up" size={14} color="currentColor"/>
             </UiButton>
-            <UiButton unstyled onClick={handleCreateSkill} className="text-[11px] px-2.5 py-1 rounded-lg bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-medium">
+                        <UiButton unstyled onClick={handleCreateSkill} className={workbenchSidebarAccentActionClass}>
               + {t('common.new', 'New')}
             </UiButton>
           </div>}>
@@ -355,22 +356,22 @@ export function SkillsLayout() {
             event.dataTransfer.dropEffect = 'copy';
         }} onDrop={handleDropSkillFolder}>
           <div className="module-sidebar-stack flex-1 overflow-y-auto px-3 pb-3 space-y-3">
-            <div className="rounded-[22px] border border-border-subtle/60 bg-linear-to-br from-surface-1/92 to-surface-2/55 p-3.5 shadow-[0_10px_24px_rgba(15,23,42,0.04)]">
+            <div className={workbenchSidebarCardClass}>
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <div className="text-[11px] font-semibold text-text-primary">{t('skills.localSources', 'Local Skill Sources')}</div>
-                  <p className="mt-1 text-[10px] leading-relaxed text-text-muted">
+                  <div className="text-[12px] font-semibold text-text-primary">{t('skills.localSources', 'Local Skill Sources')}</div>
+                  <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted">
                     {t('skills.localSourcesDesc', 'Enable or disable shared local skill folders for Claude Code, other runtimes, and custom workspace directories.')}
                   </p>
                 </div>
-                <span className="rounded-full bg-accent/12 px-2 py-0.5 text-[9px] font-semibold text-accent tabular-nums">
+                <span className="rounded-full bg-accent/12 px-2.5 py-1 text-[10px] font-semibold text-accent tabular-nums">
                   {enabledLocalSkillSourcesCount}/{localSkillSources.length}
                 </span>
               </div>
               <div className="mt-3 space-y-2">
                 {localSkillSources.map((source) => {
             const isBusy = togglingLocalSourcePath === source.path;
-            return (<div key={source.id} className={`relative overflow-hidden rounded-3xl border px-3.5 py-3 transition-all duration-200 ${source.enabled
+            return (<div key={source.id} className={`relative overflow-hidden rounded-3xl border px-4 py-3.5 transition-all duration-200 ${source.enabled
                     ? 'border-accent/20 bg-linear-to-br from-accent/10 via-surface-1/96 to-surface-2/72 shadow-[0_14px_32px_rgba(var(--t-accent-rgb),0.10)]'
                     : 'border-border-subtle/55 bg-linear-to-br from-surface-1/92 to-surface-2/50 hover:border-border-subtle/75 hover:from-surface-1 hover:to-surface-2/70'}`}>
                       <div className="flex items-center justify-between gap-3">
@@ -383,15 +384,15 @@ export function SkillsLayout() {
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-[11px] font-semibold text-text-primary">{source.label}</span>
+                                <span className="text-[13px] font-semibold text-text-primary">{source.label}</span>
                                 <span className={`h-2 w-2 rounded-full ${source.enabled
                     ? 'bg-accent-hover shadow-[0_0_0_5px_rgba(var(--t-accent-rgb),0.22)]'
                     : 'bg-zinc-500 shadow-[0_0_0_4px_rgba(113,113,122,0.18)]'}`}/>
-                                <span className="rounded-full bg-surface-3/80 px-1.5 py-0.5 text-[9px] text-text-muted tabular-nums">
+                                                                <span className={workbenchSidebarPillClass}>
                                   {source.skillCount} {t('skills.loaded', 'loaded')}
                                 </span>
                               </div>
-                              <p className="mt-1 text-[10px] leading-relaxed text-text-muted/85">{source.description}</p>
+                                                            <p className="mt-1.5 text-[12px] leading-relaxed text-text-muted/85">{source.description}</p>
                             </div>
                           </div>
                         </div>
@@ -405,7 +406,7 @@ export function SkillsLayout() {
                         </label>
                       </div>
                       <div className="mt-3">
-                        <span className="inline-flex max-w-full items-center rounded-2xl border border-border-subtle/55 bg-surface-0/55 px-2.5 py-1 text-[10px] font-mono text-text-muted/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
+                                                <span className="inline-flex max-w-full items-center rounded-2xl border border-border-subtle/55 bg-surface-0/55 px-2.5 py-1.5 text-[10px] font-mono text-text-muted/90 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
                           {source.path}
                         </span>
                       </div>
@@ -426,7 +427,7 @@ export function SkillsLayout() {
                   {t('skills.noInstalled', 'No skills yet. Create or install one.')}
                 </p>
               </div>)}
-            {filteredInstalled.map((skill) => {
+                        {filteredInstalled.map((skill) => {
             const isActive = editingId === skill.id;
             const lockStatus = getSkillLockStatus(skill, skillsLockfile);
             const lockEntry = skillsLockfile?.skills[skill.name];
@@ -436,25 +437,23 @@ export function SkillsLayout() {
                         setEditingId(skill.id);
                         setIsAdding(false);
                     }
-                }} className={`group rounded-[22px] border px-3.5 py-3.5 cursor-pointer transition-all duration-200 ${isActive
-                    ? 'border-accent/20 bg-accent/10 text-text-primary shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
-                    : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60 hover:text-text-primary'} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30`}>
+                                }} className={`${workbenchSidebarItemClass(isActive)} cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/30`}>
                 <div className="flex items-center justify-between">
                   <div className="flex items-start gap-3 min-w-0 flex-1">
-                    <div className="flex h-10 w-10 rounded-2xl bg-surface-2/80 items-center justify-center shrink-0 border border-border/40 shadow-sm">
+                                        <div className={workbenchSidebarIconClass}>
                       <SkillIcon icon={skill.icon || skill.frontmatter?.icon || getSkillIconName(skill.id)} size={18}/>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[13px] font-semibold truncate flex items-center gap-1.5 flex-wrap text-text-primary">
+                                            <div className={`${workbenchSidebarTitleClass} flex items-center gap-1.5 flex-wrap`}>
                         {skill.name}
                         {!skill.enabled && (<span className="text-[9px] px-1.5 py-0.5 rounded-full bg-surface-3 text-text-muted">{t('common.off', 'OFF')}</span>)}
                       </div>
-                      <p className="mt-1 text-[11px] leading-relaxed text-text-secondary/80 line-clamp-2">{skill.description}</p>
+                                            <p className={workbenchSidebarDescriptionClass}>{skill.description}</p>
                       <div className="mt-3 text-[10px] text-text-muted flex items-center gap-1.5 flex-wrap">
-                        <span className="px-1.5 py-0.5 rounded-full bg-surface-3/80 text-[9px]">
+                                                <span className={workbenchSidebarPillClass}>
                           {sourceLabels[skill.source] || skill.source}
                         </span>
-                        {skill.category && <span className="px-1.5 py-0.5 rounded-full bg-surface-3/80 text-[9px]">{skill.category}</span>}
+                                                {skill.category && <span className={workbenchSidebarPillClass}>{skill.category}</span>}
                         {skill.frontmatter?.context && <span className="px-1.5 py-0.5 rounded-full bg-accent/10 text-accent text-[9px]">{t(`skills.context.${skill.frontmatter.context}`, skill.frontmatter.context)}</span>}
                         {lockStatus !== 'not-locked' && (<span title={lockEntry ? `${lockEntry.source} · ${lockEntry.computedHash}` : undefined} className={`px-1.5 py-0.5 rounded-full text-[9px] ${lockStatus === 'verified'
                         ? 'bg-success/10 text-success'
@@ -492,15 +491,15 @@ export function SkillsLayout() {
           </div>
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360}/>
+    <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
       {/* ── Right pane: Editor or Empty state ────────────────── */}
       {isAdding || editingId ? (<SkillEditor key={editingId ?? 'new'} skill={editingSkill} onSave={handleSave} onCancel={() => { setIsAdding(false); setEditingId(null); }}/>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
           <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>} eyebrow={t('skills.promptBased', 'Prompt-Based Skills')} title={t('skills.promptBasedWorkspace', 'Skill Workspace')} description={t('skills.promptDesc', 'Skills are markdown instructions (SKILL.md) that enhance agent capabilities. No tool specification needed — agents decide which tools to use.')} actions={(<>
-                <UiButton unstyled type="button" onClick={() => fileInputRef.current?.click()} className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover">
+                                <UiButton unstyled type="button" onClick={() => fileInputRef.current?.click()} className={workbenchSidebarPrimaryActionClass}>
                   {t('skills.importSkill', 'Import SKILL.md')}
                 </UiButton>
-                <UiButton unstyled type="button" onClick={handleCreateSkill} className="rounded-2xl border border-border-subtle/60 bg-surface-0/60 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-all hover:border-accent/20 hover:text-text-primary">
+                                <UiButton unstyled type="button" onClick={handleCreateSkill} className={workbenchSidebarSubtleActionClass}>
                   {t('skills.createSkill', 'Create Skill')}
                 </UiButton>
               </>)} metrics={[

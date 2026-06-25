@@ -63,7 +63,7 @@ export function KnowledgeSettings() {
             if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
                 runSearch();
             }
-        }} placeholder={t('settings.searchPlaceholder', 'Enter a query to test semantic search…')}/>
+        }} placeholder={t('settings.searchPlaceholder', 'Enter a query to test semantic search…')} wrapperClassName="w-full"/>
         </div>
 
         <div className="mt-5 grid gap-3 sm:grid-cols-2">

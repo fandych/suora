@@ -13,6 +13,14 @@ import { DataSettings } from './DataSettings';
 import { LogsSettings } from './LogsSettings';
 import { SystemSettings } from './SystemSettings';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
+import {
+  workbenchSidebarDescriptionClass,
+  workbenchSidebarEmptyClass,
+  workbenchSidebarIconClass,
+  workbenchSidebarItemClass,
+  workbenchSectionEyebrowClass,
+  workbenchSidebarTitleClass,
+} from '@/components/catalyst-ui/workbench';
 const SETTING_SECTIONS = [
     { id: 'general', i18nKey: 'settings.general', fallback: 'General', icon: 'settings-general', descKey: 'settings.generalDesc', descFallback: 'Appearance, language, startup, and workspace defaults.' },
     { id: 'security', i18nKey: 'settings.security', fallback: 'Security', icon: 'settings-security', descKey: 'settings.securityDesc', descFallback: 'Keys, privacy, and safety defaults for the desktop workspace.' },
@@ -36,14 +44,14 @@ function SummaryStat({ label, value, accent = false }: {
     value: string;
     accent?: boolean;
 }) {
-    return (<div className={`rounded-2xl border px-3.5 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
-      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
-      <div className={`mt-1.5 text-sm font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    return (<div className={`rounded-2xl border px-3.5 py-3.5 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
+      <div className="text-[11px] uppercase tracking-[0.08em] text-text-muted/60">{label}</div>
+      <div className={`mt-1.5 text-[15px] font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
     </div>);
 }
 export function SettingsLayout() {
     const { t } = useI18n();
-    const [panelWidth, setPanelWidth] = useResizablePanel('settings', 280);
+    const [panelWidth, setPanelWidth] = useResizablePanel('settings', 340);
     const { section } = useParams<{
         section: string;
     }>();
@@ -57,27 +65,25 @@ export function SettingsLayout() {
       <SidePanel title={t('settings.title', 'Settings')} width={panelWidth}>
         <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
           <div className="space-y-2">
-            {SETTING_SECTIONS.map((s) => (<UiButton unstyled key={s.id} onClick={() => navigate(`/settings/${s.id}`)} className={`group w-full rounded-3xl border px-3.5 py-3 text-left transition-all duration-200 ${activeSection === s.id
-                ? 'border-accent/20 bg-accent/10 text-text-primary shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
-                : 'border-transparent bg-surface-1/20 text-text-secondary hover:bg-surface-3/55 hover:border-border-subtle/60'}`}>
+            {SETTING_SECTIONS.map((s) => (<UiButton unstyled key={s.id} onClick={() => navigate(`/settings/${s.id}`)} className={workbenchSidebarItemClass(activeSection === s.id)}>
                 <div className="flex items-start gap-3">
-                  <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 text-accent shadow-sm">
+                  <span className={`${workbenchSidebarIconClass} mt-0.5`}>
                     {ICON_DATA[s.icon] ? <IconifyIcon name={s.icon} size={16}/> : s.icon}
                   </span>
                   <div className="min-w-0 flex-1">
-                    <div className="text-[13px] font-semibold text-text-primary">{t(s.i18nKey, s.fallback)}</div>
-                    <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/78">{t(s.descKey, s.descFallback)}</p>
+                    <div className={workbenchSidebarTitleClass}>{t(s.i18nKey, s.fallback)}</div>
+                    <p className={workbenchSidebarDescriptionClass}>{t(s.descKey, s.descFallback)}</p>
                   </div>
                 </div>
               </UiButton>))}
           </div>
 
-          {workspacePath && (<div className="rounded-2xl border border-border-subtle/55 bg-surface-0/45 px-4 py-3 text-[11px] text-text-muted">
+          {workspacePath && (<div className={`${workbenchSidebarEmptyClass} px-4 py-4 text-left`}>
               <div>{workspacePath}</div>
             </div>)}
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360}/>
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
       <div className="module-canvas flex-1 overflow-y-auto px-5 py-5 xl:px-8 xl:py-6">
         <div className="module-content mx-auto max-w-7xl space-y-5">
@@ -88,7 +94,7 @@ export function SettingsLayout() {
                   {sectionMeta?.icon && ICON_DATA[sectionMeta.icon] ? <IconifyIcon name={sectionMeta.icon} size={18}/> : <span className="text-sm font-semibold">{t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback).slice(0, 2)}</span>}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.title', 'Settings')}</div>
+                  <div className={workbenchSectionEyebrowClass}>{t('settings.title', 'Settings')}</div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
                     <h2 className="text-[22px] font-semibold tracking-tight text-text-primary">{t(sectionMeta?.i18nKey ?? '', sectionMeta?.fallback)}</h2>
                     <span className="rounded-full border border-border-subtle/55 bg-surface-0/72 px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.14em] text-text-muted/78">{t('settings.preferences', 'Preferences')}</span>
@@ -97,7 +103,7 @@ export function SettingsLayout() {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-3 xl:w-[22rem]">
+              <div className="grid gap-2 sm:grid-cols-3 xl:w-88">
                 <SummaryStat label={t('settings.section', 'Section')} value={`${sectionIndex + 1}/${SETTING_SECTIONS.length}`} accent/>
                 <SummaryStat label={t('settings.category', 'Category')} value={t('settings.preferences', 'Preferences')}/>
                 <SummaryStat label={t('settings.scope', 'Scope')} value={workspacePath ? t('settings.workspace', 'Workspace') : t('settings.local', 'Local')}/>

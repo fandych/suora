@@ -296,7 +296,7 @@ export function AgentOrchestrationPanel({ agents, onClose, title, allowedTabs = 
                     return;
                 }
                 loadSavedPipeline(value);
-            }} className={orchestrationSelectClass}>
+            }} controlClassName={orchestrationSelectClass}>
                 <option value="">{t('agents.pipelineDraft', 'Draft pipeline')}</option>
                 {agentPipelines.map((savedPipeline) => (<option key={savedPipeline.id} value={savedPipeline.id}>{savedPipeline.name}</option>))}
               </UiSelect>
@@ -304,15 +304,15 @@ export function AgentOrchestrationPanel({ agents, onClose, title, allowedTabs = 
               <UiButton color="blue" onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className="rounded-xl px-3 py-2 text-xs">{t('common.saveChanges', 'Save Changes')}</UiButton>
               <UiButton unstyled onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className={orchestrationDangerButtonClass}>{t('common.delete', 'Delete')}</UiButton>
             </div>
-            <UiInput value={agentPipelineName} onChange={(e) => setAgentPipelineName(e.target.value)} placeholder={t('agents.pipelineName', 'Pipeline name')} className={orchestrationInputClass}/>
+            <UiInput value={agentPipelineName} onChange={(e) => setAgentPipelineName(e.target.value)} placeholder={t('agents.pipelineName', 'Pipeline name')} controlClassName={orchestrationInputClass}/>
             <p className="text-[10px] text-text-muted">{t('agents.pipelineFileHint', 'Saved pipelines are stored as separate JSON files in the workspace and can be triggered by timers.')}</p>
             {pipeline.map((step, idx) => (<div key={idx} className="flex items-start gap-2 p-3 rounded-xl border border-border bg-surface-0/30">
                 <span className="text-xs text-text-muted pt-2 w-6 text-center shrink-0">{idx + 1}.</span>
                 <div className="flex-1 space-y-2">
-                  <UiSelect value={step.agentId} onChange={(e) => updateStep(idx, { agentId: e.target.value })} aria-label={t('agents.pipelineAgent', 'Pipeline agent')} className={orchestrationSelectClass}>
+                  <UiSelect value={step.agentId} onChange={(e) => updateStep(idx, { agentId: e.target.value })} aria-label={t('agents.pipelineAgent', 'Pipeline agent')} controlClassName={orchestrationSelectClass}>
                     {enabledAgents.map((a) => <option key={a.id} value={a.id}>{ICON_DATA[a.avatar || ''] ? '●' : (a.avatar || '●')} {a.name}</option>)}
                   </UiSelect>
-                  <UiInput value={step.task} onChange={(e) => updateStep(idx, { task: e.target.value })} placeholder={t('agents.taskDesc', 'Task description...')} className={orchestrationInputClass}/>
+                  <UiInput value={step.task} onChange={(e) => updateStep(idx, { task: e.target.value })} placeholder={t('agents.taskDesc', 'Task description...')} controlClassName={orchestrationInputClass}/>
                 </div>
                 <UiButton unstyled title={t('agents.removeStep', 'Remove step')} onClick={() => removeStep(idx)} className="text-xs text-text-muted hover:text-danger pt-2"><IconifyIcon name="ui-close" size={14} color="currentColor"/></UiButton>
               </div>))}

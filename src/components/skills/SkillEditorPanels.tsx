@@ -69,7 +69,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 10, disabl
         </div>
       </div>
       {mode === 'edit' ? (<div className={`p-3 ${fillHeight ? 'min-h-0 flex-1' : ''}`}>
-          <UiTextArea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={fillHeight ? undefined : rows} disabled={disabled} className={`w-full rounded-[26px] border border-border-subtle/55 bg-surface-0/55 px-4 py-4 font-mono text-sm leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] placeholder-text-muted focus:border-accent/35 focus:outline-none disabled:opacity-50 ${fillHeight ? 'min-h-0 h-full flex-1 resize-none' : 'min-h-72 resize-y'}`}/>
+          <UiTextArea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={fillHeight ? undefined : rows} disabled={disabled} controlClassName={`w-full rounded-[26px] border border-border-subtle/55 bg-surface-0/55 px-4 py-4 font-mono text-sm leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] placeholder-text-muted focus:border-accent/35 disabled:opacity-50 ${fillHeight ? 'min-h-0 h-full flex-1 resize-none' : 'min-h-72 resize-y'}`}/>
         </div>) : (<div className={`overflow-auto px-4 py-4 text-sm text-text-primary ${fillHeight ? 'min-h-0 flex-1' : 'min-h-24'}`}>
           {value.trim() ? (<div className={`rounded-[26px] border border-border-subtle/55 bg-surface-0/55 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] ${fillHeight ? 'min-h-full' : ''}`}>
               <article className="document-prose markdown-body min-h-full text-text-primary">
@@ -174,7 +174,7 @@ export function SkillTestPanel({ skill }: {
         </div>) : (<>
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('skills.selectTool', 'Select Tool')}</label>
-            <UiSelect value={selectedTool} onChange={(e) => { setSelectedTool(e.target.value); setOutput(null); setError(null); }} aria-label={t('skills.selectTool', 'Select a tool…')} className={panelSelectClass}>
+            <UiSelect value={selectedTool} onChange={(e) => { setSelectedTool(e.target.value); setOutput(null); setError(null); }} aria-label={t('skills.selectTool', 'Select a tool…')} controlClassName={panelSelectClass}>
               {toolNames.map((name) => (<option key={name} value={name}>{name}</option>))}
             </UiSelect>
             {TOOL_DESCRIPTIONS[selectedTool] && (<p className="mt-1 text-[11px] text-text-muted">{TOOL_DESCRIPTIONS[selectedTool]}</p>)}
@@ -182,7 +182,7 @@ export function SkillTestPanel({ skill }: {
 
           <div>
             <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('skills.inputJson', 'Input (JSON)')}</label>
-            <UiTextArea value={inputJson} onChange={(e) => setInputJson(e.target.value)} rows={5} spellCheck={false} className={`${panelMonoInputClass} min-h-0 resize-y`} placeholder='{ "key": "value" }'/>
+            <UiTextArea value={inputJson} onChange={(e) => setInputJson(e.target.value)} rows={5} spellCheck={false} controlClassName={`${panelMonoInputClass} min-h-0 resize-y`} placeholder='{ "key": "value" }'/>
           </div>
 
           <UiButton type="button" color="blue" onClick={handleRun} disabled={running || !selectedTool}>
@@ -384,7 +384,7 @@ export function CustomCodeEditor({ value, onChange, disabled }: {
         setTestResult(null);
     }, [onChange]);
     return (<div className="space-y-3">
-      <UiTextArea value={value} onChange={handleChange} placeholder={CUSTOM_CODE_PLACEHOLDER} rows={18} disabled={disabled} spellCheck={false} className={`${panelMonoInputClass} min-h-0 resize-y whitespace-pre tab-size-2 leading-relaxed`}/>
+      <UiTextArea value={value} onChange={handleChange} placeholder={CUSTOM_CODE_PLACEHOLDER} rows={18} disabled={disabled} spellCheck={false} controlClassName={`${panelMonoInputClass} min-h-0 resize-y whitespace-pre tab-size-2 leading-relaxed`}/>
 
       <div className="flex items-center gap-3">
         <UiButton type="button" outline onClick={handleTest} disabled={disabled || !value?.trim()}>
@@ -457,11 +457,11 @@ export function SkillDependenciesEditor({ dependencies, onChange, disabled = fal
             })}
         </div>)}
       {adding && (<div className="flex items-center gap-2 p-2 rounded-lg bg-surface-2 border border-border">
-          <UiSelect value={newDepId} onChange={(e) => setNewDepId(e.target.value)} aria-label={t('skills.selectSkill', 'Select skill...')} className={`flex-1 ${panelCompactSelectClass}`}>
+          <UiSelect value={newDepId} onChange={(e) => setNewDepId(e.target.value)} aria-label={t('skills.selectSkill', 'Select skill...')} wrapperClassName="flex-1" controlClassName={panelCompactSelectClass}>
             <option value="">{t('skills.selectSkill', 'Select skill...')}</option>
             {availableSkills.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </UiSelect>
-          <UiInput type="text" value={newMinVer} onChange={(e) => setNewMinVer(e.target.value)} placeholder={t('skills.minVer', 'Min ver')} className={`w-24 ${panelCompactInputClass}`}/>
+          <UiInput type="text" value={newMinVer} onChange={(e) => setNewMinVer(e.target.value)} placeholder={t('skills.minVer', 'Min ver')} wrapperClassName="w-24" controlClassName={panelCompactInputClass}/>
           <UiButton type="button" color="blue" onClick={addDep} className="rounded-xl px-3 py-2 text-xs">{t('common.add', 'Add')}</UiButton>
         </div>)}
     </div>);
@@ -497,7 +497,7 @@ export function SkillVersionsPanel({ skill, updateForm }: {
       <div className="rounded-xl border border-border p-4 bg-surface-0/30">
         <h3 className="text-sm font-semibold text-text-primary mb-3">{t('skills.saveSnapshot', 'Save Version Snapshot')}</h3>
         <div className="flex items-center gap-2">
-          <UiInput type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('skills.versionLabel', 'Version label (optional)')} className="flex-1"/>
+          <UiInput type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t('skills.versionLabel', 'Version label (optional)')} wrapperClassName="flex-1"/>
           <UiButton type="button" color="blue" onClick={saveVersion}>
             {t('skills.saveSnapshotBtn', 'Save Snapshot')}
           </UiButton>
@@ -543,7 +543,7 @@ export function SkillVersionsPanel({ skill, updateForm }: {
       {/* Changelog */}
       <div className="rounded-xl border border-border p-4 bg-surface-0/30">
         <h3 className="text-sm font-semibold text-text-primary mb-2">{t('skills.changelog', 'Changelog')}</h3>
-        <UiTextArea value={skill.changelog || ''} onChange={(e) => updateForm({ changelog: e.target.value })} placeholder={t('skills.changelogPlaceholder', 'Document changes between versions...')} rows={4} className={`${panelTextAreaClass} min-h-0 resize-none`}/>
+        <UiTextArea value={skill.changelog || ''} onChange={(e) => updateForm({ changelog: e.target.value })} placeholder={t('skills.changelogPlaceholder', 'Document changes between versions...')} rows={4} controlClassName={`${panelTextAreaClass} min-h-0 resize-none`}/>
       </div>
     </div>);
 }

@@ -6,14 +6,15 @@ import { generateResponse } from '@/services/aiService';
 import type { ModelMessage } from 'ai';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
 function ComparisonStat({ label, value, accent = false }: {
     label: string;
     value: string;
     accent?: boolean;
 }) {
-    return (<div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/65'}`}>
-      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
-      <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    return (<div className={workbenchSummaryStatClass(accent)}>
+      <div className={workbenchSummaryLabelClass}>{label}</div>
+      <div className={`${workbenchSummaryValueClass} ${accent ? 'text-accent' : ''}`}>{value}</div>
     </div>);
 }
 export function ModelComparisonPanel({ onClose }: {
@@ -68,13 +69,13 @@ export function ModelComparisonPanel({ onClose }: {
     const secondsUnit = t('common.secondsUnitShort', 's');
     return (<div className="flex h-full flex-1 flex-col overflow-hidden bg-linear-to-b from-surface-1/96 via-surface-1/88 to-surface-0">
       <div className="border-b border-border-subtle/60 px-4 py-3">
-        <div className="flex items-start justify-between gap-3 rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-5 shadow-[0_20px_54px_rgba(var(--t-accent-rgb),0.08)]">
+        <div className={`${workbenchHeroSectionClass} flex items-start justify-between gap-3 p-5`}>
           <div className="min-w-0 flex-1">
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.comparison', 'Comparison')}</div>
+            <div className={workbenchSectionEyebrowClass}>{t('models.comparison', 'Comparison')}</div>
             <h2 className="mt-2 text-[24px] font-semibold tracking-tight text-text-primary">{t('models.compareOutputs', 'Compare Model Outputs')}</h2>
-            <p className="mt-2 max-w-2xl text-[13px] leading-6 text-text-secondary/82">{t('models.compareOutputsHint', 'Send the same prompt to multiple enabled models and inspect differences in quality, speed, and verbosity from one place.')}</p>
+            <p className={`${workbenchSectionDescriptionClass} mt-2 max-w-2xl leading-6 text-text-secondary/82`}>{t('models.compareOutputsHint', 'Send the same prompt to multiple enabled models and inspect differences in quality, speed, and verbosity from one place.')}</p>
           </div>
-          <UiButton unstyled type="button" title={t('common.close', 'Close')} onClick={onClose} className="flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle/55 bg-surface-0/72 text-text-muted transition-colors hover:bg-surface-2 hover:text-text-primary">
+          <UiButton unstyled type="button" title={t('common.close', 'Close')} onClick={onClose} className={`${workbenchNeutralButtonClass} flex h-10 w-10 items-center justify-center px-0`}>
             <IconifyIcon name="ui-close" size={16} color="currentColor"/>
           </UiButton>
         </div>
@@ -88,10 +89,10 @@ export function ModelComparisonPanel({ onClose }: {
             <ComparisonStat label={t('models.fastest', 'Fastest')} value={fastestTime > 0 ? `${(fastestTime / 1000).toFixed(1)}${secondsUnit}` : '—'}/>
           </div>
 
-          <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)]">
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.selection', 'Selection')}</div>
-            <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('models.chooseModels', 'Choose 2-4 models')}</h3>
-            <p className="mt-2 text-[13px] leading-6 text-text-secondary/80">{t('models.chooseModelsHint', 'Use the same prompt against a small batch of enabled models so the result cards stay readable and side-by-side.')}</p>
+          <section className={workbenchDetailSectionClass}>
+            <div className={workbenchSectionEyebrowClass}>{t('models.selection', 'Selection')}</div>
+            <h3 className={workbenchSectionTitleClass}>{t('models.chooseModels', 'Choose 2-4 models')}</h3>
+            <p className={`${workbenchSectionDescriptionClass} mt-2 leading-6`}>{t('models.chooseModelsHint', 'Use the same prompt against a small batch of enabled models so the result cards stay readable and side-by-side.')}</p>
 
             {enabledModels.length === 0 ? (<div className="mt-5 rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
@@ -114,24 +115,24 @@ export function ModelComparisonPanel({ onClose }: {
               </div>)}
           </section>
 
-          <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)]">
+          <section className={workbenchDetailSectionClass}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('common.prompt', 'Prompt')}</div>
-                <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('models.sharedPrompt', 'Shared Prompt')}</h3>
-                <p className="mt-2 text-[13px] leading-6 text-text-secondary/80">{t('models.sharedPromptHint', 'Write one prompt that will be sent to every selected model so the outputs can be judged under the same conditions.')}</p>
+                <div className={workbenchSectionEyebrowClass}>{t('common.prompt', 'Prompt')}</div>
+                <h3 className={workbenchSectionTitleClass}>{t('models.sharedPrompt', 'Shared Prompt')}</h3>
+                <p className={`${workbenchSectionDescriptionClass} mt-2 leading-6`}>{t('models.sharedPromptHint', 'Write one prompt that will be sent to every selected model so the outputs can be judged under the same conditions.')}</p>
               </div>
               <div className="flex gap-2">
-                <UiButton unstyled type="button" onClick={() => { setPrompt(''); setResults({}); }} className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-2">
+                <UiButton unstyled type="button" onClick={() => { setPrompt(''); setResults({}); }} className={workbenchNeutralButtonClass}>
                   {t('common.clear', 'Clear')}
                 </UiButton>
-                <UiButton unstyled type="button" onClick={runComparison} disabled={selectedModels.length < 2 || !prompt.trim() || running} className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover disabled:opacity-40">
+                <UiButton unstyled type="button" onClick={runComparison} disabled={selectedModels.length < 2 || !prompt.trim() || running} className={`${workbenchPrimaryButtonClass} disabled:opacity-40`}>
                   {running ? t('models.comparing', 'Comparing…') : t('models.runComparison', `Compare ${selectedModels.length} Models`)}
                 </UiButton>
               </div>
             </div>
 
-            <UiTextArea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t('models.promptPlaceholder', 'Enter a prompt to send to all selected models...')} rows={5} className="mt-5 min-h-36 w-full rounded-3xl border border-border-subtle/55 bg-surface-2/80 px-4 py-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20 resize-y"/>
+            <UiTextArea value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder={t('models.promptPlaceholder', 'Enter a prompt to send to all selected models...')} rows={5} wrapperClassName="mt-5 w-full" controlClassName="min-h-36 resize-y rounded-3xl border border-border-subtle/55 bg-surface-2/80 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted/55"/>
 
             <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-text-muted/75">
               <span>{t('models.selected', 'Selected')}: {selectedModels.length}</span>
@@ -140,10 +141,10 @@ export function ModelComparisonPanel({ onClose }: {
             </div>
           </section>
 
-          <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)]">
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('common.results', 'Results')}</div>
-            <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('models.sideBySideOutputs', 'Side-by-side Outputs')}</h3>
-            <p className="mt-2 text-[13px] leading-6 text-text-secondary/80">{t('models.sideBySideOutputsHint', 'Each card streams its own result and preserves response time plus a quick text-size summary.')}</p>
+          <section className={workbenchDetailSectionClass}>
+            <div className={workbenchSectionEyebrowClass}>{t('common.results', 'Results')}</div>
+            <h3 className={workbenchSectionTitleClass}>{t('models.sideBySideOutputs', 'Side-by-side Outputs')}</h3>
+            <p className={`${workbenchSectionDescriptionClass} mt-2 leading-6`}>{t('models.sideBySideOutputsHint', 'Each card streams its own result and preserves response time plus a quick text-size summary.')}</p>
 
             {selectedModels.length === 0 ? (<div className="mt-5 rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">

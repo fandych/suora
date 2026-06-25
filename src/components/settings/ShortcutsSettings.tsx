@@ -4,6 +4,7 @@ import { useI18n } from '@/hooks/useI18n';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { SettingsOverview, SettingsStat } from './panelUi';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { workbenchDetailSectionClass, workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
 function formatKeyCombo(e: KeyboardEvent): string {
     const parts: string[] = [];
     if (e.ctrlKey || e.metaKey)
@@ -112,10 +113,10 @@ export function ShortcutsSettings() {
             </UiButton>
           </>)}/>
 
-      <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+            <section className={workbenchDetailSectionClass}>
         <div className="mb-5 flex items-center justify-between gap-3">
           <div>
-            <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('settings.commandMap', 'Command Map')}</div>
+                        <div className={workbenchSectionEyebrowClass}>{t('settings.commandMap', 'Command Map')}</div>
             <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('settings.activeBindings', 'Active Bindings')}</h3>
           </div>
           <div className="rounded-full bg-surface-0/70 px-3 py-1 text-[11px] text-text-secondary">{t('settings.escapeCancels', 'Escape cancels capture')}</div>

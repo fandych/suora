@@ -5,6 +5,7 @@ import { useI18n } from '@/hooks/useI18n';
 import type { ProviderConfig, ProviderModelEntry } from '@/types';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass, workbenchPrimaryButtonClass } from '@/components/catalyst-ui/workbench';
 // ─── Model pricing data (USD per 1M tokens) ──────────────────────
 const MODEL_PRICING: Record<string, {
     input: number;
@@ -46,9 +47,9 @@ function SummaryStat({ label, value, accent = false }: {
     value: string;
     accent?: boolean;
 }) {
-    return (<div className={`rounded-3xl border px-4 py-3 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
-      <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</div>
-      <div className={`mt-2 text-lg font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    return (<div className={workbenchSummaryStatClass(accent)}>
+      <div className={workbenchSummaryLabelClass}>{label}</div>
+      <div className={`${workbenchSummaryValueClass} ${accent ? 'text-accent' : ''}`}>{value}</div>
     </div>);
 }
 export function ModelParamEditor({ provider, model, onSave, onClose }: {
@@ -68,14 +69,14 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
     const lastUsedLabel = stats?.lastUsed ? new Date(stats.lastUsed).toLocaleString(locale) : t('models.notUsedYet', 'Not used yet');
     return (<div className="flex-1 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
       <div className="mx-auto max-w-6xl space-y-6">
-        <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+        <section className={workbenchHeroSectionClass}>
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
               <div className="flex h-18 w-18 shrink-0 items-center justify-center rounded-4xl border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
                 <IconifyIcon name="ui-clipboard" size={30} color="currentColor"/>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.modelEditor', 'Model Editor')}</div>
+                <div className={workbenchSectionEyebrowClass}>{t('models.modelEditor', 'Model Editor')}</div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{model.name}</h2>
                 <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82"><span className="rounded-full border border-border-subtle/45 bg-surface-0/78 px-3 py-1 text-[11px] text-text-secondary">{model.modelId}</span> <span className="ml-2">{t('models.viaProvider', 'via {name}').replace('{name}', provider.name)}</span></p>
               </div>
@@ -84,17 +85,17 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
             <div className="flex flex-wrap items-center gap-3 xl:max-w-100 xl:justify-end">
               <SummaryStat label={t('common.status', 'Status')} value={model.enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')} accent={model.enabled}/>
               <SummaryStat label={t('models.lastUsed', 'Last used')} value={lastUsedLabel}/>
-              <UiButton unstyled title={t('common.close', 'Close')} onClick={onClose} className="rounded-2xl bg-surface-2 px-4 py-3 text-sm font-semibold text-text-muted transition-colors hover:text-text-secondary hover:bg-surface-3"><IconifyIcon name="ui-close" size={14} color="currentColor"/></UiButton>
+              <UiButton unstyled title={t('common.close', 'Close')} onClick={onClose} className={workbenchNeutralButtonClass}><IconifyIcon name="ui-close" size={14} color="currentColor"/></UiButton>
             </div>
           </div>
         </section>
 
         <div className="grid gap-6 xl:grid-cols-2">
-          <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+          <section className={workbenchDetailSectionClass}>
             <div className="mb-5">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.generation', 'Generation')}</div>
-              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('models.parameterTuning', 'Parameter Tuning')}</h3>
-              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('models.parameterTuningHint', 'Adjust model creativity and response ceiling for this provider-specific entry without changing the global catalog.')}</p>
+              <div className={workbenchSectionEyebrowClass}>{t('models.generation', 'Generation')}</div>
+              <h3 className={workbenchSectionTitleClass}>{t('models.parameterTuning', 'Parameter Tuning')}</h3>
+              <p className={workbenchSectionDescriptionClass}>{t('models.parameterTuningHint', 'Adjust model creativity and response ceiling for this provider-specific entry without changing the global catalog.')}</p>
             </div>
 
             <div className="space-y-5">
@@ -115,7 +116,7 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
               <div>
                 <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.maxTokensLabel', 'Max Tokens')}</label>
                 <div className="flex items-center gap-3">
-                  <UiInput type="number" aria-label={t('models.maxTokensLabel', 'Max Tokens')} value={maxTokens ?? ''} onChange={(e) => { setMaxTokens(e.target.value ? parseInt(e.target.value, 10) : undefined); setSaved(false); }} placeholder={t('models.defaultProviderLimit', 'Default (provider limit)')} min={256} max={128000} className="flex-1 rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                  <UiInput type="number" aria-label={t('models.maxTokensLabel', 'Max Tokens')} value={maxTokens ?? ''} onChange={(e) => { setMaxTokens(e.target.value ? parseInt(e.target.value, 10) : undefined); setSaved(false); }} placeholder={t('models.defaultProviderLimit', 'Default (provider limit)')} min={256} max={128000} wrapperClassName="flex-1" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary placeholder:text-text-muted"/>
                   <UiButton unstyled type="button" onClick={() => { setMaxTokens(undefined); setSaved(false); }} className="rounded-2xl bg-surface-2 px-3 py-2 text-[11px] font-semibold text-text-muted transition-colors hover:text-text-secondary">
                     {t('common.reset', 'Reset')}
                   </UiButton>
@@ -131,11 +132,11 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
             </div>
           </section>
 
-          <section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+          <section className={workbenchDetailSectionClass}>
             <div className="mb-5">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('models.telemetry', 'Telemetry')}</div>
-              <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('models.usageStatistics', 'Usage Statistics')}</h3>
-              <p className="mt-1 text-[13px] leading-relaxed text-text-secondary/80">{t('models.usageStatisticsHint', 'Inspect observed traffic, token volume, and cost estimates before you tighten or relax generation parameters.')}</p>
+              <div className={workbenchSectionEyebrowClass}>{t('models.telemetry', 'Telemetry')}</div>
+              <h3 className={workbenchSectionTitleClass}>{t('models.usageStatistics', 'Usage Statistics')}</h3>
+              <p className={workbenchSectionDescriptionClass}>{t('models.usageStatisticsHint', 'Inspect observed traffic, token volume, and cost estimates before you tighten or relax generation parameters.')}</p>
             </div>
 
             {stats ? (<div className="space-y-4">
@@ -158,7 +159,7 @@ export function ModelParamEditor({ provider, model, onSave, onClose }: {
               </div>) : (<div className="rounded-3xl border border-dashed border-border-subtle px-4 py-10 text-center text-sm text-text-muted">{t('models.noUsageData', 'No usage data yet')}</div>)}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <UiButton unstyled type="button" onClick={() => { onSave({ temperature, maxTokens }); setSaved(true); }} className="rounded-2xl bg-accent px-5 py-3 text-sm font-semibold text-white transition-all hover:bg-accent-hover">
+              <UiButton unstyled type="button" onClick={() => { onSave({ temperature, maxTokens }); setSaved(true); }} className={workbenchPrimaryButtonClass}>
                 {t('models.saveParameters', 'Save Parameters')}
               </UiButton>
               {saved && <span className="inline-flex items-center gap-1 text-xs text-success animate-fade-in"><IconifyIcon name="ui-check" size={12} color="currentColor"/> {t('models.saved', 'Saved')}</span>}

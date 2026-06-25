@@ -45,8 +45,8 @@ export function ExternalDirsSettings() {
             {t('settings.add', 'Add')}
           </UiButton>}>
         <div className="grid gap-4 md:grid-cols-[1fr_auto]">
-          <UiInput type="text" value={extDirPath} onChange={(event) => setExtDirPath(event.target.value)} placeholder={t('settings.externalDirectoryPlaceholder', 'e.g., ~/.agents/skills')} aria-label={t('settings.externalDirectoryPath', 'External directory path')}/>
-          <UiSelect value={extDirType} onChange={(event) => setExtDirType(event.target.value as 'agents' | 'skills')} aria-label={t('settings.directoryType', 'Directory type')}>
+          <UiInput type="text" value={extDirPath} onChange={(event) => setExtDirPath(event.target.value)} placeholder={t('settings.externalDirectoryPlaceholder', 'e.g., ~/.agents/skills')} aria-label={t('settings.externalDirectoryPath', 'External directory path')} wrapperClassName="w-full"/>
+          <UiSelect value={extDirType} onChange={(event) => setExtDirType(event.target.value as 'agents' | 'skills')} aria-label={t('settings.directoryType', 'Directory type')} wrapperClassName="w-full">
             <option value="skills">{t('skills.title', 'Skills')}</option>
             <option value="agents">{t('agents.title', 'Agents')}</option>
           </UiSelect>

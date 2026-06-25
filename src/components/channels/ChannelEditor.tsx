@@ -7,17 +7,18 @@ import { ChannelPlatformIcon, getPlatformDisplayName } from './ChannelIcons';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Checkbox } from '@/components/catalyst-ui/checkbox';
 import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass } from '@/components/catalyst-ui/workbench';
 function EditorSection({ eyebrow, title, description, children, }: {
     eyebrow: string;
     title: string;
     description?: string;
     children: ReactNode;
 }) {
-    return (<section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+    return (<section className={workbenchDetailSectionClass}>
       <div>
-        <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{eyebrow}</div>
-        <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{title}</h3>
-        {description && <p className="mt-2 max-w-2xl text-[13px] leading-6 text-text-secondary/80">{description}</p>}
+        <div className={workbenchSectionEyebrowClass}>{eyebrow}</div>
+        <h3 className={workbenchSectionTitleClass}>{title}</h3>
+        {description && <p className={`${workbenchSectionDescriptionClass} mt-2 max-w-2xl leading-6`}>{description}</p>}
       </div>
       <div className="mt-5 space-y-4">{children}</div>
     </section>);
@@ -337,14 +338,14 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
         }
     }, [normalizedWeChatQrSource, wechatQrPreviewFallback, wechatQrPreviewResolvingSource]);
     return (<div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
-      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+      <section className={workbenchHeroSectionClass}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             <div className="flex h-18 w-18 shrink-0 items-center justify-center rounded-4xl border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
               <ChannelPlatformIcon platform={draft.platform} size={30} customIcon={draft.customPlatformIcon}/>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{isNew ? t('channels.newChannel', 'New Channel') : t('channels.editChannel', 'Edit Channel')}</div>
+              <div className={workbenchSectionEyebrowClass}>{isNew ? t('channels.newChannel', 'New Channel') : t('channels.editChannel', 'Edit Channel')}</div>
               <h1 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{draft.name || t('channels.untitledChannel', 'Untitled channel')}</h1>
               <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">{t('channels.editorHeroHint', 'Set the platform identity, wire transport credentials, and decide which agent owns replies before the channel goes live.')}</p>
             </div>
@@ -352,10 +353,10 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
 
           <div className="flex flex-col items-stretch gap-3 xl:items-end">
             <div className="flex flex-wrap items-center gap-2 xl:justify-end">
-              <UiButton unstyled type="button" onClick={onCancel} className="rounded-2xl bg-surface-2 px-4 py-3 text-sm font-semibold text-text-muted transition-colors hover:bg-surface-3 hover:text-text-secondary">
+              <UiButton unstyled type="button" onClick={onCancel} className={workbenchNeutralButtonClass}>
                 <span className="inline-flex items-center gap-1.5"><IconifyIcon name="ui-close" size={14} color="currentColor"/> {t('common.cancel', 'Cancel')}</span>
               </UiButton>
-              <UiButton unstyled type="button" onClick={handleSave} disabled={!isValid} className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover disabled:opacity-50">
+              <UiButton unstyled type="button" onClick={handleSave} disabled={!isValid} className={`${workbenchPrimaryButtonClass} disabled:opacity-50`}>
                 <span className="inline-flex items-center gap-1.5"><IconifyIcon name="ui-check" size={14} color="currentColor"/> {t('common.save', 'Save')}</span>
               </UiButton>
             </div>
@@ -378,7 +379,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block">
                 <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('common.name', 'Name')}</span>
-                <UiInput type="text" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} aria-label={t('channels.channelNameField', 'Channel name')} className={INPUT_CLASS} placeholder={t('channels.channelNamePlaceholder', 'e.g. Customer support inbox')}/>
+                <UiInput type="text" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} aria-label={t('channels.channelNameField', 'Channel name')} controlClassName={INPUT_CLASS} placeholder={t('channels.channelNamePlaceholder', 'e.g. Customer support inbox')}/>
               </label>
 
               <label className="block">
@@ -390,7 +391,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
                 platform,
                 connectionMode: platform === 'wechat_personal' ? 'stream' : draft.connectionMode,
             });
-        }} aria-label={t('channels.platform', 'Platform')} className={INPUT_CLASS}>
+        }} aria-label={t('channels.platform', 'Platform')} controlClassName={INPUT_CLASS}>
                   <optgroup label={t('channels.chinesePlatforms', 'Chinese Platforms')}>
                     <option value="feishu">{getPlatformDisplayName('feishu')}</option>
                     <option value="dingtalk">{getPlatformDisplayName('dingtalk')}</option>
@@ -416,13 +417,13 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
             {draft.platform === 'custom' && (<div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.customPlatformName', 'Platform Name')}</span>
-                  <UiInput type="text" value={draft.customPlatformName || ''} onChange={(event) => setDraft({ ...draft, customPlatformName: event.target.value })} aria-label={t('channels.customPlatformName', 'Platform Name')} placeholder={t('channels.customPlatformPlaceholder', 'e.g. LINE, WhatsApp, My Bot')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.customPlatformName || ''} onChange={(event) => setDraft({ ...draft, customPlatformName: event.target.value })} aria-label={t('channels.customPlatformName', 'Platform Name')} placeholder={t('channels.customPlatformPlaceholder', 'e.g. LINE, WhatsApp, My Bot')} controlClassName={INPUT_CLASS}/>
                 </label>
 
                 <div>
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.customPlatformIcon', 'Platform Icon')}</span>
                   <div className="flex gap-2">
-                    <UiInput type="text" value={draft.customPlatformIcon || ''} onChange={(event) => setDraft({ ...draft, customPlatformIcon: event.target.value })} aria-label={t('channels.customPlatformIcon', 'Platform Icon')} placeholder={t('channels.customPlatformIconPlaceholder', 'e.g. mdi:chat, lucide:bot')} className={INPUT_CLASS}/>
+                    <UiInput type="text" value={draft.customPlatformIcon || ''} onChange={(event) => setDraft({ ...draft, customPlatformIcon: event.target.value })} aria-label={t('channels.customPlatformIcon', 'Platform Icon')} placeholder={t('channels.customPlatformIconPlaceholder', 'e.g. mdi:chat, lucide:bot')} controlClassName={INPUT_CLASS}/>
                     <UiButton unstyled type="button" onClick={() => setShowIconPicker(true)} className="shrink-0 rounded-2xl border border-border-subtle/55 bg-surface-2/80 px-4 py-3 text-sm font-semibold text-text-secondary transition-colors hover:bg-surface-3 hover:text-accent">
                       {t('common.browse', 'Browse')}
                     </UiButton>
@@ -436,11 +437,11 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.appId', 'App ID')}</span>
-                  <UiInput type="text" value={draft.appId || ''} onChange={(event) => setDraft({ ...draft, appId: event.target.value })} placeholder={t('channels.appIdPlaceholder', 'Your application ID')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.appId || ''} onChange={(event) => setDraft({ ...draft, appId: event.target.value })} placeholder={t('channels.appIdPlaceholder', 'Your application ID')} controlClassName={INPUT_CLASS}/>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.appSecret', 'App Secret')}</span>
-                  <UiInput type="password" value={draft.appSecret || ''} onChange={(event) => setDraft({ ...draft, appSecret: event.target.value })} placeholder={t('channels.appSecretPlaceholder', 'Your application secret')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.appSecret || ''} onChange={(event) => setDraft({ ...draft, appSecret: event.target.value })} placeholder={t('channels.appSecretPlaceholder', 'Your application secret')} controlClassName={INPUT_CLASS}/>
                 </label>
               </div>
             </EditorSection>)}
@@ -448,7 +449,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
           {draft.platform === 'dingtalk' && (<EditorSection eyebrow={t('channels.transport', 'Transport')} title={t('channels.dingtalkTransport', 'DingTalk Transport')} description={t('channels.dingtalkTransportHint', 'Choose whether DingTalk reaches the app through a persistent socket or a public callback endpoint.')}>
               <label className="block">
                 <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.connectionMode', 'Connection Mode')}</span>
-                <UiSelect value={draft.connectionMode || 'webhook'} onChange={(event) => setDraft({ ...draft, connectionMode: event.target.value as ChannelConnectionMode })} aria-label={t('channels.connectionMode', 'Connection Mode')} className={INPUT_CLASS}>
+                <UiSelect value={draft.connectionMode || 'webhook'} onChange={(event) => setDraft({ ...draft, connectionMode: event.target.value as ChannelConnectionMode })} aria-label={t('channels.connectionMode', 'Connection Mode')} controlClassName={INPUT_CLASS}>
                   <option value="stream">{t('channels.streamModeRecommended', 'Stream Mode (WebSocket, recommended)')}</option>
                   <option value="webhook">{t('channels.webhookModeHttp', 'Webhook Mode (HTTP callback)')}</option>
                 </UiSelect>
@@ -467,11 +468,11 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.verificationToken', 'Verification Token')}</span>
-                  <UiInput type="text" value={draft.verificationToken || ''} onChange={(event) => setDraft({ ...draft, verificationToken: event.target.value })} aria-label={t('channels.verificationToken', 'Verification Token')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.verificationToken || ''} onChange={(event) => setDraft({ ...draft, verificationToken: event.target.value })} aria-label={t('channels.verificationToken', 'Verification Token')} controlClassName={INPUT_CLASS}/>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.encryptKey', 'Encrypt Key')}</span>
-                  <UiInput type="password" value={draft.encryptKey || ''} onChange={(event) => setDraft({ ...draft, encryptKey: event.target.value })} aria-label={t('channels.encryptKey', 'Encrypt Key')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.encryptKey || ''} onChange={(event) => setDraft({ ...draft, encryptKey: event.target.value })} aria-label={t('channels.encryptKey', 'Encrypt Key')} controlClassName={INPUT_CLASS}/>
                 </label>
               </div>
             </EditorSection>)}
@@ -480,12 +481,12 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
               <div className="space-y-4">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.botToken', 'Bot Token')}</span>
-                  <UiInput type="password" value={draft.slackBotToken || ''} onChange={(event) => setDraft({ ...draft, slackBotToken: event.target.value })} aria-label={t('channels.botToken', 'Bot Token')} placeholder={t('channels.slackBotTokenPlaceholder', 'xoxb-...')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.slackBotToken || ''} onChange={(event) => setDraft({ ...draft, slackBotToken: event.target.value })} aria-label={t('channels.botToken', 'Bot Token')} placeholder={t('channels.slackBotTokenPlaceholder', 'xoxb-...')} controlClassName={INPUT_CLASS}/>
                   <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.slackBotTokenHint', 'Bot User OAuth Token from your Slack app settings.')}</p>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.signingSecret', 'Signing Secret')}</span>
-                  <UiInput type="password" value={draft.slackSigningSecret || ''} onChange={(event) => setDraft({ ...draft, slackSigningSecret: event.target.value })} aria-label={t('channels.signingSecret', 'Signing Secret')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.slackSigningSecret || ''} onChange={(event) => setDraft({ ...draft, slackSigningSecret: event.target.value })} aria-label={t('channels.signingSecret', 'Signing Secret')} controlClassName={INPUT_CLASS}/>
                   <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.slackSigningSecretHint', 'Used to verify incoming webhook requests from Slack.')}</p>
                 </label>
               </div>
@@ -494,7 +495,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
           {draft.platform === 'telegram' && (<EditorSection eyebrow={getPlatformDisplayName('telegram')} title={t('channels.telegramBotAccess', 'Telegram Bot Access')} description={t('channels.telegramBotAccessHint', 'Use the bot token issued by @BotFather to authenticate outbound replies and webhook callbacks.')}>
               <label className="block">
                 <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.botToken', 'Bot Token')}</span>
-                <UiInput type="password" value={draft.telegramBotToken || ''} onChange={(event) => setDraft({ ...draft, telegramBotToken: event.target.value })} aria-label={t('channels.botToken', 'Bot Token')} placeholder={t('channels.telegramBotTokenPlaceholder', '123456:ABC-DEF1234...')} className={INPUT_CLASS}/>
+                <UiInput type="password" value={draft.telegramBotToken || ''} onChange={(event) => setDraft({ ...draft, telegramBotToken: event.target.value })} aria-label={t('channels.botToken', 'Bot Token')} placeholder={t('channels.telegramBotTokenPlaceholder', '123456:ABC-DEF1234...')} controlClassName={INPUT_CLASS}/>
                 <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.telegramBotTokenHint', 'Bot token from @BotFather on Telegram.')}</p>
               </label>
             </EditorSection>)}
@@ -503,11 +504,11 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.botToken', 'Bot Token')}</span>
-                  <UiInput type="password" value={draft.discordBotToken || ''} onChange={(event) => setDraft({ ...draft, discordBotToken: event.target.value })} aria-label={t('channels.botToken', 'Bot Token')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.discordBotToken || ''} onChange={(event) => setDraft({ ...draft, discordBotToken: event.target.value })} aria-label={t('channels.botToken', 'Bot Token')} controlClassName={INPUT_CLASS}/>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.applicationId', 'Application ID')}</span>
-                  <UiInput type="text" value={draft.discordApplicationId || ''} onChange={(event) => setDraft({ ...draft, discordApplicationId: event.target.value })} aria-label={t('channels.applicationId', 'Application ID')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.discordApplicationId || ''} onChange={(event) => setDraft({ ...draft, discordApplicationId: event.target.value })} aria-label={t('channels.applicationId', 'Application ID')} controlClassName={INPUT_CLASS}/>
                 </label>
               </div>
             </EditorSection>)}
@@ -516,16 +517,16 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.appId', 'App ID')}</span>
-                  <UiInput type="text" value={draft.teamsAppId || ''} onChange={(event) => setDraft({ ...draft, teamsAppId: event.target.value })} aria-label={t('channels.appId', 'App ID')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.teamsAppId || ''} onChange={(event) => setDraft({ ...draft, teamsAppId: event.target.value })} aria-label={t('channels.appId', 'App ID')} controlClassName={INPUT_CLASS}/>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.appPassword', 'App Password')}</span>
-                  <UiInput type="password" value={draft.teamsAppPassword || ''} onChange={(event) => setDraft({ ...draft, teamsAppPassword: event.target.value })} aria-label={t('channels.appPassword', 'App Password')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.teamsAppPassword || ''} onChange={(event) => setDraft({ ...draft, teamsAppPassword: event.target.value })} aria-label={t('channels.appPassword', 'App Password')} controlClassName={INPUT_CLASS}/>
                 </label>
               </div>
               <label className="block">
                 <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.tenantIdOptional', 'Tenant ID (optional)')}</span>
-                <UiInput type="text" value={draft.teamsTenantId || ''} onChange={(event) => setDraft({ ...draft, teamsTenantId: event.target.value })} aria-label={t('channels.tenantIdOptional', 'Tenant ID (optional)')} className={INPUT_CLASS}/>
+                <UiInput type="text" value={draft.teamsTenantId || ''} onChange={(event) => setDraft({ ...draft, teamsTenantId: event.target.value })} aria-label={t('channels.tenantIdOptional', 'Tenant ID (optional)')} controlClassName={INPUT_CLASS}/>
                 <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.tenantIdHint', 'Use a tenant ID for single-tenant apps. Leave blank for multi-tenant registrations.')}</p>
               </label>
             </EditorSection>)}
@@ -533,7 +534,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
           {draft.platform === 'wechat_official' && (<EditorSection eyebrow={getPlatformDisplayName('wechat_official')} title={t('channels.wechatOfficialVerification', 'Official Account Verification')} description={t('channels.wechatOfficialVerificationHint', 'WeChat Official Accounts validate each request with the token configured in the management portal.')}>
               <label className="block">
                 <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.verificationToken', 'Verification Token')}</span>
-                <UiInput type="text" value={draft.wechatOfficialToken || ''} onChange={(event) => setDraft({ ...draft, wechatOfficialToken: event.target.value })} aria-label={t('channels.verificationToken', 'Verification Token')} className={INPUT_CLASS}/>
+                <UiInput type="text" value={draft.wechatOfficialToken || ''} onChange={(event) => setDraft({ ...draft, wechatOfficialToken: event.target.value })} aria-label={t('channels.verificationToken', 'Verification Token')} controlClassName={INPUT_CLASS}/>
                 <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatOfficialTokenHint', 'Token configured in the WeChat Official Account console for callback verification.')}</p>
               </label>
             </EditorSection>)}
@@ -560,7 +561,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
                 {wechatVerifyRequired && (<div className="mt-4 grid gap-3 md:grid-cols-[1fr_auto]">
                     <label className="block">
                       <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalVerifyCode', 'Pairing Code')}</span>
-                      <UiInput type="text" value={wechatVerifyCode} onChange={(event) => setWechatVerifyCode(event.target.value)} aria-label={t('channels.wechatPersonalVerifyCode', 'Pairing Code')} placeholder={t('channels.wechatPersonalVerifyCodePlaceholder', 'Enter the digits shown in WeChat')} className={INPUT_CLASS}/>
+                      <UiInput type="text" value={wechatVerifyCode} onChange={(event) => setWechatVerifyCode(event.target.value)} aria-label={t('channels.wechatPersonalVerifyCode', 'Pairing Code')} placeholder={t('channels.wechatPersonalVerifyCodePlaceholder', 'Enter the digits shown in WeChat')} controlClassName={INPUT_CLASS}/>
                     </label>
                     <UiButton unstyled type="button" onClick={handleSubmitWeChatVerifyCode} disabled={wechatLoginBusy || !wechatVerifyCode.trim()} className="self-end rounded-2xl border border-accent/18 bg-accent/10 px-4 py-3 text-sm font-semibold text-accent transition-colors hover:bg-accent/18 disabled:opacity-50">
                       {t('channels.wechatPersonalSubmitVerifyCode', 'Submit Code')}
@@ -571,12 +572,12 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalQrCodeUrl', 'QR Code URL')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalQrCodeUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalQrCodeUrl: event.target.value })} aria-label={t('channels.wechatPersonalQrCodeUrl', 'QR Code URL')} placeholder={t('channels.wechatPersonalQrCodePlaceholder', 'Generated after clicking “Generate QR Code”')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.wechatPersonalQrCodeUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalQrCodeUrl: event.target.value })} aria-label={t('channels.wechatPersonalQrCodeUrl', 'QR Code URL')} placeholder={t('channels.wechatPersonalQrCodePlaceholder', 'Generated after clicking “Generate QR Code”')} controlClassName={INPUT_CLASS}/>
                   <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalQrCodeHint', 'Suora fills this with the latest QR image URL so the operator can scan and bind the account.')}</p>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBindingStatus', 'Binding Status')}</span>
-                  <UiSelect value={draft.wechatPersonalBindingStatus || 'unbound'} onChange={(event) => setDraft({ ...draft, wechatPersonalBindingStatus: event.target.value as ChannelConfig['wechatPersonalBindingStatus'] })} aria-label={t('channels.wechatPersonalBindingStatus', 'Binding Status')} className={INPUT_CLASS}>
+                  <UiSelect value={draft.wechatPersonalBindingStatus || 'unbound'} onChange={(event) => setDraft({ ...draft, wechatPersonalBindingStatus: event.target.value as ChannelConfig['wechatPersonalBindingStatus'] })} aria-label={t('channels.wechatPersonalBindingStatus', 'Binding Status')} controlClassName={INPUT_CLASS}>
                     <option value="unbound">{t('channels.bindingStatusUnbound', 'Not bound')}</option>
                     <option value="pending">{t('channels.bindingStatusPending', 'Waiting for scan')}</option>
                     <option value="bound">{t('channels.bindingStatusBound', 'Bound')}</option>
@@ -587,35 +588,35 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBaseUrl', 'API Base URL')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalBaseUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalBaseUrl: event.target.value })} aria-label={t('channels.wechatPersonalBaseUrl', 'API Base URL')} placeholder={t('channels.wechatPersonalBaseUrlPlaceholder', 'Defaults to https://ilinkai.weixin.qq.com')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.wechatPersonalBaseUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalBaseUrl: event.target.value })} aria-label={t('channels.wechatPersonalBaseUrl', 'API Base URL')} placeholder={t('channels.wechatPersonalBaseUrlPlaceholder', 'Defaults to https://ilinkai.weixin.qq.com')} controlClassName={INPUT_CLASS}/>
                   <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalBaseUrlHint', 'Override this only if your personal WeChat backend uses a different compatible API host.')}</p>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalAccountId', 'Bound Account ID')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalAccountId || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalAccountId: event.target.value })} aria-label={t('channels.wechatPersonalAccountId', 'Bound Account ID')} placeholder={t('channels.wechatPersonalAccountIdPlaceholder', 'Filled automatically after a successful QR login')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.wechatPersonalAccountId || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalAccountId: event.target.value })} aria-label={t('channels.wechatPersonalAccountId', 'Bound Account ID')} placeholder={t('channels.wechatPersonalAccountIdPlaceholder', 'Filled automatically after a successful QR login')} controlClassName={INPUT_CLASS}/>
                 </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBotToken', 'Bot Token')}</span>
-                  <UiInput type="password" value={draft.wechatPersonalBotToken || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalBotToken: event.target.value })} aria-label={t('channels.wechatPersonalBotToken', 'Bot Token')} placeholder={t('channels.wechatPersonalBotTokenPlaceholder', 'Filled automatically after a successful QR login')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.wechatPersonalBotToken || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalBotToken: event.target.value })} aria-label={t('channels.wechatPersonalBotToken', 'Bot Token')} placeholder={t('channels.wechatPersonalBotTokenPlaceholder', 'Filled automatically after a successful QR login')} controlClassName={INPUT_CLASS}/>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalUserId', 'Last User ID')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalUserId || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalUserId: event.target.value })} aria-label={t('channels.wechatPersonalUserId', 'Last User ID')} placeholder={t('channels.wechatPersonalUserIdPlaceholder', 'Filled after the QR login flow reports a user ID')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.wechatPersonalUserId || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalUserId: event.target.value })} aria-label={t('channels.wechatPersonalUserId', 'Last User ID')} placeholder={t('channels.wechatPersonalUserIdPlaceholder', 'Filled after the QR login flow reports a user ID')} controlClassName={INPUT_CLASS}/>
                 </label>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalWebhookUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalWebhookUrl: event.target.value })} aria-label={t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')} placeholder={t('channels.wechatPersonalWebhookPlaceholder', 'https://bridge.example.com/wechat/send')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.wechatPersonalWebhookUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalWebhookUrl: event.target.value })} aria-label={t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')} placeholder={t('channels.wechatPersonalWebhookPlaceholder', 'https://bridge.example.com/wechat/send')} controlClassName={INPUT_CLASS}/>
                   <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalWebhookHint', 'Optional fallback bridge endpoint. Leave blank when you use the built-in QR login flow.')}</p>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalAuthToken', 'Bridge Auth Token')}</span>
-                  <UiInput type="password" value={draft.wechatPersonalAuthToken || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalAuthToken: event.target.value })} aria-label={t('channels.wechatPersonalAuthToken', 'Bridge Auth Token')} placeholder={t('channels.wechatPersonalAuthTokenPlaceholder', 'Optional bearer or shared token')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.wechatPersonalAuthToken || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalAuthToken: event.target.value })} aria-label={t('channels.wechatPersonalAuthToken', 'Bridge Auth Token')} placeholder={t('channels.wechatPersonalAuthTokenPlaceholder', 'Optional bearer or shared token')} controlClassName={INPUT_CLASS}/>
                   <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalAuthTokenHint', 'Used only when the optional fallback bridge endpoint requires bearer authentication.')}</p>
                 </label>
               </div>
@@ -636,24 +637,24 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
           {draft.platform === 'custom' && (<EditorSection eyebrow={t('channels.customChannel', 'Custom Channel')} title={t('channels.customDelivery', 'Custom Delivery')} description={t('channels.customDeliveryHint', 'Define how outgoing replies leave the workspace when you are integrating a platform that is not built in.')}>
               <label className="block">
                 <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.outgoingWebhookUrl', 'Outgoing Webhook URL')}</span>
-                <UiInput type="text" value={draft.customWebhookUrl || ''} onChange={(event) => setDraft({ ...draft, customWebhookUrl: event.target.value })} aria-label={t('channels.outgoingWebhookUrl', 'Outgoing Webhook URL')} placeholder={t('channels.customWebhookUrlPlaceholder', 'https://your-api.example.com/send')} className={INPUT_CLASS}/>
+                <UiInput type="text" value={draft.customWebhookUrl || ''} onChange={(event) => setDraft({ ...draft, customWebhookUrl: event.target.value })} aria-label={t('channels.outgoingWebhookUrl', 'Outgoing Webhook URL')} placeholder={t('channels.customWebhookUrlPlaceholder', 'https://your-api.example.com/send')} controlClassName={INPUT_CLASS}/>
                 <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.customWebhookUrlHint', 'Replies will be POSTed to this endpoint.')}</p>
               </label>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.authHeaderName', 'Auth Header Name')}</span>
-                  <UiInput type="text" value={draft.customAuthHeader || ''} onChange={(event) => setDraft({ ...draft, customAuthHeader: event.target.value })} aria-label={t('channels.authHeaderName', 'Auth Header Name')} placeholder={t('channels.authHeaderPlaceholder', 'e.g. Authorization, X-API-Key')} className={INPUT_CLASS}/>
+                  <UiInput type="text" value={draft.customAuthHeader || ''} onChange={(event) => setDraft({ ...draft, customAuthHeader: event.target.value })} aria-label={t('channels.authHeaderName', 'Auth Header Name')} placeholder={t('channels.authHeaderPlaceholder', 'e.g. Authorization, X-API-Key')} controlClassName={INPUT_CLASS}/>
                 </label>
                 <label className="block">
                   <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.authHeaderValue', 'Auth Header Value')}</span>
-                  <UiInput type="password" value={draft.customAuthValue || ''} onChange={(event) => setDraft({ ...draft, customAuthValue: event.target.value })} aria-label={t('channels.authHeaderValue', 'Auth Header Value')} placeholder={t('channels.authHeaderValuePlaceholder', 'e.g. Bearer your-token')} className={INPUT_CLASS}/>
+                  <UiInput type="password" value={draft.customAuthValue || ''} onChange={(event) => setDraft({ ...draft, customAuthValue: event.target.value })} aria-label={t('channels.authHeaderValue', 'Auth Header Value')} placeholder={t('channels.authHeaderValuePlaceholder', 'e.g. Bearer your-token')} controlClassName={INPUT_CLASS}/>
                 </label>
               </div>
 
               <label className="block">
                 <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.payloadTemplate', 'Payload Template (JSON)')}</span>
-                <UiTextArea value={draft.customPayloadTemplate || '{\n  "chat_id": "{{chatId}}",\n  "text": "{{content}}"\n}'} onChange={(event) => setDraft({ ...draft, customPayloadTemplate: event.target.value })} aria-label={t('channels.payloadTemplate', 'Payload Template (JSON)')} rows={6} className={TEXTAREA_CLASS}/>
+                <UiTextArea value={draft.customPayloadTemplate || '{\n  "chat_id": "{{chatId}}",\n  "text": "{{content}}"\n}'} onChange={(event) => setDraft({ ...draft, customPayloadTemplate: event.target.value })} aria-label={t('channels.payloadTemplate', 'Payload Template (JSON)')} rows={6} controlClassName={TEXTAREA_CLASS}/>
                 <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.payloadTemplateHint', 'Use {{content}} and {{chatId}} as placeholders inside the outgoing payload.')}</p>
               </label>
             </EditorSection>)}
@@ -663,7 +664,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
           <EditorSection eyebrow={t('channels.routing', 'Routing')} title={t('channels.replyRouting', 'Reply Routing')} description={t('channels.replyRoutingHint', 'Decide which agent owns the reply path for this channel and keep the handoff obvious for operators.')}>
             <label className="block">
               <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.replyAgent', 'Reply Agent')}</span>
-              <UiSelect value={draft.replyAgentId} onChange={(event) => setDraft({ ...draft, replyAgentId: event.target.value })} aria-label={t('channels.replyAgent', 'Reply Agent')} className={INPUT_CLASS}>
+              <UiSelect value={draft.replyAgentId} onChange={(event) => setDraft({ ...draft, replyAgentId: event.target.value })} aria-label={t('channels.replyAgent', 'Reply Agent')} controlClassName={INPUT_CLASS}>
                 {selectableAgents.map((agent) => (<option key={agent.id} value={agent.id}>{agent.name}</option>))}
               </UiSelect>
             </label>
@@ -813,31 +814,31 @@ function EmailChannelConfig({ draft, setDraft, t, INPUT_CLASS, }: {
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapHost', 'IMAP Host')}</span>
-            <UiInput type="text" value={draft.emailImapHost || ''} onChange={(e) => setDraft({ ...draft, emailImapHost: e.target.value })} placeholder={t('channels.emailImapHostPlaceholder', 'e.g. imap.gmail.com')} className={INPUT_CLASS}/>
+            <UiInput type="text" value={draft.emailImapHost || ''} onChange={(e) => setDraft({ ...draft, emailImapHost: e.target.value })} placeholder={t('channels.emailImapHostPlaceholder', 'e.g. imap.gmail.com')} controlClassName={INPUT_CLASS}/>
           </label>
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapPort', 'IMAP Port')}</span>
-            <UiInput type="number" value={draft.emailImapPort || 993} onChange={(e) => setDraft({ ...draft, emailImapPort: parseInt(e.target.value) || 993 })} className={INPUT_CLASS}/>
+            <UiInput type="number" value={draft.emailImapPort || 993} onChange={(e) => setDraft({ ...draft, emailImapPort: parseInt(e.target.value) || 993 })} controlClassName={INPUT_CLASS}/>
           </label>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapUser', 'Username / Email')}</span>
-            <UiInput type="text" value={draft.emailImapUser || ''} onChange={(e) => setDraft({ ...draft, emailImapUser: e.target.value })} placeholder={t('channels.emailImapUserPlaceholder', 'your@email.com')} className={INPUT_CLASS}/>
+            <UiInput type="text" value={draft.emailImapUser || ''} onChange={(e) => setDraft({ ...draft, emailImapUser: e.target.value })} placeholder={t('channels.emailImapUserPlaceholder', 'your@email.com')} controlClassName={INPUT_CLASS}/>
           </label>
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapPassword', 'Password')}</span>
-            <UiInput type="password" value={draft.emailImapPassword || ''} onChange={(e) => setDraft({ ...draft, emailImapPassword: e.target.value })} placeholder={t('channels.emailImapPasswordPlaceholder', 'App password or IMAP password')} className={INPUT_CLASS}/>
+            <UiInput type="password" value={draft.emailImapPassword || ''} onChange={(e) => setDraft({ ...draft, emailImapPassword: e.target.value })} placeholder={t('channels.emailImapPasswordPlaceholder', 'App password or IMAP password')} controlClassName={INPUT_CLASS}/>
           </label>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailImapMailbox', 'Mailbox')}</span>
-            <UiInput type="text" value={draft.emailImapMailbox || 'INBOX'} onChange={(e) => setDraft({ ...draft, emailImapMailbox: e.target.value })} className={INPUT_CLASS}/>
+            <UiInput type="text" value={draft.emailImapMailbox || 'INBOX'} onChange={(e) => setDraft({ ...draft, emailImapMailbox: e.target.value })} controlClassName={INPUT_CLASS}/>
           </label>
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailPollInterval', 'Poll Interval (seconds)')}</span>
-            <UiInput type="number" value={draft.emailPollInterval || 60} onChange={(e) => setDraft({ ...draft, emailPollInterval: Math.max(10, parseInt(e.target.value) || 60) })} min={10} className={INPUT_CLASS}/>
+            <UiInput type="number" value={draft.emailPollInterval || 60} onChange={(e) => setDraft({ ...draft, emailPollInterval: Math.max(10, parseInt(e.target.value) || 60) })} min={10} controlClassName={INPUT_CLASS}/>
           </label>
         </div>
         <label className="flex items-center gap-3">
@@ -850,31 +851,31 @@ function EmailChannelConfig({ draft, setDraft, t, INPUT_CLASS, }: {
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailSmtpHost', 'SMTP Host')}</span>
-            <UiInput type="text" value={draft.emailSmtpHost || ''} onChange={(e) => setDraft({ ...draft, emailSmtpHost: e.target.value })} placeholder={t('channels.emailSmtpHostPlaceholder', 'e.g. smtp.gmail.com')} className={INPUT_CLASS}/>
+            <UiInput type="text" value={draft.emailSmtpHost || ''} onChange={(e) => setDraft({ ...draft, emailSmtpHost: e.target.value })} placeholder={t('channels.emailSmtpHostPlaceholder', 'e.g. smtp.gmail.com')} controlClassName={INPUT_CLASS}/>
           </label>
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailSmtpPort', 'SMTP Port')}</span>
-            <UiInput type="number" value={draft.emailSmtpPort || 465} onChange={(e) => setDraft({ ...draft, emailSmtpPort: parseInt(e.target.value) || 465 })} className={INPUT_CLASS}/>
+            <UiInput type="number" value={draft.emailSmtpPort || 465} onChange={(e) => setDraft({ ...draft, emailSmtpPort: parseInt(e.target.value) || 465 })} controlClassName={INPUT_CLASS}/>
           </label>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailSmtpUser', 'SMTP Username')}</span>
-            <UiInput type="text" value={draft.emailSmtpUser || ''} onChange={(e) => setDraft({ ...draft, emailSmtpUser: e.target.value })} placeholder={t('channels.emailSmtpUserPlaceholder', 'Leave blank to use IMAP username')} className={INPUT_CLASS}/>
+            <UiInput type="text" value={draft.emailSmtpUser || ''} onChange={(e) => setDraft({ ...draft, emailSmtpUser: e.target.value })} placeholder={t('channels.emailSmtpUserPlaceholder', 'Leave blank to use IMAP username')} controlClassName={INPUT_CLASS}/>
           </label>
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailSmtpPassword', 'SMTP Password')}</span>
-            <UiInput type="password" value={draft.emailSmtpPassword || ''} onChange={(e) => setDraft({ ...draft, emailSmtpPassword: e.target.value })} placeholder={t('channels.emailSmtpPasswordPlaceholder', 'Leave blank to use IMAP password')} className={INPUT_CLASS}/>
+            <UiInput type="password" value={draft.emailSmtpPassword || ''} onChange={(e) => setDraft({ ...draft, emailSmtpPassword: e.target.value })} placeholder={t('channels.emailSmtpPasswordPlaceholder', 'Leave blank to use IMAP password')} controlClassName={INPUT_CLASS}/>
           </label>
         </div>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailFromName', 'From Name')}</span>
-            <UiInput type="text" value={draft.emailFromName || ''} onChange={(e) => setDraft({ ...draft, emailFromName: e.target.value })} placeholder={t('channels.emailFromNamePlaceholder', 'e.g. Support Bot')} className={INPUT_CLASS}/>
+            <UiInput type="text" value={draft.emailFromName || ''} onChange={(e) => setDraft({ ...draft, emailFromName: e.target.value })} placeholder={t('channels.emailFromNamePlaceholder', 'e.g. Support Bot')} controlClassName={INPUT_CLASS}/>
           </label>
           <label className="block">
             <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.emailFromAddress', 'From Address')}</span>
-            <UiInput type="text" value={draft.emailFromAddress || ''} onChange={(e) => setDraft({ ...draft, emailFromAddress: e.target.value })} placeholder={t('channels.emailFromAddressPlaceholder', 'Leave blank to use IMAP email')} className={INPUT_CLASS}/>
+            <UiInput type="text" value={draft.emailFromAddress || ''} onChange={(e) => setDraft({ ...draft, emailFromAddress: e.target.value })} placeholder={t('channels.emailFromAddressPlaceholder', 'Leave blank to use IMAP email')} controlClassName={INPUT_CLASS}/>
           </label>
         </div>
         <label className="flex items-center gap-3">
@@ -890,13 +891,13 @@ function EmailChannelConfig({ draft, setDraft, t, INPUT_CLASS, }: {
       <EditorSection eyebrow={t('channels.emailFilters', 'Filters')} title={t('channels.emailFilterRules', 'Email Filter Rules')} description={t('channels.emailFilterRulesHint', 'Define rules to filter incoming emails. Only emails matching ALL enabled rules will be processed. Leave empty to process all incoming emails.')}>
         {filters.map((filter) => (<div key={filter.id} className="flex flex-wrap items-center gap-2 rounded-2xl border border-border-subtle/45 bg-surface-0/55 p-3">
             <Checkbox checked={filter.enabled} onChange={(v) => updateFilter(filter.id, { enabled: v })} color="blue" />
-            <UiSelect value={filter.field} onChange={(e) => updateFilter(filter.id, { field: e.target.value as EmailFilterField })} className="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary">
+            <UiSelect value={filter.field} onChange={(e) => updateFilter(filter.id, { field: e.target.value as EmailFilterField })} controlClassName="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary">
               {FILTER_FIELDS.map((f) => (<option key={f.value} value={f.value}>{f.label}</option>))}
             </UiSelect>
-            <UiSelect value={filter.operator} onChange={(e) => updateFilter(filter.id, { operator: e.target.value as EmailFilterOperator })} className="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary">
+            <UiSelect value={filter.operator} onChange={(e) => updateFilter(filter.id, { operator: e.target.value as EmailFilterOperator })} controlClassName="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary">
               {FILTER_OPERATORS.filter((op) => filter.field === 'has_attachment' ? op.value === 'is_true' : op.value !== 'is_true').map((op) => (<option key={op.value} value={op.value}>{op.label}</option>))}
             </UiSelect>
-            {filter.field !== 'has_attachment' && (<UiInput type="text" value={filter.value} onChange={(e) => updateFilter(filter.id, { value: e.target.value })} placeholder={t('channels.emailFilterValuePlaceholder', 'Keyword or pattern...')} className="min-w-0 flex-1 rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary placeholder-text-muted/55"/>)}
+            {filter.field !== 'has_attachment' && (<UiInput type="text" value={filter.value} onChange={(e) => updateFilter(filter.id, { value: e.target.value })} placeholder={t('channels.emailFilterValuePlaceholder', 'Keyword or pattern...')} wrapperClassName="min-w-0 flex-1" controlClassName="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary placeholder:text-text-muted/55"/>)}
             <UiButton unstyled type="button" onClick={() => removeFilter(filter.id)} className="rounded-lg p-1.5 text-text-muted hover:bg-red-500/12 hover:text-red-400">
               <IconifyIcon name="ui-close" size={12} color="currentColor"/>
             </UiButton>
@@ -910,7 +911,7 @@ function EmailChannelConfig({ draft, setDraft, t, INPUT_CLASS, }: {
         {actions.map((action) => (<div key={action.id} className="space-y-3 rounded-2xl border border-border-subtle/45 bg-surface-0/55 p-4">
             <div className="flex items-center gap-2">
               <Checkbox checked={action.enabled} onChange={(v) => updateAction(action.id, { enabled: v })} color="blue" />
-              <UiSelect value={action.type} onChange={(e) => updateAction(action.id, { type: e.target.value as EmailActionType })} className="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary">
+              <UiSelect value={action.type} onChange={(e) => updateAction(action.id, { type: e.target.value as EmailActionType })} controlClassName="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-2 py-1.5 text-xs text-text-primary">
                 {ACTION_TYPES.map((at) => (<option key={at.value} value={at.value}>{at.label}</option>))}
               </UiSelect>
               <div className="flex-1"/>
@@ -926,22 +927,22 @@ function EmailChannelConfig({ draft, setDraft, t, INPUT_CLASS, }: {
 
             {action.type === 'auto_reply' && !action.useAgent && (<label className="block">
                 <span className="mb-1 block text-[11px] font-medium text-text-muted">{t('channels.emailReplyTemplate', 'Reply Template')}</span>
-                <UiTextArea value={action.replyTemplate || ''} onChange={(e) => updateAction(action.id, { replyTemplate: e.target.value })} placeholder={t('channels.emailReplyTemplatePlaceholder', 'Use {{subject}}, {{from}}, {{body}} as placeholders')} rows={3} className="w-full rounded-xl border border-border-subtle/55 bg-surface-2/80 px-3 py-2 font-mono text-xs text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                <UiTextArea value={action.replyTemplate || ''} onChange={(e) => updateAction(action.id, { replyTemplate: e.target.value })} placeholder={t('channels.emailReplyTemplatePlaceholder', 'Use {{subject}}, {{from}}, {{body}} as placeholders')} rows={3} wrapperClassName="w-full" controlClassName="rounded-xl border border-border-subtle/55 bg-surface-2/80 px-3 py-2 font-mono text-xs text-text-primary placeholder:text-text-muted/55"/>
               </label>)}
 
             {action.type === 'forward' && (<label className="block">
                 <span className="mb-1 block text-[11px] font-medium text-text-muted">{t('channels.emailForwardTo', 'Forward To')}</span>
-                <UiInput type="email" value={action.forwardTo || ''} onChange={(e) => updateAction(action.id, { forwardTo: e.target.value })} placeholder={t('channels.emailForwardToPlaceholder', 'recipient@example.com')} className={INPUT_CLASS}/>
+                <UiInput type="email" value={action.forwardTo || ''} onChange={(e) => updateAction(action.id, { forwardTo: e.target.value })} placeholder={t('channels.emailForwardToPlaceholder', 'recipient@example.com')} controlClassName={INPUT_CLASS}/>
               </label>)}
 
             {action.type === 'label' && (<label className="block">
                 <span className="mb-1 block text-[11px] font-medium text-text-muted">{t('channels.emailLabelName', 'Label')}</span>
-                <UiInput type="text" value={action.label || ''} onChange={(e) => updateAction(action.id, { label: e.target.value })} placeholder={t('channels.emailLabelPlaceholder', 'e.g. processed, support')} className={INPUT_CLASS}/>
+                <UiInput type="text" value={action.label || ''} onChange={(e) => updateAction(action.id, { label: e.target.value })} placeholder={t('channels.emailLabelPlaceholder', 'e.g. processed, support')} controlClassName={INPUT_CLASS}/>
               </label>)}
 
             {action.type === 'webhook' && (<label className="block">
                 <span className="mb-1 block text-[11px] font-medium text-text-muted">{t('channels.emailWebhookUrl', 'Webhook URL')}</span>
-                <UiInput type="text" value={action.webhookUrl || ''} onChange={(e) => updateAction(action.id, { webhookUrl: e.target.value })} placeholder={t('channels.emailWebhookUrlPlaceholder', 'https://your-api.example.com/email-hook')} className={INPUT_CLASS}/>
+                <UiInput type="text" value={action.webhookUrl || ''} onChange={(e) => updateAction(action.id, { webhookUrl: e.target.value })} placeholder={t('channels.emailWebhookUrlPlaceholder', 'https://your-api.example.com/email-hook')} controlClassName={INPUT_CLASS}/>
               </label>)}
           </div>))}
         <UiButton unstyled type="button" onClick={addAction} className="rounded-2xl border border-dashed border-border-subtle/55 bg-surface-0/40 px-4 py-3 text-sm font-medium text-text-muted transition-colors hover:border-accent/30 hover:text-accent">

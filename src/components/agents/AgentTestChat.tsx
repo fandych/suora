@@ -9,6 +9,7 @@ import type { Agent, Message } from '@/types';
 import type { ModelMessage, UserModelMessage, AssistantModelMessage } from 'ai';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
 function getPreviousOpenAIResponseId(messages: Message[]): string | undefined {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index];
@@ -182,20 +183,20 @@ export function AgentTestChat({ agent, onClose }: {
     }, [activeModel, input, isStreaming, messages, agent, skills, t]);
     return (<div className="flex h-full flex-col border-l border-border-subtle/60 bg-linear-to-b from-surface-1/96 via-surface-1/88 to-surface-0">
       <div className="border-b border-border-subtle/60 px-4 py-3">
-        <div className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-5 shadow-[0_20px_54px_rgba(var(--t-accent-rgb),0.08)]">
+        <div className={workbenchHeroSectionClass}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex min-w-0 flex-1 items-start gap-3">
               <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-3xl border border-accent/12 bg-surface-0/72 shadow-sm">
                 <AgentAvatar avatar={agent.avatar} size={28}/>
               </div>
               <div className="min-w-0 flex-1">
-                <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('common.test', 'Test')}</div>
+                <div className={workbenchSectionEyebrowClass}>{t('common.test', 'Test')}</div>
                 <h2 className="mt-2 text-[22px] font-semibold tracking-tight text-text-primary">{agent.name}</h2>
-                <p className="mt-2 text-[13px] leading-6 text-text-secondary/82">{agent.greeting || t('agents.testHarnessHint', 'Run quick prompts against this agent using its configured tools, prompt, and model selection.')}</p>
+                <p className={workbenchSectionDescriptionClass}>{agent.greeting || t('agents.testHarnessHint', 'Run quick prompts against this agent using its configured tools, prompt, and model selection.')}</p>
               </div>
             </div>
             <div className="flex gap-2">
-              <UiButton unstyled type="button" onClick={() => setMessages([])} title={t('agents.clearMessages', 'Clear messages')} className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2 text-[11px] font-semibold text-text-secondary transition-colors hover:bg-surface-2">
+              <UiButton unstyled type="button" onClick={() => setMessages([])} title={t('agents.clearMessages', 'Clear messages')} className={workbenchNeutralButtonClass}>
                 {t('common.clear', 'Clear')}
               </UiButton>
               {isStreaming && (<UiButton unstyled type="button" onClick={stopStreaming} className="rounded-2xl border border-amber-500/18 bg-amber-500/10 px-3 py-2 text-[11px] font-semibold text-amber-400 transition-colors hover:bg-amber-500/16">
@@ -236,7 +237,7 @@ export function AgentTestChat({ agent, onClose }: {
       </div>
 
       <div className="border-t border-border-subtle/60 px-4 py-4">
-        <div className="rounded-4xl border border-border-subtle/55 bg-surface-0/72 p-4 shadow-[0_16px_38px_rgba(15,23,42,0.08)]">
+        <div className={`${workbenchDetailSectionClass} p-4`}>
           <div className="mb-3 flex flex-wrap gap-2 text-[11px] text-text-muted/75">
             <span>{t('common.ready', 'Ready')}: {activeModel ? activeModel.name : t('common.none', 'None')}</span>
             <span>{t('common.messages', 'Messages')}: {messages.length}</span>
@@ -248,8 +249,8 @@ export function AgentTestChat({ agent, onClose }: {
                 event.preventDefault();
                 void sendMessage();
             }
-        }} placeholder={t('agents.testMessage', 'Type a test message...')} disabled={isStreaming} className="flex-1 rounded-2xl border border-border-subtle/55 bg-surface-2/80 px-3.5 py-3 text-sm text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20 disabled:opacity-50"/>
-            <UiButton unstyled type="button" onClick={() => void sendMessage()} disabled={isStreaming || !input.trim()} className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover disabled:opacity-40">
+        }} placeholder={t('agents.testMessage', 'Type a test message...')} disabled={isStreaming} wrapperClassName="flex-1" controlClassName="rounded-2xl border border-border-subtle/55 bg-surface-2/80 px-3.5 py-3 text-sm text-text-primary placeholder:text-text-muted/55 disabled:opacity-50"/>
+            <UiButton unstyled type="button" onClick={() => void sendMessage()} disabled={isStreaming || !input.trim()} className={`${workbenchPrimaryButtonClass} disabled:opacity-40`}>
               {isStreaming ? t('common.waiting', 'Working…') : t('common.send', 'Send')}
             </UiButton>
           </div>

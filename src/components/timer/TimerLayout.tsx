@@ -15,8 +15,9 @@ import { handleTimerFired } from '@/services/timerRuntime';
 import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
 import { Button as UiButton } from '@/components/catalyst-ui/button';
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 export function TimerLayout() {
-    const [panelWidth, setPanelWidth] = useResizablePanel('timer', 280);
+    const [panelWidth, setPanelWidth] = useResizablePanel('timer', 340);
     const [timers, setTimers] = useState<ScheduledTask[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [editing, setEditing] = useState(false);
@@ -180,26 +181,26 @@ export function TimerLayout() {
     const sortedTimers = [...filteredTimers].sort((a, b) => b.createdAt - a.createdAt);
     return (<div className="relative flex min-h-0 flex-1">
       <SidePanel title={t('timer.title', 'Timers')} width={panelWidth} action={<div className="flex items-center gap-2">
-          <UiButton unstyled className="text-[11px] px-3 py-1.5 rounded-xl bg-accent text-white hover:bg-accent-hover transition-colors font-semibold" onClick={openAssistantCreate}>
+          <UiButton unstyled className={workbenchSidebarPrimaryActionClass} onClick={openAssistantCreate}>
             {aiCreateLabel}
           </UiButton>
-          <UiButton unstyled className="text-[11px] px-3 py-1.5 rounded-xl bg-accent/10 text-accent hover:bg-accent/20 transition-colors font-semibold" onClick={() => { setCreating(true); setEditing(false); setSelectedId(null); }}>
+          <UiButton unstyled className={workbenchSidebarAccentActionClass} onClick={() => { setCreating(true); setEditing(false); setSelectedId(null); }}>
             {t('timer.new', '+ New')}
           </UiButton>
         </div>}>
         <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
-          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+          <div className={workbenchSidebarCardClass}>
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55 pointer-events-none"/>
-              <UiInput value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('timer.searchTimers', 'Search timers...')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-3 text-[12px] text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+              <UiInput value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t('timer.searchTimers', 'Search timers...')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass}/>
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+            <div className={workbenchSidebarMetaClass}>
               <span>{sortedTimers.length} {t('common.results', 'results')}</span>
               {searchQuery && <span>{timers.length} {t('common.total', 'total')}</span>}
             </div>
           </div>
 
-          {sortedTimers.length === 0 ? (<div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+          {sortedTimers.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
               <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
                 <IconifyIcon name="ui-timer-once" size={18} color="currentColor"/>
               </div>
@@ -209,29 +210,27 @@ export function TimerLayout() {
                 : t('timer.noTimers', 'No timers yet. Create one to get started.')}
               </p>
             </div>) : (<div className="space-y-2">
-              {sortedTimers.map((timer) => (<UiButton unstyled key={timer.id} onClick={() => { setSelectedId(timer.id); setCreating(false); setEditing(false); }} className={`w-full rounded-[22px] border px-3.5 py-3.5 text-left transition-all duration-200 ${selectedId === timer.id
-                    ? 'border-accent/20 bg-accent/10 shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]'
-                    : 'border-transparent bg-surface-1/20 hover:bg-surface-3/55 hover:border-border-subtle/60'}`}>
+              {sortedTimers.map((timer) => (<UiButton unstyled key={timer.id} onClick={() => { setSelectedId(timer.id); setCreating(false); setEditing(false); }} className={workbenchSidebarItemClass(selectedId === timer.id)}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 shadow-sm text-accent">
+                      <div className={workbenchSidebarIconClass}>
                         <IconifyIcon name={timer.type === 'once' ? 'ui-timer-once' : 'ui-repeat'} size={18} color="currentColor"/>
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="truncate text-[13px] font-semibold text-text-primary">{timer.name}</span>
+                          <span className={workbenchSidebarTitleClass}>{timer.name}</span>
                           <span className={`rounded-full px-1.5 py-0.5 text-[9px] ${timer.enabled ? 'bg-green-500/15 text-green-400' : 'bg-surface-3 text-text-muted'}`}>
                             {timer.enabled ? t('timer.enabled', 'Enabled') : t('timer.disabled', 'Disabled')}
                           </span>
                         </div>
-                        <p className="mt-1 text-[11px] leading-relaxed text-text-secondary/80 line-clamp-2">
+                        <p className={workbenchSidebarDescriptionClass}>
                           {timer.action === 'pipeline'
                     ? t('timer.pipelineScheduledRun', 'Saved pipeline execution on schedule')
                     : timer.prompt || t('timer.emptyPrompt', 'No prompt content')}
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
-                          <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{timer.action === 'pipeline' ? t('agents.pipeline', 'Pipeline') : timer.action === 'prompt' ? t('timer.agentPrompt', 'Agent Prompt') : t('timer.notify', 'Notify')}</span>
-                          <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{timer.nextRun ? `${t('timer.nextRun', 'Next Run')}: ${formatRelative(timer.nextRun)}` : t('timer.notScheduled', 'Not scheduled')}</span>
+                          <span className={workbenchSidebarPillClass}>{timer.action === 'pipeline' ? t('agents.pipeline', 'Pipeline') : timer.action === 'prompt' ? t('timer.agentPrompt', 'Agent Prompt') : t('timer.notify', 'Notify')}</span>
+                          <span className={workbenchSidebarPillClass}>{timer.nextRun ? `${t('timer.nextRun', 'Next Run')}: ${formatRelative(timer.nextRun)}` : t('timer.notScheduled', 'Not scheduled')}</span>
                         </div>
                       </div>
                     </div>
@@ -241,7 +240,7 @@ export function TimerLayout() {
             </div>)}
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={224} maxWidth={360}/>
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
       <div className="module-workspace flex-1 flex flex-col overflow-y-auto">
         {creating ? (<TimerForm key="new" onSave={handleCreate} onCancel={() => setCreating(false)}/>) : editing && selectedTimer ? (<TimerForm key={selectedTimer.id} initial={selectedTimer} onSave={handleUpdate} onCancel={() => setEditing(false)}/>) : selectedTimer ? (<TimerDetail timer={selectedTimer} onEdit={() => setEditing(true)} onOpenAssistant={() => openAssistantEdit(selectedTimer.id)} onDelete={handleDelete} onToggle={handleToggle} onRunNow={handleRunNow}/>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
@@ -249,10 +248,10 @@ export function TimerLayout() {
                   <p>{t('timer.createHint', 'Create timers via the + New button or ask your AI assistant.')}</p>
                   <p className="mt-4 text-[12px] leading-6 text-text-muted">{t('timer.trySaying', 'Try saying:')} “{t('timer.exampleTimer', 'Set a timer for 10 minutes to remind me to take a break')}”</p>
                 </>)} actions={(<div className="flex flex-wrap items-center gap-3">
-                  <UiButton unstyled type="button" className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover" onClick={openAssistantCreate}>
+                  <UiButton unstyled type="button" className={workbenchSidebarPrimaryActionClass} onClick={openAssistantCreate}>
                     {aiCreateLabel}
                   </UiButton>
-                  <UiButton unstyled type="button" className="rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent" onClick={() => { setCreating(true); setEditing(false); setSelectedId(null); }}>
+                  <UiButton unstyled type="button" className={workbenchSidebarSubtleActionClass} onClick={() => { setCreating(true); setEditing(false); setSelectedId(null); }}>
                     {t('timer.new', '+ New')}
                   </UiButton>
                 </div>)} metrics={[

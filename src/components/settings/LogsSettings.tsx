@@ -272,7 +272,7 @@ export function LogsSettings() {
               </UiButton>
             </div>}>
           <div className="grid gap-3 lg:grid-cols-[1fr_auto]">
-            <UiInput type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('settings.searchLogs', 'Search logs...')}/>
+            <UiInput type="text" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('settings.searchLogs', 'Search logs...')} wrapperClassName="w-full"/>
             <div className="flex flex-wrap gap-2">
               {(['all', 'success', 'error', 'blocked'] as const).map((status) => (<UiButton unstyled key={status} type="button" onClick={() => setFilter(status)} className={`rounded-2xl border px-4 py-3 text-[11px] font-semibold capitalize transition-colors ${filter === status ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-0/72 text-text-secondary hover:bg-surface-2'}`}>
                   {status === 'all'

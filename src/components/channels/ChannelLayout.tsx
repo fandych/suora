@@ -15,15 +15,16 @@ import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-st
 import { Button as UiButton } from '@/components/catalyst-ui/button';
 import { useI18n } from '@/hooks/useI18n';
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { workbenchAccentButtonClass, workbenchDangerButtonClass, workbenchDetailRowClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSidebarCardClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass, workbenchSidebarDescriptionClass, workbenchSidebarAccentActionClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
 type ChannelTab = 'config' | 'messages' | 'health' | 'debug' | 'users';
 function SummaryStat({ label, value, accent = false }: {
     label: string;
     value: string;
     accent?: boolean;
 }) {
-    return (<div className={`rounded-2xl border px-3 py-2.5 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/45 bg-surface-0/55'}`}>
-      <div className="text-[10px] uppercase tracking-[0.14em] text-text-muted/45">{label}</div>
-      <div className={`mt-1 text-[15px] font-semibold tabular-nums ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    return (<div className={workbenchSummaryStatClass(accent)}>
+      <div className={workbenchSummaryLabelClass}>{label}</div>
+      <div className={`${workbenchSummaryValueClass} text-[15px] tabular-nums ${accent ? 'text-accent' : ''}`}>{value}</div>
     </div>);
 }
 function DetailSection({ eyebrow, title, description, action, children, }: {
@@ -33,12 +34,12 @@ function DetailSection({ eyebrow, title, description, action, children, }: {
     action?: ReactNode;
     children: ReactNode;
 }) {
-    return (<section className="rounded-4xl border border-border-subtle/55 bg-linear-to-br from-surface-1/96 via-surface-1/88 to-surface-2/70 p-5 shadow-[0_18px_46px_rgba(15,23,42,0.08)] xl:p-6">
+    return (<section className={workbenchDetailSectionClass}>
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{eyebrow}</div>
-          <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{title}</h3>
-          {description && <p className="mt-2 max-w-2xl text-[13px] leading-6 text-text-secondary/80">{description}</p>}
+          <div className={workbenchSectionEyebrowClass}>{eyebrow}</div>
+          <h3 className={workbenchSectionTitleClass}>{title}</h3>
+          {description && <p className={`${workbenchSectionDescriptionClass} mt-2 max-w-2xl leading-6`}>{description}</p>}
         </div>
         {action}
       </div>
@@ -49,7 +50,7 @@ function DetailRow({ label, value }: {
     label: string;
     value: ReactNode;
 }) {
-    return (<div className="flex items-center justify-between gap-4 rounded-2xl border border-border-subtle/45 bg-surface-0/55 px-4 py-3 text-sm">
+    return (<div className={workbenchDetailRowClass}>
       <span className="text-text-muted">{label}</span>
       <span className="text-right font-medium text-text-primary">{value}</span>
     </div>);
@@ -135,14 +136,14 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
         { id: 'debug', label: t('channels.debug', 'Debug'), icon: 'ui-search' },
     ];
     return (<div className="mx-auto max-w-6xl space-y-6 animate-fade-in">
-      <section className="rounded-4xl border border-accent/12 bg-linear-to-br from-accent/10 via-surface-1/94 to-surface-2/72 p-6 shadow-[0_24px_70px_rgba(var(--t-accent-rgb),0.08)] xl:p-7">
+      <section className={workbenchHeroSectionClass}>
         <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 items-start gap-4">
             <div className="flex h-18 w-18 shrink-0 items-center justify-center rounded-4xl border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
               <ChannelPlatformIcon platform={channel.platform} size={30} customIcon={channel.customPlatformIcon}/>
             </div>
             <div className="min-w-0 flex-1">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{platformLabel}</div>
+              <div className={workbenchSectionEyebrowClass}>{platformLabel}</div>
               <h1 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{channel.name}</h1>
               <p className="mt-2 max-w-3xl text-[14px] leading-7 text-text-secondary/82">
                 {channel.connectionMode === 'stream'
@@ -156,10 +157,10 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
             <UiButton unstyled type="button" onClick={onToggle} className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors ${channel.enabled ? 'border-green-500/20 bg-green-500/12 text-green-400 hover:bg-green-500/18' : 'border-border-subtle/55 bg-surface-0/70 text-text-muted hover:bg-surface-2'}`}>
               {channel.enabled ? t('channels.disableChannel', 'Disable Channel') : t('channels.enableChannel', 'Enable Channel')}
             </UiButton>
-            <UiButton unstyled type="button" onClick={onEdit} className="rounded-2xl border border-accent/18 bg-accent/12 px-4 py-3 text-sm font-semibold text-accent transition-colors hover:bg-accent/18">
+            <UiButton unstyled type="button" onClick={onEdit} className={workbenchAccentButtonClass}>
               {t('common.edit', 'Edit')}
             </UiButton>
-            <UiButton unstyled type="button" onClick={onDelete} className="rounded-2xl border border-red-500/18 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-400 transition-colors hover:bg-red-500/16">
+            <UiButton unstyled type="button" onClick={onDelete} className={workbenchDangerButtonClass}>
               {t('common.delete', 'Delete')}
             </UiButton>
           </div>
@@ -204,7 +205,7 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
 
             <DetailSection eyebrow={t('channels.delivery', 'Delivery')} title={channel.connectionMode === 'stream' ? t('channels.streamMode', 'Stream Mode') : t('channels.webhookRouting', 'Webhook Routing')} description={channel.connectionMode === 'stream'
                 ? t('channels.streamModeDesc', 'This channel keeps a persistent WebSocket connection. No public URL is required, so the desktop app can stay completely local.')
-                : t('channels.webhookRoutingHint', 'Use the callback address below when wiring the platform to this workspace. The webhook server must be running to receive traffic.')} action={channel.connectionMode !== 'stream' && webhookUrl ? (<UiButton unstyled type="button" onClick={() => copyToClipboard(webhookUrl)} className="rounded-xl border border-accent/18 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/18">
+                : t('channels.webhookRoutingHint', 'Use the callback address below when wiring the platform to this workspace. The webhook server must be running to receive traffic.')} action={channel.connectionMode !== 'stream' && webhookUrl ? (<UiButton unstyled type="button" onClick={() => copyToClipboard(webhookUrl)} className={`${workbenchAccentButtonClass} px-3 py-2 text-[11px]`}>
                   <span className="inline-flex items-center gap-1.5"><IconifyIcon name="ui-clipboard" size={13} color="currentColor"/> {t('common.copy', 'Copy')}</span>
                 </UiButton>) : undefined}>
               {channel.connectionMode === 'stream' ? (<div className="rounded-3xl border border-green-500/20 bg-green-500/8 p-4">
@@ -288,7 +289,7 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
 // ─── Main Layout ───────────────────────────────────────────────────
 export function ChannelLayout() {
     const { t, locale } = useI18n();
-    const [panelWidth, setPanelWidth] = useResizablePanel('channels', 320);
+    const [panelWidth, setPanelWidth] = useResizablePanel('channels', 360);
     const { channels, agents, addChannel, updateChannel, removeChannel } = useAppStore();
     const [serverRunning, setServerRunning] = useState(false);
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -434,19 +435,19 @@ export function ChannelLayout() {
         }
     };
     return (<>
-      <SidePanel title={t('channels.title', 'Channels')} width={panelWidth} action={<UiButton unstyled type="button" onClick={handleAddChannel} className="rounded-xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent transition-colors hover:bg-accent/25">
+      <SidePanel title={t('channels.title', 'Channels')} width={panelWidth} action={<UiButton unstyled type="button" onClick={handleAddChannel} className={workbenchSidebarAccentActionClass}>
             + {t('common.new', 'New')}
           </UiButton>}>
         <div className="module-sidebar-stack px-3 pb-3 pt-3 space-y-3">
-          <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+          <div className={workbenchSidebarCardClass}>
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55"/>
-              <UiInput value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('channels.searchChannels', 'Search channels, platforms, or agents...')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-10 text-[12px] text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+              <UiInput value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder={t('channels.searchChannels', 'Search channels, platforms, or agents...')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass}/>
               {searchQuery && (<UiButton unstyled type="button" title={t('common.clear', 'Clear')} aria-label={t('common.clear', 'Clear')} onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted transition-colors hover:text-text-primary">
                   <IconifyIcon name="ui-close" size={14} color="currentColor"/>
                 </UiButton>)}
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+            <div className={workbenchSidebarMetaClass}>
               <span>{filteredChannels.length} {t('common.results', 'results')}</span>
               {searchQuery.trim() && <span>{channels.length} {t('common.total', 'total')}</span>}
             </div>
@@ -457,13 +458,13 @@ export function ChannelLayout() {
               <span className={`h-2 w-2 shrink-0 rounded-full ${serverRunning ? 'bg-green-400' : 'bg-text-muted/45'}`}/>
               <span className="truncate">{serverRunning ? t('channels.serverRunning', 'Server Running') : t('channels.serverStopped', 'Server Stopped')}</span>
             </div>
-            <UiButton unstyled type="button" onClick={serverRunning ? handleStopServer : handleStartServer} className={`shrink-0 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${serverRunning ? 'border-red-500/18 bg-red-500/8 text-red-400 hover:bg-red-500/14' : 'border-accent/18 bg-accent/10 text-accent hover:bg-accent/18'}`}>
+            <UiButton unstyled type="button" onClick={serverRunning ? handleStopServer : handleStartServer} className={`shrink-0 rounded-xl px-3 py-2 text-[12px] font-semibold transition-colors ${serverRunning ? 'border border-red-500/18 bg-red-500/8 text-red-400 hover:bg-red-500/14' : workbenchSidebarAccentActionClass}`}>
               {serverRunning ? t('channels.stopServer', 'Stop Server') : t('channels.startServer', 'Start Server')}
             </UiButton>
           </div>
 
           <div className="space-y-2">
-            {filteredChannels.length === 0 ? (<div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
+            {filteredChannels.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
                   <IconifyIcon name="action-chat" size={18} color="currentColor"/>
                 </div>
@@ -482,22 +483,22 @@ export function ChannelLayout() {
                     : channel.status === 'error'
                         ? 'bg-red-500/15 text-red-400'
                         : 'bg-surface-3/80 text-text-muted';
-            return (<UiButton unstyled key={channel.id} type="button" onClick={() => { setSelectedId(channel.id); setEditingChannel(null); setIsAdding(false); }} className={`w-full rounded-3xl border px-3.5 py-3.5 text-left transition-all duration-200 ${isActive ? 'border-accent/20 bg-accent/10 shadow-[0_14px_34px_rgba(var(--t-accent-rgb),0.07)]' : 'border-transparent bg-surface-1/20 hover:bg-surface-3/55 hover:border-border-subtle/60'}`}>
+            return (<UiButton unstyled key={channel.id} type="button" onClick={() => { setSelectedId(channel.id); setEditingChannel(null); setIsAdding(false); }} className={workbenchSidebarItemClass(isActive)}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex min-w-0 gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-0/75 text-accent shadow-sm">
+                      <div className={workbenchSidebarIconClass}>
                         <ChannelPlatformIcon platform={channel.platform} size={18} customIcon={channel.customPlatformIcon}/>
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-1.5">
-                          <span className="truncate text-[13px] font-semibold text-text-primary">{channel.name}</span>
+                          <span className={workbenchSidebarTitleClass}>{channel.name}</span>
                           {!channel.enabled && <span className="rounded-full bg-surface-3 px-1.5 py-0.5 text-[9px] text-text-muted">{t('common.off', 'Off')}</span>}
                         </div>
-                        <p className="mt-1 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{platformLabel} · {agentLabel}</p>
+                        <p className={workbenchSidebarDescriptionClass}>{platformLabel} · {agentLabel}</p>
                         <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
-                          <span className="rounded-full bg-surface-3/80 px-2 py-0.5 uppercase">{channel.connectionMode}</span>
-                          <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{channel.messageCount} {t('channels.messages', 'messages')}</span>
-                          {channel.autoReply && <span className="rounded-full bg-surface-3/80 px-2 py-0.5">{t('channels.autoReply', 'Auto Reply')}</span>}
+                          <span className={`${workbenchSidebarPillClass} uppercase`}>{channel.connectionMode}</span>
+                          <span className={workbenchSidebarPillClass}>{channel.messageCount} {t('channels.messages', 'messages')}</span>
+                          {channel.autoReply && <span className={workbenchSidebarPillClass}>{t('channels.autoReply', 'Auto Reply')}</span>}
                         </div>
                         <div className="mt-2 text-[10px] text-text-muted/70">{channel.lastMessageAt ? `${t('channels.lastSeen', 'Last seen')}: ${formatChannelRelativeTime(channel.lastMessageAt, locale)}` : t('channels.noActivityYet', 'No activity yet')}</div>
                       </div>
@@ -512,7 +513,7 @@ export function ChannelLayout() {
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520}/>
 
       <div className="module-canvas flex-1 min-w-0 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
-        {editingChannel ? (<ChannelEditor key={`${isAdding ? 'new' : 'edit'}-${editingChannel.id}`} channel={editingChannel} agents={agents} isNew={isAdding} onSave={handleSaveChannel} onCancel={handleCancelEdit}/>) : selectedChannel ? (<ChannelDetail key={selectedChannel.id} channel={selectedChannel} agents={agents} webhookUrl={webhookUrls[selectedChannel.id]} serverRunning={serverRunning} onEdit={handleEditChannel} onDelete={handleDeleteChannel} onToggle={handleToggleEnabled} onStartServer={handleStartServer}/>) : (<WorkbenchEmptyState icon={<IconifyIcon name="action-chat" size={30} color="currentColor"/>} title={`${t('channels.selectChannel', 'Select a channel')} ${t('channels.orCreateChannel', 'or create a new one')}`} description={t('channels.selectChannelHint', 'Organize inbound chat surfaces, attach a reply agent, and monitor webhook or stream traffic from one place.')} actions={(<UiButton unstyled type="button" onClick={handleAddChannel} className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover">
+        {editingChannel ? (<ChannelEditor key={`${isAdding ? 'new' : 'edit'}-${editingChannel.id}`} channel={editingChannel} agents={agents} isNew={isAdding} onSave={handleSaveChannel} onCancel={handleCancelEdit}/>) : selectedChannel ? (<ChannelDetail key={selectedChannel.id} channel={selectedChannel} agents={agents} webhookUrl={webhookUrls[selectedChannel.id]} serverRunning={serverRunning} onEdit={handleEditChannel} onDelete={handleDeleteChannel} onToggle={handleToggleEnabled} onStartServer={handleStartServer}/>) : (<WorkbenchEmptyState icon={<IconifyIcon name="action-chat" size={30} color="currentColor"/>} title={`${t('channels.selectChannel', 'Select a channel')} ${t('channels.orCreateChannel', 'or create a new one')}`} description={t('channels.selectChannelHint', 'Organize inbound chat surfaces, attach a reply agent, and monitor webhook or stream traffic from one place.')} actions={(<UiButton unstyled type="button" onClick={handleAddChannel} className={workbenchSidebarPrimaryActionClass}>
                 + {t('common.new', 'New')}
               </UiButton>)}/>)}
       </div>

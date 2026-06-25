@@ -13,6 +13,8 @@ import { TodoProgress } from './TodoProgress';
 import { AgentStateDebug } from '@/components/debug/AgentStateDebug';
 import { exportChat, type ExportFormat } from '@/services/exportUtils';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem, DropdownSection, DropdownHeading, DropdownDivider } from '@/components/catalyst-ui/dropdown';
+import { workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
 const MAX_RENDERED_MESSAGES = 120;
 const BROWSER_STATE_POLL_INTERVAL_MS = 4000;
 function formatRelativeLabel(ts: number, locale = 'en'): string {
@@ -372,61 +374,6 @@ function ModelDropdown({ models, providerNameById, value, onChange, compact = fa
       </div>
     </div>);
 }
-function ChatTabBar() {
-    const { sessions, activeSessionId, openSessionTabs, openSessionTab, closeSessionTab, agents, addSession, selectedModel, selectedAgent } = useAppStore();
-    const { t } = useI18n();
-    const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions]);
-    const chatSessionIds = useMemo(() => new Set(chatSessions.map((session) => session.id)), [chatSessions]);
-    const handleNewTab = () => {
-        if (!selectedModel) {
-            toast.warning(t('chat.noModelConfigured', 'No model configured'), t('chat.addModelFirst', 'Please add a model provider in Models settings first.'));
-            return;
-        }
-        const session: Session = {
-            id: generateId('session'),
-            title: t('chat.newChat', 'New Chat'),
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-            agentId: selectedAgent?.id,
-            modelId: selectedModel?.id,
-            messages: [],
-        };
-        addSession(session);
-    };
-    return (<div className="px-5 pt-4 xl:px-6">
-      <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-border-subtle/55 bg-surface-1/72 p-1.5 shadow-sm backdrop-blur-xl">
-        <span className="pl-2 pr-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">
-          {t('chat.tabs', 'Tabs')}
-        </span>
-
-        {openSessionTabs.filter((tabId) => chatSessionIds.has(tabId)).map((tabId) => {
-            const session = chatSessions.find((item) => item.id === tabId);
-            if (!session)
-                return null;
-            const isActive = activeSessionId === tabId;
-            const agent = session.agentId ? agents.find((item) => item.id === session.agentId) : null;
-            return (<div key={tabId} className={`group flex max-w-60 shrink-0 items-center rounded-xl border transition-all duration-200 ${isActive
-                    ? 'border-accent/22 bg-accent/10 text-text-primary shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.08)]'
-                    : 'border-transparent bg-transparent text-text-muted hover:border-border-subtle/55 hover:bg-surface-0/48 hover:text-text-secondary'}`}>
-              <UiButton unstyled type="button" onClick={() => openSessionTab(tabId)} aria-current={isActive ? 'page' : undefined} className="min-w-0 flex flex-1 items-center gap-2 px-3 py-2 text-left focus:outline-none">
-                {agent && <span className="text-[10px]"><AgentAvatar avatar={agent.avatar} size={14}/></span>}
-                <span className="truncate text-[12.5px] font-medium">{session.title}</span>
-              </UiButton>
-              <UiButton unstyled type="button" title={t('chat.closeTab', 'Close tab')} aria-label={`${t('chat.closeTab', 'Close tab')}: ${session.title}`} onClick={(e) => {
-                    e.stopPropagation();
-                    closeSessionTab(tabId);
-                }} className="mr-1.5 flex h-7 w-7 items-center justify-center rounded-lg text-text-muted/60 transition-colors hover:bg-danger/10 hover:text-danger">
-                <IconifyIcon name="ui-close" size={15} color="currentColor"/>
-              </UiButton>
-            </div>);
-        })}
-
-        <UiButton unstyled type="button" onClick={handleNewTab} title={t('chat.newTab', 'New chat tab')} aria-label={t('chat.newTab', 'New chat tab')} className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle/50 bg-surface-0/55 text-text-muted transition-all hover:border-accent/18 hover:bg-accent/10 hover:text-accent">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </UiButton>
-      </div>
-    </div>);
-}
 function AgentDropdown({ agents, selectedAgentId, onSelect, compact = false }: {
     agents: Agent[];
     selectedAgentId: string;
@@ -566,19 +513,15 @@ function getCurrentChatSession() {
     return state.sessions.find((session) => session.id === state.activeSessionId) ?? null;
 }
 export function ChatMain() {
-    const { sessions, activeSessionId, openSessionTabs, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, setActiveSession, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore();
+    const { sessions, activeSessionId, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, setActiveSession, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore();
     const { t, locale } = useI18n();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const isNearBottomRef = useRef(true);
     const [showDebug, setShowDebug] = useState(false);
-    const [showExportMenu, setShowExportMenu] = useState(false);
     const [isExportingChat, setIsExportingChat] = useState(false);
     const [showScrollToTop, setShowScrollToTop] = useState(false);
     const [showScrollToBottom, setShowScrollToBottom] = useState(false);
-    const exportMenuRef = useRef<HTMLDivElement>(null);
-    const exportMenuPanelRef = useRef<HTMLDivElement>(null);
-    const [exportMenuPlacement, setExportMenuPlacement] = useState<'top' | 'bottom'>('bottom');
     const { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat();
     const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions]);
     const chatSessionIds = useMemo(() => new Set(chatSessions.map((session) => session.id)), [chatSessions]);
@@ -794,7 +737,6 @@ export function ChatMain() {
     const handleExportChat = useCallback(async (format: ExportFormat, scope: 'all' | 'single', singleMessageId?: string) => {
         if (!activeSession)
             return;
-        setShowExportMenu(false);
         setIsExportingChat(true);
         try {
             const result = await exportChat({
@@ -804,9 +746,15 @@ export function ChatMain() {
                 scope,
                 singleMessageId,
             });
-            if (!result.success && result.message) {
+              if (result.success) {
+                toast.success(t('chat.exportSucceeded', 'Export complete'), t('chat.exportSucceededBody', 'Your file was prepared successfully.'));
+              }
+              else if (result.message) {
                 toast.error(t('chat.exportFailed', 'Export failed'), result.message);
             }
+              else {
+                toast.info(t('chat.exportCanceled', 'Export canceled'), t('chat.exportCanceledBody', 'The export was canceled before a file was written.'));
+              }
         }
         catch (err) {
             toast.error(t('chat.exportFailed', 'Export failed'), err instanceof Error ? err.message : String(err));
@@ -828,71 +776,47 @@ export function ChatMain() {
         {t('common.clear', 'Clear')}
       </UiButton>
 
-      <div className="relative" ref={exportMenuRef}>
-        <UiButton unstyled type="button" onClick={() => setShowExportMenu((v) => !v)} disabled={isExportingChat} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent disabled:opacity-35">
+      <Dropdown>
+        <DropdownButton as="button" type="button" disabled={isExportingChat} className="inline-flex min-h-9 items-center justify-center gap-2 rounded-md border border-border-subtle/45 bg-surface-0/42 px-3 text-[12px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent disabled:opacity-35">
           <IconifyIcon name="ui-export" size={15} color="currentColor"/>
           {isExportingChat ? t('common.exporting', 'Exporting…') : t('chat.exportConversation', 'Export')}
-        </UiButton>
-        {showExportMenu && (<div ref={exportMenuPanelRef} className={`absolute right-0 z-50 w-56 max-h-96 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl ${exportMenuPlacement === 'top' ? 'bottom-full mb-1.5' : 'top-full mt-1.5'}`}>
-            <div className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportAllMessages', '完整对话')}</div>
+        </DropdownButton>
+        <DropdownMenu anchor="top end" className="w-56 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
+          <DropdownSection>
+            <DropdownHeading className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportAllMessages', '完整对话')}</DropdownHeading>
             {([
+              { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
+              { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
+              { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
+            ]).map(({ format, label }) => (<DropdownItem key={format} onClick={() => void handleExportChat(format, 'all')} className="px-3.5 py-2.5 text-[12px] text-text-secondary">
+              <div className="col-span-full flex items-center gap-2.5">
+                <IconifyIcon name="ui-file" size={13} color="currentColor"/>
+                {label}
+              </div>
+            </DropdownItem>))}
+          </DropdownSection>
+          {(() => {
+            const lastAiMsg = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isStreaming && m.content.trim());
+            if (!lastAiMsg)
+              return null;
+            return (<DropdownSection>
+              <DropdownDivider/>
+              <DropdownHeading className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportLatestReply', '最新回复')}</DropdownHeading>
+              {([
                 { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
                 { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
                 { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
-            ]).map(({ format, label }) => (<UiButton unstyled key={format} type="button" onClick={() => void handleExportChat(format, 'all')} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary">
-                <IconifyIcon name="ui-file" size={13} color="currentColor"/>
-                {label}
-              </UiButton>))}
-            {(() => {
-                const lastAiMsg = [...messages].reverse().find((m) => m.role === 'assistant' && !m.isStreaming && m.content.trim());
-                if (!lastAiMsg)
-                    return null;
-                return (<>
-                  <div className="mt-1 border-t border-border-subtle/55 px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportLatestReply', '最新回复')}</div>
-                  {([
-                        { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
-                        { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
-                        { format: 'docx' as ExportFormat, label: 'Word (.docx)' },
-                    ]).map(({ format, label }) => (<UiButton unstyled key={`single-${format}`} type="button" onClick={() => void handleExportChat(format, 'single', lastAiMsg.id)} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary">
-                      <IconifyIcon name="ui-file" size={13} color="currentColor"/>
-                      {label}
-                    </UiButton>))}
-                </>);
-            })()}
-          </div>)}
-      </div>
+              ]).map(({ format, label }) => (<DropdownItem key={`single-${format}`} onClick={() => void handleExportChat(format, 'single', lastAiMsg.id)} className="px-3.5 py-2.5 text-[12px] text-text-secondary">
+                <div className="col-span-full flex items-center gap-2.5">
+                  <IconifyIcon name="ui-file" size={13} color="currentColor"/>
+                  {label}
+                </div>
+              </DropdownItem>))}
+            </DropdownSection>);
+          })()}
+        </DropdownMenu>
+      </Dropdown>
     </>) : null;
-    useEffect(() => {
-        if (!showExportMenu)
-            return;
-        const handler = (e: MouseEvent) => {
-            if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
-                setShowExportMenu(false);
-            }
-        };
-        document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [showExportMenu]);
-    useEffect(() => {
-        if (!showExportMenu)
-            return;
-        const updatePlacement = () => {
-            const triggerRect = exportMenuRef.current?.getBoundingClientRect();
-            const menuHeight = Math.min(exportMenuPanelRef.current?.scrollHeight ?? 0, 384) || 260;
-            if (!triggerRect)
-                return;
-            const spaceBelow = window.innerHeight - triggerRect.bottom;
-            const spaceAbove = triggerRect.top;
-            setExportMenuPlacement(spaceBelow < menuHeight && spaceAbove > spaceBelow ? 'top' : 'bottom');
-        };
-        updatePlacement();
-        window.addEventListener('resize', updatePlacement);
-        window.addEventListener('scroll', updatePlacement, true);
-        return () => {
-            window.removeEventListener('resize', updatePlacement);
-            window.removeEventListener('scroll', updatePlacement, true);
-        };
-    }, [showExportMenu]);
     if (!activeSession) {
         return (<div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
         <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 py-5 xl:px-6">
@@ -919,7 +843,7 @@ export function ChatMain() {
             <section className="rounded-md border border-border-subtle/35 bg-surface-1/22 p-3 xl:p-4">
               <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
                 <div className="max-w-2xl">
-                  <div className="font-display text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.startHere', '开始处理')}</div>
+                  <div className={workbenchSectionEyebrowClass}>{t('chat.startHere', '开始处理')}</div>
                   <h2 className="mt-1 text-[18px] font-semibold text-text-primary">{t('chat.mainPrompt', '选择一个会话，或从下方输入框发起新的内部任务。')}</h2>
                   <p className="mt-1 text-[12.5px] leading-5 text-text-secondary/78">{t('chat.welcomeBody', '选择智能体与模型后，可以进行知识解释、文档撰写、代码分析或任务拆解，所有上下文都保留在当前工作区。')}</p>
                 </div>
@@ -948,13 +872,11 @@ export function ChatMain() {
       </div>);
     }
     return (<div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
-      {openSessionTabs.length > 1 && <ChatTabBar />}
-
       <div ref={messagesContainerRef} onScroll={handleScroll} aria-label={t('chat.messagesAria', 'Chat messages')} aria-live="polite" className="module-canvas min-h-0 flex-1 overflow-y-auto">
         <div className="sticky top-0 z-20 border-b border-border-subtle/45 bg-surface-0/94 px-5 py-3 xl:px-6">
           <div className="mx-auto max-w-384">
             <div className="min-w-0 max-w-3xl">
-              <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.liveSession', '当前会话')}</div>
+              <div className={workbenchSectionEyebrowClass}>{t('chat.liveSession', '当前会话')}</div>
               <h1 className="mt-1 truncate text-[20px] font-semibold text-text-primary">{activeSession.title}</h1>
               <p className="mt-1 line-clamp-1 max-w-2xl text-[12px] leading-5 text-text-secondary/76">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -976,7 +898,7 @@ export function ChatMain() {
                       <AgentAvatar avatar={sessionAgent?.avatar ?? 'ui-sparkles'} size={32}/>
                     </div>
                     <div className="mt-4 max-w-2xl">
-                      <div className="font-display text-[10px] font-semibold uppercase tracking-[0.18em] text-text-muted/45">{t('chat.readyWhenYouAre', '就绪')}</div>
+                      <div className={workbenchSectionEyebrowClass}>{t('chat.readyWhenYouAre', '就绪')}</div>
                       <h2 className="mt-1.5 text-[22px] font-semibold text-text-primary">{displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')}</h2>
                       <p className="mt-2 text-[13px] leading-5 text-text-secondary/78">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
                     </div>

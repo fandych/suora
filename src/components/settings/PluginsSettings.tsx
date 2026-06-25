@@ -66,24 +66,20 @@ function PluginIcon({ icon }: {
     }
     return <IconifyIcon name="ui-plugin" size={20} color="currentColor"/>;
 }
-function ConfigFieldControl({ fieldKey, field, value, onChange, t, }: {
+function ConfigFieldControl({ fieldKey, field, value, onChange }: {
     fieldKey: string;
     field: PluginConfigField;
     value: unknown;
     onChange: (value: unknown) => void;
-    t: (key: string, fallback: string) => string;
 }) {
     const resolvedValue = value ?? field.default;
     return (<div className={PANEL_CARD_CLASS}>
       <label className="block text-[12px] font-medium text-text-primary">{field.label || fieldKey}</label>
       {field.description && <p className="mt-1 text-[11px] leading-5 text-text-muted">{field.description}</p>}
       <div className="mt-3">
-        {field.type === 'string' && (<UiInput value={String(resolvedValue ?? '')} onChange={(event) => onChange(event.target.value)} aria-label={field.label || fieldKey}/>)}
-        {field.type === 'number' && (<UiInput type="number" value={Number(resolvedValue ?? 0)} onChange={(event) => onChange(Number(event.target.value))} aria-label={field.label || fieldKey}/>)}
-        {field.type === 'boolean' && (<UiButton unstyled type="button" onClick={() => onChange(!Boolean(resolvedValue))} className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition-colors ${resolvedValue ? 'border-green-500/18 bg-green-500/10 text-green-400 hover:bg-green-500/16' : 'border-border-subtle/55 bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}>
-            {resolvedValue ? t('settings.enabled', 'Enabled') : t('settings.disabled', 'Disabled')}
-          </UiButton>)}
-        {field.type === 'select' && field.options && (<UiSelect value={String(resolvedValue ?? '')} onChange={(event) => onChange(event.target.value)} aria-label={field.label || fieldKey}>
+        {field.type === 'string' && (<UiInput value={String(resolvedValue ?? '')} onChange={(event) => onChange(event.target.value)} aria-label={field.label || fieldKey} wrapperClassName="w-full"/>)}
+        {field.type === 'number' && (<UiInput type="number" value={Number(resolvedValue ?? 0)} onChange={(event) => onChange(Number(event.target.value))} aria-label={field.label || fieldKey} wrapperClassName="w-full"/>)}
+        {field.type === 'select' && field.options && (<UiSelect value={String(resolvedValue ?? '')} onChange={(event) => onChange(event.target.value)} aria-label={field.label || fieldKey} wrapperClassName="w-full">
             {field.options.map((option) => (<option key={String(option.value)} value={String(option.value)}>{option.label}</option>))}
           </UiSelect>)}
       </div>
@@ -273,7 +269,7 @@ export function PluginsSettings() {
 
                 {marketplace.source === 'private' && (<div className="mt-4">
                     <label className="mb-2 block text-[12px] font-medium text-text-muted">{t('settings.privateMarketUrl', 'Private Market URL')}</label>
-                    <UiInput value={marketplace.privateUrl} onChange={(event) => setMarketplace({ privateUrl: event.target.value })} placeholder="https://your-company.example.com/plugins.json"/>
+                  <UiInput value={marketplace.privateUrl} onChange={(event) => setMarketplace({ privateUrl: event.target.value })} placeholder="https://your-company.example.com/plugins.json" wrapperClassName="w-full"/>
                   </div>)}
               </div>
 
@@ -326,7 +322,7 @@ export function PluginsSettings() {
                         </div>);
                 })}
                   </div>) : (<div className="mt-5 space-y-3">
-                    <UiTextArea value={jsonInput} onChange={(event) => setJsonInput(event.target.value)} placeholder={'{\n  "id": "my-plugin",\n  "name": "My Plugin",\n  "version": "1.0.0",\n  "hooks": ["afterResponse"],\n  "permissions": ["messages:read"]\n}'} className={`h-44 font-mono text-xs`}/>
+                    <UiTextArea value={jsonInput} onChange={(event) => setJsonInput(event.target.value)} placeholder={'{\n  "id": "my-plugin",\n  "name": "My Plugin",\n  "version": "1.0.0",\n  "hooks": ["afterResponse"],\n  "permissions": ["messages:read"]\n}'} controlClassName="h-44 font-mono text-xs"/>
                     {jsonError && <div className="rounded-2xl border border-red-500/18 bg-red-500/8 px-4 py-3 text-[12px] leading-6 text-red-400">{jsonError}</div>}
                     <div className="flex justify-end">
                       <UiButton unstyled type="button" onClick={() => void installFromJson()} className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover">
@@ -421,11 +417,11 @@ export function PluginsSettings() {
       {pluginTab === 'marketplace' && (<>
           <SettingsSection eyebrow={t('settings.marketplace', 'Marketplace')} title={t('settings.discoverPlugins', 'Discover Plugins')} description={t('settings.discoverPluginsHint', 'Filter the bundled plugin marketplace by keyword, category, and ranking to find the next extension worth enabling.')}>
             <div className="grid gap-3 lg:grid-cols-[1.2fr_0.7fr_0.5fr]">
-              <UiInput value={marketplaceSearch} onChange={(event) => setMarketplaceSearch(event.target.value)} placeholder={t('settings.searchPlugins', 'Search plugins...')}/>
-              <UiSelect value={marketplaceCategory} onChange={(event) => setMarketplaceCategory(event.target.value)} title={t('settings.categoryFilter', 'Category filter')}>
+              <UiInput value={marketplaceSearch} onChange={(event) => setMarketplaceSearch(event.target.value)} placeholder={t('settings.searchPlugins', 'Search plugins...')} wrapperClassName="w-full"/>
+              <UiSelect value={marketplaceCategory} onChange={(event) => setMarketplaceCategory(event.target.value)} title={t('settings.categoryFilter', 'Category filter')} wrapperClassName="w-full">
                 {MARKETPLACE_CATEGORIES.map((category) => (<option key={category || 'all'} value={category}>{getMarketplaceCategoryLabel(category)}</option>))}
               </UiSelect>
-              <UiSelect value={sortBy} onChange={(event) => setSortBy(event.target.value as 'downloads' | 'rating' | 'name')} title={t('settings.sortBy', 'Sort by')}>
+              <UiSelect value={sortBy} onChange={(event) => setSortBy(event.target.value as 'downloads' | 'rating' | 'name')} title={t('settings.sortBy', 'Sort by')} wrapperClassName="w-full">
                 <option value="downloads">{t('settings.downloads', 'Downloads')}</option>
                 <option value="rating">{t('settings.rating', 'Rating')}</option>
                 <option value="name">{t('settings.name', 'Name')}</option>
@@ -503,7 +499,7 @@ export function PluginsSettings() {
           </div>
 
           <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            {Object.entries(configPlugin.configSchema).map(([fieldKey, field]) => (<ConfigFieldControl key={fieldKey} fieldKey={fieldKey} field={field} value={configValues[fieldKey]} onChange={(value) => setConfigValues({ ...configValues, [fieldKey]: value })} t={t}/>))}
+            {Object.entries(configPlugin.configSchema).map(([fieldKey, field]) => (<ConfigFieldControl key={fieldKey} fieldKey={fieldKey} field={field} value={configValues[fieldKey]} onChange={(value) => setConfigValues({ ...configValues, [fieldKey]: value })}/>))}
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">

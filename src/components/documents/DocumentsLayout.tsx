@@ -21,6 +21,8 @@ import { DocumentsAssistantDrawer } from '@/components/documents/DocumentsAssist
 import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions';
 import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
 import { Button as UiButton } from '@/components/catalyst-ui/button';
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/catalyst-ui/dropdown';
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 import { confirm } from '@/services/confirmDialog';
 import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus';
 import { exportDocument, type ExportFormat } from '@/services/exportUtils';
@@ -408,43 +410,17 @@ function TreeActionMenu({ label, actions, }: {
         tone?: 'default' | 'danger';
     }>;
 }) {
-    const [open, setOpen] = useState(false);
-    const menuRef = useRef<HTMLDivElement | null>(null);
-    useEffect(() => {
-        if (!open)
-            return;
-        const handlePointerDown = (event: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-                setOpen(false);
-            }
-        };
-        const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-            if (event.key === 'Escape')
-                setOpen(false);
-        };
-        window.addEventListener('mousedown', handlePointerDown);
-        window.addEventListener('keydown', handleKeyDown);
-        return () => {
-            window.removeEventListener('mousedown', handlePointerDown);
-            window.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [open]);
-    return (<div ref={menuRef} className="relative shrink-0">
-      <UiButton unstyled type="button" aria-label={`More actions: ${label}`} aria-haspopup="menu" onClick={(event) => {
-            event.stopPropagation();
-            setOpen((current) => !current);
-        }} className="flex h-6 min-w-6 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/72 px-1.5 text-[11px] font-semibold leading-none text-text-muted transition-colors hover:text-text-primary">
-        ...
-      </UiButton>
-      {open && (<div role="menu" className="absolute right-0 top-[calc(100%+0.25rem)] z-30 min-w-40 overflow-hidden rounded-2xl border border-border-subtle/60 bg-surface-1/98 p-1 shadow-[0_18px_48px_rgba(15,23,42,0.24)]">
-          {actions.map((action) => (<UiButton unstyled key={action.key} type="button" role="menuitem" onClick={(event) => {
-                    event.stopPropagation();
-                    setOpen(false);
-                    action.onSelect();
-                }} className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-[12px] transition-colors ${action.tone === 'danger' ? 'text-danger hover:bg-danger/10' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
+    return (<div className="relative shrink-0">
+      <Dropdown>
+        <DropdownButton as="button" type="button" aria-label={`More actions: ${label}`} aria-haspopup="menu" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="flex h-6 min-w-6 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/72 px-1.5 text-[11px] font-semibold leading-none text-text-muted transition-colors hover:text-text-primary">
+          ...
+        </DropdownButton>
+        <DropdownMenu anchor="bottom end" className="min-w-40 overflow-hidden rounded-2xl border border-border-subtle/60 bg-surface-1/98 p-1 shadow-[0_18px_48px_rgba(15,23,42,0.24)] backdrop-blur-xl">
+          {actions.map((action) => (<DropdownItem key={action.key} onClick={() => action.onSelect()} className={`rounded-xl px-3 py-2 text-[12px] ${action.tone === 'danger' ? 'text-danger' : 'text-text-secondary'}`}>
               {action.label}
-            </UiButton>))}
-        </div>)}
+            </DropdownItem>))}
+        </DropdownMenu>
+      </Dropdown>
     </div>);
 }
 function TreeNode({ node, childrenByParent, selectedDocumentId, selectedFolderId, editingNodeId, editingTitle, expanded, onToggle, onSelectDocument, onSelectFolder, onStartRename, onEditingTitleChange, onCommitRename, onCancelRename, onCreateDocument, onCreateFolder, onDeleteNode, }: {
@@ -486,7 +462,7 @@ function TreeNode({ node, childrenByParent, selectedDocumentId, selectedFolderId
                     onCommitRename();
                 if (event.key === 'Escape')
                     onCancelRename();
-            }} aria-label={t('documents.nodeName', 'Document or folder name')} className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"/>
+            }} aria-label={t('documents.nodeName', 'Document or folder name')} wrapperClassName="min-w-0 flex-1" controlClassName="rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary"/>
             <UiButton unstyled type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCommitRename} aria-label={t('documents.saveNodeName', 'Save name')} title={t('common.save', 'Save')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success transition-colors hover:bg-success/15">
               <IconifyIcon name="ui-check" size={14} color="currentColor"/>
             </UiButton>
@@ -594,7 +570,7 @@ function GroupTreeNode({ group, children, documentCount, isActive, isExpanded, e
                     onCommitRenameGroup();
                 if (event.key === 'Escape')
                     onCancelRenameGroup();
-            }} className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20" aria-label={t('documents.groupName', 'Group name')}/>
+            }} wrapperClassName="min-w-0 flex-1" controlClassName="rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary" aria-label={t('documents.groupName', 'Group name')}/>
             <UiButton unstyled type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCommitRenameGroup} title={t('common.save', 'Save')} aria-label={t('documents.saveGroupName', 'Save group name')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success hover:bg-success/15">
               <IconifyIcon name="ui-check" size={14} color="currentColor"/>
             </UiButton>
@@ -799,7 +775,7 @@ function DocumentTitleInput({ document, onUpdate, ariaLabel }: {
 }) {
     const handleFlush = useCallback((next: string) => onUpdate(next), [onUpdate]);
     const [value, setValue, flushNow] = useDebouncedSync(document.title, document.id, handleFlush);
-    return (<UiInput value={value} onChange={(event) => setValue(event.target.value)} onBlur={flushNow} aria-label={ariaLabel} className="w-full bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary outline-none placeholder:text-text-muted"/>);
+    return (<UiInput value={value} onChange={(event) => setValue(event.target.value)} onBlur={flushNow} aria-label={ariaLabel} wrapperClassName="w-full" controlClassName="bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary placeholder:text-text-muted"/>);
 }
 function DocumentSourceTextarea({ document, onUpdate, spellCheck, placeholder, kindLabel, extension, }: {
     document: DocumentItem;
@@ -847,7 +823,7 @@ function DocumentSourceTextarea({ document, onUpdate, spellCheck, placeholder, k
           <span className="hidden rounded-lg bg-surface-2/60 px-2 py-0.5 text-text-muted/80 sm:inline">{t('documents.sourceHint', 'Tab indents · Ctrl/Cmd+S saves')}</span>
         </div>
       </div>
-      <UiTextArea ref={textareaRef} value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={handleKeyDown} onBlur={flushNow} spellCheck={spellCheck} aria-label={t('documents.sourceEditor', 'Source editor')} className="min-h-0 flex-1 resize-none bg-transparent p-5 font-(--font-code) text-[13px] leading-7 text-text-primary outline-none placeholder:text-text-muted" placeholder={placeholder}/>
+    <UiTextArea ref={textareaRef} value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={handleKeyDown} onBlur={flushNow} spellCheck={spellCheck} aria-label={t('documents.sourceEditor', 'Source editor')} wrapperClassName="min-h-0 flex-1" controlClassName="h-full resize-none bg-transparent p-5 font-(--font-code) text-[13px] leading-7 text-text-primary placeholder:text-text-muted" placeholder={placeholder}/>
     </div>);
 }
 export function DocumentsLayout() {
@@ -855,7 +831,7 @@ export function DocumentsLayout() {
     const watcherPathsRef = useRef<Set<string>>(new Set());
     const rehydrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const rehydrateInFlightRef = useRef<Promise<void> | null>(null);
-    const [panelWidth, setPanelWidth] = useResizablePanel('documents', 310);
+    const [panelWidth, setPanelWidth] = useResizablePanel('documents', 360);
     const [query, setQuery] = useState('');
     const deferredQuery = useDeferredValue(query);
     const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
@@ -1395,39 +1371,39 @@ export function DocumentsLayout() {
       </div>
     </div>) : null;
     return (<div className="flex min-h-0 min-w-0 flex-1">
-      <SidePanel title={t('documents.title', 'Documents')} width={panelWidth} action={<div className="flex items-center gap-2">
-            <UiButton unstyled type="button" onClick={openAssistantCreate} className="rounded-xl bg-accent px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-accent-hover">
+            <SidePanel title={t('documents.title', 'Documents')} width={panelWidth} action={<div className="flex items-center gap-2">
+                        <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarPrimaryActionClass}>
               {t('timer.aiCreate', 'AI Create')}
             </UiButton>
-            <UiButton unstyled type="button" onClick={createGroup} className="rounded-xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/25">
+                        <UiButton unstyled type="button" onClick={createGroup} className={workbenchSidebarAccentActionClass}>
               {t('documents.addGroup', '+ Group')}
             </UiButton>
           </div>}>
-        <div className="flex h-full min-h-0 flex-col gap-0 px-3 py-3">
+                <div className="module-sidebar-stack flex h-full min-h-0 flex-col gap-0 px-3 py-3">
           {/* Search */}
-          <div className="mb-3 rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3">
+                    <div className={`mb-3 ${workbenchSidebarCardClass}`}>
             <div className="relative">
               <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55"/>
-              <UiInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('documents.searchPlaceholder', 'Progressively search markdown…')} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-3 text-[12px] text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"/>
+                                                        <UiInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('documents.searchPlaceholder', 'Progressively search markdown…')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass.replace('pr-10', 'pr-3')}/>
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+                        <div className={workbenchSidebarMetaClass}>
               <span>{searchResults.length} {t('common.results', 'results')}</span>
               <span>{totalDocumentCount} {t('documents.docs', 'docs')}</span>
             </div>
           </div>
 
           <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {documentGroups.length === 0 ? (<UiButton unstyled type="button" onClick={createGroup} className="w-full rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-8 text-center text-[12px] text-text-muted hover:border-accent/30 hover:text-accent">
+                        {documentGroups.length === 0 ? (<UiButton unstyled type="button" onClick={createGroup} className={`${workbenchSidebarEmptyClass} w-full hover:border-accent/30 hover:text-accent`}>
                 {t('documents.emptyGroups', 'Create your first document group')}
               </UiButton>) : (<div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
                 {query.trim() ? (<div className="space-y-2">
-                    {searchResults.map(({ node, excerpt, matchedFields, path }) => (<UiButton unstyled key={node.id} type="button" onClick={() => openDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
-                        <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
+                                        {searchResults.map(({ node, excerpt, matchedFields, path }) => (<UiButton unstyled key={node.id} type="button" onClick={() => openDocument(node.id)} className={workbenchSidebarItemClass(false, 'border-border-subtle/55 bg-surface-0/35 text-text-secondary hover:border-accent/25 hover:bg-accent/8')}>
+                                                <div className={workbenchSidebarTitleClass}>{node.title}</div>
                         <div className="mt-1 truncate text-[10px] text-text-muted">{groupNameById.get(node.groupId) ?? t('documents.groups', 'Groups')} / {path || buildDocumentPath(node, documentNodes, documentNodeById)}</div>
                         <div className="mt-2 flex flex-wrap gap-1">
                           {matchedFields.slice(0, 3).map((field) => (<span key={field} className="rounded-full border border-accent/15 bg-accent/8 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-accent/90">{field}</span>))}
                         </div>
-                        <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
+                                                <p className={workbenchSidebarDescriptionClass}>{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
                       </UiButton>))}
                   </div>) : (<div className="space-y-0.5">
                     {documentGroups.map((group) => (<GroupTreeNode key={group.id} group={group} children={rootNodesByGroupId.get(group.id) ?? EMPTY_DOCUMENT_CHILDREN} documentCount={documentCountByGroupId.get(group.id) ?? 0} isActive={activeGroupId === group.id} isExpanded={expanded.has(group.id)} editingGroupId={editingGroupId} editingGroupName={editingGroupName} childrenByParent={childrenByParent} selectedDocumentId={selectedDocumentId} selectedFolderId={selectedFolderId} editingNodeId={editingNodeId} editingTitle={editingTitle} expanded={expanded} onToggle={toggleExpanded} onSelectGroup={selectGroup} onStartRenameGroup={startRenameGroup} onEditingGroupNameChange={setEditingGroupName} onCommitRenameGroup={commitRenameGroup} onCancelRenameGroup={cancelRenameGroup} onSelectDocument={openDocument} onSelectFolder={focusFolder} onStartRenameNode={startRenameNode} onEditingTitleChange={setEditingTitle} onCommitRenameNode={commitRenameNode} onCancelRenameNode={cancelRenameNode} onCreateDocument={createDoc} onCreateFolder={createFolder} onDeleteNode={deleteNode} onDeleteGroup={deleteGroup}/>))}
@@ -1447,10 +1423,10 @@ export function DocumentsLayout() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <UiButton unstyled type="button" onClick={openAssistantCreate} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15">
+                                <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarSubtleActionClass}>
                   {t('timer.aiCreate', 'AI Create')}
                 </UiButton>
-                <UiButton unstyled type="button" onClick={() => openAssistantEdit(activeDocument.id)} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15">
+                                <UiButton unstyled type="button" onClick={() => openAssistantEdit(activeDocument.id)} className={workbenchSidebarSubtleActionClass}>
                   {t('timer.aiEditCurrent', 'AI Edit')}
                 </UiButton>
                 <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2.5 py-1 text-[10px] font-semibold text-text-muted">
@@ -1465,7 +1441,7 @@ export function DocumentsLayout() {
                       </UiButton>);
             })}
                 </div>
-                <UiButton unstyled type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
+                                <UiButton unstyled type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className={`${workbenchSidebarSubtleActionClass} disabled:cursor-not-allowed disabled:opacity-60`}>
                   {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
                 </UiButton>
                 <div className="relative" ref={docExportMenuRef}>
@@ -1684,7 +1660,7 @@ export function DocumentsLayout() {
                         <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.exportCorpus', 'Export Corpus')}</h3>
                         <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.exportCorpusHint', 'Write this group into a local corpus folder for later Graphify CLI and MCP use. No Python is required for this export.')}</p>
                       </div>
-                      <UiButton unstyled type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
+                                            <UiButton unstyled type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className={`${workbenchSidebarSubtleActionClass} disabled:cursor-not-allowed disabled:opacity-60`}>
                         {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
                       </UiButton>
                     </div>
@@ -1745,10 +1721,10 @@ export function DocumentsLayout() {
             </div>
           </div>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
             <WorkbenchEmptyState icon={<IconifyIcon name="skill-code-review" size={26} color="currentColor"/>} title={t('documents.emptyTitle', 'Build a document knowledge space')} description={t('documents.emptyBody', 'Create document groups, nest folders freely, write Markdown, resolve references, and find notes progressively as you type.')} actions={(<div className="flex flex-wrap items-center justify-center gap-3">
-                  <UiButton unstyled type="button" onClick={openAssistantCreate} className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover">
+                                    <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarPrimaryActionClass}>
                     {t('timer.aiCreate', 'AI Create')}
                   </UiButton>
-                  <UiButton unstyled type="button" onClick={createGroup} className="rounded-2xl border border-border-subtle/55 bg-surface-0/62 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-all hover:border-accent/20 hover:bg-accent/8 hover:text-accent">
+                                    <UiButton unstyled type="button" onClick={createGroup} className={workbenchSidebarSubtleActionClass}>
                     {t('documents.addGroup', '+ Group')}
                   </UiButton>
                 </div>)}/>

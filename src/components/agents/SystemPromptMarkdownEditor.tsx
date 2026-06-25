@@ -100,7 +100,7 @@ export function SystemPromptMarkdownEditor({ value, onChange, placeholder, rows 
         </div>
       </div>
 
-      {mode === 'write' ? (<UiTextArea ref={textareaRef} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} rows={rows} className="w-full resize-y bg-transparent px-4 py-4 font-mono text-sm leading-7 text-text-primary placeholder-text-muted focus:outline-none"/>) : (<div className="max-h-120 min-h-64 overflow-auto px-4 py-4 text-sm text-text-primary">
+    {mode === 'write' ? (<UiTextArea ref={textareaRef} value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} rows={rows} wrapperClassName="w-full" controlClassName="resize-y bg-transparent px-4 py-4 font-mono text-sm leading-7 text-text-primary placeholder:text-text-muted"/>) : (<div className="max-h-120 min-h-64 overflow-auto px-4 py-4 text-sm text-text-primary">
           {value.trim() ? (<div className="markdown-body">
               <MarkdownContent content={value}/>
             </div>) : (<div className="flex min-h-52 items-center justify-center rounded-2xl border border-dashed border-border-subtle text-xs text-text-muted">
