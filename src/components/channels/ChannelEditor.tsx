@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+﻿import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { IconPicker } from '@/components/icons/IconPicker';
 import { useI18n } from '@/hooks/useI18n';
@@ -151,6 +151,8 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
         dataUrl: string;
     } | null>(null);
     const [wechatQrPreviewResolvingSource, setWechatQrPreviewResolvingSource] = useState('');
+    const [wechatQrImageLoaded, setWechatQrImageLoaded] = useState(false);
+    const [showWechatAdvanced, setShowWechatAdvanced] = useState(true);
     const isValid = draft.name.trim().length > 0;
     const selectableAgents = useMemo(() => agents.filter((agent) => agent.enabled !== false || agent.id === draft.replyAgentId), [agents, draft.replyAgentId]);
     const platformLabel = draft.platform === 'custom'
@@ -170,6 +172,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
             return current.source === normalizedWeChatQrSource ? current : null;
         });
         setWechatQrPreviewResolvingSource((current) => (current === normalizedWeChatQrSource ? current : ''));
+        setWechatQrImageLoaded(false);
     }, [normalizedWeChatQrSource]);
     const handleSave = () => {
         setSaveError('');
@@ -569,67 +572,88 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
                   </div>)}
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalQrCodeUrl', 'QR Code URL')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalQrCodeUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalQrCodeUrl: event.target.value })} aria-label={t('channels.wechatPersonalQrCodeUrl', 'QR Code URL')} placeholder={t('channels.wechatPersonalQrCodePlaceholder', 'Generated after clicking “Generate QR Code”')} controlClassName={INPUT_CLASS}/>
-                  <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalQrCodeHint', 'Suora fills this with the latest QR image URL so the operator can scan and bind the account.')}</p>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBindingStatus', 'Binding Status')}</span>
-                  <UiSelect value={draft.wechatPersonalBindingStatus || 'unbound'} onChange={(event) => setDraft({ ...draft, wechatPersonalBindingStatus: event.target.value as ChannelConfig['wechatPersonalBindingStatus'] })} aria-label={t('channels.wechatPersonalBindingStatus', 'Binding Status')} controlClassName={INPUT_CLASS}>
-                    <option value="unbound">{t('channels.bindingStatusUnbound', 'Not bound')}</option>
-                    <option value="pending">{t('channels.bindingStatusPending', 'Waiting for scan')}</option>
-                    <option value="bound">{t('channels.bindingStatusBound', 'Bound')}</option>
-                  </UiSelect>
-                </label>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBaseUrl', 'API Base URL')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalBaseUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalBaseUrl: event.target.value })} aria-label={t('channels.wechatPersonalBaseUrl', 'API Base URL')} placeholder={t('channels.wechatPersonalBaseUrlPlaceholder', 'Defaults to https://ilinkai.weixin.qq.com')} controlClassName={INPUT_CLASS}/>
-                  <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalBaseUrlHint', 'Override this only if your personal WeChat backend uses a different compatible API host.')}</p>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalAccountId', 'Bound Account ID')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalAccountId || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalAccountId: event.target.value })} aria-label={t('channels.wechatPersonalAccountId', 'Bound Account ID')} placeholder={t('channels.wechatPersonalAccountIdPlaceholder', 'Filled automatically after a successful QR login')} controlClassName={INPUT_CLASS}/>
-                </label>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBotToken', 'Bot Token')}</span>
-                  <UiInput type="password" value={draft.wechatPersonalBotToken || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalBotToken: event.target.value })} aria-label={t('channels.wechatPersonalBotToken', 'Bot Token')} placeholder={t('channels.wechatPersonalBotTokenPlaceholder', 'Filled automatically after a successful QR login')} controlClassName={INPUT_CLASS}/>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalUserId', 'Last User ID')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalUserId || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalUserId: event.target.value })} aria-label={t('channels.wechatPersonalUserId', 'Last User ID')} placeholder={t('channels.wechatPersonalUserIdPlaceholder', 'Filled after the QR login flow reports a user ID')} controlClassName={INPUT_CLASS}/>
-                </label>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')}</span>
-                  <UiInput type="text" value={draft.wechatPersonalWebhookUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalWebhookUrl: event.target.value })} aria-label={t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')} placeholder={t('channels.wechatPersonalWebhookPlaceholder', 'https://bridge.example.com/wechat/send')} controlClassName={INPUT_CLASS}/>
-                  <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalWebhookHint', 'Optional fallback bridge endpoint. Leave blank when you use the built-in QR login flow.')}</p>
-                </label>
-                <label className="block">
-                  <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalAuthToken', 'Bridge Auth Token')}</span>
-                  <UiInput type="password" value={draft.wechatPersonalAuthToken || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalAuthToken: event.target.value })} aria-label={t('channels.wechatPersonalAuthToken', 'Bridge Auth Token')} placeholder={t('channels.wechatPersonalAuthTokenPlaceholder', 'Optional bearer or shared token')} controlClassName={INPUT_CLASS}/>
-                  <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalAuthTokenHint', 'Used only when the optional fallback bridge endpoint requires bearer authentication.')}</p>
-                </label>
-              </div>
-
+              {/* ── QR code preview ── */}
               {draft.wechatPersonalQrCodeUrl ? (<div className="rounded-3xl border border-border-subtle/45 bg-surface-0/55 p-4">
                   <div className="text-[12px] font-medium text-text-primary">{t('channels.wechatPersonalScanTitle', 'Scan to bind')}</div>
                   <p className="mt-1 text-[11px] leading-5 text-text-secondary/78">{t('channels.wechatPersonalScanHint', 'Open WeChat on the target account, scan this QR code, and keep this editor open until Suora finishes the binding flow.')}</p>
-                  <img src={wechatPersonalQrPreviewUrl} alt={t('channels.wechatPersonalQrPreview', 'Personal WeChat QR')} onError={() => {
-                    void handleWeChatQrPreviewError();
-                }} className="mt-4 h-72 w-72 rounded-3xl border border-border-subtle/55 bg-white object-contain p-2 shadow-sm md:h-80 md:w-80"/>
+                  <div className="relative mt-4 inline-block">
+                    {(!wechatQrImageLoaded || wechatQrPreviewResolvingSource === normalizedWeChatQrSource) && (<div className="absolute inset-0 flex items-center justify-center rounded-3xl border border-border-subtle/55 bg-surface-2/80">
+                        <span className="h-8 w-8 animate-spin rounded-full border-2 border-accent/30 border-t-accent" aria-hidden="true"/>
+                      </div>)}
+                    <img src={wechatPersonalQrPreviewUrl} alt={t('channels.wechatPersonalQrPreview', 'Personal WeChat QR')} onLoad={() => setWechatQrImageLoaded(true)} onError={() => { void handleWeChatQrPreviewError(); }} className="h-72 w-72 rounded-3xl border border-border-subtle/55 bg-white object-contain p-2 shadow-sm md:h-80 md:w-80"/>
+                  </div>
+                  {wechatLoginBusy && wechatQrImageLoaded && (<div className="mt-4 flex items-center gap-3 text-[12px] text-text-secondary">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-accent/30 border-t-accent" aria-hidden="true"/>
+                      {t('channels.wechatPersonalBindingInProgress', 'Waiting for scan…')}
+                    </div>)}
                 </div>) : (<div className="rounded-3xl border border-dashed border-border-subtle/55 bg-surface-0/40 p-4 text-[12px] leading-6 text-text-secondary/80">
-                  {t('channels.wechatPersonalAwaitingQr', 'Add the bridge QR code URL to preview the binding code here for operators.')}
+                  {t('channels.wechatPersonalAwaitingQr', 'Click "Generate QR Code" to get a QR code to scan in WeChat.')}
                 </div>)}
+
+              {/* ── Binding status (when bound) ── */}
+              {draft.wechatPersonalBindingStatus === 'bound' && draft.wechatPersonalBotToken && (<div className="flex items-center gap-2.5 rounded-2xl border border-success/20 bg-success/8 px-4 py-3 text-[12px] text-success">
+                  <IconifyIcon name="ui-check" size={14} color="currentColor"/>
+                  {t('channels.bindingStatusBound', 'Bound')}
+                  {draft.wechatPersonalAccountId && <span className="text-text-muted/70">· {draft.wechatPersonalAccountId}</span>}
+                </div>)}
+
+              {/* ── Advanced config ── */}
+              <div>
+                <UiButton unstyled type="button" onClick={() => setShowWechatAdvanced((v) => !v)} className="flex items-center gap-1.5 text-[11px] font-medium text-text-muted hover:text-text-secondary transition-colors">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`shrink-0 transition-transform duration-150 ${showWechatAdvanced ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+                  {t('channels.wechatPersonalAdvanced', 'Advanced / manual configuration')}
+                </UiButton>
+                {showWechatAdvanced && (<div className="mt-4 space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalQrCodeUrl', 'QR Code URL')}</span>
+                        <UiInput type="text" value={draft.wechatPersonalQrCodeUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalQrCodeUrl: event.target.value })} aria-label={t('channels.wechatPersonalQrCodeUrl', 'QR Code URL')} placeholder={t('channels.wechatPersonalQrCodePlaceholder', 'Generated after clicking "Generate QR Code"')} controlClassName={INPUT_CLASS}/>
+                        <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalQrCodeHint', 'Suora fills this with the latest QR image URL so the operator can scan and bind the account.')}</p>
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBindingStatus', 'Binding Status')}</span>
+                        <UiSelect value={draft.wechatPersonalBindingStatus || 'unbound'} onChange={(event) => setDraft({ ...draft, wechatPersonalBindingStatus: event.target.value as ChannelConfig['wechatPersonalBindingStatus'] })} aria-label={t('channels.wechatPersonalBindingStatus', 'Binding Status')} controlClassName={INPUT_CLASS}>
+                          <option value="unbound">{t('channels.bindingStatusUnbound', 'Not bound')}</option>
+                          <option value="pending">{t('channels.bindingStatusPending', 'Waiting for scan')}</option>
+                          <option value="bound">{t('channels.bindingStatusBound', 'Bound')}</option>
+                        </UiSelect>
+                      </label>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBaseUrl', 'API Base URL')}</span>
+                        <UiInput type="text" value={draft.wechatPersonalBaseUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalBaseUrl: event.target.value })} aria-label={t('channels.wechatPersonalBaseUrl', 'API Base URL')} placeholder={t('channels.wechatPersonalBaseUrlPlaceholder', 'Defaults to https://ilinkai.weixin.qq.com')} controlClassName={INPUT_CLASS}/>
+                        <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalBaseUrlHint', 'Override this only if your personal WeChat backend uses a different compatible API host.')}</p>
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalAccountId', 'Bound Account ID')}</span>
+                        <UiInput type="text" value={draft.wechatPersonalAccountId || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalAccountId: event.target.value })} aria-label={t('channels.wechatPersonalAccountId', 'Bound Account ID')} placeholder={t('channels.wechatPersonalAccountIdPlaceholder', 'Filled automatically after a successful QR login')} controlClassName={INPUT_CLASS}/>
+                      </label>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalBotToken', 'Bot Token')}</span>
+                        <UiInput type="password" value={draft.wechatPersonalBotToken || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalBotToken: event.target.value })} aria-label={t('channels.wechatPersonalBotToken', 'Bot Token')} placeholder={t('channels.wechatPersonalBotTokenPlaceholder', 'Filled automatically after a successful QR login')} controlClassName={INPUT_CLASS}/>
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalUserId', 'Last User ID')}</span>
+                        <UiInput type="text" value={draft.wechatPersonalUserId || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalUserId: event.target.value })} aria-label={t('channels.wechatPersonalUserId', 'Last User ID')} placeholder={t('channels.wechatPersonalUserIdPlaceholder', 'Filled after the QR login flow reports a user ID')} controlClassName={INPUT_CLASS}/>
+                      </label>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <label className="block">
+                        <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')}</span>
+                        <UiInput type="text" value={draft.wechatPersonalWebhookUrl || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalWebhookUrl: event.target.value })} aria-label={t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')} placeholder={t('channels.wechatPersonalWebhookPlaceholder', 'https://bridge.example.com/wechat/send')} controlClassName={INPUT_CLASS}/>
+                        <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalWebhookHint', 'Optional fallback bridge endpoint. Leave blank when you use the built-in QR login flow.')}</p>
+                      </label>
+                      <label className="block">
+                        <span className="mb-2 block text-[12px] font-medium text-text-muted">{t('channels.wechatPersonalAuthToken', 'Bridge Auth Token')}</span>
+                        <UiInput type="password" value={draft.wechatPersonalAuthToken || ''} onChange={(event) => setDraft({ ...draft, wechatPersonalAuthToken: event.target.value })} aria-label={t('channels.wechatPersonalAuthToken', 'Bridge Auth Token')} placeholder={t('channels.wechatPersonalAuthTokenPlaceholder', 'Optional bearer or shared token')} controlClassName={INPUT_CLASS}/>
+                        <p className="mt-2 text-[11px] leading-5 text-text-muted">{t('channels.wechatPersonalAuthTokenHint', 'Used only when the optional fallback bridge endpoint requires bearer authentication.')}</p>
+                      </label>
+                    </div>
+                  </div>)}
+              </div>
             </EditorSection>)}
 
           {draft.platform === 'email' && (<EmailChannelConfig draft={draft} setDraft={setDraft} t={t} INPUT_CLASS={INPUT_CLASS}/>)}

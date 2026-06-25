@@ -377,6 +377,23 @@ Suora 保持 Electron 的 context isolation，并通过 preload bridge 转发特
 
 ## 11. UI 主题、国际化、构建与测试
 
+### 组件库
+
+工作台组件基于 `src/components/catalyst-ui/` 中的自定义 catalyst-ui 适配层构建，该层封装了 Headless UI v2 原语（Dialog、Checkbox、Switch、Listbox 等），并统一使用工作台设计 token。所有 catalyst-ui 组件均引用主题 CSS 变量（`--color-surface-*`、`--color-text-*`、`--color-accent` 等），因此可正确响应深色/浅色模式和强调色变化。
+
+设置面板和表单控件的共享适配层位于：
+- `src/components/catalyst-ui/` — 核心原语
+- `src/components/settings/panelUi.tsx` — 设置面板构建块
+- `src/components/ui/Primitives.tsx` 与 `src/components/ui/FormControls.tsx` — 共享表单层
+
+### 深色模式实现
+
+工作台使用反转类策略进行主题切换：
+- **深色模式（默认）**：`<html>` 上同时存在 `dark` 类，不存在 `light` 类
+- **浅色模式**：添加 `light` 类，移除 `dark` 类
+
+`dark` 类由 Tailwind 的 `dark:` 变体（通过 `src/index.css` 中的 `@custom-variant dark (&:where(.dark, .dark *))` 配置）所需。`light` 类驱动 `src/index.css` 中浅色模式的 CSS 变量覆盖。`useTheme` 同时切换两个类。
+
 ### 主题与偏好
 
 渲染层在 `src/index.css` 中使用共享 token 主题系统，并通过 `useTheme` 等 hook 应用偏好。当前支持：
@@ -384,10 +401,14 @@ Suora 保持 Electron 的 context isolation，并通过 preload bridge 转发特
 - 浅色 / 深色 / 跟随系统主题
 - 字号
 - 代码字体
-- 强调色
+- 强调色（12 种命名预设：工作台蓝、琥珀、宝蓝、翠绿、紫晶、珊瑚、玫瑰、青玉、深红、铜色、极光蓝、石板灰）
 - 语言
 
 当前默认主题模式为 `system`。
+
+### 强调色系统
+
+强调色系统由 `src/theme/accentPresets.ts` 管理，并由 `useTheme.ts` 应用。'default'（工作台蓝，`#0024D3`）始终通过显式设置 CSS 变量来应用，不依赖 CSS 层叠默认值，因此无论当前 CSS 基准主题如何，均能正常工作。
 
 ### 当前语言集合
 

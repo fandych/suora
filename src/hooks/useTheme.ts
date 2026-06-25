@@ -29,6 +29,9 @@ export function useTheme() {
 
     const apply = (isDark: boolean) => {
       root.classList.toggle('light', !isDark)
+      // Also toggle the standard 'dark' class so Tailwind's dark: variant
+      // (used by catalyst-ui components) respects the app's manual theme setting.
+      root.classList.toggle('dark', isDark)
     }
 
     if (theme === 'system') {
@@ -81,10 +84,15 @@ export function useTheme() {
   useEffect(() => {
     const root = document.documentElement
     if (!isAccentPreset(accentColor)) {
-      // 'default' — remove overrides, fall back to CSS-defined values
-      ;['--t-accent', '--t-accent-hover', '--t-accent-glow', '--t-accent-soft', '--t-accent-secondary', '--t-accent-rgb'].forEach((p) =>
-        root.style.removeProperty(p),
-      )
+      // 'default' — explicitly apply the brand Workbench Blue.
+      // Do not just remove overrides: the CSS baseline may differ (e.g. teal
+      // enterprise theme), so removing would not reliably give blue.
+      root.style.setProperty('--t-accent', '#0024D3')
+      root.style.setProperty('--t-accent-hover', '#2948E8')
+      root.style.setProperty('--t-accent-glow', 'rgba(0, 36, 211, 0.20)')
+      root.style.setProperty('--t-accent-soft', 'rgba(0, 36, 211, 0.12)')
+      root.style.setProperty('--t-accent-secondary', '#1D4ED8')
+      root.style.setProperty('--t-accent-rgb', '0, 36, 211')
       return
     }
     const preset = ACCENT_PRESETS[accentColor]

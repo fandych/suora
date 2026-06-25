@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* ── Dark-mode variant: use .dark class (set by useTheme) instead of OS media query.
+   This lets catalyst-ui's `dark:*` utilities respond to the app's manual theme toggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ── Tailwind v4 theme tokens (reference CSS vars for dynamic theming) ── */
 @theme {
   --color-surface-0: var(--t-surface-0);

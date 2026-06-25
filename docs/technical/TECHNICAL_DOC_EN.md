@@ -381,15 +381,36 @@ The application first attempts to store sensitive data such as API keys in opera
 
 The renderer uses a shared tokenized theme system in `src/index.css` and preference hooks such as `useTheme`.
 
+### Component library
+
+Workbench components are built using a custom catalyst-ui adapter layer located in `src/components/catalyst-ui/`. This layer wraps Headless UI v2 primitives (Dialog, Checkbox, Switch, Listbox, etc.) with the workbench design tokens. All catalyst-ui components reference theme CSS variables (`--color-surface-*`, `--color-text-*`, `--color-accent`, etc.) so they respond correctly to dark/light mode and accent color changes.
+
+Shared surface adapters for settings panels and form controls live in:
+- `src/components/catalyst-ui/` — core primitives
+- `src/components/settings/panelUi.tsx` — settings panel building blocks
+- `src/components/ui/Primitives.tsx` and `src/components/ui/FormControls.tsx` — shared form surface
+
+### Dark mode implementation
+
+The workbench uses an inverted class strategy for theming:
+- **Dark mode (default)**: both `dark` and no `light` class on `<html>` 
+- **Light mode**: `light` class added, `dark` class removed
+
+The `dark` class is required by Tailwind's `dark:` variant (configured via `@custom-variant dark (&:where(.dark, .dark *))` in `src/index.css`). The `light` class drives the CSS variable overrides for light mode in `src/index.css`. `useTheme` toggles both classes.
+
 ### Current preference dimensions
 
 - light, dark, or system theme
 - font size
 - code font
-- accent color
+- accent color (12 named presets: default blue, amber, sapphire, emerald, amethyst, coral, rose, jade, crimson, copper, arctic, slate)
 - locale
 
 The default UI preference theme is currently `system`.
+
+### Accent color system
+
+The accent color system is managed by `src/theme/accentPresets.ts` and applied by `useTheme.ts`. The 'default' (Workbench Blue, `#0024D3`) is always applied explicitly to CSS variables — it does not rely on the CSS cascade default — so it works correctly regardless of the current CSS baseline theme.
 
 ## 12. Internationalization
 

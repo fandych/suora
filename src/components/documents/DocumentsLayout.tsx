@@ -1454,7 +1454,7 @@ export function DocumentsLayout() {
                     { format: 'markdown' as ExportFormat, label: 'Markdown (.md)', icon: 'ui-file' },
                     { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)', icon: 'ui-file' },
                     { format: 'docx' as ExportFormat, label: 'Word (.docx)', icon: 'ui-file' },
-                ]).map(({ format, label, icon }) => (<UiButton unstyled key={format} type="button" onClick={() => void handleDocExport(format)} className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary">
+                ]).map(({ format, label, icon }) => (<UiButton unstyled key={format} type="button" onClick={() => void handleDocExport(format)} className="flex w-full justify-start items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary">
                           <IconifyIcon name={icon} size={13} color="currentColor"/>
                           {label}
                         </UiButton>))}

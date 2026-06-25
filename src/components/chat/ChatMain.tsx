@@ -344,9 +344,9 @@ function ModelDropdown({ models, providerNameById, value, onChange, compact = fa
         </UiButton>
 
         {open && (<div ref={menuRef} className={`absolute left-0 z-50 min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
-            <UiButton unstyled type="button" onClick={() => { onChange(''); setOpen(false); }} className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${!value ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70 text-accent">
+            <UiButton unstyled type="button" onClick={() => { onChange(''); setOpen(false); }} className={`w-full justify-start rounded-md px-3 py-2.5 text-left transition-colors ${!value ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
+              <div className="flex items-center gap-3">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70 text-accent">
                   <IconifyIcon name="ui-close" size={14} color="currentColor"/>
                 </div>
                 <div className="min-w-0 flex-1">
@@ -358,9 +358,9 @@ function ModelDropdown({ models, providerNameById, value, onChange, compact = fa
 
             {models.map((model) => {
                 const providerName = providerNameById.get(model.provider) || model.provider;
-                return (<UiButton unstyled type="button" key={model.id} onClick={() => { onChange(model.id); setOpen(false); }} className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${model.id === value ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70 text-accent">
+            return (<UiButton unstyled type="button" key={model.id} onClick={() => { onChange(model.id); setOpen(false); }} className={`w-full justify-start rounded-md px-3 py-2.5 text-left transition-colors ${model.id === value ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70 text-accent">
                       <span className="text-[10px] font-semibold uppercase tracking-[0.08em]">{providerName.slice(0, 2)}</span>
                     </div>
                     <div className="min-w-0 flex-1">
@@ -443,9 +443,9 @@ function AgentDropdown({ agents, selectedAgentId, onSelect, compact = false }: {
         </UiButton>
 
         {open && (<div ref={menuRef} className={`absolute left-0 z-50 min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
-            {enabledAgents.map((a) => (<UiButton unstyled type="button" key={a.id} onClick={() => { onSelect(a); setOpen(false); }} className={`w-full rounded-md px-3 py-2.5 text-left transition-colors ${a.id === selectedAgentId ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
-                <div className="flex items-start gap-3">
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70">
+              {enabledAgents.map((a) => (<UiButton unstyled type="button" key={a.id} onClick={() => { onSelect(a); setOpen(false); }} className={`w-full justify-start rounded-md px-3 py-2.5 text-left transition-colors ${a.id === selectedAgentId ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
+                <div className="flex items-center gap-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70">
                     <AgentAvatar avatar={a.avatar} size={16}/>
                   </div>
                   <div className="min-w-0 flex-1">

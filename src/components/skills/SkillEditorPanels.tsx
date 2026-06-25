@@ -35,7 +35,7 @@ const panelMonoInputClass = 'font-mono';
 const panelTextAreaClass = 'min-h-32 leading-6';
 const panelCompactInputClass = 'rounded-xl px-3 py-2 text-xs';
 const panelCompactSelectClass = 'rounded-xl px-3 py-2 text-xs';
-const panelCompactSecondaryButtonClass = 'relative inline-flex items-center justify-center gap-1.5 rounded-xl border border-zinc-950/10 bg-white px-3 py-2 text-xs font-semibold text-zinc-950 shadow-sm transition hover:bg-zinc-950/2.5 dark:border-white/15 dark:bg-white/5 dark:text-white dark:hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50';
+const panelCompactSecondaryButtonClass = 'relative inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-semibold text-text-secondary shadow-sm transition hover:bg-surface-3 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50';
 // ─── Markdown editor with Edit / Preview tabs ─────────────────────
 export function MarkdownEditor({ value, onChange, placeholder, rows = 10, disabled, fillHeight = false, }: {
     value: string;
