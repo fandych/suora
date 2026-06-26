@@ -348,7 +348,7 @@ describe('ChatMain', () => {
     expect(screen.getAllByText(/^message$/)).toHaveLength(120)
   })
 
-  it('uses auto scrolling while streaming to avoid smooth-scroll thrash', () => {
+  it('uses auto scrolling while streaming to avoid smooth-scroll thrash', async () => {
     const scrollIntoView = vi.fn()
     window.HTMLElement.prototype.scrollIntoView = scrollIntoView
     mockUseAIChatState.isLoading = true
@@ -391,7 +391,7 @@ describe('ChatMain', () => {
 
     render(<ChatMain />)
 
-    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' })
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' }))
   })
 
   it('wires the chat stop button to cancel the active stream', async () => {

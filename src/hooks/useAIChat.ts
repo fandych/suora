@@ -28,8 +28,14 @@ import { useAppStore } from '@/store/appStore'
 import { generateId } from '@/utils/helpers'
 import type { Message, ToolCall, MessageAttachment, ContentPart } from '@/types'
 
-const STREAM_FLUSH_INTERVAL = 100 // ms between store updates during text streaming
+const STREAM_FLUSH_INTERVAL_MS = 100 // minimum ms between store updates during short text streaming
 const MAX_CHAT_TOOL_STEPS = 100
+
+function getStreamFlushIntervalMs(contentLength: number): number {
+  if (contentLength < 4_000) return STREAM_FLUSH_INTERVAL_MS
+  if (contentLength < 12_000) return 180
+  return 320
+}
 
 type PipelineChatLanguage = 'en' | 'zh'
 
@@ -898,7 +904,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
                 }
                 // Throttle UI updates for text-delta to avoid state-overwrite races
                 const now = Date.now()
-                if (now - lastFlush > STREAM_FLUSH_INTERVAL) {
+                if (now - lastFlush > getStreamFlushIntervalMs(fullContent.length)) {
                   if (!flushToStore(false)) return
                   lastFlush = now
                 }
@@ -1048,7 +1054,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
 
           // Throttled flush for text-delta
           const now = Date.now()
-          if (now - lastFlush >= STREAM_FLUSH_INTERVAL) {
+          if (now - lastFlush >= getStreamFlushIntervalMs(fullContent.length)) {
             lastFlush = now
             if (!flushToStore(false)) return
           }

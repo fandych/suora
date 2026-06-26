@@ -21,12 +21,16 @@ function electronInvoke(channel: string, ...args: unknown[]): Promise<unknown> {
     return electron.invoke(channel, ...args);
 }
 export function TodoProgress() {
-    const { workspacePath, activeSessionId, sessions } = useAppStore();
+    const workspacePath = useAppStore((state) => state.workspacePath);
+    const activeSessionId = useAppStore((state) => state.activeSessionId);
+    const messageCount = useAppStore((state) => {
+        if (!state.activeSessionId)
+            return 0;
+        return state.sessions.find((session) => session.id === state.activeSessionId)?.messages.length ?? 0;
+    });
     const { t } = useI18n();
     const [todos, setTodos] = useState<TodoItem[]>([]);
     const [expanded, setExpanded] = useState(false);
-    const activeSession = sessions.find((s) => s.id === activeSessionId);
-    const messages = activeSession?.messages ?? [];
     const loadTodos = useCallback(async () => {
         if (!workspacePath || !activeSessionId) {
             setTodos([]);
@@ -50,7 +54,7 @@ export function TodoProgress() {
         }
     }, [workspacePath, activeSessionId]);
     // Reload todos when session or messages change (tool calls may have modified todos)
-    useEffect(() => { loadTodos(); }, [loadTodos, messages.length]);
+    useEffect(() => { loadTodos(); }, [loadTodos, messageCount]);
     // Also poll periodically for freshness
     useEffect(() => {
         const id = setInterval(loadTodos, 3000);

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ComponentPropsWithoutRef, type ComponentType } from 'react';
+import { memo, useMemo, useState, type ComponentPropsWithoutRef, type ComponentType } from 'react';
 import Markdown from 'react-markdown';
 import rehypeKatex from 'rehype-katex';
 import rehypeRaw from 'rehype-raw';
@@ -111,7 +111,7 @@ const MD_COMPONENTS = {
     del: ({ children, ...props }: ComponentPropsWithoutRef<'del'>) => <del className="text-text-muted" {...props}>{children}</del>,
     input: ({ size: _size, ...props }: ComponentPropsWithoutRef<'input'>) => <UiInput className="mr-1" controlClassName="accent-accent" {...props}/>,
 } as const;
-export function MarkdownRenderer({ content, allowHtml = false, }: {
+export const MarkdownRenderer = memo(function MarkdownRenderer({ content, allowHtml = false, }: {
     content: string;
     allowHtml?: boolean;
 }) {
@@ -121,6 +121,6 @@ export function MarkdownRenderer({ content, allowHtml = false, }: {
     return (<Markdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={rehypePlugins} components={MD_COMPONENTS as Record<string, ComponentType<unknown>>}>
       {content}
     </Markdown>);
-}
+});
 
 

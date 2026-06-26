@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { memo, useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/appStore';
 import type { Message, ToolCall, MessageAttachment } from '@/types';
 import { IconifyIcon, ICON_DATA } from '@/components/icons/IconifyIcons';
@@ -487,7 +487,7 @@ function FailedMidStreamBanner({ message, onResume, onRetry }: {
     </div>);
 }
 // ─── Message Bubble ────────────────────────────────────────────────
-export function MessageBubble({ message, onRetry, onResume, onDelete, onRegenerate, onFeedback, onEdit, onTogglePin, onBranch, onExport, }: {
+export const MessageBubble = memo(function MessageBubble({ message, onRetry, onResume, onDelete, onRegenerate, onFeedback, onEdit, onTogglePin, onBranch, onExport, }: {
     message: Message;
     onRetry?: () => void;
     onResume?: () => void;
@@ -550,7 +550,7 @@ export function MessageBubble({ message, onRetry, onResume, onDelete, onRegenera
             const renderedToolCallIds = new Set<string>();
             return contentParts.map((part, index) => {
                 if (part.type === 'text') {
-                    return <div key={index} className="markdown-body"><MarkdownContent content={part.text}/></div>;
+                    return <div key={index} className="markdown-body"><MarkdownContent content={part.text} defer={message.isStreaming}/></div>;
                 }
                 if (renderedToolCallIds.has(part.toolCallId))
                     return null;
@@ -565,7 +565,7 @@ export function MessageBubble({ message, onRetry, onResume, onDelete, onRegenera
             });
         })()
         : (<>
-        {message.content && <div className="markdown-body"><MarkdownContent content={message.content}/></div>}
+        {message.content && <div className="markdown-body"><MarkdownContent content={message.content} defer={message.isStreaming}/></div>}
         {toolCalls.length > 0 && (<div className="mt-4 space-y-2 border-t border-border-subtle/45 pt-4">
             <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.toolCalls', 'Tool Calls')}</div>
             {toolCalls.map((call, index) => (<ToolCallRow key={call.id} call={call} stepLabel={toolCalls.length > 1 ? `${index + 1}/${toolCalls.length}` : undefined}/>))}
@@ -573,7 +573,7 @@ export function MessageBubble({ message, onRetry, onResume, onDelete, onRegenera
       </>);
     return (<>
       {lightboxSrc && <ImageLightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={() => setLightboxSrc(null)}/>}
-      <div className={`group mb-5 flex items-start gap-3 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div className={`chat-message-row group mb-5 flex items-start gap-3 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>
         {!isUser && (<div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border-subtle/45 bg-surface-0/72 text-accent shadow-sm"><IconifyIcon name="ui-sparkles" size={15} color="currentColor"/></div>)}
         <div className="max-w-[90%] min-w-0 sm:max-w-[84%]">
           <div className={`relative overflow-hidden rounded-2xl ${isUser ? userBubbleCls : aiBubbleCls}`}>
@@ -667,6 +667,6 @@ export function MessageBubble({ message, onRetry, onResume, onDelete, onRegenera
         {isUser && <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-accent/16 bg-accent/10 text-accent/76 shadow-sm"><IconifyIcon name="ui-user" size={15} color="currentColor"/></div>}
       </div>
     </>);
-}
+});
 
 

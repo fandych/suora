@@ -375,6 +375,11 @@ input[type="file"]:disabled::file-selector-button {
   animation: none;
 }
 
+.chat-message-row {
+  content-visibility: auto;
+  contain-intrinsic-size: 220px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

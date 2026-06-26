@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '@/store/appStore';
 import { generateId } from '@/utils/helpers';
 import type { Agent, MessageAttachment, Model, Session } from '@/types';
@@ -17,6 +18,7 @@ import { Dropdown, DropdownButton, DropdownMenu, DropdownItem, DropdownSection, 
 import { workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
 const MAX_RENDERED_MESSAGES = 120;
 const BROWSER_STATE_POLL_INTERVAL_MS = 4000;
+const SCROLL_CONTROL_THRESHOLD_PX = 220;
 function formatRelativeLabel(ts: number, locale = 'en'): string {
     const diffSeconds = Math.round((ts - Date.now()) / 1000);
     const absSeconds = Math.abs(diffSeconds);
@@ -513,11 +515,29 @@ function getCurrentChatSession() {
     return state.sessions.find((session) => session.id === state.activeSessionId) ?? null;
 }
 export function ChatMain() {
-    const { sessions, activeSessionId, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, setActiveSession, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore();
+    const { sessions, activeSessionId, updateSession, models, agents, selectedModel, selectedAgent, setSelectedModel, setSelectedAgent, setActiveSession, providerConfigs, addSession, openSessionTab, recordAgentSelectionPreference } = useAppStore(useShallow((state) => ({
+        sessions: state.sessions,
+        activeSessionId: state.activeSessionId,
+        updateSession: state.updateSession,
+        models: state.models,
+        agents: state.agents,
+        selectedModel: state.selectedModel,
+        selectedAgent: state.selectedAgent,
+        setSelectedModel: state.setSelectedModel,
+        setSelectedAgent: state.setSelectedAgent,
+        setActiveSession: state.setActiveSession,
+        providerConfigs: state.providerConfigs,
+        addSession: state.addSession,
+        openSessionTab: state.openSessionTab,
+        recordAgentSelectionPreference: state.recordAgentSelectionPreference,
+    })));
     const { t, locale } = useI18n();
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const isNearBottomRef = useRef(true);
+    const scrollFrameRef = useRef<number | null>(null);
+    const scrollControlsFrameRef = useRef<number | null>(null);
+    const scrollControlStateRef = useRef({ top: false, bottom: false });
     const [showDebug, setShowDebug] = useState(false);
     const [isExportingChat, setIsExportingChat] = useState(false);
     const [showScrollToTop, setShowScrollToTop] = useState(false);
@@ -547,12 +567,16 @@ export function ChatMain() {
             return;
         setActiveSession(chatSessions[0]?.id ?? null);
     }, [activeSessionId, chatSessionIds, chatSessions, setActiveSession]);
-    const activeSession = chatSessions.find((s) => s.id === activeSessionId) ?? null;
+    const activeSession = useMemo(() => chatSessions.find((s) => s.id === activeSessionId) ?? null, [activeSessionId, chatSessions]);
     const messages = activeSession?.messages ?? [];
     const hiddenMessageCount = Math.max(0, messages.length - MAX_RENDERED_MESSAGES);
-    const visibleMessages = hiddenMessageCount > 0
+    const visibleMessages = useMemo(() => (hiddenMessageCount > 0
         ? messages.slice(-MAX_RENDERED_MESSAGES)
-        : messages;
+        : messages), [hiddenMessageCount, messages]);
+    const lastMessage = messages[messages.length - 1];
+    const messageRenderVersion = lastMessage
+        ? `${messages.length}:${lastMessage.id}:${lastMessage.content.length}:${lastMessage.isStreaming ? 1 : 0}:${lastMessage.toolCalls?.length ?? 0}:${lastMessage.contentParts?.length ?? 0}`
+        : `${activeSessionId ?? 'none'}:0`;
     const enabledModels = useMemo(() => models.filter((model) => model.enabled), [models]);
     const providerNameById = useMemo(() => new Map(providerConfigs.map((config) => [config.id, config.name])), [providerConfigs]);
     const defaultAgent = agents.find((a) => a.id === 'default-assistant');
@@ -581,12 +605,43 @@ export function ChatMain() {
         const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
         const distanceFromTop = el.scrollTop;
         isNearBottomRef.current = distanceFromBottom < 120;
-        setShowScrollToTop(distanceFromTop > 220);
-        setShowScrollToBottom(distanceFromBottom > 220);
+        const nextTop = distanceFromTop > SCROLL_CONTROL_THRESHOLD_PX;
+        const nextBottom = distanceFromBottom > SCROLL_CONTROL_THRESHOLD_PX;
+        if (scrollControlStateRef.current.top !== nextTop) {
+            scrollControlStateRef.current.top = nextTop;
+            setShowScrollToTop(nextTop);
+        }
+        if (scrollControlStateRef.current.bottom !== nextBottom) {
+            scrollControlStateRef.current.bottom = nextBottom;
+            setShowScrollToBottom(nextBottom);
+        }
     }, []);
-    const handleScroll = useCallback(() => {
-        updateScrollControls();
+    const scheduleScrollControlsUpdate = useCallback(() => {
+        if (scrollControlsFrameRef.current !== null)
+            return;
+        scrollControlsFrameRef.current = window.requestAnimationFrame(() => {
+            scrollControlsFrameRef.current = null;
+            updateScrollControls();
+        });
     }, [updateScrollControls]);
+    const handleScroll = useCallback(() => {
+        scheduleScrollControlsUpdate();
+    }, [scheduleScrollControlsUpdate]);
+    useEffect(() => {
+        return () => {
+            if (scrollFrameRef.current !== null) {
+                window.cancelAnimationFrame(scrollFrameRef.current);
+                scrollFrameRef.current = null;
+            }
+            if (scrollControlsFrameRef.current !== null) {
+                window.cancelAnimationFrame(scrollControlsFrameRef.current);
+                scrollControlsFrameRef.current = null;
+            }
+        };
+    }, []);
+    useEffect(() => {
+        scheduleScrollControlsUpdate();
+    }, [activeSessionId, messageRenderVersion, scheduleScrollControlsUpdate]);
     const scrollToTop = useCallback(() => {
         const el = messagesContainerRef.current;
         if (!el)
@@ -600,14 +655,16 @@ export function ChatMain() {
         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }, []);
     useEffect(() => {
-        if (isNearBottomRef.current) {
-            messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
+        if (!isNearBottomRef.current)
+            return;
+        if (scrollFrameRef.current !== null) {
+            window.cancelAnimationFrame(scrollFrameRef.current);
         }
-    }, [isStreaming, messages]);
-    useEffect(() => {
-        const id = window.requestAnimationFrame(() => updateScrollControls());
-        return () => window.cancelAnimationFrame(id);
-    }, [activeSessionId, messages, updateScrollControls]);
+        scrollFrameRef.current = window.requestAnimationFrame(() => {
+            scrollFrameRef.current = null;
+            messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
+        });
+    }, [isStreaming, messageRenderVersion]);
     const starterPrompts = useMemo(() => ([
         {
             icon: 'ui-lightbulb',
@@ -872,7 +929,7 @@ export function ChatMain() {
       </div>);
     }
     return (<div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
-      <div ref={messagesContainerRef} onScroll={handleScroll} aria-label={t('chat.messagesAria', 'Chat messages')} aria-live="polite" className="module-canvas min-h-0 flex-1 overflow-y-auto">
+      <div ref={messagesContainerRef} onScroll={handleScroll} aria-label={t('chat.messagesAria', 'Chat messages')} aria-live="off" className="module-canvas min-h-0 flex-1 overflow-y-auto">
         <div className="sticky top-0 z-20 border-b border-border-subtle/45 bg-surface-0/94 px-5 py-3 xl:px-6">
           <div className="mx-auto max-w-384">
             <div className="min-w-0 max-w-3xl">
@@ -966,7 +1023,13 @@ function StreamingStatus({ isStreaming, messages, }: {
     const { t } = useI18n();
     if (!isStreaming)
         return null;
-    const last = [...messages].reverse().find((m) => m.role === 'assistant');
+    let last: import('@/types').Message | undefined;
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index].role === 'assistant') {
+            last = messages[index];
+            break;
+        }
+    }
     const activeTool = last?.toolCalls?.find((tc) => tc.status === 'running' || tc.status === 'pending');
     const label = activeTool
         ? `${t('chat.callingTool', 'Calling tool')}: ${activeTool.toolName}`
