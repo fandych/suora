@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Button } from '@/components/catalyst-ui/button'
 import { SkillsLayout } from './SkillsLayout'
 import { useAppStore } from '@/store/appStore'
 import type { Skill } from '@/types'
@@ -15,8 +16,9 @@ vi.mock('@/components/icons/IconifyIcons', () => ({
 
 vi.mock('./SkillEditor', () => ({
   SkillEditor: ({ skill, onSave }: { skill: Skill | null; onSave: (skill: Skill) => void }) => (
-    <button
+    <Button
       type="button"
+      unstyled
       onClick={() => onSave({
         ...(skill as Skill),
         name: 'New Skill',
@@ -25,7 +27,7 @@ vi.mock('./SkillEditor', () => ({
       })}
     >
       Mock Save Skill
-    </button>
+    </Button>
   ),
 }))
 
@@ -140,3 +142,4 @@ describe('SkillsLayout', () => {
     expect(screen.getAllByRole('checkbox')).toHaveLength(2)
   })
 })
+

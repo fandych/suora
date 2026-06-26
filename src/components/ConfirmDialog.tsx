@@ -2,6 +2,8 @@
 // Mounted once near the root of the app (App.tsx).
 
 import { useEffect, useRef } from 'react'
+import { Alert, AlertActions, AlertDescription, AlertTitle } from '@/components/catalyst-ui/alert'
+import { Button } from '@/components/catalyst-ui/button'
 import { useConfirmStore } from '@/services/confirmDialog'
 import { useI18n } from '@/hooks/useI18n'
 
@@ -46,69 +48,50 @@ export function ConfirmDialogHost() {
     : current.cancelText
   const choices = current.choices?.length ? current.choices : undefined
   const primaryChoiceIndex = choices ? Math.max(0, choices.findIndex((item) => item.variant === 'primary')) : -1
-  const buttonClass = (variant: 'primary' | 'danger' | 'secondary' | undefined) => {
-    if (variant === 'danger') return 'bg-danger/90 hover:bg-danger text-white focus:ring-danger/40'
-    if (variant === 'primary') return 'bg-accent/90 hover:bg-accent text-white focus:ring-accent/40'
-    return 'bg-surface-2/60 hover:bg-surface-3/60 text-text-secondary hover:text-text-primary focus:ring-border-subtle/70'
+  const buttonVariant = (variant: 'primary' | 'danger' | 'secondary' | undefined) => {
+    if (variant === 'danger') return 'danger' as const
+    if (variant === 'primary') return 'primary' as const
+    return 'secondary' as const
   }
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="suora-confirm-title"
-      className="fixed inset-0 z-200 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fade-in"
-      onClick={() => resolveTop(false)}
-    >
-      <div
-        className="w-full max-w-md mx-4 bg-surface-1 border border-border-subtle/60 rounded-[18px] shadow-2xl p-6 animate-fade-in-scale"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2
-          id="suora-confirm-title"
-          className={`text-[16px] font-semibold ${current.danger ? 'text-danger' : 'text-text-primary'}`}
-        >
+    <Alert open={true} onClose={() => resolveTop(false)} size="md" className="border border-border-subtle/60 bg-surface-1 text-text-primary shadow-2xl">
+      <AlertTitle id="suora-confirm-title" className={current.danger ? 'text-danger dark:text-red-400' : 'text-text-primary dark:text-white'}>
           {current.title}
-        </h2>
-        <p className="mt-3 text-[14px] text-text-secondary leading-relaxed whitespace-pre-wrap">
+      </AlertTitle>
+      <AlertDescription className="mt-3 whitespace-pre-wrap text-[14px] leading-relaxed text-text-secondary dark:text-zinc-400">
           {current.body}
-        </p>
-        <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => resolveTop(false)}
-            className="px-4 py-2 text-[13px] rounded-xl bg-surface-2/60 hover:bg-surface-3/60 text-text-secondary hover:text-text-primary transition-colors font-medium"
-          >
+      </AlertDescription>
+      <AlertActions className="mt-6">
+          <Button type="button" variant="secondary" onClick={() => resolveTop(false)} className="rounded-xl px-4 py-2 text-[13px]">
             {cancelText}
-          </button>
+          </Button>
           {choices ? (
             choices.map((choice, index) => (
-              <button
+              <Button
                 key={choice.value}
                 type="button"
                 ref={index === primaryChoiceIndex ? confirmBtnRef : undefined}
                 onClick={() => resolveTop(choice.value)}
-                className={`px-4 py-2 text-[13px] rounded-xl transition-colors font-medium focus:outline-none focus:ring-2 ${buttonClass(choice.variant)}`}
+                variant={buttonVariant(choice.variant)}
+                className="rounded-xl px-4 py-2 text-[13px]"
               >
                 {choice.label}
-              </button>
+              </Button>
             ))
           ) : (
-            <button
+            <Button
               type="button"
               ref={confirmBtnRef}
               onClick={() => resolveTop(true)}
-              className={`px-4 py-2 text-[13px] rounded-xl transition-colors font-medium focus:outline-none focus:ring-2 ${
-                current.danger
-                  ? 'bg-danger/90 hover:bg-danger text-white focus:ring-danger/40'
-                  : 'bg-accent/90 hover:bg-accent text-white focus:ring-accent/40'
-              }`}
+              variant={current.danger ? 'danger' : 'primary'}
+              className="rounded-xl px-4 py-2 text-[13px]"
             >
               {confirmText}
-            </button>
+            </Button>
           )}
-        </div>
-      </div>
-    </div>
+      </AlertActions>
+    </Alert>
   )
 }
+

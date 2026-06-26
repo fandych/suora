@@ -225,6 +225,7 @@ let currentToolBlockedCommands: string[] = ['rm -rf', 'del /f /q', 'format', 'sh
 let currentWorkspaceLock: WorkspaceLock | null = null
 let suoraDatabase: SuoraDatabase | null = null
 let suoraDatabaseWorkspacePath: string | null = null
+let mainWindowRecoveryInProgress = false
 const AI_REQUEST_CLIENT_HEADER = 'x-suora-client'
 const AI_REQUEST_CLIENT_VALUE = 'suora-desktop-assistant'
 
@@ -353,6 +354,7 @@ async function createWindow() {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      backgroundThrottling: false,
     },
   })
 
@@ -394,11 +396,28 @@ async function createWindow() {
     event.preventDefault()
   })
 
-  if (isDev && process.env['ELECTRON_RENDERER_URL']) {
-    mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
-  }
+  mainWindow.webContents.on('render-process-gone', (_event, details) => {
+    logger.error('Main renderer process gone', { reason: details.reason, exitCode: details.exitCode })
+    reloadMainWindowContent(`render-process-gone:${details.reason}`)
+  })
+
+  mainWindow.webContents.on('unresponsive', () => {
+    logger.warn('Main renderer became unresponsive')
+  })
+
+  mainWindow.webContents.on('responsive', () => {
+    logger.info('Main renderer became responsive')
+  })
+
+  mainWindow.on('restore', () => {
+    recoverMainWindowAfterVisibilityChange('restore')
+  })
+
+  mainWindow.on('show', () => {
+    recoverMainWindowAfterVisibilityChange('show')
+  })
+
+  loadMainWindowContent(mainWindow)
 
   // Save window state on resize/move/close
   mainWindow.on('close', () => {
@@ -409,6 +428,44 @@ async function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+}
+
+function loadMainWindowContent(window: BrowserWindow): void {
+  if (isDev && process.env['ELECTRON_RENDERER_URL']) {
+    void window.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  } else {
+    void window.loadFile(path.join(__dirname, '../renderer/index.html'))
+  }
+}
+
+function reloadMainWindowContent(reason: string): void {
+  const window = mainWindow
+  if (!window || window.isDestroyed() || mainWindowRecoveryInProgress) return
+  mainWindowRecoveryInProgress = true
+  logger.warn('Reloading main window renderer', { reason })
+  loadMainWindowContent(window)
+  const finishRecovery = () => {
+    mainWindowRecoveryInProgress = false
+  }
+  window.webContents.once('did-finish-load', finishRecovery)
+  window.webContents.once('did-fail-load', (_event, errorCode, errorDescription) => {
+    logger.error('Main window renderer reload failed', { reason, errorCode, errorDescription })
+    finishRecovery()
+  })
+  setTimeout(finishRecovery, 5000)
+}
+
+function recoverMainWindowAfterVisibilityChange(reason: string): void {
+  const window = mainWindow
+  if (!window || window.isDestroyed()) return
+  setTimeout(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || mainWindow !== window || window.webContents.isDestroyed()) return
+    window.webContents.focus()
+    const currentUrl = window.webContents.getURL()
+    if (window.webContents.isCrashed() || !currentUrl || currentUrl === 'about:blank') {
+      reloadMainWindowContent(reason)
+    }
+  }, 100)
 }
 
 // ─── IPC Handlers: System ──────────────────────────────────────────

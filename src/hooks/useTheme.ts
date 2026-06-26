@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useAppStore } from '@/store/appStore'
+import { ACCENT_PRESETS, isAccentPreset } from '@/theme/accentPresets'
 
 const FONT_SIZE_MAP = {
   small: '13px',
@@ -16,20 +17,6 @@ const CODE_FONT_MAP: Record<string, string> = {
   consolas: "'Consolas', 'Menlo', monospace",
 }
 
-const ACCENT_PRESETS: Record<string, { accent: string; hover: string; glow: string; soft: string; secondary: string; rgb: string }> = {
-  // 'default' → use CSS-defined enterprise AI palette (no override)
-  sapphire:  { accent: '#0024D4', hover: '#3250DE', glow: 'rgba(0,36,212,0.24)',  soft: 'rgba(0,36,212,0.10)',  secondary: '#99A7F1', rgb: '0,36,212' },
-  emerald:   { accent: '#007F8F', hover: '#009DA8', glow: 'rgba(0,127,143,0.16)',   soft: 'rgba(0,127,143,0.085)',   secondary: '#B7791F', rgb: '0,127,143' },
-  amethyst:  { accent: '#A855F7', hover: '#C084FC', glow: 'rgba(168,85,247,0.24)',  soft: 'rgba(168,85,247,0.10)',  secondary: '#D8B4FE', rgb: '168,85,247' },
-  coral:     { accent: '#FB7252', hover: '#FF8A6D', glow: 'rgba(251,114,82,0.24)',  soft: 'rgba(251,114,82,0.10)',  secondary: '#FFA891', rgb: '251,114,82' },
-  rose:      { accent: '#F43F85', hover: '#F65F9E', glow: 'rgba(244,63,133,0.24)',  soft: 'rgba(244,63,133,0.10)',  secondary: '#F9A8C8', rgb: '244,63,133' },
-  jade:      { accent: '#14B8A6', hover: '#2DD4BF', glow: 'rgba(20,184,166,0.24)',  soft: 'rgba(20,184,166,0.10)',  secondary: '#5EEAD4', rgb: '20,184,166' },
-  crimson:   { accent: '#EF4444', hover: '#F87171', glow: 'rgba(239,68,68,0.24)',   soft: 'rgba(239,68,68,0.10)',   secondary: '#FCA5A5', rgb: '239,68,68' },
-  copper:    { accent: '#EA8C3A', hover: '#F6A056', glow: 'rgba(234,140,58,0.24)',  soft: 'rgba(234,140,58,0.10)',  secondary: '#F6B888', rgb: '234,140,58' },
-  arctic:    { accent: '#22B8E6', hover: '#3ECEF9', glow: 'rgba(34,184,230,0.24)',  soft: 'rgba(34,184,230,0.10)',  secondary: '#7EDAF4', rgb: '34,184,230' },
-  slate:     { accent: '#7A8DB2', hover: '#8DA0C7', glow: 'rgba(122,141,178,0.22)', soft: 'rgba(122,141,178,0.10)', secondary: '#AFBFD5', rgb: '122,141,178' },
-}
-
 export function useTheme() {
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
@@ -42,6 +29,9 @@ export function useTheme() {
 
     const apply = (isDark: boolean) => {
       root.classList.toggle('light', !isDark)
+      // Also toggle the standard 'dark' class so Tailwind's dark: variant
+      // (used by catalyst-ui components) respects the app's manual theme setting.
+      root.classList.toggle('dark', isDark)
     }
 
     if (theme === 'system') {
@@ -93,14 +83,19 @@ export function useTheme() {
   // Apply custom accent color
   useEffect(() => {
     const root = document.documentElement
-    const preset = ACCENT_PRESETS[accentColor]
-    if (!preset) {
-      // 'default' — remove overrides, fall back to CSS-defined values
-      ;['--t-accent', '--t-accent-hover', '--t-accent-glow', '--t-accent-soft', '--t-accent-secondary', '--t-accent-rgb'].forEach((p) =>
-        root.style.removeProperty(p),
-      )
+    if (!isAccentPreset(accentColor)) {
+      // 'default' — explicitly apply the brand Workbench Blue.
+      // Do not just remove overrides: the CSS baseline may differ (e.g. teal
+      // enterprise theme), so removing would not reliably give blue.
+      root.style.setProperty('--t-accent', '#0024D3')
+      root.style.setProperty('--t-accent-hover', '#2948E8')
+      root.style.setProperty('--t-accent-glow', 'rgba(0, 36, 211, 0.20)')
+      root.style.setProperty('--t-accent-soft', 'rgba(0, 36, 211, 0.12)')
+      root.style.setProperty('--t-accent-secondary', '#1D4ED8')
+      root.style.setProperty('--t-accent-rgb', '0, 36, 211')
       return
     }
+    const preset = ACCENT_PRESETS[accentColor]
     root.style.setProperty('--t-accent', preset.accent)
     root.style.setProperty('--t-accent-hover', preset.hover)
     root.style.setProperty('--t-accent-glow', preset.glow)

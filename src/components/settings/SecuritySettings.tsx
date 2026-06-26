@@ -8,17 +8,10 @@ import {
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
-  settingsCheckboxClass,
-  settingsDangerButtonClass,
-  settingsFieldCardClass,
-  settingsHintClass,
-  settingsInputClass,
-  settingsLabelClass,
-  settingsMonoInputClass,
-  settingsSecondaryButtonClass,
-  settingsSoftButtonClass,
-  settingsSurfaceCardClass,
 } from './panelUi'
+import { Checkbox } from '@/components/catalyst-ui/checkbox'
+import { Button as UiButton } from '@/components/catalyst-ui/button'
+import { Input as UiInput } from '@/components/catalyst-ui/form-controls'
 
 function ListEditor({
   items,
@@ -46,31 +39,31 @@ function ListEditor({
   return (
     <div className="space-y-3">
       <div className="flex flex-col gap-3 md:flex-row">
-        <input
+        <UiInput
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder={placeholder}
-          className={`${settingsInputClass} flex-1`}
+          wrapperClassName="flex-1"
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               commitValue()
             }
           }}
         />
-        <button type="button" onClick={commitValue} className={settingsSoftButtonClass}>
+        <UiButton type="button" color="blue" onClick={commitValue}>
           {t('settings.add', 'Add')}
-        </button>
+        </UiButton>
       </div>
 
-      {items.length === 0 && emptyText && <p className={settingsHintClass}>{emptyText}</p>}
+      {items.length === 0 && emptyText && <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{emptyText}</p>}
 
       <div className="space-y-2">
         {items.map((item) => (
-          <div key={item} className={`${settingsSurfaceCardClass} flex items-center justify-between gap-3`}>
+          <div key={item} className="rounded-md border border-border-subtle bg-surface-2/55 p-3 flex items-center justify-between gap-3">
             <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-text-secondary">{item}</span>
-            <button type="button" onClick={() => onRemove(item)} className="shrink-0 text-[11px] font-medium text-danger transition-colors hover:text-danger/80">
+            <UiButton unstyled type="button" onClick={() => onRemove(item)} className="shrink-0 text-[11px] font-medium text-danger transition-colors hover:text-danger/80">
               {t('settings.remove', 'Remove')}
-            </button>
+            </UiButton>
           </div>
         ))}
       </div>
@@ -145,51 +138,50 @@ function EnvVarsSection() {
 
   return (
     <div className="space-y-4">
-      <div className={`${settingsFieldCardClass} space-y-4`}>
+      <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
         <div className="grid gap-4 lg:grid-cols-2">
           <div>
-            <label className={settingsLabelClass}>{t('settings.envKey', 'Name')}</label>
-            <input
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.envKey', 'Name')}</label>
+            <UiInput
               value={newKey}
               onChange={(e) => {
                 setNewKey(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, '_'))
                 setKeyError('')
               }}
               placeholder="API_KEY"
-              className={settingsMonoInputClass}
+              controlClassName="font-mono"
             />
             {keyError && <p className="mt-2 text-[11px] text-red-500">{keyError}</p>}
           </div>
           <div>
-            <label className={settingsLabelClass}>{t('settings.envValue', 'Value')}</label>
-            <input
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.envValue', 'Value')}</label>
+            <UiInput
               type={newSecret ? 'password' : 'text'}
               value={newValue}
               onChange={(e) => setNewValue(e.target.value)}
               placeholder="••••••••"
-              className={settingsMonoInputClass}
+              controlClassName="font-mono"
             />
           </div>
         </div>
 
         <div>
-          <label className={settingsLabelClass}>{t('settings.envDescription', 'Description')}</label>
-          <input
+          <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.envDescription', 'Description')}</label>
+          <UiInput
             value={newDesc}
             onChange={(e) => setNewDesc(e.target.value)}
             placeholder={t('settings.envDescriptionPlaceholder', 'What is this variable used for?')}
-            className={settingsInputClass}
           />
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
           <label className="inline-flex items-center gap-3 text-sm text-text-secondary">
-            <input type="checkbox" checked={newSecret} onChange={(e) => setNewSecret(e.target.checked)} className={settingsCheckboxClass} />
+            <Checkbox checked={newSecret} onChange={(v) => setNewSecret(v)} color="blue" />
             {t('settings.envMarkSecret', 'Secret (masked)')}
           </label>
-          <button type="button" onClick={handleAdd} disabled={!newKey.trim() || !newValue} className={settingsSoftButtonClass}>
+          <UiButton type="button" color="blue" onClick={handleAdd} disabled={!newKey.trim() || !newValue}>
             {t('settings.add', 'Add')}
-          </button>
+          </UiButton>
         </div>
       </div>
 
@@ -200,34 +192,34 @@ function EnvVarsSection() {
       ) : (
         <div className="space-y-2">
           {envVariables.map((variable) => (
-            <div key={variable.key} className={`${settingsFieldCardClass} p-3`}>
+            <div key={variable.key} className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
               {editingKey === variable.key ? (
                 <div className="space-y-3">
                   <span className="font-mono text-[12px] font-semibold text-accent">{variable.key}</span>
-                  <input
+                  <UiInput
                     type={editSecret ? 'password' : 'text'}
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     aria-label={t('settings.envValue', 'Value')}
-                    className={settingsMonoInputClass}
+                    controlClassName="font-mono"
                   />
-                  <input
+                  <UiInput
                     value={editDesc}
                     onChange={(e) => setEditDesc(e.target.value)}
                     placeholder={t('settings.envDescription', 'Description')}
-                    className={settingsInputClass}
                   />
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <label className="inline-flex items-center gap-3 text-sm text-text-secondary">
-                      <input type="checkbox" checked={editSecret} onChange={(e) => setEditSecret(e.target.checked)} className={settingsCheckboxClass} />
+                      <Checkbox checked={editSecret} onChange={(v) => setEditSecret(v)} color="blue" />
                       {t('settings.envMarkSecret', 'Secret (masked)')}
                     </label>
                     <div className="flex flex-wrap gap-2">
-                      <button type="button" onClick={() => setEditingKey(null)} className={settingsSecondaryButtonClass}>
+                      <UiButton type="button" outline onClick={() => setEditingKey(null)}>
                         {t('common.cancel', 'Cancel')}
-                      </button>
-                      <button
+                      </UiButton>
+                      <UiButton
                         type="button"
+                        color="blue"
                         onClick={() => {
                           updateEnvVariable(variable.key, {
                             value: editValue,
@@ -236,10 +228,9 @@ function EnvVarsSection() {
                           })
                           setEditingKey(null)
                         }}
-                        className={settingsSoftButtonClass}
                       >
                         {t('common.save', 'Save')}
-                      </button>
+                      </UiButton>
                     </div>
                   </div>
                 </div>
@@ -253,21 +244,21 @@ function EnvVarsSection() {
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <span className="font-mono text-[11px] text-text-muted wrap-break-word">{variable.secret && !visibleKeys.has(variable.key) ? '••••••••' : variable.value}</span>
                       {variable.secret && (
-                        <button type="button" onClick={() => toggleVisible(variable.key)} className="text-[11px] text-text-muted transition-colors hover:text-accent">
+                        <UiButton unstyled type="button" onClick={() => toggleVisible(variable.key)} className="text-[11px] text-text-muted transition-colors hover:text-accent">
                           {visibleKeys.has(variable.key) ? t('settings.hide', 'Hide') : t('settings.show', 'Show')}
-                        </button>
+                        </UiButton>
                       )}
                     </div>
                     {variable.description && <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{variable.description}</p>}
                   </div>
 
                   <div className="flex shrink-0 items-center gap-2">
-                    <button type="button" onClick={() => startEditing(variable)} className="rounded-full p-2 text-text-muted transition-colors hover:bg-surface-2 hover:text-accent" title={t('common.edit', 'Edit')}>
+                    <UiButton unstyled type="button" onClick={() => startEditing(variable)} className="rounded-full p-2 text-text-muted transition-colors hover:bg-surface-2 hover:text-accent" title={t('common.edit', 'Edit')}>
                       <IconifyIcon name="ui-edit" size={13} color="currentColor" />
-                    </button>
-                    <button type="button" onClick={() => removeEnvVariable(variable.key)} className="rounded-full p-2 text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500" title={t('common.delete', 'Delete')}>
+                    </UiButton>
+                    <UiButton unstyled type="button" onClick={() => removeEnvVariable(variable.key)} className="rounded-full p-2 text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-500" title={t('common.delete', 'Delete')}>
                       <IconifyIcon name="ui-cross" size={13} color="currentColor" />
-                    </button>
+                    </UiButton>
                   </div>
                 </div>
               )}
@@ -370,7 +361,7 @@ export function SecuritySettings() {
         eyebrow={t('settings.envVars', 'Environment Variables')}
         title={t('settings.agentSecretsVault', 'Agent Secrets Vault')}
         description={t('settings.agentSecretsVaultDesc', 'Store credentials, tokens, and config values that agents can retrieve at runtime through `env_get` without hardcoding them into prompts or skill files.')}
-        action={envVariables.length > 0 ? <button type="button" className={settingsDangerButtonClass}>{t('settings.secretsMasked', 'Secrets masked')}</button> : undefined}
+        action={envVariables.length > 0 ? <UiButton type="button" color="red">{t('settings.secretsMasked', 'Secrets masked')}</UiButton> : undefined}
       >
         <EnvVarsSection />
       </SettingsSection>

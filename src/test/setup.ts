@@ -36,3 +36,29 @@ global.console = {
   error: vi.fn(),
   warn: vi.fn(),
 }
+
+// Mock ResizeObserver (not available in jsdom, required by Headless UI anchor positioning)
+global.ResizeObserver = class ResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+// Mock IntersectionObserver (required by Headless UI floating panels)
+global.IntersectionObserver = class IntersectionObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+  readonly root = null
+  readonly rootMargin = ''
+  readonly thresholds: ReadonlyArray<number> = []
+  takeRecords(): IntersectionObserverEntry[] { return [] }
+}
+
+// Provide getBoundingClientRect layout stubs so Headless UI / FloatingUI
+// can compute positions without throwing in jsdom
+if (typeof Element !== 'undefined') {
+  Element.prototype.getBoundingClientRect = function () {
+    return { width: 200, height: 40, top: 0, left: 0, bottom: 40, right: 200, x: 0, y: 0, toJSON() { return this } }
+  }
+}

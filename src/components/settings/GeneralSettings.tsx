@@ -8,32 +8,85 @@ import {
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
-  settingsCheckboxClass,
-  settingsFieldCardClass,
-  settingsHintClass,
-  settingsInputClass,
-  settingsLabelClass,
-  settingsPrimaryButtonClass,
-  settingsSecondaryButtonClass,
-  settingsSelectClass,
-  settingsSoftButtonClass,
-  settingsSurfaceCardClass,
 } from './panelUi'
+import { Checkbox } from '@/components/catalyst-ui/checkbox'
+import { Button as UiButton } from '@/components/catalyst-ui/button'
+import { Input as UiInput, Select as UiSelect } from '@/components/catalyst-ui/form-controls'
 import type { AppLocale, BubbleStyle, CodeFont, FontSize, ThemeMode } from '@/types'
+import { ACCENT_PRESETS, type AccentColorId } from '@/theme/accentPresets'
 
 const ACCENT_SWATCH_STYLES = {
-  default: { fill: 'bg-[#C99A2E]', ring: 'ring-[#C99A2E]/45' },
-  sapphire: { fill: 'bg-[#0024D4]', ring: 'ring-[#0024D4]/45' },
-  emerald: { fill: 'bg-[#2DA66E]', ring: 'ring-[#2DA66E]/45' },
-  amethyst: { fill: 'bg-[#8B5CF6]', ring: 'ring-[#8B5CF6]/45' },
-  coral: { fill: 'bg-[#E06848]', ring: 'ring-[#E06848]/45' },
-  rose: { fill: 'bg-[#D44878]', ring: 'ring-[#D44878]/45' },
-  jade: { fill: 'bg-[#1C9B8E]', ring: 'ring-[#1C9B8E]/45' },
-  crimson: { fill: 'bg-[#CC3340]', ring: 'ring-[#CC3340]/45' },
-  copper: { fill: 'bg-[#C07840]', ring: 'ring-[#C07840]/45' },
-  arctic: { fill: 'bg-[#4AA8D0]', ring: 'ring-[#4AA8D0]/45' },
-  slate: { fill: 'bg-[#6B7B99]', ring: 'ring-[#6B7B99]/45' },
+  default: { fill: 'bg-[#0024D3]', ring: 'ring-[#0024D3]/45' },
+  amber: { fill: ACCENT_PRESETS.amber.swatchFill, ring: ACCENT_PRESETS.amber.swatchRing },
+  sapphire: { fill: ACCENT_PRESETS.sapphire.swatchFill, ring: ACCENT_PRESETS.sapphire.swatchRing },
+  emerald: { fill: ACCENT_PRESETS.emerald.swatchFill, ring: ACCENT_PRESETS.emerald.swatchRing },
+  amethyst: { fill: ACCENT_PRESETS.amethyst.swatchFill, ring: ACCENT_PRESETS.amethyst.swatchRing },
+  coral: { fill: ACCENT_PRESETS.coral.swatchFill, ring: ACCENT_PRESETS.coral.swatchRing },
+  rose: { fill: ACCENT_PRESETS.rose.swatchFill, ring: ACCENT_PRESETS.rose.swatchRing },
+  jade: { fill: ACCENT_PRESETS.jade.swatchFill, ring: ACCENT_PRESETS.jade.swatchRing },
+  crimson: { fill: ACCENT_PRESETS.crimson.swatchFill, ring: ACCENT_PRESETS.crimson.swatchRing },
+  copper: { fill: ACCENT_PRESETS.copper.swatchFill, ring: ACCENT_PRESETS.copper.swatchRing },
+  arctic: { fill: ACCENT_PRESETS.arctic.swatchFill, ring: ACCENT_PRESETS.arctic.swatchRing },
+  slate: { fill: ACCENT_PRESETS.slate.swatchFill, ring: ACCENT_PRESETS.slate.swatchRing },
 } as const
+
+const THEME_OPTION_STYLES: Record<ThemeMode, string> = {
+  dark: 'border-slate-700/80 bg-[linear-gradient(160deg,#08121d,#13253a)]',
+  light: 'border-slate-300/90 bg-[linear-gradient(160deg,#ffffff,#e9f0f7)]',
+  system: 'border-border-subtle/65 bg-[linear-gradient(90deg,#0b1622_0%,#0f2033_49%,#eef3f7_51%,#ffffff_100%)]',
+}
+
+function ThemePreview({ mode }: { mode: ThemeMode }) {
+  if (mode === 'system') {
+    return (
+      <div className="grid grid-cols-2 gap-2">
+        <div className="rounded-[14px] border border-slate-700/70 bg-[linear-gradient(160deg,#08121d,#13253a)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-100/90" />
+            <span className="h-1.5 w-5 rounded-full bg-slate-100/20" />
+          </div>
+          <div className="space-y-1.5">
+            <div className="h-2 rounded-full bg-slate-100/16" />
+            <div className="h-6 rounded-xl border border-white/8 bg-white/7" />
+            <div className="h-3 w-7 rounded-full bg-accent/75" />
+          </div>
+        </div>
+        <div className="rounded-[14px] border border-slate-300/90 bg-[linear-gradient(160deg,#ffffff,#e9f0f7)] p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-700/80" />
+            <span className="h-1.5 w-5 rounded-full bg-slate-500/30" />
+          </div>
+          <div className="space-y-1.5">
+            <div className="h-2 rounded-full bg-slate-400/18" />
+            <div className="h-6 rounded-xl border border-slate-300/85 bg-white/95" />
+            <div className="h-3 w-7 rounded-full bg-accent/75" />
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const isDark = mode === 'dark'
+
+  return (
+    <div className={`rounded-[16px] border p-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${THEME_OPTION_STYLES[mode]}`}>
+      <div className="mb-2 flex items-center gap-1.5">
+        <span className={`h-1.5 w-1.5 rounded-full ${isDark ? 'bg-slate-100/90' : 'bg-slate-700/80'}`} />
+        <span className={`h-1.5 w-7 rounded-full ${isDark ? 'bg-slate-100/20' : 'bg-slate-500/30'}`} />
+      </div>
+      <div className="grid grid-cols-[1.1fr_0.9fr] gap-2">
+        <div className="space-y-1.5">
+          <div className={`h-2 rounded-full ${isDark ? 'bg-slate-100/16' : 'bg-slate-400/18'}`} />
+          <div className={`h-6 rounded-xl border ${isDark ? 'border-white/8 bg-white/7' : 'border-slate-300/85 bg-white/95'}`} />
+          <div className="h-3 w-9 rounded-full bg-accent/75" />
+        </div>
+        <div className={`rounded-xl border p-2 ${isDark ? 'border-white/8 bg-black/14' : 'border-slate-300/80 bg-slate-100/90'}`}>
+          <div className={`h-full rounded-lg ${isDark ? 'bg-white/6' : 'bg-white/92'}`} />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const LOCALE_VALUES: AppLocale[] = ['en', 'zh']
 
@@ -97,75 +150,75 @@ function ProxySection() {
 
       {proxySettings.enabled && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(20rem,0.95fr)]">
-          <div className={settingsFieldCardClass}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
             <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.endpoint', 'Endpoint')}</div>
             <div className="grid gap-4 md:grid-cols-4">
               <div>
-                <label className={settingsLabelClass}>{t('settings.protocol', 'Protocol')}</label>
-                <select
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.protocol', 'Protocol')}</label>
+                <UiSelect
                   value={proxySettings.type}
                   onChange={(e) => setProxySettings({ type: e.target.value as 'http' | 'https' | 'socks5' })}
                   aria-label={t('settings.protocol', 'Protocol')}
-                  className={settingsSelectClass}
+                  wrapperClassName="w-full"
                 >
                   <option value="http">{t('settings.protocolHttp')}</option>
                   <option value="https">{t('settings.protocolHttps')}</option>
                   <option value="socks5">{t('settings.protocolSocks5')}</option>
-                </select>
+                </UiSelect>
               </div>
               <div className="md:col-span-2">
-                <label className={settingsLabelClass}>{t('settings.host', 'Host')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.host', 'Host')}</label>
+                <UiInput
                   value={proxySettings.host}
                   onChange={(e) => setProxySettings({ host: e.target.value })}
                   placeholder="127.0.0.1"
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.port', 'Port')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.port', 'Port')}</label>
+                <UiInput
                   type="number"
                   value={proxySettings.port || ''}
                   onChange={(e) => setProxySettings({ port: parseInt(e.target.value, 10) || 0 })}
                   placeholder="7890"
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
             </div>
           </div>
 
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.credentials', 'Credentials')}</div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={settingsLabelClass}>{t('settings.usernameOptional', 'Username (optional)')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.usernameOptional', 'Username (optional)')}</label>
+                <UiInput
                   value={proxySettings.username || ''}
                   onChange={(e) => setProxySettings({ username: e.target.value })}
                   aria-label={t('settings.usernameOptional', 'Username (optional)')}
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.passwordOptional', 'Password (optional)')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.passwordOptional', 'Password (optional)')}</label>
+                <UiInput
                   type="password"
                   value={proxySettings.password || ''}
                   onChange={(e) => setProxySettings({ password: e.target.value })}
                   aria-label={t('settings.passwordOptional', 'Password (optional)')}
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
             </div>
 
             {proxySettings.host && proxySettings.port > 0 ? (
-              <div className={settingsSurfaceCardClass}>
+              <div className="rounded-md border border-border-subtle bg-surface-2/55 p-3">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.proxyUrl', 'Proxy URL')}</div>
                 <code className="mt-2 block wrap-break-word text-[12px] text-accent">{proxySettings.type}://{proxySettings.host}:{proxySettings.port}</code>
               </div>
             ) : (
-              <p className={settingsHintClass}>{t('settings.proxyHint', 'Set host and port to preview the resolved endpoint and apply it consistently across the app.')}</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('settings.proxyHint', 'Set host and port to preview the resolved endpoint and apply it consistently across the app.')}</p>
             )}
           </div>
         </div>
@@ -191,36 +244,34 @@ function EmailSection() {
 
       {emailConfig.enabled && (
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(22rem,1fr)]">
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.deliveryPath', 'Delivery Path')}</div>
             <div className="grid gap-4 md:grid-cols-4">
               <div className="md:col-span-2">
-                <label className={settingsLabelClass}>{t('settings.smtpHost', 'SMTP Host')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.smtpHost', 'SMTP Host')}</label>
+                <UiInput
                   type="text"
                   value={emailConfig.smtpHost}
                   onChange={(e) => setEmailConfig({ smtpHost: e.target.value })}
                   placeholder="smtp.gmail.com"
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.smtpPort', 'SMTP Port')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.smtpPort', 'SMTP Port')}</label>
+                <UiInput
                   type="number"
                   value={emailConfig.smtpPort}
                   onChange={(e) => setEmailConfig({ smtpPort: parseInt(e.target.value, 10) || 587 })}
                   title={t('settings.smtpPort', 'SMTP Port')}
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
-              <label className={`${settingsSurfaceCardClass} flex items-center gap-3 self-end cursor-pointer`}>
-                <input
-                  type="checkbox"
+              <label className="rounded-md border border-border-subtle bg-surface-2/55 p-3 flex items-center gap-3 self-end cursor-pointer">
+                <Checkbox
                   checked={emailConfig.secure}
-                  onChange={(e) => setEmailConfig({ secure: e.target.checked })}
-                  className={settingsCheckboxClass}
-                  title={t('settings.useTls', 'Use TLS')}
+                  onChange={(value) => setEmailConfig({ secure: value })}
+                  color="blue"
                 />
                 <span className="text-sm text-text-secondary">{t('settings.useTls', 'Use TLS')}</span>
               </label>
@@ -228,55 +279,55 @@ function EmailSection() {
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={settingsLabelClass}>{t('settings.username', 'Username')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.username', 'Username')}</label>
+                <UiInput
                   type="text"
                   value={emailConfig.username}
                   onChange={(e) => setEmailConfig({ username: e.target.value })}
                   placeholder="your@email.com"
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.password', 'Password / App Password')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.password', 'Password / App Password')}</label>
+                <UiInput
                   type="password"
                   value={emailConfig.password}
                   onChange={(e) => setEmailConfig({ password: e.target.value })}
                   placeholder="••••••••"
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
             </div>
           </div>
 
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.identity', 'Identity')}</div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <label className={settingsLabelClass}>{t('settings.fromName', 'From Name')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.fromName', 'From Name')}</label>
+                <UiInput
                   type="text"
                   value={emailConfig.fromName}
                   onChange={(e) => setEmailConfig({ fromName: e.target.value })}
                   placeholder="Suora"
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
               <div>
-                <label className={settingsLabelClass}>{t('settings.fromAddress', 'From Address')}</label>
-                <input
+                <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.fromAddress', 'From Address')}</label>
+                <UiInput
                   type="email"
                   value={emailConfig.fromAddress}
                   onChange={(e) => setEmailConfig({ fromAddress: e.target.value })}
                   placeholder="assistant@example.com"
-                  className={settingsInputClass}
+                  wrapperClassName="w-full"
                 />
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
-              <button
+              <UiButton
                 type="button"
                 onClick={async () => {
                   setEmailTestStatus('testing')
@@ -307,10 +358,10 @@ function EmailSection() {
                   }
                 }}
                 disabled={emailTestStatus === 'testing' || !emailConfig.smtpHost}
-                className={settingsSoftButtonClass}
+                color="blue"
               >
                 {emailTestStatus === 'testing' ? t('settings.testing', 'Testing...') : t('settings.testConnection', 'Test Connection')}
-              </button>
+              </UiButton>
 
               {emailTestStatus === 'success' && (
                 <span className="inline-flex items-center gap-1.5 text-xs text-green-500">
@@ -356,8 +407,9 @@ export function GeneralSettings() {
     emailConfig,
   } = useAppStore()
   const [saved, setSaved] = useState(false)
-  const accentOptions = [
-    { value: 'default', label: t('settings.accentAmber', 'Amber') },
+  const accentOptions: ReadonlyArray<{ value: AccentColorId; label: string }> = [
+    { value: 'default', label: t('settings.accentDefault', 'Workbench Blue') },
+    { value: 'amber', label: t('settings.accentAmber', 'Amber') },
     { value: 'sapphire', label: t('settings.accentSapphire', 'Sapphire') },
     { value: 'emerald', label: t('settings.accentEmerald', 'Emerald') },
     { value: 'amethyst', label: t('settings.accentAmethyst', 'Amethyst') },
@@ -368,7 +420,7 @@ export function GeneralSettings() {
     { value: 'copper', label: t('settings.accentCopper', 'Copper') },
     { value: 'arctic', label: t('settings.accentArctic', 'Arctic') },
     { value: 'slate', label: t('settings.accentSlate', 'Slate') },
-  ] as const
+  ]
   const localeLabels: Record<AppLocale, string> = {
     en: t('settings.localeEnglish', 'English'),
     zh: t('settings.localeChinese', '中文'),
@@ -384,7 +436,7 @@ export function GeneralSettings() {
     }
   }, [workspacePath, setWorkspacePath])
 
-  const activeAccent = accentOptions.find((option) => option.value === accentColor)?.label || t('settings.accentAmber', 'Amber')
+  const activeAccent = accentOptions.find((option) => option.value === accentColor)?.label || t('settings.accentDefault', 'Workbench Blue')
   const themeLabel = theme === 'dark'
     ? t('settings.dark', 'Dark')
     : theme === 'light'
@@ -412,33 +464,41 @@ export function GeneralSettings() {
         description={t('settings.interfaceToneDesc', 'Choose the app mood, highlight color, and reading defaults so every workspace starts from a consistent visual language.')}
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,0.95fr)]">
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.theme', 'Theme')}</label>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.theme', 'Theme')}</label>
             <div className="grid gap-2 sm:grid-cols-3">
               {(['dark', 'light', 'system'] as ThemeMode[]).map((mode) => (
-                <button
+                <UiButton
                   key={mode}
+                  unstyled
                   type="button"
                   onClick={() => setTheme(mode)}
-                  className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-medium transition-all ${theme === mode ? 'border-accent/25 bg-accent/12 text-accent shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.08)]' : 'border-border-subtle/55 bg-surface-0/70 text-text-secondary hover:border-accent/18 hover:bg-surface-0/90'}`}
+                  className={`flex flex-col items-stretch gap-3 rounded-[22px] border bg-surface-0/72 p-3 text-left text-sm font-medium text-text-secondary transition-all hover:border-accent/18 hover:bg-surface-0/88 ${theme === mode ? 'scale-[1.01] border-accent/40 text-text-primary shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.12)] ring-2 ring-accent/15' : 'border-border-subtle/55'}`}
                 >
-                  {mode === 'dark' ? <IconifyIcon name="ui-moon" size={14} color="currentColor" /> : mode === 'light' ? <IconifyIcon name="ui-sun" size={14} color="currentColor" /> : <IconifyIcon name="ui-computer" size={14} color="currentColor" />}
-                  {mode === 'dark' ? t('settings.dark', 'Dark') : mode === 'light' ? t('settings.light', 'Light') : t('settings.system', 'System')}
-                </button>
+                  <ThemePreview mode={mode} />
+                  <span className="flex items-center justify-between gap-3">
+                    <span className="inline-flex items-center gap-2">
+                      {mode === 'dark' ? <IconifyIcon name="ui-moon" size={14} color="currentColor" /> : mode === 'light' ? <IconifyIcon name="ui-sun" size={14} color="currentColor" /> : <IconifyIcon name="ui-computer" size={14} color="currentColor" />}
+                      {mode === 'dark' ? t('settings.dark', 'Dark') : mode === 'light' ? t('settings.light', 'Light') : t('settings.system', 'System')}
+                    </span>
+                    {theme === mode && <IconifyIcon name="ui-check" size={14} color="currentColor" />}
+                  </span>
+                </UiButton>
               ))}
             </div>
           </div>
 
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.accentColor', 'Accent Color')}</label>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.accentColor', 'Accent Color')}</label>
             <div className="flex flex-wrap gap-2.5">
               {accentOptions.map((option) => (
-                <button
+                <UiButton
                   key={option.value}
+                  unstyled
                   type="button"
                   onClick={() => setAccentColor(option.value)}
                   title={option.label}
-                  className={`relative flex h-9 w-9 items-center justify-center rounded-full border-2 transition-all ${accentColor === option.value ? `border-text-primary scale-110 shadow-lg ring-2 ring-offset-2 ring-offset-surface-0 ${ACCENT_SWATCH_STYLES[option.value].ring}` : 'border-transparent hover:scale-105'}`}
+                  className={`relative flex h-9 w-9 items-center justify-center rounded-full border-2 bg-surface-0/72 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] transition-all ${accentColor === option.value ? `border-text-primary scale-110 shadow-lg ring-2 ring-offset-2 ring-offset-surface-0 ${ACCENT_SWATCH_STYLES[option.value].ring}` : 'border-border-subtle/35 hover:scale-105 hover:border-border-subtle/70'}`}
                   aria-label={t('settings.accentColorAria', 'Accent color: {name}').replace('{name}', option.label)}
                 >
                   <span className={`block h-full w-full rounded-full ${ACCENT_SWATCH_STYLES[option.value].fill}`} aria-hidden="true" />
@@ -447,35 +507,35 @@ export function GeneralSettings() {
                       <polyline points="20 6 9 17 4 12" />
                     </svg>
                   )}
-                </button>
+                </UiButton>
               ))}
             </div>
-            <p className={settingsHintClass}>{t('settings.accentHint', 'This accent color is reused by navigation rails, stats, and form focus states across the workbench.')}</p>
+            <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('settings.accentHint', 'This accent color is reused by navigation rails, stats, and form focus states across the workbench.')}</p>
           </div>
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-3">
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.fontSize', 'Font Size')}</label>
-            <select
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.fontSize', 'Font Size')}</label>
+            <UiSelect
               aria-label={t('settings.fontSize', 'Font Size')}
               value={fontSize}
               onChange={(e) => setFontSize(e.target.value as FontSize)}
-              className={settingsSelectClass}
+              wrapperClassName="w-full"
             >
               <option value="small">{t('settings.fontSizeSmall', 'Small')}</option>
               <option value="medium">{t('settings.fontSizeMedium', 'Medium')}</option>
               <option value="large">{t('settings.fontSizeLarge', 'Large')}</option>
-            </select>
+            </UiSelect>
           </div>
 
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.codeFont', 'Code Font')}</label>
-            <select
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.codeFont', 'Code Font')}</label>
+            <UiSelect
               aria-label={t('settings.codeFont', 'Code Font')}
               value={codeFont}
               onChange={(e) => setCodeFont(e.target.value as CodeFont)}
-              className={settingsSelectClass}
+              wrapperClassName="w-full"
             >
               <option value="default">{t('settings.codeFontDefault', 'System Default')}</option>
               <option value="fira-code">Fira Code</option>
@@ -483,22 +543,22 @@ export function GeneralSettings() {
               <option value="source-code-pro">Source Code Pro</option>
               <option value="cascadia-code">Cascadia Code</option>
               <option value="consolas">Consolas</option>
-            </select>
+            </UiSelect>
           </div>
 
-          <div className={settingsFieldCardClass}>
-            <label className={settingsLabelClass}>{t('settings.bubbleStyle', 'Bubble Style')}</label>
-            <select
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.bubbleStyle', 'Bubble Style')}</label>
+            <UiSelect
               aria-label={t('settings.bubbleStyle', 'Bubble Style')}
               value={bubbleStyle}
               onChange={(e) => setBubbleStyle(e.target.value as BubbleStyle)}
-              className={settingsSelectClass}
+              wrapperClassName="w-full"
             >
               <option value="default">{t('settings.bubbleDefault', 'Default')}</option>
               <option value="minimal">{t('settings.bubbleMinimal', 'Minimal')}</option>
               <option value="bordered">{t('settings.bubbleBordered', 'Bordered')}</option>
               <option value="glassmorphism">{t('settings.bubbleGlass', 'Glass')}</option>
-            </select>
+            </UiSelect>
           </div>
         </div>
       </SettingsSection>
@@ -509,17 +569,17 @@ export function GeneralSettings() {
         description={t('settings.regionAndLocalizationDesc', 'Choose the primary app language used by navigation, settings, and system messaging across the desktop shell.')}
       >
         <div className="max-w-md">
-          <label className={settingsLabelClass}>{t('settings.language', 'Language')}</label>
-          <select
+          <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.language', 'Language')}</label>
+          <UiSelect
             aria-label={t('settings.language', 'Language')}
             value={locale}
             onChange={(e) => setLocale(e.target.value as AppLocale)}
-            className={settingsSelectClass}
+            wrapperClassName="w-full"
           >
             {LOCALE_VALUES.map((value) => (
               <option key={value} value={value}>{localeLabels[value]}</option>
             ))}
-          </select>
+          </UiSelect>
         </div>
       </SettingsSection>
 
@@ -529,17 +589,17 @@ export function GeneralSettings() {
         description={t('settings.workspaceDefaultsDesc', 'Point Suora at the right workspace directory and decide how aggressively it saves and boots itself in the background.')}
       >
         <div className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(22rem,1fr)]">
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4">
             <div>
-              <label className={settingsLabelClass}>{t('settings.workspaceDir', 'Workspace Directory')}</label>
+              <label className="mb-1.5 block text-[12px] font-medium text-text-secondary">{t('settings.workspaceDir', 'Workspace Directory')}</label>
               <div className="flex flex-col gap-3 sm:flex-row">
-                <input
+                <UiInput
                   value={workspacePath}
                   onChange={(e) => setWorkspacePath(e.target.value)}
                   placeholder="~/.suora"
-                  className={`${settingsInputClass} flex-1`}
+                  wrapperClassName="flex-1"
                 />
-                <button
+                <UiButton
                   type="button"
                   onClick={() => {
                     const electron = getElectron()
@@ -547,12 +607,12 @@ export function GeneralSettings() {
                       void electron.invoke('system:ensureDirectory', workspacePath)
                     }
                   }}
-                  className={settingsSoftButtonClass}
+                  color="blue"
                 >
                   {t('settings.apply', 'Apply')}
-                </button>
+                </UiButton>
               </div>
-              <p className={settingsHintClass}>{t('settings.workspaceDirDesc', 'Agent memory, logs, plugin files, and pipeline snapshots are stored here.')}</p>
+              <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{t('settings.workspaceDirDesc', 'Agent memory, logs, plugin files, and pipeline snapshots are stored here.')}</p>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
@@ -566,7 +626,7 @@ export function GeneralSettings() {
             </div>
           </div>
 
-          <div className={`${settingsFieldCardClass} grid gap-3 sm:grid-cols-2`}>
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 grid gap-3 sm:grid-cols-2">
             <SettingsStat label={t('settings.theme', 'Theme')} value={themeLabel} accent />
             <SettingsStat label={t('settings.language', 'Language')} value={localeLabels[locale]} />
             <SettingsStat label={t('settings.proxy', 'Proxy')} value={proxySettings.enabled ? t('common.enabled', 'Enabled') : t('common.off', 'Off')} />
@@ -598,7 +658,7 @@ export function GeneralSettings() {
         action={saved ? <span className="inline-flex items-center gap-1.5 text-sm text-green-500"><IconifyIcon name="ui-check" size={14} color="currentColor" /> {t('settings.saved', 'Settings saved')}</span> : null}
       >
         <div className="flex flex-wrap gap-3">
-          <button
+          <UiButton
             type="button"
             onClick={async () => {
               const ok = await saveSettingsToWorkspace()
@@ -606,11 +666,11 @@ export function GeneralSettings() {
               setSaved(true)
               setTimeout(() => setSaved(false), 2000)
             }}
-            className={settingsPrimaryButtonClass}
+            color="blue"
           >
             {saved ? t('settings.saved', 'Settings saved') : t('settings.save', 'Save')}
-          </button>
-          <button
+          </UiButton>
+          <UiButton
             type="button"
             onClick={() => {
               const electron = getElectron()
@@ -618,10 +678,10 @@ export function GeneralSettings() {
                 void electron.invoke('system:ensureDirectory', workspacePath)
               }
             }}
-            className={settingsSecondaryButtonClass}
+            outline
           >
             {t('settings.verifyWorkspace', 'Verify Workspace Path')}
-          </button>
+          </UiButton>
         </div>
       </SettingsSection>
     </div>

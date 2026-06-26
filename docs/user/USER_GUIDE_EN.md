@@ -307,7 +307,7 @@ The current settings sections are:
 
 Important settings capabilities include:
 
-- theme, locale, fonts, and accent color
+- theme (dark/light/system), locale, fonts, and accent color (12 named presets: default blue, amber, sapphire, emerald, amethyst, coral, rose, jade, crimson, copper, arctic, slate)
 - auto-start
 - proxy configuration
 - SMTP email settings and connection test

@@ -10,12 +10,8 @@ import {
   SettingsSection,
   SettingsStat,
   SettingsToggleRow,
-  settingsDangerButtonClass,
-  settingsFieldCardClass,
-  settingsPrimaryButtonClass,
-  settingsSecondaryButtonClass,
-  settingsSurfaceCardClass,
 } from './panelUi'
+import { Button as UiButton } from '@/components/catalyst-ui/button'
 
 interface PerfMetrics {
   memory: { heapUsed: number; heapTotal: number; rss: number; external: number }
@@ -245,7 +241,7 @@ export function SystemSettings() {
         title={t('settings.productIdentity', 'Product Identity')}
         description={t('settings.productIdentityDesc', 'Quick reference for the current desktop shell, version surface, and the stack the renderer is running on.')}
       >
-        <div className={`${settingsFieldCardClass} flex flex-col gap-4 sm:flex-row sm:items-center`}>
+        <div className={`rounded-lg border border-border-subtle bg-surface-0/45 p-3 flex flex-col gap-4 sm:flex-row sm:items-center`}>
           <div className="flex h-14 w-14 items-center justify-center rounded-[22px] border border-accent/18 bg-accent/10 text-accent shadow-[0_12px_32px_rgba(var(--t-accent-rgb),0.14)]">
             <IconifyIcon name="ui-sparkles" size={28} color="currentColor" />
           </div>
@@ -263,7 +259,7 @@ export function SystemSettings() {
           title={t('settings.appUpdates', 'Application Updates')}
           description={t('settings.appUpdatesDesc', 'Check the packaged app version, monitor update progress, and install downloaded releases without leaving the workbench.')}
         >
-          <div className={`${settingsFieldCardClass} space-y-4`}>
+          <div className={`rounded-lg border border-border-subtle bg-surface-0/45 p-3 space-y-4`}>
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="text-sm font-semibold text-text-primary">
@@ -277,42 +273,42 @@ export function SystemSettings() {
                 )}
               </div>
               <div className="flex flex-wrap gap-3">
-                <button
+                <UiButton
                   type="button"
+                  color="blue"
                   onClick={() => void handleCheckForUpdates()}
                   disabled={checkingUpdates || installingUpdate}
-                  className={settingsPrimaryButtonClass}
                 >
                   <IconifyIcon name={checkingUpdates ? 'ui-loading' : 'ui-refresh'} size={14} color="currentColor" />
                   {checkingUpdates ? t('settings.checkingUpdates', 'Checking for updates…') : t('settings.checkForUpdates', 'Check for Updates')}
-                </button>
+          </UiButton>
                 {updaterState?.status === 'downloaded' && (
-                  <button
+                  <UiButton
                     type="button"
+                    outline
                     onClick={() => void handleInstallUpdate()}
                     disabled={installingUpdate}
-                    className={settingsSecondaryButtonClass}
                   >
                     <IconifyIcon name={installingUpdate ? 'ui-loading' : 'ui-download'} size={14} color="currentColor" />
                     {installingUpdate ? t('settings.installingUpdate', 'Installing…') : t('settings.installUpdate', 'Install Update')}
-                  </button>
+                  </UiButton>
                 )}
                 {hasNewerVersion && updaterState?.status !== 'downloaded' && manualUpdateUrl && (
-                  <button
+                  <UiButton
                     type="button"
+                    outline
                     onClick={() => void handleOpenUpdateUrl(manualUpdateUrl)}
                     disabled={checkingUpdates || installingUpdate}
-                    className={settingsSecondaryButtonClass}
                   >
                     <IconifyIcon name="ui-download" size={14} color="currentColor" />
                     {manualUpdateLabel}
-                  </button>
+                  </UiButton>
                 )}
               </div>
             </div>
 
             {typeof updaterState?.downloadPercent === 'number' && updaterState.status === 'downloading' && (
-              <div className={settingsSurfaceCardClass}>
+              <div className="rounded-md border border-border-subtle bg-surface-2/55 p-3">
                 <div className="mb-2 flex items-center justify-between gap-3 text-[11px] text-text-muted">
                   <span>{t('settings.downloadProgress', 'Download Progress')}</span>
                   <span className="font-mono text-text-primary">{Math.round(updaterState.downloadPercent)}%</span>
@@ -329,13 +325,13 @@ export function SystemSettings() {
             {(releaseDate || manualUpdateUrl) && (
               <div className="grid gap-3 md:grid-cols-2">
                 {releaseDate && (
-                  <div className={settingsSurfaceCardClass}>
+                    <div className="rounded-md border border-border-subtle bg-surface-2/55 p-3">
                     <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.releaseDate', 'Release Date')}</div>
                     <div className="mt-2 text-[12px] font-mono text-text-primary">{new Date(releaseDate).toLocaleString()}</div>
                   </div>
                 )}
                 {manualUpdateUrl && (
-                  <div className={settingsSurfaceCardClass}>
+                  <div className="rounded-md border border-border-subtle bg-surface-2/55 p-3">
                     <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{releaseLinkTitle}</div>
                     <div className="mt-2 break-all text-[12px] font-mono text-text-primary">{manualUpdateUrl}</div>
                   </div>
@@ -344,7 +340,7 @@ export function SystemSettings() {
             )}
 
             {releaseNotesHtml && (
-              <div className={settingsSurfaceCardClass}>
+              <div className="rounded-md border border-border-subtle bg-surface-2/55 p-3">
                 <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.releaseNotes', 'Release Notes')}</div>
                 <div
                   className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap text-[11px] leading-6 text-text-secondary [&_a]:font-medium [&_a]:text-accent [&_a]:underline [&_a]:underline-offset-2 [&_blockquote]:border-l-2 [&_blockquote]:border-accent/20 [&_blockquote]:pl-3 [&_code]:rounded-md [&_code]:bg-surface-2/75 [&_code]:px-1.5 [&_code]:py-0.5 [&_h1]:text-sm [&_h1]:font-semibold [&_h1]:text-text-primary [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:text-text-primary [&_h3]:text-[12px] [&_h3]:font-semibold [&_h3]:text-text-primary [&_li]:ml-4 [&_ol]:list-decimal [&_p+p]:mt-2 [&_pre]:overflow-x-auto [&_pre]:rounded-xl [&_pre]:bg-surface-2/75 [&_pre]:p-3 [&_ul]:list-disc"
@@ -367,21 +363,21 @@ export function SystemSettings() {
         title={t('settings.replayOnboarding', 'Replay Onboarding')}
         description={t('settings.replayOnboardingDesc', 'Jump back into the guided first-run flow to reconfigure basics, provider setup, and recommended workbench entry points.')}
       >
-        <div className={`${settingsFieldCardClass} flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between`}>
+        <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-text-primary">{t('settings.onboardingTitle', 'Onboarding Walkthrough')}</p>
             <p className="mt-1 text-[12px] leading-relaxed text-text-muted">{t('settings.onboardingDesc', 'Replay the first-run setup guide and jump back into the recommended starting flow.')}</p>
           </div>
-          <button
+          <UiButton
             type="button"
+            color="blue"
             onClick={() => {
               setOnboarding({ completed: false, skipped: false, currentStep: 0 })
               navigate('/chat')
             }}
-            className={settingsPrimaryButtonClass}
           >
             {t('settings.rerunOnboarding', 'Re-run Walkthrough')}
-          </button>
+          </UiButton>
         </div>
       </SettingsSection>
 
@@ -397,13 +393,13 @@ export function SystemSettings() {
         ) : (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
-              <button type="button" onClick={() => void fetchMetrics()} disabled={loading} className={settingsPrimaryButtonClass}>
+              <UiButton type="button" color="blue" onClick={() => void fetchMetrics()} disabled={loading}>
                 <IconifyIcon name={loading ? 'ui-loading' : 'ui-refresh'} size={14} color="currentColor" />
                 {loading ? t('settings.loading', 'Loading...') : t('settings.refresh', 'Refresh')}
-              </button>
-              <button type="button" onClick={() => setAutoRefresh(!autoRefresh)} className={settingsSecondaryButtonClass}>
+              </UiButton>
+              <UiButton type="button" outline onClick={() => setAutoRefresh(!autoRefresh)}>
                 {autoRefresh ? t('settings.autoRefreshOn', 'Auto refresh on (3s)') : t('settings.autoRefreshOff', 'Auto refresh off')}
-              </button>
+              </UiButton>
             </div>
 
             <SettingsToggleRow
@@ -415,7 +411,7 @@ export function SystemSettings() {
 
             {metrics && (
               <div className="space-y-4">
-                <div className={settingsFieldCardClass}>
+                <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
                   <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.memoryUsage', 'Memory')}</div>
                   <div className="grid gap-3 lg:grid-cols-4">
                     {([
@@ -424,7 +420,7 @@ export function SystemSettings() {
                       { label: t('settings.rss', 'RSS'), value: metrics.memory.rss, pct: null },
                       { label: t('settings.external', 'External'), value: metrics.memory.external, pct: null },
                     ] as const).map(({ label, value, pct }) => (
-                      <div key={label} className={settingsSurfaceCardClass}>
+                      <div key={label} className="rounded-md border border-border-subtle bg-surface-2/55 p-3">
                         <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{label}</p>
                         <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{formatBytes(value)}</p>
                         {pct !== null && (
@@ -439,26 +435,26 @@ export function SystemSettings() {
                 </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
-                  <div className={settingsFieldCardClass}>
+                  <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
                     <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.cpuUser', 'CPU User')}</p>
                     <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.user / 1000).toFixed(1)} {t('settings.millisecondsUnit', 'ms')}</p>
                   </div>
-                  <div className={settingsFieldCardClass}>
+                  <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
                     <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.cpuSystem', 'CPU System')}</p>
                     <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{(metrics.cpu.system / 1000).toFixed(1)} {t('settings.millisecondsUnit', 'ms')}</p>
                   </div>
-                  <div className={settingsFieldCardClass}>
+                  <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
                     <p className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{t('settings.uptime', 'Uptime')}</p>
                     <p className="mt-2 text-sm font-mono font-semibold text-text-primary">{formatUptime(metrics.uptime)}</p>
                   </div>
                 </div>
 
                 {metrics.versions && (
-                  <div className={settingsFieldCardClass}>
+                  <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
                     <div className="mb-3 text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted/55">{t('settings.runtimeVersions', 'Runtime Versions')}</div>
                     <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                       {Object.entries(metrics.versions).map(([name, version]) => (
-                        <div key={name} className={`${settingsSurfaceCardClass} flex items-center justify-between gap-3`}>
+                        <div key={name} className="rounded-md border border-border-subtle bg-surface-2/55 p-3 flex items-center justify-between gap-3">
                           <span className="text-[11px] text-text-muted">{name}</span>
                           <span className="text-[11px] font-mono text-text-primary">{version}</span>
                         </div>
@@ -478,16 +474,16 @@ export function SystemSettings() {
           title={t('settings.failureArchive', 'Failure Archive')}
           description={t('settings.failureArchiveDesc', 'Review recent desktop crashes, inspect the recorded error payload, and clear the archive once the issue is understood.')}
           action={crashLogs.length > 0 ? (
-            <button
+            <UiButton
               type="button"
+              color="red"
               onClick={async () => {
                 await electron.invoke('crash:clearLogs')
                 setCrashLogs([])
               }}
-              className={settingsDangerButtonClass}
             >
               {t('settings.clearAll', 'Clear')}
-            </button>
+            </UiButton>
           ) : undefined}
         >
           {crashLogs.length === 0 ? (

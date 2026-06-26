@@ -1,1076 +1,816 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { EditorContent, useEditor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Placeholder from '@tiptap/extension-placeholder'
-import Image from '@tiptap/extension-image'
-import { Table } from '@tiptap/extension-table'
-import { TableRow } from '@tiptap/extension-table-row'
-import { TableHeader } from '@tiptap/extension-table-header'
-import { TableCell } from '@tiptap/extension-table-cell'
-import { TaskList } from '@tiptap/extension-task-list'
-import { TaskItem } from '@tiptap/extension-task-item'
-import { useAppStore } from '@/store/appStore'
-import { SidePanel } from '@/components/layout/SidePanel'
-import { ResizeHandle } from '@/components/layout/ResizeHandle'
-import { useResizablePanel } from '@/hooks/useResizablePanel'
-import { useI18n } from '@/hooks/useI18n'
-import { IconifyIcon } from '@/components/icons/IconifyIcons'
-import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer'
-import { DocumentGraphView } from '@/components/documents/DocumentGraphView'
-import { DocumentsAssistantDrawer } from '@/components/documents/DocumentsAssistantDrawer'
-import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions'
-import { WorkbenchEmptyState } from '@/components/ui/Primitives'
-import { confirm } from '@/services/confirmDialog'
-import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus'
-import { exportDocument, type ExportFormat } from '@/services/exportUtils'
-import { toast } from '@/services/toast'
-import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents'
-import { computeDocumentGroupStatistics, computeDocumentStatistics } from '@/services/documentStatistics'
-import { analyzeDocumentGraphInsights, buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph'
-import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types'
-
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TaskList } from '@tiptap/extension-task-list';
+import { TaskItem } from '@tiptap/extension-task-item';
+import { useAppStore } from '@/store/appStore';
+import { SidePanel } from '@/components/layout/SidePanel';
+import { ResizeHandle } from '@/components/layout/ResizeHandle';
+import { useResizablePanel } from '@/hooks/useResizablePanel';
+import { useI18n } from '@/hooks/useI18n';
+import { IconifyIcon } from '@/components/icons/IconifyIcons';
+import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer';
+import { DocumentGraphView } from '@/components/documents/DocumentGraphView';
+import { DocumentsAssistantDrawer } from '@/components/documents/DocumentsAssistantDrawer';
+import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions';
+import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
+import { Button as UiButton } from '@/components/catalyst-ui/button';
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/catalyst-ui/dropdown';
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { confirm } from '@/services/confirmDialog';
+import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus';
+import { exportDocument, type ExportFormat } from '@/services/exportUtils';
+import { toast } from '@/services/toast';
+import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents';
+import { computeDocumentGroupStatistics, computeDocumentStatistics } from '@/services/documentStatistics';
+import { analyzeDocumentGraphInsights, buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph';
+import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types';
+import { Input as UiInput, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
 interface DirEntry {
-  name: string
-  isDirectory: boolean
-  path: string
+    name: string;
+    isDirectory: boolean;
+    path: string;
 }
-
 interface FsWatchChangedPayload {
-  dir?: string
+    dir?: string;
 }
-
 interface ExportCorpusStatus {
-  type: 'success' | 'error'
-  message: string
-  rootDir?: string
+    type: 'success' | 'error';
+    message: string;
+    rootDir?: string;
 }
-
 const DOCUMENT_GROUP_COLOR_CLASS: Record<string, string> = {
-  '#12A8A0': 'bg-[#12A8A0]',
-  '#4D7CFF': 'bg-[#4D7CFF]',
-  '#D9A441': 'bg-[#D9A441]',
-  '#35B98F': 'bg-[#35B98F]',
-  '#E45F68': 'bg-[#E45F68]',
-  '#9B7CFF': 'bg-[#9B7CFF]',
-}
-
+    '#12A8A0': 'bg-[#12A8A0]',
+    '#4D7CFF': 'bg-[#4D7CFF]',
+    '#D9A441': 'bg-[#D9A441]',
+    '#35B98F': 'bg-[#35B98F]',
+    '#E45F68': 'bg-[#E45F68]',
+    '#9B7CFF': 'bg-[#9B7CFF]',
+};
 function sortDocumentNodes(a: DocumentNode, b: DocumentNode) {
-  return a.type === b.type ? a.title.localeCompare(b.title) : a.type === 'folder' ? -1 : 1
+    return a.type === b.type ? a.title.localeCompare(b.title) : a.type === 'folder' ? -1 : 1;
 }
-
 function getDocumentGroupColorClass(color: string) {
-  return DOCUMENT_GROUP_COLOR_CLASS[color] ?? 'bg-accent'
+    return DOCUMENT_GROUP_COLOR_CLASS[color] ?? 'bg-accent';
 }
-
 function getDocumentHealthScoreClass(score: number) {
-  if (score >= 80) return 'border-success/25 bg-success/10 text-success'
-  if (score >= 60) return 'border-amber-400/25 bg-amber-400/10 text-amber-500'
-  return 'border-danger/25 bg-danger/10 text-danger'
+    if (score >= 80)
+        return 'border-success/25 bg-success/10 text-success';
+    if (score >= 60)
+        return 'border-amber-400/25 bg-amber-400/10 text-amber-500';
+    return 'border-danger/25 bg-danger/10 text-danger';
 }
-
 function getDocumentNodeDisplayName(node: DocumentNode): string {
-  if (node.type !== 'document') return node.title
-  return getDocumentDisplayName(node.title)
+    if (node.type !== 'document')
+        return node.title;
+    return getDocumentDisplayName(node.title);
 }
-
 function normalizeWatchedPath(pathValue: string): string {
-  return pathValue.replace(/\\/g, '/').replace(/\/+$/g, '')
+    return pathValue.replace(/\\/g, '/').replace(/\/+$/g, '');
 }
-
 function joinWorkspacePath(workspacePath: string, relativePath: string): string {
-  return `${normalizeWatchedPath(workspacePath)}/${relativePath.replace(/^[/\\]+/, '').replace(/\\/g, '/')}`
+    return `${normalizeWatchedPath(workspacePath)}/${relativePath.replace(/^[/\\]+/, '').replace(/\\/g, '/')}`;
 }
-
-const EMPTY_DOCUMENT_CHILDREN: DocumentNode[] = []
+const EMPTY_DOCUMENT_CHILDREN: DocumentNode[] = [];
 const EMPTY_DOCUMENT_GRAPH: DocumentGraph = {
-  nodes: [],
-  edges: [],
-  backlinksByDocumentId: {},
-  referencesByDocumentId: {},
-  orphanDocumentIds: [],
-  tags: [],
-}
-
+    nodes: [],
+    edges: [],
+    backlinksByDocumentId: {},
+    referencesByDocumentId: {},
+    orphanDocumentIds: [],
+    tags: [],
+};
 function collectAncestorFolderIds(parentId: string | null, nodes: DocumentNode[]) {
-  const ids: string[] = []
-  const visited = new Set<string>()
-  let currentId = parentId
-
-  while (currentId && !visited.has(currentId)) {
-    visited.add(currentId)
-    ids.push(currentId)
-    const currentNode = nodes.find((node) => node.id === currentId && node.type === 'folder')
-    currentId = currentNode?.parentId ?? null
-  }
-
-  return ids
+    const ids: string[] = [];
+    const visited = new Set<string>();
+    let currentId = parentId;
+    while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        ids.push(currentId);
+        const currentNode = nodes.find((node) => node.id === currentId && node.type === 'folder');
+        currentId = currentNode?.parentId ?? null;
+    }
+    return ids;
 }
-
 function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;')
+    return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
 }
-
 function escapeAttr(value: string) {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
-
 function inlineMarkdown(value: string) {
-  // Extract inline math tokens before HTML escaping to preserve raw LaTeX.
-  // The pattern intentionally excludes newlines ($\n) because inline math
-  // is single-line by convention; block math uses $$...$$.
-  const mathTokens: string[] = []
-  const tokenized = value.replace(/\$([^$\n]+)\$/g, (_, latex: string) => {
-    mathTokens.push(latex)
-    return `\x01M${mathTokens.length - 1}\x01`
-  })
-
-  let result = escapeHtml(tokenized)
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/~~([^~]+)~~/g, '<s>$1</s>')
-    .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`)
-    .replace(/\[\[([^\]\n]+)\]\]/g, (_, target: string) => `<a href="#doc:${escapeAttr(target)}">${escapeHtml(target)}</a>`)
-    .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, (_, label: string, href: string) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`)
-
-  result = result.replace(/\x01M(\d+)\x01/g, (_, i: string) => {
-    const latex = mathTokens[parseInt(i)]
-    return `<span data-math-inline="${escapeAttr(latex)}"></span>`
-  })
-
-  return result
+    // Extract inline math tokens before HTML escaping to preserve raw LaTeX.
+    // The pattern intentionally excludes newlines ($\n) because inline math
+    // is single-line by convention; block math uses $$...$$.
+    const mathTokens: string[] = [];
+    const tokenized = value.replace(/\$([^$\n]+)\$/g, (_, latex: string) => {
+        mathTokens.push(latex);
+        return `\x01M${mathTokens.length - 1}\x01`;
+    });
+    let result = escapeHtml(tokenized)
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/~~([^~]+)~~/g, '<s>$1</s>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`)
+        .replace(/\[\[([^\]\n]+)\]\]/g, (_, target: string) => `<a href="#doc:${escapeAttr(target)}">${escapeHtml(target)}</a>`)
+        .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, (_, label: string, href: string) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`);
+    result = result.replace(/\x01M(\d+)\x01/g, (_, i: string) => {
+        const latex = mathTokens[parseInt(i)];
+        return `<span data-math-inline="${escapeAttr(latex)}"></span>`;
+    });
+    return result;
 }
-
 function parseTableRow(line: string): string[] {
-  return line
-    .replace(/^\||\|$/g, '')
-    .split('|')
-    .map((cell) => cell.trim())
+    return line
+        .replace(/^\||\|$/g, '')
+        .split('|')
+        .map((cell) => cell.trim());
 }
-
 function isTableSeparator(line: string): boolean {
-  return /^\|?[\s|:-]+\|?$/.test(line) && /[-]/.test(line)
+    return /^\|?[\s|:-]+\|?$/.test(line) && /[-]/.test(line);
 }
-
 function markdownToTiptapHtml(markdown: string) {
-  const lines = markdown.split('\n')
-  const html: string[] = []
-  let list: 'ul' | 'ol' | 'ul[data-type="taskList"]' | null = null
-  let inCode = false
-  let codeLang = ''
-  let code: string[] = []
-  let inMath = false
-  let math: string[] = []
-  // Table state: buffer pending rows until separator is confirmed
-  let tablePending: string[] = []
-  let inTable = false
-
-  const closeList = () => {
-    if (list) {
-      html.push(`</${list === 'ul[data-type="taskList"]' ? 'ul' : list}>`)
-      list = null
-    }
-  }
-
-  const flushTable = () => {
-    if (inTable) {
-      html.push('</tbody></table>')
-      inTable = false
-    }
-  }
-
-  const flushPendingTable = () => {
-    if (tablePending.length > 0) {
-      // Not a real table — emit as paragraphs
-      for (const pending of tablePending) {
-        html.push(`<p>${inlineMarkdown(pending)}</p>`)
-      }
-      tablePending = []
-    }
-  }
-
-  lines.forEach((line) => {
-    // ── Code / mermaid fence ──────────────────────────────────────────────
-    if (line.trim().startsWith('```')) {
-      if (inCode) {
-        if (codeLang === 'mermaid') {
-          html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`)
-        } else {
-          html.push(`<pre><code class="language-${escapeHtml(codeLang)}">${escapeHtml(code.join('\n'))}</code></pre>`)
+    const lines = markdown.split('\n');
+    const html: string[] = [];
+    let list: 'ul' | 'ol' | 'ul[data-type="taskList"]' | null = null;
+    let inCode = false;
+    let codeLang = '';
+    let code: string[] = [];
+    let inMath = false;
+    let math: string[] = [];
+    // Table state: buffer pending rows until separator is confirmed
+    let tablePending: string[] = [];
+    let inTable = false;
+    const closeList = () => {
+        if (list) {
+            html.push(`</${list === 'ul[data-type="taskList"]' ? 'ul' : list}>`);
+            list = null;
         }
-        code = []
-        codeLang = ''
-        inCode = false
-      } else {
-        closeList()
-        flushTable()
-        flushPendingTable()
-        codeLang = line.trim().slice(3).trim()
-        inCode = true
-      }
-      return
-    }
-
-    if (inCode) {
-      code.push(line)
-      return
-    }
-
-    // ── Block math ($$...$$) ───────────────────────────────────────────────
-    if (line.trim() === '$$') {
-      if (inMath) {
-        html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`)
-        math = []
-        inMath = false
-      } else {
-        closeList()
-        flushTable()
-        flushPendingTable()
-        inMath = true
-      }
-      return
-    }
-
-    if (inMath) {
-      math.push(line)
-      return
-    }
-
-    // ── GFM Tables ────────────────────────────────────────────────────────
-    const isTableLine = line.trim().startsWith('|') || (line.includes('|') && !line.trim().startsWith('#'))
-
-    if (inTable) {
-      if (isTableSeparator(line) || !line.trim()) {
-        // Empty line ends the table
-        if (!line.trim()) {
-          flushTable()
-          return
+    };
+    const flushTable = () => {
+        if (inTable) {
+            html.push('</tbody></table>');
+            inTable = false;
         }
-        return
-      }
-      if (line.trim().startsWith('|') || line.includes('|')) {
-        const cells = parseTableRow(line)
-        const row = cells.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join('')
-        html.push(`<tr>${row}</tr>`)
-        return
-      }
-      flushTable()
-    }
-
-    if (!inTable && tablePending.length === 0 && isTableLine && line.trim().startsWith('|')) {
-      // Could be a table header row — buffer it
-      tablePending.push(line)
-      return
-    }
-
-    if (tablePending.length > 0) {
-      if (isTableSeparator(line)) {
-        // Confirmed table
-        closeList()
-        const headerCells = parseTableRow(tablePending[0])
-        const headerRow = headerCells.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join('')
-        html.push(`<table><thead><tr>${headerRow}</tr></thead><tbody>`)
-        inTable = true
-        tablePending = []
-        return
-
-      } else {
-        // Not a table — flush buffered line
-        flushPendingTable()
-      }
-    }
-
-    // ── Normal inline content ──────────────────────────────────────────────
-    const heading = /^(#{1,6})\s+(.*)$/.exec(line)
-    if (heading) {
-      closeList()
-      html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`)
-      return
-    }
-
-    // Task list items
-    const taskUnchecked = /^\s*[-*]\s+\[ \]\s+(.*)$/.exec(line)
-    if (taskUnchecked) {
-      if (list !== 'ul[data-type="taskList"]') {
-        closeList()
-        list = 'ul[data-type="taskList"]'
-        html.push('<ul data-type="taskList">')
-      }
-      html.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div><p>${inlineMarkdown(taskUnchecked[1])}</p></div></li>`)
-      return
-    }
-
-    const taskChecked = /^\s*[-*]\s+\[x\]\s+(.*)$/i.exec(line)
-    if (taskChecked) {
-      if (list !== 'ul[data-type="taskList"]') {
-        closeList()
-        list = 'ul[data-type="taskList"]'
-        html.push('<ul data-type="taskList">')
-      }
-      html.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked /></label><div><p>${inlineMarkdown(taskChecked[1])}</p></div></li>`)
-      return
-    }
-
-    const unordered = /^\s*[-*]\s+(.*)$/.exec(line)
-    if (unordered) {
-      if (list !== 'ul') {
-        closeList()
-        list = 'ul'
-        html.push('<ul>')
-      }
-      html.push(`<li>${inlineMarkdown(unordered[1])}</li>`)
-      return
-    }
-
-    const ordered = /^\s*\d+\.\s+(.*)$/.exec(line)
-    if (ordered) {
-      if (list !== 'ol') {
-        closeList()
-        list = 'ol'
-        html.push('<ol>')
-      }
-      html.push(`<li>${inlineMarkdown(ordered[1])}</li>`)
-      return
-    }
-
-    closeList()
-    if (line.trim().startsWith('>')) {
-      html.push(`<blockquote>${inlineMarkdown(line.replace(/^>\s?/, ''))}</blockquote>`)
-    } else if (line.trim() === '---') {
-      html.push('<hr />')
-    } else if (line.trim()) {
-      html.push(`<p>${inlineMarkdown(line)}</p>`)
-    }
-  })
-
-  closeList()
-  flushTable()
-  flushPendingTable()
-  if (inCode) {
-    if (codeLang === 'mermaid') {
-      html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`)
-    } else {
-      html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`)
-    }
-  }
-  if (inMath) html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`)
-  return html.join('\n') || '<p></p>'
-}
-
-function DocumentTiptapEditor({ document, onUpdate }: { document: DocumentItem; onUpdate: (markdown: string) => void }) {
-  // Prevents the onUpdate callback from firing during programmatic content resets
-  // that occur when switching between documents, avoiding a feedback loop where
-  // the reset triggers onUpdate which would overwrite the incoming document's markdown.
-  const isSyncingFromPropsRef = useRef(false)
-  // Track the last markdown emitted by this editor so we can distinguish between
-  // external updates (from the store, e.g. AI write) and our own debounced flushes.
-  const lastEmittedMarkdownRef = useRef(document.markdown)
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      Placeholder.configure({ placeholder: 'Start writing…' }),
-      Image.configure({ inline: true }),
-      Table.configure({ resizable: false }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      MathBlock,
-      InlineMath,
-      MermaidBlock,
-    ],
-    content: markdownToTiptapHtml(document.markdown),
-    editable: true,
-    editorProps: {
-      attributes: {
-        class: 'document-prose min-h-full focus:outline-none',
-      },
-    },
-    onUpdate: ({ editor: ed }: { editor: { getJSON: () => unknown } }) => {
-      if (isSyncingFromPropsRef.current) return
-      const json = ed.getJSON()
-      const markdown = tiptapJsonToMarkdown(json as Parameters<typeof tiptapJsonToMarkdown>[0])
-      lastEmittedMarkdownRef.current = markdown
-      onUpdate(markdown)
-    },
-  })
-
-  const previousDocumentIdRef = useRef(document.id)
-
-  useEffect(() => {
-    if (!editor || editor.isDestroyed) return
-    const documentChanged = previousDocumentIdRef.current !== document.id
-    // Sync editor content when the document identity changes, or when the
-    // document's markdown is updated externally (e.g. AI generation, import)
-    // to a value the editor itself did not just emit. The lastEmittedMarkdownRef
-    // guard avoids overwriting in-flight user edits during the debounce window.
-    // We always force a sync on identity change so a new document whose
-    // markdown coincidentally equals the previous emission still loads.
-    if (!documentChanged && document.markdown === lastEmittedMarkdownRef.current) return
-    isSyncingFromPropsRef.current = true
-    editor.commands.setContent(markdownToTiptapHtml(document.markdown), { emitUpdate: false })
-    lastEmittedMarkdownRef.current = document.markdown
-    previousDocumentIdRef.current = document.id
-    isSyncingFromPropsRef.current = false
-  }, [document.id, document.markdown, editor])
-
-  return <EditorContent editor={editor} className="document-tiptap-wysiwyg h-full" />
-}
-
-function TreeActionMenu({
-  label,
-  actions,
-}: {
-  label: string
-  actions: Array<{ key: string; label: string; onSelect: () => void; tone?: 'default' | 'danger' }>
-}) {
-  const [open, setOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpen(false)
-      }
-    }
-
-    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
-    }
-
-    window.addEventListener('mousedown', handlePointerDown)
-    window.addEventListener('keydown', handleKeyDown)
-    return () => {
-      window.removeEventListener('mousedown', handlePointerDown)
-      window.removeEventListener('keydown', handleKeyDown)
-    }
-  }, [open])
-
-  return (
-    <div ref={menuRef} className="relative shrink-0">
-      <button
-        type="button"
-        aria-label={`More actions: ${label}`}
-        aria-haspopup="menu"
-        onClick={(event) => {
-          event.stopPropagation()
-          setOpen((current) => !current)
-        }}
-        className="flex h-6 min-w-6 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/72 px-1.5 text-[11px] font-semibold leading-none text-text-muted transition-colors hover:text-text-primary"
-      >
-        ...
-      </button>
-      {open && (
-        <div role="menu" className="absolute right-0 top-[calc(100%+0.25rem)] z-30 min-w-40 overflow-hidden rounded-2xl border border-border-subtle/60 bg-surface-1/98 p-1 shadow-[0_18px_48px_rgba(15,23,42,0.24)]">
-          {actions.map((action) => (
-            <button
-              key={action.key}
-              type="button"
-              role="menuitem"
-              onClick={(event) => {
-                event.stopPropagation()
-                setOpen(false)
-                action.onSelect()
-              }}
-              className={`flex w-full items-center rounded-xl px-3 py-2 text-left text-[12px] transition-colors ${action.tone === 'danger' ? 'text-danger hover:bg-danger/10' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}
-            >
-              {action.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function TreeNode({
-  node,
-  childrenByParent,
-  selectedDocumentId,
-  selectedFolderId,
-  editingNodeId,
-  editingTitle,
-  expanded,
-  onToggle,
-  onSelectDocument,
-  onSelectFolder,
-  onStartRename,
-  onEditingTitleChange,
-  onCommitRename,
-  onCancelRename,
-  onCreateDocument,
-  onCreateFolder,
-  onDeleteNode,
-}: {
-  node: DocumentNode
-  childrenByParent: Map<string | null, DocumentNode[]>
-  selectedDocumentId: string | null
-  selectedFolderId: string | null
-  editingNodeId: string | null
-  editingTitle: string
-  expanded: Set<string>
-  onToggle: (id: string) => void
-  onSelectDocument: (id: string) => void
-  onSelectFolder: (id: string) => void
-  onStartRename: (node: DocumentNode) => void
-  onEditingTitleChange: (value: string) => void
-  onCommitRename: () => void
-  onCancelRename: () => void
-  onCreateDocument: (parentId: string | null, groupId?: string) => void
-  onCreateFolder: (parentId: string | null, groupId?: string) => void
-  onDeleteNode: (node: DocumentNode) => void
-}) {
-  const { t } = useI18n()
-  const children = childrenByParent.get(node.id) ?? EMPTY_DOCUMENT_CHILDREN
-  const isExpanded = expanded.has(node.id)
-  const isActive = node.type === 'document' ? selectedDocumentId === node.id : selectedFolderId === node.id
-  const isEditing = editingNodeId === node.id
-  const nodeDisplayName = getDocumentNodeDisplayName(node)
-
-  return (
-    <div>
-      <div className={`group relative flex items-center gap-0.5 rounded-xl px-1 py-0.5 text-[12px] transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
-        {isEditing ? (
-          <>
-            {node.type === 'folder' ? (
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() => onToggle(node.id)}
-                aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${nodeDisplayName}` : `${t('documents.expandFolder', 'Expand folder')}: ${nodeDisplayName}`}
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
-                title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}
-              >
-                <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
-              </button>
-            ) : (
-              <span className="h-7 w-7 shrink-0" />
-            )}
-            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
-              <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={14} color="currentColor" />
-            </span>
-            <input
-              autoFocus
-              value={editingTitle}
-              onChange={(event) => onEditingTitleChange(event.target.value)}
-              onBlur={onCommitRename}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.nativeEvent.isComposing) onCommitRename()
-                if (event.key === 'Escape') onCancelRename()
-              }}
-              aria-label={t('documents.nodeName', 'Document or folder name')}
-              className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"
-            />
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onCommitRename}
-              aria-label={t('documents.saveNodeName', 'Save name')}
-              title={t('common.save', 'Save')}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success transition-colors hover:bg-success/15"
-            >
-              <IconifyIcon name="ui-check" size={14} color="currentColor" />
-            </button>
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onCancelRename}
-              aria-label={t('documents.cancelRename', 'Cancel rename')}
-              title={t('common.cancel', 'Cancel')}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary"
-            >
-              <IconifyIcon name="ui-close" size={14} color="currentColor" />
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => {
-                if (node.type === 'folder') {
-                  onSelectFolder(node.id)
-                  onToggle(node.id)
-                } else {
-                  onSelectDocument(node.id)
+    };
+    const flushPendingTable = () => {
+        if (tablePending.length > 0) {
+            // Not a real table — emit as paragraphs
+            for (const pending of tablePending) {
+                html.push(`<p>${inlineMarkdown(pending)}</p>`);
+            }
+            tablePending = [];
+        }
+    };
+    lines.forEach((line) => {
+        // ── Code / mermaid fence ──────────────────────────────────────────────
+        if (line.trim().startsWith('```')) {
+            if (inCode) {
+                if (codeLang === 'mermaid') {
+                    html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`);
                 }
-              }}
-              onDoubleClick={() => onStartRename(node)}
-              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-1 py-1 text-left text-[12px]"
-            >
-              {node.type === 'folder' ? (
-                <span className="flex h-4 w-4 shrink-0 items-center justify-center text-text-muted">
-                  <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
-                </span>
-              ) : (
-                <span className="h-4 w-4 shrink-0" />
-              )}
+                else {
+                    html.push(`<pre><code class="language-${escapeHtml(codeLang)}">${escapeHtml(code.join('\n'))}</code></pre>`);
+                }
+                code = [];
+                codeLang = '';
+                inCode = false;
+            }
+            else {
+                closeList();
+                flushTable();
+                flushPendingTable();
+                codeLang = line.trim().slice(3).trim();
+                inCode = true;
+            }
+            return;
+        }
+        if (inCode) {
+            code.push(line);
+            return;
+        }
+        // ── Block math ($$...$$) ───────────────────────────────────────────────
+        if (line.trim() === '$$') {
+            if (inMath) {
+                html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`);
+                math = [];
+                inMath = false;
+            }
+            else {
+                closeList();
+                flushTable();
+                flushPendingTable();
+                inMath = true;
+            }
+            return;
+        }
+        if (inMath) {
+            math.push(line);
+            return;
+        }
+        // ── GFM Tables ────────────────────────────────────────────────────────
+        const isTableLine = line.trim().startsWith('|') || (line.includes('|') && !line.trim().startsWith('#'));
+        if (inTable) {
+            if (isTableSeparator(line) || !line.trim()) {
+                // Empty line ends the table
+                if (!line.trim()) {
+                    flushTable();
+                    return;
+                }
+                return;
+            }
+            if (line.trim().startsWith('|') || line.includes('|')) {
+                const cells = parseTableRow(line);
+                const row = cells.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join('');
+                html.push(`<tr>${row}</tr>`);
+                return;
+            }
+            flushTable();
+        }
+        if (!inTable && tablePending.length === 0 && isTableLine && line.trim().startsWith('|')) {
+            // Could be a table header row — buffer it
+            tablePending.push(line);
+            return;
+        }
+        if (tablePending.length > 0) {
+            if (isTableSeparator(line)) {
+                // Confirmed table
+                closeList();
+                const headerCells = parseTableRow(tablePending[0]);
+                const headerRow = headerCells.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join('');
+                html.push(`<table><thead><tr>${headerRow}</tr></thead><tbody>`);
+                inTable = true;
+                tablePending = [];
+                return;
+            }
+            else {
+                // Not a table — flush buffered line
+                flushPendingTable();
+            }
+        }
+        // ── Normal inline content ──────────────────────────────────────────────
+        const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+        if (heading) {
+            closeList();
+            html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
+            return;
+        }
+        // Task list items
+        const taskUnchecked = /^\s*[-*]\s+\[ \]\s+(.*)$/.exec(line);
+        if (taskUnchecked) {
+            if (list !== 'ul[data-type="taskList"]') {
+                closeList();
+                list = 'ul[data-type="taskList"]';
+                html.push('<ul data-type="taskList">');
+            }
+            html.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div><p>${inlineMarkdown(taskUnchecked[1])}</p></div></li>`);
+            return;
+        }
+        const taskChecked = /^\s*[-*]\s+\[x\]\s+(.*)$/i.exec(line);
+        if (taskChecked) {
+            if (list !== 'ul[data-type="taskList"]') {
+                closeList();
+                list = 'ul[data-type="taskList"]';
+                html.push('<ul data-type="taskList">');
+            }
+            html.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked /></label><div><p>${inlineMarkdown(taskChecked[1])}</p></div></li>`);
+            return;
+        }
+        const unordered = /^\s*[-*]\s+(.*)$/.exec(line);
+        if (unordered) {
+            if (list !== 'ul') {
+                closeList();
+                list = 'ul';
+                html.push('<ul>');
+            }
+            html.push(`<li>${inlineMarkdown(unordered[1])}</li>`);
+            return;
+        }
+        const ordered = /^\s*\d+\.\s+(.*)$/.exec(line);
+        if (ordered) {
+            if (list !== 'ol') {
+                closeList();
+                list = 'ol';
+                html.push('<ol>');
+            }
+            html.push(`<li>${inlineMarkdown(ordered[1])}</li>`);
+            return;
+        }
+        closeList();
+        if (line.trim().startsWith('>')) {
+            html.push(`<blockquote>${inlineMarkdown(line.replace(/^>\s?/, ''))}</blockquote>`);
+        }
+        else if (line.trim() === '---') {
+            html.push('<hr />');
+        }
+        else if (line.trim()) {
+            html.push(`<p>${inlineMarkdown(line)}</p>`);
+        }
+    });
+    closeList();
+    flushTable();
+    flushPendingTable();
+    if (inCode) {
+        if (codeLang === 'mermaid') {
+            html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`);
+        }
+        else {
+            html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
+        }
+    }
+    if (inMath)
+        html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`);
+    return html.join('\n') || '<p></p>';
+}
+function DocumentTiptapEditor({ document, onUpdate }: {
+    document: DocumentItem;
+    onUpdate: (markdown: string) => void;
+}) {
+    // Prevents the onUpdate callback from firing during programmatic content resets
+    // that occur when switching between documents, avoiding a feedback loop where
+    // the reset triggers onUpdate which would overwrite the incoming document's markdown.
+    const isSyncingFromPropsRef = useRef(false);
+    // Track the last markdown emitted by this editor so we can distinguish between
+    // external updates (from the store, e.g. AI write) and our own debounced flushes.
+    const lastEmittedMarkdownRef = useRef(document.markdown);
+    const editor = useEditor({
+        extensions: [
+            StarterKit,
+            Placeholder.configure({ placeholder: 'Start writing…' }),
+            Image.configure({ inline: true }),
+            Table.configure({ resizable: false }),
+            TableRow,
+            TableHeader,
+            TableCell,
+            TaskList,
+            TaskItem.configure({ nested: true }),
+            MathBlock,
+            InlineMath,
+            MermaidBlock,
+        ],
+        content: markdownToTiptapHtml(document.markdown),
+        editable: true,
+        editorProps: {
+            attributes: {
+                class: 'document-prose min-h-full focus:outline-none',
+            },
+        },
+        onUpdate: ({ editor: ed }: {
+            editor: {
+                getJSON: () => unknown;
+            };
+        }) => {
+            if (isSyncingFromPropsRef.current)
+                return;
+            const json = ed.getJSON();
+            const markdown = tiptapJsonToMarkdown(json as Parameters<typeof tiptapJsonToMarkdown>[0]);
+            lastEmittedMarkdownRef.current = markdown;
+            onUpdate(markdown);
+        },
+    });
+    const previousDocumentIdRef = useRef(document.id);
+    useEffect(() => {
+        if (!editor || editor.isDestroyed)
+            return;
+        const documentChanged = previousDocumentIdRef.current !== document.id;
+        // Sync editor content when the document identity changes, or when the
+        // document's markdown is updated externally (e.g. AI generation, import)
+        // to a value the editor itself did not just emit. The lastEmittedMarkdownRef
+        // guard avoids overwriting in-flight user edits during the debounce window.
+        // We always force a sync on identity change so a new document whose
+        // markdown coincidentally equals the previous emission still loads.
+        if (!documentChanged && document.markdown === lastEmittedMarkdownRef.current)
+            return;
+        isSyncingFromPropsRef.current = true;
+        editor.commands.setContent(markdownToTiptapHtml(document.markdown), { emitUpdate: false });
+        lastEmittedMarkdownRef.current = document.markdown;
+        previousDocumentIdRef.current = document.id;
+        isSyncingFromPropsRef.current = false;
+    }, [document.id, document.markdown, editor]);
+    return <EditorContent editor={editor} className="document-tiptap-wysiwyg h-full"/>;
+}
+function TreeActionMenu({ label, actions, }: {
+    label: string;
+    actions: Array<{
+        key: string;
+        label: string;
+        onSelect: () => void;
+        tone?: 'default' | 'danger';
+    }>;
+}) {
+    return (<div className="relative shrink-0">
+      <Dropdown>
+        <DropdownButton as="button" type="button" aria-label={`More actions: ${label}`} aria-haspopup="menu" onClick={(e: React.MouseEvent) => e.stopPropagation()} className="flex h-6 min-w-6 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/72 px-1.5 text-[11px] font-semibold leading-none text-text-muted transition-colors hover:text-text-primary">
+          ...
+        </DropdownButton>
+        <DropdownMenu anchor="bottom end" className="min-w-40 overflow-hidden rounded-2xl border border-border-subtle/60 bg-surface-1/98 p-1 shadow-[0_18px_48px_rgba(15,23,42,0.24)] backdrop-blur-xl">
+          {actions.map((action) => (<DropdownItem key={action.key} onClick={() => action.onSelect()} className={`rounded-xl px-3 py-2 text-[12px] ${action.tone === 'danger' ? 'text-danger' : 'text-text-secondary'}`}>
+              {action.label}
+            </DropdownItem>))}
+        </DropdownMenu>
+      </Dropdown>
+    </div>);
+}
+function TreeNode({ node, childrenByParent, selectedDocumentId, selectedFolderId, editingNodeId, editingTitle, expanded, onToggle, onSelectDocument, onSelectFolder, onStartRename, onEditingTitleChange, onCommitRename, onCancelRename, onCreateDocument, onCreateFolder, onDeleteNode, }: {
+    node: DocumentNode;
+    childrenByParent: Map<string | null, DocumentNode[]>;
+    selectedDocumentId: string | null;
+    selectedFolderId: string | null;
+    editingNodeId: string | null;
+    editingTitle: string;
+    expanded: Set<string>;
+    onToggle: (id: string) => void;
+    onSelectDocument: (id: string) => void;
+    onSelectFolder: (id: string) => void;
+    onStartRename: (node: DocumentNode) => void;
+    onEditingTitleChange: (value: string) => void;
+    onCommitRename: () => void;
+    onCancelRename: () => void;
+    onCreateDocument: (parentId: string | null, groupId?: string) => void;
+    onCreateFolder: (parentId: string | null, groupId?: string) => void;
+    onDeleteNode: (node: DocumentNode) => void;
+}) {
+    const { t } = useI18n();
+    const children = childrenByParent.get(node.id) ?? EMPTY_DOCUMENT_CHILDREN;
+    const isExpanded = expanded.has(node.id);
+    const isActive = node.type === 'document' ? selectedDocumentId === node.id : selectedFolderId === node.id;
+    const isEditing = editingNodeId === node.id;
+    const nodeDisplayName = getDocumentNodeDisplayName(node);
+    return (<div>
+      <div className={`group relative flex items-center gap-0.5 rounded-xl px-1 py-0.5 text-[12px] transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
+        {isEditing ? (<>
+            {node.type === 'folder' ? (<UiButton unstyled type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => onToggle(node.id)} aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${nodeDisplayName}` : `${t('documents.expandFolder', 'Expand folder')}: ${nodeDisplayName}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary" title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}>
+                <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'}/>
+              </UiButton>) : (<span className="h-7 w-7 shrink-0"/>)}
+            <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
+              <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={14} color="currentColor"/>
+            </span>
+            <UiInput autoFocus value={editingTitle} onChange={(event) => onEditingTitleChange(event.target.value)} onBlur={onCommitRename} onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing)
+                    onCommitRename();
+                if (event.key === 'Escape')
+                    onCancelRename();
+            }} aria-label={t('documents.nodeName', 'Document or folder name')} wrapperClassName="min-w-0 flex-1" controlClassName="rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary"/>
+            <UiButton unstyled type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCommitRename} aria-label={t('documents.saveNodeName', 'Save name')} title={t('common.save', 'Save')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success transition-colors hover:bg-success/15">
+              <IconifyIcon name="ui-check" size={14} color="currentColor"/>
+            </UiButton>
+            <UiButton unstyled type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCancelRename} aria-label={t('documents.cancelRename', 'Cancel rename')} title={t('common.cancel', 'Cancel')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted transition-colors hover:text-text-primary">
+              <IconifyIcon name="ui-close" size={14} color="currentColor"/>
+            </UiButton>
+          </>) : (<>
+            <UiButton unstyled type="button" onClick={() => {
+                if (node.type === 'folder') {
+                    onSelectFolder(node.id);
+                    onToggle(node.id);
+                }
+                else {
+                    onSelectDocument(node.id);
+                }
+            }} onDoubleClick={() => onStartRename(node)} className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-1 py-1 text-left text-[12px]">
+              {node.type === 'folder' ? (<span className="flex h-4 w-4 shrink-0 items-center justify-center text-text-muted">
+                  <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'}/>
+                </span>) : (<span className="h-4 w-4 shrink-0"/>)}
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl border ${node.type === 'folder' ? 'border-amber-400/20 bg-amber-400/10 text-amber-300' : 'border-accent/15 bg-accent/10 text-accent'}`}>
-                <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={14} color="currentColor" />
+                <IconifyIcon name={node.type === 'folder' ? 'skill-filesystem' : 'skill-code-review'} size={14} color="currentColor"/>
               </span>
               <span className="min-w-0 flex-1 truncate font-medium leading-5">{nodeDisplayName}</span>
-            </button>
+            </UiButton>
             <div className={`flex shrink-0 items-center transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
-              <TreeActionMenu
-                label={nodeDisplayName}
-                actions={[
-                  ...(node.type === 'folder'
+              <TreeActionMenu label={nodeDisplayName} actions={[
+                ...(node.type === 'folder'
                     ? [
                         {
-                          key: 'new-document',
-                          label: t('documents.newDocInFolder', 'New child document'),
-                          onSelect: () => onCreateDocument(node.id, node.groupId),
+                            key: 'new-document',
+                            label: t('documents.newDocInFolder', 'New child document'),
+                            onSelect: () => onCreateDocument(node.id, node.groupId),
                         },
                         {
-                          key: 'new-folder',
-                          label: t('documents.newSubfolder', 'New subfolder'),
-                          onSelect: () => onCreateFolder(node.id, node.groupId),
+                            key: 'new-folder',
+                            label: t('documents.newSubfolder', 'New subfolder'),
+                            onSelect: () => onCreateFolder(node.id, node.groupId),
                         },
-                      ]
+                    ]
                     : []),
-                  {
+                {
                     key: 'rename',
                     label: t('common.rename', 'Rename'),
                     onSelect: () => onStartRename(node),
-                  },
-                  {
+                },
+                {
                     key: 'delete',
                     label: t('common.delete', 'Delete'),
                     onSelect: () => onDeleteNode(node),
                     tone: 'danger',
-                  },
-                ]}
-              />
+                },
+            ]}/>
             </div>
-          </>
-        )}
+          </>)}
       </div>
-      {node.type === 'folder' && isExpanded && children.length > 0 && (
-        <div className="mt-1 space-y-1 pl-3">
-          {children.map((child) => (
-            <TreeNode
-              key={child.id}
-              node={child}
-              childrenByParent={childrenByParent}
-              selectedDocumentId={selectedDocumentId}
-              selectedFolderId={selectedFolderId}
-              editingNodeId={editingNodeId}
-              editingTitle={editingTitle}
-              expanded={expanded}
-              onToggle={onToggle}
-              onSelectDocument={onSelectDocument}
-              onSelectFolder={onSelectFolder}
-              onStartRename={onStartRename}
-              onEditingTitleChange={onEditingTitleChange}
-              onCommitRename={onCommitRename}
-              onCancelRename={onCancelRename}
-              onCreateDocument={onCreateDocument}
-              onCreateFolder={onCreateFolder}
-              onDeleteNode={onDeleteNode}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
+      {node.type === 'folder' && isExpanded && children.length > 0 && (<div className="mt-1 space-y-1 pl-3">
+          {children.map((child) => (<TreeNode key={child.id} node={child} childrenByParent={childrenByParent} selectedDocumentId={selectedDocumentId} selectedFolderId={selectedFolderId} editingNodeId={editingNodeId} editingTitle={editingTitle} expanded={expanded} onToggle={onToggle} onSelectDocument={onSelectDocument} onSelectFolder={onSelectFolder} onStartRename={onStartRename} onEditingTitleChange={onEditingTitleChange} onCommitRename={onCommitRename} onCancelRename={onCancelRename} onCreateDocument={onCreateDocument} onCreateFolder={onCreateFolder} onDeleteNode={onDeleteNode}/>))}
+        </div>)}
+    </div>);
 }
-
-function GroupTreeNode({
-  group,
-  children,
-  documentCount,
-  isActive,
-  isExpanded,
-  editingGroupId,
-  editingGroupName,
-  childrenByParent,
-  selectedDocumentId,
-  selectedFolderId,
-  editingNodeId,
-  editingTitle,
-  expanded,
-  onToggle,
-  onSelectGroup,
-  onStartRenameGroup,
-  onEditingGroupNameChange,
-  onCommitRenameGroup,
-  onCancelRenameGroup,
-  onSelectDocument,
-  onSelectFolder,
-  onStartRenameNode,
-  onEditingTitleChange,
-  onCommitRenameNode,
-  onCancelRenameNode,
-  onCreateDocument,
-  onCreateFolder,
-  onDeleteNode,
-  onDeleteGroup,
-}: {
-  group: DocumentGroup
-  children: DocumentNode[]
-  documentCount: number
-  isActive: boolean
-  isExpanded: boolean
-  editingGroupId: string | null
-  editingGroupName: string
-  childrenByParent: Map<string | null, DocumentNode[]>
-  selectedDocumentId: string | null
-  selectedFolderId: string | null
-  editingNodeId: string | null
-  editingTitle: string
-  expanded: Set<string>
-  onToggle: (id: string) => void
-  onSelectGroup: (group: DocumentGroup) => void
-  onStartRenameGroup: (group: DocumentGroup) => void
-  onEditingGroupNameChange: (value: string) => void
-  onCommitRenameGroup: () => void
-  onCancelRenameGroup: () => void
-  onSelectDocument: (id: string) => void
-  onSelectFolder: (id: string) => void
-  onStartRenameNode: (node: DocumentNode) => void
-  onEditingTitleChange: (value: string) => void
-  onCommitRenameNode: () => void
-  onCancelRenameNode: () => void
-  onCreateDocument: (parentId: string | null, groupId?: string) => void
-  onCreateFolder: (parentId: string | null, groupId?: string) => void
-  onDeleteNode: (node: DocumentNode) => void
-  onDeleteGroup: (group: DocumentGroup) => void
+function GroupTreeNode({ group, children, documentCount, isActive, isExpanded, editingGroupId, editingGroupName, childrenByParent, selectedDocumentId, selectedFolderId, editingNodeId, editingTitle, expanded, onToggle, onSelectGroup, onStartRenameGroup, onEditingGroupNameChange, onCommitRenameGroup, onCancelRenameGroup, onSelectDocument, onSelectFolder, onStartRenameNode, onEditingTitleChange, onCommitRenameNode, onCancelRenameNode, onCreateDocument, onCreateFolder, onDeleteNode, onDeleteGroup, }: {
+    group: DocumentGroup;
+    children: DocumentNode[];
+    documentCount: number;
+    isActive: boolean;
+    isExpanded: boolean;
+    editingGroupId: string | null;
+    editingGroupName: string;
+    childrenByParent: Map<string | null, DocumentNode[]>;
+    selectedDocumentId: string | null;
+    selectedFolderId: string | null;
+    editingNodeId: string | null;
+    editingTitle: string;
+    expanded: Set<string>;
+    onToggle: (id: string) => void;
+    onSelectGroup: (group: DocumentGroup) => void;
+    onStartRenameGroup: (group: DocumentGroup) => void;
+    onEditingGroupNameChange: (value: string) => void;
+    onCommitRenameGroup: () => void;
+    onCancelRenameGroup: () => void;
+    onSelectDocument: (id: string) => void;
+    onSelectFolder: (id: string) => void;
+    onStartRenameNode: (node: DocumentNode) => void;
+    onEditingTitleChange: (value: string) => void;
+    onCommitRenameNode: () => void;
+    onCancelRenameNode: () => void;
+    onCreateDocument: (parentId: string | null, groupId?: string) => void;
+    onCreateFolder: (parentId: string | null, groupId?: string) => void;
+    onDeleteNode: (node: DocumentNode) => void;
+    onDeleteGroup: (group: DocumentGroup) => void;
 }) {
-  const { t } = useI18n()
-  const isEditing = editingGroupId === group.id
-
-  return (
-    <div>
+    const { t } = useI18n();
+    const isEditing = editingGroupId === group.id;
+    return (<div>
       <div className={`group relative flex items-center gap-0.5 rounded-xl px-1 py-0.5 text-[12px] transition-all ${isActive ? 'bg-accent/12 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]' : 'text-text-secondary hover:bg-surface-3/55 hover:text-text-primary'}`}>
-        {isEditing ? (
-          <>
-            <button
-              type="button"
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onToggle(group.id)}
-              aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${group.name}` : `${t('documents.expandFolder', 'Expand folder')}: ${group.name}`}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary"
-              title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}
-            >
-              <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
-            </button>
+        {isEditing ? (<>
+            <UiButton unstyled type="button" onMouseDown={(event) => event.preventDefault()} onClick={() => onToggle(group.id)} aria-label={isExpanded ? `${t('documents.collapseFolder', 'Collapse folder')}: ${group.name}` : `${t('documents.expandFolder', 'Expand folder')}: ${group.name}`} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl text-text-muted transition-colors hover:bg-surface-3/55 hover:text-text-primary" title={isExpanded ? t('documents.collapseFolder', 'Collapse folder') : t('documents.expandFolder', 'Expand folder')}>
+              <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'}/>
+            </UiButton>
             <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl text-white/95 ${getDocumentGroupColorClass(group.color)}`}>
-              <IconifyIcon name="skill-filesystem" size={14} color="currentColor" />
+              <IconifyIcon name="skill-filesystem" size={14} color="currentColor"/>
             </span>
-            <input
-              autoFocus
-              value={editingGroupName}
-              onChange={(event) => onEditingGroupNameChange(event.target.value)}
-              onBlur={onCommitRenameGroup}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && !event.nativeEvent.isComposing) onCommitRenameGroup()
-                if (event.key === 'Escape') onCancelRenameGroup()
-              }}
-              className="min-w-0 flex-1 rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary outline-none focus:ring-2 focus:ring-accent/20"
-              aria-label={t('documents.groupName', 'Group name')}
-            />
-            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCommitRenameGroup} title={t('common.save', 'Save')} aria-label={t('documents.saveGroupName', 'Save group name')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success hover:bg-success/15">
-              <IconifyIcon name="ui-check" size={14} color="currentColor" />
-            </button>
-            <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCancelRenameGroup} title={t('common.cancel', 'Cancel')} aria-label={t('documents.cancelGroupRename', 'Cancel group rename')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted hover:text-text-primary">
-              <IconifyIcon name="ui-close" size={14} color="currentColor" />
-            </button>
-          </>
-        ) : (
-          <>
-            <button
-              type="button"
-              onClick={() => onSelectGroup(group)}
-              onDoubleClick={() => onStartRenameGroup(group)}
-              className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-1 py-1 text-left text-[12px]"
-            >
+            <UiInput autoFocus value={editingGroupName} onChange={(event) => onEditingGroupNameChange(event.target.value)} onBlur={onCommitRenameGroup} onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.nativeEvent.isComposing)
+                    onCommitRenameGroup();
+                if (event.key === 'Escape')
+                    onCancelRenameGroup();
+            }} wrapperClassName="min-w-0 flex-1" controlClassName="rounded-xl border border-accent/30 bg-surface-0/88 px-3 py-1.5 text-[11px] font-medium text-text-primary" aria-label={t('documents.groupName', 'Group name')}/>
+            <UiButton unstyled type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCommitRenameGroup} title={t('common.save', 'Save')} aria-label={t('documents.saveGroupName', 'Save group name')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-success/20 bg-success/10 text-success hover:bg-success/15">
+              <IconifyIcon name="ui-check" size={14} color="currentColor"/>
+            </UiButton>
+            <UiButton unstyled type="button" onMouseDown={(event) => event.preventDefault()} onClick={onCancelRenameGroup} title={t('common.cancel', 'Cancel')} aria-label={t('documents.cancelGroupRename', 'Cancel group rename')} className="flex h-7 w-7 shrink-0 items-center justify-center rounded-xl border border-border-subtle/65 bg-surface-2/70 text-text-muted hover:text-text-primary">
+              <IconifyIcon name="ui-close" size={14} color="currentColor"/>
+            </UiButton>
+          </>) : (<>
+            <UiButton unstyled type="button" onClick={() => onSelectGroup(group)} onDoubleClick={() => onStartRenameGroup(group)} className="flex min-w-0 flex-1 items-center gap-1.5 rounded-xl px-1 py-1 text-left text-[12px]">
               <span className="flex h-4 w-4 shrink-0 items-center justify-center text-text-muted">
-                <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'} />
+                <IconifyIcon name="ui-chevron-down" size={13} color="currentColor" className={isExpanded ? '' : '-rotate-90'}/>
               </span>
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-xl text-white/95 ${getDocumentGroupColorClass(group.color)}`}>
-                <IconifyIcon name="skill-filesystem" size={14} color="currentColor" />
+                <IconifyIcon name="skill-filesystem" size={14} color="currentColor"/>
               </span>
               <span className="min-w-0 flex-1 truncate font-semibold leading-5">{group.name}</span>
               <span className="shrink-0 rounded-lg bg-surface-2/60 px-1.5 py-0.5 text-[9px] text-text-muted">{documentCount}</span>
-            </button>
+            </UiButton>
             <div className={`flex shrink-0 items-center transition-opacity ${isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'}`}>
-              <TreeActionMenu
-                label={group.name}
-                actions={[
-                  {
+              <TreeActionMenu label={group.name} actions={[
+                {
                     key: 'new-document',
                     label: t('documents.newDoc', 'New Document'),
                     onSelect: () => onCreateDocument(null, group.id),
-                  },
-                  {
+                },
+                {
                     key: 'new-folder',
                     label: t('documents.newFolderButton', 'New Folder'),
                     onSelect: () => onCreateFolder(null, group.id),
-                  },
-                  {
+                },
+                {
                     key: 'graph',
                     label: t('documents.groupGraph', 'Knowledge Graph'),
                     onSelect: () => onSelectGroup(group),
-                  },
-                  {
+                },
+                {
                     key: 'rename',
                     label: t('common.rename', 'Rename'),
                     onSelect: () => onStartRenameGroup(group),
-                  },
-                  {
+                },
+                {
                     key: 'delete',
                     label: t('common.delete', 'Delete'),
                     onSelect: () => onDeleteGroup(group),
                     tone: 'danger',
-                  },
-                ]}
-              />
+                },
+            ]}/>
             </div>
-          </>
-        )}
+          </>)}
       </div>
-      {isExpanded && children.length > 0 && (
-        <div className="mt-1 space-y-1 pl-3">
-          {children.map((child) => (
-            <TreeNode
-              key={child.id}
-              node={child}
-              childrenByParent={childrenByParent}
-              selectedDocumentId={selectedDocumentId}
-              selectedFolderId={selectedFolderId}
-              editingNodeId={editingNodeId}
-              editingTitle={editingTitle}
-              expanded={expanded}
-              onToggle={onToggle}
-              onSelectDocument={onSelectDocument}
-              onSelectFolder={onSelectFolder}
-              onStartRename={onStartRenameNode}
-              onEditingTitleChange={onEditingTitleChange}
-              onCommitRename={onCommitRenameNode}
-              onCancelRename={onCancelRenameNode}
-              onCreateDocument={onCreateDocument}
-              onCreateFolder={onCreateFolder}
-              onDeleteNode={onDeleteNode}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
+      {isExpanded && children.length > 0 && (<div className="mt-1 space-y-1 pl-3">
+          {children.map((child) => (<TreeNode key={child.id} node={child} childrenByParent={childrenByParent} selectedDocumentId={selectedDocumentId} selectedFolderId={selectedFolderId} editingNodeId={editingNodeId} editingTitle={editingTitle} expanded={expanded} onToggle={onToggle} onSelectDocument={onSelectDocument} onSelectFolder={onSelectFolder} onStartRename={onStartRenameNode} onEditingTitleChange={onEditingTitleChange} onCommitRename={onCommitRenameNode} onCancelRename={onCancelRenameNode} onCreateDocument={onCreateDocument} onCreateFolder={onCreateFolder} onDeleteNode={onDeleteNode}/>))}
+        </div>)}
+    </div>);
 }
-
-const EMPTY_SEARCH_RESULTS: ReturnType<typeof searchDocuments> = []
-
+const EMPTY_SEARCH_RESULTS: ReturnType<typeof searchDocuments> = [];
 // Debounce window for syncing the document title and source-mode markdown into
 // the global store. Keeps editing responsive (local state is the source of
 // truth while typing) without triggering whole-document-tree recomputation on
 // every keystroke.
-const DOCUMENT_FIELD_DEBOUNCE_MS = 250
-const SOURCE_EDITOR_INDENT = '  '
-
+const DOCUMENT_FIELD_DEBOUNCE_MS = 250;
+const SOURCE_EDITOR_INDENT = '  ';
 function getIndentRemovalCount(line: string) {
-  if (line.startsWith(SOURCE_EDITOR_INDENT)) return SOURCE_EDITOR_INDENT.length
-  if (line.startsWith('\t')) return 1
-  return 0
+    if (line.startsWith(SOURCE_EDITOR_INDENT))
+        return SOURCE_EDITOR_INDENT.length;
+    if (line.startsWith('\t'))
+        return 1;
+    return 0;
 }
-
 function splitSourceLines(block: string) {
-  const segments = block.match(/[^\r\n]*(?:\r\n|\n|\r|$)/g) ?? []
-  return segments.filter(Boolean).map((segment) => {
-    const separator = segment.endsWith('\r\n') ? '\r\n' : segment.endsWith('\n') ? '\n' : segment.endsWith('\r') ? '\r' : ''
-    return {
-      text: separator ? segment.slice(0, -separator.length) : segment,
-      separator,
-    }
-  })
+    const segments = block.match(/[^\r\n]*(?:\r\n|\n|\r|$)/g) ?? [];
+    return segments.filter(Boolean).map((segment) => {
+        const separator = segment.endsWith('\r\n') ? '\r\n' : segment.endsWith('\n') ? '\n' : segment.endsWith('\r') ? '\r' : '';
+        return {
+            text: separator ? segment.slice(0, -separator.length) : segment,
+            separator,
+        };
+    });
 }
-
 function updateSourceIndentation(value: string, selectionStart: number, selectionEnd: number, outdent: boolean) {
-  if (outdent) {
-    const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
-    const lineEnd = selectionStart === selectionEnd
-      ? selectionEnd
-      : (value.indexOf('\n', selectionEnd) === -1 ? value.length : value.indexOf('\n', selectionEnd))
-    const before = value.slice(0, lineStart)
-    const selectedBlock = value.slice(lineStart, lineEnd)
-    const after = value.slice(lineEnd)
-    const lines = splitSourceLines(selectedBlock)
-    let removedBeforeSelection = 0
-    let removedTotal = 0
-    let offset = lineStart
+    if (outdent) {
+        const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+        const lineEnd = selectionStart === selectionEnd
+            ? selectionEnd
+            : (value.indexOf('\n', selectionEnd) === -1 ? value.length : value.indexOf('\n', selectionEnd));
+        const before = value.slice(0, lineStart);
+        const selectedBlock = value.slice(lineStart, lineEnd);
+        const after = value.slice(lineEnd);
+        const lines = splitSourceLines(selectedBlock);
+        let removedBeforeSelection = 0;
+        let removedTotal = 0;
+        let offset = lineStart;
+        const nextBlock = lines.map((line) => {
+            const removeCount = getIndentRemovalCount(line.text);
+            if (removeCount > 0) {
+                if (offset < selectionStart)
+                    removedBeforeSelection += removeCount;
+                removedTotal += removeCount;
+            }
+            offset += line.text.length + line.separator.length;
+            return `${removeCount > 0 ? line.text.slice(removeCount) : line.text}${line.separator}`;
+        }).join('');
+        const nextSelectionStart = Math.max(lineStart, selectionStart - removedBeforeSelection);
+        const nextSelectionEnd = Math.max(nextSelectionStart, selectionEnd - removedTotal);
+        return {
+            value: before + nextBlock + after,
+            selectionStart: nextSelectionStart,
+            selectionEnd: nextSelectionEnd,
+        };
+    }
+    if (selectionStart === selectionEnd) {
+        return {
+            value: `${value.slice(0, selectionStart)}${SOURCE_EDITOR_INDENT}${value.slice(selectionEnd)}`,
+            selectionStart: selectionStart + SOURCE_EDITOR_INDENT.length,
+            selectionEnd: selectionStart + SOURCE_EDITOR_INDENT.length,
+        };
+    }
+    const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1;
+    const lineEnd = value.indexOf('\n', selectionEnd) === -1 ? value.length : value.indexOf('\n', selectionEnd);
+    const before = value.slice(0, lineStart);
+    const selectedBlock = value.slice(lineStart, lineEnd);
+    const after = value.slice(lineEnd);
+    const lines = splitSourceLines(selectedBlock);
+    let addedBeforeSelection = 0;
+    let addedTotal = 0;
+    let offset = lineStart;
     const nextBlock = lines.map((line) => {
-      const removeCount = getIndentRemovalCount(line.text)
-      if (removeCount > 0) {
-        if (offset < selectionStart) removedBeforeSelection += removeCount
-        removedTotal += removeCount
-      }
-      offset += line.text.length + line.separator.length
-      return `${removeCount > 0 ? line.text.slice(removeCount) : line.text}${line.separator}`
-    }).join('')
-
-    const nextSelectionStart = Math.max(lineStart, selectionStart - removedBeforeSelection)
-    const nextSelectionEnd = Math.max(nextSelectionStart, selectionEnd - removedTotal)
+        const shouldIndent = line.text.trim().length > 0;
+        if (shouldIndent) {
+            if (offset < selectionStart)
+                addedBeforeSelection += SOURCE_EDITOR_INDENT.length;
+            addedTotal += SOURCE_EDITOR_INDENT.length;
+        }
+        offset += line.text.length + line.separator.length;
+        return `${shouldIndent ? SOURCE_EDITOR_INDENT : ''}${line.text}${line.separator}`;
+    }).join('');
     return {
-      value: before + nextBlock + after,
-      selectionStart: nextSelectionStart,
-      selectionEnd: nextSelectionEnd,
-    }
-  }
-
-  if (selectionStart === selectionEnd) {
-    return {
-      value: `${value.slice(0, selectionStart)}${SOURCE_EDITOR_INDENT}${value.slice(selectionEnd)}`,
-      selectionStart: selectionStart + SOURCE_EDITOR_INDENT.length,
-      selectionEnd: selectionStart + SOURCE_EDITOR_INDENT.length,
-    }
-  }
-
-  const lineStart = value.lastIndexOf('\n', selectionStart - 1) + 1
-  const lineEnd = value.indexOf('\n', selectionEnd) === -1 ? value.length : value.indexOf('\n', selectionEnd)
-  const before = value.slice(0, lineStart)
-  const selectedBlock = value.slice(lineStart, lineEnd)
-  const after = value.slice(lineEnd)
-  const lines = splitSourceLines(selectedBlock)
-  let addedBeforeSelection = 0
-  let addedTotal = 0
-  let offset = lineStart
-  const nextBlock = lines.map((line) => {
-    const shouldIndent = line.text.trim().length > 0
-    if (shouldIndent) {
-      if (offset < selectionStart) addedBeforeSelection += SOURCE_EDITOR_INDENT.length
-      addedTotal += SOURCE_EDITOR_INDENT.length
-    }
-    offset += line.text.length + line.separator.length
-    return `${shouldIndent ? SOURCE_EDITOR_INDENT : ''}${line.text}${line.separator}`
-  }).join('')
-
-  return {
-    value: before + nextBlock + after,
-    selectionStart: selectionStart + addedBeforeSelection,
-    selectionEnd: selectionEnd + addedTotal,
-  }
+        value: before + nextBlock + after,
+        selectionStart: selectionStart + addedBeforeSelection,
+        selectionEnd: selectionEnd + addedTotal,
+    };
 }
-
-function useDebouncedSync<T>(initialValue: T, identityKey: string, onFlush: (next: T) => void): [T, (next: T) => void, () => void] {
-  const [value, setValue] = useState(initialValue)
-  const onFlushRef = useRef(onFlush)
-  const lastFlushedRef = useRef(initialValue)
-  const identityRef = useRef(identityKey)
-  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    onFlushRef.current = onFlush
-  }, [onFlush])
-
-  // When the upstream identity (e.g. document id) changes, accept the new
-  // value as the local source of truth and skip flushing. The same applies
-  // when the upstream value is updated externally to something we did not just
-  // emit ourselves.
-  useEffect(() => {
-    if (pendingTimerRef.current) {
-      clearTimeout(pendingTimerRef.current)
-      pendingTimerRef.current = null
-    }
-    identityRef.current = identityKey
-    setValue(initialValue)
-    lastFlushedRef.current = initialValue
-  }, [identityKey, initialValue])
-
-  useEffect(() => {
-    if (Object.is(value, lastFlushedRef.current)) return
-    const scheduledIdentity = identityRef.current
-    pendingTimerRef.current = setTimeout(() => {
-      pendingTimerRef.current = null
-      if (identityRef.current !== scheduledIdentity) return
-      lastFlushedRef.current = value
-      onFlushRef.current(value)
-    }, DOCUMENT_FIELD_DEBOUNCE_MS)
-    return () => {
-      if (pendingTimerRef.current) {
-        clearTimeout(pendingTimerRef.current)
-        pendingTimerRef.current = null
-      }
-    }
-  }, [value])
-
-  const flushNow = useCallback(() => {
-    if (pendingTimerRef.current) {
-      clearTimeout(pendingTimerRef.current)
-      pendingTimerRef.current = null
-    }
-    if (Object.is(value, lastFlushedRef.current)) return
-    lastFlushedRef.current = value
-    onFlushRef.current(value)
-  }, [value])
-
-  return [value, setValue, flushNow]
+function useDebouncedSync<T>(initialValue: T, identityKey: string, onFlush: (next: T) => void): [
+    T,
+    (next: T) => void,
+    () => void
+] {
+    const [value, setValue] = useState(initialValue);
+    const onFlushRef = useRef(onFlush);
+    const lastFlushedRef = useRef(initialValue);
+    const identityRef = useRef(identityKey);
+    const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        onFlushRef.current = onFlush;
+    }, [onFlush]);
+    // When the upstream identity (e.g. document id) changes, accept the new
+    // value as the local source of truth and skip flushing. The same applies
+    // when the upstream value is updated externally to something we did not just
+    // emit ourselves.
+    useEffect(() => {
+        if (pendingTimerRef.current) {
+            clearTimeout(pendingTimerRef.current);
+            pendingTimerRef.current = null;
+        }
+        identityRef.current = identityKey;
+        setValue(initialValue);
+        lastFlushedRef.current = initialValue;
+    }, [identityKey, initialValue]);
+    useEffect(() => {
+        if (Object.is(value, lastFlushedRef.current))
+            return;
+        const scheduledIdentity = identityRef.current;
+        pendingTimerRef.current = setTimeout(() => {
+            pendingTimerRef.current = null;
+            if (identityRef.current !== scheduledIdentity)
+                return;
+            lastFlushedRef.current = value;
+            onFlushRef.current(value);
+        }, DOCUMENT_FIELD_DEBOUNCE_MS);
+        return () => {
+            if (pendingTimerRef.current) {
+                clearTimeout(pendingTimerRef.current);
+                pendingTimerRef.current = null;
+            }
+        };
+    }, [value]);
+    const flushNow = useCallback(() => {
+        if (pendingTimerRef.current) {
+            clearTimeout(pendingTimerRef.current);
+            pendingTimerRef.current = null;
+        }
+        if (Object.is(value, lastFlushedRef.current))
+            return;
+        lastFlushedRef.current = value;
+        onFlushRef.current(value);
+    }, [value]);
+    return [value, setValue, flushNow];
 }
-
-function DocumentTitleInput({ document, onUpdate, ariaLabel }: { document: DocumentItem; onUpdate: (title: string) => void; ariaLabel: string }) {
-  const handleFlush = useCallback((next: string) => onUpdate(next), [onUpdate])
-  const [value, setValue, flushNow] = useDebouncedSync(document.title, document.id, handleFlush)
-  return (
-    <input
-      value={value}
-      onChange={(event) => setValue(event.target.value)}
-      onBlur={flushNow}
-      aria-label={ariaLabel}
-      className="w-full bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary outline-none placeholder:text-text-muted"
-    />
-  )
-}
-
-function DocumentSourceTextarea({
-  document,
-  onUpdate,
-  spellCheck,
-  placeholder,
-  kindLabel,
-  extension,
-}: {
-  document: DocumentItem
-  onUpdate: (markdown: string) => void
-  spellCheck: boolean
-  placeholder: string
-  kindLabel: string
-  extension: string
+function DocumentTitleInput({ document, onUpdate, ariaLabel }: {
+    document: DocumentItem;
+    onUpdate: (title: string) => void;
+    ariaLabel: string;
 }) {
-  const { t } = useI18n()
-  const handleFlush = useCallback((next: string) => onUpdate(next), [onUpdate])
-  const [value, setValue, flushNow] = useDebouncedSync(document.markdown, document.id, handleFlush)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const lineCount = Math.max(1, value.split('\n').length)
-  const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0
-
-  const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
-      event.preventDefault()
-      flushNow()
-      return
-    }
-
-    if (event.key !== 'Tab') return
-
-    event.preventDefault()
-    const target = event.currentTarget
-    const next = updateSourceIndentation(value, target.selectionStart, target.selectionEnd, event.shiftKey)
-    setValue(next.value)
-    requestAnimationFrame(() => {
-      if (!textareaRef.current) return
-      textareaRef.current.selectionStart = next.selectionStart
-      textareaRef.current.selectionEnd = next.selectionEnd
-    })
-  }
-
-  return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-4xl border border-border-subtle/70 bg-surface-0/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus-within:border-accent/30 focus-within:ring-4 focus-within:ring-accent/10">
+    const handleFlush = useCallback((next: string) => onUpdate(next), [onUpdate]);
+    const [value, setValue, flushNow] = useDebouncedSync(document.title, document.id, handleFlush);
+    return (<UiInput value={value} onChange={(event) => setValue(event.target.value)} onBlur={flushNow} aria-label={ariaLabel} wrapperClassName="w-full" controlClassName="bg-transparent text-xl font-semibold tracking-[-0.02em] text-text-primary placeholder:text-text-muted"/>);
+}
+function DocumentSourceTextarea({ document, onUpdate, spellCheck, placeholder, kindLabel, extension, }: {
+    document: DocumentItem;
+    onUpdate: (markdown: string) => void;
+    spellCheck: boolean;
+    placeholder: string;
+    kindLabel: string;
+    extension: string;
+}) {
+    const { t } = useI18n();
+    const handleFlush = useCallback((next: string) => onUpdate(next), [onUpdate]);
+    const [value, setValue, flushNow] = useDebouncedSync(document.markdown, document.id, handleFlush);
+    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const lineCount = Math.max(1, value.split('\n').length);
+    const wordCount = value.trim() ? value.trim().split(/\s+/).length : 0;
+    const handleKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+            event.preventDefault();
+            flushNow();
+            return;
+        }
+        if (event.key !== 'Tab')
+            return;
+        event.preventDefault();
+        const target = event.currentTarget;
+        const next = updateSourceIndentation(value, target.selectionStart, target.selectionEnd, event.shiftKey);
+        setValue(next.value);
+        requestAnimationFrame(() => {
+            if (!textareaRef.current)
+                return;
+            textareaRef.current.selectionStart = next.selectionStart;
+            textareaRef.current.selectionEnd = next.selectionEnd;
+        });
+    };
+    return (<div className="flex h-full min-h-0 flex-col overflow-hidden rounded-4xl border border-border-subtle/70 bg-surface-0/62 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] focus-within:border-accent/30 focus-within:ring-4 focus-within:ring-accent/10">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border-subtle/65 bg-surface-1/56 px-4 py-2 text-[10px] text-text-muted">
         <div className="flex min-w-0 items-center gap-2">
           <span className="rounded-lg border border-border-subtle/55 bg-surface-2/65 px-2 py-0.5 font-semibold text-text-secondary">{kindLabel}</span>
@@ -1083,845 +823,660 @@ function DocumentSourceTextarea({
           <span className="hidden rounded-lg bg-surface-2/60 px-2 py-0.5 text-text-muted/80 sm:inline">{t('documents.sourceHint', 'Tab indents · Ctrl/Cmd+S saves')}</span>
         </div>
       </div>
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        onKeyDown={handleKeyDown}
-        onBlur={flushNow}
-        spellCheck={spellCheck}
-        aria-label={t('documents.sourceEditor', 'Source editor')}
-        className="min-h-0 flex-1 resize-none bg-transparent p-5 font-(--font-code) text-[13px] leading-7 text-text-primary outline-none placeholder:text-text-muted"
-        placeholder={placeholder}
-      />
-    </div>
-  )
+    <UiTextArea ref={textareaRef} value={value} onChange={(event) => setValue(event.target.value)} onKeyDown={handleKeyDown} onBlur={flushNow} spellCheck={spellCheck} aria-label={t('documents.sourceEditor', 'Source editor')} wrapperClassName="min-h-0 flex-1" controlClassName="h-full resize-none bg-transparent p-5 font-(--font-code) text-[13px] leading-7 text-text-primary placeholder:text-text-muted" placeholder={placeholder}/>
+    </div>);
 }
-
 export function DocumentsLayout() {
-  const { t } = useI18n()
-  const watcherPathsRef = useRef<Set<string>>(new Set())
-  const rehydrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const rehydrateInFlightRef = useRef<Promise<void> | null>(null)
-  const [panelWidth, setPanelWidth] = useResizablePanel('documents', 310)
-  const [query, setQuery] = useState('')
-  const deferredQuery = useDeferredValue(query)
-  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null)
-  const [editingNodeId, setEditingNodeId] = useState<string | null>(null)
-  const [editingTitle, setEditingTitle] = useState('')
-  const [editingGroupId, setEditingGroupId] = useState<string | null>(null)
-  const [editingGroupName, setEditingGroupName] = useState('')
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
-  const [mode, setMode] = useState<'editor' | 'source' | 'preview' | 'graph'>('editor')
-  const [assistantState, setAssistantState] = useState<{ mode: 'create' | 'edit'; documentId?: string } | null>(null)
-  const [isExportingCorpus, setIsExportingCorpus] = useState(false)
-  const [exportStatus, setExportStatus] = useState<ExportCorpusStatus | null>(null)
-  const [showDocExportMenu, setShowDocExportMenu] = useState(false)
-  const [isExportingDoc, setIsExportingDoc] = useState(false)
-  const docExportMenuRef = useRef<HTMLDivElement>(null)
-  const {
-    documentGroups,
-    documentNodes,
-    selectedDocumentGroupId,
-    selectedDocumentId,
-    workspacePath,
-    addDocumentGroup,
-    updateDocumentGroup,
-    removeDocumentGroup,
-    setSelectedDocumentGroup,
-    addDocumentFolder,
-    addDocument,
-    updateDocumentNode,
-    removeDocumentNode,
-    setSelectedDocument,
-  } = useAppStore()
-
-  const activeGroup = documentGroups.find((group) => group.id === selectedDocumentGroupId) ?? documentGroups[0] ?? null
-  const activeGroupId = activeGroup?.id ?? null
-  const groupNodes = useMemo(() => activeGroupId ? documentNodes.filter((node) => node.groupId === activeGroupId) : [], [documentNodes, activeGroupId])
-  const activeDocument = useMemo(() => documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === selectedDocumentId) ?? null, [documentNodes, selectedDocumentId])
-  const activeFolder = useMemo(() => documentNodes.find((node): node is DocumentFolder => node.type === 'folder' && node.id === selectedFolderId) ?? null, [documentNodes, selectedFolderId])
-  const assistantDocument = useMemo(
-    () => assistantState?.mode === 'edit'
-      ? documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === assistantState.documentId) ?? null
-      : null,
-    [assistantState, documentNodes],
-  )
-  const activeDocumentIsMarkdown = activeDocument ? isMarkdownDocumentTitle(activeDocument.title) : false
-  const activeDocumentKindLabel = activeDocument ? getDocumentKindLabel(activeDocument.title) : ''
-  const activeDocumentExtension = activeDocument ? getDocumentExtension(activeDocument.title) || '.md' : ''
-  const groupDocuments = useMemo(() => groupNodes.filter((node): node is DocumentItem => node.type === 'document'), [groupNodes])
-  const activeDocumentStatistics = useMemo(() => activeDocument ? computeDocumentStatistics(activeDocument.markdown) : null, [activeDocument?.id, activeDocument?.markdown])
-  const activeGroupStatistics = useMemo(() => activeGroupId ? computeDocumentGroupStatistics(documentNodes, activeGroupId) : null, [activeGroupId, documentNodes])
-  const documentNodeById = useMemo(() => new Map<string, DocumentNode>(documentNodes.map((node) => [node.id, node])), [documentNodes])
-  const documentSearchIndex = useMemo(() => buildDocumentSearchIndex(documentNodes, null), [documentNodes])
-  const searchResults = useMemo(
-    () => deferredQuery.trim() ? searchDocumentIndex(documentSearchIndex, deferredQuery) : EMPTY_SEARCH_RESULTS,
-    [deferredQuery, documentSearchIndex],
-  )
-  const referencedDocuments = useMemo(() => activeDocument ? findReferencedDocuments(activeDocument.markdown, groupDocuments).filter((doc) => doc.id !== activeDocument.id) : [], [activeDocument, groupDocuments])
-  const imageReferences = useMemo(() => activeDocument && activeDocumentIsMarkdown ? extractMarkdownImageReferences(activeDocument.markdown) : [], [activeDocument, activeDocumentIsMarkdown])
-  const documentOutline = useMemo(() => {
-    if (!activeDocument) return [] as string[]
-    const headings: string[] = []
-    for (const line of activeDocument.markdown.split('\n')) {
-      if (/^#{1,3}\s+/.test(line)) {
-        headings.push(line.replace(/^#{1,3}\s+/, ''))
-        if (headings.length >= 12) break
-      }
-    }
-    return headings
-  }, [activeDocument?.id, activeDocument?.markdown])
-  const documentGraph = useMemo(
-    () => activeGroupId ? buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroupId }) : EMPTY_DOCUMENT_GRAPH,
-    [activeGroupId, documentGroups, documentNodes],
-  )
-  const documentHealth = useMemo(
-    () => analyzeDocumentHealth(documentNodes, activeGroupId),
-    [activeGroupId, documentNodes],
-  )
-  const graphInsights = useMemo(
-    () => activeDocument && activeGroupId
-      ? queryDocumentGraph(documentGraph, groupNodes, {
-          documentIdOrTitle: activeDocument.id,
-          groupId: activeGroupId,
-          relatedLimit: 6,
-        })
-      : null,
-    [activeDocument, activeGroupId, documentGraph, groupNodes],
-  )
-  const graphInsightReport = useMemo(
-    () => analyzeDocumentGraphInsights(documentGraph, groupNodes),
-    [documentGraph, groupNodes],
-  )
-  const graphBacklinks = useMemo(
-    () => activeDocument
-      ? (documentGraph.backlinksByDocumentId[activeDocument.id] ?? [])
-        .map((documentId) => groupDocuments.find((doc) => doc.id === documentId) ?? null)
-        .filter((doc): doc is DocumentItem => Boolean(doc))
-      : [],
-    [activeDocument, documentGraph.backlinksByDocumentId, groupDocuments],
-  )
-  const documentCountByGroupId = useMemo(() => {
-    const counts = new Map<string, number>()
-
-    for (const node of documentNodes) {
-      if (node.type !== 'document') continue
-      counts.set(node.groupId, (counts.get(node.groupId) ?? 0) + 1)
-    }
-
-    return counts
-  }, [documentNodes])
-  const totalDocumentCount = useMemo(() => Array.from(documentCountByGroupId.values()).reduce((total, count) => total + count, 0), [documentCountByGroupId])
-  const groupNameById = useMemo(() => new Map(documentGroups.map((group) => [group.id, group.name])), [documentGroups])
-  const childrenByParent = useMemo(() => {
-    const nextChildrenByParent = new Map<string | null, DocumentNode[]>()
-
-    for (const node of documentNodes) {
-      const siblings = nextChildrenByParent.get(node.parentId)
-      if (siblings) siblings.push(node)
-      else nextChildrenByParent.set(node.parentId, [node])
-    }
-
-    for (const children of nextChildrenByParent.values()) {
-      children.sort(sortDocumentNodes)
-    }
-
-    return nextChildrenByParent
-  }, [documentNodes])
-  const rootNodesByGroupId = useMemo(() => {
-    const nextRootNodesByGroupId = new Map<string, DocumentNode[]>()
-
-    for (const node of documentNodes) {
-      if (node.parentId !== null) continue
-      const roots = nextRootNodesByGroupId.get(node.groupId)
-      if (roots) roots.push(node)
-      else nextRootNodesByGroupId.set(node.groupId, [node])
-    }
-
-    for (const roots of nextRootNodesByGroupId.values()) {
-      roots.sort(sortDocumentNodes)
-    }
-
-    return nextRootNodesByGroupId
-  }, [documentNodes])
-  const documentNodeIds = useMemo(() => new Set(documentNodes.map((node) => node.id)), [documentNodes])
-  const documentFolderIds = useMemo(() => new Set(documentNodes.filter((node) => node.type === 'folder').map((node) => node.id)), [documentNodes])
-  const watchedFolderRelativePaths = useMemo(
-    () => documentNodes
-      .filter((node): node is DocumentFolder & { path: string } => node.type === 'folder' && typeof node.path === 'string' && node.path.length > 0)
-      .map((node) => node.path)
-      .sort((first, second) => first.localeCompare(second)),
-    [documentNodes],
-  )
-  const watchedFolderPathKey = useMemo(() => watchedFolderRelativePaths.join('|'), [watchedFolderRelativePaths])
-  const documentGroupKey = useMemo(() => documentGroups.map((group) => group.id).sort().join('|'), [documentGroups])
-  const activeDocumentAncestorKey = useMemo(
-    () => activeDocument ? collectAncestorFolderIds(activeDocument.parentId, documentNodes).join('|') : '',
-    [activeDocument?.id, activeDocument?.parentId, documentNodes],
-  )
-
-  const scheduleDocumentFilesystemRefresh = useCallback(() => {
-    if (rehydrateTimerRef.current) {
-      clearTimeout(rehydrateTimerRef.current)
-    }
-    rehydrateTimerRef.current = setTimeout(() => {
-      rehydrateTimerRef.current = null
-      if (rehydrateInFlightRef.current) return
-      const request = Promise.resolve(useAppStore.persist.rehydrate()).finally(() => {
-        rehydrateInFlightRef.current = null
-      })
-      rehydrateInFlightRef.current = request
-    }, 150)
-  }, [])
-
-  useEffect(() => {
-    if (!selectedDocumentGroupId && documentGroups[0]) setSelectedDocumentGroup(documentGroups[0].id)
-  }, [documentGroups, selectedDocumentGroupId, setSelectedDocumentGroup])
-
-  useEffect(() => {
-    const electron = window.electron
-    if (!electron) return
-
-    const handleWatchChanged = (_event: unknown, payload: unknown) => {
-      const directory = payload && typeof payload === 'object' && typeof (payload as FsWatchChangedPayload).dir === 'string'
-        ? normalizeWatchedPath((payload as FsWatchChangedPayload).dir as string)
-        : ''
-      if (!directory || !watcherPathsRef.current.has(directory)) return
-      scheduleDocumentFilesystemRefresh()
-    }
-
-    electron.on('fs:watch:changed', handleWatchChanged)
-    return () => {
-      electron.off('fs:watch:changed', handleWatchChanged)
-    }
-  }, [scheduleDocumentFilesystemRefresh])
-
-  useEffect(() => {
-    return () => {
-      const electron = window.electron
-      if (rehydrateTimerRef.current) {
-        clearTimeout(rehydrateTimerRef.current)
-        rehydrateTimerRef.current = null
-      }
-      if (!electron) return
-      for (const watchedPath of watcherPathsRef.current) {
-        void electron.invoke('fs:watch:stop', watchedPath).catch(() => {})
-      }
-      watcherPathsRef.current.clear()
-    }
-  }, [])
-
-  useEffect(() => {
-    const electron = window.electron
-    if (!electron || !workspacePath) return
-
-    let cancelled = false
-    const syncDocumentWatchers = async () => {
-      const documentsRootPath = normalizeWatchedPath(joinWorkspacePath(workspacePath, 'documents'))
-      const nextPaths = new Set<string>([documentsRootPath])
-      const rootEntries = await electron.invoke('fs:listDir', documentsRootPath) as DirEntry[] | { error: string }
-
-      if (Array.isArray(rootEntries)) {
-        for (const entry of rootEntries) {
-          if (!entry.isDirectory || entry.name === 'indexes') continue
-          nextPaths.add(normalizeWatchedPath(entry.path))
+    const { t } = useI18n();
+    const watcherPathsRef = useRef<Set<string>>(new Set());
+    const rehydrateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const rehydrateInFlightRef = useRef<Promise<void> | null>(null);
+    const [panelWidth, setPanelWidth] = useResizablePanel('documents', 360);
+    const [query, setQuery] = useState('');
+    const deferredQuery = useDeferredValue(query);
+    const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+    const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
+    const [editingTitle, setEditingTitle] = useState('');
+    const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+    const [editingGroupName, setEditingGroupName] = useState('');
+    const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+    const [mode, setMode] = useState<'editor' | 'source' | 'preview' | 'graph'>('editor');
+    const [assistantState, setAssistantState] = useState<{
+        mode: 'create' | 'edit';
+        documentId?: string;
+    } | null>(null);
+    const [isExportingCorpus, setIsExportingCorpus] = useState(false);
+    const [exportStatus, setExportStatus] = useState<ExportCorpusStatus | null>(null);
+    const [showDocExportMenu, setShowDocExportMenu] = useState(false);
+    const [isExportingDoc, setIsExportingDoc] = useState(false);
+    const docExportMenuRef = useRef<HTMLDivElement>(null);
+    const { documentGroups, documentNodes, selectedDocumentGroupId, selectedDocumentId, workspacePath, addDocumentGroup, updateDocumentGroup, removeDocumentGroup, setSelectedDocumentGroup, addDocumentFolder, addDocument, updateDocumentNode, removeDocumentNode, setSelectedDocument, } = useAppStore();
+    const activeGroup = documentGroups.find((group) => group.id === selectedDocumentGroupId) ?? documentGroups[0] ?? null;
+    const activeGroupId = activeGroup?.id ?? null;
+    const groupNodes = useMemo(() => activeGroupId ? documentNodes.filter((node) => node.groupId === activeGroupId) : [], [documentNodes, activeGroupId]);
+    const activeDocument = useMemo(() => documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === selectedDocumentId) ?? null, [documentNodes, selectedDocumentId]);
+    const activeFolder = useMemo(() => documentNodes.find((node): node is DocumentFolder => node.type === 'folder' && node.id === selectedFolderId) ?? null, [documentNodes, selectedFolderId]);
+    const assistantDocument = useMemo(() => assistantState?.mode === 'edit'
+        ? documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === assistantState.documentId) ?? null
+        : null, [assistantState, documentNodes]);
+    const activeDocumentIsMarkdown = activeDocument ? isMarkdownDocumentTitle(activeDocument.title) : false;
+    const activeDocumentKindLabel = activeDocument ? getDocumentKindLabel(activeDocument.title) : '';
+    const activeDocumentExtension = activeDocument ? getDocumentExtension(activeDocument.title) || '.md' : '';
+    const groupDocuments = useMemo(() => groupNodes.filter((node): node is DocumentItem => node.type === 'document'), [groupNodes]);
+    const activeDocumentStatistics = useMemo(() => activeDocument ? computeDocumentStatistics(activeDocument.markdown) : null, [activeDocument?.id, activeDocument?.markdown]);
+    const activeGroupStatistics = useMemo(() => activeGroupId ? computeDocumentGroupStatistics(documentNodes, activeGroupId) : null, [activeGroupId, documentNodes]);
+    const documentNodeById = useMemo(() => new Map<string, DocumentNode>(documentNodes.map((node) => [node.id, node])), [documentNodes]);
+    const documentSearchIndex = useMemo(() => buildDocumentSearchIndex(documentNodes, null), [documentNodes]);
+    const searchResults = useMemo(() => deferredQuery.trim() ? searchDocumentIndex(documentSearchIndex, deferredQuery) : EMPTY_SEARCH_RESULTS, [deferredQuery, documentSearchIndex]);
+    const referencedDocuments = useMemo(() => activeDocument ? findReferencedDocuments(activeDocument.markdown, groupDocuments).filter((doc) => doc.id !== activeDocument.id) : [], [activeDocument, groupDocuments]);
+    const imageReferences = useMemo(() => activeDocument && activeDocumentIsMarkdown ? extractMarkdownImageReferences(activeDocument.markdown) : [], [activeDocument, activeDocumentIsMarkdown]);
+    const documentOutline = useMemo(() => {
+        if (!activeDocument)
+            return [] as string[];
+        const headings: string[] = [];
+        for (const line of activeDocument.markdown.split('\n')) {
+            if (/^#{1,3}\s+/.test(line)) {
+                headings.push(line.replace(/^#{1,3}\s+/, ''));
+                if (headings.length >= 12)
+                    break;
+            }
         }
-      }
-
-      for (const relativeFolderPath of watchedFolderRelativePaths) {
-        nextPaths.add(normalizeWatchedPath(joinWorkspacePath(workspacePath, relativeFolderPath)))
-      }
-
-      const previousPaths = watcherPathsRef.current
-      const pathsToStop = Array.from(previousPaths).filter((watchedPath) => !nextPaths.has(watchedPath))
-      const pathsToStart = Array.from(nextPaths).filter((watchedPath) => !previousPaths.has(watchedPath))
-
-      await Promise.all(pathsToStop.map((watchedPath) => electron.invoke('fs:watch:stop', watchedPath).catch(() => {})))
-      await Promise.all(pathsToStart.map((watchedPath) => electron.invoke('fs:watch:start', watchedPath).catch(() => {})))
-
-      if (cancelled) {
-        await Promise.all(pathsToStart.map((watchedPath) => electron.invoke('fs:watch:stop', watchedPath).catch(() => {})))
-        return
-      }
-
-      watcherPathsRef.current = nextPaths
-    }
-
-    void syncDocumentWatchers()
-    return () => {
-      cancelled = true
-    }
-  }, [documentGroupKey, watchedFolderPathKey, watchedFolderRelativePaths, workspacePath])
-
-  useEffect(() => {
-    if (selectedFolderId && !documentFolderIds.has(selectedFolderId)) {
-      setSelectedFolderId(null)
-    }
-  }, [documentFolderIds, selectedFolderId])
-
-  useEffect(() => {
-    if (editingNodeId && !documentNodeIds.has(editingNodeId)) {
-      setEditingNodeId(null)
-      setEditingTitle('')
-    }
-  }, [documentNodeIds, editingNodeId])
-
-  useEffect(() => {
-    if (editingGroupId && (!documentGroups.some((group) => group.id === editingGroupId) || editingGroupId !== activeGroupId)) {
-      setEditingGroupId(null)
-      setEditingGroupName('')
-    }
-  }, [activeGroupId, documentGroups, editingGroupId])
-
-  useEffect(() => {
-    if (!activeDocument) return
-    setSelectedFolderId(activeDocument.parentId)
-    if (!isMarkdownDocumentTitle(activeDocument.title) && (mode === 'editor' || mode === 'preview')) {
-      setMode('source')
-    }
-
-    const ancestorIds = activeDocumentAncestorKey.split('|').filter(Boolean)
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.add(activeDocument.groupId)
-      ancestorIds.forEach((id) => next.add(id))
-      return next
-    })
-  }, [activeDocument?.groupId, activeDocument?.id, activeDocument?.parentId, activeDocument?.title, activeDocumentAncestorKey, mode])
-
-  const revealNode = (node: DocumentNode) => {
-    const ancestorIds = collectAncestorFolderIds(node.parentId, documentNodes)
-    ancestorIds.unshift(node.groupId)
-    if (node.type === 'folder') ancestorIds.push(node.id)
-    if (!ancestorIds.length) return
-
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      ancestorIds.forEach((id) => next.add(id))
-      return next
-    })
-  }
-
-  const openAssistantCreate = () => {
-    setAssistantState({ mode: 'create' })
-  }
-
-  const openAssistantEdit = (documentId = activeDocument?.id ?? undefined) => {
-    if (!documentId) return
-    setAssistantState({ mode: 'edit', documentId })
-  }
-
-  const handleAssistantDocumentMutated = () => {
-    const store = useAppStore.getState()
-    const nodes = store.documentNodes as DocumentNode[]
-    const doc = store.selectedDocumentId
-      ? nodes.find((node): node is DocumentItem => node.type === 'document' && node.id === store.selectedDocumentId) ?? null
-      : null
-    if (!doc) return
-
-    revealNode(doc)
-    setSelectedFolderId(doc.parentId)
-    setMode(isMarkdownDocumentTitle(doc.title) ? 'editor' : 'source')
-  }
-
-  const openDocument = (documentId: string) => {
-    const doc = documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === documentId)
-    if (!doc) return
-
-    setSelectedDocumentGroup(doc.groupId)
-    setSelectedDocument(doc.id)
-    setSelectedFolderId(doc.parentId)
-    revealNode(doc)
-    setMode(isMarkdownDocumentTitle(doc.title) ? 'editor' : 'source')
-  }
-
-  const selectGroup = (group: DocumentGroup) => {
-    setSelectedDocumentGroup(group.id)
-    setSelectedDocument(null)
-    setSelectedFolderId(null)
-    setMode('graph')
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      if (next.has(group.id)) next.delete(group.id)
-      else next.add(group.id)
-      return next
-    })
-  }
-
-  const focusFolder = (folderId: string) => {
-    const folder = documentNodes.find((node): node is DocumentFolder => node.type === 'folder' && node.id === folderId)
-    if (!folder) return
-
-    setSelectedDocumentGroup(folder.groupId)
-    setSelectedFolderId(folder.id)
-    revealNode(folder)
-  }
-
-  const createGroup = () => {
-    const group = createDocumentGroup(t('documents.newGroup', 'New Document Group'))
-    addDocumentGroup(group)
-    const doc = createDocument(group.id, null, t('documents.welcomeDoc', 'Welcome'))
-    addDocument(doc)
-    setEditingNodeId(null)
-    setEditingTitle('')
-    setEditingGroupId(null)
-    setEditingGroupName('')
-    setSelectedFolderId(null)
-    setExpanded(new Set([group.id]))
-    setQuery('')
-    setMode('editor')
-  }
-
-  const createFolder = (parentId: string | null = selectedFolderId, targetGroupId = activeGroupId) => {
-    if (!targetGroupId) return
-    const now = Date.now()
-    const folder: DocumentFolder = {
-      id: createDocumentId('doc-folder'),
-      groupId: targetGroupId,
-      parentId,
-      type: 'folder',
-      title: t('documents.newFolder', 'New Folder'),
-      createdAt: now,
-      updatedAt: now,
-    }
-    addDocumentFolder(folder)
-    setSelectedDocumentGroup(targetGroupId)
-    const nextParentId = folder.parentId
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.add(targetGroupId)
-      if (nextParentId) next.add(nextParentId)
-      return next
-    })
-    setSelectedFolderId(folder.id)
-    setEditingNodeId(folder.id)
-    setEditingTitle(folder.title)
-  }
-
-  const createDoc = (parentId: string | null = selectedFolderId, targetGroupId = activeGroupId) => {
-    if (!targetGroupId) return
-    const doc = createDocument(targetGroupId, parentId, t('documents.untitled', 'Untitled Document'))
-    addDocument(doc)
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.add(targetGroupId)
-      if (parentId) next.add(parentId)
-      return next
-    })
-    setSelectedFolderId(parentId)
-    setMode('editor')
-  }
-
-  const startRenameNode = (node: DocumentNode) => {
-    setEditingNodeId(node.id)
-    setEditingTitle(node.title)
-
-    if (node.type === 'folder') {
-      focusFolder(node.id)
-      return
-    }
-
-    openDocument(node.id)
-  }
-
-  const cancelRenameNode = () => {
-    setEditingNodeId(null)
-    setEditingTitle('')
-  }
-
-  const startRenameGroup = (group: DocumentGroup) => {
-    cancelRenameNode()
-    setSelectedDocumentGroup(group.id)
-    setEditingGroupId(group.id)
-    setEditingGroupName(group.name)
-  }
-
-  const cancelRenameGroup = () => {
-    setEditingGroupId(null)
-    setEditingGroupName('')
-  }
-
-  const commitRenameGroup = () => {
-    if (!editingGroupId) return
-
-    const nextName = editingGroupName.trim()
-    if (!nextName) {
-      cancelRenameGroup()
-      return
-    }
-
-    updateDocumentGroup(editingGroupId, { name: nextName })
-    cancelRenameGroup()
-  }
-
-  const commitRenameNode = () => {
-    if (!editingNodeId) return
-
-    const nextTitle = editingTitle.trim()
-    if (!nextTitle) {
-      cancelRenameNode()
-      return
-    }
-
-    updateDocumentNode(editingNodeId, { title: nextTitle })
-    cancelRenameNode()
-  }
-
-  const deleteGroup = async (group = activeGroup) => {
-    if (!group) return
-    const ok = await confirm({
-      title: t('documents.deleteGroupTitle', 'Delete document group?'),
-      body: t('documents.deleteGroupBody', '"{name}" and all nested documents will be removed. This cannot be undone.').replace('{name}', group.name),
-      danger: true,
-      confirmText: t('common.delete', 'Delete'),
-    })
-    if (!ok) return
-
-    if (editingGroupId === group.id) cancelRenameGroup()
-    removeDocumentGroup(group.id)
-  }
-
-  const deleteActiveDocument = async () => {
-    if (!activeDocument) return
-    const ok = await confirm({
-      title: t('documents.deleteDocumentTitle', 'Delete document?'),
-      body: t('documents.deleteDocumentBody', '"{name}" will be removed. This cannot be undone.').replace('{name}', activeDocument.title),
-      danger: true,
-      confirmText: t('common.delete', 'Delete'),
-    })
-    if (ok) removeDocumentNode(activeDocument.id)
-  }
-
-  const handleDocExport = async (format: ExportFormat) => {
-    if (!activeDocument) return
-    setShowDocExportMenu(false)
-    setIsExportingDoc(true)
-    try {
-      const result = await exportDocument({
-        title: activeDocument.title,
-        markdown: activeDocument.markdown,
-        format,
-      })
-      if (!result.success && result.message) {
-        setExportStatus({ type: 'error', message: result.message })
-      } else if (result.success) {
-        toast.success(
-          t('documents.exportSuccess', 'Exported'),
-          t('documents.exportSuccessDetail', '"{name}" exported as {format}.').replace('{name}', activeDocument.title).replace('{format}', format.toUpperCase()),
-        )
-      }
-    } finally {
-      setIsExportingDoc(false)
-    }
-  }
-
-  useEffect(() => {
-    if (!showDocExportMenu) return
-    const handler = (e: MouseEvent) => {
-      if (docExportMenuRef.current && !docExportMenuRef.current.contains(e.target as Node)) {
-        setShowDocExportMenu(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [showDocExportMenu])
-
-  const deleteNode = async (node: DocumentNode) => {
-    const isFolder = node.type === 'folder'
-    const ok = await confirm({
-      title: isFolder ? t('documents.deleteFolderTitle', 'Delete folder?') : t('documents.deleteDocumentTitle', 'Delete document?'),
-      body: isFolder
-        ? t('documents.deleteFolderBody', '"{name}" and all nested documents will be removed. This cannot be undone.').replace('{name}', node.title)
-        : t('documents.deleteDocumentBody', '"{name}" will be removed. This cannot be undone.').replace('{name}', node.title),
-      danger: true,
-      confirmText: t('common.delete', 'Delete'),
-    })
-
-    if (!ok) return
-
-    if (editingNodeId === node.id) cancelRenameNode()
-    removeDocumentNode(node.id)
-  }
-
-  const toggleExpanded = (id: string) => setExpanded((prev) => {
-    const next = new Set(prev)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    return next
-  })
-
-  const exportActiveGroupCorpus = async () => {
-    if (!activeGroup) return
-    if (!workspacePath) {
-      setExportStatus({ type: 'error', message: t('documents.exportCorpusNoWorkspace', 'Set a workspace path before exporting a graph corpus.') })
-      return
-    }
-
-    setIsExportingCorpus(true)
-    setExportStatus(null)
-    const result = await exportDocumentGroupToGraphifyCorpus(workspacePath, activeGroup, documentNodes)
-    setIsExportingCorpus(false)
-
-    if (!result.success) {
-      setExportStatus({
-        type: 'error',
-        message: `${t('documents.exportCorpusError', 'Graphify corpus export failed.')} ${result.error}`,
-      })
-      return
-    }
-
-    setExportStatus({
-      type: 'success',
-      message: `${t('documents.exportCorpusSuccess', 'Graphify corpus exported successfully.')} ${result.documentCount} docs · ${result.fileCount} files`,
-      rootDir: result.rootDir,
-    })
-  }
-
-  const openExportFolder = async (rootDir: string) => {
-    const result = await window.electron.invoke('shell:openPath', rootDir) as { success?: boolean; error?: string }
-    if (!result?.success) {
-      setExportStatus({
-        type: 'error',
-        message: `${t('documents.exportFolderOpenError', 'Could not open exported corpus folder.')} ${result?.error || ''}`.trim(),
-        rootDir,
-      })
-    }
-  }
-
-  const renderExportStatusBanner = () => exportStatus ? (
-    <div className={`mx-5 mt-3 shrink-0 rounded-2xl border px-4 py-3 text-[11px] ${exportStatus.type === 'success' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700' : 'border-danger/20 bg-danger/10 text-danger/95'}`}>
+        return headings;
+    }, [activeDocument?.id, activeDocument?.markdown]);
+    const documentGraph = useMemo(() => activeGroupId ? buildDocumentGraph(documentGroups, documentNodes, { groupId: activeGroupId }) : EMPTY_DOCUMENT_GRAPH, [activeGroupId, documentGroups, documentNodes]);
+    const documentHealth = useMemo(() => analyzeDocumentHealth(documentNodes, activeGroupId), [activeGroupId, documentNodes]);
+    const graphInsights = useMemo(() => activeDocument && activeGroupId
+        ? queryDocumentGraph(documentGraph, groupNodes, {
+            documentIdOrTitle: activeDocument.id,
+            groupId: activeGroupId,
+            relatedLimit: 6,
+        })
+        : null, [activeDocument, activeGroupId, documentGraph, groupNodes]);
+    const graphInsightReport = useMemo(() => analyzeDocumentGraphInsights(documentGraph, groupNodes), [documentGraph, groupNodes]);
+    const graphBacklinks = useMemo(() => activeDocument
+        ? (documentGraph.backlinksByDocumentId[activeDocument.id] ?? [])
+            .map((documentId) => groupDocuments.find((doc) => doc.id === documentId) ?? null)
+            .filter((doc): doc is DocumentItem => Boolean(doc))
+        : [], [activeDocument, documentGraph.backlinksByDocumentId, groupDocuments]);
+    const documentCountByGroupId = useMemo(() => {
+        const counts = new Map<string, number>();
+        for (const node of documentNodes) {
+            if (node.type !== 'document')
+                continue;
+            counts.set(node.groupId, (counts.get(node.groupId) ?? 0) + 1);
+        }
+        return counts;
+    }, [documentNodes]);
+    const totalDocumentCount = useMemo(() => Array.from(documentCountByGroupId.values()).reduce((total, count) => total + count, 0), [documentCountByGroupId]);
+    const groupNameById = useMemo(() => new Map(documentGroups.map((group) => [group.id, group.name])), [documentGroups]);
+    const childrenByParent = useMemo(() => {
+        const nextChildrenByParent = new Map<string | null, DocumentNode[]>();
+        for (const node of documentNodes) {
+            const siblings = nextChildrenByParent.get(node.parentId);
+            if (siblings)
+                siblings.push(node);
+            else
+                nextChildrenByParent.set(node.parentId, [node]);
+        }
+        for (const children of nextChildrenByParent.values()) {
+            children.sort(sortDocumentNodes);
+        }
+        return nextChildrenByParent;
+    }, [documentNodes]);
+    const rootNodesByGroupId = useMemo(() => {
+        const nextRootNodesByGroupId = new Map<string, DocumentNode[]>();
+        for (const node of documentNodes) {
+            if (node.parentId !== null)
+                continue;
+            const roots = nextRootNodesByGroupId.get(node.groupId);
+            if (roots)
+                roots.push(node);
+            else
+                nextRootNodesByGroupId.set(node.groupId, [node]);
+        }
+        for (const roots of nextRootNodesByGroupId.values()) {
+            roots.sort(sortDocumentNodes);
+        }
+        return nextRootNodesByGroupId;
+    }, [documentNodes]);
+    const documentNodeIds = useMemo(() => new Set(documentNodes.map((node) => node.id)), [documentNodes]);
+    const documentFolderIds = useMemo(() => new Set(documentNodes.filter((node) => node.type === 'folder').map((node) => node.id)), [documentNodes]);
+    const watchedFolderRelativePaths = useMemo(() => documentNodes
+        .filter((node): node is DocumentFolder & {
+        path: string;
+    } => node.type === 'folder' && typeof node.path === 'string' && node.path.length > 0)
+        .map((node) => node.path)
+        .sort((first, second) => first.localeCompare(second)), [documentNodes]);
+    const watchedFolderPathKey = useMemo(() => watchedFolderRelativePaths.join('|'), [watchedFolderRelativePaths]);
+    const documentGroupKey = useMemo(() => documentGroups.map((group) => group.id).sort().join('|'), [documentGroups]);
+    const activeDocumentAncestorKey = useMemo(() => activeDocument ? collectAncestorFolderIds(activeDocument.parentId, documentNodes).join('|') : '', [activeDocument?.id, activeDocument?.parentId, documentNodes]);
+    const scheduleDocumentFilesystemRefresh = useCallback(() => {
+        if (rehydrateTimerRef.current) {
+            clearTimeout(rehydrateTimerRef.current);
+        }
+        rehydrateTimerRef.current = setTimeout(() => {
+            rehydrateTimerRef.current = null;
+            if (rehydrateInFlightRef.current)
+                return;
+            const request = Promise.resolve(useAppStore.persist.rehydrate()).finally(() => {
+                rehydrateInFlightRef.current = null;
+            });
+            rehydrateInFlightRef.current = request;
+        }, 150);
+    }, []);
+    useEffect(() => {
+        if (!selectedDocumentGroupId && documentGroups[0])
+            setSelectedDocumentGroup(documentGroups[0].id);
+    }, [documentGroups, selectedDocumentGroupId, setSelectedDocumentGroup]);
+    useEffect(() => {
+        const electron = window.electron;
+        if (!electron)
+            return;
+        const handleWatchChanged = (_event: unknown, payload: unknown) => {
+            const directory = payload && typeof payload === 'object' && typeof (payload as FsWatchChangedPayload).dir === 'string'
+                ? normalizeWatchedPath((payload as FsWatchChangedPayload).dir as string)
+                : '';
+            if (!directory || !watcherPathsRef.current.has(directory))
+                return;
+            scheduleDocumentFilesystemRefresh();
+        };
+        electron.on('fs:watch:changed', handleWatchChanged);
+        return () => {
+            electron.off('fs:watch:changed', handleWatchChanged);
+        };
+    }, [scheduleDocumentFilesystemRefresh]);
+    useEffect(() => {
+        return () => {
+            const electron = window.electron;
+            if (rehydrateTimerRef.current) {
+                clearTimeout(rehydrateTimerRef.current);
+                rehydrateTimerRef.current = null;
+            }
+            if (!electron)
+                return;
+            for (const watchedPath of watcherPathsRef.current) {
+                void electron.invoke('fs:watch:stop', watchedPath).catch(() => { });
+            }
+            watcherPathsRef.current.clear();
+        };
+    }, []);
+    useEffect(() => {
+        const electron = window.electron;
+        if (!electron || !workspacePath)
+            return;
+        let cancelled = false;
+        const syncDocumentWatchers = async () => {
+            const documentsRootPath = normalizeWatchedPath(joinWorkspacePath(workspacePath, 'documents'));
+            const nextPaths = new Set<string>([documentsRootPath]);
+            const rootEntries = await electron.invoke('fs:listDir', documentsRootPath) as DirEntry[] | {
+                error: string;
+            };
+            if (Array.isArray(rootEntries)) {
+                for (const entry of rootEntries) {
+                    if (!entry.isDirectory || entry.name === 'indexes')
+                        continue;
+                    nextPaths.add(normalizeWatchedPath(entry.path));
+                }
+            }
+            for (const relativeFolderPath of watchedFolderRelativePaths) {
+                nextPaths.add(normalizeWatchedPath(joinWorkspacePath(workspacePath, relativeFolderPath)));
+            }
+            const previousPaths = watcherPathsRef.current;
+            const pathsToStop = Array.from(previousPaths).filter((watchedPath) => !nextPaths.has(watchedPath));
+            const pathsToStart = Array.from(nextPaths).filter((watchedPath) => !previousPaths.has(watchedPath));
+            await Promise.all(pathsToStop.map((watchedPath) => electron.invoke('fs:watch:stop', watchedPath).catch(() => { })));
+            await Promise.all(pathsToStart.map((watchedPath) => electron.invoke('fs:watch:start', watchedPath).catch(() => { })));
+            if (cancelled) {
+                await Promise.all(pathsToStart.map((watchedPath) => electron.invoke('fs:watch:stop', watchedPath).catch(() => { })));
+                return;
+            }
+            watcherPathsRef.current = nextPaths;
+        };
+        void syncDocumentWatchers();
+        return () => {
+            cancelled = true;
+        };
+    }, [documentGroupKey, watchedFolderPathKey, watchedFolderRelativePaths, workspacePath]);
+    useEffect(() => {
+        if (selectedFolderId && !documentFolderIds.has(selectedFolderId)) {
+            setSelectedFolderId(null);
+        }
+    }, [documentFolderIds, selectedFolderId]);
+    useEffect(() => {
+        if (editingNodeId && !documentNodeIds.has(editingNodeId)) {
+            setEditingNodeId(null);
+            setEditingTitle('');
+        }
+    }, [documentNodeIds, editingNodeId]);
+    useEffect(() => {
+        if (editingGroupId && (!documentGroups.some((group) => group.id === editingGroupId) || editingGroupId !== activeGroupId)) {
+            setEditingGroupId(null);
+            setEditingGroupName('');
+        }
+    }, [activeGroupId, documentGroups, editingGroupId]);
+    useEffect(() => {
+        if (!activeDocument)
+            return;
+        setSelectedFolderId(activeDocument.parentId);
+        if (!isMarkdownDocumentTitle(activeDocument.title) && (mode === 'editor' || mode === 'preview')) {
+            setMode('source');
+        }
+        const ancestorIds = activeDocumentAncestorKey.split('|').filter(Boolean);
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            next.add(activeDocument.groupId);
+            ancestorIds.forEach((id) => next.add(id));
+            return next;
+        });
+    }, [activeDocument?.groupId, activeDocument?.id, activeDocument?.parentId, activeDocument?.title, activeDocumentAncestorKey, mode]);
+    const revealNode = (node: DocumentNode) => {
+        const ancestorIds = collectAncestorFolderIds(node.parentId, documentNodes);
+        ancestorIds.unshift(node.groupId);
+        if (node.type === 'folder')
+            ancestorIds.push(node.id);
+        if (!ancestorIds.length)
+            return;
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            ancestorIds.forEach((id) => next.add(id));
+            return next;
+        });
+    };
+    const openAssistantCreate = () => {
+        setAssistantState({ mode: 'create' });
+    };
+    const openAssistantEdit = (documentId = activeDocument?.id ?? undefined) => {
+        if (!documentId)
+            return;
+        setAssistantState({ mode: 'edit', documentId });
+    };
+    const handleAssistantDocumentMutated = () => {
+        const store = useAppStore.getState();
+        const nodes = store.documentNodes as DocumentNode[];
+        const doc = store.selectedDocumentId
+            ? nodes.find((node): node is DocumentItem => node.type === 'document' && node.id === store.selectedDocumentId) ?? null
+            : null;
+        if (!doc)
+            return;
+        revealNode(doc);
+        setSelectedFolderId(doc.parentId);
+        setMode(isMarkdownDocumentTitle(doc.title) ? 'editor' : 'source');
+    };
+    const openDocument = (documentId: string) => {
+        const doc = documentNodes.find((node): node is DocumentItem => node.type === 'document' && node.id === documentId);
+        if (!doc)
+            return;
+        setSelectedDocumentGroup(doc.groupId);
+        setSelectedDocument(doc.id);
+        setSelectedFolderId(doc.parentId);
+        revealNode(doc);
+        setMode(isMarkdownDocumentTitle(doc.title) ? 'editor' : 'source');
+    };
+    const selectGroup = (group: DocumentGroup) => {
+        setSelectedDocumentGroup(group.id);
+        setSelectedDocument(null);
+        setSelectedFolderId(null);
+        setMode('graph');
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(group.id))
+                next.delete(group.id);
+            else
+                next.add(group.id);
+            return next;
+        });
+    };
+    const focusFolder = (folderId: string) => {
+        const folder = documentNodes.find((node): node is DocumentFolder => node.type === 'folder' && node.id === folderId);
+        if (!folder)
+            return;
+        setSelectedDocumentGroup(folder.groupId);
+        setSelectedFolderId(folder.id);
+        revealNode(folder);
+    };
+    const createGroup = () => {
+        const group = createDocumentGroup(t('documents.newGroup', 'New Document Group'));
+        addDocumentGroup(group);
+        const doc = createDocument(group.id, null, t('documents.welcomeDoc', 'Welcome'));
+        addDocument(doc);
+        setEditingNodeId(null);
+        setEditingTitle('');
+        setEditingGroupId(null);
+        setEditingGroupName('');
+        setSelectedFolderId(null);
+        setExpanded(new Set([group.id]));
+        setQuery('');
+        setMode('editor');
+    };
+    const createFolder = (parentId: string | null = selectedFolderId, targetGroupId = activeGroupId) => {
+        if (!targetGroupId)
+            return;
+        const now = Date.now();
+        const folder: DocumentFolder = {
+            id: createDocumentId('doc-folder'),
+            groupId: targetGroupId,
+            parentId,
+            type: 'folder',
+            title: t('documents.newFolder', 'New Folder'),
+            createdAt: now,
+            updatedAt: now,
+        };
+        addDocumentFolder(folder);
+        setSelectedDocumentGroup(targetGroupId);
+        const nextParentId = folder.parentId;
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            next.add(targetGroupId);
+            if (nextParentId)
+                next.add(nextParentId);
+            return next;
+        });
+        setSelectedFolderId(folder.id);
+        setEditingNodeId(folder.id);
+        setEditingTitle(folder.title);
+    };
+    const createDoc = (parentId: string | null = selectedFolderId, targetGroupId = activeGroupId) => {
+        if (!targetGroupId)
+            return;
+        const doc = createDocument(targetGroupId, parentId, t('documents.untitled', 'Untitled Document'));
+        addDocument(doc);
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            next.add(targetGroupId);
+            if (parentId)
+                next.add(parentId);
+            return next;
+        });
+        setSelectedFolderId(parentId);
+        setMode('editor');
+    };
+    const startRenameNode = (node: DocumentNode) => {
+        setEditingNodeId(node.id);
+        setEditingTitle(node.title);
+        if (node.type === 'folder') {
+            focusFolder(node.id);
+            return;
+        }
+        openDocument(node.id);
+    };
+    const cancelRenameNode = () => {
+        setEditingNodeId(null);
+        setEditingTitle('');
+    };
+    const startRenameGroup = (group: DocumentGroup) => {
+        cancelRenameNode();
+        setSelectedDocumentGroup(group.id);
+        setEditingGroupId(group.id);
+        setEditingGroupName(group.name);
+    };
+    const cancelRenameGroup = () => {
+        setEditingGroupId(null);
+        setEditingGroupName('');
+    };
+    const commitRenameGroup = () => {
+        if (!editingGroupId)
+            return;
+        const nextName = editingGroupName.trim();
+        if (!nextName) {
+            cancelRenameGroup();
+            return;
+        }
+        updateDocumentGroup(editingGroupId, { name: nextName });
+        cancelRenameGroup();
+    };
+    const commitRenameNode = () => {
+        if (!editingNodeId)
+            return;
+        const nextTitle = editingTitle.trim();
+        if (!nextTitle) {
+            cancelRenameNode();
+            return;
+        }
+        updateDocumentNode(editingNodeId, { title: nextTitle });
+        cancelRenameNode();
+    };
+    const deleteGroup = async (group = activeGroup) => {
+        if (!group)
+            return;
+        const ok = await confirm({
+            title: t('documents.deleteGroupTitle', 'Delete document group?'),
+            body: t('documents.deleteGroupBody', '"{name}" and all nested documents will be removed. This cannot be undone.').replace('{name}', group.name),
+            danger: true,
+            confirmText: t('common.delete', 'Delete'),
+        });
+        if (!ok)
+            return;
+        if (editingGroupId === group.id)
+            cancelRenameGroup();
+        removeDocumentGroup(group.id);
+    };
+    const deleteActiveDocument = async () => {
+        if (!activeDocument)
+            return;
+        const ok = await confirm({
+            title: t('documents.deleteDocumentTitle', 'Delete document?'),
+            body: t('documents.deleteDocumentBody', '"{name}" will be removed. This cannot be undone.').replace('{name}', activeDocument.title),
+            danger: true,
+            confirmText: t('common.delete', 'Delete'),
+        });
+        if (ok)
+            removeDocumentNode(activeDocument.id);
+    };
+    const handleDocExport = async (format: ExportFormat) => {
+        if (!activeDocument)
+            return;
+        setShowDocExportMenu(false);
+        setIsExportingDoc(true);
+        try {
+            const result = await exportDocument({
+                title: activeDocument.title,
+                markdown: activeDocument.markdown,
+                format,
+            });
+            if (!result.success && result.message) {
+                setExportStatus({ type: 'error', message: result.message });
+            }
+            else if (result.success) {
+                toast.success(t('documents.exportSuccess', 'Exported'), t('documents.exportSuccessDetail', '"{name}" exported as {format}.').replace('{name}', activeDocument.title).replace('{format}', format.toUpperCase()));
+            }
+        }
+        finally {
+            setIsExportingDoc(false);
+        }
+    };
+    useEffect(() => {
+        if (!showDocExportMenu)
+            return;
+        const handler = (e: MouseEvent) => {
+            if (docExportMenuRef.current && !docExportMenuRef.current.contains(e.target as Node)) {
+                setShowDocExportMenu(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [showDocExportMenu]);
+    const deleteNode = async (node: DocumentNode) => {
+        const isFolder = node.type === 'folder';
+        const ok = await confirm({
+            title: isFolder ? t('documents.deleteFolderTitle', 'Delete folder?') : t('documents.deleteDocumentTitle', 'Delete document?'),
+            body: isFolder
+                ? t('documents.deleteFolderBody', '"{name}" and all nested documents will be removed. This cannot be undone.').replace('{name}', node.title)
+                : t('documents.deleteDocumentBody', '"{name}" will be removed. This cannot be undone.').replace('{name}', node.title),
+            danger: true,
+            confirmText: t('common.delete', 'Delete'),
+        });
+        if (!ok)
+            return;
+        if (editingNodeId === node.id)
+            cancelRenameNode();
+        removeDocumentNode(node.id);
+    };
+    const toggleExpanded = (id: string) => setExpanded((prev) => {
+        const next = new Set(prev);
+        if (next.has(id))
+            next.delete(id);
+        else
+            next.add(id);
+        return next;
+    });
+    const exportActiveGroupCorpus = async () => {
+        if (!activeGroup)
+            return;
+        if (!workspacePath) {
+            setExportStatus({ type: 'error', message: t('documents.exportCorpusNoWorkspace', 'Set a workspace path before exporting a graph corpus.') });
+            return;
+        }
+        setIsExportingCorpus(true);
+        setExportStatus(null);
+        const result = await exportDocumentGroupToGraphifyCorpus(workspacePath, activeGroup, documentNodes);
+        setIsExportingCorpus(false);
+        if (!result.success) {
+            setExportStatus({
+                type: 'error',
+                message: `${t('documents.exportCorpusError', 'Graphify corpus export failed.')} ${result.error}`,
+            });
+            return;
+        }
+        setExportStatus({
+            type: 'success',
+            message: `${t('documents.exportCorpusSuccess', 'Graphify corpus exported successfully.')} ${result.documentCount} docs · ${result.fileCount} files`,
+            rootDir: result.rootDir,
+        });
+    };
+    const openExportFolder = async (rootDir: string) => {
+        const result = await window.electron.invoke('shell:openPath', rootDir) as {
+            success?: boolean;
+            error?: string;
+        };
+        if (!result?.success) {
+            setExportStatus({
+                type: 'error',
+                message: `${t('documents.exportFolderOpenError', 'Could not open exported corpus folder.')} ${result?.error || ''}`.trim(),
+                rootDir,
+            });
+        }
+    };
+    const renderExportStatusBanner = () => exportStatus ? (<div className={`mx-5 mt-3 shrink-0 rounded-2xl border px-4 py-3 text-[11px] ${exportStatus.type === 'success' ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700' : 'border-danger/20 bg-danger/10 text-danger/95'}`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="font-semibold">{exportStatus.message}</p>
-          {exportStatus.rootDir && (
-            <p className="mt-2 break-all font-(--font-code) text-[10px] text-text-secondary">
+          {exportStatus.rootDir && (<p className="mt-2 break-all font-(--font-code) text-[10px] text-text-secondary">
               <span className="font-sans font-semibold text-text-muted">{t('documents.exportCorpusPath', 'Path')}: </span>
               {exportStatus.rootDir}
-            </p>
-          )}
+            </p>)}
         </div>
-        {exportStatus.rootDir && exportStatus.type === 'success' && (
-          <button type="button" onClick={() => void openExportFolder(exportStatus.rootDir as string)} className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-500/15">
+        {exportStatus.rootDir && exportStatus.type === 'success' && (<UiButton unstyled type="button" onClick={() => void openExportFolder(exportStatus.rootDir as string)} className="shrink-0 rounded-xl border border-emerald-500/25 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-semibold text-emerald-700 hover:bg-emerald-500/15">
             {t('documents.openExportFolder', 'Open Folder')}
-          </button>
-        )}
+          </UiButton>)}
       </div>
-    </div>
-  ) : null
-
-  return (
-    <div className="flex min-h-0 min-w-0 flex-1">
-      <SidePanel
-        title={t('documents.title', 'Documents')}
-        width={panelWidth}
-        action={
-          <div className="flex items-center gap-2">
-            <button type="button" onClick={openAssistantCreate} className="rounded-xl bg-accent px-3 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-accent-hover">
+    </div>) : null;
+    return (<div className="flex min-h-0 min-w-0 flex-1">
+            <SidePanel title={t('documents.title', 'Documents')} width={panelWidth} action={<div className="flex items-center gap-2">
+                        <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarPrimaryActionClass}>
               {t('timer.aiCreate', 'AI Create')}
-            </button>
-            <button type="button" onClick={createGroup} className="rounded-xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/25">
+            </UiButton>
+                        <UiButton unstyled type="button" onClick={createGroup} className={workbenchSidebarAccentActionClass}>
               {t('documents.addGroup', '+ Group')}
-            </button>
-          </div>
-        }
-      >
-        <div className="flex h-full min-h-0 flex-col gap-0 px-3 py-3">
+            </UiButton>
+          </div>}>
+                <div className="module-sidebar-stack flex h-full min-h-0 flex-col gap-0 px-3 py-3">
           {/* Search */}
-          <div className="mb-3 rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-3">
+                    <div className={`mb-3 ${workbenchSidebarCardClass}`}>
             <div className="relative">
-              <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55" />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('documents.searchPlaceholder', 'Progressively search markdown…')}
-                className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/80 py-2.5 pl-10 pr-3 text-[12px] text-text-primary placeholder-text-muted/55 focus:outline-none focus:ring-2 focus:ring-accent/20"
-              />
+              <IconifyIcon name="ui-search" size={14} color="currentColor" className="absolute left-3 top-1/2 -translate-y-1/2 text-text-muted/55"/>
+                                                        <UiInput value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t('documents.searchPlaceholder', 'Progressively search markdown…')} wrapperClassName="w-full" controlClassName={workbenchSidebarSearchInputClass.replace('pr-10', 'pr-3')}/>
             </div>
-            <div className="mt-2 flex items-center justify-between text-[10px] text-text-muted/70">
+                        <div className={workbenchSidebarMetaClass}>
               <span>{searchResults.length} {t('common.results', 'results')}</span>
               <span>{totalDocumentCount} {t('documents.docs', 'docs')}</span>
             </div>
           </div>
 
           <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {documentGroups.length === 0 ? (
-              <button type="button" onClick={createGroup} className="w-full rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-8 text-center text-[12px] text-text-muted hover:border-accent/30 hover:text-accent">
+                        {documentGroups.length === 0 ? (<UiButton unstyled type="button" onClick={createGroup} className={`${workbenchSidebarEmptyClass} w-full hover:border-accent/30 hover:text-accent`}>
                 {t('documents.emptyGroups', 'Create your first document group')}
-              </button>
-            ) : (
-              <div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
-                {query.trim() ? (
-                  <div className="space-y-2">
-                    {searchResults.map(({ node, excerpt, matchedFields, path }) => (
-                      <button key={node.id} type="button" onClick={() => openDocument(node.id)} className="w-full rounded-3xl border border-border-subtle/55 bg-surface-0/35 px-3 py-3 text-left hover:border-accent/25 hover:bg-accent/8">
-                        <div className="truncate text-[12px] font-semibold text-text-primary">{node.title}</div>
+              </UiButton>) : (<div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+                {query.trim() ? (<div className="space-y-2">
+                                        {searchResults.map(({ node, excerpt, matchedFields, path }) => (<UiButton unstyled key={node.id} type="button" onClick={() => openDocument(node.id)} className={workbenchSidebarItemClass(false, 'border-border-subtle/55 bg-surface-0/35 text-text-secondary hover:border-accent/25 hover:bg-accent/8')}>
+                                                <div className={workbenchSidebarTitleClass}>{node.title}</div>
                         <div className="mt-1 truncate text-[10px] text-text-muted">{groupNameById.get(node.groupId) ?? t('documents.groups', 'Groups')} / {path || buildDocumentPath(node, documentNodes, documentNodeById)}</div>
                         <div className="mt-2 flex flex-wrap gap-1">
-                          {matchedFields.slice(0, 3).map((field) => (
-                            <span key={field} className="rounded-full border border-accent/15 bg-accent/8 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-accent/90">{field}</span>
-                          ))}
+                          {matchedFields.slice(0, 3).map((field) => (<span key={field} className="rounded-full border border-accent/15 bg-accent/8 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-accent/90">{field}</span>))}
                         </div>
-                        <p className="mt-2 line-clamp-2 text-[11px] leading-relaxed text-text-secondary/80">{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="space-y-0.5">
-                    {documentGroups.map((group) => (
-                      <GroupTreeNode
-                        key={group.id}
-                        group={group}
-                        children={rootNodesByGroupId.get(group.id) ?? EMPTY_DOCUMENT_CHILDREN}
-                        documentCount={documentCountByGroupId.get(group.id) ?? 0}
-                        isActive={activeGroupId === group.id}
-                        isExpanded={expanded.has(group.id)}
-                        editingGroupId={editingGroupId}
-                        editingGroupName={editingGroupName}
-                        childrenByParent={childrenByParent}
-                        selectedDocumentId={selectedDocumentId}
-                        selectedFolderId={selectedFolderId}
-                        editingNodeId={editingNodeId}
-                        editingTitle={editingTitle}
-                        expanded={expanded}
-                        onToggle={toggleExpanded}
-                        onSelectGroup={selectGroup}
-                        onStartRenameGroup={startRenameGroup}
-                        onEditingGroupNameChange={setEditingGroupName}
-                        onCommitRenameGroup={commitRenameGroup}
-                        onCancelRenameGroup={cancelRenameGroup}
-                        onSelectDocument={openDocument}
-                        onSelectFolder={focusFolder}
-                        onStartRenameNode={startRenameNode}
-                        onEditingTitleChange={setEditingTitle}
-                        onCommitRenameNode={commitRenameNode}
-                        onCancelRenameNode={cancelRenameNode}
-                        onCreateDocument={createDoc}
-                        onCreateFolder={createFolder}
-                        onDeleteNode={deleteNode}
-                        onDeleteGroup={deleteGroup}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+                                                <p className={workbenchSidebarDescriptionClass}>{excerpt || t('documents.noExcerpt', 'No excerpt')}</p>
+                      </UiButton>))}
+                  </div>) : (<div className="space-y-0.5">
+                    {documentGroups.map((group) => (<GroupTreeNode key={group.id} group={group} children={rootNodesByGroupId.get(group.id) ?? EMPTY_DOCUMENT_CHILDREN} documentCount={documentCountByGroupId.get(group.id) ?? 0} isActive={activeGroupId === group.id} isExpanded={expanded.has(group.id)} editingGroupId={editingGroupId} editingGroupName={editingGroupName} childrenByParent={childrenByParent} selectedDocumentId={selectedDocumentId} selectedFolderId={selectedFolderId} editingNodeId={editingNodeId} editingTitle={editingTitle} expanded={expanded} onToggle={toggleExpanded} onSelectGroup={selectGroup} onStartRenameGroup={startRenameGroup} onEditingGroupNameChange={setEditingGroupName} onCommitRenameGroup={commitRenameGroup} onCancelRenameGroup={cancelRenameGroup} onSelectDocument={openDocument} onSelectFolder={focusFolder} onStartRenameNode={startRenameNode} onEditingTitleChange={setEditingTitle} onCommitRenameNode={commitRenameNode} onCancelRenameNode={cancelRenameNode} onCreateDocument={createDoc} onCreateFolder={createFolder} onDeleteNode={deleteNode} onDeleteGroup={deleteGroup}/>))}
+                  </div>)}
+              </div>)}
           </section>
         </div>
       </SidePanel>
-      <ResizeHandle width={panelWidth} onResize={setPanelWidth} />
+      <ResizeHandle width={panelWidth} onResize={setPanelWidth}/>
       <section className="module-workspace flex min-w-0 flex-1 flex-col overflow-hidden">
-        {activeDocument ? (
-          <>
+        {activeDocument ? (<>
             <header className="flex min-h-0 shrink-0 items-center justify-between gap-4 border-b border-border-subtle/80 bg-surface-1/72 px-5 py-3">
               <div className="min-w-0 flex-1">
-                <DocumentTitleInput
-                  document={activeDocument}
-                  onUpdate={(title) => updateDocumentNode(activeDocument.id, { title })}
-                  ariaLabel={t('documents.documentTitle', 'Document title')}
-                />
+                <DocumentTitleInput document={activeDocument} onUpdate={(title) => updateDocumentNode(activeDocument.id, { title })} ariaLabel={t('documents.documentTitle', 'Document title')}/>
                 <p className="mt-1 truncate text-[11px] text-text-muted" aria-label={`${activeGroup?.name ?? ''} / ${buildDocumentPath(activeDocument, documentNodes, documentNodeById)}`}>
                   {activeGroup?.name} / {buildDocumentPath(activeDocument, documentNodes, documentNodeById)}
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                <button type="button" onClick={openAssistantCreate} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15">
+                                <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarSubtleActionClass}>
                   {t('timer.aiCreate', 'AI Create')}
-                </button>
-                <button type="button" onClick={() => openAssistantEdit(activeDocument.id)} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15">
+                </UiButton>
+                                <UiButton unstyled type="button" onClick={() => openAssistantEdit(activeDocument.id)} className={workbenchSidebarSubtleActionClass}>
                   {t('timer.aiEditCurrent', 'AI Edit')}
-                </button>
+                </UiButton>
                 <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2.5 py-1 text-[10px] font-semibold text-text-muted">
                   {activeDocumentKindLabel}
                 </span>
                 <div className="flex rounded-2xl border border-border-subtle/55 bg-surface-0/45 p-1">
                   {(['editor', 'source', 'preview', 'graph'] as const).map((value) => {
-                    const markdownOnlyMode = value === 'editor' || value === 'preview'
-                    const isEditorUnavailable = markdownOnlyMode && !activeDocumentIsMarkdown
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        onClick={() => setMode(value)}
-                        disabled={isEditorUnavailable}
-                        title={isEditorUnavailable ? t('documents.markdownEditorOnly', 'Rich editor is available for Markdown files only.') : undefined}
-                        className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : isEditorUnavailable ? 'cursor-not-allowed text-text-muted/35' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}
-                      >
+                const markdownOnlyMode = value === 'editor' || value === 'preview';
+                const isEditorUnavailable = markdownOnlyMode && !activeDocumentIsMarkdown;
+                return (<UiButton unstyled key={value} type="button" onClick={() => setMode(value)} disabled={isEditorUnavailable} title={isEditorUnavailable ? t('documents.markdownEditorOnly', 'Rich editor is available for Markdown files only.') : undefined} className={`rounded-xl px-3 py-1.5 text-[11px] font-semibold ${mode === value ? 'bg-accent/15 text-accent' : isEditorUnavailable ? 'cursor-not-allowed text-text-muted/35' : 'text-text-muted hover:bg-surface-3/55 hover:text-text-primary'}`}>
                         {value === 'editor' ? t('documents.editor', 'Editor') : value === 'source' ? t('documents.source', 'Source') : value === 'preview' ? t('settings.preview', 'Preview') : t('documents.graph', 'Graph')}
-                      </button>
-                    )
-                  })}
+                      </UiButton>);
+            })}
                 </div>
-                <button type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
+                                <UiButton unstyled type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className={`${workbenchSidebarSubtleActionClass} disabled:cursor-not-allowed disabled:opacity-60`}>
                   {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
-                </button>
+                </UiButton>
                 <div className="relative" ref={docExportMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setShowDocExportMenu((v) => !v)}
-                    disabled={isExportingDoc}
-                    className="flex items-center gap-1.5 rounded-2xl border border-border-subtle/55 bg-surface-2/60 px-3 py-2 text-[11px] font-semibold text-text-secondary hover:border-accent/24 hover:bg-accent/10 hover:text-accent disabled:opacity-50"
-                    title={t('documents.exportDocument', 'Export document')}
-                  >
-                    <IconifyIcon name="ui-export" size={13} color="currentColor" />
+                  <UiButton unstyled type="button" onClick={() => setShowDocExportMenu((v) => !v)} disabled={isExportingDoc} className="flex items-center gap-1.5 rounded-2xl border border-border-subtle/55 bg-surface-2/60 px-3 py-2 text-[11px] font-semibold text-text-secondary hover:border-accent/24 hover:bg-accent/10 hover:text-accent disabled:opacity-50" title={t('documents.exportDocument', 'Export document')}>
+                    <IconifyIcon name="ui-export" size={13} color="currentColor"/>
                     {isExportingDoc ? t('common.exporting', 'Exporting…') : t('documents.export', 'Export')}
-                  </button>
-                  {showDocExportMenu && (
-                    <div className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
+                  </UiButton>
+                  {showDocExportMenu && (<div className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
                       {([
-                        { format: 'markdown' as ExportFormat, label: 'Markdown (.md)', icon: 'ui-file' },
-                        { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)', icon: 'ui-file' },
-                        { format: 'docx' as ExportFormat, label: 'Word (.docx)', icon: 'ui-file' },
-                      ]).map(({ format, label, icon }) => (
-                        <button
-                          key={format}
-                          type="button"
-                          onClick={() => void handleDocExport(format)}
-                          className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary"
-                        >
-                          <IconifyIcon name={icon} size={13} color="currentColor" />
+                    { format: 'markdown' as ExportFormat, label: 'Markdown (.md)', icon: 'ui-file' },
+                    { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)', icon: 'ui-file' },
+                    { format: 'docx' as ExportFormat, label: 'Word (.docx)', icon: 'ui-file' },
+                ]).map(({ format, label, icon }) => (<UiButton unstyled key={format} type="button" onClick={() => void handleDocExport(format)} className="flex w-full justify-start items-center gap-2.5 px-3.5 py-2.5 text-left text-[12px] text-text-secondary hover:bg-surface-3/55 hover:text-text-primary">
+                          <IconifyIcon name={icon} size={13} color="currentColor"/>
                           {label}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                        </UiButton>))}
+                    </div>)}
                 </div>
-                <button type="button" onClick={deleteActiveDocument} aria-label={t('documents.deleteCurrentDocument', 'Delete current document')} className="rounded-2xl border border-danger/20 bg-danger/10 px-3 py-2 text-[11px] font-semibold text-danger/90 hover:bg-danger/15">
+                <UiButton unstyled type="button" onClick={deleteActiveDocument} aria-label={t('documents.deleteCurrentDocument', 'Delete current document')} className="rounded-2xl border border-danger/20 bg-danger/10 px-3 py-2 text-[11px] font-semibold text-danger/90 hover:bg-danger/15">
                   {t('common.delete', 'Delete')}
-                </button>
+                </UiButton>
               </div>
             </header>
             {renderExportStatusBanner()}
             <div className={`grid min-h-0 flex-1 overflow-hidden ${mode === 'graph' ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_280px]'}`}>
               <div className="min-h-0 overflow-hidden p-5">
-                {mode === 'editor' ? (
-                  <div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <DocumentTiptapEditor
-                      document={activeDocument}
-                      onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}
-                    />
-                  </div>
-                ) : mode === 'source' ? (
-                  <DocumentSourceTextarea
-                    document={activeDocument}
-                    onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}
-                    spellCheck={activeDocumentIsMarkdown || activeDocumentExtension === '.txt'}
-                    placeholder={activeDocumentIsMarkdown ? t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.') : t('documents.textPlaceholder', 'Edit this text or script file.')}
-                    kindLabel={activeDocumentKindLabel}
-                    extension={activeDocumentExtension}
-                  />
-                ) : mode === 'preview' ? (
-                  <div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                {mode === 'editor' ? (<div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <DocumentTiptapEditor document={activeDocument} onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}/>
+                  </div>) : mode === 'source' ? (<DocumentSourceTextarea document={activeDocument} onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })} spellCheck={activeDocumentIsMarkdown || activeDocumentExtension === '.txt'} placeholder={activeDocumentIsMarkdown ? t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.') : t('documents.textPlaceholder', 'Edit this text or script file.')} kindLabel={activeDocumentKindLabel} extension={activeDocumentExtension}/>) : mode === 'preview' ? (<div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     <article className="document-prose markdown-body min-h-full text-text-primary">
-                      <MarkdownRenderer content={activeDocument.markdown} allowHtml />
+                      <MarkdownRenderer content={activeDocument.markdown} allowHtml/>
                     </article>
-                  </div>
-                ) : (
-                  <DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument} />
-                )}
+                  </div>) : (<DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument}/>)}
               </div>
-              {mode !== 'graph' && (
-                <aside className="min-h-0 overflow-y-auto border-l border-border-subtle/80 bg-surface-1/64 p-4">
+              {mode !== 'graph' && (<aside className="min-h-0 overflow-y-auto border-l border-border-subtle/80 bg-surface-1/64 p-4">
                   <div className="rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.fileInfo', 'File')}</h3>
                     <dl className="mt-3 space-y-2 text-[11px] text-text-secondary/80">
@@ -1966,9 +1521,7 @@ export function DocumentsLayout() {
                       <span className="rounded-full border border-border-subtle/55 bg-surface-2/45 px-2.5 py-1 text-[10px] text-text-secondary">{activeDocumentStatistics?.paragraphCount ?? 0} {t('documents.paragraphs', 'paragraphs')}</span>
                       <span className="rounded-full border border-border-subtle/55 bg-surface-2/45 px-2.5 py-1 text-[10px] text-text-secondary">{activeDocumentStatistics?.referenceCount ?? 0} {t('documents.references', 'references')}</span>
                       <span className="rounded-full border border-border-subtle/55 bg-surface-2/45 px-2.5 py-1 text-[10px] text-text-secondary">{activeDocumentStatistics?.imageCount ?? 0} {t('documents.images', 'images')}</span>
-                      {activeDocumentStatistics?.hasFrontmatter && (
-                        <span className="rounded-full border border-accent/18 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent">{t('documents.frontmatter', 'frontmatter')}</span>
-                      )}
+                      {activeDocumentStatistics?.hasFrontmatter && (<span className="rounded-full border border-accent/18 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent">{t('documents.frontmatter', 'frontmatter')}</span>)}
                     </div>
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
@@ -1994,24 +1547,14 @@ export function DocumentsLayout() {
                         <div className="mt-1 font-semibold text-text-primary">{graphInsights?.externalLinks.length ?? 0}</div>
                       </div>
                     </div>
-                    {graphInsights && (graphInsights.tags.length > 0 || graphInsights.externalLinks.length > 0) && (
-                      <>
-                        {graphInsights.tags.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {graphInsights.tags.slice(0, 8).map((tag) => (
-                              <span key={tag} className="rounded-full border border-accent/18 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent">#{tag}</span>
-                            ))}
-                          </div>
-                        )}
-                        {graphInsights.externalLinks.length > 0 && (
-                          <div className="mt-3 space-y-1">
-                            {graphInsights.externalLinks.slice(0, 3).map((link) => (
-                              <div key={link} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 font-(--font-code) text-[10px] text-text-secondary">{link}</div>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
+                    {graphInsights && (graphInsights.tags.length > 0 || graphInsights.externalLinks.length > 0) && (<>
+                        {graphInsights.tags.length > 0 && (<div className="mt-3 flex flex-wrap gap-2">
+                            {graphInsights.tags.slice(0, 8).map((tag) => (<span key={tag} className="rounded-full border border-accent/18 bg-accent/10 px-2.5 py-1 text-[10px] font-semibold text-accent">#{tag}</span>))}
+                          </div>)}
+                        {graphInsights.externalLinks.length > 0 && (<div className="mt-3 space-y-1">
+                            {graphInsights.externalLinks.slice(0, 3).map((link) => (<div key={link} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 font-(--font-code) text-[10px] text-text-secondary">{link}</div>))}
+                          </div>)}
+                      </>)}
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <div className="flex items-start justify-between gap-3">
@@ -2043,18 +1586,14 @@ export function DocumentsLayout() {
                       </div>
                     </div>
                     <div className="mt-4 space-y-2">
-                      {documentHealth.issues.length === 0 ? (
-                        <p className="rounded-2xl border border-dashed border-success/25 bg-success/5 px-3 py-5 text-center text-[11px] text-success">{t('documents.noHealthIssues', 'No knowledge health issues found.')}</p>
-                      ) : documentHealth.issues.slice(0, 4).map((issue) => (
-                        <button key={issue.id} type="button" onClick={() => openDocument(issue.documentId)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
+                      {documentHealth.issues.length === 0 ? (<p className="rounded-2xl border border-dashed border-success/25 bg-success/5 px-3 py-5 text-center text-[11px] text-success">{t('documents.noHealthIssues', 'No knowledge health issues found.')}</p>) : documentHealth.issues.slice(0, 4).map((issue) => (<UiButton unstyled key={issue.id} type="button" onClick={() => openDocument(issue.documentId)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
                           <span className="flex items-center justify-between gap-2">
                             <span className="min-w-0 truncate text-[12px] font-semibold text-text-primary">{issue.message}</span>
                             <span className={`shrink-0 rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] ${issue.severity === 'high' ? 'bg-danger/10 text-danger' : issue.severity === 'medium' ? 'bg-amber-400/10 text-amber-500' : 'bg-surface-3/70 text-text-muted'}`}>{issue.severity}</span>
                           </span>
                           <span className="mt-1 block truncate text-[10px] text-text-muted">{issue.title}</span>
                           <span className="mt-2 block line-clamp-2 text-[10px] leading-relaxed text-text-secondary/80">{issue.detail}</span>
-                        </button>
-                      ))}
+                        </UiButton>))}
                     </div>
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
@@ -2074,22 +1613,18 @@ export function DocumentsLayout() {
                       </div>
                     </div>
                     <div className="mt-4 space-y-2">
-                      {graphInsightReport.insights.length ? graphInsightReport.insights.slice(0, 3).map((insight) => (
-                        <article key={insight.id} className="rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 hover:border-accent/25 hover:bg-accent/8">
-                          <button type="button" onClick={() => setMode('graph')} className="w-full text-left">
+                      {graphInsightReport.insights.length ? graphInsightReport.insights.slice(0, 3).map((insight) => (<article key={insight.id} className="rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 hover:border-accent/25 hover:bg-accent/8">
+                          <UiButton unstyled type="button" onClick={() => setMode('graph')} className="w-full text-left">
                             <span className="block truncate text-[12px] font-semibold text-text-primary">{insight.title}</span>
                             <span className="mt-2 block line-clamp-2 text-[10px] leading-relaxed text-text-secondary/80">{insight.detail}</span>
-                          </button>
+                          </UiButton>
                           <div className="mt-2 flex justify-end">
-                            <button type="button" onClick={() => insight.documentIds[0] && openDocument(insight.documentIds[0])} className="rounded-xl border border-accent/18 bg-accent/8 px-2.5 py-1 text-[10px] font-semibold text-accent hover:bg-accent/14">
+                            <UiButton unstyled type="button" onClick={() => insight.documentIds[0] && openDocument(insight.documentIds[0])} className="rounded-xl border border-accent/18 bg-accent/8 px-2.5 py-1 text-[10px] font-semibold text-accent hover:bg-accent/14">
                               {t('documents.openInsightDocument', 'Open')}
                               <span className="sr-only"> {insight.title}</span>
-                            </button>
+                            </UiButton>
                           </div>
-                        </article>
-                      )) : (
-                        <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noGraphInsights', 'No graph insights yet.')}</p>
-                      )}
+                        </article>)) : (<p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noGraphInsights', 'No graph insights yet.')}</p>)}
                     </div>
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
@@ -2097,35 +1632,26 @@ export function DocumentsLayout() {
                     <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.relatedNotesHint', 'Suora expands from the current note through references and shared tags so large note collections remain navigable.')}</p>
                     <div className="mt-4 space-y-2">
                       {graphInsights?.relatedDocuments.length ? graphInsights.relatedDocuments.map((doc) => {
-                        const relatedNode = documentNodeById.get(doc.id)
-                        const fallbackPath = relatedNode && relatedNode.type === 'document'
-                          ? buildDocumentPath(relatedNode, documentNodes, documentNodeById)
-                          : undefined
-
-                        return (
-                          <button key={doc.id} type="button" onClick={() => openDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
+                    const relatedNode = documentNodeById.get(doc.id);
+                    const fallbackPath = relatedNode && relatedNode.type === 'document'
+                        ? buildDocumentPath(relatedNode, documentNodes, documentNodeById)
+                        : undefined;
+                    return (<UiButton unstyled key={doc.id} type="button" onClick={() => openDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
                             <span className="block truncate text-[12px] font-semibold text-text-primary">{doc.title}</span>
                             <span className="mt-1 block truncate text-[10px] text-text-muted">{doc.path || fallbackPath}</span>
                             <span className="mt-2 block line-clamp-2 text-[10px] leading-relaxed text-text-secondary/80">{doc.reasons[0]}</span>
-                          </button>
-                        )
-                      }) : (
-                        <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noRelatedNotes', 'No graph-related notes yet.')}</p>
-                      )}
+                          </UiButton>);
+                }) : (<p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noRelatedNotes', 'No graph-related notes yet.')}</p>)}
                     </div>
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.references', 'References')}</h3>
                     <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.referencesHint', 'Use [[Document Title]] or [Title](#doc:id) to connect notes in this group.')}</p>
                     <div className="mt-4 space-y-2">
-                      {referencedDocuments.length === 0 ? (
-                        <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noReferences', 'No resolved references yet.')}</p>
-                      ) : referencedDocuments.map((doc) => (
-                        <button key={doc.id} type="button" onClick={() => openDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
+                      {referencedDocuments.length === 0 ? (<p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noReferences', 'No resolved references yet.')}</p>) : referencedDocuments.map((doc) => (<UiButton unstyled key={doc.id} type="button" onClick={() => openDocument(doc.id)} className="w-full rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2 text-left hover:border-accent/25 hover:bg-accent/8">
                           <span className="block truncate text-[12px] font-semibold text-text-primary">{doc.title}</span>
                           <span className="mt-1 block truncate text-[10px] text-text-muted">{buildDocumentPath(doc, documentNodes, documentNodeById)}</span>
-                        </button>
-                      ))}
+                        </UiButton>))}
                     </div>
                   </div>
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
@@ -2134,118 +1660,79 @@ export function DocumentsLayout() {
                         <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.exportCorpus', 'Export Corpus')}</h3>
                         <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.exportCorpusHint', 'Write this group into a local corpus folder for later Graphify CLI and MCP use. No Python is required for this export.')}</p>
                       </div>
-                      <button type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-2 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
+                                            <UiButton unstyled type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className={`${workbenchSidebarSubtleActionClass} disabled:cursor-not-allowed disabled:opacity-60`}>
                         {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
-                      </button>
+                      </UiButton>
                     </div>
                     <p className="mt-3 rounded-2xl border border-dashed border-border-subtle/55 px-3 py-4 text-center text-[11px] text-text-muted">{t('documents.exportCorpusReady', 'The exported folder will include docs/, manifest.json, and a Suora graph preview for future Graphify upgrades.')}</p>
                   </div>
-                  {activeDocumentIsMarkdown && (
-                    <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
+                  {activeDocumentIsMarkdown && (<div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                       <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.assets', 'Assets')}</h3>
                       <p className="mt-2 text-[11px] leading-relaxed text-text-secondary/75">{t('documents.assetsHint', 'Markdown image references are tracked here so linked local or remote images stay visible in the document context.')}</p>
                       <div className="mt-4 space-y-2">
-                        {imageReferences.length === 0 ? (
-                          <p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noAssets', 'No image references yet.')}</p>
-                        ) : imageReferences.map((asset) => (
-                          <div key={asset.source} className="rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2">
+                        {imageReferences.length === 0 ? (<p className="rounded-2xl border border-dashed border-border-subtle/55 px-3 py-5 text-center text-[11px] text-text-muted">{t('documents.noAssets', 'No image references yet.')}</p>) : imageReferences.map((asset) => (<div key={asset.source} className="rounded-2xl border border-border-subtle/55 bg-surface-2/55 px-3 py-2">
                             <span className="block truncate font-(--font-code) text-[11px] text-text-primary">{asset.source}</span>
-                            {(asset.alt || asset.title) && (
-                              <span className="mt-1 block truncate text-[10px] text-text-muted">{asset.alt || asset.title}</span>
-                            )}
-                          </div>
-                        ))}
+                            {(asset.alt || asset.title) && (<span className="mt-1 block truncate text-[10px] text-text-muted">{asset.alt || asset.title}</span>)}
+                          </div>))}
                       </div>
-                    </div>
-                  )}
+                    </div>)}
                   <div className="mt-4 rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
                     <h3 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-text-muted">{t('documents.outline', 'Outline')}</h3>
                     <div className="mt-3 space-y-1">
-                      {documentOutline.map((heading, index) => (
-                        <div key={`${heading}-${index}`} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 text-[11px] text-text-secondary">
+                      {documentOutline.map((heading, index) => (<div key={`${heading}-${index}`} className="truncate rounded-xl bg-surface-2/50 px-2.5 py-1.5 text-[11px] text-text-secondary">
                           {heading}
-                        </div>
-                      ))}
+                        </div>))}
                     </div>
                   </div>
-                </aside>
-              )}
+                </aside>)}
             </div>
-          </>
-        ) : activeGroup ? (
-          /* Group-level knowledge graph — shown when a group is selected but no document is open */
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          </>) : activeGroup ? (
+        /* Group-level knowledge graph — shown when a group is selected but no document is open */
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <header className="flex min-h-0 shrink-0 items-center gap-3 border-b border-border-subtle/80 bg-surface-1/72 px-5 py-3">
-              <span className={`h-3 w-3 shrink-0 rounded-full ${getDocumentGroupColorClass(activeGroup.color)}`} />
+              <span className={`h-3 w-3 shrink-0 rounded-full ${getDocumentGroupColorClass(activeGroup.color)}`}/>
               <h2 className="text-base font-semibold text-text-primary">{activeGroup.name}</h2>
               <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2 py-0.5 text-[10px] text-text-muted">
                 {t('documents.knowledgeGraph', 'Knowledge Graph')}
               </span>
-              {activeGroupStatistics && (
-                <>
+              {activeGroupStatistics && (<>
                   <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2 py-0.5 text-[10px] text-text-muted">
                     {activeGroupStatistics.documentCount} {t('documents.docs', 'docs')} · {activeGroupStatistics.folderCount} {t('documents.folders', 'folders')}
                   </span>
                   <span className="rounded-xl border border-border-subtle/55 bg-surface-2/60 px-2 py-0.5 text-[10px] text-text-muted">
                     {activeGroupStatistics.totalWordCount.toLocaleString()} {t('documents.words', 'words')} · {activeGroupStatistics.averageReadingTimeMinutes} {t('documents.avgMin', 'avg min')}
                   </span>
-                </>
-              )}
+                </>)}
               <div className="ml-auto flex gap-2">
-                <button type="button" onClick={openAssistantCreate} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/15">
+                <UiButton unstyled type="button" onClick={openAssistantCreate} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/15">
                   {t('timer.aiCreate', 'AI Create')}
-                </button>
-                <button type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
+                </UiButton>
+                <UiButton unstyled type="button" onClick={() => void exportActiveGroupCorpus()} disabled={isExportingCorpus || !activeGroup} className="rounded-2xl border border-accent/20 bg-accent/10 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-60">
                   {isExportingCorpus ? t('documents.exportingCorpus', 'Exporting…') : t('documents.exportCorpus', 'Export Corpus')}
-                </button>
-                <button type="button" onClick={() => createDoc()} className="rounded-2xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/25">
+                </UiButton>
+                <UiButton unstyled type="button" onClick={() => createDoc()} className="rounded-2xl bg-accent/15 px-3 py-1.5 text-[11px] font-semibold text-accent hover:bg-accent/25">
                   {t('documents.addDocument', '+ Document')}
-                </button>
+                </UiButton>
               </div>
             </header>
             {renderExportStatusBanner()}
             <div className="min-h-0 flex-1 overflow-hidden p-5">
-              <DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={null} onSelectDocument={openDocument} />
+              <DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={null} onSelectDocument={openDocument}/>
             </div>
-          </div>
-        ) : (
-          <div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
-            <WorkbenchEmptyState
-              icon={<IconifyIcon name="skill-code-review" size={26} color="currentColor" />}
-              title={t('documents.emptyTitle', 'Build a document knowledge space')}
-              description={t('documents.emptyBody', 'Create document groups, nest folders freely, write Markdown, resolve references, and find notes progressively as you type.')}
-              actions={(
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    onClick={openAssistantCreate}
-                    className="rounded-2xl bg-accent px-5 py-3 text-[13px] font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-all hover:bg-accent-hover"
-                  >
+          </div>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
+            <WorkbenchEmptyState icon={<IconifyIcon name="skill-code-review" size={26} color="currentColor"/>} title={t('documents.emptyTitle', 'Build a document knowledge space')} description={t('documents.emptyBody', 'Create document groups, nest folders freely, write Markdown, resolve references, and find notes progressively as you type.')} actions={(<div className="flex flex-wrap items-center justify-center gap-3">
+                                    <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarPrimaryActionClass}>
                     {t('timer.aiCreate', 'AI Create')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={createGroup}
-                    className="rounded-2xl border border-border-subtle/55 bg-surface-0/62 px-5 py-3 text-[13px] font-semibold text-text-secondary transition-all hover:border-accent/20 hover:bg-accent/8 hover:text-accent"
-                  >
+                  </UiButton>
+                                    <UiButton unstyled type="button" onClick={createGroup} className={workbenchSidebarSubtleActionClass}>
                     {t('documents.addGroup', '+ Group')}
-                  </button>
-                </div>
-              )}
-            />
-          </div>
-        )}
-        {assistantState && (
-          <DocumentsAssistantDrawer
-            mode={assistantState.mode}
-            document={assistantState.mode === 'edit' ? assistantDocument : null}
-            group={activeGroup}
-            folder={activeFolder}
-            onClose={() => setAssistantState(null)}
-            onDocumentMutated={handleAssistantDocumentMutated}
-          />
-        )}
+                  </UiButton>
+                </div>)}/>
+          </div>)}
+        {assistantState && (<DocumentsAssistantDrawer mode={assistantState.mode} document={assistantState.mode === 'edit' ? assistantDocument : null} group={activeGroup} folder={activeFolder} onClose={() => setAssistantState(null)} onDocumentMutated={handleAssistantDocumentMutated}/>)}
       </section>
-    </div>
-  )
+    </div>);
 }
+
+
+

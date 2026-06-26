@@ -44,8 +44,8 @@ export const PipelineStepNode = memo(function PipelineStepNode({ data }: NodePro
   const { stepIndex, stepName, agentName, task, status, retryCount, continueOnError, attempts, hasCondition, durationMs } = data
 
   return (
-    <div className={`w-[260px] rounded-2xl border-2 ${STATUS_RING[status]} ${STATUS_BG[status]} p-3 transition-shadow`}>
-      <Handle type="target" position={Position.Top} className="!h-2 !w-2 !border-0 !bg-slate-500" />
+    <div className={`w-65 rounded-2xl border-2 ${STATUS_RING[status]} ${STATUS_BG[status]} p-3 transition-shadow`}>
+      <Handle type="target" position={Position.Top} className="h-2! w-2! border-0! bg-slate-500!" />
 
       {/* Header */}
       <div className="flex items-center gap-2">
@@ -86,7 +86,7 @@ export const PipelineStepNode = memo(function PipelineStepNode({ data }: NodePro
         )}
       </div>
 
-      <Handle type="source" position={Position.Bottom} className="!h-2 !w-2 !border-0 !bg-slate-500" />
+      <Handle type="source" position={Position.Bottom} className="h-2! w-2! border-0! bg-slate-500!" />
     </div>
   )
 })
@@ -98,10 +98,10 @@ type TerminalNode = Node<TerminalNodeData, 'terminal'>
 export const TerminalNode = memo(function TerminalNode({ data }: NodeProps<TerminalNode>) {
   const isStart = data.label === 'Start'
   return (
-    <div className="flex h-11 w-[100px] items-center justify-center rounded-full border border-slate-600/50 bg-slate-800/70 text-xs font-medium text-white/70">
-      {!isStart && <Handle type="target" position={Position.Top} className="!h-2 !w-2 !border-0 !bg-slate-500" />}
+    <div className="flex h-11 w-25 items-center justify-center rounded-full border border-slate-600/50 bg-slate-800/70 text-xs font-medium text-white/70">
+      {!isStart && <Handle type="target" position={Position.Top} className="h-2! w-2! border-0! bg-slate-500!" />}
       {data.label}
-      {isStart && <Handle type="source" position={Position.Bottom} className="!h-2 !w-2 !border-0 !bg-slate-500" />}
+      {isStart && <Handle type="source" position={Position.Bottom} className="h-2! w-2! border-0! bg-slate-500!" />}
     </div>
   )
 })

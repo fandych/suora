@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { TextArea } from '@/components/catalyst-ui/form-controls'
 import { SkillEditor } from './SkillEditor'
 import { useAppStore } from '@/store/appStore'
 import type { Skill } from '@/types'
@@ -27,7 +28,7 @@ vi.mock('@/services/toast', () => ({
 // Avoid pulling in heavy markdown renderer used by the Content tab.
 vi.mock('./SkillEditorPanels', () => ({
   MarkdownEditor: ({ value }: { value: string }) => (
-    <textarea data-testid="markdown-editor" aria-label="Markdown editor" defaultValue={value} />
+    <TextArea data-testid="markdown-editor" aria-label="Markdown editor" defaultValue={value} />
   ),
 }))
 
@@ -323,3 +324,5 @@ describe('SkillEditor — Resources tab', () => {
     expect(screen.getByText(/name: Test Skill/)).toBeInTheDocument()
   })
 })
+
+

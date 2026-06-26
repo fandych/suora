@@ -1,4 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
+import { Dialog, DialogBody } from '@/components/catalyst-ui/dialog'
+import { Input } from '@/components/catalyst-ui/form-controls'
+import { Button } from '@/components/catalyst-ui/button'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons'
@@ -223,24 +226,15 @@ export function CommandPalette() {
   })
 
   return (
-    <div
-      role="dialog"
-      aria-label={t('nav.commandPalette', 'Command palette')}
-      aria-modal="true"
-      className="fixed inset-0 z-100 flex items-start justify-center pt-[15vh] bg-black/50 backdrop-blur-sm animate-fade-in"
-      onClick={() => setOpen(false)}
-    >
-      <div
-        className="glass-strong w-full max-w-lg border rounded-2xl shadow-2xl overflow-hidden animate-slide-up"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Dialog open={true} onClose={() => setOpen(false)} size="lg" className="glass-strong mt-[12vh] w-full max-w-lg overflow-hidden rounded-2xl border border-border-subtle/60 bg-surface-1 p-0 text-text-primary shadow-2xl">
+      <DialogBody className="mt-0">
         {/* Search Input */}
         <div className="command-palette-search flex items-center gap-3 px-4 py-3 border-b focus-within:shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.18)]">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-text-muted shrink-0">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
-          <input
+          <Input
             ref={inputRef}
             type="text"
             role="combobox"
@@ -253,7 +247,7 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
-            className="flex-1 bg-transparent text-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+            className="flex-1 border-0 bg-transparent px-0 py-0 text-sm shadow-none before:hidden after:hidden focus:ring-0"
           />
           <kbd className="text-[10px] text-text-muted px-1.5 py-0.5 bg-surface-2 border border-border-subtle rounded">
             ESC
@@ -273,12 +267,13 @@ export function CommandPalette() {
                 {typeLabel[group.type] || group.type}
               </div>
               {group.items.map(({ item, globalIdx }) => (
-                <button
+                <Button
                   key={item.id}
                   id={`cp-item-${item.id}`}
+                  variant={globalIdx === selectedIndex ? 'primary' : 'ghost'}
                   role="option"
                   {...{ 'aria-selected': globalIdx === selectedIndex ? 'true' : 'false' }}
-                  className={`w-full flex items-center gap-3 px-4 py-2.5 text-left text-sm transition-colors ${
+                  className={`w-full justify-start gap-3 rounded-none border-0 px-4 py-2.5 text-left text-sm transition-colors shadow-none before:hidden after:hidden ${
                     globalIdx === selectedIndex
                       ? 'nav-item-active text-accent'
                       : 'glass-hover text-text-primary'
@@ -294,7 +289,7 @@ export function CommandPalette() {
                     )}
                   </div>
                   <span className="text-[10px] text-text-muted/60 shrink-0">{typeLabel[item.type]}</span>
-                </button>
+                </Button>
               ))}
             </div>
           ))}
@@ -306,7 +301,9 @@ export function CommandPalette() {
           <span>{t('commandPalette.openHint', '↵ Open')}</span>
           <span>{t('commandPalette.closeHint', 'ESC Close')}</span>
         </div>
-      </div>
-    </div>
+      </DialogBody>
+    </Dialog>
   )
 }
+
+

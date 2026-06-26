@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import { Switch } from '@/components/catalyst-ui/switch'
 
 export function SettingsSection({
   eyebrow,
@@ -14,25 +15,25 @@ export function SettingsSection({
   children: ReactNode
 }) {
   return (
-    <section className="rounded-lg border border-border-subtle bg-surface-1 p-4 xl:p-5">
+    <section className="rounded-2xl border border-border-subtle/65 bg-surface-1/88 p-4.5 xl:p-5.5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-[11px] font-medium text-text-muted">{eyebrow}</div>
-          <h3 className="mt-1 text-base font-semibold text-text-primary">{title}</h3>
-          {description && <p className="mt-1 max-w-3xl text-[13px] leading-5 text-text-muted">{description}</p>}
+          <div className="text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted/78">{eyebrow}</div>
+          <h3 className="mt-1.5 text-[17px] font-semibold text-text-primary">{title}</h3>
+          {description && <p className="mt-1.5 max-w-3xl text-[13px] leading-6 text-text-secondary/82">{description}</p>}
         </div>
         {action}
       </div>
-      <div className="mt-4">{children}</div>
+      <div className="mt-4.5">{children}</div>
     </section>
   )
 }
 
 export function SettingsStat({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className={`rounded-lg border px-3 py-2.5 ${accent ? 'border-accent/25 bg-accent/8' : 'border-border-subtle bg-surface-0/45'}`}>
-      <div className="text-[11px] text-text-muted">{label}</div>
-      <div className={`mt-1 text-base font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    <div className={`rounded-2xl border px-3.5 py-3 ${accent ? 'border-accent/22 bg-accent/8' : 'border-border-subtle/65 bg-surface-0/45'}`}>
+      <div className="text-[11px] uppercase tracking-[0.08em] text-text-muted/72">{label}</div>
+      <div className={`mt-1.5 text-[15px] font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
     </div>
   )
 }
@@ -51,10 +52,10 @@ export function SettingsOverview({
   statsClassName?: string
 }) {
   return (
-    <section className="rounded-3xl border border-border-subtle/55 bg-surface-1/78 p-4 shadow-[0_14px_36px_rgba(15,23,42,0.06)] xl:p-5">
+    <section className="rounded-3xl border border-border-subtle/60 bg-surface-1/82 p-4.5 shadow-[0_14px_36px_rgba(15,23,42,0.06)] xl:p-5.5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 flex-1">
-          <p className="max-w-3xl text-[13px] leading-6 text-text-secondary/80">{description}</p>
+          <p className="max-w-3xl text-[13px] leading-6 text-text-secondary/84">{description}</p>
           {details ? <div className="mt-3 flex flex-wrap items-center gap-2">{details}</div> : null}
         </div>
 
@@ -67,21 +68,11 @@ export function SettingsOverview({
   )
 }
 
-export const settingsLabelClass = 'mb-1.5 block text-[12px] font-medium text-text-secondary'
-export const settingsHintClass = 'mt-2 text-[11px] leading-relaxed text-text-muted'
-export const settingsFieldCardClass = 'rounded-lg border border-border-subtle bg-surface-0/45 p-3'
-export const settingsSurfaceCardClass = 'rounded-md border border-border-subtle bg-surface-2/55 p-3'
-export const settingsInputClass = 'w-full rounded-md border border-border-subtle bg-surface-1 px-3 py-2.5 text-sm text-text-primary placeholder-text-muted/55 transition-colors focus:border-accent/40 focus:outline-none focus:ring-1 focus:ring-accent/25 disabled:cursor-not-allowed disabled:opacity-50'
-export const settingsSelectClass = settingsInputClass
-export const settingsMonoInputClass = `${settingsInputClass} font-mono`
-export const settingsTextAreaClass = `${settingsInputClass} min-h-32 resize-y leading-6`
-export const settingsCheckboxClass = 'h-4 w-4 rounded border-border bg-surface-2 text-accent focus:ring-accent/30'
-export const settingsRadioClass = 'h-4 w-4 border-border bg-surface-2 text-accent focus:ring-accent/30'
+export const settingsLabelClass = 'mb-2 block text-[12px] font-medium text-text-secondary'
+export const settingsHintClass = 'mt-2 text-[12px] leading-relaxed text-text-muted'
+export const settingsFieldCardClass = 'rounded-2xl border border-border-subtle/65 bg-surface-0/45 p-3.5'
+export const settingsSurfaceCardClass = 'rounded-xl border border-border-subtle/65 bg-surface-2/55 p-3.5'
 export const settingsRangeClass = 'w-full cursor-pointer accent-accent'
-export const settingsPrimaryButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-accent bg-accent px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50'
-export const settingsSoftButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-accent/25 bg-accent/10 px-3 py-2 text-sm font-medium text-accent transition-colors hover:bg-accent/15 disabled:cursor-not-allowed disabled:opacity-50'
-export const settingsSecondaryButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-border-subtle bg-surface-1 px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:border-border hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50'
-export const settingsDangerButtonClass = 'inline-flex items-center justify-center gap-1.5 rounded-md border border-danger/25 bg-danger/10 px-3 py-2 text-sm font-medium text-danger transition-colors hover:bg-danger/15 disabled:cursor-not-allowed disabled:opacity-50'
 
 export function SettingsToggleRow({
   label,
@@ -98,18 +89,9 @@ export function SettingsToggleRow({
     <div className={`${settingsFieldCardClass} flex items-start justify-between gap-4`}>
       <div className="min-w-0">
         <div className="text-[13px] font-medium text-text-primary">{label}</div>
-        {description && <p className="mt-1 text-[12px] leading-6 text-text-muted">{description}</p>}
+        {description && <p className="mt-1.5 text-[12px] leading-6 text-text-muted">{description}</p>}
       </div>
-      <button
-        type="button"
-        onClick={onChange}
-        className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border transition-colors ${checked ? 'border-accent/30 bg-accent/20' : 'border-border-subtle bg-surface-2'}`}
-        aria-label={label}
-      >
-        <span
-          className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white transition-transform ${checked ? 'translate-x-4' : 'translate-x-0'}`}
-        />
-      </button>
+      <Switch checked={checked} onChange={onChange} color="blue" aria-label={label} className="shrink-0" />
     </div>
   )
 }
