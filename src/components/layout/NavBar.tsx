@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/store/appStore';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
-import { openCommandPalette } from '@/components/CommandPalette';
+import { openCommandPalette } from '@/services/commandPalette';
+import { preloadRoute } from '@/services/routePrefetch';
 import logoSvg from '../../../resources/logo.svg';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
@@ -43,7 +44,7 @@ export function NavBar() {
     const { t } = useI18n();
     return (<nav aria-label={t('nav.mainNavigation', 'Main navigation')} className="relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r border-border-subtle/80 bg-surface-1/96 py-3 shadow-[inset_-1px_0_0_rgba(255,255,255,0.025)]">
       {/* Logo */}
-      <UiButton unstyled type="button" onClick={() => navigate('/chat')} aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`} className="mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-border-subtle/70 bg-surface-2/82 shadow-sm transition-colors hover:border-accent/40">
+      <UiButton unstyled type="button" onMouseEnter={() => void preloadRoute('/chat')} onFocus={() => void preloadRoute('/chat')} onClick={() => navigate('/chat')} aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`} className="mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-border-subtle/70 bg-surface-2/82 shadow-sm transition-colors hover:border-accent/40">
         <img src={logoSvg} alt="SUORA" width={32} height={32} className="h-8 w-8"/>
       </UiButton>
 
@@ -51,7 +52,7 @@ export function NavBar() {
         {navItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
             const label = t(item.i18nKey, item.fallbackLabel);
-            return (<UiButton unstyled type="button" key={item.path} onClick={() => navigate(item.path)} aria-label={label} aria-current={isActive ? 'page' : undefined} title={label} className={`${navButtonBase} ${isActive ? navButtonActive : navButtonInactive}`}>
+            return (<UiButton unstyled type="button" key={item.path} onMouseEnter={() => void preloadRoute(item.path)} onFocus={() => void preloadRoute(item.path)} onClick={() => navigate(item.path)} aria-label={label} aria-current={isActive ? 'page' : undefined} title={label} className={`${navButtonBase} ${isActive ? navButtonActive : navButtonInactive}`}>
               {isActive && (<span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent"/>)}
               <span className="flex">{item.icon}</span>
             </UiButton>);
@@ -75,7 +76,7 @@ export function NavBar() {
       </UiButton>
 
       {/* Settings at bottom */}
-      <UiButton unstyled type="button" onClick={() => navigate('/settings')} aria-label={t('nav.settings', 'Settings')} aria-current={location.pathname.startsWith('/settings') ? 'page' : undefined} title={t('nav.settings', 'Settings')} className={`${navButtonBase} ${location.pathname.startsWith('/settings') ? navButtonActive : navButtonInactive}`}>
+      <UiButton unstyled type="button" onMouseEnter={() => void preloadRoute('/settings')} onFocus={() => void preloadRoute('/settings')} onClick={() => navigate('/settings')} aria-label={t('nav.settings', 'Settings')} aria-current={location.pathname.startsWith('/settings') ? 'page' : undefined} title={t('nav.settings', 'Settings')} className={`${navButtonBase} ${location.pathname.startsWith('/settings') ? navButtonActive : navButtonInactive}`}>
         {location.pathname.startsWith('/settings') && (<span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent"/>)}
         <span className="flex">{settingsIcon}</span>
       </UiButton>

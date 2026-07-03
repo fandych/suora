@@ -2,7 +2,6 @@ import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom'
 import { useEffect, useMemo, lazy, Suspense } from 'react'
 import { AppShell } from '@/components/layout/AppShell'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { OnboardingWizard } from '@/components/OnboardingWizard'
 import { ConfirmDialogHost } from '@/components/ConfirmDialog'
 import { ToastHost } from '@/components/ToastHost'
 import { useI18n } from '@/hooks/useI18n'
@@ -13,23 +12,25 @@ import { preloadPopularCollections } from '@/services/iconService'
 import { initTimerRuntimeListener } from '@/services/timerRuntime'
 import { toast } from '@/services/toast'
 import { initRendererRuntimeLogging } from '@/services/logger'
+import { loadAgentsLayout, loadChannelLayout, loadChatLayout, loadDocumentsLayout, loadIntegrationsLayout, loadModelsLayout, loadPipelineLayout, loadSettingsLayout, loadSkillsLayout, loadTimerLayout } from '@/services/routePrefetch'
+import { scheduleWhenIdle } from '@/utils/scheduling'
 
-const ChatLayout = lazy(() => import('@/components/chat/ChatLayout').then(m => ({ default: m.ChatLayout })))
-const DocumentsLayout = lazy(() => import('@/components/documents/DocumentsLayout').then(m => ({ default: m.DocumentsLayout })))
-const PipelineLayout = lazy(() => import('@/components/pipeline/PipelineLayout').then(m => ({ default: m.PipelineLayout })))
-const ModelsLayout = lazy(() => import('@/components/models/ModelsLayout').then(m => ({ default: m.ModelsLayout })))
-const AgentsLayout = lazy(() => import('@/components/agents/AgentsLayout').then(m => ({ default: m.AgentsLayout })))
-const SkillsLayout = lazy(() => import('@/components/skills/SkillsLayout').then(m => ({ default: m.SkillsLayout })))
-const TimerLayout = lazy(() => import('@/components/timer/TimerLayout').then(m => ({ default: m.TimerLayout })))
-const SettingsLayout = lazy(() => import('@/components/settings/SettingsLayout').then(m => ({ default: m.SettingsLayout })))
-const ChannelLayout = lazy(() => import('@/components/channels/ChannelLayout').then(m => ({ default: m.ChannelLayout })))
-const IntegrationsLayout = lazy(() => import('@/components/integrations/IntegrationsLayout').then(m => ({ default: m.IntegrationsLayout })))
+const ChatLayout = lazy(() => loadChatLayout().then(m => ({ default: m.ChatLayout })))
+const DocumentsLayout = lazy(() => loadDocumentsLayout().then(m => ({ default: m.DocumentsLayout })))
+const PipelineLayout = lazy(() => loadPipelineLayout().then(m => ({ default: m.PipelineLayout })))
+const ModelsLayout = lazy(() => loadModelsLayout().then(m => ({ default: m.ModelsLayout })))
+const AgentsLayout = lazy(() => loadAgentsLayout().then(m => ({ default: m.AgentsLayout })))
+const SkillsLayout = lazy(() => loadSkillsLayout().then(m => ({ default: m.SkillsLayout })))
+const TimerLayout = lazy(() => loadTimerLayout().then(m => ({ default: m.TimerLayout })))
+const SettingsLayout = lazy(() => loadSettingsLayout().then(m => ({ default: m.SettingsLayout })))
+const ChannelLayout = lazy(() => loadChannelLayout().then(m => ({ default: m.ChannelLayout })))
+const IntegrationsLayout = lazy(() => loadIntegrationsLayout().then(m => ({ default: m.IntegrationsLayout })))
 
 function LazyPage({ children, label }: { children: React.ReactNode; label?: string }) {
   return (
     <Suspense
       fallback={
-        <div role="status" aria-live="polite" aria-label={label} className="flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
+        <div role="status" aria-live="polite" aria-label={label} className="route-transition-fallback animate-fade-in flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
           <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
           {label && <span className="text-xs text-text-muted/60">{label}</span>}
         </div>
@@ -77,34 +78,16 @@ export default function App() {
     // Non-critical runtimes (timer + event automation) are deferred to idle
     // time so they don't compete with first paint. Icon collections are even
     // less urgent and are also pre-loaded lazily.
-    type IdleCallback = (cb: () => void) => number
-    const win = window as unknown as {
-      requestIdleCallback?: IdleCallback
-      cancelIdleCallback?: (handle: number) => void
-    }
-    const requestIdle = (cb: () => void): { cancel: () => void } => {
-      if (typeof win.requestIdleCallback === 'function') {
-        const handle = win.requestIdleCallback(cb)
-        return {
-          cancel: () => {
-            if (typeof win.cancelIdleCallback === 'function') win.cancelIdleCallback(handle)
-          },
-        }
-      }
-      const handle = window.setTimeout(cb, 2000)
-      return { cancel: () => window.clearTimeout(handle) }
-    }
-
     let cleanupTimerRuntime: (() => void) | null = null
     let cleanupEventAutomation: (() => void) | null = null
 
-    const idleRuntime = requestIdle(() => {
+    const idleRuntime = scheduleWhenIdle(() => {
       cleanupTimerRuntime = initTimerRuntimeListener()
       cleanupEventAutomation = initEventAutomationRuntime()
     })
-    const idleIcons = requestIdle(() => {
+    const idleIcons = scheduleWhenIdle(() => {
       preloadPopularCollections().catch(console.error)
-    })
+    }, 3500)
 
     return () => {
       idleRuntime.cancel()
@@ -136,7 +119,6 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <OnboardingWizard />
       <RouterProvider router={router} />
       <ConfirmDialogHost />
       <ToastHost />

@@ -28,6 +28,103 @@ export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   autoSend: false,
 }
 
+export type MicrophonePermissionState = 'granted' | 'prompt' | 'denied' | 'unsupported' | 'unknown'
+
+export interface MicrophoneAccessResult {
+  ok: boolean
+  state: MicrophonePermissionState
+  stream?: MediaStream
+  message?: string
+}
+
+function hasAudioCaptureSupport(): boolean {
+  return typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia
+}
+
+function classifyMicrophoneError(error: unknown): { state: MicrophonePermissionState; message: string } {
+  const code = error && typeof error === 'object' && 'name' in error ? String((error as { name?: unknown }).name) : 'UnknownError'
+
+  switch (code) {
+    case 'NotAllowedError':
+    case 'PermissionDeniedError':
+    case 'SecurityError':
+      return {
+        state: 'denied',
+        message: t('voice.microphoneAccessDenied', 'Microphone access denied. Enable microphone access for this app and browser, then try again.'),
+      }
+    case 'NotFoundError':
+    case 'DevicesNotFoundError':
+      return {
+        state: 'unsupported',
+        message: t('voice.microphoneNotFound', 'No microphone was found. Connect an input device and try again.'),
+      }
+    case 'NotReadableError':
+    case 'TrackStartError':
+      return {
+        state: 'unknown',
+        message: t('voice.microphoneBusy', 'Microphone is busy or unavailable. Close other recording apps and try again.'),
+      }
+    case 'AbortError':
+      return {
+        state: 'unknown',
+        message: t('voice.microphoneAborted', 'Microphone access was interrupted. Please try again.'),
+      }
+    default:
+      return {
+        state: 'unknown',
+        message: t('voice.microphoneAccessFailed', 'Unable to access the microphone. Check device and privacy settings, then try again.'),
+      }
+  }
+}
+
+export async function getMicrophonePermissionState(): Promise<MicrophonePermissionState> {
+  if (!hasAudioCaptureSupport()) return 'unsupported'
+
+  const permissionsApi = (navigator as Navigator & {
+    permissions?: {
+      query: (descriptor: PermissionDescriptor) => Promise<{ state: PermissionState }>
+    }
+  }).permissions
+
+  if (!permissionsApi?.query) return 'unknown'
+
+  try {
+    const result = await permissionsApi.query({ name: 'microphone' as PermissionName })
+    if (result.state === 'granted' || result.state === 'prompt' || result.state === 'denied') {
+      return result.state
+    }
+    return 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
+export async function requestMicrophoneStream(): Promise<MicrophoneAccessResult> {
+  if (!hasAudioCaptureSupport()) {
+    return {
+      ok: false,
+      state: 'unsupported',
+      message: t('voice.microphoneUnsupported', 'Microphone capture is not available in this environment.'),
+    }
+  }
+
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    return { ok: true, state: 'granted', stream }
+  } catch (error) {
+    const classified = classifyMicrophoneError(error)
+    return {
+      ok: false,
+      state: classified.state,
+      message: classified.message,
+    }
+  }
+}
+
+export function stopMicrophoneStream(stream: MediaStream | null | undefined): void {
+  stream?.getTracks().forEach((track) => track.stop())
+}
+
 // ─── Speech Recognition (STT) ──────────────────────────────────────
 
 // Use 'any' for SpeechRecognition since TypeScript doesn't have built-in types
@@ -94,15 +191,15 @@ export function startListening(settings: VoiceSettings, callbacks: STTCallbacks)
 
   recognition.onerror = (event: any) => {
     const friendlyMessages: Record<string, string> = {
-      'network': 'Network connection failed — check your internet',
-      'no-speech': 'No speech detected — please try again',
-      'audio-capture': 'Microphone not available — check permissions',
-      'not-allowed': 'Microphone access denied — enable it in system settings',
-      'aborted': 'Speech recognition was cancelled',
-      'service-not-allowed': 'Speech service not available in this environment',
+      'network': t('voice.networkFailed', 'Network connection failed. Check your internet connection and try again.'),
+      'no-speech': t('voice.noSpeechDetected', 'No speech detected. Try speaking a little closer to the microphone.'),
+      'audio-capture': t('voice.audioCaptureUnavailable', 'Microphone not available. Check device and permission settings.'),
+      'not-allowed': t('voice.microphoneAccessDenied', 'Microphone access denied. Enable microphone access for this app and browser, then try again.'),
+      'aborted': t('voice.speechRecognitionCancelled', 'Speech recognition was cancelled.'),
+      'service-not-allowed': t('voice.speechServiceUnavailable', 'Speech recognition service is not available in this environment.'),
     }
     const code = event.error || 'unknown'
-    callbacks.onError(friendlyMessages[code] || `Speech recognition error: ${code}`)
+    callbacks.onError(friendlyMessages[code] || t('voice.speechRecognitionGenericError', 'Speech recognition failed: {code}').replace('{code}', code))
   }
 
   recognition.onend = () => {

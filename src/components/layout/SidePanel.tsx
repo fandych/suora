@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode, type Ref, type UIEventHandler } from 'react'
 
 const MIN_PANEL_WIDTH = 280
 const MAX_PANEL_WIDTH = 420
@@ -13,9 +13,11 @@ interface SidePanelProps {
   action?: ReactNode
   /** Panel width in pixels. When provided, overrides the default width. */
   width?: number
+  contentRef?: Ref<HTMLDivElement>
+  onContentScroll?: UIEventHandler<HTMLDivElement>
 }
 
-export function SidePanel({ title, children, action, width }: SidePanelProps) {
+export function SidePanel({ title, children, action, width, contentRef, onContentScroll }: SidePanelProps) {
   const panelRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
@@ -33,7 +35,7 @@ export function SidePanel({ title, children, action, width }: SidePanelProps) {
         <h2 className="truncate text-sm font-semibold text-text-primary">{title}</h2>
         {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
       </div>
-      <div className="min-h-0 flex-1 overflow-y-auto">
+      <div ref={contentRef} onScroll={onContentScroll} className="min-h-0 flex-1 overflow-y-auto">
         {children}
       </div>
     </aside>

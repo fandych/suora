@@ -62,7 +62,7 @@ describe('SkillsLayout', () => {
     renderSkillsLayout()
 
     await user.click(screen.getByRole('button', { name: /\+ New/i }))
-    await user.click(screen.getByRole('button', { name: 'Mock Save Skill' }))
+    await user.click(await screen.findByRole('button', { name: 'Mock Save Skill' }))
 
     await waitFor(() => {
       expect(window.electron.invoke).toHaveBeenCalledWith('system:ensureDirectory', '/workspace/.suora/skills/new-skill')

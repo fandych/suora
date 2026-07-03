@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Button } from '@/components/catalyst-ui/button'
@@ -308,7 +308,7 @@ describe('ChatMain', () => {
     expect(screen.getByText(/Select or create a conversation/i)).toBeInTheDocument()
   })
 
-  it('hides older messages in very long chats to keep rendering responsive', () => {
+  it('shows an initial message window for very long chats to keep rendering responsive', () => {
     const model: Model = {
       id: 'model-1',
       name: 'GPT-4',
@@ -344,8 +344,119 @@ describe('ChatMain', () => {
 
     render(<ChatMain />)
 
-    expect(screen.getByText('30 older messages are hidden to keep long chats responsive.')).toBeInTheDocument()
-    expect(screen.getAllByText(/^message$/)).toHaveLength(120)
+    expect(screen.getByText('110 older messages are hidden to keep long chats responsive.')).toBeInTheDocument()
+    expect(screen.getAllByText(/^message$/)).toHaveLength(40)
+  })
+
+  it('loads older messages when the user scrolls to the top of a long chat', async () => {
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const session: Session = {
+      id: 'session-1',
+      title: 'Long chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: Array.from({ length: 150 }, (_, index) => ({
+        id: `msg-${index + 1}`,
+        role: index % 2 === 0 ? 'user' : 'assistant',
+        content: `message ${index + 1}`,
+        timestamp: Date.now() + index,
+      })),
+    }
+
+    useAppStore.setState({
+      sessions: [session],
+      activeSessionId: session.id,
+      openSessionTabs: [session.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    const scroller = screen.getByLabelText('Chat messages')
+    Object.defineProperty(scroller, 'scrollTop', { value: 0, writable: true, configurable: true })
+    Object.defineProperty(scroller, 'scrollHeight', { value: 2400, writable: true, configurable: true })
+    Object.defineProperty(scroller, 'clientHeight', { value: 800, writable: true, configurable: true })
+
+    fireEvent.scroll(scroller)
+
+    await waitFor(() => expect(screen.getByText('70 older messages are hidden to keep long chats responsive.')).toBeInTheDocument())
+    expect(screen.getAllByText(/^message$/)).toHaveLength(80)
+  })
+
+  it('keeps expanded history visible when new messages arrive in the same session', async () => {
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const initialMessages = Array.from({ length: 150 }, (_, index) => ({
+      id: `msg-${index + 1}`,
+      role: index % 2 === 0 ? 'user' as const : 'assistant' as const,
+      content: `message ${index + 1}`,
+      timestamp: Date.now() + index,
+    }))
+
+    const session: Session = {
+      id: 'session-1',
+      title: 'Long chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: initialMessages,
+    }
+
+    useAppStore.setState({
+      sessions: [session],
+      activeSessionId: session.id,
+      openSessionTabs: [session.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    const scroller = screen.getByLabelText('Chat messages')
+    Object.defineProperty(scroller, 'scrollTop', { value: 0, writable: true, configurable: true })
+    Object.defineProperty(scroller, 'scrollHeight', { value: 2400, writable: true, configurable: true })
+    Object.defineProperty(scroller, 'clientHeight', { value: 800, writable: true, configurable: true })
+
+    fireEvent.scroll(scroller)
+
+    await waitFor(() => expect(screen.getAllByText(/^message$/)).toHaveLength(80))
+
+    useAppStore.getState().updateSession(session.id, {
+      messages: [
+        ...initialMessages,
+        {
+          id: 'msg-151',
+          role: 'assistant',
+          content: 'message 151',
+          timestamp: Date.now() + 151,
+        },
+      ],
+      updatedAt: Date.now(),
+    })
+
+    await waitFor(() => expect(screen.getAllByText(/^message$/)).toHaveLength(80))
+    expect(screen.getByText('71 older messages are hidden to keep long chats responsive.')).toBeInTheDocument()
   })
 
   it('uses auto scrolling while streaming to avoid smooth-scroll thrash', async () => {

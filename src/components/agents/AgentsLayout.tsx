@@ -1,14 +1,10 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { Suspense, lazy, useState, useRef, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { useI18n } from '@/hooks/useI18n';
 import { SidePanel } from '@/components/layout/SidePanel';
 import { generateId } from '@/utils/helpers';
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons';
 import type { Agent, Session } from '@/types';
-import { AgentTestChat } from './AgentTestChat';
-import { AgentEditor } from './AgentEditor';
-import { AgentAssistantDrawer } from './AgentAssistantDrawer';
-import { AgentOrchestrationPanel } from './AgentOrchestrationPanel';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { confirm } from '@/services/confirmDialog';
@@ -19,6 +15,10 @@ import { Dropdown, DropdownButton, DropdownMenu, DropdownItem, DropdownDivider }
 import { workbenchSegmentButtonClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 import { safeParse, safeStringify } from '@/utils/safeJson';
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+const LazyAgentTestChat = lazy(() => import('./AgentTestChat').then((module) => ({ default: module.AgentTestChat })));
+const LazyAgentEditor = lazy(() => import('./AgentEditor').then((module) => ({ default: module.AgentEditor })));
+const LazyAgentAssistantDrawer = lazy(() => import('./AgentAssistantDrawer').then((module) => ({ default: module.AgentAssistantDrawer })));
+const LazyAgentOrchestrationPanel = lazy(() => import('./AgentOrchestrationPanel').then((module) => ({ default: module.AgentOrchestrationPanel })));
 const DEFAULT_AGENT_ID = 'default-assistant';
 type MarketplaceAgentSeed = {
     id: string;
@@ -556,12 +556,18 @@ export function AgentsLayout() {
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
-      {showHub ? (<AgentOrchestrationPanel agents={agents} title={t('agents.agentHub', 'Agent Hub')} allowedTabs={['communications', 'versions', 'performance']} initialTab="communications" onClose={() => setShowHub(false)}/>) : isAdding || editingId ? (<>
+      {showHub ? (<Suspense fallback={<div className="flex-1 bg-surface-0/40" />}>
+          <LazyAgentOrchestrationPanel agents={agents} title={t('agents.agentHub', 'Agent Hub')} allowedTabs={['communications', 'versions', 'performance']} initialTab="communications" onClose={() => setShowHub(false)}/>
+        </Suspense>) : isAdding || editingId ? (<>
           <div className="min-h-0 min-w-0 flex flex-1 overflow-hidden">
-            <AgentEditor key={`${editingId ?? 'new'}:${editorRevision}`} agent={isAdding ? null : editingAgent} onSave={handleSave} onCancel={() => { setIsAdding(false); setEditingId(null); setTestAgent(null); }} onTest={(agentData) => setTestAgent(agentData)} header={editorHeader}/>
+            <Suspense fallback={<div className="flex-1 bg-surface-0/40" />}>
+              <LazyAgentEditor key={`${editingId ?? 'new'}:${editorRevision}`} agent={isAdding ? null : editingAgent} onSave={handleSave} onCancel={() => { setIsAdding(false); setEditingId(null); setTestAgent(null); }} onTest={(agentData) => setTestAgent(agentData)} header={editorHeader}/>
+            </Suspense>
           </div>
           {testAgent && (<div className="min-h-0 w-95 shrink-0">
-              <AgentTestChat key={testAgent.id} agent={testAgent} onClose={() => setTestAgent(null)}/>
+              <Suspense fallback={<div className="h-full rounded-l-3xl border-l border-border-subtle/70 bg-surface-1/70" />}>
+                <LazyAgentTestChat key={testAgent.id} agent={testAgent} onClose={() => setTestAgent(null)}/>
+              </Suspense>
             </div>)}
         </>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
           <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a4 4 0 0 1 4 4v2a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z"/><path d="M16 14H8a4 4 0 0 0-4 4v2h16v-2a4 4 0 0 0-4-4z"/></svg>} eyebrow={t('agents.studioWorkspace', 'Agent Workspace')} title={t('agents.selectToEdit', 'Select an agent to edit')} description={t('agents.emptyStateDetail', 'Build specialists with distinct prompts, curated skills, and guardrails. Pick an existing agent to refine it, or create a new one as a reusable starting point.')} actions={(<>
@@ -592,7 +598,9 @@ export function AgentsLayout() {
                 },
             ]}/>
         </div>)}
-      {assistantState && (<AgentAssistantDrawer mode={assistantState.mode} agent={assistantState.mode === 'edit' ? assistantAgent : null} onClose={() => setAssistantState(null)} onAgentMutated={handleAssistantAgentMutated}/>)}
+      {assistantState && (<Suspense fallback={null}>
+          <LazyAgentAssistantDrawer mode={assistantState.mode} agent={assistantState.mode === 'edit' ? assistantAgent : null} onClose={() => setAssistantState(null)} onAgentMutated={handleAssistantAgentMutated}/>
+        </Suspense>)}
     </>);
 }
 

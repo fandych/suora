@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { loadExternalSkillsAndAgents, saveSettingsToWorkspace, useAppStore } from '@/store/appStore';
 import { SidePanel } from '@/components/layout/SidePanel';
 import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons';
@@ -9,13 +9,15 @@ import { confirm } from '@/services/confirmDialog';
 import { toast } from '@/services/toast';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
-import { SkillEditor } from './SkillEditor';
 import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
 import { Button as UiButton } from '@/components/catalyst-ui/button';
 import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 import { buildSkillFromDataTransferItems, buildSkillFromFolderFiles, downloadBlob, exportSkillToZipBlob, skillArchiveName } from '@/services/skillArchive';
 import { skillDirectorySegment } from '@/utils/pathSegments';
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { scheduleWhenIdle } from '@/utils/scheduling';
+
+const LazySkillEditor = lazy(() => import('./SkillEditor').then((module) => ({ default: module.SkillEditor })));
 function buildImportedResourceManifest(resources: Array<{
     path: string;
     size: number;
@@ -111,12 +113,15 @@ export function SkillsLayout() {
     useEffect(() => {
         if (!workspacePath)
             return;
-        loadExternalSkillsAndAgents().catch(() => {
-            // Ignore skill loading errors - user will see empty list
-        });
-        loadSkillsLockfile(workspacePath).then(setSkillsLockfile).catch(() => {
-            // Ignore lockfile errors
-        });
+        const scheduled = scheduleWhenIdle(() => {
+            loadExternalSkillsAndAgents().catch(() => {
+                // Ignore skill loading errors - user will see empty list
+            });
+            loadSkillsLockfile(workspacePath).then(setSkillsLockfile).catch(() => {
+                // Ignore lockfile errors
+            });
+        }, 1800);
+        return () => scheduled.cancel();
     }, [workspacePath]);
     const filteredInstalled = skills;
     const enabledSkillsCount = skills.filter((skill) => skill.enabled).length;
@@ -494,7 +499,9 @@ export function SkillsLayout() {
     <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
       {/* ── Right pane: Editor or Empty state ────────────────── */}
-      {isAdding || editingId ? (<SkillEditor key={editingId ?? 'new'} skill={editingSkill} onSave={handleSave} onCancel={() => { setIsAdding(false); setEditingId(null); }}/>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
+            {isAdding || editingId ? (<Suspense fallback={<div className="flex-1 bg-surface-0/40" />}>
+                    <LazySkillEditor key={editingId ?? 'new'} skill={editingSkill} onSave={handleSave} onCancel={() => { setIsAdding(false); setEditingId(null); }}/>
+                </Suspense>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
           <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>} eyebrow={t('skills.promptBased', 'Prompt-Based Skills')} title={t('skills.promptBasedWorkspace', 'Skill Workspace')} description={t('skills.promptDesc', 'Skills are markdown instructions (SKILL.md) that enhance agent capabilities. No tool specification needed — agents decide which tools to use.')} actions={(<>
                                 <UiButton unstyled type="button" onClick={() => fileInputRef.current?.click()} className={workbenchSidebarPrimaryActionClass}>
                   {t('skills.importSkill', 'Import SKILL.md')}

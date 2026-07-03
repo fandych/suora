@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Suspense, lazy, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useAppStore } from '@/store/appStore';
 import { generateId } from '@/utils/helpers';
@@ -11,14 +11,16 @@ import { isMainChatSession } from '@/utils/chatSessions';
 import { MessageBubble } from './ChatMessages';
 import { ChatInput } from './ChatInput';
 import { TodoProgress } from './TodoProgress';
-import { AgentStateDebug } from '@/components/debug/AgentStateDebug';
-import { exportChat, type ExportFormat } from '@/services/exportUtils';
+import type { ExportFormat } from '@/services/exportUtils';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem, DropdownSection, DropdownHeading, DropdownDivider } from '@/components/catalyst-ui/dropdown';
 import { workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
-const MAX_RENDERED_MESSAGES = 120;
+const LazyAgentStateDebug = lazy(() => import('@/components/debug/AgentStateDebug').then((module) => ({ default: module.AgentStateDebug })));
+const INITIAL_RENDERED_MESSAGES = 40;
+const MESSAGE_BATCH_SIZE = 40;
 const BROWSER_STATE_POLL_INTERVAL_MS = 4000;
 const SCROLL_CONTROL_THRESHOLD_PX = 220;
+const OLDER_MESSAGE_LOAD_THRESHOLD_PX = 96;
 function formatRelativeLabel(ts: number, locale = 'en'): string {
     const diffSeconds = Math.round((ts - Date.now()) / 1000);
     const absSeconds = Math.abs(diffSeconds);
@@ -508,6 +510,30 @@ const ChatMessageRow = memo(function ChatMessageRow({ message, retryLastError, r
     && prevProps.branchFromMessage === nextProps.branchFromMessage
     && prevProps.setMessageFeedback === nextProps.setMessageFeedback
     && prevProps.exportMessage === nextProps.exportMessage));
+  const ChatMessageHistory = memo(function ChatMessageHistory({ messages, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, updateMessage, branchFromMessage, setMessageFeedback, exportMessage, }: {
+    messages: import('@/types').Message[];
+    retryLastError: () => void;
+    resumeFromMessage: (messageId: string) => void;
+    deleteMessage: (messageId: string) => void;
+    regenerateMessage: (messageId: string) => void;
+    updateMessage: (messageId: string, patch: Partial<import('@/types').Message>) => void;
+    branchFromMessage: (messageId: string) => void;
+    setMessageFeedback: (messageId: string, feedback: 'positive' | 'negative' | undefined) => void;
+    exportMessage: (format: ExportFormat, messageId: string) => void;
+  }) {
+    return (<div className="space-y-0.5">
+      {messages.map((msg) => (<ChatMessageRow key={msg.id} message={msg} retryLastError={retryLastError} resumeFromMessage={resumeFromMessage} deleteMessage={deleteMessage} regenerateMessage={regenerateMessage} updateMessage={updateMessage} branchFromMessage={branchFromMessage} setMessageFeedback={setMessageFeedback} exportMessage={exportMessage}/>))}
+    </div>);
+  }, (prevProps, nextProps) => (prevProps.messages.length === nextProps.messages.length
+    && prevProps.messages.every((message, index) => message === nextProps.messages[index])
+    && prevProps.retryLastError === nextProps.retryLastError
+    && prevProps.resumeFromMessage === nextProps.resumeFromMessage
+    && prevProps.deleteMessage === nextProps.deleteMessage
+    && prevProps.regenerateMessage === nextProps.regenerateMessage
+    && prevProps.updateMessage === nextProps.updateMessage
+    && prevProps.branchFromMessage === nextProps.branchFromMessage
+    && prevProps.setMessageFeedback === nextProps.setMessageFeedback
+    && prevProps.exportMessage === nextProps.exportMessage));
 function getCurrentChatSession() {
     const state = useAppStore.getState();
     if (!state.activeSessionId)
@@ -538,10 +564,15 @@ export function ChatMain() {
     const scrollFrameRef = useRef<number | null>(null);
     const scrollControlsFrameRef = useRef<number | null>(null);
     const scrollControlStateRef = useRef({ top: false, bottom: false });
+    const olderMessageRestoreRef = useRef<{
+      previousScrollHeight: number;
+      previousScrollTop: number;
+    } | null>(null);
     const [showDebug, setShowDebug] = useState(false);
     const [isExportingChat, setIsExportingChat] = useState(false);
     const [showScrollToTop, setShowScrollToTop] = useState(false);
     const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+    const [renderedMessageCount, setRenderedMessageCount] = useState(INITIAL_RENDERED_MESSAGES);
     const { sendMessage, cancelStream, retryLastError, resumeFromMessage, deleteMessage, regenerateMessage, clearMessages, isLoading: isStreaming } = useAIChat();
     const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions]);
     const chatSessionIds = useMemo(() => new Set(chatSessions.map((session) => session.id)), [chatSessions]);
@@ -569,10 +600,28 @@ export function ChatMain() {
     }, [activeSessionId, chatSessionIds, chatSessions, setActiveSession]);
     const activeSession = useMemo(() => chatSessions.find((s) => s.id === activeSessionId) ?? null, [activeSessionId, chatSessions]);
     const messages = activeSession?.messages ?? [];
-    const hiddenMessageCount = Math.max(0, messages.length - MAX_RENDERED_MESSAGES);
-    const visibleMessages = useMemo(() => (hiddenMessageCount > 0
-        ? messages.slice(-MAX_RENDERED_MESSAGES)
-        : messages), [hiddenMessageCount, messages]);
+    useEffect(() => {
+      olderMessageRestoreRef.current = null;
+      setRenderedMessageCount(Math.min(messages.length, INITIAL_RENDERED_MESSAGES));
+    }, [activeSessionId]);
+    useEffect(() => {
+      setRenderedMessageCount((prev) => {
+        if (messages.length === 0)
+          return 0;
+        const minimumVisibleCount = Math.min(messages.length, INITIAL_RENDERED_MESSAGES);
+        if (prev === 0)
+          return minimumVisibleCount;
+        return Math.max(Math.min(prev, messages.length), minimumVisibleCount);
+      });
+    }, [messages.length]);
+    const hiddenMessageCount = Math.max(0, messages.length - renderedMessageCount);
+    const visibleMessages = useMemo(() => (renderedMessageCount > 0
+      ? messages.slice(-renderedMessageCount)
+      : []), [messages, renderedMessageCount]);
+    const lastVisibleMessage = visibleMessages[visibleMessages.length - 1] ?? null;
+    const historicalVisibleMessages = useMemo(() => (lastVisibleMessage
+      ? visibleMessages.slice(0, -1)
+      : []), [lastVisibleMessage, visibleMessages]);
     const lastMessage = messages[messages.length - 1];
     const messageRenderVersion = lastMessage
         ? `${messages.length}:${lastMessage.id}:${lastMessage.content.length}:${lastMessage.isStreaming ? 1 : 0}:${lastMessage.toolCalls?.length ?? 0}:${lastMessage.contentParts?.length ?? 0}`
@@ -625,8 +674,16 @@ export function ChatMain() {
         });
     }, [updateScrollControls]);
     const handleScroll = useCallback(() => {
+      const el = messagesContainerRef.current;
+      if (el && hiddenMessageCount > 0 && el.scrollTop <= OLDER_MESSAGE_LOAD_THRESHOLD_PX && olderMessageRestoreRef.current === null) {
+        olderMessageRestoreRef.current = {
+          previousScrollHeight: el.scrollHeight,
+          previousScrollTop: el.scrollTop,
+        };
+        setRenderedMessageCount((prev) => Math.min(messages.length, prev + MESSAGE_BATCH_SIZE));
+      }
         scheduleScrollControlsUpdate();
-    }, [scheduleScrollControlsUpdate]);
+    }, [hiddenMessageCount, messages.length, scheduleScrollControlsUpdate]);
     useEffect(() => {
         return () => {
             if (scrollFrameRef.current !== null) {
@@ -642,6 +699,19 @@ export function ChatMain() {
     useEffect(() => {
         scheduleScrollControlsUpdate();
     }, [activeSessionId, messageRenderVersion, scheduleScrollControlsUpdate]);
+    useLayoutEffect(() => {
+      if (!olderMessageRestoreRef.current)
+        return;
+      const el = messagesContainerRef.current;
+      if (!el) {
+        olderMessageRestoreRef.current = null;
+        return;
+      }
+      const { previousScrollHeight, previousScrollTop } = olderMessageRestoreRef.current;
+      olderMessageRestoreRef.current = null;
+      el.scrollTop = previousScrollTop + (el.scrollHeight - previousScrollHeight);
+      scheduleScrollControlsUpdate();
+    }, [renderedMessageCount, scheduleScrollControlsUpdate]);
     const scrollToTop = useCallback(() => {
         const el = messagesContainerRef.current;
         if (!el)
@@ -796,6 +866,7 @@ export function ChatMain() {
             return;
         setIsExportingChat(true);
         try {
+        const { exportChat } = await import('@/services/exportUtils');
             const result = await exportChat({
                 session: activeSession,
                 messages: activeSession.messages,
@@ -982,9 +1053,10 @@ export function ChatMain() {
                   {hiddenMessageCount > 0 && (<div className="mb-3 rounded-2xl border border-amber-500/18 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-200">
                       {t('chat.hiddenOlderMessages', '{count} older messages are hidden to keep long chats responsive.').replace('{count}', hiddenMessageCount.toLocaleString())}
                     </div>)}
-                  <div className="space-y-0.5">
-                    {visibleMessages.map((msg) => (<ChatMessageRow key={msg.id} message={msg} retryLastError={retryLastError} resumeFromMessage={resumeFromMessage} deleteMessage={deleteMessage} regenerateMessage={regenerateMessage} updateMessage={updateMessage} branchFromMessage={branchFromMessage} setMessageFeedback={setMessageFeedback} exportMessage={handleExportSingleMessage}/>))}
-                  </div>
+                  <ChatMessageHistory messages={historicalVisibleMessages} retryLastError={retryLastError} resumeFromMessage={resumeFromMessage} deleteMessage={deleteMessage} regenerateMessage={regenerateMessage} updateMessage={updateMessage} branchFromMessage={branchFromMessage} setMessageFeedback={setMessageFeedback} exportMessage={handleExportSingleMessage}/>
+                  {lastVisibleMessage && (<div className="space-y-0.5">
+                      <ChatMessageRow message={lastVisibleMessage} retryLastError={retryLastError} resumeFromMessage={resumeFromMessage} deleteMessage={deleteMessage} regenerateMessage={regenerateMessage} updateMessage={updateMessage} branchFromMessage={branchFromMessage} setMessageFeedback={setMessageFeedback} exportMessage={handleExportSingleMessage}/>
+                    </div>)}
                   <div ref={messagesEndRef}/>
                 </div>
               </section>)}
@@ -1013,7 +1085,9 @@ export function ChatMain() {
         <ChatInput onSend={handleSend} disabled={isStreaming} isStreaming={isStreaming} onStop={handleStopStreaming} noModel={!sessionModel} footer={(<ComposerContextFooter agents={agents} selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''} onSelectAgent={handleAgentSelect} models={enabledModels} providerNameById={providerNameById} selectedModelId={sessionModel?.id ?? selectedModel?.id ?? ''} onSelectModel={handleModelChange} status={!sessionModel ? missingModelBadge : undefined} actions={sessionContextActions}/>)}/>
       </div>
 
-      {showDebug && <AgentStateDebug />}
+      {showDebug && (<Suspense fallback={null}>
+          <LazyAgentStateDebug />
+        </Suspense>)}
     </div>);
 }
 function StreamingStatus({ isStreaming, messages, }: {

@@ -5,7 +5,7 @@ import { DocumentsLayout } from './DocumentsLayout'
 import { useAppStore } from '@/store/appStore'
 import { createDocument, createDocumentGroup } from '@/services/documents'
 
-vi.mock('./DocumentsAssistantDrawer', () => ({
+vi.mock('@/components/documents/DocumentsAssistantDrawer', () => ({
   DocumentsAssistantDrawer: ({ mode, document }: { mode: 'create' | 'edit'; document?: { id: string } | null }) => (
     <div data-testid="documents-assistant-drawer">{`${mode}:${document?.id ?? 'new'}`}</div>
   ),
@@ -90,7 +90,7 @@ describe('DocumentsLayout', () => {
 
     await user.click(screen.getAllByRole('button', { name: 'AI Create' })[0])
 
-    expect(screen.getByTestId('documents-assistant-drawer')).toHaveTextContent('create:new')
+    expect(await screen.findByTestId('documents-assistant-drawer')).toHaveTextContent('create:new')
   })
 
   it('supports folder and document CRUD plus search', async () => {
@@ -173,7 +173,7 @@ describe('DocumentsLayout', () => {
 
     await user.click(screen.getByRole('button', { name: 'AI Edit' }))
 
-    expect(screen.getByTestId('documents-assistant-drawer')).toHaveTextContent(`edit:${rootDoc.id}`)
+    expect(await screen.findByTestId('documents-assistant-drawer')).toHaveTextContent(`edit:${rootDoc.id}`)
   })
 
   it('preserves script extensions and uses source editing for non-markdown documents', async () => {

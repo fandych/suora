@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useDeferredValue } from 'react';
+import { Suspense, lazy, useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAppStore, loadSettingsFromWorkspace, saveSettingsToWorkspace } from '@/store/appStore';
 import { SidePanel } from '@/components/layout/SidePanel';
@@ -7,9 +7,6 @@ import { testConnection } from '@/services/aiService';
 import { confirm } from '@/services/confirmDialog';
 import { useI18n } from '@/hooks/useI18n';
 import type { ProviderConfig } from '@/types';
-import { ProviderEditor } from './ProviderEditor';
-import { ModelParamEditor } from './ModelParamEditor';
-import { ModelComparisonPanel } from './ModelComparisonPanel';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { PROVIDER_PRESETS } from '@/store/slices/modelConfigSlice';
@@ -17,6 +14,11 @@ import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-st
 import { Button as UiButton } from '@/components/catalyst-ui/button';
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
 import { workbenchSegmentButtonClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { scheduleAfterPaint, scheduleWhenIdle } from '@/utils/scheduling';
+
+const LazyProviderEditor = lazy(() => import('./ProviderEditor').then((module) => ({ default: module.ProviderEditor })));
+const LazyModelParamEditor = lazy(() => import('./ModelParamEditor').then((module) => ({ default: module.ModelParamEditor })));
+const LazyModelComparisonPanel = lazy(() => import('./ModelComparisonPanel').then((module) => ({ default: module.ModelComparisonPanel })));
 type ModelsViewMode = 'providers' | 'models' | 'compare';
 const MODEL_VIEW_MODES = new Set<ModelsViewMode>(['providers', 'models', 'compare']);
 function generateId(): string {
@@ -45,7 +47,10 @@ export function ModelsLayout() {
     // Load settings from workspace on mount
     useEffect(() => {
         if (workspacePath && !loaded) {
-            loadSettingsFromWorkspace().then(() => setLoaded(true)).catch(() => setLoaded(true));
+        const scheduled = scheduleAfterPaint(() => {
+          void loadSettingsFromWorkspace().then(() => setLoaded(true)).catch(() => setLoaded(true));
+        });
+        return () => scheduled.cancel();
         }
         else {
             setLoaded(true);
@@ -55,26 +60,29 @@ export function ModelsLayout() {
     useEffect(() => {
         if (!loaded)
             return;
+      const scheduled = scheduleWhenIdle(() => {
         providerConfigs.forEach((config) => {
-            const hasKey = !!config.apiKey || config.providerType === 'ollama';
-            const hasModels = config.models.some((m) => m.enabled);
-            if (hasKey && hasModels) {
-                setConnectionStatus((prev) => ({ ...prev, [config.id]: 'checking' }));
-                const firstModel = config.models.find((m) => m.enabled) || config.models[0];
-                if (firstModel) {
-                    testConnection(config.providerType, config.apiKey, config.baseUrl || undefined, firstModel.modelId, config.id)
-                        .then((result) => {
-                        setConnectionStatus((prev) => ({ ...prev, [config.id]: result.success ? 'connected' : 'disconnected' }));
-                    })
-                        .catch(() => {
-                        setConnectionStatus((prev) => ({ ...prev, [config.id]: 'disconnected' }));
-                    });
-                }
-            }
-            else {
+          const hasKey = !!config.apiKey || config.providerType === 'ollama';
+          const hasModels = config.models.some((m) => m.enabled);
+          if (hasKey && hasModels) {
+            setConnectionStatus((prev) => ({ ...prev, [config.id]: 'checking' }));
+            const firstModel = config.models.find((m) => m.enabled) || config.models[0];
+            if (firstModel) {
+              testConnection(config.providerType, config.apiKey, config.baseUrl || undefined, firstModel.modelId, config.id)
+                .then((result) => {
+                setConnectionStatus((prev) => ({ ...prev, [config.id]: result.success ? 'connected' : 'disconnected' }));
+              })
+                .catch(() => {
                 setConnectionStatus((prev) => ({ ...prev, [config.id]: 'disconnected' }));
+              });
             }
+          }
+          else {
+            setConnectionStatus((prev) => ({ ...prev, [config.id]: 'disconnected' }));
+          }
         });
+      }, 1500);
+      return () => scheduled.cancel();
     }, [loaded, providerConfigs]);
     // Auto-select first provider
     useEffect(() => {
@@ -295,7 +303,11 @@ export function ModelsLayout() {
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
-      {viewMode === 'compare' ? (<ModelComparisonPanel onClose={() => navigate('/models/providers')}/>) : viewMode === 'providers' && selectedId ? (<ProviderEditor key={selectedId} providerId={selectedId} onSaved={handleProviderSaved}/>) : viewMode === 'models' ? ((() => {
+      {viewMode === 'compare' ? (<Suspense fallback={<div className="flex-1 bg-surface-0/40" />}>
+          <LazyModelComparisonPanel onClose={() => navigate('/models/providers')}/>
+        </Suspense>) : viewMode === 'providers' && selectedId ? (<Suspense fallback={<div className="flex-1 bg-surface-0/40" />}>
+          <LazyProviderEditor key={selectedId} providerId={selectedId} onSaved={handleProviderSaved}/>
+        </Suspense>) : viewMode === 'models' ? ((() => {
             if (!editingModelKey) {
                 return (<div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
                 <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m3.08 3.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m3.08-3.08l4.24-4.24"/></svg>} eyebrow={t('models.library', 'Library')} title={t('models.allModels', 'All Models')} description={t('models.clickModelToEdit', 'Click a model to edit its parameters')} metrics={[
@@ -322,13 +334,15 @@ export function ModelsLayout() {
             if (!provider || !modelEntry) {
                 return <div className="flex-1 flex items-center justify-center text-text-muted text-sm">{t('models.notFound', 'Model not found')}</div>;
             }
-            return (<ModelParamEditor key={editingModelKey} provider={provider} model={modelEntry} onSave={(updated) => {
+                return (<Suspense fallback={<div className="flex-1 bg-surface-0/40" />}>
+              <LazyModelParamEditor key={editingModelKey} provider={provider} model={modelEntry} onSave={(updated) => {
                     const newModels = provider.models.map((m) => m.modelId === modelEntry.modelId ? { ...m, ...updated } : m);
                     updateProviderConfig(provider.id, { models: newModels });
                     syncModelsFromConfigs();
                     if (workspacePath)
                         saveSettingsToWorkspace();
                 }} onClose={() => setEditingModelKey(null)}/>);
+                  </Suspense>);
         })()) : (<div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
           <WorkbenchEmptyState icon={<IconifyIcon name="ui-building" size={30} color="currentColor"/>} title={providerConfigs.length === 0 ? t('models.addProviderToBegin', 'Add a provider to begin') : t('models.selectProviderToConfigure', 'Select a provider to configure')} description={providerConfigs.length === 0 ? t('models.noProvidersConfigured', 'No providers configured. Click + Provider to add one.') : t('models.providerSelectionHint', 'Choose a provider from the left rail to edit credentials, endpoints, and model availability.')} actions={providerConfigs.length === 0 ? (<UiButton unstyled type="button" onClick={() => handleAddProvider()} className={workbenchSidebarPrimaryActionClass}>
                 {t('models.addProvider', '+ Provider')}

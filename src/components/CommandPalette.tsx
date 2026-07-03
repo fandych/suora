@@ -7,6 +7,7 @@ import { useAppStore } from '@/store/appStore'
 import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { generateId } from '@/utils/helpers'
+import { addCommandPaletteOpenListener } from '@/services/commandPalette'
 import type { Session } from '@/types'
 
 interface PaletteItem {
@@ -16,11 +17,6 @@ interface PaletteItem {
   subtitle?: string
   icon: string
   action: () => void
-}
-
-/** Programmatically open the command palette from anywhere (e.g. NavBar button). */
-export function openCommandPalette() {
-  window.dispatchEvent(new CustomEvent('suora:command-palette:open'))
 }
 
 export function CommandPalette() {
@@ -47,10 +43,10 @@ export function CommandPalette() {
     }
     const openHandler = () => setOpen(true)
     window.addEventListener('keydown', keyHandler)
-    window.addEventListener('suora:command-palette:open', openHandler as EventListener)
+    const removeOpenListener = addCommandPaletteOpenListener(openHandler as EventListener)
     return () => {
       window.removeEventListener('keydown', keyHandler)
-      window.removeEventListener('suora:command-palette:open', openHandler as EventListener)
+      removeOpenListener()
     }
   }, [open])
 

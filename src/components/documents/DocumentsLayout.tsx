@@ -1,14 +1,4 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { EditorContent, useEditor } from '@tiptap/react';
-import StarterKit from '@tiptap/starter-kit';
-import Placeholder from '@tiptap/extension-placeholder';
-import Image from '@tiptap/extension-image';
-import { Table } from '@tiptap/extension-table';
-import { TableRow } from '@tiptap/extension-table-row';
-import { TableHeader } from '@tiptap/extension-table-header';
-import { TableCell } from '@tiptap/extension-table-cell';
-import { TaskList } from '@tiptap/extension-task-list';
-import { TaskItem } from '@tiptap/extension-task-item';
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { useAppStore } from '@/store/appStore';
 import { SidePanel } from '@/components/layout/SidePanel';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
@@ -16,22 +6,21 @@ import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { useI18n } from '@/hooks/useI18n';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer';
-import { DocumentGraphView } from '@/components/documents/DocumentGraphView';
-import { DocumentsAssistantDrawer } from '@/components/documents/DocumentsAssistantDrawer';
-import { MathBlock, InlineMath, MermaidBlock } from '@/components/documents/DocumentExtensions';
 import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
 import { Button as UiButton } from '@/components/catalyst-ui/button';
 import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/catalyst-ui/dropdown';
 import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
 import { confirm } from '@/services/confirmDialog';
-import { exportDocumentGroupToGraphifyCorpus } from '@/services/graphifyCorpus';
-import { exportDocument, type ExportFormat } from '@/services/exportUtils';
+import type { ExportFormat } from '@/services/exportUtils';
 import { toast } from '@/services/toast';
-import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments, tiptapJsonToMarkdown } from '@/services/documents';
+import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, createDocumentGroup, createDocumentId, extractMarkdownImageReferences, findReferencedDocuments, getDocumentDisplayName, getDocumentExtension, getDocumentKindLabel, isMarkdownDocumentTitle, searchDocumentIndex, searchDocuments } from '@/services/documents';
 import { computeDocumentGroupStatistics, computeDocumentStatistics } from '@/services/documentStatistics';
 import { analyzeDocumentGraphInsights, buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph';
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types';
 import { Input as UiInput, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+const LazyDocumentGraphView = lazy(() => import('@/components/documents/DocumentGraphView').then((module) => ({ default: module.DocumentGraphView })));
+const LazyDocumentsAssistantDrawer = lazy(() => import('@/components/documents/DocumentsAssistantDrawer').then((module) => ({ default: module.DocumentsAssistantDrawer })));
+const LazyDocumentTiptapEditor = lazy(() => import('@/components/documents/DocumentTiptapEditor').then((module) => ({ default: module.DocumentTiptapEditor })));
 interface DirEntry {
     name: string;
     isDirectory: boolean;
@@ -97,309 +86,6 @@ function collectAncestorFolderIds(parentId: string | null, nodes: DocumentNode[]
         currentId = currentNode?.parentId ?? null;
     }
     return ids;
-}
-function escapeHtml(value: string) {
-    return value
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#039;');
-}
-function escapeAttr(value: string) {
-    return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-function inlineMarkdown(value: string) {
-    // Extract inline math tokens before HTML escaping to preserve raw LaTeX.
-    // The pattern intentionally excludes newlines ($\n) because inline math
-    // is single-line by convention; block math uses $$...$$.
-    const mathTokens: string[] = [];
-    const tokenized = value.replace(/\$([^$\n]+)\$/g, (_, latex: string) => {
-        mathTokens.push(latex);
-        return `\x01M${mathTokens.length - 1}\x01`;
-    });
-    let result = escapeHtml(tokenized)
-        .replace(/`([^`]+)`/g, '<code>$1</code>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/~~([^~]+)~~/g, '<s>$1</s>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, src: string) => `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`)
-        .replace(/\[\[([^\]\n]+)\]\]/g, (_, target: string) => `<a href="#doc:${escapeAttr(target)}">${escapeHtml(target)}</a>`)
-        .replace(/\[([^\]\n]+)\]\(([^)]+)\)/g, (_, label: string, href: string) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`);
-    result = result.replace(/\x01M(\d+)\x01/g, (_, i: string) => {
-        const latex = mathTokens[parseInt(i)];
-        return `<span data-math-inline="${escapeAttr(latex)}"></span>`;
-    });
-    return result;
-}
-function parseTableRow(line: string): string[] {
-    return line
-        .replace(/^\||\|$/g, '')
-        .split('|')
-        .map((cell) => cell.trim());
-}
-function isTableSeparator(line: string): boolean {
-    return /^\|?[\s|:-]+\|?$/.test(line) && /[-]/.test(line);
-}
-function markdownToTiptapHtml(markdown: string) {
-    const lines = markdown.split('\n');
-    const html: string[] = [];
-    let list: 'ul' | 'ol' | 'ul[data-type="taskList"]' | null = null;
-    let inCode = false;
-    let codeLang = '';
-    let code: string[] = [];
-    let inMath = false;
-    let math: string[] = [];
-    // Table state: buffer pending rows until separator is confirmed
-    let tablePending: string[] = [];
-    let inTable = false;
-    const closeList = () => {
-        if (list) {
-            html.push(`</${list === 'ul[data-type="taskList"]' ? 'ul' : list}>`);
-            list = null;
-        }
-    };
-    const flushTable = () => {
-        if (inTable) {
-            html.push('</tbody></table>');
-            inTable = false;
-        }
-    };
-    const flushPendingTable = () => {
-        if (tablePending.length > 0) {
-            // Not a real table — emit as paragraphs
-            for (const pending of tablePending) {
-                html.push(`<p>${inlineMarkdown(pending)}</p>`);
-            }
-            tablePending = [];
-        }
-    };
-    lines.forEach((line) => {
-        // ── Code / mermaid fence ──────────────────────────────────────────────
-        if (line.trim().startsWith('```')) {
-            if (inCode) {
-                if (codeLang === 'mermaid') {
-                    html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`);
-                }
-                else {
-                    html.push(`<pre><code class="language-${escapeHtml(codeLang)}">${escapeHtml(code.join('\n'))}</code></pre>`);
-                }
-                code = [];
-                codeLang = '';
-                inCode = false;
-            }
-            else {
-                closeList();
-                flushTable();
-                flushPendingTable();
-                codeLang = line.trim().slice(3).trim();
-                inCode = true;
-            }
-            return;
-        }
-        if (inCode) {
-            code.push(line);
-            return;
-        }
-        // ── Block math ($$...$$) ───────────────────────────────────────────────
-        if (line.trim() === '$$') {
-            if (inMath) {
-                html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`);
-                math = [];
-                inMath = false;
-            }
-            else {
-                closeList();
-                flushTable();
-                flushPendingTable();
-                inMath = true;
-            }
-            return;
-        }
-        if (inMath) {
-            math.push(line);
-            return;
-        }
-        // ── GFM Tables ────────────────────────────────────────────────────────
-        const isTableLine = line.trim().startsWith('|') || (line.includes('|') && !line.trim().startsWith('#'));
-        if (inTable) {
-            if (isTableSeparator(line) || !line.trim()) {
-                // Empty line ends the table
-                if (!line.trim()) {
-                    flushTable();
-                    return;
-                }
-                return;
-            }
-            if (line.trim().startsWith('|') || line.includes('|')) {
-                const cells = parseTableRow(line);
-                const row = cells.map((cell) => `<td>${inlineMarkdown(cell)}</td>`).join('');
-                html.push(`<tr>${row}</tr>`);
-                return;
-            }
-            flushTable();
-        }
-        if (!inTable && tablePending.length === 0 && isTableLine && line.trim().startsWith('|')) {
-            // Could be a table header row — buffer it
-            tablePending.push(line);
-            return;
-        }
-        if (tablePending.length > 0) {
-            if (isTableSeparator(line)) {
-                // Confirmed table
-                closeList();
-                const headerCells = parseTableRow(tablePending[0]);
-                const headerRow = headerCells.map((cell) => `<th>${inlineMarkdown(cell)}</th>`).join('');
-                html.push(`<table><thead><tr>${headerRow}</tr></thead><tbody>`);
-                inTable = true;
-                tablePending = [];
-                return;
-            }
-            else {
-                // Not a table — flush buffered line
-                flushPendingTable();
-            }
-        }
-        // ── Normal inline content ──────────────────────────────────────────────
-        const heading = /^(#{1,6})\s+(.*)$/.exec(line);
-        if (heading) {
-            closeList();
-            html.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
-            return;
-        }
-        // Task list items
-        const taskUnchecked = /^\s*[-*]\s+\[ \]\s+(.*)$/.exec(line);
-        if (taskUnchecked) {
-            if (list !== 'ul[data-type="taskList"]') {
-                closeList();
-                list = 'ul[data-type="taskList"]';
-                html.push('<ul data-type="taskList">');
-            }
-            html.push(`<li data-type="taskItem" data-checked="false"><label><input type="checkbox" /></label><div><p>${inlineMarkdown(taskUnchecked[1])}</p></div></li>`);
-            return;
-        }
-        const taskChecked = /^\s*[-*]\s+\[x\]\s+(.*)$/i.exec(line);
-        if (taskChecked) {
-            if (list !== 'ul[data-type="taskList"]') {
-                closeList();
-                list = 'ul[data-type="taskList"]';
-                html.push('<ul data-type="taskList">');
-            }
-            html.push(`<li data-type="taskItem" data-checked="true"><label><input type="checkbox" checked /></label><div><p>${inlineMarkdown(taskChecked[1])}</p></div></li>`);
-            return;
-        }
-        const unordered = /^\s*[-*]\s+(.*)$/.exec(line);
-        if (unordered) {
-            if (list !== 'ul') {
-                closeList();
-                list = 'ul';
-                html.push('<ul>');
-            }
-            html.push(`<li>${inlineMarkdown(unordered[1])}</li>`);
-            return;
-        }
-        const ordered = /^\s*\d+\.\s+(.*)$/.exec(line);
-        if (ordered) {
-            if (list !== 'ol') {
-                closeList();
-                list = 'ol';
-                html.push('<ol>');
-            }
-            html.push(`<li>${inlineMarkdown(ordered[1])}</li>`);
-            return;
-        }
-        closeList();
-        if (line.trim().startsWith('>')) {
-            html.push(`<blockquote>${inlineMarkdown(line.replace(/^>\s?/, ''))}</blockquote>`);
-        }
-        else if (line.trim() === '---') {
-            html.push('<hr />');
-        }
-        else if (line.trim()) {
-            html.push(`<p>${inlineMarkdown(line)}</p>`);
-        }
-    });
-    closeList();
-    flushTable();
-    flushPendingTable();
-    if (inCode) {
-        if (codeLang === 'mermaid') {
-            html.push(`<div data-mermaid="${escapeAttr(code.join('\n'))}"></div>`);
-        }
-        else {
-            html.push(`<pre><code>${escapeHtml(code.join('\n'))}</code></pre>`);
-        }
-    }
-    if (inMath)
-        html.push(`<div data-math-block="${escapeAttr(math.join('\n'))}"></div>`);
-    return html.join('\n') || '<p></p>';
-}
-function DocumentTiptapEditor({ document, onUpdate }: {
-    document: DocumentItem;
-    onUpdate: (markdown: string) => void;
-}) {
-    // Prevents the onUpdate callback from firing during programmatic content resets
-    // that occur when switching between documents, avoiding a feedback loop where
-    // the reset triggers onUpdate which would overwrite the incoming document's markdown.
-    const isSyncingFromPropsRef = useRef(false);
-    // Track the last markdown emitted by this editor so we can distinguish between
-    // external updates (from the store, e.g. AI write) and our own debounced flushes.
-    const lastEmittedMarkdownRef = useRef(document.markdown);
-    const editor = useEditor({
-        extensions: [
-            StarterKit,
-            Placeholder.configure({ placeholder: 'Start writing…' }),
-            Image.configure({ inline: true }),
-            Table.configure({ resizable: false }),
-            TableRow,
-            TableHeader,
-            TableCell,
-            TaskList,
-            TaskItem.configure({ nested: true }),
-            MathBlock,
-            InlineMath,
-            MermaidBlock,
-        ],
-        content: markdownToTiptapHtml(document.markdown),
-        editable: true,
-        editorProps: {
-            attributes: {
-                class: 'document-prose min-h-full focus:outline-none',
-            },
-        },
-        onUpdate: ({ editor: ed }: {
-            editor: {
-                getJSON: () => unknown;
-            };
-        }) => {
-            if (isSyncingFromPropsRef.current)
-                return;
-            const json = ed.getJSON();
-            const markdown = tiptapJsonToMarkdown(json as Parameters<typeof tiptapJsonToMarkdown>[0]);
-            lastEmittedMarkdownRef.current = markdown;
-            onUpdate(markdown);
-        },
-    });
-    const previousDocumentIdRef = useRef(document.id);
-    useEffect(() => {
-        if (!editor || editor.isDestroyed)
-            return;
-        const documentChanged = previousDocumentIdRef.current !== document.id;
-        // Sync editor content when the document identity changes, or when the
-        // document's markdown is updated externally (e.g. AI generation, import)
-        // to a value the editor itself did not just emit. The lastEmittedMarkdownRef
-        // guard avoids overwriting in-flight user edits during the debounce window.
-        // We always force a sync on identity change so a new document whose
-        // markdown coincidentally equals the previous emission still loads.
-        if (!documentChanged && document.markdown === lastEmittedMarkdownRef.current)
-            return;
-        isSyncingFromPropsRef.current = true;
-        editor.commands.setContent(markdownToTiptapHtml(document.markdown), { emitUpdate: false });
-        lastEmittedMarkdownRef.current = document.markdown;
-        previousDocumentIdRef.current = document.id;
-        isSyncingFromPropsRef.current = false;
-    }, [document.id, document.markdown, editor]);
-    return <EditorContent editor={editor} className="document-tiptap-wysiwyg h-full"/>;
 }
 function TreeActionMenu({ label, actions, }: {
     label: string;
@@ -1268,6 +954,7 @@ export function DocumentsLayout() {
         setShowDocExportMenu(false);
         setIsExportingDoc(true);
         try {
+            const { exportDocument } = await import('@/services/exportUtils');
             const result = await exportDocument({
                 title: activeDocument.title,
                 markdown: activeDocument.markdown,
@@ -1328,6 +1015,7 @@ export function DocumentsLayout() {
         }
         setIsExportingCorpus(true);
         setExportStatus(null);
+        const { exportDocumentGroupToGraphifyCorpus } = await import('@/services/graphifyCorpus');
         const result = await exportDocumentGroupToGraphifyCorpus(workspacePath, activeGroup, documentNodes);
         setIsExportingCorpus(false);
         if (!result.success) {
@@ -1468,13 +1156,17 @@ export function DocumentsLayout() {
             {renderExportStatusBanner()}
             <div className={`grid min-h-0 flex-1 overflow-hidden ${mode === 'graph' ? 'grid-cols-1' : 'grid-cols-[minmax(0,1fr)_280px]'}`}>
               <div className="min-h-0 overflow-hidden p-5">
-                {mode === 'editor' ? (<div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <DocumentTiptapEditor document={activeDocument} onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}/>
-                  </div>) : mode === 'source' ? (<DocumentSourceTextarea document={activeDocument} onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })} spellCheck={activeDocumentIsMarkdown || activeDocumentExtension === '.txt'} placeholder={activeDocumentIsMarkdown ? t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.') : t('documents.textPlaceholder', 'Edit this text or script file.')} kindLabel={activeDocumentKindLabel} extension={activeDocumentExtension}/>) : mode === 'preview' ? (<div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                                {mode === 'editor' ? (<div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                                        <Suspense fallback={<div className="h-full rounded-3xl border border-border-subtle/50 bg-surface-0/35 animate-fade-in" />}>
+                                            <LazyDocumentTiptapEditor document={activeDocument} onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })}/>
+                                        </Suspense>
+                                    </div>) : mode === 'source' ? (<DocumentSourceTextarea document={activeDocument} onUpdate={(markdown) => updateDocumentNode(activeDocument.id, { markdown })} spellCheck={activeDocumentIsMarkdown || activeDocumentExtension === '.txt'} placeholder={activeDocumentIsMarkdown ? t('documents.markdownPlaceholder', 'Write Markdown. Use [[Document Title]] to create references.') : t('documents.textPlaceholder', 'Edit this text or script file.')} kindLabel={activeDocumentKindLabel} extension={activeDocumentExtension}/>) : mode === 'preview' ? (<div className="h-full overflow-y-auto rounded-4xl border border-border-subtle/70 bg-surface-0/62 p-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
                     <article className="document-prose markdown-body min-h-full text-text-primary">
                       <MarkdownRenderer content={activeDocument.markdown} allowHtml/>
                     </article>
-                  </div>) : (<DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument}/>)}
+                                    </div>) : (<Suspense fallback={<div className="h-full rounded-2xl border border-border-subtle bg-surface-0/40" />}>
+                                            <LazyDocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={activeDocument.id} onSelectDocument={openDocument}/>
+                                        </Suspense>)}
               </div>
               {mode !== 'graph' && (<aside className="min-h-0 overflow-y-auto border-l border-border-subtle/80 bg-surface-1/64 p-4">
                   <div className="rounded-3xl border border-border-subtle/60 bg-surface-0/42 p-4">
@@ -1717,7 +1409,9 @@ export function DocumentsLayout() {
             </header>
             {renderExportStatusBanner()}
             <div className="min-h-0 flex-1 overflow-hidden p-5">
-              <DocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={null} onSelectDocument={openDocument}/>
+                            <Suspense fallback={<div className="h-full rounded-2xl border border-border-subtle bg-surface-0/40" />}>
+                                <LazyDocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={null} onSelectDocument={openDocument}/>
+                            </Suspense>
             </div>
           </div>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
             <WorkbenchEmptyState icon={<IconifyIcon name="skill-code-review" size={26} color="currentColor"/>} title={t('documents.emptyTitle', 'Build a document knowledge space')} description={t('documents.emptyBody', 'Create document groups, nest folders freely, write Markdown, resolve references, and find notes progressively as you type.')} actions={(<div className="flex flex-wrap items-center justify-center gap-3">
@@ -1729,7 +1423,9 @@ export function DocumentsLayout() {
                   </UiButton>
                 </div>)}/>
           </div>)}
-        {assistantState && (<DocumentsAssistantDrawer mode={assistantState.mode} document={assistantState.mode === 'edit' ? assistantDocument : null} group={activeGroup} folder={activeFolder} onClose={() => setAssistantState(null)} onDocumentMutated={handleAssistantDocumentMutated}/>)}
+                {assistantState && (<Suspense fallback={null}>
+                        <LazyDocumentsAssistantDrawer mode={assistantState.mode} document={assistantState.mode === 'edit' ? assistantDocument : null} group={activeGroup} folder={activeFolder} onClose={() => setAssistantState(null)} onDocumentMutated={handleAssistantDocumentMutated}/>
+                    </Suspense>)}
       </section>
     </div>);
 }

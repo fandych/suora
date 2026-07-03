@@ -12,6 +12,9 @@ import { safeStringify } from '@/utils/safeJson';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
 import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+const INITIAL_RENDERED_SESSIONS = 60;
+const SESSION_BATCH_SIZE = 60;
+const SESSION_LOAD_THRESHOLD_PX = 120;
 function formatSessionRelativeTime(ts: number, locale = 'en'): string {
     const diffSeconds = Math.round((ts - Date.now()) / 1000);
     const absSeconds = Math.abs(diffSeconds);
@@ -65,13 +68,16 @@ export function SessionList({ width }: {
     const deferredSearchQuery = useDeferredValue(searchQuery);
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editTitle, setEditTitle] = useState('');
+    const [renderedSessionCount, setRenderedSessionCount] = useState(INITIAL_RENDERED_SESSIONS);
     const [contextMenu, setContextMenu] = useState<{
         x: number;
         y: number;
         sessionId: string;
     } | null>(null);
     const editInputRef = useRef<HTMLInputElement>(null);
+    const scrollContainerRef = useRef<HTMLDivElement | null>(null);
     const focusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const previousQueryRef = useRef('');
     useEffect(() => {
         return () => {
             if (focusTimerRef.current)
@@ -103,7 +109,24 @@ export function SessionList({ width }: {
             session.messages.some((message) => message.content.toLowerCase().includes(query)));
     }, [chatSessions, deferredSearchQuery]);
     const orderedSessions = useMemo(() => [...filteredSessions].sort((a, b) => b.updatedAt - a.updatedAt), [filteredSessions]);
-    const groups = useMemo(() => groupSessionsByDate(orderedSessions, t), [orderedSessions, t]);
+    useEffect(() => {
+        const minimumVisibleCount = Math.min(orderedSessions.length, INITIAL_RENDERED_SESSIONS);
+        const queryChanged = previousQueryRef.current !== deferredSearchQuery;
+        previousQueryRef.current = deferredSearchQuery;
+        setRenderedSessionCount((prev) => {
+            if (orderedSessions.length === 0)
+                return 0;
+            if (queryChanged || prev === 0)
+                return minimumVisibleCount;
+            return Math.max(Math.min(prev, orderedSessions.length), minimumVisibleCount);
+        });
+        if (queryChanged && scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = 0;
+        }
+    }, [deferredSearchQuery, orderedSessions.length]);
+    const visibleSessions = useMemo(() => orderedSessions.slice(0, renderedSessionCount), [orderedSessions, renderedSessionCount]);
+    const hiddenSessionCount = Math.max(0, orderedSessions.length - visibleSessions.length);
+    const groups = useMemo(() => groupSessionsByDate(visibleSessions, t), [visibleSessions, t]);
     const startRename = (sessionId: string) => {
         const session = chatSessions.find((item) => item.id === sessionId);
         if (!session)
@@ -136,12 +159,21 @@ export function SessionList({ width }: {
         window.addEventListener('click', handleClick);
         return () => window.removeEventListener('click', handleClick);
     }, [contextMenu]);
+    const handlePanelScroll = (event: React.UIEvent<HTMLDivElement>) => {
+        if (hiddenSessionCount === 0)
+            return;
+        const element = event.currentTarget;
+        const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
+        if (distanceFromBottom <= SESSION_LOAD_THRESHOLD_PX) {
+            setRenderedSessionCount((prev) => Math.min(orderedSessions.length, prev + SESSION_BATCH_SIZE));
+        }
+    };
     const getSessionMeta = (session: Session) => {
         const agent = session.agentId ? agents.find((a) => a.id === session.agentId) : null;
         const model = session.modelId ? models.find((m) => m.id === session.modelId) : null;
         return { agent, model };
     };
-    return (<SidePanel title={t('sessions.title', 'Sessions')} width={width} action={<UiButton unstyled type="button" onClick={handleNewSession} className={workbenchSidebarAccentActionClass}>
+        return (<SidePanel title={t('sessions.title', 'Sessions')} width={width} contentRef={scrollContainerRef} onContentScroll={handlePanelScroll} action={<UiButton unstyled type="button" onClick={handleNewSession} className={workbenchSidebarAccentActionClass}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           {t('sessions.new', 'New')}
         </UiButton>}>
@@ -161,6 +193,10 @@ export function SessionList({ width }: {
             {searchQuery && <span>{chatSessions.length} {t('common.total', 'total')}</span>}
           </div>
         </div>
+
+                {hiddenSessionCount > 0 && (<div className="rounded-2xl border border-border-subtle/45 bg-surface-0/48 px-3.5 py-2 text-[11px] text-text-muted/72">
+                        {t('sessions.loadMoreWhileScrolling', '{count} more sessions load as you scroll.').replace('{count}', hiddenSessionCount.toLocaleString())}
+                    </div>)}
 
         {filteredSessions.length === 0 && (<div className={workbenchSidebarEmptyClass}>
             <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-[18px] border border-border-subtle/30 bg-surface-3/30">
@@ -196,7 +232,7 @@ export function SessionList({ width }: {
 
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-center gap-1.5">
-                            <div className={`${workbenchSidebarTitleClass} max-w-full break-words whitespace-normal leading-5`}>{session.title}</div>
+                            <div className={`${workbenchSidebarTitleClass} max-w-full wrap-break-word whitespace-normal leading-5`}>{session.title}</div>
                             {isOpen && (<span className="rounded-full bg-accent/10 px-1.5 py-0.5 text-[9px] font-semibold text-accent">
                                 {t('sessions.live', 'Live')}
                               </span>)}

@@ -29,7 +29,7 @@ vi.mock('@/components/pipeline/PipelineFlowCanvas', () => ({
   PipelineFlowCanvas: () => <div data-testid="pipeline-flow-canvas" />,
 }))
 
-vi.mock('./PipelineAssistantDrawer', () => ({
+vi.mock('@/components/pipeline/PipelineAssistantDrawer', () => ({
   PipelineAssistantDrawer: ({ mode }: { mode: 'create' | 'edit' }) => <div data-testid="pipeline-assistant-drawer">{mode}</div>,
 }))
 
@@ -139,6 +139,17 @@ function renderPipelineLayout() {
 
 describe('PipelineLayout', () => {
   beforeEach(() => {
+    Object.defineProperty(window, 'requestIdleCallback', {
+      configurable: true,
+      value: (callback: () => void) => {
+        callback()
+        return 1
+      },
+    })
+    Object.defineProperty(window, 'cancelIdleCallback', {
+      configurable: true,
+      value: vi.fn(),
+    })
     vi.mocked(window.electron.invoke).mockReset()
     vi.mocked(window.electron.invoke).mockResolvedValue(undefined)
     vi.mocked(loadPipelinesFromDisk).mockResolvedValue([])
@@ -216,9 +227,10 @@ describe('PipelineLayout', () => {
 
     renderPipelineLayout()
 
-    expect(await screen.findByText('Execution engine: Legacy')).toBeInTheDocument()
+    await screen.findByText('Routing diagnostics')
+    expect(screen.getByText('Execution engine')).toBeInTheDocument()
+    expect(screen.getAllByText('Legacy').length).toBeGreaterThan(0)
     expect(await screen.findAllByText('Workflow executor failed and fell back to legacy')).not.toHaveLength(0)
-    expect(await screen.findByText('Routing diagnostics')).toBeInTheDocument()
     expect(await screen.findByText('Workflow SDK path is enabled but the Workflow executor is not configured; execution used the legacy pipeline executor.')).toBeInTheDocument()
   })
 

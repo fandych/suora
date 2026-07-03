@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { SidePanel } from '@/components/layout/SidePanel';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
@@ -5,13 +6,6 @@ import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import { useAppStore } from '@/store/appStore';
-import { GeneralSettings } from './GeneralSettings';
-import { SecuritySettings } from './SecuritySettings';
-import { VoiceSettings } from './VoiceSettings';
-import { ShortcutsSettings } from './ShortcutsSettings';
-import { DataSettings } from './DataSettings';
-import { LogsSettings } from './LogsSettings';
-import { SystemSettings } from './SystemSettings';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 import {
   workbenchSidebarDescriptionClass,
@@ -21,6 +15,13 @@ import {
   workbenchSectionEyebrowClass,
   workbenchSidebarTitleClass,
 } from '@/components/catalyst-ui/workbench';
+const GeneralSettings = lazy(() => import('./GeneralSettings').then((module) => ({ default: module.GeneralSettings })));
+const SecuritySettings = lazy(() => import('./SecuritySettings').then((module) => ({ default: module.SecuritySettings })));
+const VoiceSettings = lazy(() => import('./VoiceSettings').then((module) => ({ default: module.VoiceSettings })));
+const ShortcutsSettings = lazy(() => import('./ShortcutsSettings').then((module) => ({ default: module.ShortcutsSettings })));
+const DataSettings = lazy(() => import('./DataSettings').then((module) => ({ default: module.DataSettings })));
+const LogsSettings = lazy(() => import('./LogsSettings').then((module) => ({ default: module.LogsSettings })));
+const SystemSettings = lazy(() => import('./SystemSettings').then((module) => ({ default: module.SystemSettings })));
 const SETTING_SECTIONS = [
     { id: 'general', i18nKey: 'settings.general', fallback: 'General', icon: 'settings-general', descKey: 'settings.generalDesc', descFallback: 'Appearance, language, startup, and workspace defaults.' },
     { id: 'security', i18nKey: 'settings.security', fallback: 'Security', icon: 'settings-security', descKey: 'settings.securityDesc', descFallback: 'Keys, privacy, and safety defaults for the desktop workspace.' },
@@ -111,7 +112,9 @@ export function SettingsLayout() {
             </div>
           </section>
 
-          <ActiveComponent />
+          <Suspense fallback={<div className="rounded-3xl border border-border-subtle/55 bg-surface-1/78 px-5 py-12 text-sm text-text-muted shadow-[0_14px_36px_rgba(15,23,42,0.06)] xl:px-6">{t('app.loadingSettings', 'Loading Settings…')}</div>}>
+            <ActiveComponent />
+          </Suspense>
         </div>
       </div>
     </>);

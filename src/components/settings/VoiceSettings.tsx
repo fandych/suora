@@ -7,8 +7,12 @@ import {
   isSpeechRecognitionAvailable,
   isSpeechSynthesisAvailable,
   getAvailableVoices,
+  getMicrophonePermissionState,
+  requestMicrophoneStream,
+  stopMicrophoneStream,
   speak,
   stopSpeaking,
+  type MicrophonePermissionState,
   type VoiceSettings,
   DEFAULT_VOICE_SETTINGS,
 } from '@/services/voiceInteraction'
@@ -28,6 +32,8 @@ export function VoiceSettings() {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
   const [testText, setTestText] = useState('')
   const [ttsError, setTtsError] = useState('')
+  const [microphonePermission, setMicrophonePermission] = useState<MicrophonePermissionState>('unknown')
+  const [microphoneMessage, setMicrophoneMessage] = useState('')
   const voiceLanguageOptions = [
     { value: 'en-US', label: t('settings.voiceLanguageEnUs', 'English (US)') },
     { value: 'en-GB', label: t('settings.voiceLanguageEnGb', 'English (UK)') },
@@ -42,6 +48,7 @@ export function VoiceSettings() {
 
   useEffect(() => {
     setVoiceSettings(loadVoiceSettings())
+    void getMicrophonePermissionState().then(setMicrophonePermission)
 
     if (isSpeechSynthesisAvailable()) {
       const loadVoices = () => setVoices(getAvailableVoices())
@@ -61,8 +68,28 @@ export function VoiceSettings() {
 
   const voiceAvailable = isSpeechSynthesisAvailable()
   const recognitionAvailable = isSpeechRecognitionAvailable()
+  const microphonePermissionLabel = microphonePermission === 'granted'
+    ? t('settings.microphonePermissionGranted', 'Granted')
+    : microphonePermission === 'prompt'
+      ? t('settings.microphonePermissionPrompt', 'Needs approval')
+      : microphonePermission === 'denied'
+        ? t('settings.microphonePermissionDenied', 'Denied')
+        : microphonePermission === 'unsupported'
+          ? t('settings.microphonePermissionUnsupported', 'Unavailable')
+          : t('settings.microphonePermissionUnknown', 'Unknown')
   const selectedVoiceLabel = voiceSettings.voiceName || t('settings.default', 'Default')
   const selectedLanguageLabel = voiceLanguageOptions.find((option) => option.value === voiceSettings.language)?.label || voiceSettings.language
+  const refreshMicrophonePermission = async () => {
+    setMicrophoneMessage('')
+    const access = await requestMicrophoneStream()
+    setMicrophonePermission(access.state)
+    if (access.ok) {
+      stopMicrophoneStream(access.stream)
+      setMicrophoneMessage(t('settings.microphoneAccessReady', 'Microphone access is ready for voice input.'))
+      return
+    }
+    setMicrophoneMessage(access.message ?? t('settings.microphonePermissionDenied', 'Denied'))
+  }
 
   return (
     <div className="space-y-6">
@@ -206,6 +233,18 @@ export function VoiceSettings() {
             <div className="text-sm font-medium text-text-primary">{t('settings.availableVoices', 'Available voices')}</div>
             <p className="mt-3 text-[28px] font-semibold tracking-tight text-text-primary">{voices.length}</p>
             <p className="mt-1 text-[12px] text-text-muted">{selectedVoiceLabel}</p>
+          </div>
+
+          <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3">
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${microphonePermission === 'granted' ? 'bg-success' : microphonePermission === 'prompt' ? 'bg-warning' : microphonePermission === 'denied' ? 'bg-danger' : 'bg-text-muted'}`} />
+              <span className="text-sm font-medium text-text-primary">{t('settings.microphonePermission', 'Microphone Permission')}</span>
+            </div>
+            <p className="mt-3 text-[12px] leading-relaxed text-text-muted">{microphonePermissionLabel}</p>
+            <UiButton type="button" outline className="mt-3" onClick={() => void refreshMicrophonePermission()}>
+              {t('settings.checkMicrophoneAccess', 'Check microphone access')}
+            </UiButton>
+            {microphoneMessage && <p className={`mt-3 text-[12px] leading-relaxed ${microphonePermission === 'denied' ? 'text-danger' : 'text-text-muted'}`}>{microphoneMessage}</p>}
           </div>
         </div>
       </SettingsSection>

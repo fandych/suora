@@ -7,7 +7,7 @@ import type { MessageAttachment } from '@/types';
 import { generateId } from '@/utils/helpers';
 import { toast } from '@/services/toast';
 import { buildAttachmentManifest } from '@/services/chatContext';
-import { isSpeechRecognitionAvailable, startListening, stopListening, loadVoiceSettings, type VoiceState, } from '@/services/voiceInteraction';
+import { isSpeechRecognitionAvailable, startListening, stopListening, loadVoiceSettings, requestMicrophoneStream, stopMicrophoneStream, type VoiceState, } from '@/services/voiceInteraction';
 import { formatFileSize } from './ChatMessages';
 import { Button as UiButton } from "@/components/catalyst-ui/button";
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -213,6 +213,12 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
     const audioChunksRef = useRef<Blob[]>([]);
     const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const interimTextTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const showVoiceMessage = useCallback((message: string) => {
+        setInterimText(message);
+        if (interimTextTimerRef.current)
+            clearTimeout(interimTextTimerRef.current);
+        interimTextTimerRef.current = setTimeout(() => setInterimText(''), 4000);
+    }, []);
     const handleSubmit = () => {
         const text = input.trim();
         if ((!text && !attachments.length) || disabled)
@@ -282,7 +288,12 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
     const recordingStartRef = useRef<number>(0);
     const startRecording = useCallback(async () => {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const access = await requestMicrophoneStream();
+            if (!access.ok || !access.stream) {
+                showVoiceMessage(access.message ?? t('chat.microphoneDenied', 'Microphone access denied'));
+                return;
+            }
+            const stream = access.stream;
             const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
             const mediaRecorder = new MediaRecorder(stream, { mimeType });
             audioChunksRef.current = [];
@@ -290,7 +301,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
             mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0)
                 audioChunksRef.current.push(e.data); };
             mediaRecorder.onstop = () => {
-                stream.getTracks().forEach((t) => t.stop());
+                stopMicrophoneStream(stream);
                 const blob = new Blob(audioChunksRef.current, { type: mimeType });
                 const duration = Math.round((Date.now() - recordingStartRef.current) / 1000);
                 if (blob.size > 0) {
@@ -337,12 +348,9 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
             recordingTimerRef.current = setInterval(() => setRecordingDuration((d) => d + 1), 1000);
         }
         catch {
-            setInterimText(t('chat.microphoneDenied', 'Microphone access denied'));
-            if (interimTextTimerRef.current)
-                clearTimeout(interimTextTimerRef.current);
-            interimTextTimerRef.current = setTimeout(() => setInterimText(''), 3000);
+            showVoiceMessage(t('chat.microphoneDenied', 'Microphone access denied'));
         }
-    }, [t]);
+    }, [showVoiceMessage, t]);
     const stopRecording = useCallback(() => {
         if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive')
             mediaRecorderRef.current.stop();
@@ -427,13 +435,20 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
                 <ComposerActionButton label={isRecording ? t('chat.stopRecording', 'Stop recording') : t('chat.recordAudio', 'Record audio message')} icon={isRecording
             ? <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>
             : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>} onClick={isRecording ? stopRecording : startRecording} disabled={disabled || voiceState === 'listening'} active={isRecording}/>
-                {isSpeechRecognitionAvailable() && (<ComposerActionButton label={voiceState === 'listening' ? t('chat.stopListening', 'Stop listening') : t('chat.voiceInput', 'Voice input (speech-to-text)')} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>} onClick={() => {
+                {isSpeechRecognitionAvailable() && (<ComposerActionButton label={voiceState === 'listening' ? t('chat.stopListening', 'Stop listening') : t('chat.voiceInput', 'Voice input (speech-to-text)')} icon={<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>} onClick={async () => {
                 if (voiceState === 'listening') {
                     stopListening();
                     setVoiceState('idle');
                     return;
                 }
                 const settings = loadVoiceSettings();
+                const access = await requestMicrophoneStream();
+                if (!access.ok) {
+                    setVoiceState('idle');
+                    showVoiceMessage(access.message ?? t('chat.microphoneDenied', 'Microphone access denied'));
+                    return;
+                }
+                stopMicrophoneStream(access.stream);
                 setVoiceState('listening');
                 startListening(settings, {
                     onResult: (text, isFinal) => {
@@ -455,9 +470,9 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
                             setInterimText(text);
                         }
                     },
-                    onError: () => {
+                    onError: (message) => {
                         setVoiceState('idle');
-                        setInterimText('');
+                        showVoiceMessage(message);
                     },
                     onEnd: () => {
                         setVoiceState('idle');

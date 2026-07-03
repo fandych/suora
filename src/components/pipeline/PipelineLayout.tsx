@@ -1,10 +1,7 @@
-import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { SidePanel } from '@/components/layout/SidePanel';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
-import { PipelineAssistantDrawer } from '@/components/pipeline/PipelineAssistantDrawer';
-import { PipelineFlowDiagram } from '@/components/pipeline/PipelineFlowDiagram';
-import { PipelineFlowCanvas } from '@/components/pipeline/PipelineFlowCanvas';
 import { flushPendingSplitStoreWrites } from '@/services/fileStorage';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { useI18n } from '@/hooks/useI18n';
@@ -26,6 +23,11 @@ import { Checkbox } from '@/components/catalyst-ui/checkbox';
 import { Dialog, DialogBody, DialogTitle } from '@/components/catalyst-ui/dialog';
 import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
 import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { scheduleWhenIdle } from '@/utils/scheduling';
+
+const LazyPipelineAssistantDrawer = lazy(() => import('@/components/pipeline/PipelineAssistantDrawer').then((module) => ({ default: module.PipelineAssistantDrawer })));
+const LazyPipelineFlowDiagram = lazy(() => import('@/components/pipeline/PipelineFlowDiagram').then((module) => ({ default: module.PipelineFlowDiagram })));
+const LazyPipelineFlowCanvas = lazy(() => import('@/components/pipeline/PipelineFlowCanvas').then((module) => ({ default: module.PipelineFlowCanvas })));
 const PIPELINE_HEADER_BACKGROUND = 'bg-[radial-gradient(circle_at_top_left,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_55%)]';
 function formatDuration(durationMs?: number, t?: (key: string, defaultValue?: string) => string) {
     if (durationMs === undefined)
@@ -275,7 +277,10 @@ export function PipelineLayout() {
     }, [pipelineVariables]);
     const invalidEnabledSteps = useMemo(() => enabledPipelineSteps.filter((step) => !step.task.trim()).length, [enabledPipelineSteps]);
     useEffect(() => {
+      const scheduled = scheduleWhenIdle(() => {
         void refreshSavedPipelines();
+      }, 1200);
+      return () => scheduled.cancel();
     }, [refreshSavedPipelines]);
     useEffect(() => {
         if (!requestedPipelineId) {
@@ -320,30 +325,33 @@ export function PipelineLayout() {
             setSelectedExecutionId(null);
             return;
         }
-        loadPipelineExecutionsFromDisk(workspacePath, selectedAgentPipelineId).then((executions) => {
+        const scheduled = scheduleWhenIdle(() => {
+          loadPipelineExecutionsFromDisk(workspacePath, selectedAgentPipelineId).then((executions) => {
             setPipelineHistory(executions);
             setSelectedExecutionId((current) => {
-                if (requestedExecutionId && executions.some((execution) => execution.id === requestedExecutionId)) {
-                    return requestedExecutionId;
+              if (requestedExecutionId && executions.some((execution) => execution.id === requestedExecutionId)) {
+                return requestedExecutionId;
+              }
+              if (requestedTimerId) {
+                const timerMatches = executions.filter((execution) => execution.timerId === requestedTimerId);
+                if (timerMatches.length > 0) {
+                  const matchedExecution = Number.isFinite(requestedFiredAt)
+                    ? timerMatches
+                      .slice()
+                      .sort((left, right) => Math.abs(left.startedAt - requestedFiredAt) - Math.abs(right.startedAt - requestedFiredAt))[0]
+                    : timerMatches[0];
+                  if (matchedExecution) {
+                    return matchedExecution.id;
+                  }
                 }
-                if (requestedTimerId) {
-                    const timerMatches = executions.filter((execution) => execution.timerId === requestedTimerId);
-                    if (timerMatches.length > 0) {
-                        const matchedExecution = Number.isFinite(requestedFiredAt)
-                            ? timerMatches
-                                .slice()
-                                .sort((left, right) => Math.abs(left.startedAt - requestedFiredAt) - Math.abs(right.startedAt - requestedFiredAt))[0]
-                            : timerMatches[0];
-                        if (matchedExecution) {
-                            return matchedExecution.id;
-                        }
-                    }
-                }
-                return getValidExecutionId(current, executions);
+              }
+              return getValidExecutionId(current, executions);
             });
-        }).catch(() => {
+          }).catch(() => {
             // Ignore execution history loading errors
-        });
+          });
+        }, 1400);
+        return () => scheduled.cancel();
     }, [workspacePath, selectedAgentPipelineId, requestedExecutionId, requestedTimerId, requestedFiredAt]);
     useEffect(() => {
         if (!requestedPipelineId && !requestedExecutionId && !requestedTimerId)
@@ -862,11 +870,15 @@ export function PipelineLayout() {
     };
       const renderDiagramContent = (expanded = false) => {
         if (diagramView === 'flow') {
-          return (<PipelineFlowCanvas steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap} className={expanded ? 'h-[70vh]' : undefined}/>);
+          return (<Suspense fallback={<div className={`${expanded ? 'h-[70vh]' : 'h-80'} rounded-2xl border border-border-subtle bg-surface-0/40`} />}>
+            <LazyPipelineFlowCanvas steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap} className={expanded ? 'h-[70vh]' : undefined}/>
+          </Suspense>);
         }
         if (diagramView === 'list') {
           return (<div className={expanded ? 'max-h-[70vh] overflow-y-auto' : undefined}>
-            <PipelineFlowDiagram steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap}/>
+            <Suspense fallback={<div className="h-80 rounded-2xl border border-border-subtle bg-surface-0/40" />}>
+              <LazyPipelineFlowDiagram steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap}/>
+            </Suspense>
           </div>);
         }
         return (<pre className={`${expanded ? 'h-[70vh]' : 'max-h-96'} overflow-auto rounded-2xl border border-border-subtle bg-surface-0/45 p-4 text-[11px] leading-relaxed text-text-secondary`}>
@@ -1559,7 +1571,9 @@ export function PipelineLayout() {
           </aside>
         </div>
       </div>
-      {assistantState && (<PipelineAssistantDrawer mode={assistantState.mode} pipeline={assistantState.mode === 'edit' ? assistantPipeline : null} onClose={() => setAssistantState(null)} onPipelineMutated={() => { void handleAssistantPipelineMutated(); }}/>)}
+        {assistantState && (<Suspense fallback={null}>
+            <LazyPipelineAssistantDrawer mode={assistantState.mode} pipeline={assistantState.mode === 'edit' ? assistantPipeline : null} onClose={() => setAssistantState(null)} onPipelineMutated={() => { void handleAssistantPipelineMutated(); }}/>
+          </Suspense>)}
     </>);
 }
 
