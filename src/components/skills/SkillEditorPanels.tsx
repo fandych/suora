@@ -37,13 +37,14 @@ const panelCompactInputClass = 'rounded-xl px-3 py-2 text-xs';
 const panelCompactSelectClass = 'rounded-xl px-3 py-2 text-xs';
 const panelCompactSecondaryButtonClass = 'relative inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-semibold text-text-secondary shadow-sm transition hover:bg-surface-3 hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50';
 // ─── Markdown editor with Edit / Preview tabs ─────────────────────
-export function MarkdownEditor({ value, onChange, placeholder, rows = 10, disabled, fillHeight = false, }: {
+export function MarkdownEditor({ value, onChange, placeholder, rows = 10, disabled, fillHeight = false, ariaLabel, }: {
     value: string;
     onChange: (v: string) => void;
     placeholder?: string;
     rows?: number;
     disabled?: boolean;
     fillHeight?: boolean;
+  ariaLabel?: string;
 }) {
     const [mode, setMode] = useState<'edit' | 'preview'>('edit');
     const { t } = useI18n();
@@ -69,7 +70,7 @@ export function MarkdownEditor({ value, onChange, placeholder, rows = 10, disabl
         </div>
       </div>
       {mode === 'edit' ? (<div className={`p-3 ${fillHeight ? 'min-h-0 flex-1' : ''}`}>
-          <UiTextArea value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={fillHeight ? undefined : rows} disabled={disabled} controlClassName={`w-full rounded-[26px] border border-border-subtle/55 bg-surface-0/55 px-4 py-4 font-mono text-sm leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] placeholder-text-muted focus:border-accent/35 disabled:opacity-50 ${fillHeight ? 'min-h-0 h-full flex-1 resize-none' : 'min-h-72 resize-y'}`}/>
+          <UiTextArea aria-label={ariaLabel} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} rows={fillHeight ? undefined : rows} disabled={disabled} controlClassName={`w-full rounded-[26px] border border-border-subtle/55 bg-surface-0/55 px-4 py-4 font-mono text-sm leading-7 text-text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] placeholder-text-muted focus:border-accent/35 disabled:opacity-50 ${fillHeight ? 'min-h-0 h-full flex-1 resize-none' : 'min-h-72 resize-y'}`}/>
         </div>) : (<div className={`overflow-auto px-4 py-4 text-sm text-text-primary ${fillHeight ? 'min-h-0 flex-1' : 'min-h-24'}`}>
           {value.trim() ? (<div className={`rounded-[26px] border border-border-subtle/55 bg-surface-0/55 p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] ${fillHeight ? 'min-h-full' : ''}`}>
               <article className="document-prose markdown-body min-h-full text-text-primary">

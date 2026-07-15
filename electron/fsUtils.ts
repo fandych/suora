@@ -68,11 +68,11 @@ export function isWithinRoot(candidatePath: string, rootPath: string): boolean {
   return relativePath === '' || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
 }
 
-export async function atomicWriteFile(filePath: string, content: string): Promise<void> {
+export async function atomicWriteFile(filePath: string, content: string | Uint8Array): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
 
   const tempPath = `${filePath}.${crypto.randomUUID()}.tmp`
-  await fs.writeFile(tempPath, content, 'utf-8')
+  await fs.writeFile(tempPath, content)
 
   try {
     await fs.rename(tempPath, filePath)

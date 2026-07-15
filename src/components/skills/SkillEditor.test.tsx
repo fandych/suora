@@ -27,8 +27,8 @@ vi.mock('@/services/toast', () => ({
 
 // Avoid pulling in heavy markdown renderer used by the Content tab.
 vi.mock('./SkillEditorPanels', () => ({
-  MarkdownEditor: ({ value }: { value: string }) => (
-    <TextArea data-testid="markdown-editor" aria-label="Markdown editor" defaultValue={value} />
+  MarkdownEditor: ({ value, ariaLabel, onChange }: { value: string; ariaLabel?: string; onChange: (value: string) => void }) => (
+    <TextArea data-testid="markdown-editor" aria-label={ariaLabel || 'Markdown editor'} value={value} onChange={(event) => onChange(event.target.value)} />
   ),
 }))
 
@@ -67,7 +67,7 @@ function makeSkill(overrides: Partial<Skill> = {}): Skill {
   }
 }
 
-describe('SkillEditor — Resources tab', () => {
+describe('SkillEditor — Files tab', () => {
   beforeEach(() => {
     confirmMock.mockClear()
     confirmMock.mockResolvedValue(true)
@@ -96,17 +96,16 @@ describe('SkillEditor — Resources tab', () => {
     render(
       <SkillEditor skill={makeSkill({ bundledResources: [] })} onSave={vi.fn()} onCancel={vi.fn()} />,
     )
-    // Resources tab is selected when bundledResources is empty? No — default is 'metadata'.
+    // Files tab is available even when bundledResources is empty.
     // Bring it forward.
-    // (Buttons render with capitalized "Resources" text.)
-    expect(screen.getByRole('button', { name: /Resources/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Files/i })).toBeInTheDocument()
   })
 
   it('renders bundled resources grouped by top-level folder and opens a text file in the editor', async () => {
     const user = userEvent.setup()
     render(<SkillEditor skill={makeSkill()} onSave={vi.fn()} onCancel={vi.fn()} />)
 
-    // SkillEditor opens the Resources tab when bundledResources is non-empty.
+    // SkillEditor opens the Files tab by default.
     expect(screen.getByText('references/intro.md')).toBeInTheDocument()
     expect(screen.getByText('assets/logo.png')).toBeInTheDocument()
 
@@ -167,8 +166,8 @@ describe('SkillEditor — Resources tab', () => {
     const skill = makeSkill({ skillRoot: undefined, bundledResources: [] })
     render(<SkillEditor skill={skill} onSave={vi.fn()} onCancel={vi.fn()} />)
 
-    // Switch to Resources tab manually since bundledResources is empty.
-    await user.click(screen.getByRole('button', { name: /Resources/i }))
+    // Switch to Files tab manually since the skill starts on the metadata tab when needed.
+    await user.click(screen.getByRole('button', { name: /Files/i }))
 
     const newFileButtons = screen.getAllByRole('button', { name: 'New file' })
     await user.click(newFileButtons[0]) // scripts/

@@ -1,6 +1,6 @@
 {
   "name": "suora",
-  "version": "0.1.26",
+  "version": "0.1.27",
   "description": "Suora - AI desktop assistant with multi-model support, skills, agents, memory, and plugin system",
   "keywords": [
     "suora",
@@ -46,6 +46,7 @@
     "@iconify/json": "^2.2.456",
     "@iconify/react": "^6.0.2",
     "@iconify/utils": "^3.1.0",
+    "@monaco-editor/react": "^4.7.0",
     "@tiptap/extension-image": "^3.22.5",
     "@tiptap/extension-link": "^3.22.5",
     "@tiptap/extension-placeholder": "^3.22.5",
@@ -70,6 +71,7 @@
     "express": "^5.2.1",
     "katex": "^0.16.45",
     "mermaid": "^11.15.0",
+    "monaco-editor": "^0.55.1",
     "motion": "^12.41.0",
     "nodemailer": "^9.0.1",
     "react": "^19.2.4",
@@ -105,7 +107,7 @@
     "@vitest/coverage-v8": "^4.1.2",
     "@vitest/ui": "^4.1.2",
     "autoprefixer": "^10.4.27",
-    "electron": "^41.3.0",
+    "electron": "^43.1.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
     "eslint": "^9.39.4",

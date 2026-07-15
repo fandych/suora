@@ -138,8 +138,47 @@ describe('SkillsLayout', () => {
     expect(screen.getByText('~/.claude/skills')).toBeInTheDocument()
     expect(screen.getByText('~/.agents/skills')).toBeInTheDocument()
     expect(screen.queryByText('~/.claude/.suora/skills')).not.toBeInTheDocument()
-    expect(screen.queryByText('C:/shared/skills')).not.toBeInTheDocument()
-    expect(screen.getAllByRole('checkbox')).toHaveLength(2)
+    expect(screen.getByText('C:/shared/skills')).toBeInTheDocument()
+    expect(screen.getAllByRole('checkbox')).toHaveLength(3)
+  })
+
+  it('filters installed skills by source tab label', async () => {
+    const user = userEvent.setup()
+    useAppStore.setState({
+      workspacePath: '/workspace',
+      skills: [
+        {
+          id: 'skill-local',
+          name: 'Local Skill',
+          description: 'Local description',
+          enabled: true,
+          source: 'local',
+          content: 'local',
+          context: 'inline',
+          frontmatter: { name: 'Local Skill', description: 'Local description' },
+        },
+        {
+          id: 'skill-shared',
+          name: 'Shared Skill',
+          description: 'Shared description',
+          enabled: true,
+          source: 'claude-dir',
+          content: 'shared',
+          context: 'inline',
+          frontmatter: { name: 'Shared Skill', description: 'Shared description' },
+        },
+      ],
+    })
+
+    renderSkillsLayout('/skills')
+
+    expect(screen.getByText('Local Skill')).toBeInTheDocument()
+    expect(screen.getByText('Shared Skill')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: /Claude Code/i }))
+
+    expect(screen.queryByText('Local Skill')).not.toBeInTheDocument()
+    expect(screen.getByText('Shared Skill')).toBeInTheDocument()
   })
 })
 

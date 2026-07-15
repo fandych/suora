@@ -76,6 +76,15 @@ describe('fsUtils', () => {
     expect(entries.filter((entry) => entry.endsWith('.tmp'))).toHaveLength(0)
   })
 
+  it('writes binary files atomically without corrupting bytes', async () => {
+    const tempDirectory = await createTempDirectory()
+    const filePath = path.join(tempDirectory, 'image.bin')
+
+    await atomicWriteFile(filePath, new Uint8Array([0, 255, 127, 64]))
+
+    expect(await fs.readFile(filePath)).toEqual(Buffer.from([0, 255, 127, 64]))
+  })
+
   it('guards large text reads with a byte limit', async () => {
     const tempDirectory = await createTempDirectory()
     const filePath = path.join(tempDirectory, 'large.txt')

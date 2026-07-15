@@ -11,7 +11,7 @@ import { z } from 'zod'
 import type { Agent, AgentPipeline, AgentPipelineBudget, AgentPipelineStep, AgentPipelineVariable, ChannelConfig, ChannelConnectionMode, ChannelPlatform, DocumentFolder, DocumentGroup, DocumentItem, DocumentNode, MemoryScope, Model, Skill, ToolMeta, ToolSecuritySettings } from '@/types'
 import { getPluginTools } from '@/services/pluginSystem'
 import { logger } from '@/services/logger'
-import { serializeSkillToMarkdown } from '@/services/skillRegistry'
+import { buildSkillPrompts, serializeSkillToMarkdown } from '@/services/skillRegistry'
 import {
   getIndex,
   rebuildIndexFromStore,
@@ -5091,15 +5091,8 @@ export function mergeSkillsWithBuiltins(storeSkills: Skill[]): Skill[] {
 }
 
 function resolveRuntimeSkillIds(agentSkillIds: string[], allSkills: Skill[]): string[] {
-  const runtimeSkillIds = new Set(agentSkillIds)
-
-  for (const skill of allSkills) {
-    if (!skill?.enabled) continue
-    if (skill.source !== 'claude-dir' && skill.source !== 'agent-dir') continue
-    runtimeSkillIds.add(skill.id)
-  }
-
-  return Array.from(runtimeSkillIds)
+  const knownSkillIds = new Set(allSkills.map((skill) => skill.id))
+  return agentSkillIds.filter((skillId) => knownSkillIds.has(skillId))
 }
 
 /**
@@ -5197,48 +5190,18 @@ export async function getSkillSystemPrompts(
   agentSkillIds: string[],
   allSkills: Skill[],
 ): Promise<string> {
-  const parts: string[] = []
   const runtimeSkillIds = resolveRuntimeSkillIds(agentSkillIds, allSkills)
+  const prompt = await buildSkillPrompts(runtimeSkillIds, allSkills)
 
-  for (const skillId of runtimeSkillIds) {
-    const skill = allSkills.find((s) => s.id === skillId)
-    if (!skill?.enabled) continue
+  if (!prompt) return ''
 
-    const lines: string[] = []
+  const selectedSkillMap = new Map(allSkills.map((skill) => [skill.id, skill] as const))
+  const memoryBlocks = runtimeSkillIds
+    .map((skillId) => selectedSkillMap.get(skillId))
+    .filter((skill): skill is Skill => Boolean(skill?.enabled && skill.memories?.length))
+    .map((skill) => `<skill-memory name="${skill.name}">\n${skill.memories?.slice(-8).map((memory) => `- ${memory.content}`).join('\n')}\n</skill-memory>`)
 
-    // 1. Skill content (markdown instructions)
-    const content = skill.content ?? skill.prompt
-    if (typeof content === 'string' && content.trim()) {
-      lines.push(content.trim())
-    }
-
-    if (skill.memories?.length) {
-      lines.push(`### Skill memory\n\n${skill.memories.slice(-8).map((memory) => `- ${memory.content}`).join('\n')}`)
-    }
-
-    // 2. Reference files — read external files and append
-    if (skill.referenceFiles?.length) {
-      for (const ref of skill.referenceFiles) {
-        try {
-          const fileContent = await window.electron.invoke('fs:readFile', ref.path) as string | { error: string }
-          if (typeof fileContent === 'string' && fileContent.trim()) {
-            const label = ref.label || ref.path.split(/[/\\]/).pop() || 'Reference'
-            lines.push(`### ${label}\n\n${fileContent.trim()}`)
-          } else if (typeof fileContent === 'object' && 'error' in fileContent) {
-            logger.warn(`[getSkillSystemPrompts] Failed to read reference: ${ref.path}: ${fileContent.error}`)
-          }
-        } catch {
-          logger.warn(`[getSkillSystemPrompts] Failed to read reference: ${ref.path}`)
-        }
-      }
-    }
-
-    if (lines.length > 0) {
-      const whenToUse = skill.whenToUse ? `\nUse when: ${skill.whenToUse}` : ''
-      parts.push(`<skill name="${skill.name}">${whenToUse}\n${lines.join('\n\n')}\n</skill>`)
-    }
-  }
-
-  if (parts.length === 0) return ''
-  return `\n\n${parts.join('\n\n')}`
+  return memoryBlocks.length > 0
+    ? `${prompt}\n\n${memoryBlocks.join('\n\n')}`
+    : prompt
 }

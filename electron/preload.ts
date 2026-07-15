@@ -29,6 +29,7 @@ const ALLOWED_INVOKE_CHANNELS = [
   'fs:readFile',
   'fs:readFileRange',
   'fs:writeFile',
+  'fs:writeBinaryFile',
   'fs:appendFile',
   'fs:deleteFile',
   'fs:deleteDir',

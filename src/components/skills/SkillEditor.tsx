@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import Editor from '@monaco-editor/react';
 import { generateId } from '@/utils/helpers';
 import { SkillIcon, IconifyIcon, getSkillIconName } from '@/components/icons/IconifyIcons';
 import { IconPicker } from '@/components/icons/IconPicker';
@@ -6,6 +7,7 @@ import { MarkdownContent } from '@/components/chat/ChatMarkdown';
 import { useI18n } from '@/hooks/useI18n';
 import type { Skill, SkillBundledResource, SkillFrontmatter, SkillSource, SkillExecutionContext } from '@/types';
 import { MarkdownEditor } from './SkillEditorPanels';
+import { parseSkillMarkdown } from '@/services/skillRegistry';
 import { confirm } from '@/services/confirmDialog';
 import { toast } from '@/services/toast';
 import { SKILL_TOP_LEVEL_FOLDERS, type SkillTopLevelFolder, classifySkillFileKind, getDefaultSkillFileName, getSkillFileIcon, isEditableSkillFile, isSafeSkillResourcePath, isSkillResourceExecutable, isSkillTopLevelFolder, } from '@/utils/skillPaths';
@@ -22,7 +24,8 @@ const skillInputClass = 'bg-surface-2/75';
 const skillSelectClass = 'bg-surface-2/75';
 const skillMonoInputClass = 'font-mono bg-surface-2/75';
 const skillTextAreaClass = 'rounded-3xl bg-surface-2/75 min-h-32 leading-6';
-type SkillEditorTab = 'metadata' | 'content' | 'resources' | 'preview';
+type SkillEditorTab = 'files' | 'metadata' | 'preview';
+type SkillEditorFileKind = 'skill-markdown' | 'markdown' | 'script' | 'data' | 'image' | 'binary';
 function makeDefaultSkill(): Skill {
     return {
         id: generateId('skill'),
@@ -71,6 +74,67 @@ function normalizeResourcePath(pathValue: string): string {
 function joinSkillPath(skillRoot: string, resourcePath: string): string {
     return `${skillRoot.replace(/[\\/]+$/, '')}/${normalizeResourcePath(resourcePath)}`;
 }
+function filePathToMonacoLanguage(pathValue: string): string {
+  const ext = normalizeResourcePath(pathValue).split('.').pop()?.toLowerCase() || '';
+  switch (ext) {
+    case 'ts':
+    case 'tsx':
+      return 'typescript';
+    case 'js':
+    case 'mjs':
+    case 'cjs':
+      return 'javascript';
+    case 'py':
+      return 'python';
+    case 'sh':
+    case 'bash':
+    case 'zsh':
+      return 'shell';
+    case 'json':
+      return 'json';
+    case 'yml':
+    case 'yaml':
+      return 'yaml';
+    case 'md':
+    case 'markdown':
+    case 'txt':
+      return 'markdown';
+    case 'xml':
+      return 'xml';
+    case 'css':
+      return 'css';
+    case 'html':
+      return 'html';
+    default:
+      return 'plaintext';
+  }
+}
+function fileKindForEditor(pathValue: string): SkillEditorFileKind {
+  if (normalizeResourcePath(pathValue).toLowerCase() === 'skill.md') return 'skill-markdown';
+  return classifySkillFileKind(pathValue);
+}
+function buildSkillMarkdownContent(skill: Skill): string {
+  return generatePreview(skill);
+}
+function parseEditedSkillMarkdown(raw: string, existingSkill: Skill, parseErrorMessage: string): Partial<Skill> | null {
+  const parsed = parseSkillMarkdown(raw, existingSkill.filePath || `${existingSkill.skillRoot || ''}/SKILL.md`, existingSkill.source);
+  if (!parsed) {
+    toast.error(parseErrorMessage);
+    return null;
+  }
+  return {
+    ...parsed,
+    id: existingSkill.id,
+    enabled: existingSkill.enabled,
+    source: existingSkill.source,
+    skillRoot: existingSkill.skillRoot,
+    filePath: existingSkill.filePath,
+    bundledResources: existingSkill.bundledResources,
+    referenceFiles: existingSkill.referenceFiles,
+    memories: existingSkill.memories,
+    installInfo: existingSkill.installInfo,
+  };
+}
 function sortResources(resources: SkillBundledResource[]): SkillBundledResource[] {
     return [...resources].sort((a, b) => {
         const aDepth = a.path.split('/').length;
@@ -112,7 +176,7 @@ function ResourceTreePanel({ skill, onChange, }: {
     const [uploadFolder, setUploadFolder] = useState<SkillTopLevelFolder>('assets');
     const resources = useMemo(() => sortResources(skill.bundledResources ?? []), [skill.bundledResources]);
     const [search, setSearch] = useState('');
-    const [selectedPath, setSelectedPath] = useState<string>('');
+    const [selectedPath, setSelectedPath] = useState<string>('SKILL.md');
     const [renamingPath, setRenamingPath] = useState('');
     const [renameValue, setRenameValue] = useState('');
     const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
@@ -126,6 +190,13 @@ function ResourceTreePanel({ skill, onChange, }: {
     // ── load file content when selection changes ─────────────────────────
     useEffect(() => {
         setEditorError('');
+      if (selectedPath === 'SKILL.md') {
+        const next = buildSkillMarkdownContent(skill);
+        setEditorContent(next);
+        setEditorOriginal(next);
+        setEditorLoading(false);
+        return;
+      }
         if (!selectedPath || !skill.skillRoot) {
             setEditorContent('');
             setEditorOriginal('');
@@ -176,7 +247,7 @@ function ResourceTreePanel({ skill, onChange, }: {
         return () => {
             cancelled = true;
         };
-    }, [selectedPath, skill.skillRoot, resources, t]);
+    }, [selectedPath, skill, skill.skillRoot, resources, t]);
     const removeResourceFromState = useCallback((resourcePath: string) => {
         const normalized = normalizeResourcePath(resourcePath);
         onChange({
@@ -420,7 +491,10 @@ function ResourceTreePanel({ skill, onChange, }: {
             };
             if (!ensure?.success)
                 throw new Error(ensure?.error || t('skills.createResourceDirectoryFailed', 'Failed to create resource directory.'));
-            const write = await window.electron.invoke('fs:writeFile', joinSkillPath(skill.skillRoot, resourcePath), await file.text()) as {
+          const kind = classifySkillFileKind(resourcePath);
+          const write = await window.electron.invoke(kind === 'image' || kind === 'binary' ? 'fs:writeBinaryFile' : 'fs:writeFile', joinSkillPath(skill.skillRoot, resourcePath), kind === 'image' || kind === 'binary'
+            ? btoa(String.fromCharCode(...new Uint8Array(await file.arrayBuffer())))
+            : await file.text()) as {
                 success?: boolean;
                 error?: string;
             };
@@ -445,8 +519,19 @@ function ResourceTreePanel({ skill, onChange, }: {
     };
     // ── save edited file ────────────────────────────────────────────────
     const saveCurrentFile = async () => {
-        if (!selectedPath || !skill.skillRoot || !dirty)
+      if (!selectedPath || !dirty)
             return;
+      if (selectedPath === 'SKILL.md') {
+        const reparsed = parseEditedSkillMarkdown(editorContent, skill, t('skills.parseFailed', 'Failed to parse SKILL.md'));
+        if (!reparsed)
+          return;
+        onChange(reparsed);
+        setEditorOriginal(editorContent);
+        toast.success(t('skills.fileSaved', 'File saved'));
+        return;
+      }
+      if (!skill.skillRoot)
+        return;
         setSavingFile(true);
         try {
             const result = (await window.electron.invoke('fs:writeFile', joinSkillPath(skill.skillRoot, selectedPath), editorContent)) as {
@@ -510,9 +595,12 @@ function ResourceTreePanel({ skill, onChange, }: {
         return out;
     }, [filteredResources]);
     const normalizedSelectedPath = normalizeResourcePath(selectedPath);
-    const selectedResource = normalizedSelectedPath
+    const selectedResource = normalizedSelectedPath === 'SKILL.md'.toLowerCase()
+      ? { path: 'SKILL.md', type: 'file' as const, size: new TextEncoder().encode(buildSkillMarkdownContent(skill)).length }
+      : normalizedSelectedPath
         ? resources.find((r) => normalizeResourcePath(r.path) === normalizedSelectedPath)
         : null;
+    const selectedKind = selectedPath ? fileKindForEditor(selectedPath) : null;
     // ── render ──────────────────────────────────────────────────────────
     return (<div className="grid gap-6 xl:grid-cols-[minmax(20rem,0.82fr)_minmax(0,1.18fr)] xl:items-stretch">
       <EditorSection eyebrow={t('skills.resources', 'Resources')} title={t('skills.resourceTree', 'Bundled File Tree')} description={t('skills.resourceTreeHint', 'Browse and manage files packaged alongside SKILL.md.')} className="flex h-full flex-col">
@@ -538,6 +626,17 @@ function ResourceTreePanel({ skill, onChange, }: {
 
           <div className="min-h-0 flex-1 overflow-y-auto pr-1">
             <div className="space-y-3">
+              <div className={`group flex items-center gap-2 rounded-2xl px-3 py-2 transition-colors ${selectedPath === 'SKILL.md'
+                    ? 'bg-accent/12 ring-1 ring-accent/35'
+                    : 'bg-surface-2/60 hover:bg-surface-2/85'}`}>
+                <IconifyIcon name="lucide:file-badge-2" size={12} color="currentColor" className="text-text-muted"/>
+                <UiButton unstyled type="button" onClick={() => setSelectedPath('SKILL.md')} className={`min-w-0 flex-1 truncate text-left font-mono text-[11px] hover:text-accent ${selectedPath === 'SKILL.md' ? 'text-accent' : 'text-text-secondary'}`}>
+                  SKILL.md
+                </UiButton>
+                <span className="text-[9px] tabular-nums text-text-muted">
+                  {new TextEncoder().encode(buildSkillMarkdownContent(skill)).length}b
+                </span>
+              </div>
               {SKILL_TOP_LEVEL_FOLDERS.map((folder) => {
             const entries = grouped[folder];
             const isCreatingHere = pendingCreate && normalizeResourcePath(pendingCreate.parent) === folder;
@@ -620,14 +719,14 @@ function ResourceTreePanel({ skill, onChange, }: {
       </EditorSection>
 
       <EditorSection eyebrow={t('skills.resourceEditor', 'File')} title={selectedPath || t('skills.noFileSelected', 'No file selected')} description={selectedResource && selectedResource.type === 'file'
-            ? `${classifySkillFileKind(selectedResource.path)} · ${selectedResource.size ?? 0}b`
+        ? `${selectedKind === 'skill-markdown' ? 'markdown' : classifySkillFileKind(selectedResource.path)} · ${selectedResource.size ?? 0}b`
             : t('skills.fileEditorHint', 'Pick a file from the tree to view or edit its contents.')} className="flex h-full flex-col">
         <div className="flex min-h-168 flex-1 flex-col">
           {!selectedPath ? (<div className="flex flex-1 items-center justify-center rounded-3xl border border-dashed border-border-subtle/55 bg-surface-0/45 p-8 text-center text-[12px] text-text-muted">
               {t('skills.noFileSelected', 'No file selected.')}
             </div>) : editorError ? (<div className="flex flex-1 items-center rounded-3xl border border-danger/20 bg-danger/8 p-4 text-[12px] text-danger">
               {editorError}
-            </div>) : selectedResource && !isEditableSkillFile(selectedResource.path) ? (<div className="flex flex-1 flex-col rounded-3xl border border-border-subtle/55 bg-surface-2/60 p-5 text-[12px] text-text-secondary">
+            </div>) : selectedResource && selectedKind !== 'skill-markdown' && !isEditableSkillFile(selectedResource.path) ? (<div className="flex flex-1 flex-col rounded-3xl border border-border-subtle/55 bg-surface-2/60 p-5 text-[12px] text-text-secondary">
               <div className="mb-2 font-semibold text-text-primary">
                 {t('skills.cannotEditBinary', 'Binary file — preview only.')}
               </div>
@@ -644,7 +743,11 @@ function ResourceTreePanel({ skill, onChange, }: {
             </div>) : (<div className="flex min-h-0 flex-1 flex-col gap-3">
               <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-border-subtle/55 bg-surface-0/55 px-3 py-2 text-[11px] text-text-muted">
                 <span className="rounded-full border border-border-subtle/45 bg-surface-2/75 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/70">
-                  {selectedResource ? classifySkillFileKind(selectedResource.path) : t('skills.file', 'File')}
+                  {selectedKind === 'skill-markdown'
+                ? 'markdown'
+                : selectedResource
+                    ? classifySkillFileKind(selectedResource.path)
+                    : t('skills.file', 'File')}
                 </span>
                 {selectedResource?.size !== undefined && (<span className="rounded-full border border-border-subtle/45 bg-surface-2/75 px-2 py-1 text-[10px] font-mono text-text-secondary/80">
                     {selectedResource.size} bytes
@@ -654,7 +757,10 @@ function ResourceTreePanel({ skill, onChange, }: {
                 </span>
               </div>
 
-              <UiTextArea aria-label={t('skills.fileContent', 'File content')} value={editorContent} onChange={(event) => setEditorContent(event.target.value)} wrapperClassName="min-h-112 flex-1 w-full" controlClassName="resize-none rounded-3xl border border-border-subtle/55 bg-surface-2/75 p-4 font-mono text-[13px] leading-6 text-text-secondary focus:border-accent/50" spellCheck={false}/>
+              {(selectedKind === 'skill-markdown' || selectedKind === 'markdown') && (<MarkdownEditor value={editorContent} onChange={(value) => setEditorContent(value)} ariaLabel={t('skills.fileContent', 'File content')} placeholder={t('skills.fileContent', 'File content')} fillHeight/>) }
+              {(selectedKind === 'script' || selectedKind === 'data') && (<div className="min-h-112 flex-1 overflow-hidden rounded-3xl border border-border-subtle/55 bg-surface-2/75">
+                  <Editor height="100%" theme="vs-dark" language={filePathToMonacoLanguage(selectedPath)} value={editorContent} onChange={(value) => setEditorContent(value ?? '')} options={{ minimap: { enabled: false }, fontSize: 13, automaticLayout: true, wordWrap: 'on', scrollBeyondLastLine: false }} />
+                </div>)}
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="text-[11px] text-text-muted">
@@ -666,7 +772,7 @@ function ResourceTreePanel({ skill, onChange, }: {
                 ? t('skills.unsavedChanges', 'Unsaved changes')
                 : t('skills.noChanges', 'No changes')}
                   </span>
-                  <UiButton unstyled type="button" onClick={saveCurrentFile} disabled={!dirty || savingFile || !skill.skillRoot} className="rounded-2xl bg-accent px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-45">
+                  <UiButton unstyled type="button" onClick={saveCurrentFile} disabled={!dirty || savingFile || (selectedPath !== 'SKILL.md' && !skill.skillRoot)} className="rounded-2xl bg-accent px-4 py-2 text-[12px] font-semibold text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-45">
                     {savingFile
                 ? t('common.saving', 'Saving…')
                 : t('skills.saveFile', 'Save file')}
@@ -685,7 +791,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
 }) {
     const [dirty, setDirty] = useState(false);
     const [validationError, setValidationError] = useState('');
-    const [activeTab, setActiveTab] = useState<SkillEditorTab>(skill?.bundledResources?.length ? 'resources' : 'metadata');
+  const [activeTab, setActiveTab] = useState<SkillEditorTab>('files');
     const [form, setForm] = useState<Skill>(skill ?? makeDefaultSkill());
     const { t } = useI18n();
     const [showIconPicker, setShowIconPicker] = useState(false);
@@ -818,11 +924,8 @@ export function SkillEditor({ skill, onSave, onCancel }: {
             <UiButton unstyled type="button" className={tabCls('metadata')} onClick={() => setActiveTab('metadata')}>
               <IconifyIcon name="lucide:settings-2" size={12} color="currentColor"/> {t('skills.metadata', 'Metadata')}
             </UiButton>
-            <UiButton unstyled type="button" className={tabCls('content')} onClick={() => setActiveTab('content')}>
-              <IconifyIcon name="lucide:file-text" size={12} color="currentColor"/> {t('skills.content', 'Content')}
-            </UiButton>
-            <UiButton unstyled type="button" className={tabCls('resources')} onClick={() => setActiveTab('resources')}>
-              <IconifyIcon name="lucide:folder-tree" size={12} color="currentColor"/> {t('skills.resources', 'Resources')}
+            <UiButton unstyled type="button" className={tabCls('files')} onClick={() => setActiveTab('files')}>
+              <IconifyIcon name="lucide:folder-tree" size={12} color="currentColor"/> {t('skills.files', 'Files')}
             </UiButton>
             <UiButton unstyled type="button" className={tabCls('preview')} onClick={() => setActiveTab('preview')}>
               <IconifyIcon name="lucide:eye" size={12} color="currentColor"/> {t('skills.preview', 'Preview')}
@@ -910,24 +1013,7 @@ export function SkillEditor({ skill, onSave, onCancel }: {
               </div>
             </div>)}
 
-          {activeTab === 'content' && (<div className="grid gap-6 xl:grid-cols-[18rem_minmax(0,1fr)] xl:items-stretch">
-              <EditorSection eyebrow={t('skills.content', 'Content')} title={t('skills.authoringGuide', 'Authoring Guide')} description={t('skills.contentHelp', 'Write the skill\'s markdown instructions. This is the core content that gets injected into the agent\'s system prompt when the skill is active.')}>
-                <div className="space-y-3 text-[12px] leading-6 text-text-secondary/82">
-                  <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip1', 'Lead with the exact behavior you want, then add constraints and examples only when they materially improve consistency.')}</div>
-                  <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip2', 'Use headings and short bullets so the resulting SKILL.md stays readable to both humans and models.')}</div>
-                  <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip3', 'Keep tool hints sparse. The best skills define judgment and process, not a giant list of commands.')}</div>
-                  <div className="rounded-2xl border border-border-subtle/45 bg-surface-0/60 p-3">{t('skills.authoringTip4', 'Folder skills can bundle scripts/, references/, and assets/ next to SKILL.md; mention when to read or run each resource.')}</div>
-                </div>
-              </EditorSection>
-
-              <EditorSection eyebrow={t('skills.markdown', 'Markdown')} title={t('skills.instructionsBody', 'Instructions Body')} description={t('skills.instructionsBodyHint', 'This content becomes the actual markdown payload saved into SKILL.md.')} className="flex h-full flex-col">
-                <div className="flex min-h-168 flex-1 flex-col">
-                  <MarkdownEditor value={form.content ?? ''} onChange={(value) => updateForm({ content: value })} placeholder={t('skills.contentPlaceholder', '## Instructions\n\nDescribe how the agent should behave when this skill is active...\n\n## Guidelines\n- Be specific about patterns and approaches\n- Include examples when helpful\n- Reference external docs if needed')} rows={24} fillHeight/>
-                </div>
-              </EditorSection>
-            </div>)}
-
-          {activeTab === 'resources' && (<ResourceTreePanel skill={form} onChange={updateForm}/>)}
+          {activeTab === 'files' && (<ResourceTreePanel skill={form} onChange={updateForm}/>) }
 
           {activeTab === 'preview' && (<div className="grid gap-6 xl:grid-cols-[minmax(0,1.08fr)_minmax(24rem,0.92fr)] xl:items-stretch">
               <EditorSection eyebrow={t('skills.preview', 'Preview')} title={t('skills.renderedPreview', 'Rendered Preview')} description={t('skills.previewHelp', 'See how the skill instructions will read once rendered as Markdown.')} className="flex h-full flex-col">

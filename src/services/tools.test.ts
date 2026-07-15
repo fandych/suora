@@ -1112,7 +1112,7 @@ describe('builtin tool guidance', () => {
     expect(updateParsed.success).toBe(true)
   })
 
-  it('includes enabled Claude-style shared local skills in runtime prompts even when not assigned to the agent', async () => {
+  it('does not auto-include shared local skills when they are not assigned to the agent', async () => {
     const sharedSkill: Skill = {
       id: 'claude-shared-skill',
       name: 'Shared Claude Skill',
@@ -1125,6 +1125,23 @@ describe('builtin tool guidance', () => {
     }
 
     const prompts = await getSkillSystemPrompts([], [sharedSkill])
+
+    expect(prompts).toBe('')
+  })
+
+  it('includes shared local skills in runtime prompts when they are explicitly assigned to the agent', async () => {
+    const sharedSkill: Skill = {
+      id: 'claude-shared-skill',
+      name: 'Shared Claude Skill',
+      description: 'Shared local skill',
+      enabled: true,
+      source: 'claude-dir',
+      content: 'Use the shared Claude skill instructions.',
+      frontmatter: { name: 'Shared Claude Skill', description: 'Shared local skill' },
+      context: 'inline',
+    }
+
+    const prompts = await getSkillSystemPrompts(['claude-shared-skill'], [sharedSkill])
 
     expect(prompts).toContain('Shared Claude Skill')
     expect(prompts).toContain('Use the shared Claude skill instructions.')

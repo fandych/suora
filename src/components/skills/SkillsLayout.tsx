@@ -67,6 +67,7 @@ export function SkillsLayout() {
     const { skills, addSkill, updateSkill, removeSkill, workspacePath, externalDirectories, addExternalDirectory, updateExternalDirectory, } = useAppStore();
     const [editingId, setEditingId] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
+    const [sourceFilter, setSourceFilter] = useState<'all' | Skill['source']>('all');
     const fileInputRef = useRef<HTMLInputElement>(null);
     const folderInputRef = useRef<HTMLInputElement>(null);
     const [skillsLockfile, setSkillsLockfile] = useState<SkillsLockfile | null>(null);
@@ -86,6 +87,10 @@ export function SkillsLayout() {
     const localSkillSources = useMemo(() => {
         const skillDirectories = externalDirectories.filter((directory) => directory.type === 'skills');
         const configuredDirectories = new Map(skillDirectories.map((directory) => [normalizeSkillSourcePath(directory.path), directory] as const));
+        const presetPaths = new Set([
+            normalizeSkillSourcePath(CLAUDE_CODE_SKILLS_DIRECTORY),
+            normalizeSkillSourcePath(OTHER_AGENTS_SKILLS_DIRECTORY),
+        ]);
         const presetSources = [
             {
                 id: 'claude-code',
@@ -106,7 +111,18 @@ export function SkillsLayout() {
                 skillCount: countSkillsForDirectory(skills, OTHER_AGENTS_SKILLS_DIRECTORY, 'agent-dir'),
             },
         ];
-        return presetSources;
+        const customSources = skillDirectories
+            .filter((directory) => !presetPaths.has(normalizeSkillSourcePath(directory.path)))
+            .map((directory, index) => ({
+            id: `custom-skill-source-${index}`,
+            path: directory.path,
+            label: directory.path.replace(/\\/g, '/').split('/').filter(Boolean).pop() || t('skills.customDirectory', 'Custom Directory'),
+            icon: 'lucide:folder-symlink',
+            description: t('skills.customDirectoryDesc', 'Load skills from a custom external folder.'),
+            enabled: directory.enabled,
+            skillCount: countSkillsForDirectory(skills, directory.path, 'workspace'),
+        }));
+        return [...presetSources, ...customSources];
     }, [externalDirectories, skills, t]);
     const enabledLocalSkillSourcesCount = localSkillSources.filter((source) => source.enabled).length;
     // Load skills from disk on mount
@@ -123,7 +139,18 @@ export function SkillsLayout() {
         }, 1800);
         return () => scheduled.cancel();
     }, [workspacePath]);
-    const filteredInstalled = skills;
+    const sourceFilterOptions = useMemo(() => {
+        const order: Skill['source'][] = ['local', 'project', 'user', 'registry', 'workspace', 'claude-dir', 'agent-dir'];
+        return order.filter((source) => skills.some((skill) => skill.source === source));
+    }, [skills]);
+    useEffect(() => {
+        if (sourceFilter !== 'all' && !skills.some((skill) => skill.source === sourceFilter)) {
+            setSourceFilter('all');
+        }
+    }, [skills, sourceFilter]);
+    const filteredInstalled = useMemo(() => sourceFilter === 'all'
+        ? skills
+        : skills.filter((skill) => skill.source === sourceFilter), [skills, sourceFilter]);
     const enabledSkillsCount = skills.filter((skill) => skill.enabled).length;
     // ─── Handlers ──────────────────────────────────────────────────
     const handleCreateSkill = () => {
@@ -423,6 +450,22 @@ export function SkillsLayout() {
             <div className="px-1 pt-1 text-[10px] font-medium uppercase tracking-wider text-text-muted">
               {t('skills.installed', 'Installed')}
             </div>
+
+                        <div className="flex flex-wrap gap-2 px-1">
+                            <UiButton unstyled type="button" onClick={() => setSourceFilter('all')} className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${sourceFilter === 'all'
+                                        ? 'bg-accent text-white shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.24)]'
+                                        : 'bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}>
+                                {t('skills.allSources', 'All Sources')} · {skills.length}
+                            </UiButton>
+                            {sourceFilterOptions.map((source) => {
+                        const sourceCount = skills.filter((skill) => skill.source === source).length;
+                        return (<UiButton key={source} unstyled type="button" onClick={() => setSourceFilter(source)} className={`rounded-full px-3 py-1.5 text-[11px] font-medium transition-colors ${sourceFilter === source
+                                        ? 'bg-accent text-white shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.24)]'
+                                        : 'bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}>
+                                        {sourceLabels[source] || source} · {sourceCount}
+                                    </UiButton>);
+                })}
+                        </div>
 
             {filteredInstalled.length === 0 && (<div className="rounded-3xl border border-dashed border-border-subtle/60 bg-surface-0/35 px-4 py-10 text-center">
                 <div className="w-12 h-12 rounded-2xl bg-surface-2 flex items-center justify-center mx-auto mb-3 border border-border-subtle">

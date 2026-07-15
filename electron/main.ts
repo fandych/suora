@@ -830,6 +830,18 @@ ipcMain.handle('fs:writeFile', async (_event, filePath: string, content: string)
   }
 })
 
+ipcMain.handle('fs:writeBinaryFile', async (_event, filePath: string, base64Content: string) => {
+  try {
+    const pathErr = enforceFsPathInWorkspace(filePath)
+    if (pathErr) return { error: pathErr }
+    const buffer = Buffer.from(base64Content, 'base64')
+    await atomicWriteFile(filePath, buffer)
+    return { success: true }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
 ipcMain.handle('fs:appendFile', async (_event, filePath: string, content: string) => {
   try {
     const pathErr = enforceFsPathInWorkspace(filePath)
