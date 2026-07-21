@@ -53,4 +53,37 @@ test.describe('Suora', () => {
     })
     expect(result).not.toBe('allowed')
   })
+
+  test('should delete a chat session from the session list', async ({ page }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem('suora-store', JSON.stringify({
+        state: {
+          onboarding: { completed: true, currentStep: 0, skipped: false },
+          sessions: [
+            {
+              id: 'session-visible',
+              title: 'Visible chat',
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+              messages: [],
+            },
+          ],
+          activeSessionId: 'session-visible',
+          openSessionTabs: ['session-visible'],
+          models: [],
+          selectedModel: null,
+          agents: [],
+          selectedAgent: null,
+        },
+        version: 22,
+      }))
+    })
+
+    await page.goto('/#/chat')
+
+    await page.getByRole('button', { name: /remove session: visible chat/i }).click()
+
+    await expect(page.getByText('Visible chat')).not.toBeVisible()
+    await expect(page.getByText(/No conversations yet/i)).toBeVisible()
+  })
 })

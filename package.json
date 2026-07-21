@@ -120,16 +120,20 @@
   },
   "overrides": {
     "@xmldom/xmldom": "^0.9.10",
+    "body-parser": "^2.3.0",
+    "brace-expansion": "^5.0.7",
     "dompurify": "^3.4.11",
     "jsdom": {
       "undici": "^7.28.0"
     },
+    "js-yaml": "^5.2.1",
     "lodash": "^4.18.1",
     "lodash-es": "4.18.1",
     "node-gyp": {
       "undici": "^6.27.0"
     },
     "plist": "^4.0.0",
+    "tar": "^7.5.20",
     "tmp": "^0.2.6",
     "uuid": "^14.0.0"
   },

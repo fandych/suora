@@ -228,6 +228,32 @@ function ToolCallRow({ call, stepLabel }: {
         </div>)}
     </div>);
 }
+function ProcessSection({ title, summary, children }: {
+    title: string;
+    summary: string;
+    children: React.ReactNode;
+}) {
+    const { t } = useI18n();
+    const [open, setOpen] = useState(false);
+    return (<div className="mt-4 overflow-hidden rounded-[22px] border border-border-subtle/45 bg-surface-0/40 shadow-sm">
+      <UiButton unstyled type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-2/50">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/70">
+          <IconifyIcon name="ui-clipboard" size={14} color="currentColor"/>
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[12px] font-semibold text-text-primary">{title}</div>
+          <div className="mt-0.5 text-[11px] text-text-muted/72">{summary}</div>
+        </div>
+        <span className="rounded-full border border-border-subtle/45 bg-surface-0/60 px-2.5 py-1 text-[10px] font-medium text-text-muted/76">
+          {open ? t('chat.hideProcess', 'Hide') : t('chat.showProcess', 'Show process')}
+        </span>
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={`text-text-muted/40 transition-transform duration-200 ${open ? 'rotate-90' : ''}`}><polyline points="9 18 15 12 9 6"/></svg>
+      </UiButton>
+      {open && (<div className="border-t border-border-subtle/45 bg-surface-2/22 px-4 pb-4 pt-3 animate-fade-in">
+          {children}
+        </div>)}
+    </div>);
+}
 // ─── Error Handling ────────────────────────────────────────────────
 type ErrorCategory = 'auth' | 'permission' | 'rate-limit' | 'not-found' | 'server' | 'unavailable' | 'timeout' | 'network' | 'not-configured' | 'config' | 'unknown';
 function classifyError(raw: string): ErrorCategory {
@@ -541,36 +567,48 @@ export const MessageBubble = memo(function MessageBubble({ message, onRetry, onR
     };
     const contentParts = message.contentParts ?? [];
     const toolCalls = message.toolCalls ?? [];
-    const assistantBody = contentParts.length > 0
-        ? (() => {
-            const totalSteps = new Set(contentParts
-                .filter((part) => part.type === 'tool-call')
-                .map((part) => part.toolCallId)).size;
-            let stepIndex = 0;
-            const renderedToolCallIds = new Set<string>();
-            return contentParts.map((part, index) => {
-                if (part.type === 'text') {
-                    return <div key={index} className="markdown-body"><MarkdownContent content={part.text} defer={message.isStreaming}/></div>;
-                }
-                if (renderedToolCallIds.has(part.toolCallId))
-                    return null;
-                renderedToolCallIds.add(part.toolCallId);
-                const call = toolCalls.find((toolCall) => toolCall.id === part.toolCallId);
-                if (!call)
-                    return null;
-                const label = totalSteps > 1 ? `${++stepIndex}/${totalSteps}` : undefined;
-                return (<div key={index} className="my-3">
-            <ToolCallRow call={call} stepLabel={label}/>
-          </div>);
-            });
-        })()
-        : (<>
-        {message.content && <div className="markdown-body"><MarkdownContent content={message.content} defer={message.isStreaming}/></div>}
-        {toolCalls.length > 0 && (<div className="mt-4 space-y-2 border-t border-border-subtle/45 pt-4">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-text-muted/45">{t('chat.toolCalls', 'Tool Calls')}</div>
-            {toolCalls.map((call, index) => (<ToolCallRow key={call.id} call={call} stepLabel={toolCalls.length > 1 ? `${index + 1}/${toolCalls.length}` : undefined}/>))}
-          </div>)}
-      </>);
+    const textPartIndexes = contentParts.flatMap((part, index) => part.type === 'text' && part.text ? [index] : []);
+    const toolPartIndexes = contentParts.flatMap((part, index) => part.type === 'tool-call' ? [index] : []);
+    const shouldRenderProcessBeforeResult = toolPartIndexes.length > 0
+      && (textPartIndexes.length === 0 || toolPartIndexes[0] < textPartIndexes[0]);
+    const orderedToolCalls = (() => {
+      const seen = new Set<string>();
+      const ordered: ToolCall[] = [];
+      for (const part of contentParts) {
+        if (part.type !== 'tool-call' || seen.has(part.toolCallId))
+          continue;
+        const call = toolCalls.find((toolCall) => toolCall.id === part.toolCallId);
+        if (!call)
+          continue;
+        seen.add(part.toolCallId);
+        ordered.push(call);
+      }
+      for (const call of toolCalls) {
+        if (seen.has(call.id))
+          continue;
+        seen.add(call.id);
+        ordered.push(call);
+      }
+      return ordered;
+    })();
+    const processSection = orderedToolCalls.length > 0
+        ? (<ProcessSection title={t('chat.processSectionTitle', 'Execution process')} summary={t('chat.processSectionSummary', '{count} execution step(s) are collapsed by default.').replace('{count}', String(orderedToolCalls.length))}>
+          <div className="space-y-2">
+            {orderedToolCalls.map((call, index) => (<ToolCallRow key={call.id} call={call} stepLabel={orderedToolCalls.length > 1 ? `${index + 1}/${orderedToolCalls.length}` : undefined}/>))}
+          </div>
+        </ProcessSection>)
+        : null;
+    const assistantBody = (<>
+      {shouldRenderProcessBeforeResult ? processSection : null}
+      {contentParts.length > 0
+      ? contentParts.map((part, index) => {
+        if (part.type !== 'text' || !part.text)
+          return null;
+        return <div key={index} className="markdown-body"><MarkdownContent content={part.text} defer={message.isStreaming}/></div>;
+      })
+      : (message.content ? <div className="markdown-body"><MarkdownContent content={message.content} defer={message.isStreaming}/></div> : null)}
+      {!shouldRenderProcessBeforeResult ? processSection : null}
+    </>);
     return (<>
       {lightboxSrc && <ImageLightbox src={lightboxSrc.src} alt={lightboxSrc.alt} onClose={() => setLightboxSrc(null)}/>}
       <div className={`chat-message-row group mb-5 flex items-start gap-3 animate-fade-in ${isUser ? 'justify-end' : 'justify-start'}`}>

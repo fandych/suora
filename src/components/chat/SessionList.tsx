@@ -5,7 +5,6 @@ import { generateId } from '@/utils/helpers';
 import type { Session } from '@/types';
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
-import { confirm } from '@/services/confirmDialog';
 import { toast } from '@/services/toast';
 import { isMainChatSession } from '@/utils/chatSessions';
 import { safeStringify } from '@/utils/safeJson';
@@ -173,6 +172,10 @@ export function SessionList({ width }: {
         const model = session.modelId ? models.find((m) => m.id === session.modelId) : null;
         return { agent, model };
     };
+    const requestRemoveSession = (sessionId: string) => {
+        setContextMenu(null);
+        removeSession(sessionId);
+    };
         return (<SidePanel title={t('sessions.title', 'Sessions')} width={width} contentRef={scrollContainerRef} onContentScroll={handlePanelScroll} action={<UiButton unstyled type="button" onClick={handleNewSession} className={workbenchSidebarAccentActionClass}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           {t('sessions.new', 'New')}
@@ -251,21 +254,18 @@ export function SessionList({ width }: {
                         </div>
                       </UiButton>
 
-                      <div className="flex shrink-0 flex-col items-end gap-2 pl-1.5">
-                        <span className="text-[10px] text-text-muted/52">{formatSessionRelativeTime(session.updatedAt, locale)}</span>
-                        <UiButton unstyled type="button" title={t('sessions.removeSession', 'Delete session')} aria-label={`${t('sessions.removeSession', 'Delete session')}: ${session.title}`} onClick={async (e) => {
-                            e.stopPropagation();
-                            const ok = await confirm({
-                                title: t('sessions.deleteTitle', 'Delete conversation?'),
-                                body: t('sessions.deleteBody', `"${session.title}" and its ${session.messages.length} messages will be permanently deleted.`),
-                                danger: true,
-                                confirmText: t('common.delete', 'Delete'),
-                            });
-                            if (ok)
-                                removeSession(session.id);
-                        }} className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/68 text-text-muted/70 transition-colors hover:bg-danger/10 hover:text-danger">
-                          <IconifyIcon name="ui-close" size={15} color="currentColor"/>
-                        </UiButton>
+                                            <div className="flex shrink-0 flex-col items-end gap-2 pl-1.5">
+                                                <span className="text-[10px] text-text-muted/52">{formatSessionRelativeTime(session.updatedAt, locale)}</span>
+                                                <button type="button" title={t('sessions.removeSession', 'Delete session')} aria-label={`${t('sessions.removeSession', 'Delete session')}: ${session.title}`} onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                }} onClick={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        requestRemoveSession(session.id);
+                                                }} className="flex h-8 w-8 items-center justify-center rounded-xl bg-surface-0/68 text-text-muted/70 transition-colors hover:bg-danger/10 hover:text-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-danger/40">
+                                                    <IconifyIcon name="ui-trash" size={15} color="currentColor"/>
+                                                </button>
                       </div>
                     </div>)}
                 </div>);
@@ -295,20 +295,9 @@ export function SessionList({ width }: {
             <IconifyIcon name="ui-export" size={15} color="currentColor"/> {t('common.export', 'Export')}
           </UiButton>
           <div className="separator-gradient mx-2 my-1"/>
-          <UiButton unstyled type="button" onClick={async () => {
-                const session = sessions.find((s) => s.id === contextMenu.sessionId);
-                const title = session?.title ?? t('sessions.thisConversation', 'this conversation');
-                const count = session?.messages.length ?? 0;
-                setContextMenu(null);
-                const ok = await confirm({
-                    title: t('sessions.deleteTitle', 'Delete conversation?'),
-                    body: t('sessions.deleteBody', `"${title}" and its ${count} messages will be permanently deleted.`),
-                    danger: true,
-                    confirmText: t('common.delete', 'Delete'),
-                });
-                if (ok)
-                    removeSession(contextMenu.sessionId);
-            }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-danger transition-colors hover:bg-danger/10">
+                    <UiButton unstyled type="button" onClick={() => {
+                                requestRemoveSession(contextMenu.sessionId);
+                        }} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[13px] text-danger transition-colors hover:bg-danger/10">
             <IconifyIcon name="ui-trash" size={15} color="currentColor"/> {t('common.delete', 'Delete')}
           </UiButton>
         </div>)}

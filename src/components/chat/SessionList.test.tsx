@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/appStore'
 import type { Model, Session } from '@/types'
@@ -105,5 +106,16 @@ describe('SessionList', () => {
     await waitFor(() => expect(screen.getByText('30 more sessions load as you scroll.')).toBeInTheDocument())
     expect(screen.getByText('Chat 120')).toBeInTheDocument()
     expect(screen.queryByText('Chat 121')).not.toBeInTheDocument()
+  })
+
+  it('removes a session from the delete button', async () => {
+    const user = userEvent.setup()
+
+    render(<SessionList />)
+
+    await user.click(screen.getByRole('button', { name: /Remove session: Visible chat/i }))
+
+    await waitFor(() => expect(screen.queryByText('Visible chat')).not.toBeInTheDocument())
+    expect(useAppStore.getState().sessions.find((session) => session.id === 'session-visible')).toBeUndefined()
   })
 })

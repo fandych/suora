@@ -1,7 +1,7 @@
 // Global confirmation dialog host — renders the top of the confirm queue.
 // Mounted once near the root of the app (App.tsx).
 
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { Alert, AlertActions, AlertDescription, AlertTitle } from '@/components/catalyst-ui/alert'
 import { Button } from '@/components/catalyst-ui/button'
 import { useConfirmStore } from '@/services/confirmDialog'
@@ -12,8 +12,30 @@ export function ConfirmDialogHost() {
   const resolveTop = useConfirmStore((s) => s.resolveTop)
   const { t } = useI18n()
   const confirmBtnRef = useRef<HTMLButtonElement>(null)
+  // Timestamp of when the current dialog became visible. Used to swallow the
+  // trailing pointer/keyboard events from the interaction that *opened* the
+  // dialog, which Headless UI's Dialog would otherwise treat as an outside
+  // click / dismiss and close it immediately (observed in the Electron shell).
+  const openedAtRef = useRef(0)
 
   const current = queue[0]
+
+  useEffect(() => {
+    if (!current) {
+      openedAtRef.current = 0
+      return
+    }
+    openedAtRef.current = Date.now()
+  }, [current?.id])
+
+  // Ignore dismiss requests that arrive within a short guard window after the
+  // dialog opens — these are the tail end of the click/keypress that triggered
+  // it, not a genuine user dismissal.
+  const OPEN_GUARD_MS = 300
+  const requestDismiss = useCallback(() => {
+    if (Date.now() - openedAtRef.current < OPEN_GUARD_MS) return
+    resolveTop(false)
+  }, [resolveTop])
 
   useEffect(() => {
     if (!current) return
@@ -24,7 +46,7 @@ export function ConfirmDialogHost() {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault()
-        resolveTop(false)
+        requestDismiss()
       } else if (e.key === 'Enter' && (e.target as HTMLElement | null)?.tagName !== 'BUTTON') {
         e.preventDefault()
         resolveTop(true)
@@ -36,7 +58,7 @@ export function ConfirmDialogHost() {
       clearTimeout(focusTimer)
       window.removeEventListener('keydown', onKeyDown)
     }
-  }, [current, resolveTop])
+  }, [current, requestDismiss, resolveTop])
 
   if (!current) return null
 
@@ -55,7 +77,7 @@ export function ConfirmDialogHost() {
   }
 
   return (
-    <Alert open={true} onClose={() => resolveTop(false)} size="md" className="border border-border-subtle/60 bg-surface-1 text-text-primary shadow-2xl">
+    <Alert open={true} onClose={requestDismiss} size="md" className="border border-border-subtle/60 bg-surface-1 text-text-primary shadow-2xl">
       <AlertTitle id="suora-confirm-title" className={current.danger ? 'text-danger dark:text-red-400' : 'text-text-primary dark:text-white'}>
           {current.title}
       </AlertTitle>

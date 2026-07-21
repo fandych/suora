@@ -20,7 +20,6 @@ const INITIAL_RENDERED_MESSAGES = 40;
 const MESSAGE_BATCH_SIZE = 40;
 const BROWSER_STATE_POLL_INTERVAL_MS = 4000;
 const SCROLL_CONTROL_THRESHOLD_PX = 220;
-const OLDER_MESSAGE_LOAD_THRESHOLD_PX = 96;
 function formatRelativeLabel(ts: number, locale = 'en'): string {
     const diffSeconds = Math.round((ts - Date.now()) / 1000);
     const absSeconds = Math.abs(diffSeconds);
@@ -561,6 +560,7 @@ export function ChatMain() {
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const messagesContainerRef = useRef<HTMLDivElement>(null);
     const isNearBottomRef = useRef(true);
+    const wasStreamingRef = useRef(false);
     const scrollFrameRef = useRef<number | null>(null);
     const scrollControlsFrameRef = useRef<number | null>(null);
     const scrollControlStateRef = useRef({ top: false, bottom: false });
@@ -673,17 +673,19 @@ export function ChatMain() {
             updateScrollControls();
         });
     }, [updateScrollControls]);
-    const handleScroll = useCallback(() => {
+    const loadOlderMessages = useCallback(() => {
+      if (hiddenMessageCount === 0 || olderMessageRestoreRef.current !== null)
+        return;
       const el = messagesContainerRef.current;
-      if (el && hiddenMessageCount > 0 && el.scrollTop <= OLDER_MESSAGE_LOAD_THRESHOLD_PX && olderMessageRestoreRef.current === null) {
-        olderMessageRestoreRef.current = {
-          previousScrollHeight: el.scrollHeight,
-          previousScrollTop: el.scrollTop,
-        };
-        setRenderedMessageCount((prev) => Math.min(messages.length, prev + MESSAGE_BATCH_SIZE));
-      }
+      olderMessageRestoreRef.current = {
+        previousScrollHeight: el?.scrollHeight ?? 0,
+        previousScrollTop: el?.scrollTop ?? 0,
+      };
+      setRenderedMessageCount((prev) => Math.min(messages.length, prev + MESSAGE_BATCH_SIZE));
+    }, [hiddenMessageCount, messages.length]);
+    const handleScroll = useCallback(() => {
         scheduleScrollControlsUpdate();
-    }, [hiddenMessageCount, messages.length, scheduleScrollControlsUpdate]);
+    }, [scheduleScrollControlsUpdate]);
     useEffect(() => {
         return () => {
             if (scrollFrameRef.current !== null) {
@@ -725,16 +727,28 @@ export function ChatMain() {
         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }, []);
     useEffect(() => {
-        if (!isNearBottomRef.current)
+      const shouldAutoScroll = isNearBottomRef.current;
+      const didFinishStreaming = wasStreamingRef.current && !isStreaming;
+      wasStreamingRef.current = isStreaming;
+      if (!shouldAutoScroll)
             return;
         if (scrollFrameRef.current !== null) {
             window.cancelAnimationFrame(scrollFrameRef.current);
         }
         scrollFrameRef.current = window.requestAnimationFrame(() => {
             scrollFrameRef.current = null;
-            messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
+        if (didFinishStreaming) {
+          const el = messagesContainerRef.current;
+          if (el) {
+            el.scrollTop = el.scrollHeight;
+          }
+          messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+          scheduleScrollControlsUpdate();
+          return;
+        }
+        messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
         });
-    }, [isStreaming, messageRenderVersion]);
+    }, [isStreaming, messageRenderVersion, scheduleScrollControlsUpdate]);
     const starterPrompts = useMemo(() => ([
         {
             icon: 'ui-lightbulb',
@@ -1050,8 +1064,11 @@ export function ChatMain() {
               </div>) : (<section className="relative overflow-visible">
                 <div className="relative z-10 px-1 py-1 sm:px-2 xl:px-3">
                   <TodoProgress />
-                  {hiddenMessageCount > 0 && (<div className="mb-3 rounded-2xl border border-amber-500/18 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-200">
-                      {t('chat.hiddenOlderMessages', '{count} older messages are hidden to keep long chats responsive.').replace('{count}', hiddenMessageCount.toLocaleString())}
+                  {hiddenMessageCount > 0 && (<div className="mb-3 flex flex-col gap-3 rounded-2xl border border-amber-500/18 bg-amber-500/10 px-4 py-3 text-[12px] text-amber-200 sm:flex-row sm:items-center sm:justify-between">
+                      <span>{t('chat.hiddenOlderMessages', '{count} older messages are hidden to keep long chats responsive.').replace('{count}', hiddenMessageCount.toLocaleString())}</span>
+                      <UiButton unstyled type="button" onClick={loadOlderMessages} className="inline-flex min-h-9 items-center justify-center rounded-full border border-amber-400/25 bg-amber-400/10 px-3 py-1.5 text-[11px] font-semibold text-amber-100 transition-colors hover:bg-amber-400/16">
+                        {t('chat.loadMoreMessages', 'Load more')}
+                      </UiButton>
                     </div>)}
                   <ChatMessageHistory messages={historicalVisibleMessages} retryLastError={retryLastError} resumeFromMessage={resumeFromMessage} deleteMessage={deleteMessage} regenerateMessage={regenerateMessage} updateMessage={updateMessage} branchFromMessage={branchFromMessage} setMessageFeedback={setMessageFeedback} exportMessage={handleExportSingleMessage}/>
                   {lastVisibleMessage && (<div className="space-y-0.5">

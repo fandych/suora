@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { Button } from '@/components/catalyst-ui/button'
@@ -348,7 +348,8 @@ describe('ChatMain', () => {
     expect(screen.getAllByText(/^message$/)).toHaveLength(40)
   })
 
-  it('loads older messages when the user scrolls to the top of a long chat', async () => {
+  it('loads older messages when the user clicks load more in a long chat', async () => {
+    const user = userEvent.setup()
     const model: Model = {
       id: 'model-1',
       name: 'GPT-4',
@@ -384,18 +385,14 @@ describe('ChatMain', () => {
 
     render(<ChatMain />)
 
-    const scroller = screen.getByLabelText('Chat messages')
-    Object.defineProperty(scroller, 'scrollTop', { value: 0, writable: true, configurable: true })
-    Object.defineProperty(scroller, 'scrollHeight', { value: 2400, writable: true, configurable: true })
-    Object.defineProperty(scroller, 'clientHeight', { value: 800, writable: true, configurable: true })
-
-    fireEvent.scroll(scroller)
+    await user.click(screen.getByRole('button', { name: 'Load more' }))
 
     await waitFor(() => expect(screen.getByText('70 older messages are hidden to keep long chats responsive.')).toBeInTheDocument())
     expect(screen.getAllByText(/^message$/)).toHaveLength(80)
   })
 
   it('keeps expanded history visible when new messages arrive in the same session', async () => {
+    const user = userEvent.setup()
     const model: Model = {
       id: 'model-1',
       name: 'GPT-4',
@@ -433,12 +430,7 @@ describe('ChatMain', () => {
 
     render(<ChatMain />)
 
-    const scroller = screen.getByLabelText('Chat messages')
-    Object.defineProperty(scroller, 'scrollTop', { value: 0, writable: true, configurable: true })
-    Object.defineProperty(scroller, 'scrollHeight', { value: 2400, writable: true, configurable: true })
-    Object.defineProperty(scroller, 'clientHeight', { value: 800, writable: true, configurable: true })
-
-    fireEvent.scroll(scroller)
+  await user.click(screen.getByRole('button', { name: 'Load more' }))
 
     await waitFor(() => expect(screen.getAllByText(/^message$/)).toHaveLength(80))
 
@@ -457,6 +449,75 @@ describe('ChatMain', () => {
 
     await waitFor(() => expect(screen.getAllByText(/^message$/)).toHaveLength(80))
     expect(screen.getByText('71 older messages are hidden to keep long chats responsive.')).toBeInTheDocument()
+  })
+
+  it('pins the chat view to the exact bottom when streaming finishes', async () => {
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    mockUseAIChatState.isLoading = true
+
+    const session: Session = {
+      id: 'session-1',
+      title: 'Streaming chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: [
+        {
+          id: 'msg-1',
+          role: 'assistant',
+          content: 'partial response',
+          timestamp: Date.now(),
+          isStreaming: true,
+        },
+      ],
+    }
+
+    useAppStore.setState({
+      sessions: [session],
+      activeSessionId: session.id,
+      openSessionTabs: [session.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    const scroller = screen.getByLabelText('Chat messages')
+    let scrollTop = 0
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value) => {
+        scrollTop = Number(value)
+      },
+    })
+    Object.defineProperty(scroller, 'scrollHeight', { value: 1200, writable: true, configurable: true })
+
+    mockUseAIChatState.isLoading = false
+    useAppStore.getState().updateSession(session.id, {
+      messages: [
+        {
+          id: 'msg-1',
+          role: 'assistant',
+          content: 'final response',
+          timestamp: Date.now(),
+          isStreaming: false,
+        },
+      ],
+      updatedAt: Date.now(),
+    })
+
+    await waitFor(() => expect(scrollTop).toBe(1200))
   })
 
   it('uses auto scrolling while streaming to avoid smooth-scroll thrash', async () => {
