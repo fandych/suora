@@ -26,6 +26,7 @@ const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const require = createRequire(import.meta.url)
 const isDev = !app.isPackaged
+const shouldUseSystemTray = process.platform !== 'win32'
 
 function isPrivateIPv4(hostname: string): boolean {
   const parts = hostname.split('.').map((part) => Number(part))
@@ -2910,6 +2911,8 @@ async function saveWindowState(win: BrowserWindow): Promise<void> {
 // ─── System Tray ───────────────────────────────────────────────────
 
 function createTray() {
+  if (!shouldUseSystemTray) return
+
   const icon = nativeImage.createFromPath(
     path.join(__dirname, '../../resources/icons/icon-32x32.png')
   )
@@ -3303,23 +3306,27 @@ if (process.defaultApp) {
   app.setAsDefaultProtocolClient(PROTOCOL_NAME)
 }
 
-// Single-instance lock — ensures only one window handles deep links
-const gotTheLock = app.requestSingleInstanceLock()
+// Single-instance lock — ensures only one window handles deep links.
+// Agent-browser / smoke automation may need an isolated second instance.
+const singleInstanceLockDisabled = process.env.SUORA_DISABLE_SINGLE_INSTANCE_LOCK === '1'
+const gotTheLock = singleInstanceLockDisabled ? true : app.requestSingleInstanceLock()
 
 if (!gotTheLock) {
   app.quit()
 } else {
-  app.on('second-instance', (_event, commandLine) => {
-    // Windows / Linux: deep link URL is in commandLine
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore()
-      mainWindow.focus()
-      const deepLinkUrl = commandLine.find((arg) => arg.startsWith(`${PROTOCOL_NAME}://`))
-      if (deepLinkUrl) {
-        handleDeepLink(deepLinkUrl)
+  if (!singleInstanceLockDisabled) {
+    app.on('second-instance', (_event, commandLine) => {
+      // Windows / Linux: deep link URL is in commandLine
+      if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore()
+        mainWindow.focus()
+        const deepLinkUrl = commandLine.find((arg) => arg.startsWith(`${PROTOCOL_NAME}://`))
+        if (deepLinkUrl) {
+          handleDeepLink(deepLinkUrl)
+        }
       }
-    }
-  })
+    })
+  }
 }
 
 // macOS: open-url event
@@ -3471,15 +3478,17 @@ app.whenReady().then(async () => {
   }
 
   // Defer non-critical startup work until the window has actually painted,
-  // so tray/shortcut/timer registration doesn't compete with first frame.
+  // so shortcut/timer registration doesn't compete with first frame.
   let deferredStartupRan = false
   const scheduleDeferredStartup = () => {
     if (deferredStartupRan) return
     deferredStartupRan = true
-    try {
-      createTray()
-    } catch (err) {
-      logger.error('Failed to create tray', { error: err instanceof Error ? err.message : String(err) })
+    if (shouldUseSystemTray) {
+      try {
+        createTray()
+      } catch (err) {
+        logger.error('Failed to create tray', { error: err instanceof Error ? err.message : String(err) })
+      }
     }
     try {
       registerGlobalShortcuts()

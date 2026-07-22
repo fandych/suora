@@ -65,4 +65,14 @@ describe('ConfirmDialogHost open guard', () => {
     })
     expect(resolved).toBe(true)
   })
+
+  it('renders the confirmation dialog in a top-level stacking context', () => {
+    render(<ConfirmDialogHost />)
+
+    act(() => {
+      void confirm({ title: 'Delete?', body: 'Sure?', danger: true })
+    })
+
+    expect(screen.getByRole('dialog')).toHaveClass('relative', 'z-[120]')
+  })
 })

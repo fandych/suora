@@ -1137,7 +1137,7 @@ export function DocumentsLayout() {
                     <IconifyIcon name="ui-export" size={13} color="currentColor"/>
                     {isExportingDoc ? t('common.exporting', 'Exporting…') : t('documents.export', 'Export')}
                   </UiButton>
-                  {showDocExportMenu && (<div className="absolute right-0 top-full z-50 mt-1.5 w-44 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
+                  {showDocExportMenu && (<div className="absolute right-0 top-full z-[110] mt-1.5 w-44 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
                       {([
                     { format: 'markdown' as ExportFormat, label: 'Markdown (.md)', icon: 'ui-file' },
                     { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)', icon: 'ui-file' },

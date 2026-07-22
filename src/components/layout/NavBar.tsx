@@ -127,7 +127,7 @@ function NotificationBell() {
           </span>)}
       </UiButton>
 
-      {open && (<div role="dialog" aria-label={t('nav.notifications', 'Notifications')} className="glass-strong absolute bottom-0 left-full z-50 ml-2 flex max-h-120 w-88 flex-col rounded-lg border shadow-lg">
+      {open && (<div role="dialog" aria-label={t('nav.notifications', 'Notifications')} className="glass-strong absolute bottom-0 left-full z-[110] ml-2 flex max-h-120 w-88 flex-col rounded-lg border shadow-lg">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border-subtle px-3 py-2.5">
             <span className="text-[15px] font-semibold text-text-primary">{t('nav.notifications', 'Notifications')}</span>

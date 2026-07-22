@@ -1,6 +1,6 @@
 {
   "name": "suora",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "Suora - AI desktop assistant with multi-model support, skills, agents, memory, and plugin system",
   "keywords": [
     "suora",
@@ -113,7 +113,7 @@
     "eslint": "^9.39.4",
     "jsdom": "^29.0.1",
     "postcss": "^8.5.10",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.3",
     "typescript": "^5.9.3",
     "vite": "^6.4.2",
     "vitest": "^4.1.2"
@@ -122,7 +122,7 @@
     "@xmldom/xmldom": "^0.9.10",
     "body-parser": "^2.3.0",
     "brace-expansion": "^5.0.7",
-    "dompurify": "^3.4.11",
+    "dompurify": "^3.4.12",
     "jsdom": {
       "undici": "^7.28.0"
     },

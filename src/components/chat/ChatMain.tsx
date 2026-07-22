@@ -346,7 +346,7 @@ function ModelDropdown({ models, providerNameById, value, onChange, compact = fa
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={compact ? 'shrink-0 text-current/65' : 'shrink-0 text-text-muted/45'}><polyline points="6 9 12 15 18 9"/></svg>
         </UiButton>
 
-        {open && (<div ref={menuRef} className={`absolute left-0 z-50 min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        {open && (<div ref={menuRef} className={`absolute left-0 z-[110] min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
             <UiButton unstyled type="button" onClick={() => { onChange(''); setOpen(false); }} className={`w-full justify-start rounded-md px-3 py-2.5 text-left transition-colors ${!value ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70 text-accent">
@@ -445,7 +445,7 @@ function AgentDropdown({ agents, selectedAgentId, onSelect, compact = false }: {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={compact ? 'shrink-0 text-current/65' : 'shrink-0 text-text-muted/45'}><polyline points="6 9 12 15 18 9"/></svg>
         </UiButton>
 
-        {open && (<div ref={menuRef} className={`absolute left-0 z-50 min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        {open && (<div ref={menuRef} className={`absolute left-0 z-[110] min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
               {enabledAgents.map((a) => (<UiButton unstyled type="button" key={a.id} onClick={() => { onSelect(a); setOpen(false); }} className={`w-full justify-start rounded-md px-3 py-2.5 text-left transition-colors ${a.id === selectedAgentId ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
                 <div className="flex items-center gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70">

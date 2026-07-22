@@ -165,6 +165,8 @@ describe('ChannelEditor', () => {
     await user.click(screen.getByRole('button', { name: /save/i }))
 
     expect(onSave).toHaveBeenCalledWith(expect.objectContaining({
+      enabled: true,
+      autoReply: true,
       connectionMode: 'stream',
       wechatPersonalBindingStatus: 'bound',
       wechatPersonalBotToken: 'bot-token',

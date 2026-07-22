@@ -209,6 +209,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
                 setWechatLoginError('');
                 setDraft((current) => ({
                     ...current,
+                enabled: true,
                     connectionMode: 'stream',
                     wechatPersonalBindingStatus: 'bound',
                     wechatPersonalBotToken: result.botToken,
@@ -223,6 +224,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
                 setWechatVerifyCode('');
                 setDraft((current) => ({
                     ...current,
+                enabled: current.enabled || Boolean(current.wechatPersonalBotToken),
                     connectionMode: 'stream',
                     wechatPersonalBindingStatus: current.wechatPersonalBotToken ? 'bound' : current.wechatPersonalBindingStatus || 'pending',
                 }));
