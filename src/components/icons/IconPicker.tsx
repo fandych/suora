@@ -9,9 +9,9 @@ import { Icon as OfflineIcon } from '@iconify/react';
 import { useI18n } from '@/hooks/useI18n';
 import { ICON_DATA, IconifyIcon as PresetIcon, parseIconValue } from './IconifyIcons';
 import { listIconCollections, loadIconCollection, searchIcons, isCollectionLoaded, FEATURED_COLLECTIONS, type IconCollectionMeta, } from '@/services/iconService';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
-import { Dialog } from '@/components/catalyst-ui/dialog';
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
+import { Dialog } from '@/components/shared/dialog';
 // ─── Types ─────────────────────────────────────────────────────────
 interface IconPickerProps {
     /** Currently selected icon name */

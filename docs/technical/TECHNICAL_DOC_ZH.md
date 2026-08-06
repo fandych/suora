@@ -55,6 +55,10 @@ Suora 是一个基于 Electron 的本地 AI 工作台。当前版本由以下工
 - `voice`
 - `shortcuts`
 - `data`
+- `knowledge`
+- `events`
+- `external-dirs`
+- `plugins`
 - `logs`
 - `system`
 
@@ -379,12 +383,13 @@ Suora 保持 Electron 的 context isolation，并通过 preload bridge 转发特
 
 ### 组件库
 
-工作台组件基于 `src/components/catalyst-ui/` 中的自定义 catalyst-ui 适配层构建，该层封装了 Headless UI v2 原语（Dialog、Checkbox、Switch、Listbox 等），并统一使用工作台设计 token。所有 catalyst-ui 组件均引用主题 CSS 变量（`--color-surface-*`、`--color-text-*`、`--color-accent` 等），因此可正确响应深色/浅色模式和强调色变化。
+工作台组件基于项目内的 shadcn/ui 配置与 Base UI 原语库构建。通用原语位于 `src/components/ui/`，面向业务的按钮、弹窗、下拉菜单和表单封装位于 `src/components/shared/`。这些组件统一消费工作台主题 token（`--color-surface-*`、`--color-text-*`、`--color-accent` 等），因此可正确响应深色/浅色模式和强调色变化。
 
 设置面板和表单控件的共享适配层位于：
-- `src/components/catalyst-ui/` — 核心原语
+- `src/components/ui/` — shadcn/Base UI 原语
+- `src/components/shared/` — 业务层封装与兼容层
 - `src/components/settings/panelUi.tsx` — 设置面板构建块
-- `src/components/ui/Primitives.tsx` 与 `src/components/ui/FormControls.tsx` — 共享表单层
+- `src/components/shared/form-controls.tsx` — 共享表单层
 
 ### 深色模式实现
 
@@ -401,14 +406,39 @@ Suora 保持 Electron 的 context isolation，并通过 preload bridge 转发特
 - 浅色 / 深色 / 跟随系统主题
 - 字号
 - 代码字体
-- 强调色（12 种命名预设：工作台蓝、琥珀、宝蓝、翠绿、紫晶、珊瑚、玫瑰、青玉、深红、铜色、极光蓝、石板灰）
+- 强调色（Settings 界面当前共 9 个命名选项：强蓝、探戈粉、深橘、柠檬黄、波斯绿、绿松石蓝、天际蓝、海洋青、玫瑰灰褐；持久化层中的 `default` 也会映射到强蓝）
 - 语言
 
 当前默认主题模式为 `system`。
 
 ### 强调色系统
 
-强调色系统由 `src/theme/accentPresets.ts` 管理，并由 `useTheme.ts` 应用。'default'（工作台蓝，`#0024D3`）始终通过显式设置 CSS 变量来应用，不依赖 CSS 层叠默认值，因此无论当前 CSS 基准主题如何，均能正常工作。
+强调色系统由 `src/theme/accentPresets.ts` 管理，并由 `useTheme.ts` 应用。`default` 现在对应 Strong Blue（`#0024D3`），并且仍然通过显式写入 CSS 变量来应用，不依赖 CSS 层叠默认值。当前命名预设包括：
+
+- `strong-blue` → `#0024D3`
+- `tango-pink` → `#F06473`
+- `dark-tangerine` → `#F58C35`
+- `lemon-curry` → `#F5D34C`
+- `persian-green` → `#00B48F`
+- `turquoise` → `#00A8BF`
+- `skyline-blue` → `#00A9EB`
+- `oceanic-teal` → `#008CB7`
+- `rose-taupe` → `#954F72`
+
+为兼容旧持久化状态，`default` 仍然保留并解析到与 `strong-blue` 相同的强蓝值，但不再作为 Settings 界面里的重复选项显示。
+
+这些预设只会覆盖强调色相关变量（`--t-accent`、`--t-accent-hover`、`--t-accent-glow`、`--t-accent-soft`、`--t-accent-secondary`、`--t-accent-rgb`），不会替换 `src/index.css` 中当前的黑 / 灰白 / 白中性表面基底。
+
+### 当前表面基线
+
+最近一轮工作台精修后，渲染层全局主题已经收敛为更安静的视觉基线：
+
+- 深色模式使用黑色与石墨灰表面层级
+- 浅色模式使用白色与灰白色表面层级
+- `src/index.css` 中重复的后置主题覆盖和过重装饰渐变已被移除或显著减弱
+- 共享 workbench hero、detail、sidebar 与 empty-state 类统一降低了阴影与强调强度
+
+因此在描述当前 UI 主题时，应表述为“中性表面优先、主题色负责强调”，而不是“整页带色背景主题”。
 
 ### 当前语言集合
 

@@ -10,8 +10,8 @@ import { ICON_DATA, AgentAvatar, IconifyIcon } from '@/components/icons/IconifyI
 import type { Agent, AgentMessage, AgentPipelineExecution } from '@/types';
 import { generateId } from '@/utils/helpers';
 import { SettingsStat } from '@/components/settings/panelUi';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput, Select as UiSelect } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput, Select as UiSelect } from "@/components/shared/form-controls";
 type OrchestrationTab = 'orchestrate' | 'communications' | 'versions' | 'performance';
 const DEFAULT_TABS: OrchestrationTab[] = ['orchestrate', 'communications', 'versions', 'performance'];
 interface AgentOrchestrationPanelProps {

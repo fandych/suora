@@ -12,10 +12,10 @@ import { TimerDetail } from './TimerDetail';
 import { TimerAssistantDrawer } from './TimerAssistantDrawer';
 import { loadPipelinesFromDisk } from '@/services/pipelineFiles';
 import { handleTimerFired } from '@/services/timerRuntime';
-import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
-import { Button as UiButton } from '@/components/catalyst-ui/button';
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
-import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { WorkbenchEmptyState } from '@/components/workbench/empty-state';
+import { Button as UiButton } from '@/components/shared/button';
+import { Input as UiInput } from "@/components/shared/form-controls";
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
 export function TimerLayout() {
     const [panelWidth, setPanelWidth] = useResizablePanel('timer', 340);
     const [timers, setTimers] = useState<ScheduledTask[]>([]);
@@ -209,6 +209,14 @@ export function TimerLayout() {
                 ? t('timer.noMatchingTimers', 'No matching timers.')
                 : t('timer.noTimers', 'No timers yet. Create one to get started.')}
               </p>
+              {!searchQuery && (<div className="mt-4 flex flex-col gap-2">
+                  <UiButton unstyled type="button" className={workbenchSidebarPrimaryActionClass} onClick={openAssistantCreate}>
+                    {aiCreateLabel}
+                  </UiButton>
+                  <UiButton unstyled type="button" className={workbenchSidebarSubtleActionClass} onClick={() => { setCreating(true); setEditing(false); setSelectedId(null); }}>
+                    {t('timer.new', '+ New')}
+                  </UiButton>
+                </div>)}
             </div>) : (<div className="space-y-2">
               {sortedTimers.map((timer) => (<UiButton unstyled key={timer.id} onClick={() => { setSelectedId(timer.id); setCreating(false); setEditing(false); }} className={workbenchSidebarItemClass(selectedId === timer.id)}>
                   <div className="flex items-start justify-between gap-3">
@@ -242,7 +250,7 @@ export function TimerLayout() {
       </SidePanel>
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={280} maxWidth={420}/>
 
-      <div className="module-workspace flex-1 flex flex-col overflow-y-auto">
+      <div className="module-workspace flex-1 min-w-0 flex flex-col overflow-y-auto">
         {creating ? (<TimerForm key="new" onSave={handleCreate} onCancel={() => setCreating(false)}/>) : editing && selectedTimer ? (<TimerForm key={selectedTimer.id} initial={selectedTimer} onSave={handleUpdate} onCancel={() => setEditing(false)}/>) : selectedTimer ? (<TimerDetail timer={selectedTimer} onEdit={() => setEditing(true)} onOpenAssistant={() => openAssistantEdit(selectedTimer.id)} onDelete={handleDelete} onToggle={handleToggle} onRunNow={handleRunNow}/>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
             <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} eyebrow={t('timer.scheduler', 'Scheduler')} title={t('timer.timersAndReminders', 'Timers & Reminders')} description={(<>
                   <p>{t('timer.createHint', 'Create timers via the + New button or ask your AI assistant.')}</p>

@@ -3,8 +3,9 @@ import { useAppStore } from '@/store/appStore';
 import { useI18n } from '@/hooks/useI18n';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { SettingsOverview, SettingsStat } from './panelUi';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { workbenchDetailSectionClass, workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { workbenchDetailSectionClass, workbenchSectionEyebrowClass } from '@/components/workbench/styles';
+import { setShortcutRecording } from '@/services/commandPalette';
 function formatKeyCombo(e: KeyboardEvent): string {
     const parts: string[] = [];
     if (e.ctrlKey || e.metaKey)
@@ -69,6 +70,13 @@ function getShortcutDescription(action: string, t: (key: string, defaultValue?: 
             return t('settings.shortcutGenericDesc', 'Trigger this desktop action from the keyboard.');
     }
 }
+
+function getShortcutSupportState(action: string) {
+    if (action === 'Search' || action === 'Send Message' || action === 'New Line') {
+        return 'live' as const;
+    }
+    return 'saved' as const;
+}
 export function ShortcutsSettings() {
     const { t } = useI18n();
     const { shortcuts, setShortcut, resetShortcuts } = useAppStore();
@@ -79,6 +87,7 @@ export function ShortcutsSettings() {
     useEffect(() => {
         if (!recording)
             return;
+        setShortcutRecording(true);
         const handler = (e: KeyboardEvent) => {
             e.preventDefault();
             e.stopPropagation();
@@ -99,6 +108,7 @@ export function ShortcutsSettings() {
         window.addEventListener('keydown', handler);
         window.addEventListener('keydown', cancel);
         return () => {
+            setShortcutRecording(false);
             window.removeEventListener('keydown', handler);
             window.removeEventListener('keydown', cancel);
         };
@@ -126,6 +136,7 @@ export function ShortcutsSettings() {
           {shortcutEntries.map(([action, shortcut]) => {
             const isRecording = recording === action;
             const actionLabel = getShortcutLabel(action, t);
+                        const supportState = getShortcutSupportState(action);
             return (<div key={action} className={`rounded-3xl border px-4 py-4 transition-all ${isRecording ? 'border-accent/20 bg-accent/10 shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.06)]' : 'border-border-subtle/55 bg-surface-0/60'}`}>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
@@ -133,8 +144,14 @@ export function ShortcutsSettings() {
                       {buildShortcutMonogram(actionLabel)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[14px] font-semibold text-text-primary">{actionLabel}</div>
+                                            <div className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-text-primary">
+                                                <span>{actionLabel}</span>
+                                                <span className={`rounded-full px-2 py-0.5 text-[9px] font-medium ${supportState === 'live' ? 'bg-green-500/12 text-green-400' : 'bg-surface-3 text-text-muted'}`}>
+                                                    {supportState === 'live' ? t('settings.shortcutLive', 'Live now') : t('settings.shortcutSaved', 'Saved only')}
+                                                </span>
+                                            </div>
                       <p className="mt-1 text-[12px] leading-relaxed text-text-secondary/78">{getShortcutDescription(action, t)}</p>
+                                            {supportState === 'saved' && <p className="mt-1 text-[11px] leading-relaxed text-text-muted">{t('settings.shortcutSavedHint', 'This binding is persisted already, but more workbench entry points still need to adopt it.')}</p>}
                     </div>
                   </div>
 

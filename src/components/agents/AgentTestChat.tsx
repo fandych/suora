@@ -7,9 +7,9 @@ import { streamResponseWithTools, initializeProvider, validateModelConfig } from
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons';
 import type { Agent, Message } from '@/types';
 import type { ModelMessage, UserModelMessage, AssistantModelMessage } from 'ai';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
-import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass } from '@/components/workbench/styles';
 function getPreviousOpenAIResponseId(messages: Message[]): string | undefined {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
         const message = messages[index];

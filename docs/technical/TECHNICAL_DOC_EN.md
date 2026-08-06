@@ -55,6 +55,10 @@ The renderer is routed with a hash router and lazy-loads feature modules.
 - `voice`
 - `shortcuts`
 - `data`
+- `knowledge`
+- `events`
+- `external-dirs`
+- `plugins`
 - `logs`
 - `system`
 
@@ -383,12 +387,13 @@ The renderer uses a shared tokenized theme system in `src/index.css` and prefere
 
 ### Component library
 
-Workbench components are built using a custom catalyst-ui adapter layer located in `src/components/catalyst-ui/`. This layer wraps Headless UI v2 primitives (Dialog, Checkbox, Switch, Listbox, etc.) with the workbench design tokens. All catalyst-ui components reference theme CSS variables (`--color-surface-*`, `--color-text-*`, `--color-accent`, etc.) so they respond correctly to dark/light mode and accent color changes.
+Workbench components are built on the project's shadcn/ui setup with the Base UI primitive library. Shared primitives live in `src/components/ui/`, while business-facing wrappers such as buttons, alerts, dropdowns, and form controls live in `src/components/shared/`. These surfaces consume the workbench theme tokens (`--color-surface-*`, `--color-text-*`, `--color-accent`, etc.) so they respond correctly to dark/light mode and accent color changes.
 
 Shared surface adapters for settings panels and form controls live in:
-- `src/components/catalyst-ui/` — core primitives
+- `src/components/ui/` — shadcn/Base UI primitives
+- `src/components/shared/` — business-facing wrappers and compatibility surfaces
 - `src/components/settings/panelUi.tsx` — settings panel building blocks
-- `src/components/ui/Primitives.tsx` and `src/components/ui/FormControls.tsx` — shared form surface
+- `src/components/shared/form-controls.tsx` — shared form surface
 
 ### Dark mode implementation
 
@@ -403,14 +408,39 @@ The `dark` class is required by Tailwind's `dark:` variant (configured via `@cus
 - light, dark, or system theme
 - font size
 - code font
-- accent color (12 named presets: default blue, amber, sapphire, emerald, amethyst, coral, rose, jade, crimson, copper, arctic, slate)
+- accent color (9 named choices in the Settings UI: strong blue, tango pink, dark tangerine, lemon curry, persian green, turquoise, skyline blue, oceanic teal, rose taupe; persisted `default` also maps to strong blue)
 - locale
 
 The default UI preference theme is currently `system`.
 
 ### Accent color system
 
-The accent color system is managed by `src/theme/accentPresets.ts` and applied by `useTheme.ts`. The 'default' (Workbench Blue, `#0024D3`) is always applied explicitly to CSS variables — it does not rely on the CSS cascade default — so it works correctly regardless of the current CSS baseline theme.
+The accent color system is managed by `src/theme/accentPresets.ts` and applied by `useTheme.ts`. The `default` accent now resolves to Strong Blue (`#0024D3`) and is still applied explicitly through CSS variables rather than relying on the cascade. The current named preset list is:
+
+- `strong-blue` → `#0024D3`
+- `tango-pink` → `#F06473`
+- `dark-tangerine` → `#F58C35`
+- `lemon-curry` → `#F5D34C`
+- `persian-green` → `#00B48F`
+- `turquoise` → `#00A8BF`
+- `skyline-blue` → `#00A9EB`
+- `oceanic-teal` → `#008CB7`
+- `rose-taupe` → `#954F72`
+
+The persisted `default` accent is kept for backward compatibility and resolves to the same Strong Blue values as the explicit `strong-blue` preset, but it is no longer presented as a duplicate Settings option.
+
+These presets only override accent-related variables (`--t-accent`, `--t-accent-hover`, `--t-accent-glow`, `--t-accent-soft`, `--t-accent-secondary`, `--t-accent-rgb`). They do not replace the current neutral black / gray-white / white surface foundation defined in `src/index.css`.
+
+### Current surface baseline
+
+After the recent workbench polish pass, the global renderer theme is intentionally quieter:
+
+- dark mode tokens use black and graphite surfaces
+- light mode tokens use white and gray-white surfaces
+- decorative gradients and duplicate late theme overrides in `src/index.css` were removed or reduced
+- shared workbench hero, detail, sidebar, and empty-state classes now carry lighter shadows and lower emphasis
+
+When documenting visual behavior, describe the current theme system as neutral-surface-first with accent-driven emphasis, not as a tinted full-canvas theme.
 
 ## 12. Internationalization
 

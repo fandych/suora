@@ -6,10 +6,10 @@ import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { useI18n } from '@/hooks/useI18n';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer';
-import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
-import { Button as UiButton } from '@/components/catalyst-ui/button';
-import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/catalyst-ui/dropdown';
-import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { WorkbenchEmptyState } from '@/components/workbench/empty-state';
+import { Button as UiButton } from '@/components/shared/button';
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/shared/dropdown';
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
 import { confirm } from '@/services/confirmDialog';
 import type { ExportFormat } from '@/services/exportUtils';
 import { toast } from '@/services/toast';
@@ -17,7 +17,7 @@ import { analyzeDocumentHealth, buildDocumentSearchIndex, createDocument, create
 import { computeDocumentGroupStatistics, computeDocumentStatistics } from '@/services/documentStatistics';
 import { analyzeDocumentGraphInsights, buildDocumentGraph, buildDocumentPath, queryDocumentGraph, type DocumentGraph } from '@/services/documentGraph';
 import type { DocumentFolder, DocumentGroup, DocumentItem, DocumentNode } from '@/types';
-import { Input as UiInput, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { Input as UiInput, TextArea as UiTextArea } from "@/components/shared/form-controls";
 const LazyDocumentGraphView = lazy(() => import('@/components/documents/DocumentGraphView').then((module) => ({ default: module.DocumentGraphView })));
 const LazyDocumentsAssistantDrawer = lazy(() => import('@/components/documents/DocumentsAssistantDrawer').then((module) => ({ default: module.DocumentsAssistantDrawer })));
 const LazyDocumentTiptapEditor = lazy(() => import('@/components/documents/DocumentTiptapEditor').then((module) => ({ default: module.DocumentTiptapEditor })));
@@ -1080,10 +1080,16 @@ export function DocumentsLayout() {
             </div>
           </div>
 
-          <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                        {documentGroups.length === 0 ? (<UiButton unstyled type="button" onClick={createGroup} className={`${workbenchSidebarEmptyClass} w-full hover:border-accent/30 hover:text-accent`}>
-                {t('documents.emptyGroups', 'Create your first document group')}
-              </UiButton>) : (<div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
+                                        <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                                                                                                {documentGroups.length === 0 ? (<div className={`${workbenchSidebarEmptyClass} w-full px-5 py-8 text-left`}>
+                                <div className="text-[13px] font-semibold text-text-primary">{t('documents.emptyGroupsSidebarTitle', 'No groups yet')}</div>
+                                <p className="mt-2 text-[12px] leading-6 text-text-muted/72">{t('documents.emptyGroupsSidebarHint', 'Use AI Create or + Group above to start the workspace structure.')}</p>
+                                <div className="mt-4">
+                                    <UiButton unstyled type="button" onClick={createGroup} className={workbenchSidebarSubtleActionClass}>
+                                        {t('documents.emptyGroups', 'Create your first document group')}
+                                    </UiButton>
+                                </div>
+                            </div>) : (<div className="min-h-0 flex-1 overflow-y-auto pr-0.5">
                 {query.trim() ? (<div className="space-y-2">
                                         {searchResults.map(({ node, excerpt, matchedFields, path }) => (<UiButton unstyled key={node.id} type="button" onClick={() => openDocument(node.id)} className={workbenchSidebarItemClass(false, 'border-border-subtle/55 bg-surface-0/35 text-text-secondary hover:border-accent/25 hover:bg-accent/8')}>
                                                 <div className={workbenchSidebarTitleClass}>{node.title}</div>
@@ -1137,7 +1143,7 @@ export function DocumentsLayout() {
                     <IconifyIcon name="ui-export" size={13} color="currentColor"/>
                     {isExportingDoc ? t('common.exporting', 'Exporting…') : t('documents.export', 'Export')}
                   </UiButton>
-                  {showDocExportMenu && (<div className="absolute right-0 top-full z-[110] mt-1.5 w-44 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
+                  {showDocExportMenu && (<div className="absolute right-0 top-full z-110 mt-1.5 w-44 overflow-hidden rounded-2xl border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
                       {([
                     { format: 'markdown' as ExportFormat, label: 'Markdown (.md)', icon: 'ui-file' },
                     { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)', icon: 'ui-file' },
@@ -1413,14 +1419,30 @@ export function DocumentsLayout() {
                                 <LazyDocumentGraphView graph={documentGraph} insights={graphInsightReport} selectedDocumentId={null} onSelectDocument={openDocument}/>
                             </Suspense>
             </div>
-          </div>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
-            <WorkbenchEmptyState icon={<IconifyIcon name="skill-code-review" size={26} color="currentColor"/>} title={t('documents.emptyTitle', 'Build a document knowledge space')} description={t('documents.emptyBody', 'Create document groups, nest folders freely, write Markdown, resolve references, and find notes progressively as you type.')} actions={(<div className="flex flex-wrap items-center justify-center gap-3">
-                                    <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarPrimaryActionClass}>
+                            </div>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
+                                <WorkbenchEmptyState icon={<IconifyIcon name="skill-code-review" size={26} color="currentColor"/>} eyebrow={t('documents.workspacePrimer', 'Workspace primer')} title={t('documents.emptyTitle', 'Build a document knowledge space')} description={t('documents.emptyBody', 'Create document groups, nest folders freely, write Markdown, resolve references, and find notes progressively as you type.')} metrics={[
+                                    {
+                                        label: t('documents.metricCapture', 'Capture'),
+                                        value: t('documents.metricCaptureValue', 'Markdown + files'),
+                                        description: t('documents.metricCaptureHint', 'Notes, scripts, images, and references stay in one local graph.'),
+                                    },
+                                    {
+                                        label: t('documents.metricStructure', 'Structure'),
+                                        value: t('documents.metricStructureValue', 'Groups + folders'),
+                                        description: t('documents.metricStructureHint', 'Use the left rail to create the first group, then branch into folders.'),
+                                    },
+                                    {
+                                        label: t('documents.metricRecall', 'Recall'),
+                                        value: t('documents.metricRecallValue', 'Search + graph'),
+                                        description: t('documents.metricRecallHint', 'Progressive search and graph insights stay available as the corpus grows.'),
+                                    },
+                                                                                                                                ]} actions={(<div className="flex flex-wrap items-center gap-3">
+                                        <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarPrimaryActionClass}>
                     {t('timer.aiCreate', 'AI Create')}
                   </UiButton>
-                                    <UiButton unstyled type="button" onClick={createGroup} className={workbenchSidebarSubtleActionClass}>
-                    {t('documents.addGroup', '+ Group')}
-                  </UiButton>
+                                                                                <UiButton unstyled type="button" onClick={createGroup} className={workbenchSidebarAccentActionClass}>
+                                        {t('documents.addGroup', '+ Group')}
+                                    </UiButton>
                 </div>)}/>
           </div>)}
                 {assistantState && (<Suspense fallback={null}>

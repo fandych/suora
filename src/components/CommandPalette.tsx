@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
-import { Dialog, DialogBody } from '@/components/catalyst-ui/dialog'
-import { Input } from '@/components/catalyst-ui/form-controls'
-import { Button } from '@/components/catalyst-ui/button'
+import { Dialog, DialogBody } from '@/components/shared/dialog'
+import { Input } from '@/components/shared/form-controls'
+import { Button } from '@/components/shared/button'
 import { useNavigate } from 'react-router-dom'
 import { useAppStore } from '@/store/appStore'
 import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { useI18n } from '@/hooks/useI18n'
 import { generateId } from '@/utils/helpers'
-import { addCommandPaletteOpenListener } from '@/services/commandPalette'
+import { addCommandPaletteOpenListener, addShortcutRecordingListener } from '@/services/commandPalette'
 import type { Session } from '@/types'
 
 interface PaletteItem {
@@ -21,7 +21,9 @@ interface PaletteItem {
 
 export function CommandPalette() {
   const { t } = useI18n()
+  const shortcuts = useAppStore((state) => state.shortcuts)
   const [open, setOpen] = useState(false)
+  const [shortcutRecordingActive, setShortcutRecordingActive] = useState(false)
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -33,7 +35,11 @@ export function CommandPalette() {
   // Listen for Cmd+K / Ctrl+K plus programmatic open events.
   useEffect(() => {
     const keyHandler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      if (shortcutRecordingActive) return
+      const combo = [e.ctrlKey || e.metaKey ? 'Ctrl' : null, e.altKey ? 'Alt' : null, e.shiftKey ? 'Shift' : null, !['Control', 'Alt', 'Shift', 'Meta'].includes(e.key) ? (e.key.length === 1 ? e.key.toUpperCase() : e.key) : null]
+        .filter(Boolean)
+        .join(' + ')
+      if (combo === (shortcuts['Search'] || 'Ctrl + K')) {
         e.preventDefault()
         setOpen((prev) => !prev)
       }
@@ -42,13 +48,19 @@ export function CommandPalette() {
       }
     }
     const openHandler = () => setOpen(true)
+    const recordingHandler = (event: Event) => {
+      const detail = (event as CustomEvent<{ active?: boolean }>).detail
+      setShortcutRecordingActive(Boolean(detail?.active))
+    }
     window.addEventListener('keydown', keyHandler)
     const removeOpenListener = addCommandPaletteOpenListener(openHandler as EventListener)
+    const removeRecordingListener = addShortcutRecordingListener(recordingHandler as EventListener)
     return () => {
       window.removeEventListener('keydown', keyHandler)
       removeOpenListener()
+      removeRecordingListener()
     }
-  }, [open])
+  }, [open, shortcutRecordingActive, shortcuts])
 
   // Focus input when opened
   useEffect(() => {
@@ -140,7 +152,7 @@ export function CommandPalette() {
         title: skill.name,
         subtitle: skill.description && skill.description.length > 60 ? skill.description.slice(0, 60) + '…' : skill.description,
         icon: 'action-skills',
-        action: () => { navigate('/skills'); setOpen(false) },
+        action: () => { navigate(`/skills?skillId=${encodeURIComponent(skill.id)}`); setOpen(false) },
       })
     }
 
@@ -153,7 +165,7 @@ export function CommandPalette() {
         title: model.name,
         subtitle: providerName,
         icon: 'action-models',
-        action: () => { navigate('/models'); setOpen(false) },
+        action: () => { navigate(`/models/models?modelId=${encodeURIComponent(model.id)}`); setOpen(false) },
       })
     }
 

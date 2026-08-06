@@ -5,9 +5,11 @@ import path from 'path'
 import os from 'os'
 import fs from 'fs/promises'
 import { readFileSync, watch, type FSWatcher } from 'fs'
+import { HttpProxyAgent } from 'http-proxy-agent'
 import http, { type ClientRequest, type IncomingMessage } from 'http'
 import { execFile } from 'child_process'
 import crypto from 'crypto'
+import { HttpsProxyAgent } from 'https-proxy-agent'
 import https from 'https'
 import net from 'net'
 import dns from 'dns'
@@ -19,6 +21,15 @@ import { getChannelService, type ChannelWebhookEvent } from './channelService.js
 import { openSuoraDatabase, type JsonTableName, type SuoraDatabase } from './database.js'
 import { acquireWorkspaceLock, releaseWorkspaceLock, releaseWorkspaceLockSync, WorkspaceLockError, type WorkspaceLock } from './workspaceLock.js'
 import type { ChannelConfig } from '../src/types/index.js'
+
+type ProxySettings = {
+  enabled: boolean
+  type: 'http' | 'https' | 'socks5'
+  host: string
+  port: number
+  username?: string
+  password?: string
+}
 
 const { autoUpdater } = electronUpdater
 
@@ -223,6 +234,7 @@ let currentToolSandboxMode: 'workspace' | 'relaxed' = 'workspace'
 let currentToolAllowedDirectoryPaths: string[] = []
 let currentToolAllowedDirectoryCanonicalPaths: string[] = []
 let currentToolBlockedCommands: string[] = ['rm -rf', 'del /f /q', 'format', 'shutdown']
+let currentProxySettings: ProxySettings = { enabled: false, type: 'http', host: '', port: 0 }
 let currentWorkspaceLock: WorkspaceLock | null = null
 let suoraDatabase: SuoraDatabase | null = null
 let suoraDatabaseWorkspacePath: string | null = null
@@ -425,10 +437,16 @@ async function createWindow() {
     if (mainWindow) saveWindowState(mainWindow)
   })
 
-  // Minimize to tray instead of closing on macOS
   mainWindow.on('closed', () => {
+    destroyAutomationWindow()
     mainWindow = null
   })
+}
+
+function destroyTray(): void {
+  if (!tray) return
+  tray.destroy()
+  tray = null
 }
 
 function loadMainWindowContent(window: BrowserWindow): void {
@@ -549,6 +567,23 @@ ipcMain.handle('workspace:setToolSecurity', async (_event, settings: unknown) =>
       : []
     refreshAllowedFsRoots()
     return { success: true, sandboxMode: currentToolSandboxMode, allowedDirectoryCount: currentToolAllowedDirectoryPaths.length }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('workspace:setProxySettings', async (_event, settings: unknown) => {
+  try {
+    const candidate = settings && typeof settings === 'object' ? settings as Partial<ProxySettings> : {}
+    currentProxySettings = {
+      enabled: candidate.enabled === true,
+      type: candidate.type === 'https' || candidate.type === 'socks5' ? candidate.type : 'http',
+      host: typeof candidate.host === 'string' ? candidate.host : '',
+      port: typeof candidate.port === 'number' && Number.isFinite(candidate.port) ? Math.max(0, Math.trunc(candidate.port)) : 0,
+      username: typeof candidate.username === 'string' ? candidate.username : '',
+      password: typeof candidate.password === 'string' ? candidate.password : '',
+    }
+    return { success: true }
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
   }
@@ -1718,12 +1753,21 @@ function startAiFetchRequest(
   if (!headerNames.has(AI_REQUEST_CLIENT_HEADER)) {
     headers['X-Suora-Client'] = AI_REQUEST_CLIENT_VALUE
   }
-
+  if (currentProxySettings.enabled && currentProxySettings.type === 'socks5') {
+    clearAiFetchRequestTracking(requestId)
+    sendAiFetchEvent(target, {
+      requestId,
+      type: 'error',
+      error: 'SOCKS5 proxy transport is not wired in the current desktop runtime yet.',
+    })
+    return
+  }
   const req = reqModule.request(
     url,
     {
       method,
       headers,
+      agent: getProxyAgent(url),
       lookup: safeDnsLookup,
     },
     (res: IncomingMessage) => {
@@ -1801,6 +1845,22 @@ function startAiFetchRequest(
 
 type HttpGetFn = (url: string, options: Record<string, unknown>, callback: (res: FetchResponse) => void) => FetchRequest
 
+function getProxyUrl(): string | null {
+  if (!currentProxySettings.enabled || !currentProxySettings.host || !currentProxySettings.port) return null
+  if (currentProxySettings.type === 'socks5') return null
+  const protocol = currentProxySettings.type === 'https' ? 'https' : 'http'
+  const auth = currentProxySettings.username
+    ? `${encodeURIComponent(currentProxySettings.username)}:${encodeURIComponent(currentProxySettings.password ?? '')}@`
+    : ''
+  return `${protocol}://${auth}${currentProxySettings.host}:${currentProxySettings.port}`
+}
+
+function getProxyAgent(url: string): HttpProxyAgent<string> | HttpsProxyAgent<string> | undefined {
+  const proxyUrl = getProxyUrl()
+  if (!proxyUrl) return undefined
+  return url.startsWith('https:') ? new HttpsProxyAgent(proxyUrl) : new HttpProxyAgent(proxyUrl)
+}
+
 function fetchUrl(url: string, redirectsLeft = 5, accept = 'text/html'): Promise<{ body: string; rawTruncated: boolean }> {
   return new Promise((resolve, reject) => {
     if (redirectsLeft <= 0) return reject(new Error('Too many redirects'))
@@ -1811,9 +1871,14 @@ function fetchUrl(url: string, redirectsLeft = 5, accept = 'text/html'): Promise
       return
     }
     const mod = url.startsWith('https:') ? https : http
+    if (currentProxySettings.enabled && currentProxySettings.type === 'socks5') {
+      reject(new Error('SOCKS5 proxy transport is not wired in the current desktop runtime yet.'))
+      return
+    }
+    const headers: Record<string, string> = { 'User-Agent': 'Mozilla/5.0 Suora/1.0', Accept: accept }
     const req = (mod.get as unknown as HttpGetFn)(
       url,
-      { headers: { 'User-Agent': 'Mozilla/5.0 Suora/1.0', Accept: accept }, lookup: safeDnsLookup },
+      { headers, lookup: safeDnsLookup, agent: getProxyAgent(url) },
       (res: FetchResponse) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           const next = new URL(res.headers.location as string, url).toString()
@@ -1927,6 +1992,14 @@ const SAFE_BROWSER_EVALUATIONS: Record<string, string> = {
   text: "document.body ? document.body.innerText.slice(0, 16000) : ''",
   links: `Array.from(document.querySelectorAll('a[href]')).map(a => ({ text: a.textContent.trim().slice(0, 200), href: a.href })).filter(l => l.href.startsWith('http')).slice(0, 200)`,
   headings: `Array.from(document.querySelectorAll('h1,h2,h3')).map(h => ({ level: h.tagName.toLowerCase(), text: h.textContent.trim().slice(0, 300) })).filter(h => h.text).slice(0, 100)`,
+}
+
+function destroyAutomationWindow(): void {
+  if (!automationWindow) return
+  if (!automationWindow.isDestroyed()) {
+    automationWindow.destroy()
+  }
+  automationWindow = null
 }
 
 function getAutomationWindow(): BrowserWindow {
@@ -3534,6 +3607,7 @@ app.on('before-quit', () => {
     clearTimeout(updateCheckTimeout)
     updateCheckTimeout = null
   }
+  destroyTray()
   releaseWorkspaceLockSync(currentWorkspaceLock)
   currentWorkspaceLock = null
 })
@@ -3558,15 +3632,13 @@ app.on('window-all-closed', async () => {
     watcher.close()
   }
   activeWatchers.clear()
-  if (automationWindow && !automationWindow.isDestroyed()) {
-    automationWindow.destroy()
-    automationWindow = null
-  }
+  destroyAutomationWindow()
+  destroyTray()
   // Close logger
   await closeLogger()
   logger.info('Suora stopped')
   if (process.platform !== 'darwin') {
-    app.quit()
+    app.exit(0)
   }
 })
 

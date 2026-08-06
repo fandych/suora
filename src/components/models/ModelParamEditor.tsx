@@ -3,9 +3,9 @@ import { useAppStore } from '@/store/appStore';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import type { ProviderConfig, ProviderModelEntry } from '@/types';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
-import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass, workbenchPrimaryButtonClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass, workbenchPrimaryButtonClass } from '@/components/workbench/styles';
 // ─── Model pricing data (USD per 1M tokens) ──────────────────────
 const MODEL_PRICING: Record<string, {
     input: number;

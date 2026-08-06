@@ -44,20 +44,20 @@ describe('useTheme', () => {
     })
   })
 
-  it('applies the sapphire accent preset with the updated blue value', async () => {
+  it('applies the strong-blue accent preset with the requested blue value', async () => {
     useAppStore.setState({
       theme: 'dark',
       fontSize: 'medium',
       codeFont: 'default',
-      accentColor: 'sapphire',
+      accentColor: 'strong-blue',
     })
 
     render(<ThemeHarness />)
 
     await waitFor(() => {
-      expect(document.documentElement.style.getPropertyValue('--t-accent')).toBe('#215DFF')
-      expect(document.documentElement.style.getPropertyValue('--t-accent-rgb')).toBe('33,93,255')
-      expect(document.documentElement.style.getPropertyValue('--t-accent-glow')).toBe('rgba(33,93,255,0.22)')
+      expect(document.documentElement.style.getPropertyValue('--t-accent')).toBe('#0024d3')
+      expect(document.documentElement.style.getPropertyValue('--t-accent-rgb')).toBe('0,36,211')
+      expect(document.documentElement.style.getPropertyValue('--t-accent-glow')).toBe('rgba(0,36,211,0.22)')
     })
   })
 })

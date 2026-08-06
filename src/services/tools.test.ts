@@ -1163,4 +1163,23 @@ describe('builtin tool guidance', () => {
 
     expect(prompts).toBe('')
   })
+
+  it('deduplicates assigned skill prompts and escapes skill-memory tags', async () => {
+    const skill: Skill = {
+      id: 'skill-1',
+      name: 'Review "Skill" <alpha>',
+      description: 'Checks code review readiness',
+      enabled: true,
+      source: 'local',
+      content: 'Review carefully.',
+      frontmatter: { name: 'Review "Skill" <alpha>', description: 'Checks code review readiness' },
+      context: 'inline',
+      memories: [{ id: 'mem-1', content: 'Prefer diffs first.', type: 'preference', scope: 'skill', createdAt: 1, source: 'skill-1' }],
+    }
+
+    const prompts = await getSkillSystemPrompts(['skill-1', 'skill-1'], [skill])
+
+    expect(prompts.match(/<skill name=/g)).toHaveLength(1)
+    expect(prompts).toContain('<skill-memory name="Review &quot;Skill&quot; &lt;alpha&gt;">')
+  })
 })

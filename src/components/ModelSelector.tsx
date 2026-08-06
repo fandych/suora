@@ -3,8 +3,8 @@ import { useAppStore } from '@/store/appStore';
 import { useI18n } from '@/hooks/useI18n';
 import { testConnection } from '@/services/aiService';
 import { toast } from '@/services/toast';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Select as UiSelect } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Select as UiSelect } from "@/components/shared/form-controls";
 type TestState = {
     kind: 'idle';
 } | {

@@ -102,6 +102,9 @@ export function AppShell() {
             await yieldToMainThread()
             await runDeferredTask('loadSessionsFromWorkspace', loadSessionsFromWorkspace)
             if (cancelled) return
+            await yieldToMainThread()
+            await runDeferredTask('restoreChannelRuntime', async () => restoreChannelRuntime(useAppStore.getState().channels))
+            if (cancelled) return
 
             const idleTask = scheduleWhenIdle(() => {
               void (async () => {
@@ -110,9 +113,6 @@ export function AppShell() {
                 if (cancelled) return
                 await yieldToMainThread()
                 await runDeferredTask('restorePluginsFromStore', restorePluginsFromStore)
-                if (cancelled) return
-                await yieldToMainThread()
-                await runDeferredTask('restoreChannelRuntime', async () => restoreChannelRuntime(useAppStore.getState().channels))
                 if (cancelled) return
                 markPerf('app:boot:complete')
                 measurePerf('app:boot:deferred', 'app:boot:deferred:start', 'app:boot:complete')

@@ -7,9 +7,9 @@ import { isSpeechSynthesisAvailable, loadVoiceSettings, speak } from '@/services
 import { CopyButton, MarkdownContent } from './ChatMarkdown';
 import { useI18n } from '@/hooks/useI18n';
 import { type ExportFormat } from '@/services/exportUtils';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
-import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/catalyst-ui/dropdown';
+import { Button as UiButton } from "@/components/shared/button";
+import { TextArea as UiTextArea } from "@/components/shared/form-controls";
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem } from '@/components/shared/dropdown';
 // ─── Helpers ───────────────────────────────────────────────────────
 export function formatFileSize(bytes: number): string {
     const locale = getLocale();

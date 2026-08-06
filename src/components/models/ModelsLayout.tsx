@@ -1,5 +1,5 @@
 import { Suspense, lazy, useState, useEffect, useMemo, useDeferredValue } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAppStore, loadSettingsFromWorkspace, saveSettingsToWorkspace } from '@/store/appStore';
 import { SidePanel } from '@/components/layout/SidePanel';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
@@ -10,10 +10,10 @@ import type { ProviderConfig } from '@/types';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { PROVIDER_PRESETS } from '@/store/slices/modelConfigSlice';
-import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
-import { Button as UiButton } from '@/components/catalyst-ui/button';
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
-import { workbenchSegmentButtonClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { WorkbenchEmptyState } from '@/components/workbench/empty-state';
+import { Button as UiButton } from '@/components/shared/button';
+import { Input as UiInput } from "@/components/shared/form-controls";
+import { workbenchSegmentButtonClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
 import { scheduleAfterPaint, scheduleWhenIdle } from '@/utils/scheduling';
 
 const LazyProviderEditor = lazy(() => import('./ProviderEditor').then((module) => ({ default: module.ProviderEditor })));
@@ -27,6 +27,7 @@ function generateId(): string {
 export function ModelsLayout() {
     const { t } = useI18n();
     const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
     const { view } = useParams<{
         view: string;
     }>();
@@ -109,6 +110,21 @@ export function ModelsLayout() {
     }))
         .filter((entry) => entry.models.length > 0), [filteredProviderConfigs]);
     const filteredEnabledModelsCount = useMemo(() => groupedEnabledModels.reduce((total, entry) => total + entry.models.length, 0), [groupedEnabledModels]);
+    useEffect(() => {
+      const targetModelId = searchParams.get('modelId');
+      if (!targetModelId)
+        return;
+      const targetModel = models.find((model) => model.id === targetModelId);
+      if (targetModel) {
+        setEditingModelKey(targetModelId);
+        navigate('/models/models', { replace: true });
+      }
+      setSearchParams((prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('modelId');
+        return next;
+      }, { replace: true });
+    }, [models, navigate, searchParams, setSearchParams]);
     const sidebarResultCount = viewMode === 'providers' ? filteredProviderConfigs.length : filteredEnabledModelsCount;
     const sidebarTotalCount = viewMode === 'providers' ? providerConfigs.length : enabledModelsCount;
     const handleAddProvider = (presetId?: string) => {
@@ -214,6 +230,14 @@ export function ModelsLayout() {
                   <IconifyIcon name="ui-building" size={18} color="currentColor"/>
                 </div>
                 <p className="text-[12px] leading-relaxed text-text-muted">{searchQuery ? t('models.noMatchingProviders', 'No matching providers.') : t('models.noProvidersConfigured', 'No providers configured. Click + Provider to add one.')}</p>
+                {!searchQuery && (<div className="mt-4 flex flex-col gap-2">
+                    <UiButton unstyled type="button" onClick={() => handleAddProvider('openai')} className={workbenchSidebarPrimaryActionClass}>
+                      {t('home.configureModels', 'Configure Models')}
+                    </UiButton>
+                    <UiButton unstyled type="button" onClick={() => handleAddProvider('ollama')} className={workbenchSidebarSubtleActionClass}>
+                      {t('models.local', 'Local')} · Ollama
+                    </UiButton>
+                  </div>)}
               </div>) : (<div className="space-y-2">
                 {filteredProviderConfigs.map((provider) => {
                 const enabledCount = provider.models.filter((m) => m.enabled).length;
@@ -275,7 +299,7 @@ export function ModelsLayout() {
                         const globalModelId = `${provider.id}:${model.modelId}`;
                         const isDefault = models.find((item) => item.id === globalModelId)?.isDefault;
                         const isEditing = editingModelKey === globalModelId;
-                        return (<UiButton unstyled key={model.modelId} type="button" onClick={() => setEditingModelKey(isEditing ? null : globalModelId)} className={`w-full rounded-[20px] border px-3 py-3 text-left transition-all ${isEditing ? 'border-accent/25 bg-accent/10 shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.06)]' : 'border-transparent bg-surface-1/35 hover:bg-surface-2/60 hover:border-border-subtle/55'}`}>
+                        return (<UiButton unstyled key={model.modelId} type="button" onClick={() => setEditingModelKey(isEditing ? null : globalModelId)} className={`w-full rounded-xl border px-3 py-3 text-left transition-all ${isEditing ? 'border-accent/25 bg-accent/10 shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.06)]' : 'border-transparent bg-surface-1/35 hover:bg-surface-2/60 hover:border-border-subtle/55'}`}>
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0 flex-1">
                                   <div className="flex flex-wrap items-center gap-1.5">
@@ -344,9 +368,14 @@ export function ModelsLayout() {
                 }} onClose={() => setEditingModelKey(null)}/>);
                   </Suspense>);
         })()) : (<div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
-          <WorkbenchEmptyState icon={<IconifyIcon name="ui-building" size={30} color="currentColor"/>} title={providerConfigs.length === 0 ? t('models.addProviderToBegin', 'Add a provider to begin') : t('models.selectProviderToConfigure', 'Select a provider to configure')} description={providerConfigs.length === 0 ? t('models.noProvidersConfigured', 'No providers configured. Click + Provider to add one.') : t('models.providerSelectionHint', 'Choose a provider from the left rail to edit credentials, endpoints, and model availability.')} actions={providerConfigs.length === 0 ? (<UiButton unstyled type="button" onClick={() => handleAddProvider()} className={workbenchSidebarPrimaryActionClass}>
-                {t('models.addProvider', '+ Provider')}
-              </UiButton>) : undefined}/>
+          <WorkbenchEmptyState icon={<IconifyIcon name="ui-building" size={30} color="currentColor"/>} title={providerConfigs.length === 0 ? t('models.addProviderToBegin', 'Add a provider to begin') : t('models.selectProviderToConfigure', 'Select a provider to configure')} description={providerConfigs.length === 0 ? t('models.noProvidersConfigured', 'No providers configured. Click + Provider to add one.') : t('models.providerSelectionHint', 'Choose a provider from the left rail to edit credentials, endpoints, and model availability.')} actions={providerConfigs.length === 0 ? (<div className="flex flex-wrap items-center gap-3">
+                <UiButton unstyled type="button" onClick={() => handleAddProvider('openai')} className={workbenchSidebarPrimaryActionClass}>
+                  {t('models.addProvider', '+ Provider')}
+                </UiButton>
+                <UiButton unstyled type="button" onClick={() => handleAddProvider('ollama')} className={workbenchSidebarSubtleActionClass}>
+                  {t('models.local', 'Local')} · Ollama
+                </UiButton>
+              </div>) : undefined}/>
         </div>)}
     </>);
 }

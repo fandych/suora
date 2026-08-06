@@ -8,9 +8,9 @@ import { useI18n } from '@/hooks/useI18n';
 import { toast } from '@/services/toast';
 import { isMainChatSession } from '@/utils/chatSessions';
 import { safeStringify } from '@/utils/safeJson';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
-import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
 const INITIAL_RENDERED_SESSIONS = 60;
 const SESSION_BATCH_SIZE = 60;
 const SESSION_LOAD_THRESHOLD_PX = 120;
@@ -206,7 +206,14 @@ export function SessionList({ width }: {
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-text-muted/40"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             </div>
             <p className="text-[13px] text-text-muted/75 leading-relaxed">{searchQuery ? t('sessions.noMatching', 'No matching sessions') : t('sessions.noConversations', 'No conversations yet')}</p>
-            {!searchQuery && <p className="mt-2 text-[11px] text-text-muted/45">{t('sessions.clickNewToStart', 'Click + New to start')}</p>}
+                        {!searchQuery && <>
+                                <p className="mt-2 text-[11px] text-text-muted/45">{t('sessions.clickNewToStart', 'Click + New to start')}</p>
+                                <div className="mt-4 flex flex-col gap-2">
+                                    <UiButton unstyled type="button" onClick={handleNewSession} className={workbenchSidebarPrimaryActionClass}>
+                                        {t('chat.newChat', 'New Chat')}
+                                    </UiButton>
+                                </div>
+                            </>}
           </div>)}
 
         {groups.map((group) => (<section key={group.label} className="space-y-2">

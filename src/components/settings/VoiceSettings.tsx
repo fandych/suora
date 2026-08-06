@@ -22,9 +22,9 @@ import {
   SettingsStat,
   SettingsToggleRow,
 } from './panelUi'
-import { Checkbox } from '@/components/catalyst-ui/checkbox'
-import { Button as UiButton } from '@/components/catalyst-ui/button'
-import { Input as UiInput, Select as UiSelect } from '@/components/catalyst-ui/form-controls'
+import { Checkbox } from '@/components/shared/checkbox'
+import { Button as UiButton } from '@/components/shared/button'
+import { Input as UiInput, Select as UiSelect } from '@/components/shared/form-controls'
 
 export function VoiceSettings() {
   const { t } = useI18n()

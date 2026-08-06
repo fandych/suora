@@ -2,8 +2,8 @@ import { useRef, useState } from 'react';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { MarkdownContent } from '@/components/chat/ChatMarkdown';
 import { useI18n } from '@/hooks/useI18n';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { TextArea as UiTextArea } from "@/components/shared/form-controls";
 interface SystemPromptMarkdownEditorProps {
     value: string;
     onChange: (value: string) => void;

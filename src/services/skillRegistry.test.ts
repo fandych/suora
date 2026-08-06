@@ -189,6 +189,24 @@ Plan carefully.
     expect(prompt).toContain('/workspace/skills/creator/scripts/aggregate.py')
   })
 
+  it('includes activation metadata and escapes prompt tag attributes for runtime skill prompts', async () => {
+    const skill = parseSkillMarkdown(
+      '---\nname: launch "review" <skill>\ndescription: Reviews launches\nwhen_to_use: When the user asks for launch readiness\nargument-hint: <service> [environment]\nuser-invocable: false\ncontext: fork\n---\n\nFocus on launch risks.',
+      '/workspace/skills/launch/SKILL.md',
+      'local',
+    )
+    if (!skill) throw new Error('Expected parsed skill')
+
+    const prompt = await buildSkillPrompts([skill.id], [skill])
+
+    expect(prompt).toContain('<skill name="launch &quot;review&quot; &lt;skill&gt;" context="fork">')
+    expect(prompt).toContain('### Activation metadata')
+    expect(prompt).toContain('Use this skill only when: When the user asks for launch readiness')
+    expect(prompt).toContain('Arguments hint: <service> [environment]')
+    expect(prompt).toContain('Direct user invocation is disabled for this skill.')
+    expect(prompt).toContain('Execution preference: fork.')
+  })
+
   it('loads skills-lock.json and reports lock verification status', async () => {
     vi.mocked(window.electron.invoke).mockImplementation(async (channel, filePath) => {
       if (channel === 'fs:readFile' && filePath === '/workspace/skills-lock.json') {

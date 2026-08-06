@@ -9,8 +9,8 @@ import { builtinToolDefs, BUILTIN_TOOL_DESCRIPTIONS } from '@/services/tools';
 import { compileCustomCode, type CompileResult } from '@/services/customSkillRuntime';
 import { auditCustomCode, signSkill, verifySkillSignature, getAuditLog, type SecurityFinding, type AuditLogEntry } from '@/services/skillSecurity';
 import { confirm } from '@/services/confirmDialog';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/shared/form-controls";
 // ─── Constants ────────────────────────────────────────────────────
 export const TOOL_DESCRIPTIONS = BUILTIN_TOOL_DESCRIPTIONS;
 export const BUILTIN_TOOL_OPTIONS = Object.keys(builtinToolDefs);

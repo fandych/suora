@@ -4,9 +4,9 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import { ChannelPlatformIcon, getPlatformDisplayName } from './ChannelIcons';
 import { ChannelMessageBubble, formatChannelAbsoluteTime, formatChannelRelativeTime, normalizeChannelDirection } from './ChannelComponents';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput, Select as UiSelect } from "@/components/catalyst-ui/form-controls";
-import { workbenchDetailSectionClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput, Select as UiSelect } from "@/components/shared/form-controls";
+import { workbenchDetailSectionClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/workbench/styles';
 function PanelShell({ eyebrow, title, description, action, children, }: {
     eyebrow: string;
     title: string;

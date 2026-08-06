@@ -6,7 +6,7 @@ import { useResizablePanel } from '@/hooks/useResizablePanel';
 import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import { useAppStore } from '@/store/appStore';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Button as UiButton } from "@/components/shared/button";
 import {
   workbenchSidebarDescriptionClass,
   workbenchSidebarEmptyClass,
@@ -14,22 +14,33 @@ import {
   workbenchSidebarItemClass,
   workbenchSectionEyebrowClass,
   workbenchSidebarTitleClass,
-} from '@/components/catalyst-ui/workbench';
+  workbenchSummaryLabelClass,
+  workbenchSummaryStatClass,
+  workbenchSummaryValueClass,
+} from '@/components/workbench/styles';
 const GeneralSettings = lazy(() => import('./GeneralSettings').then((module) => ({ default: module.GeneralSettings })));
 const SecuritySettings = lazy(() => import('./SecuritySettings').then((module) => ({ default: module.SecuritySettings })));
 const VoiceSettings = lazy(() => import('./VoiceSettings').then((module) => ({ default: module.VoiceSettings })));
 const ShortcutsSettings = lazy(() => import('./ShortcutsSettings').then((module) => ({ default: module.ShortcutsSettings })));
 const DataSettings = lazy(() => import('./DataSettings').then((module) => ({ default: module.DataSettings })));
+const KnowledgeSettings = lazy(() => import('./KnowledgeSettings').then((module) => ({ default: module.KnowledgeSettings })));
+const EventsSettings = lazy(() => import('./EventsSettings').then((module) => ({ default: module.EventsSettings })));
+const ExternalDirsSettings = lazy(() => import('./ExternalDirsSettings').then((module) => ({ default: module.ExternalDirsSettings })));
+const PluginsSettings = lazy(() => import('./PluginsSettings').then((module) => ({ default: module.PluginsSettings })));
 const LogsSettings = lazy(() => import('./LogsSettings').then((module) => ({ default: module.LogsSettings })));
 const SystemSettings = lazy(() => import('./SystemSettings').then((module) => ({ default: module.SystemSettings })));
 const SETTING_SECTIONS = [
-    { id: 'general', i18nKey: 'settings.general', fallback: 'General', icon: 'settings-general', descKey: 'settings.generalDesc', descFallback: 'Appearance, language, startup, and workspace defaults.' },
-    { id: 'security', i18nKey: 'settings.security', fallback: 'Security', icon: 'settings-security', descKey: 'settings.securityDesc', descFallback: 'Keys, privacy, and safety defaults for the desktop workspace.' },
-    { id: 'voice', i18nKey: 'settings.voice', fallback: 'Voice', icon: 'settings-voice', descKey: 'settings.voiceDesc', descFallback: 'Speech input, voice output, and audio behavior.' },
-    { id: 'shortcuts', i18nKey: 'settings.shortcuts', fallback: 'Shortcuts', icon: 'settings-shortcuts', descKey: 'settings.shortcutsDescLong', descFallback: 'Keyboard bindings for chat, navigation, and panel control.' },
-    { id: 'data', i18nKey: 'settings.data', fallback: 'Data', icon: 'settings-data', descKey: 'settings.dataDescLong', descFallback: 'Backups, imports, retention rules, and destructive cleanup actions.' },
-    { id: 'logs', i18nKey: 'settings.logs', fallback: 'Logs', icon: 'settings-logs', descKey: 'settings.logsDesc', descFallback: 'Runtime diagnostics, log files, and crash evidence.' },
-    { id: 'system', i18nKey: 'settings.system', fallback: 'System', icon: 'settings-performance', descKey: 'settings.systemDesc', descFallback: 'Onboarding, app health, and runtime performance metrics.' },
+  { id: 'general', i18nKey: 'settings.general', fallback: 'General', icon: 'settings-general', descKey: 'settings.generalDesc', descFallback: 'Appearance, language, startup, and workspace defaults.', categoryFallback: 'Workspace' },
+  { id: 'security', i18nKey: 'settings.security', fallback: 'Security', icon: 'settings-security', descKey: 'settings.securityDesc', descFallback: 'Keys, privacy, and safety defaults for the desktop workspace.', categoryFallback: 'Trust' },
+  { id: 'voice', i18nKey: 'settings.voice', fallback: 'Voice', icon: 'settings-voice', descKey: 'settings.voiceDesc', descFallback: 'Speech input, voice output, and audio behavior.', categoryFallback: 'Workspace' },
+  { id: 'shortcuts', i18nKey: 'settings.shortcuts', fallback: 'Shortcuts', icon: 'settings-shortcuts', descKey: 'settings.shortcutsDescLong', descFallback: 'Keyboard bindings for chat, navigation, and panel control.', categoryFallback: 'Workspace' },
+  { id: 'data', i18nKey: 'settings.data', fallback: 'Data', icon: 'settings-data', descKey: 'settings.dataDescLong', descFallback: 'Backups, imports, retention rules, and destructive cleanup actions.', categoryFallback: 'Operations' },
+  { id: 'knowledge', i18nKey: 'settings.knowledge', fallback: 'Knowledge Base', icon: 'settings-data', descKey: 'settings.knowledgeDesc', descFallback: 'Vector memory indexing, semantic recall, and local knowledge verification.', categoryFallback: 'Knowledge' },
+  { id: 'events', i18nKey: 'settings.events', fallback: 'Event Automation', icon: 'settings-performance', descKey: 'settings.eventsDesc', descFallback: 'Clipboard, file, schedule, and startup triggers that route work to agents.', categoryFallback: 'Automation' },
+  { id: 'external-dirs', i18nKey: 'settings.externalDirs', fallback: 'External Directories', icon: 'settings-logs', descKey: 'settings.externalDirsDesc', descFallback: 'Attach shared prompt, skill, and agent directories beyond the current workspace.', categoryFallback: 'Extensions' },
+  { id: 'plugins', i18nKey: 'settings.plugins', fallback: 'Plugins', icon: 'settings-performance', descKey: 'settings.pluginsDesc', descFallback: 'Install runtime extensions, inspect permissions, and manage marketplace sources.', categoryFallback: 'Extensions' },
+  { id: 'logs', i18nKey: 'settings.logs', fallback: 'Logs', icon: 'settings-logs', descKey: 'settings.logsDesc', descFallback: 'Runtime diagnostics, log files, and crash evidence.', categoryFallback: 'Operations' },
+  { id: 'system', i18nKey: 'settings.system', fallback: 'System', icon: 'settings-performance', descKey: 'settings.systemDesc', descFallback: 'Onboarding, app health, and runtime performance metrics.', categoryFallback: 'Operations' },
 ];
 const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
     general: GeneralSettings,
@@ -37,6 +48,10 @@ const SECTION_COMPONENTS: Record<string, React.ComponentType> = {
     voice: VoiceSettings,
     shortcuts: ShortcutsSettings,
     data: DataSettings,
+  knowledge: KnowledgeSettings,
+  events: EventsSettings,
+  'external-dirs': ExternalDirsSettings,
+  plugins: PluginsSettings,
     logs: LogsSettings,
     system: SystemSettings,
 };
@@ -45,9 +60,9 @@ function SummaryStat({ label, value, accent = false }: {
     value: string;
     accent?: boolean;
 }) {
-    return (<div className={`rounded-2xl border px-3.5 py-3.5 ${accent ? 'border-accent/18 bg-accent/10' : 'border-border-subtle/55 bg-surface-0/60'}`}>
-      <div className="text-[11px] uppercase tracking-[0.08em] text-text-muted/60">{label}</div>
-      <div className={`mt-1.5 text-[15px] font-semibold ${accent ? 'text-accent' : 'text-text-primary'}`}>{value}</div>
+    return (<div className={workbenchSummaryStatClass(accent)}>
+      <div className={workbenchSummaryLabelClass}>{label}</div>
+      <div className={`${workbenchSummaryValueClass} ${accent ? 'text-accent' : ''}`}>{value}</div>
     </div>);
 }
 export function SettingsLayout() {
@@ -88,7 +103,7 @@ export function SettingsLayout() {
 
       <div className="module-canvas flex-1 overflow-y-auto px-5 py-5 xl:px-8 xl:py-6">
         <div className="module-content mx-auto max-w-7xl space-y-5">
-          <section className="rounded-3xl border border-border-subtle/55 bg-surface-1/78 px-5 py-4 shadow-[0_14px_36px_rgba(15,23,42,0.06)] xl:px-6">
+          <section className="rounded-3xl border border-border-subtle/55 bg-surface-1/88 px-5 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)] xl:px-6">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div className="flex min-w-0 items-start gap-3.5">
                 <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-accent/12 bg-accent/10 text-accent shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.1)]">
@@ -106,7 +121,7 @@ export function SettingsLayout() {
 
               <div className="grid gap-2 sm:grid-cols-3 xl:w-88">
                 <SummaryStat label={t('settings.section', 'Section')} value={`${sectionIndex + 1}/${SETTING_SECTIONS.length}`} accent/>
-                <SummaryStat label={t('settings.category', 'Category')} value={t('settings.preferences', 'Preferences')}/>
+                <SummaryStat label={t('settings.category', 'Category')} value={sectionMeta?.categoryFallback ?? t('settings.preferences', 'Preferences')}/>
                 <SummaryStat label={t('settings.scope', 'Scope')} value={workspacePath ? t('settings.workspace', 'Workspace') : t('settings.local', 'Local')}/>
               </div>
             </div>

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useTheme as useNextTheme } from 'next-themes'
 import { useAppStore } from '@/store/appStore'
 import { ACCENT_PRESETS, isAccentPreset } from '@/theme/accentPresets'
 
@@ -20,51 +21,28 @@ const CODE_FONT_MAP: Record<string, string> = {
 export function useTheme() {
   const theme = useAppStore((s) => s.theme)
   const setTheme = useAppStore((s) => s.setTheme)
+  const { setTheme: applyTheme } = useNextTheme()
   const fontSize = useAppStore((s) => s.fontSize)
   const codeFont = useAppStore((s) => s.codeFont)
   const accentColor = useAppStore((s) => s.accentColor)
 
   useEffect(() => {
+    applyTheme(theme)
+  }, [applyTheme, theme])
+
+  useEffect(() => {
+    if (theme !== 'system') return
+
     const root = document.documentElement
-
-    const apply = (isDark: boolean) => {
-      root.classList.toggle('light', !isDark)
-      // Also toggle the standard 'dark' class so Tailwind's dark: variant
-      // (used by catalyst-ui components) respects the app's manual theme setting.
-      root.classList.toggle('dark', isDark)
-    }
-
-    if (theme === 'system') {
-      if (typeof window.matchMedia !== 'function') {
-        apply(false)
-        return
-      }
-
-      let mq: MediaQueryList
-      try {
-        mq = window.matchMedia('(prefers-color-scheme: dark)')
-      } catch {
-        apply(false)
-        return
-      }
-
-      apply(mq.matches)
-      const handler = (e: MediaQueryListEvent) => apply(e.matches)
-
-      if (typeof mq.addEventListener === 'function') {
-        mq.addEventListener('change', handler)
-        return () => mq.removeEventListener('change', handler)
-      }
-
-      if (typeof mq.addListener === 'function') {
-        mq.addListener(handler)
-        return () => mq.removeListener(handler)
-      }
-
+    if (typeof window.matchMedia !== 'function') {
+      root.classList.remove('dark')
+      root.classList.add('light')
       return
     }
 
-    apply(theme === 'dark')
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+    root.classList.toggle('dark', prefersDark)
+    root.classList.toggle('light', !prefersDark)
   }, [theme])
 
   // Apply font size to root element
@@ -84,14 +62,11 @@ export function useTheme() {
   useEffect(() => {
     const root = document.documentElement
     if (!isAccentPreset(accentColor)) {
-      // 'default' — explicitly apply the brand Workbench Blue.
-      // Do not just remove overrides: the CSS baseline may differ (e.g. teal
-      // enterprise theme), so removing would not reliably give blue.
       root.style.setProperty('--t-accent', '#0024D3')
-      root.style.setProperty('--t-accent-hover', '#2948E8')
-      root.style.setProperty('--t-accent-glow', 'rgba(0, 36, 211, 0.20)')
-      root.style.setProperty('--t-accent-soft', 'rgba(0, 36, 211, 0.12)')
-      root.style.setProperty('--t-accent-secondary', '#1D4ED8')
+      root.style.setProperty('--t-accent-hover', '#2346DF')
+      root.style.setProperty('--t-accent-glow', 'rgba(0, 36, 211, 0.22)')
+      root.style.setProperty('--t-accent-soft', 'rgba(0, 36, 211, 0.10)')
+      root.style.setProperty('--t-accent-secondary', '#6D85FF')
       root.style.setProperty('--t-accent-rgb', '0, 36, 211')
       return
     }

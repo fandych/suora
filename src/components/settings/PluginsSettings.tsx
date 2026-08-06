@@ -7,8 +7,8 @@ import type { PluginConfigField, PluginInfo, PluginManifestV2 } from '@/types';
 import { PLUGIN_TEMPLATES, PLUGIN_MARKETPLACE_CATALOG, validatePlugin, activatePlugin, deactivatePlugin, checkPluginUpdate, getDefaultConfig, getPluginToolNames, getResolvedPluginEntryPoint, loadPluginFromManifest, resolvePluginRuntimeModule, searchMarketplacePlugins, installMarketplacePlugin, } from '@/services/pluginSystem';
 import type { MarketplacePlugin } from '@/services/pluginSystem';
 import { SettingsSection, SettingsStat } from './panelUi';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/shared/form-controls";
 const MARKETPLACE_CATEGORIES: Array<'' | MarketplacePlugin['category']> = ['', 'communication', 'productivity', 'developer', 'ai', 'utility', 'integration'];
 const PANEL_CARD_CLASS = 'rounded-3xl border border-border-subtle/55 bg-surface-0/45 p-4 shadow-[0_10px_24px_rgba(15,23,42,0.05)]';
 function TabButton({ active, icon, label, count, onClick, }: {
@@ -79,6 +79,10 @@ function ConfigFieldControl({ fieldKey, field, value, onChange }: {
       <div className="mt-3">
         {field.type === 'string' && (<UiInput value={String(resolvedValue ?? '')} onChange={(event) => onChange(event.target.value)} aria-label={field.label || fieldKey} wrapperClassName="w-full"/>)}
         {field.type === 'number' && (<UiInput type="number" value={Number(resolvedValue ?? 0)} onChange={(event) => onChange(Number(event.target.value))} aria-label={field.label || fieldKey} wrapperClassName="w-full"/>)}
+        {field.type === 'boolean' && (<label className="inline-flex items-center gap-3 rounded-2xl border border-border-subtle/55 bg-surface-2/70 px-4 py-3 text-sm text-text-secondary">
+            <input type="checkbox" checked={Boolean(resolvedValue)} onChange={(event) => onChange(event.target.checked)} aria-label={field.label || fieldKey} className="h-4 w-4 rounded border-border-subtle text-accent focus:ring-accent/30"/>
+            <span>{Boolean(resolvedValue) ? 'On' : 'Off'}</span>
+          </label>)}
         {field.type === 'select' && field.options && (<UiSelect value={String(resolvedValue ?? '')} onChange={(event) => onChange(event.target.value)} aria-label={field.label || fieldKey} wrapperClassName="w-full">
             {field.options.map((option) => (<option key={String(option.value)} value={String(option.value)}>{option.label}</option>))}
           </UiSelect>)}
@@ -264,6 +268,7 @@ export function PluginsSettings() {
                   <UiButton unstyled type="button" onClick={() => setMarketplace({ source: 'private' })} className={`rounded-2xl border px-4 py-3 text-left transition-colors ${marketplace.source === 'private' ? 'border-accent/20 bg-accent/10 text-accent' : 'border-border-subtle/55 bg-surface-2/70 text-text-secondary hover:bg-surface-3'}`}>
                     <div className="text-[13px] font-semibold">{t('settings.privateMarket', 'Private Market')}</div>
                     <div className="mt-1 text-[11px] leading-5 text-current/75">{t('settings.privateMarketHint', 'Point the app at a company-hosted manifest feed or plugin catalog.')}</div>
+                    <div className="mt-2 text-[10px] text-current/70">{t('settings.privateMarketPreviewOnly', 'Preview only until remote registry fetching is implemented.')}</div>
                   </UiButton>
                 </div>
 

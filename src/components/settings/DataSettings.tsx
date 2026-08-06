@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store/appStore';
+import { loadExternalSkillsAndAgents, saveSettingsToWorkspace, useAppStore } from '@/store/appStore';
 import { useI18n } from '@/hooks/useI18n';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import type { Agent, ProviderConfig, Skill, Session } from '@/types';
@@ -6,8 +6,8 @@ import { confirm } from '@/services/confirmDialog';
 import { toast } from '@/services/toast';
 import { safeParse, safeStringify } from '@/utils/safeJson';
 import { SettingsOverview, SettingsSection, SettingsStat } from './panelUi';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
 const PROVIDER_TYPES = new Set<ProviderConfig['providerType']>([
     'anthropic',
     'openai',
@@ -115,8 +115,17 @@ export function DataSettings() {
                 const importProviderConfigs = Array.isArray(data.providerConfigs)
                     ? data.providerConfigs.map(coerceProviderConfig).filter((config): config is ProviderConfig => config !== null)
                     : [];
+                const importExternalDirectories = Array.isArray(data.externalDirectories)
+                    ? data.externalDirectories.filter((directory): directory is { path: string; enabled: boolean; type: 'agents' | 'skills' } => !!directory
+                        && typeof directory === 'object'
+                        && !Array.isArray(directory)
+                        && typeof (directory as { path?: unknown }).path === 'string'
+                        && typeof (directory as { enabled?: unknown }).enabled === 'boolean'
+                        && (((directory as { type?: unknown }).type === 'agents') || ((directory as { type?: unknown }).type === 'skills')))
+                    : [];
                 const hasProviders = importProviderConfigs.length > 0;
-                const total = importAgents.length + importSkills.length + importSessions.length + (hasProviders ? 1 : 0);
+                const hasExternalDirectories = importExternalDirectories.length > 0;
+                const total = importAgents.length + importSkills.length + importSessions.length + (hasProviders ? 1 : 0) + (hasExternalDirectories ? 1 : 0);
                 if (total === 0) {
                     toast.warning(t('settings.importEmpty', 'Nothing to import from this file.'));
                     input.value = '';
@@ -127,6 +136,7 @@ export function DataSettings() {
                     importSkills.length && translateTemplate('settings.importSkillsCount', '{count} skill(s)', { count: importSkills.length }),
                     importSessions.length && translateTemplate('settings.importSessionsCount', '{count} session(s)', { count: importSessions.length }),
                     hasProviders && t('settings.importProviderConfigsOverwrite', 'provider configs (will overwrite current)'),
+                    hasExternalDirectories && translateTemplate('settings.importExternalDirectoriesCount', '{count} external directorie(s)', { count: importExternalDirectories.length }),
                 ].filter(Boolean).join(', ');
                 const ok = await confirm({
                     title: t('settings.importTitle', 'Import data?'),
@@ -144,6 +154,11 @@ export function DataSettings() {
                 if (hasProviders) {
                     setProviderConfigs(importProviderConfigs);
                     syncModelsFromConfigs();
+                }
+                if (hasExternalDirectories) {
+                    useAppStore.setState({ externalDirectories: importExternalDirectories });
+                    await saveSettingsToWorkspace();
+                    await loadExternalSkillsAndAgents();
                 }
                 toast.success(t('settings.importSuccess', 'Data imported successfully!'), summary);
                 input.value = '';

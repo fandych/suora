@@ -4,8 +4,8 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { clearAuditLog, getAuditLog } from '@/services/skillSecurity';
 import { SettingsOverview, SettingsSection, SettingsStat } from './panelUi';
 import { getElectron } from './shared';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
 type AuditLogStatus = 'success' | 'error' | 'blocked';
 type LogsTab = 'overview' | 'audit' | 'runtime';
 interface AuditLogEntry {

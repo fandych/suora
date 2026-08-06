@@ -11,11 +11,11 @@ import { formatChannelRelativeTime } from './ChannelComponents';
 import { ChannelEditor } from './ChannelEditor';
 import { ChannelMessageHistory, ChannelHealthMonitor, ChannelDebugPanel, ChannelUsersPanel } from './ChannelPanels';
 import { confirm as showConfirm } from '@/services/confirmDialog';
-import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
-import { Button as UiButton } from '@/components/catalyst-ui/button';
+import { WorkbenchEmptyState } from '@/components/workbench/empty-state';
+import { Button as UiButton } from '@/components/shared/button';
 import { useI18n } from '@/hooks/useI18n';
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
-import { workbenchAccentButtonClass, workbenchDangerButtonClass, workbenchDetailRowClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSidebarCardClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass, workbenchSidebarDescriptionClass, workbenchSidebarAccentActionClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
+import { Input as UiInput } from "@/components/shared/form-controls";
+import { workbenchAccentButtonClass, workbenchDangerButtonClass, workbenchDetailRowClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSidebarCardClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass, workbenchSidebarDescriptionClass, workbenchSidebarAccentActionClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/workbench/styles';
 type ChannelTab = 'config' | 'messages' | 'health' | 'debug' | 'users';
 function SummaryStat({ label, value, accent = false }: {
     label: string;
@@ -182,7 +182,7 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
         </div>
       </section>
 
-      <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/50 p-2 shadow-[0_10px_24px_rgba(15,23,42,0.05)]">
+      <div className="rounded-3xl border border-border-subtle/55 bg-surface-1/96 p-2 shadow-[0_6px_16px_rgba(15,23,42,0.04)]">
         <div className="flex flex-wrap gap-2">
           {tabMeta.map((tab) => (<UiButton unstyled key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`rounded-2xl px-4 py-2.5 text-[12px] font-semibold transition-colors ${activeTab === tab.id ? 'bg-accent/15 text-accent' : 'text-text-muted hover:bg-surface-3/60 hover:text-text-primary'}`}>
               <span className="inline-flex items-center gap-2"><IconifyIcon name={tab.icon} size={14} color="currentColor"/> {tab.label}</span>
@@ -208,8 +208,8 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
                 : t('channels.webhookRoutingHint', 'Use the callback address below when wiring the platform to this workspace. The webhook server must be running to receive traffic.')} action={channel.connectionMode !== 'stream' && webhookUrl ? (<UiButton unstyled type="button" onClick={() => copyToClipboard(webhookUrl)} className={`${workbenchAccentButtonClass} px-3 py-2 text-[11px]`}>
                   <span className="inline-flex items-center gap-1.5"><IconifyIcon name="ui-clipboard" size={13} color="currentColor"/> {t('common.copy', 'Copy')}</span>
                 </UiButton>) : undefined}>
-              {channel.connectionMode === 'stream' ? (<div className="rounded-3xl border border-green-500/20 bg-green-500/8 p-4">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-green-400">
+              {channel.connectionMode === 'stream' ? (<div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 p-4">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-text-primary">
                     <IconifyIcon name="ui-check" size={14} color="currentColor"/>
                     {t('channels.streamReady', 'Direct stream transport is ready')}
                   </div>
@@ -219,7 +219,7 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
                 </div>) : (<div className="space-y-3">
                   <DetailRow label={t('channels.serverState', 'Server State')} value={serverRunning ? t('channels.serverRunning', 'Server running') : t('channels.serverStopped', 'Server stopped')}/>
                   <DetailRow label={t('channels.webhookPath', 'Webhook Path')} value={<code className="rounded-lg bg-surface-3/60 px-2 py-1 text-xs text-accent">{channel.webhookPath}</code>}/>
-                  {webhookUrl ? (<DetailRow label={t('channels.webhookUrl', 'Webhook URL')} value={<code className="break-all rounded-lg bg-surface-3/60 px-2 py-1 text-xs text-accent">{webhookUrl}</code>}/>) : (<div className="rounded-3xl border border-yellow-500/18 bg-yellow-500/8 p-4">
+                  {webhookUrl ? (<DetailRow label={t('channels.webhookUrl', 'Webhook URL')} value={<code className="break-all rounded-lg bg-surface-3/60 px-2 py-1 text-xs text-accent">{webhookUrl}</code>}/>) : (<div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 p-4">
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <div className="text-sm font-semibold text-text-primary">{t('channels.webhookServerRequired', 'Webhook server required')}</div>
@@ -244,7 +244,7 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
                     </>) : (<DetailRow label={t('channels.wechatPersonalWebhookUrl', 'Outgoing Webhook URL')} value={channel.wechatPersonalWebhookUrl
                         ? <code className="break-all rounded-lg bg-surface-3/60 px-2 py-1 text-xs text-accent">{channel.wechatPersonalWebhookUrl}</code>
                         : t('common.noData', 'No data')}/>)}
-                  {channel.wechatPersonalQrCodeUrl ? (<div className="rounded-3xl border border-border-subtle/45 bg-surface-0/55 p-4">
+                  {channel.wechatPersonalQrCodeUrl ? (<div className="rounded-3xl border border-border-subtle/45 bg-surface-0/72 p-4">
                       <div className="text-[12px] font-medium text-text-primary">{t('channels.wechatPersonalScanTitle', 'Scan to bind')}</div>
                       <p className="mt-1 text-[11px] leading-5 text-text-secondary/78">{t('channels.wechatPersonalScanHint', 'Open WeChat on the target account, scan this QR code, and keep Suora open until the binding flow reports success.')}</p>
                       <img src={channel.wechatPersonalQrCodeUrl} alt={t('channels.wechatPersonalQrPreview', 'Personal WeChat QR')} className="mt-4 h-48 w-48 rounded-3xl border border-border-subtle/55 bg-white object-contain p-3 shadow-sm"/>
@@ -271,14 +271,14 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
                 <DetailRow label={t('channels.lastChecked', 'Last Checked')} value={health?.lastCheckAt ? new Date(health.lastCheckAt).toLocaleString() : t('channels.notChecked', 'Not checked')}/>
                 <DetailRow label={t('channels.latency', 'Latency')} value={health?.latencyMs !== undefined ? `${health.latencyMs}ms` : t('channels.pending', 'Pending')}/>
                 <DetailRow label={t('channels.errors', 'Errors')} value={String(health?.errorCount ?? 0)}/>
-                {health?.lastError && (<div className="rounded-3xl border border-red-500/18 bg-red-500/8 p-4 text-[12px] leading-6 text-red-400">
+                {health?.lastError && (<div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 p-4 text-[12px] leading-6 text-text-secondary">
                     <div className="font-semibold">{t('channels.lastError', 'Last error')}</div>
                     <p className="mt-2 wrap-break-word">{health.lastError}</p>
                   </div>)}
               </div>
             </DetailSection>
           </div>
-        </div>) : (<div className="flex h-[calc(100vh-15rem)] min-h-135 max-h-[calc(100vh-15rem)] flex-col overflow-hidden rounded-4xl border border-border-subtle/55 bg-surface-1/70">
+        </div>) : (<div className="flex h-[calc(100vh-15rem)] min-h-135 max-h-[calc(100vh-15rem)] flex-col overflow-hidden rounded-4xl border border-border-subtle/55 bg-surface-1/96">
           {activeTab === 'messages' && <ChannelMessageHistory channelId={channel.id}/>}
           {activeTab === 'users' && <ChannelUsersPanel channelId={channel.id}/>}
           {activeTab === 'health' && <ChannelHealthMonitor singleChannelId={channel.id}/>}

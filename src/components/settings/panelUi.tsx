@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Switch } from '@/components/catalyst-ui/switch'
+import { Switch } from '@/components/shared/switch'
 
 export function SettingsSection({
   eyebrow,

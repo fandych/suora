@@ -2,8 +2,8 @@
 // Mounted once near the root of the app (App.tsx).
 
 import { useCallback, useEffect, useRef } from 'react'
-import { Alert, AlertActions, AlertDescription, AlertTitle } from '@/components/catalyst-ui/alert'
-import { Button } from '@/components/catalyst-ui/button'
+import { Alert, AlertActions, AlertDescription, AlertTitle } from '@/components/shared/alert'
+import { Button } from '@/components/shared/button'
 import { useConfirmStore } from '@/services/confirmDialog'
 import { useI18n } from '@/hooks/useI18n'
 

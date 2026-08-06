@@ -4,8 +4,8 @@ import { CLAUDE_CODE_SKILLS_DIRECTORY, OTHER_AGENTS_SKILLS_DIRECTORY } from '@/s
 import { useI18n } from '@/hooks/useI18n';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { SettingsSection, SettingsStat } from './panelUi';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput, Select as UiSelect } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput, Select as UiSelect } from "@/components/shared/form-controls";
 export function ExternalDirsSettings() {
     const { t } = useI18n();
     const { externalDirectories, addExternalDirectory, updateExternalDirectory, removeExternalDirectory } = useAppStore();

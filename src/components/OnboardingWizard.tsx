@@ -3,8 +3,8 @@ import { useAppStore } from '@/store/appStore';
 import { ICON_DATA, IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import { confirm } from '@/services/confirmDialog';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionEyebrowClass } from '@/components/workbench/styles';
 interface OnboardingStepDef {
     titleKey: string;
     titleDefault: string;

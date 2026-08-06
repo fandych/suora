@@ -1,16 +1,14 @@
 export type AccentColorId =
   | 'default'
-  | 'amber'
-  | 'sapphire'
-  | 'emerald'
-  | 'amethyst'
-  | 'coral'
-  | 'rose'
-  | 'jade'
-  | 'crimson'
-  | 'copper'
-  | 'arctic'
-  | 'slate'
+  | 'strong-blue'
+  | 'tango-pink'
+  | 'dark-tangerine'
+  | 'lemon-curry'
+  | 'persian-green'
+  | 'turquoise'
+  | 'skyline-blue'
+  | 'oceanic-teal'
+  | 'rose-taupe'
 
 export interface AccentPreset {
   accent: string
@@ -26,115 +24,95 @@ export interface AccentPreset {
 export const DEFAULT_ACCENT_COLOR: AccentColorId = 'default'
 
 export const ACCENT_PRESETS: Record<Exclude<AccentColorId, 'default'>, AccentPreset> = {
-  amber: {
-    accent: '#C99A2E',
-    hover: '#D7A93F',
-    glow: 'rgba(201,154,46,0.22)',
-    soft: 'rgba(201,154,46,0.10)',
-    secondary: '#E2BC62',
-    rgb: '201,154,46',
-    swatchFill: 'bg-[#C99A2E]',
-    swatchRing: 'ring-[#C99A2E]/45',
+  'strong-blue': {
+    accent: '#0024d3',
+    hover: '#2346df',
+    glow: 'rgba(0,36,211,0.22)',
+    soft: 'rgba(0,36,211,0.10)',
+    secondary: '#6d85ff',
+    rgb: '0,36,211',
+    swatchFill: 'bg-[#0024d3]',
+    swatchRing: 'ring-[#0024d3]/45',
   },
-  sapphire: {
-    accent: '#215DFF',
-    hover: '#4678FF',
-    glow: 'rgba(33,93,255,0.22)',
-    soft: 'rgba(33,93,255,0.10)',
-    secondary: '#8EAEFF',
-    rgb: '33,93,255',
-    swatchFill: 'bg-[#215DFF]',
-    swatchRing: 'ring-[#215DFF]/45',
+  'tango-pink': {
+    accent: '#F06473',
+    hover: '#f37f8b',
+    glow: 'rgba(240,100,115,0.22)',
+    soft: 'rgba(240,100,115,0.10)',
+    secondary: '#f7b0b8',
+    rgb: '240,100,115',
+    swatchFill: 'bg-[#F06473]',
+    swatchRing: 'ring-[#F06473]/45',
   },
-  emerald: {
-    accent: '#158F74',
-    hover: '#22A785',
-    glow: 'rgba(21,143,116,0.20)',
-    soft: 'rgba(21,143,116,0.10)',
-    secondary: '#67C3A8',
-    rgb: '21,143,116',
-    swatchFill: 'bg-[#158F74]',
-    swatchRing: 'ring-[#158F74]/45',
+  'dark-tangerine': {
+    accent: '#f58c35',
+    hover: '#f7a154',
+    glow: 'rgba(245,140,53,0.22)',
+    soft: 'rgba(245,140,53,0.10)',
+    secondary: '#f9c089',
+    rgb: '245,140,53',
+    swatchFill: 'bg-[#f58c35]',
+    swatchRing: 'ring-[#f58c35]/45',
   },
-  amethyst: {
-    accent: '#8B5CF6',
-    hover: '#A78BFA',
-    glow: 'rgba(139,92,246,0.22)',
-    soft: 'rgba(139,92,246,0.10)',
-    secondary: '#C4B5FD',
-    rgb: '139,92,246',
-    swatchFill: 'bg-[#8B5CF6]',
-    swatchRing: 'ring-[#8B5CF6]/45',
+  'lemon-curry': {
+    accent: '#F5D34C',
+    hover: '#f7dc6d',
+    glow: 'rgba(245,211,76,0.22)',
+    soft: 'rgba(245,211,76,0.10)',
+    secondary: '#fae9a3',
+    rgb: '245,211,76',
+    swatchFill: 'bg-[#F5D34C]',
+    swatchRing: 'ring-[#F5D34C]/45',
   },
-  coral: {
-    accent: '#E06848',
-    hover: '#EB8163',
-    glow: 'rgba(224,104,72,0.22)',
-    soft: 'rgba(224,104,72,0.10)',
-    secondary: '#F2A38F',
-    rgb: '224,104,72',
-    swatchFill: 'bg-[#E06848]',
-    swatchRing: 'ring-[#E06848]/45',
+  'persian-green': {
+    accent: '#00B48F',
+    hover: '#1ac4a1',
+    glow: 'rgba(0,180,143,0.22)',
+    soft: 'rgba(0,180,143,0.10)',
+    secondary: '#7adbc8',
+    rgb: '0,180,143',
+    swatchFill: 'bg-[#00B48F]',
+    swatchRing: 'ring-[#00B48F]/45',
   },
-  rose: {
-    accent: '#D44878',
-    hover: '#E16692',
-    glow: 'rgba(212,72,120,0.22)',
-    soft: 'rgba(212,72,120,0.10)',
-    secondary: '#EE9AB7',
-    rgb: '212,72,120',
-    swatchFill: 'bg-[#D44878]',
-    swatchRing: 'ring-[#D44878]/45',
+  turquoise: {
+    accent: '#00A8BF',
+    hover: '#1db7cd',
+    glow: 'rgba(0,168,191,0.22)',
+    soft: 'rgba(0,168,191,0.10)',
+    secondary: '#7ad7e3',
+    rgb: '0,168,191',
+    swatchFill: 'bg-[#00A8BF]',
+    swatchRing: 'ring-[#00A8BF]/45',
   },
-  jade: {
-    accent: '#1C9B8E',
-    hover: '#2CB4A6',
-    glow: 'rgba(28,155,142,0.22)',
-    soft: 'rgba(28,155,142,0.10)',
-    secondary: '#79D0C7',
-    rgb: '28,155,142',
-    swatchFill: 'bg-[#1C9B8E]',
-    swatchRing: 'ring-[#1C9B8E]/45',
+  'skyline-blue': {
+    accent: '#00a9eb',
+    hover: '#24b7ef',
+    glow: 'rgba(0,169,235,0.22)',
+    soft: 'rgba(0,169,235,0.10)',
+    secondary: '#86d9f8',
+    rgb: '0,169,235',
+    swatchFill: 'bg-[#00a9eb]',
+    swatchRing: 'ring-[#00a9eb]/45',
   },
-  crimson: {
-    accent: '#CC3340',
-    hover: '#DA5360',
-    glow: 'rgba(204,51,64,0.22)',
-    soft: 'rgba(204,51,64,0.10)',
-    secondary: '#F08D96',
-    rgb: '204,51,64',
-    swatchFill: 'bg-[#CC3340]',
-    swatchRing: 'ring-[#CC3340]/45',
+  'oceanic-teal': {
+    accent: '#008cb7',
+    hover: '#1d9ec7',
+    glow: 'rgba(0,140,183,0.22)',
+    soft: 'rgba(0,140,183,0.10)',
+    secondary: '#7bc5db',
+    rgb: '0,140,183',
+    swatchFill: 'bg-[#008cb7]',
+    swatchRing: 'ring-[#008cb7]/45',
   },
-  copper: {
-    accent: '#C07840',
-    hover: '#CE8D58',
-    glow: 'rgba(192,120,64,0.22)',
-    soft: 'rgba(192,120,64,0.10)',
-    secondary: '#E0AF86',
-    rgb: '192,120,64',
-    swatchFill: 'bg-[#C07840]',
-    swatchRing: 'ring-[#C07840]/45',
-  },
-  arctic: {
-    accent: '#4AA8D0',
-    hover: '#68B9DB',
-    glow: 'rgba(74,168,208,0.22)',
-    soft: 'rgba(74,168,208,0.10)',
-    secondary: '#9FD3E7',
-    rgb: '74,168,208',
-    swatchFill: 'bg-[#4AA8D0]',
-    swatchRing: 'ring-[#4AA8D0]/45',
-  },
-  slate: {
-    accent: '#6B7B99',
-    hover: '#8393B0',
-    glow: 'rgba(107,123,153,0.20)',
-    soft: 'rgba(107,123,153,0.10)',
-    secondary: '#B1BDD1',
-    rgb: '107,123,153',
-    swatchFill: 'bg-[#6B7B99]',
-    swatchRing: 'ring-[#6B7B99]/45',
+  'rose-taupe': {
+    accent: '#954f72',
+    hover: '#ab6687',
+    glow: 'rgba(149,79,114,0.22)',
+    soft: 'rgba(149,79,114,0.10)',
+    secondary: '#c796af',
+    rgb: '149,79,114',
+    swatchFill: 'bg-[#954f72]',
+    swatchRing: 'ring-[#954f72]/45',
   },
 }
 

@@ -9,8 +9,8 @@ import type { PluggableList } from 'unified';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import 'katex/dist/katex.min.css';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
 const MARKDOWN_SANITIZE_SCHEMA = {
     ...defaultSchema,
     tagNames: Array.from(new Set([

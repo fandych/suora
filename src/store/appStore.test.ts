@@ -450,7 +450,7 @@ describe('appStore', () => {
       expect(window.electron.invoke).toHaveBeenCalledWith('workspace:init', 'C:/boot-workspace')
     })
 
-    it('should load file-backed skills without importing file-backed agents during startup refresh', async () => {
+    it('should load file-backed skills and enabled external agents during startup refresh', async () => {
       vi.mocked(loadAllSkills).mockResolvedValueOnce([
         {
           id: 'skill-local', name: 'Local Skill', description: 'Local description',
@@ -490,6 +490,7 @@ describe('appStore', () => {
       )
       expect(useAppStore.getState().agents.map((agent) => agent.id)).toEqual([
         'default-assistant',
+        'agent-external',
       ])
       expect(useAppStore.getState().skills.map((skill) => skill.name)).toEqual([
         'Local Skill',

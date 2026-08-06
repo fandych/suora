@@ -668,21 +668,19 @@ export function initChannelMessageListener(): () => void {
     if (channel.autoReply) {
       const response = await handleChannelMessage(channel, message)
 
-      // Store outgoing reply in history
-      storeChannelMessage({
-        id: `reply-${message.id}`,
-        channelId: channel.id,
-        direction: 'outgoing',
-        platform: channel.platform,
-        senderId: 'assistant',
-        senderName: 'AI Assistant',
-        content: response,
-        timestamp: Date.now(),
-        status: 'pending',
-      })
-
       // Send reply back
       if (message.chatId) {
+        storeChannelMessage({
+          id: `reply-${message.id}`,
+          channelId: channel.id,
+          direction: 'outgoing',
+          platform: channel.platform,
+          senderId: 'assistant',
+          senderName: 'AI Assistant',
+          content: response,
+          timestamp: Date.now(),
+          status: 'pending',
+        })
         const success = await sendChannelReply(channel, message.chatId, response)
         if (success) {
           logger.info('Reply sent successfully', { channelId: channel.id })
@@ -701,6 +699,11 @@ export function initChannelMessageListener(): () => void {
             ),
           }))
         }
+      } else {
+        logger.warn('Skipping channel reply because inbound payload has no chatId', {
+          channelId: channel.id,
+          messageId: message.id,
+        })
       }
     } else {
       logger.info('AutoReply disabled, message not processed', {

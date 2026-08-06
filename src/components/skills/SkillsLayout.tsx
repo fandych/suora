@@ -1,4 +1,5 @@
 import { Suspense, lazy, useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { loadExternalSkillsAndAgents, saveSettingsToWorkspace, useAppStore } from '@/store/appStore';
 import { SidePanel } from '@/components/layout/SidePanel';
 import { SkillIcon, IconifyIcon, getSkillIconName, useSkillIconsReady } from '@/components/icons/IconifyIcons';
@@ -9,12 +10,12 @@ import { confirm } from '@/services/confirmDialog';
 import { toast } from '@/services/toast';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { useResizablePanel } from '@/hooks/useResizablePanel';
-import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
-import { Button as UiButton } from '@/components/catalyst-ui/button';
-import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { WorkbenchEmptyState } from '@/components/workbench/empty-state';
+import { Button as UiButton } from '@/components/shared/button';
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
 import { buildSkillFromDataTransferItems, buildSkillFromFolderFiles, downloadBlob, exportSkillToZipBlob, skillArchiveName } from '@/services/skillArchive';
 import { skillDirectorySegment } from '@/utils/pathSegments';
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { Input as UiInput } from "@/components/shared/form-controls";
 import { scheduleWhenIdle } from '@/utils/scheduling';
 
 const LazySkillEditor = lazy(() => import('./SkillEditor').then((module) => ({ default: module.SkillEditor })));
@@ -63,6 +64,7 @@ function countSkillsForDirectory(skills: Skill[], dirPath: string, fallbackSourc
     }).length;
 }
 export function SkillsLayout() {
+    const [searchParams, setSearchParams] = useSearchParams();
     const [panelWidth, setPanelWidth] = useResizablePanel('skills', 340);
     const { skills, addSkill, updateSkill, removeSkill, workspacePath, externalDirectories, addExternalDirectory, updateExternalDirectory, } = useAppStore();
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -84,6 +86,20 @@ export function SkillsLayout() {
         'claude-dir': t('skills.claudeCode', 'Claude Code'),
     }), [t]);
     const editingSkill = editingId ? skills.find((s) => s.id === editingId) ?? null : null;
+    useEffect(() => {
+        const targetSkillId = searchParams.get('skillId');
+        if (!targetSkillId)
+            return;
+        if (skills.some((skill) => skill.id === targetSkillId)) {
+            setEditingId(targetSkillId);
+            setIsAdding(false);
+        }
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.delete('skillId');
+            return next;
+        }, { replace: true });
+    }, [searchParams, setSearchParams, skills]);
     const localSkillSources = useMemo(() => {
         const skillDirectories = externalDirectories.filter((directory) => directory.type === 'skills');
         const configuredDirectories = new Map(skillDirectories.map((directory) => [normalizeSkillSourcePath(directory.path), directory] as const));
@@ -403,22 +419,22 @@ export function SkillsLayout() {
               <div className="mt-3 space-y-2">
                 {localSkillSources.map((source) => {
             const isBusy = togglingLocalSourcePath === source.path;
-            return (<div key={source.id} className={`relative overflow-hidden rounded-3xl border px-4 py-3.5 transition-all duration-200 ${source.enabled
-                    ? 'border-accent/20 bg-linear-to-br from-accent/10 via-surface-1/96 to-surface-2/72 shadow-[0_14px_32px_rgba(var(--t-accent-rgb),0.10)]'
-                    : 'border-border-subtle/55 bg-linear-to-br from-surface-1/92 to-surface-2/50 hover:border-border-subtle/75 hover:from-surface-1 hover:to-surface-2/70'}`}>
+                return (<div key={source.id} className={`relative overflow-hidden rounded-3xl border px-4 py-3.5 transition-all duration-200 ${source.enabled
+                    ? 'border-accent/14 bg-linear-to-br from-surface-1/99 via-surface-1/97 to-surface-2/92 shadow-[0_8px_18px_rgba(var(--t-accent-rgb),0.05)]'
+                    : 'border-border-subtle/55 bg-linear-to-br from-surface-1/98 to-surface-2/92 hover:border-border-subtle/75 hover:from-surface-1 hover:to-surface-2/94'}`}>
                       <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-3">
-                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-colors ${source.enabled
-                    ? 'border-accent-hover/35 bg-accent-hover text-white shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.26)]'
-                    : 'border-border/40 bg-surface-0/75 text-text-muted'}`}>
+                                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border transition-colors ${source.enabled
+                            ? 'border-accent/20 bg-accent/10 text-accent shadow-[0_6px_14px_rgba(var(--t-accent-rgb),0.08)]'
+                            : 'border-border/40 bg-surface-0/75 text-text-muted'}`}>
                               <IconifyIcon name={source.icon} size={16} color="currentColor"/>
                             </div>
                             <div className="min-w-0 flex-1">
                               <div className="flex flex-wrap items-center gap-2">
                                 <span className="text-[13px] font-semibold text-text-primary">{source.label}</span>
                                 <span className={`h-2 w-2 rounded-full ${source.enabled
-                    ? 'bg-accent-hover shadow-[0_0_0_5px_rgba(var(--t-accent-rgb),0.22)]'
+                    ? 'bg-accent shadow-[0_0_0_4px_rgba(var(--t-accent-rgb),0.12)]'
                     : 'bg-zinc-500 shadow-[0_0_0_4px_rgba(113,113,122,0.18)]'}`}/>
                                                                 <span className={workbenchSidebarPillClass}>
                                   {source.skillCount} {t('skills.loaded', 'loaded')}
@@ -429,7 +445,7 @@ export function SkillsLayout() {
                           </div>
                         </div>
                         <label aria-label={`${source.enabled ? t('skills.disable', 'Disable') : t('skills.enable', 'Enable')} ${source.label}`} title={source.enabled ? t('skills.disable', 'Disable') : t('skills.enable', 'Enable')} className={`group relative inline-flex w-11 shrink-0 rounded-full p-0.5 outline-offset-2 transition-colors duration-200 ease-in-out ${source.enabled
-                    ? 'bg-accent inset-ring inset-ring-white/16 shadow-[0_8px_18px_rgba(var(--t-accent-rgb),0.30)]'
+                    ? 'bg-accent inset-ring inset-ring-white/16 shadow-[0_5px_12px_rgba(var(--t-accent-rgb),0.18)]'
                     : 'bg-zinc-500/75 inset-ring inset-ring-black/10 shadow-[inset_0_1px_2px_rgba(15,23,42,0.18)]'} ${isBusy ? 'cursor-wait opacity-75' : 'cursor-pointer'} has-focus-visible:outline-2 has-focus-visible:outline-accent`}>
                           <span className={`pointer-events-none flex size-5 items-center justify-center rounded-full bg-white ring-1 transition-transform duration-200 ease-in-out ${source.enabled ? 'translate-x-5 ring-white/20 shadow-[0_4px_12px_rgba(15,23,42,0.22)]' : 'translate-x-0 ring-black/10 shadow-[0_3px_8px_rgba(15,23,42,0.14)]'}`}>
                             {isBusy ? <IconifyIcon name="lucide:loader-circle" size={10} color="currentColor" className="animate-spin text-text-muted"/> : null}

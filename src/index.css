@@ -1,144 +1,176 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
-/* ── Dark-mode variant: use .dark class (set by useTheme) instead of OS media query.
-   This lets catalyst-ui's `dark:*` utilities respond to the app's manual theme toggle. */
+/* ── Dark-mode variant: use the app theme class instead of OS media query.
+  This keeps shadcn/Base UI surfaces aligned with the manual theme toggle. */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ── Tailwind v4 theme tokens (reference CSS vars for dynamic theming) ── */
 @theme {
+  --radius: 1rem;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
   --color-surface-0: var(--t-surface-0);
   --color-surface-1: var(--t-surface-1);
   --color-surface-2: var(--t-surface-2);
   --color-surface-3: var(--t-surface-3);
   --color-surface-4: var(--t-surface-4);
+  --color-card-muted: var(--t-surface-2);
   --color-border: var(--t-border);
   --color-border-subtle: var(--t-border-subtle);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
   --color-text-primary: var(--t-text-primary);
   --color-text-secondary: var(--t-text-secondary);
   --color-text-muted: var(--t-text-muted);
   --color-accent: var(--t-accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-accent-hover: var(--t-accent-hover);
   --color-accent-glow: var(--t-accent-glow);
   --color-accent-soft: var(--t-accent-soft);
   --color-accent-secondary: var(--t-accent-secondary);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-success: var(--t-success);
   --color-danger: var(--t-danger);
   --color-warning: var(--t-warning);
 }
 
-/* ── Dark theme (default) ── SUORA · Enterprise AI Workbench ── */
+/* ── Dark theme (default) ── SUORA · Graphite & Strong Blue ── */
 :root {
-  --t-surface-0: #071019;
-  --t-surface-1: #0B1622;
-  --t-surface-2: #102033;
-  --t-surface-3: #172A40;
-  --t-surface-4: #22364D;
-  --t-border: #2A4056;
-  --t-border-subtle: #182A3C;
-  --t-text-primary: #EAF2F8;
-  --t-text-secondary: #AAB9C8;
-  --t-text-muted: #71859A;
-  --t-accent: #0024D3;
-  --t-accent-hover: #2948E8;
-  --t-accent-glow: rgba(0, 36, 211, 0.20);
-  --t-accent-soft: rgba(0, 36, 211, 0.12);
-  --t-accent-secondary: #1D4ED8;
-  --t-accent-rgb: 0, 36, 211;
-  --t-success: #00B48F;
-  --t-danger: #F06473;
-  --t-warning: #F58C35;
-  --glass-tint: rgba(9, 22, 34, 0.84);
-  --glass-tint-strong: rgba(8, 19, 30, 0.94);
-  --glass-border: rgba(109, 139, 168, 0.26);
-  --glass-hover: rgba(31, 56, 80, 0.72);
-  --glass-highlight-opacity: 0.48;
-  --pattern-overlay-opacity: 0.28;
-  --glass-pattern-opacity: 0.045;
-  --glass-shadow: 0 18px 42px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  --t-surface-0: #0f0f10;
+  --t-surface-1: #17181a;
+  --t-surface-2: #202225;
+  --t-surface-3: #2a2d31;
+  --t-surface-4: #363a3f;
+  --t-border: #41454b;
+  --t-border-subtle: #2a2d31;
+  --t-text-primary: #f3f4f6;
+  --t-text-secondary: #d1d5db;
+  --t-text-muted: #9ca3af;
+  --t-accent: #c7863a;
+  --t-accent-hover: #d39a56;
+  --t-accent-glow: rgba(199, 134, 58, 0.22);
+  --t-accent-soft: rgba(199, 134, 58, 0.12);
+  --t-accent-secondary: #e4b179;
+  --t-accent-rgb: 199, 134, 58;
+  --t-success: #4db58f;
+  --t-danger: #e06d6d;
+  --t-warning: #d79a4b;
+  --background: var(--t-surface-0);
+  --foreground: var(--t-text-primary);
+  --card: color-mix(in srgb, var(--t-surface-1) 92%, black 8%);
+  --card-foreground: var(--t-text-primary);
+  --popover: color-mix(in srgb, var(--t-surface-1) 94%, black 6%);
+  --popover-foreground: var(--t-text-primary);
+  --primary: var(--t-accent);
+  --primary-foreground: #ffffff;
+  --secondary: color-mix(in srgb, var(--t-surface-2) 92%, black 8%);
+  --secondary-foreground: var(--t-text-primary);
+  --muted: color-mix(in srgb, var(--t-surface-2) 82%, transparent);
+  --muted-foreground: var(--t-text-muted);
+  --accent: color-mix(in srgb, var(--t-accent) 18%, var(--t-surface-2));
+  --accent-foreground: var(--t-text-primary);
+  --destructive: var(--t-danger);
+  --destructive-foreground: #ffffff;
+  --input: color-mix(in srgb, var(--t-surface-2) 86%, transparent);
+  --ring: color-mix(in srgb, var(--t-accent) 44%, white 8%);
+  --glass-tint: rgba(23, 24, 26, 0.92);
+  --glass-tint-strong: rgba(15, 15, 16, 0.96);
+  --glass-border: rgba(95, 100, 108, 0.26);
+  --glass-hover: rgba(42, 45, 49, 0.88);
+  --glass-highlight-opacity: 0.18;
+  --pattern-overlay-opacity: 0;
+  --glass-pattern-opacity: 0;
+  --glass-shadow: 0 10px 28px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --glass-border-accent-84: rgba(199, 134, 58, 0.22);
+  --glass-border-alpha-70: rgba(95, 100, 108, 0.18);
+  --glass-border-alpha-78: rgba(95, 100, 108, 0.24);
+  --t-border-alpha-58: rgba(65, 69, 75, 0.58);
+  --t-border-alpha-76: rgba(65, 69, 75, 0.76);
+  --t-surface-1-alpha-72: rgba(23, 24, 26, 0.72);
 }
 
-/* ── Light theme ── SUORA · Enterprise AI Workbench ── */
+/* ── Light theme ── SUORA · Parchment & Ink ── */
 .light {
-  --t-surface-0: #F4F7FA;
-  --t-surface-1: #FFFFFF;
-  --t-surface-2: #EEF3F7;
-  --t-surface-3: #E3EAF1;
-  --t-surface-4: #D4DEE9;
-  --t-border: #C4D0DC;
-  --t-border-subtle: #DDE6EF;
-  --t-text-primary: #162231;
-  --t-text-secondary: #526376;
-  --t-text-muted: #8493A4;
-  --t-accent: #0024D3;
-  --t-accent-hover: #001BA8;
-  --t-accent-glow: rgba(0, 36, 211, 0.14);
-  --t-accent-soft: rgba(0, 36, 211, 0.08);
-  --t-accent-secondary: #1D4ED8;
-  --t-accent-rgb: 0, 36, 211;
-  --t-success: #009A7A;
-  --t-danger: #E04858;
-  --t-warning: #E07A20;
-  --glass-tint: rgba(255, 255, 255, 0.86);
-  --glass-tint-strong: rgba(255, 255, 255, 0.96);
-  --glass-border: rgba(141, 158, 178, 0.42);
-  --glass-hover: rgba(230, 238, 246, 0.82);
-  --glass-highlight-opacity: 0.58;
-  --pattern-overlay-opacity: 0.22;
-  --glass-pattern-opacity: 0.045;
-  --glass-shadow: 0 16px 38px rgba(28, 48, 70, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  --t-surface-0: #f5f5f4;
+  --t-surface-1: #fafaf9;
+  --t-surface-2: #f0f1f3;
+  --t-surface-3: #e6e7ea;
+  --t-surface-4: #d5d7dc;
+  --t-border: #cbced4;
+  --t-border-subtle: #e6e7ea;
+  --t-text-primary: #111827;
+  --t-text-secondary: #4b5563;
+  --t-text-muted: #6b7280;
+  --t-accent: #9a5a17;
+  --t-accent-hover: #b26d25;
+  --t-accent-glow: rgba(154, 90, 23, 0.16);
+  --t-accent-soft: rgba(154, 90, 23, 0.08);
+  --t-accent-secondary: #c7863a;
+  --t-accent-rgb: 154, 90, 23;
+  --t-success: #2f8f6c;
+  --t-danger: #c85454;
+  --t-warning: #b97c29;
+  --background: var(--t-surface-0);
+  --foreground: var(--t-text-primary);
+  --card: color-mix(in srgb, var(--t-surface-1) 96%, white 4%);
+  --card-foreground: var(--t-text-primary);
+  --popover: color-mix(in srgb, var(--t-surface-1) 98%, white 2%);
+  --popover-foreground: var(--t-text-primary);
+  --primary: var(--t-accent);
+  --primary-foreground: #ffffff;
+  --secondary: color-mix(in srgb, var(--t-surface-2) 92%, white 8%);
+  --secondary-foreground: var(--t-text-primary);
+  --muted: color-mix(in srgb, var(--t-surface-2) 84%, white 16%);
+  --muted-foreground: var(--t-text-muted);
+  --accent: color-mix(in srgb, var(--t-accent) 12%, white 88%);
+  --accent-foreground: var(--t-text-primary);
+  --destructive: var(--t-danger);
+  --destructive-foreground: #ffffff;
+  --input: color-mix(in srgb, var(--t-surface-2) 72%, white 28%);
+  --ring: color-mix(in srgb, var(--t-accent) 32%, white 18%);
+  --glass-tint: rgba(255, 255, 255, 0.94);
+  --glass-tint-strong: rgba(255, 255, 255, 0.98);
+  --glass-border: rgba(203, 206, 212, 0.72);
+  --glass-hover: rgba(240, 241, 243, 0.92);
+  --glass-highlight-opacity: 0.28;
+  --pattern-overlay-opacity: 0;
+  --glass-pattern-opacity: 0;
+  --glass-shadow: 0 10px 24px rgba(17, 24, 39, 0.06), inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  --glass-border-accent-84: rgba(154, 90, 23, 0.22);
+  --glass-border-alpha-70: rgba(203, 206, 212, 0.52);
+  --glass-border-alpha-78: rgba(203, 206, 212, 0.68);
+  --t-border-alpha-58: rgba(203, 206, 212, 0.58);
+  --t-border-alpha-76: rgba(203, 206, 212, 0.76);
+  --t-surface-1-alpha-72: rgba(250, 250, 249, 0.72);
 }
 
 html, body, #root {
   width: 100%;
   height: 100%;
   font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
   --font-code: 'JetBrains Mono', 'Menlo', 'Monaco', 'Courier New', monospace;
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   letter-spacing: 0;
-}
-
-body {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 30%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 26%, transparent) 1px, transparent 1px),
-    linear-gradient(145deg, color-mix(in srgb, var(--t-surface-0) 94%, #03111d), color-mix(in srgb, var(--t-surface-2) 30%, var(--t-surface-0)));
-  background-size: 48px 48px, 48px 48px, auto;
-  color: var(--color-text-primary);
-}
-
-.app-aurora {
-  background:
-    linear-gradient(180deg, rgba(var(--t-accent-rgb), 0.055), transparent 26%),
-    linear-gradient(135deg, color-mix(in srgb, var(--t-surface-0) 92%, transparent), color-mix(in srgb, var(--t-surface-1) 68%, transparent));
-}
-
-.app-aurora::before,
-.app-aurora::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-}
-
-.app-aurora::before {
-  inset: 0;
-  opacity: var(--pattern-overlay-opacity);
-  background:
-    linear-gradient(90deg, transparent 0, transparent calc(100% - 1px), color-mix(in srgb, var(--t-accent) 28%, transparent) calc(100% - 1px), color-mix(in srgb, var(--t-accent) 28%, transparent) 100%),
-    linear-gradient(180deg, transparent 0, transparent calc(100% - 1px), color-mix(in srgb, var(--t-accent-secondary) 20%, transparent) calc(100% - 1px), color-mix(in srgb, var(--t-accent-secondary) 20%, transparent) 100%);
-  background-size: 96px 96px;
-  -webkit-mask-image: linear-gradient(90deg, transparent, black 14%, black 86%, transparent);
-  mask-image: linear-gradient(90deg, transparent, black 14%, black 86%, transparent);
-}
-
-.app-aurora::after {
-  inset: 0;
-  background:
-    linear-gradient(115deg, transparent 0 58%, color-mix(in srgb, var(--t-accent-secondary) 7%, transparent) 58% 58.2%, transparent 58.2%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 9rem);
 }
 
 /* Custom scrollbar */
@@ -234,37 +266,33 @@ input[type="file"]:disabled::file-selector-button {
 
 .glass {
   background:
-    linear-gradient(135deg, var(--glass-tint), rgba(255, 255, 255, 0.025)),
-    color-mix(in srgb, var(--t-surface-1) 70%, transparent);
+    linear-gradient(180deg, var(--glass-tint), color-mix(in srgb, var(--t-surface-1) 96%, transparent));
   border-color: var(--glass-border);
   box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(20px) saturate(1.45);
-  backdrop-filter: blur(20px) saturate(1.45);
+  -webkit-backdrop-filter: blur(10px) saturate(1.06);
+  backdrop-filter: blur(10px) saturate(1.06);
 }
 
 .light .glass {
   background:
-    linear-gradient(135deg, var(--glass-tint), rgba(255, 255, 255, 0.32)),
-    color-mix(in srgb, var(--t-surface-1) 58%, transparent);
+    linear-gradient(180deg, var(--glass-tint), color-mix(in srgb, var(--t-surface-1) 98%, transparent));
 }
 
 .glass-strong {
   background:
-    linear-gradient(135deg, var(--glass-tint-strong), rgba(255, 255, 255, 0.035)),
-    color-mix(in srgb, var(--t-surface-1) 76%, transparent);
+    linear-gradient(180deg, var(--glass-tint-strong), color-mix(in srgb, var(--t-surface-1) 98%, transparent));
   border-color: var(--glass-border-accent-84);
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255, 255, 255, 0.13);
-  -webkit-backdrop-filter: blur(30px) saturate(1.65);
-  backdrop-filter: blur(30px) saturate(1.65);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  -webkit-backdrop-filter: blur(12px) saturate(1.08);
+  backdrop-filter: blur(12px) saturate(1.08);
 }
 
 .glass-subtle {
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.018)),
-    color-mix(in srgb, var(--t-surface-1) 52%, transparent);
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 92%, transparent), color-mix(in srgb, var(--t-surface-0) 98%, transparent));
   border-color: var(--glass-border-alpha-70);
-  -webkit-backdrop-filter: blur(18px) saturate(1.35);
-  backdrop-filter: blur(18px) saturate(1.35);
+  -webkit-backdrop-filter: blur(8px) saturate(1.03);
+  backdrop-filter: blur(8px) saturate(1.03);
 }
 
 .glass-card {
@@ -278,13 +306,13 @@ input[type="file"]:disabled::file-selector-button {
   inset: 1px;
   pointer-events: none;
   border-radius: inherit;
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.12), transparent 36%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent 34%);
   opacity: var(--glass-highlight-opacity);
 }
 
 .glass-hover:hover {
   background: var(--glass-hover);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-border) 78%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-border) 88%, transparent);
 }
 
 .command-palette-search {
@@ -298,9 +326,7 @@ input[type="file"]:disabled::file-selector-button {
 .module-workspace {
   position: relative;
   isolation: isolate;
-  background:
-    radial-gradient(circle at 10% 0%, rgba(var(--t-accent-rgb), 0.08), transparent 24rem),
-    color-mix(in srgb, var(--t-surface-0) 74%, var(--t-surface-1));
+  background: linear-gradient(180deg, var(--t-surface-1), var(--t-surface-0));
 }
 
 .module-canvas {
@@ -309,7 +335,7 @@ input[type="file"]:disabled::file-selector-button {
   min-width: 0;
   overflow-y: auto;
   padding: 1.5rem 1.25rem;
-  background: color-mix(in srgb, var(--t-surface-1) 22%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 98%, transparent), color-mix(in srgb, var(--t-surface-0) 100%, transparent));
 }
 
 .module-content {
@@ -319,11 +345,9 @@ input[type="file"]:disabled::file-selector-button {
 }
 
 .module-hero-strip {
-  background:
-    linear-gradient(135deg, rgba(var(--t-accent-rgb), 0.08), transparent 48%),
-    color-mix(in srgb, var(--t-surface-1) 52%, transparent) !important;
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
+  background: color-mix(in srgb, var(--t-surface-1) 98%, transparent) !important;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
 }
 
 /* Legacy glow hooks kept quiet */
@@ -769,9 +793,9 @@ code, pre, .font-mono, kbd, samp {
 /* ── NavBar refined styling ── */
 .nav-item-active {
   background:
-    linear-gradient(135deg, rgba(var(--t-accent-rgb), 0.22), rgba(255, 255, 255, 0.055)),
+    linear-gradient(135deg, rgba(var(--t-accent-rgb), 0.16), rgba(255, 255, 255, 0.03)),
     color-mix(in srgb, var(--t-accent-soft) 78%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-accent) 38%, transparent), 0 10px 26px rgba(var(--t-accent-rgb), 0.16);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-accent) 28%, transparent), 0 6px 18px rgba(var(--t-accent-rgb), 0.1);
 }
 
 /* ── Message bubble gradient for user ── */
@@ -884,13 +908,7 @@ code, pre, .font-mono, kbd, samp {
 .chat-workbench {
   position: relative;
   min-height: 100%;
-  background:
-    radial-gradient(circle at 12% 0%, rgba(var(--t-accent-rgb), 0.16), transparent 28rem),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 24%, transparent), transparent 24rem),
-    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 24%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 18%, transparent) 1px, transparent 1px),
-    color-mix(in srgb, var(--t-surface-0) 82%, transparent);
-  background-size: auto, auto, 56px 56px, 56px 56px, auto;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 100%, transparent), color-mix(in srgb, var(--t-surface-0) 100%, transparent));
 }
 
 .chat-workbench::before {
@@ -898,16 +916,15 @@ code, pre, .font-mono, kbd, samp {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  opacity: 0.52;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--t-accent) 5%, transparent), transparent);
+  opacity: 0.08;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 22%);
 }
 
 .chat-transcript {
   background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.065), rgba(255, 255, 255, 0.02)),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 62%, transparent), color-mix(in srgb, var(--t-surface-0) 34%, transparent));
-  -webkit-backdrop-filter: blur(16px) saturate(1.32);
-  backdrop-filter: blur(16px) saturate(1.32);
+    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 98%, transparent), color-mix(in srgb, var(--t-surface-2) 86%, transparent));
+  -webkit-backdrop-filter: blur(8px) saturate(1.04);
+  backdrop-filter: blur(8px) saturate(1.04);
 }
 
 .chat-stage-panel {
@@ -922,305 +939,28 @@ code, pre, .font-mono, kbd, samp {
   inset: 1px;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 26%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 24%);
 }
 
 .chat-stage-panel::after {
   /* Soft refracted glow anchored behind the foreground content. */
   content: '';
   position: absolute;
-  right: -8%;
-  bottom: -18%;
-  width: 18rem;
-  height: 18rem;
-  pointer-events: none;
-  border-radius: 9999px;
-  background: radial-gradient(circle, rgba(var(--t-accent-rgb), 0.14), transparent 70%);
-  filter: blur(12px);
-  opacity: 0.85;
-}
-
-.light .chat-workbench::before {
-  opacity: 0.2;
-}
-
-.light .chat-stage-panel::before {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), transparent 24%);
-}
-
-/* ── Enterprise AI Workbench Theme ─────────────────────────────────
-   Solid, scan-friendly surfaces for internal enterprise use. */
-:root {
-  --t-surface-0: #08111d;
-  --t-surface-1: #0d1826;
-  --t-surface-2: #122133;
-  --t-surface-3: #172b42;
-  --t-surface-4: #22364f;
-  --t-border: #2a435f;
-  --t-border-subtle: #1b3148;
-  --t-text-primary: #eff6ff;
-  --t-text-secondary: #b8c6d8;
-  --t-text-muted: #7f91a8;
-  --t-accent: #00a6a6;
-  --t-accent-hover: #16c7bd;
-  --t-accent-glow: rgba(0, 166, 166, 0.18);
-  --t-accent-soft: rgba(0, 166, 166, 0.11);
-  --t-accent-secondary: #f0b95b;
-  --t-accent-rgb: 0, 166, 166;
-  --t-success: #39c88f;
-  --t-danger: #f26464;
-  --t-warning: #e4ad4f;
-  --glass-tint: rgba(14, 28, 44, 0.86);
-  --glass-tint-strong: rgba(10, 22, 36, 0.96);
-  --glass-border: rgba(94, 129, 166, 0.22);
-  --glass-hover: rgba(36, 59, 86, 0.62);
-  --glass-highlight-opacity: 0.46;
-  --pattern-overlay-opacity: 0.18;
-  --glass-pattern-opacity: 0.035;
-  --glass-shadow: 0 18px 42px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.045);
-  --glass-border-accent-84: rgba(79, 135, 166, 0.345);
-  --glass-border-alpha-70: rgba(94, 129, 166, 0.154);
-  --glass-border-alpha-78: rgba(94, 129, 166, 0.172);
-  --t-border-alpha-58: rgba(42, 67, 95, 0.58);
-  --t-border-alpha-76: rgba(42, 67, 95, 0.76);
-  --t-surface-1-alpha-72: rgba(13, 24, 38, 0.72);
-}
-
-.light {
-  --t-surface-0: #eef3f8;
-  --t-surface-1: #f8fafc;
-  --t-surface-2: #f1f5f9;
-  --t-surface-3: #e6edf4;
-  --t-surface-4: #d7e1ec;
-  --t-border: #bccbdd;
-  --t-border-subtle: #d8e2ee;
-  --t-text-primary: #142033;
-  --t-text-secondary: #42536a;
-  --t-text-muted: #78879a;
-  --t-accent: #007f8f;
-  --t-accent-hover: #009da8;
-  --t-accent-glow: rgba(0, 127, 143, 0.14);
-  --t-accent-soft: rgba(0, 127, 143, 0.085);
-  --t-accent-secondary: #b7791f;
-  --t-accent-rgb: 0, 127, 143;
-  --t-success: #168c61;
-  --t-danger: #c64545;
-  --t-warning: #a96919;
-  --glass-tint: rgba(248, 250, 252, 0.91);
-  --glass-tint-strong: rgba(255, 255, 255, 0.97);
-  --glass-border: rgba(130, 151, 176, 0.34);
-  --glass-hover: rgba(225, 235, 245, 0.88);
-  --glass-highlight-opacity: 0.56;
-  --pattern-overlay-opacity: 0.13;
-  --glass-pattern-opacity: 0.045;
-  --glass-shadow: 0 16px 38px rgba(40, 59, 83, 0.13), inset 0 1px 0 rgba(255, 255, 255, 0.7);
-  --glass-border-accent-84: rgba(109, 147, 171, 0.446);
-  --glass-border-alpha-70: rgba(130, 151, 176, 0.238);
-  --glass-border-alpha-78: rgba(130, 151, 176, 0.265);
-  --t-border-alpha-58: rgba(188, 203, 221, 0.58);
-  --t-border-alpha-76: rgba(188, 203, 221, 0.76);
-  --t-surface-1-alpha-72: rgba(248, 250, 252, 0.72);
-}
-
-html, body, #root {
-  font-family: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', ui-sans-serif, system-ui, sans-serif;
-  --font-display: 'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', ui-sans-serif, system-ui, sans-serif;
-}
-
-body {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 34%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 24%, transparent) 1px, transparent 1px),
-    linear-gradient(135deg, color-mix(in srgb, var(--t-surface-0) 94%, #0f2539), var(--t-surface-0) 48%, color-mix(in srgb, var(--t-surface-0) 92%, #192112));
-  background-size: 40px 40px, 40px 40px, auto;
-}
-
-.app-aurora {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 28%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 20%, transparent) 1px, transparent 1px),
-    linear-gradient(135deg, var(--t-surface-0), color-mix(in srgb, var(--t-surface-1) 78%, var(--t-surface-0)));
-  background-size: 44px 44px, 44px 44px, auto;
-}
-
-.app-aurora::before,
-.app-aurora::after {
-  border-radius: 0;
-  filter: none;
-}
-
-.app-aurora::before {
-  inset: 0;
-  width: auto;
-  height: auto;
-  background:
-    linear-gradient(90deg, transparent 0 68%, rgba(var(--t-accent-rgb), 0.08) 68% 68.15%, transparent 68.15%),
-    linear-gradient(180deg, rgba(var(--t-accent-rgb), 0.085), transparent 34%);
-  opacity: 0.72;
-}
-
-.app-aurora::after {
-  inset: auto 0 0 0;
-  width: auto;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(var(--t-accent-rgb), 0.48), color-mix(in srgb, var(--t-accent-secondary) 50%, transparent), transparent);
-  opacity: 0.56;
-}
-
-.glass,
-.glass-strong,
-.glass-subtle {
-  background:
-    linear-gradient(180deg, var(--glass-tint), color-mix(in srgb, var(--t-surface-1) 82%, transparent));
-  border-color: var(--glass-border);
-  box-shadow: var(--glass-shadow);
-  -webkit-backdrop-filter: blur(10px) saturate(1.12);
-  backdrop-filter: blur(10px) saturate(1.12);
-}
-
-.glass-strong {
-  background:
-    linear-gradient(180deg, var(--glass-tint-strong), color-mix(in srgb, var(--t-surface-1) 92%, transparent));
-}
-
-.glass-subtle {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 78%, transparent), color-mix(in srgb, var(--t-surface-0) 74%, transparent));
-}
-
-.glass-card::before,
-.chat-stage-panel::before {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.075), transparent 34%);
-}
-
-.glass-hover:hover {
-  background: color-mix(in srgb, var(--t-surface-3) 76%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-accent) 18%, var(--glass-border));
-}
-
-.module-workspace {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 18%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 16%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 58%, transparent), color-mix(in srgb, var(--t-surface-0) 94%, transparent));
-  background-size: 44px 44px, 44px 44px, auto;
-}
-
-.module-canvas {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 48%, transparent), transparent 22rem),
-    color-mix(in srgb, var(--t-surface-0) 64%, transparent);
-}
-
-.module-hero-strip {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--t-accent) 10%, transparent), transparent 42%),
-    color-mix(in srgb, var(--t-surface-1) 90%, transparent) !important;
-  box-shadow: inset 0 -1px 0 var(--t-border-subtle);
-}
-
-.module-side-panel {
-  background: color-mix(in srgb, var(--t-surface-1) 94%, transparent);
-  box-shadow: inset -1px 0 0 var(--t-border-subtle);
-}
-
-.nav-item-active {
-  background:
-    linear-gradient(90deg, rgba(var(--t-accent-rgb), 0.2), rgba(var(--t-accent-rgb), 0.07));
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--t-accent) 28%, transparent), 0 10px 22px rgba(var(--t-accent-rgb), 0.13);
-}
-
-.user-bubble-gradient {
-  background: linear-gradient(135deg, var(--t-accent), color-mix(in srgb, var(--t-accent) 58%, var(--t-accent-secondary)));
-  box-shadow: 0 12px 28px rgba(var(--t-accent-rgb), 0.16);
-}
-
-.chat-workbench {
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--t-border-subtle) 22%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-border-subtle) 18%, transparent) 1px, transparent 1px),
-    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 64%, transparent), color-mix(in srgb, var(--t-surface-0) 96%, transparent));
-  background-size: 44px 44px, 44px 44px, auto;
-}
-
-.chat-workbench::before {
-  opacity: 0.3;
-  background: linear-gradient(90deg, transparent, rgba(var(--t-accent-rgb), 0.07), transparent);
-}
-
-.chat-transcript,
-.chat-stage-panel {
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 78%, transparent), color-mix(in srgb, var(--t-surface-2) 34%, transparent));
-  border-color: var(--t-border-alpha-58);
-  box-shadow: none;
-}
-
-.chat-stage-panel::after {
   right: 0;
   bottom: 0;
   width: 44%;
   height: 2px;
+  pointer-events: none;
   border-radius: 0;
-  background: linear-gradient(90deg, transparent, rgba(var(--t-accent-rgb), 0.7), color-mix(in srgb, var(--t-accent-secondary) 70%, transparent));
+  background: linear-gradient(90deg, transparent, rgba(var(--t-accent-rgb), 0.34), transparent);
   filter: none;
-  opacity: 0.72;
+  opacity: 0.5;
 }
 
-.workbench-density {
-  --workbench-card-radius: 0.375rem;
-  --workbench-panel-bg: color-mix(in srgb, var(--t-surface-1) 86%, transparent);
+.light .chat-workbench::before {
+  opacity: 0.06;
 }
 
-.workbench-density .shadow-sm,
-.workbench-density .shadow-lg,
-.workbench-density .shadow-2xl,
-.workbench-density [class*="shadow-["] {
-  box-shadow: none !important;
-}
-
-.workbench-density [class*="rounded-4xl"],
-.workbench-density [class*="rounded-3xl"],
-.workbench-density [class*="rounded-2xl"],
-.workbench-density [class*="rounded-xl"],
-.workbench-density [class*="rounded-[28px]"],
-.workbench-density [class*="rounded-[26px]"],
-.workbench-density [class*="rounded-[24px]"],
-.workbench-density [class*="rounded-[22px]"],
-.workbench-density [class*="rounded-[20px]"],
-.workbench-density [class*="rounded-[18px]"] {
-  border-radius: var(--workbench-card-radius) !important;
-}
-
-.workbench-density [class*="tracking-[0.18em]"],
-.workbench-density [class*="tracking-[0.16em]"],
-.workbench-density [class*="tracking-[0.14em]"] {
-  letter-spacing: 0.08em !important;
-}
-
-.workbench-density [class*="bg-linear-to-br"],
-.workbench-density [class*="bg-[radial-gradient"],
-.workbench-density .chat-stage-panel {
-  background-image:
-    linear-gradient(180deg, color-mix(in srgb, var(--t-surface-1) 92%, transparent), color-mix(in srgb, var(--t-surface-2) 56%, transparent)) !important;
-  background-color: var(--workbench-panel-bg) !important;
-  -webkit-backdrop-filter: blur(8px) saturate(1.05);
-  backdrop-filter: blur(8px) saturate(1.05);
-}
-
-.workbench-density input,
-.workbench-density textarea,
-.workbench-density select {
-  background-color: var(--t-surface-1-alpha-72) !important;
-  border-color: var(--t-border-alpha-76) !important;
-}
-
-.workbench-density input:focus,
-.workbench-density textarea:focus,
-.workbench-density select:focus {
-  box-shadow: 0 0 0 2px rgba(var(--t-accent-rgb), 0.16) !important;
-}
-
-.workbench-density .text-gradient {
-  color: var(--t-accent);
+.light .chat-stage-panel::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 24%);
 }

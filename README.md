@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-	Chat · Documents · Models · Agents · Skills · Pipeline · Timer · Channels · MCP · Settings
+	Home · Chat · Documents · Models · Agents · Skills · Pipeline · Timer · Channels · MCP · Settings
 </p>
 
 <p align="center">
@@ -36,6 +36,7 @@ Suora is an Electron-based AI workbench for local knowledge work, automation, an
 
 | Module | Current role |
 | --- | --- |
+| Home | Product landing surface for readiness, recent work, next actions, and AI SDK preview |
 | Chat | Conversations, attachments, tool calls, and pipeline commands |
 | Documents | Local notes, folders, backlinks, source-aware graph insights, and chat context |
 | Models | Provider setup, model enablement, testing, and compare |
@@ -45,7 +46,7 @@ Suora is an Electron-based AI workbench for local knowledge work, automation, an
 | Timer | Once / interval / cron schedules |
 | Channels | External messaging integrations and reply routing |
 | MCP | MCP server configuration |
-| Settings | Preferences, security, data, logs, and system diagnostics |
+| Settings | Preferences, security, data, knowledge, plugins, logs, external sources, automation, and system diagnostics |
 
 ## Why It Feels Different
 
@@ -72,10 +73,11 @@ npm run dev
 ### First useful setup order
 
 1. Configure at least one model in `Models`
-2. Start a conversation in `Chat`
-3. Create a local knowledge area in `Documents`
-4. Add automation in `Pipeline` and `Timer`
-5. Connect external channels only when needed
+2. Review readiness and next actions in `Home`
+3. Start a conversation in `Chat`
+4. Create a local knowledge area in `Documents`
+5. Add automation in `Pipeline` and `Timer`
+6. Connect external channels only when needed
 
 ## Documentation Map
 

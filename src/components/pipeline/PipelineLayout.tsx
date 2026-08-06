@@ -18,17 +18,17 @@ import { confirm } from '@/services/confirmDialog';
 import { t as translate } from '@/services/i18n';
 import type { AgentPipeline, AgentPipelineBudget, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep, AgentPipelineVariable, PipelineStepUsage } from '@/types';
 import { generateId } from '@/utils/helpers';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Checkbox } from '@/components/catalyst-ui/checkbox';
-import { Dialog, DialogBody, DialogTitle } from '@/components/catalyst-ui/dialog';
-import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
-import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Checkbox } from '@/components/shared/checkbox';
+import { Dialog, DialogBody, DialogTitle } from '@/components/shared/dialog';
+import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/shared/form-controls";
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
 import { scheduleWhenIdle } from '@/utils/scheduling';
 
 const LazyPipelineAssistantDrawer = lazy(() => import('@/components/pipeline/PipelineAssistantDrawer').then((module) => ({ default: module.PipelineAssistantDrawer })));
 const LazyPipelineFlowDiagram = lazy(() => import('@/components/pipeline/PipelineFlowDiagram').then((module) => ({ default: module.PipelineFlowDiagram })));
 const LazyPipelineFlowCanvas = lazy(() => import('@/components/pipeline/PipelineFlowCanvas').then((module) => ({ default: module.PipelineFlowCanvas })));
-const PIPELINE_HEADER_BACKGROUND = 'bg-[radial-gradient(circle_at_top_left,rgba(var(--t-accent-rgb),0.18),transparent_42%),linear-gradient(135deg,rgba(255,255,255,0.03),transparent_55%)]';
+const PIPELINE_HEADER_BACKGROUND = 'bg-[linear-gradient(180deg,color-mix(in_srgb,var(--t-surface-1)_99%,transparent),color-mix(in_srgb,var(--t-surface-0)_98%,transparent))]';
 function formatDuration(durationMs?: number, t?: (key: string, defaultValue?: string) => string) {
     if (durationMs === undefined)
         return t?.('agents.pipelinePendingDuration', 'Waiting...') ?? 'Waiting...';
@@ -983,7 +983,7 @@ export function PipelineLayout() {
               </UiButton>)}
           </div>
 
-          {dryRunResult && (<div className="mt-3 rounded-3xl border border-blue-500/20 bg-blue-500/8 px-4 py-3 text-xs text-blue-200">
+          {dryRunResult && (<div className="mt-3 rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-xs text-text-secondary">
               <div className="flex items-center justify-between gap-2">
                 <div className="font-semibold">{t('agents.pipelineDryRunResultTitle', 'Dry run preview')}</div>
                 <UiButton unstyled type="button" onClick={() => setDryRunResult(null)} className="text-text-muted hover:text-text-primary" aria-label={t('common.close', 'Close')}>×</UiButton>
@@ -1009,7 +1009,7 @@ export function PipelineLayout() {
               </ol>
             </div>)}
 
-          {optimizationIterations && (<div className="mt-3 rounded-3xl border border-emerald-500/20 bg-emerald-500/8 px-4 py-3 text-xs text-emerald-100">
+          {optimizationIterations && (<div className="mt-3 rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-xs text-text-secondary">
               <div className="flex items-center justify-between gap-2">
                 <div>
                   <div className="font-semibold">{t('agents.pipelineOptimizationTitle', 'Pipeline optimization')}</div>
@@ -1018,7 +1018,7 @@ export function PipelineLayout() {
                 <UiButton unstyled type="button" onClick={() => setOptimizationIterations(null)} className="text-text-muted hover:text-text-primary" aria-label={t('common.close', 'Close')}>×</UiButton>
               </div>
               <ol className="mt-3 grid gap-2 xl:grid-cols-2">
-                {optimizationIterations.map((iteration) => (<li key={iteration.iteration} className="rounded-2xl border border-border-subtle bg-surface-0/45 px-3 py-2">
+                {optimizationIterations.map((iteration) => (<li key={iteration.iteration} className="rounded-2xl border border-border-subtle bg-surface-1/92 px-3 py-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-mono text-[11px] text-text-muted">#{iteration.iteration}</span>
                       <span className="font-medium text-text-primary">{iteration.title}</span>
@@ -1031,7 +1031,7 @@ export function PipelineLayout() {
               </ol>
             </div>)}
 
-          {pipelineValidation.issues.length > 0 && (<div className="mt-3 rounded-3xl border border-amber-500/20 bg-amber-500/8 px-4 py-3 text-xs text-amber-200">
+          {pipelineValidation.issues.length > 0 && (<div className="mt-3 rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-xs text-text-secondary">
               <div className="font-semibold">{t('agents.pipelineDryRun', 'Dry-run validation')}</div>
               <div className="mt-2 space-y-1">
                 {pipelineValidation.issues.slice(0, 5).map((issue) => (<div key={`${issue.code}-${issue.stepIndex ?? 'pipeline'}-${issue.message}`}>
@@ -1044,7 +1044,7 @@ export function PipelineLayout() {
         <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.9fr)]">
           <div className="module-canvas min-h-0 overflow-y-auto px-6 py-6">
             <div className="space-y-6">
-              <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+              <section className="rounded-[28px] border border-border-subtle/55 bg-surface-1/96 p-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)] backdrop-blur-sm">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineBuilder', 'Pipeline builder')}</h2>
@@ -1171,7 +1171,7 @@ export function PipelineLayout() {
                 ]
                 : [];
             const usesReferences = step.task.includes('{{') && step.task.includes('}}');
-            return (<div key={idx} className={`rounded-3xl border border-border bg-[linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01))] p-4 transition-opacity ${step.enabled === false ? 'opacity-65' : 'opacity-100'}`}>
+            return (<div key={idx} className={`rounded-3xl border border-border-subtle/55 bg-surface-1/96 p-4 transition-opacity ${step.enabled === false ? 'opacity-65' : 'opacity-100'}`}>
                           <div className="mb-3 flex items-center justify-between gap-3">
                             <div className="flex items-center gap-3">
                               <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-accent/12 text-xs font-semibold text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]">{idx + 1}</span>

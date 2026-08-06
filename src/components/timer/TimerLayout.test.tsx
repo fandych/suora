@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Button } from '@/components/catalyst-ui/button'
+import { Button } from '@/components/shared/button'
 import { useAppStore } from '@/store/appStore'
 import type { ScheduledTask } from '@/types'
 import { TimerLayout } from './TimerLayout'

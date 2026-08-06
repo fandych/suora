@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent, type ClipboardEvent, type DragEvent, type KeyboardEvent, type ReactNode, } from 'react';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
-import { TextArea, Input as UiInput } from '@/components/catalyst-ui/form-controls';
+import { TextArea, Input as UiInput } from '@/components/shared/form-controls';
 import { useI18n } from '@/hooks/useI18n';
 import { t as translate } from '@/services/i18n';
 import type { MessageAttachment } from '@/types';
 import { generateId } from '@/utils/helpers';
 import { toast } from '@/services/toast';
 import { buildAttachmentManifest } from '@/services/chatContext';
-import { isSpeechRecognitionAvailable, startListening, stopListening, loadVoiceSettings, requestMicrophoneStream, stopMicrophoneStream, type VoiceState, } from '@/services/voiceInteraction';
+import { useAppStore } from '@/store/appStore';
+import { isSpeechRecognitionAvailable, startListening, stopListening, loadVoiceSettings, saveVoiceSettings, requestMicrophoneStream, stopMicrophoneStream, type VoiceState, } from '@/services/voiceInteraction';
 import { formatFileSize } from './ChatMessages';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Button as UiButton } from "@/components/shared/button";
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const MAX_FILE_SIZE = 2 * 1024 * 1024;
 const MAX_ATTACHMENT_CONTEXT_CHARS = 24000;
@@ -200,6 +201,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
     footer?: ReactNode;
 }) {
     const { t } = useI18n();
+    const shortcuts = useAppStore((state) => state.shortcuts);
     const [input, setInput] = useState('');
     const [attachments, setAttachments] = useState<MessageAttachment[]>([]);
     const [isDragging, setIsDragging] = useState(false);
@@ -230,7 +232,16 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
             textareaRef.current.style.height = 'auto';
     };
     const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+        const sendShortcut = shortcuts['Send Message'] || 'Enter';
+        const newLineShortcut = shortcuts['New Line'] || 'Shift + Enter';
+        const combo = [e.ctrlKey || e.metaKey ? 'Ctrl' : null, e.altKey ? 'Alt' : null, e.shiftKey ? 'Shift' : null, !['Control', 'Alt', 'Shift', 'Meta'].includes(e.key) ? (e.key.length === 1 ? e.key.toUpperCase() : e.key) : null]
+            .filter(Boolean)
+            .join(' + ');
+        const normalizedCombo = combo || e.key;
+        if (normalizedCombo === newLineShortcut) {
+            return;
+        }
+        if (normalizedCombo === sendShortcut && !e.nativeEvent.isComposing) {
             e.preventDefault();
             handleSubmit();
         }
@@ -422,7 +433,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
                 ? t('chat.listening', 'Listening…')
                 : noModel
                     ? t('chat.selectModelOrRunPipeline', 'Select a model to chat, or use /pipeline run Morning Run')
-                    : t('chat.messagePlaceholder', 'Send a message… (Shift+Enter for new line, paste/drag files)')} rows={1} disabled={disabled} className="w-full min-h-11 max-h-32 text-[14.5px] leading-6"/>
+                    : t('chat.messagePlaceholder', 'Send a message… (Shift+Enter for new line, paste/drag files)').replace('Shift+Enter', shortcuts['New Line'] || 'Shift+Enter')} rows={1} disabled={disabled} className="w-full min-h-11 max-h-32 text-[14.5px] leading-6"/>
 
               {interimText && (<div className="mt-2 rounded-2xl border border-accent/18 bg-accent/8 px-3 py-2 text-[12px] text-accent/80">
                   {interimText}
@@ -442,6 +453,10 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
                     return;
                 }
                 const settings = loadVoiceSettings();
+                const effectiveSettings = settings.enabled ? settings : { ...settings, enabled: true };
+                if (!settings.enabled) {
+                    saveVoiceSettings(effectiveSettings);
+                }
                 const access = await requestMicrophoneStream();
                 if (!access.ok) {
                     setVoiceState('idle');
@@ -450,13 +465,13 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
                 }
                 stopMicrophoneStream(access.stream);
                 setVoiceState('listening');
-                startListening(settings, {
+                startListening(effectiveSettings, {
                     onResult: (text, isFinal) => {
                         if (isFinal) {
                             setInput((prev) => (prev ? prev + ' ' + text : text));
                             setInterimText('');
                             setVoiceState('idle');
-                            if (settings.autoSend && text.trim()) {
+                            if (effectiveSettings.autoSend && text.trim()) {
                                 setTimeout(() => {
                                     const currentInput = (textareaRef.current?.value || '').trim();
                                     const finalInput = currentInput || text.trim();

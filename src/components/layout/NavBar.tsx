@@ -6,9 +6,11 @@ import { useI18n } from '@/hooks/useI18n';
 import { openCommandPalette } from '@/services/commandPalette';
 import { preloadRoute } from '@/services/routePrefetch';
 import logoSvg from '../../../resources/logo.svg';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Button as UiButton } from "@/components/shared/button";
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/.test(navigator.platform);
-const CMD_SHORTCUT_LABEL = isMac ? '⌘K' : 'Ctrl K';
+function formatShortcutLabel(shortcut: string) {
+  return isMac ? shortcut.replace(/Ctrl/gi, '⌘') : shortcut.replace(/ \+ /g, ' ');
+}
 const navItems = [
     { path: '/chat', i18nKey: 'nav.chat', fallbackLabel: 'Chat', icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>) },
     { path: '/documents', i18nKey: 'nav.documents', fallbackLabel: 'Documents', icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4.5A2.5 2.5 0 0 1 6.5 2H20v18H6.5A2.5 2.5 0 0 0 4 22V4.5z"/><path d="M4 4.5v15"/><path d="M8 7h8"/><path d="M8 11h6"/></svg>) },
@@ -21,8 +23,8 @@ const navItems = [
     { path: '/mcp', i18nKey: 'nav.mcp', fallbackLabel: 'MCP Servers', icon: (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48 2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48 2.83-2.83"/><circle cx="12" cy="12" r="3"/></svg>) },
 ];
 const settingsIcon = (<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>);
-const navButtonBase = 'relative flex h-10 w-10 items-center justify-center rounded-lg border border-transparent transition-all';
-const navButtonInactive = 'text-text-muted hover:border-border-subtle/70 hover:bg-surface-2/70 hover:text-text-primary';
+const navButtonBase = 'relative flex h-10 w-10 items-center justify-center rounded-full border border-transparent transition-all';
+const navButtonInactive = 'text-text-muted hover:border-border/70 hover:bg-surface-2/92 hover:text-text-primary';
 const navButtonActive = 'nav-item-active text-accent';
 function formatRelativeTime(ts: number, locale = 'en') {
     const diffSeconds = Math.round((ts - Date.now()) / 1000);
@@ -42,9 +44,11 @@ export function NavBar() {
     const location = useLocation();
     const navigate = useNavigate();
     const { t } = useI18n();
-    return (<nav aria-label={t('nav.mainNavigation', 'Main navigation')} className="relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r border-border-subtle/80 bg-surface-1/96 py-3 shadow-[inset_-1px_0_0_rgba(255,255,255,0.025)]">
+  const searchShortcut = useAppStore((state) => state.shortcuts['Search'] || 'Ctrl + K');
+  const commandShortcutLabel = formatShortcutLabel(searchShortcut);
+    return (<nav aria-label={t('nav.mainNavigation', 'Main navigation')} className="relative z-20 flex h-full w-16 shrink-0 flex-col items-center border-r border-border/70 bg-[linear-gradient(180deg,color-mix(in_srgb,var(--t-surface-1)_100%,transparent),color-mix(in_srgb,var(--t-surface-2)_88%,transparent))] py-3 shadow-[inset_-1px_0_0_rgba(255,255,255,0.05)]">
       {/* Logo */}
-      <UiButton unstyled type="button" onMouseEnter={() => void preloadRoute('/chat')} onFocus={() => void preloadRoute('/chat')} onClick={() => navigate('/chat')} aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`} className="mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-lg border border-border-subtle/70 bg-surface-2/82 shadow-sm transition-colors hover:border-accent/40">
+      <UiButton unstyled type="button" onMouseEnter={() => void preloadRoute('/chat')} onFocus={() => void preloadRoute('/chat')} onClick={() => navigate('/chat')} aria-label={`SUORA · 朔枢 — ${t('nav.goToChat', 'Go to Chat')}`} className="mb-5 flex h-10 w-10 items-center justify-center overflow-hidden rounded-[18px] border border-accent/28 bg-surface-1/96 shadow-[0_10px_28px_rgba(var(--t-accent-rgb),0.14)] transition-colors hover:border-accent/50">
         <img src={logoSvg} alt="SUORA" width={32} height={32} className="h-8 w-8"/>
       </UiButton>
 
@@ -53,7 +57,6 @@ export function NavBar() {
             const isActive = location.pathname.startsWith(item.path);
             const label = t(item.i18nKey, item.fallbackLabel);
             return (<UiButton unstyled type="button" key={item.path} onMouseEnter={() => void preloadRoute(item.path)} onFocus={() => void preloadRoute(item.path)} onClick={() => navigate(item.path)} aria-label={label} aria-current={isActive ? 'page' : undefined} title={label} className={`${navButtonBase} ${isActive ? navButtonActive : navButtonInactive}`}>
-              {isActive && (<span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent"/>)}
               <span className="flex">{item.icon}</span>
             </UiButton>);
         })}
@@ -66,7 +69,7 @@ export function NavBar() {
       <OfflineIndicator />
 
       {/* Command palette launcher — discoverable entry point for Ctrl/⌘+K */}
-      <UiButton unstyled type="button" onClick={() => openCommandPalette()} aria-label={`${t('nav.commandPalette', 'Command palette')} (${CMD_SHORTCUT_LABEL})`} aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'} title={`${t('nav.commandPalette', 'Command palette')} · ${CMD_SHORTCUT_LABEL}`} className={`${navButtonBase} ${navButtonInactive} mb-1`}>
+      <UiButton unstyled type="button" onClick={() => openCommandPalette()} aria-label={`${t('nav.commandPalette', 'Command palette')} (${commandShortcutLabel})`} aria-keyshortcuts={searchShortcut} title={`${t('nav.commandPalette', 'Command palette')} · ${commandShortcutLabel}`} className={`${navButtonBase} ${navButtonInactive} mb-1`}>
         <span className="flex">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
             <circle cx="11" cy="11" r="7"/>
@@ -77,7 +80,6 @@ export function NavBar() {
 
       {/* Settings at bottom */}
       <UiButton unstyled type="button" onMouseEnter={() => void preloadRoute('/settings')} onFocus={() => void preloadRoute('/settings')} onClick={() => navigate('/settings')} aria-label={t('nav.settings', 'Settings')} aria-current={location.pathname.startsWith('/settings') ? 'page' : undefined} title={t('nav.settings', 'Settings')} className={`${navButtonBase} ${location.pathname.startsWith('/settings') ? navButtonActive : navButtonInactive}`}>
-        {location.pathname.startsWith('/settings') && (<span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-accent"/>)}
         <span className="flex">{settingsIcon}</span>
       </UiButton>
     </nav>);
@@ -127,7 +129,7 @@ function NotificationBell() {
           </span>)}
       </UiButton>
 
-      {open && (<div role="dialog" aria-label={t('nav.notifications', 'Notifications')} className="glass-strong absolute bottom-0 left-full z-[110] ml-2 flex max-h-120 w-88 flex-col rounded-lg border shadow-lg">
+      {open && (<div role="dialog" aria-label={t('nav.notifications', 'Notifications')} className="glass-strong absolute bottom-0 left-full z-110 ml-2 flex max-h-120 w-88 flex-col rounded-lg border shadow-lg">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border-subtle px-3 py-2.5">
             <span className="text-[15px] font-semibold text-text-primary">{t('nav.notifications', 'Notifications')}</span>

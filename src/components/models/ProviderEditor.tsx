@@ -4,10 +4,10 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { testConnection } from '@/services/aiService';
 import { useI18n } from '@/hooks/useI18n';
 import type { ProviderConfig, ProviderModelEntry } from '@/types';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Checkbox } from '@/components/catalyst-ui/checkbox';
-import { Input as UiInput, Select as UiSelect } from "@/components/catalyst-ui/form-controls";
-import { workbenchAccentButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Checkbox } from '@/components/shared/checkbox';
+import { Input as UiInput, Select as UiSelect } from "@/components/shared/form-controls";
+import { workbenchAccentButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/workbench/styles';
 const PROVIDER_TYPES: ProviderConfig['providerType'][] = ['openai', 'anthropic', 'google', 'ollama', 'openai-compatible'];
 const PRESET_MODELS: Partial<Record<ProviderConfig['providerType'], {
     modelId: string;

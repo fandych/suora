@@ -5,7 +5,7 @@ import { ChannelPlatformIcon } from './ChannelIcons';
 import type { ChannelHistoryMessage, ChannelMessageDirection } from '@/types';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Button as UiButton } from "@/components/shared/button";
 // ─── Channel Copy Button ───────────────────────────────────────────
 export function ChannelCopyButton({ text, className = '' }: {
     text: string;

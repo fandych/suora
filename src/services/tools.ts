@@ -205,6 +205,15 @@ function splitGitPathspecInput(value: string): string[] {
     })
 }
 
+function escapePromptAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 // ─── Store helpers (avoid circular import with appStore) ──────────
 
 const STORE_KEY = 'suora-store'
@@ -5092,7 +5101,16 @@ export function mergeSkillsWithBuiltins(storeSkills: Skill[]): Skill[] {
 
 function resolveRuntimeSkillIds(agentSkillIds: string[], allSkills: Skill[]): string[] {
   const knownSkillIds = new Set(allSkills.map((skill) => skill.id))
-  return agentSkillIds.filter((skillId) => knownSkillIds.has(skillId))
+  const seen = new Set<string>()
+  const resolved: string[] = []
+
+  for (const skillId of agentSkillIds) {
+    if (!knownSkillIds.has(skillId) || seen.has(skillId)) continue
+    seen.add(skillId)
+    resolved.push(skillId)
+  }
+
+  return resolved
 }
 
 /**
@@ -5124,7 +5142,8 @@ export function getToolsForAgent(
 ): ToolSet {
   const { includePluginTools = false, allowedTools, disallowedTools, permissionMode, errorContext } = options
   let result: ToolSet = {}
-  const runtimeSkillIds = resolveRuntimeSkillIds(agentSkillIds, allSkills)
+  void agentSkillIds
+  void allSkills
 
   const explicitlyAllowedTools = new Set(allowedTools ?? [])
 
@@ -5145,16 +5164,6 @@ export function getToolsForAgent(
       if (!(name in result)) {
         result[name] = def
       }
-    }
-  }
-
-  // --- Permission filtering (Claude Code pattern) ---
-  // Collect allowed tools from skills (advisory) and agent config (restrictive)
-  const skillAllowedTools = new Set<string>()
-  for (const skillId of runtimeSkillIds) {
-    const skill = allSkills.find((s) => s.id === skillId)
-    if (skill?.enabled && skill.allowedTools?.length) {
-      for (const t of skill.allowedTools) skillAllowedTools.add(t)
     }
   }
 
@@ -5199,7 +5208,7 @@ export async function getSkillSystemPrompts(
   const memoryBlocks = runtimeSkillIds
     .map((skillId) => selectedSkillMap.get(skillId))
     .filter((skill): skill is Skill => Boolean(skill?.enabled && skill.memories?.length))
-    .map((skill) => `<skill-memory name="${skill.name}">\n${skill.memories?.slice(-8).map((memory) => `- ${memory.content}`).join('\n')}\n</skill-memory>`)
+    .map((skill) => `<skill-memory name="${escapePromptAttribute(skill.name)}">\n${skill.memories?.slice(-8).map((memory) => `- ${memory.content}`).join('\n')}\n</skill-memory>`)
 
   return memoryBlocks.length > 0
     ? `${prompt}\n\n${memoryBlocks.join('\n\n')}`

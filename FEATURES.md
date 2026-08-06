@@ -6,6 +6,7 @@ This file is the shortest implementation-backed capability map for the current p
 
 Suora is a local-first desktop AI workbench, not a single-chat shell. The current app ships these first-class modules:
 
+- Home
 - Chat
 - Documents
 - Pipeline
@@ -21,6 +22,7 @@ Suora is a local-first desktop AI workbench, not a single-chat shell. The curren
 
 | Area | Current capability surface |
 | --- | --- |
+| Home | Task-oriented landing surface with workspace readiness, recent work, quick actions, and a local AI SDK preview panel |
 | Chat | Multi-session conversations, attachments, model/agent switching, tool-call visibility, branching, retry, citations, read-aloud, and command-palette entry points |
 | Documents | Local document groups, nested folders, markdown editing, Mermaid, math, source-aware search expansion, backlinks, graph view, graph insights, related-note expansion, and chat context attachment |
 | Pipeline | Saved multi-step agent workflows with retries, timeouts, budgets, `runIf`, output transforms, exported variables, history, and Mermaid preview |
@@ -30,7 +32,7 @@ Suora is a local-first desktop AI workbench, not a single-chat shell. The curren
 | Timer | Once, interval, and cron schedules that can notify, prompt an agent, or run a saved pipeline |
 | Channels | Messaging-channel configuration with webhook/stream transport, reply-agent routing, allowlists, history, users, health, and debug panels |
 | MCP | MCP server configuration and connection-state tracking |
-| Settings | General, security, voice, shortcuts, data, logs, and system sections |
+| Settings | General, security, voice, shortcuts, data, knowledge, events, external directories, plugins, logs, and system sections |
 
 For future document-intelligence planning, see `docs/LLM_WIKI_CAPABILITIES.md` for an LLM Wiki-inspired capability reference. It is intentionally separate from the current capability table above.
 

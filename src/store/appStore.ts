@@ -1532,7 +1532,7 @@ export async function loadExternalSkillsAndAgents(): Promise<void> {
 
   await syncExternalDirectoryAccess(externalDirectories, ['~/.suora/skills'])
 
-  const [diskSkills, { skills: externalSkills }] = await Promise.all([
+  const [diskSkills, { skills: externalSkills, agents: externalAgents }] = await Promise.all([
     loadAllSkills(state.workspacePath),
     loadExternalResources(externalDirectories),
   ])
@@ -1553,6 +1553,9 @@ export async function loadExternalSkillsAndAgents(): Promise<void> {
   useAppStore.setState((current) => {
     const agentMap = new Map<string, Agent>()
     for (const agent of current.agents) {
+      agentMap.set(agent.id, normalizeAgent(agent))
+    }
+    for (const agent of externalAgents) {
       agentMap.set(agent.id, normalizeAgent(agent))
     }
 

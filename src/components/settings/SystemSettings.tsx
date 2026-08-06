@@ -11,7 +11,7 @@ import {
   SettingsStat,
   SettingsToggleRow,
 } from './panelUi'
-import { Button as UiButton } from '@/components/catalyst-ui/button'
+import { Button as UiButton } from '@/components/shared/button'
 
 interface PerfMetrics {
   memory: { heapUsed: number; heapTotal: number; rss: number; external: number }

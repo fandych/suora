@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/appStore';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { safeParse } from '@/utils/safeJson';
 import { useI18n } from '@/hooks/useI18n';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Button as UiButton } from "@/components/shared/button";
 interface TodoItem {
     id: string;
     title: string;

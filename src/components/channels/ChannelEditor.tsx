@@ -1,13 +1,13 @@
-﻿import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { IconPicker } from '@/components/icons/IconPicker';
 import { useI18n } from '@/hooks/useI18n';
 import type { ChannelConfig, ChannelConnectionMode, ChannelPlatform, EmailFilterRule, EmailAction, EmailFilterField, EmailFilterOperator, EmailActionType } from '@/types';
 import { ChannelPlatformIcon, getPlatformDisplayName } from './ChannelIcons';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Checkbox } from '@/components/catalyst-ui/checkbox';
-import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
-import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Checkbox } from '@/components/shared/checkbox';
+import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/shared/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass } from '@/components/workbench/styles';
 function EditorSection({ eyebrow, title, description, children, }: {
     eyebrow: string;
     title: string;

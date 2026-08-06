@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { TextArea } from '@/components/catalyst-ui/form-controls'
+import { TextArea } from '@/components/shared/form-controls'
 import { SkillEditor } from './SkillEditor'
 import { useAppStore } from '@/store/appStore'
 import type { Skill } from '@/types'
@@ -67,7 +67,7 @@ function makeSkill(overrides: Partial<Skill> = {}): Skill {
   }
 }
 
-describe('SkillEditor — Files tab', () => {
+describe('SkillEditor — File workspace', () => {
   beforeEach(() => {
     confirmMock.mockClear()
     confirmMock.mockResolvedValue(true)
@@ -96,16 +96,17 @@ describe('SkillEditor — Files tab', () => {
     render(
       <SkillEditor skill={makeSkill({ bundledResources: [] })} onSave={vi.fn()} onCancel={vi.fn()} />,
     )
-    // Files tab is available even when bundledResources is empty.
-    // Bring it forward.
-    expect(screen.getByRole('button', { name: /Files/i })).toBeInTheDocument()
+    expect(screen.getAllByText('scripts/').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('references/').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('assets/').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('other/').length).toBeGreaterThan(0)
   })
 
   it('renders bundled resources grouped by top-level folder and opens a text file in the editor', async () => {
     const user = userEvent.setup()
     render(<SkillEditor skill={makeSkill()} onSave={vi.fn()} onCancel={vi.fn()} />)
 
-    // SkillEditor opens the Files tab by default.
+    // SkillEditor opens the file workspace by default.
     expect(screen.getByText('references/intro.md')).toBeInTheDocument()
     expect(screen.getByText('assets/logo.png')).toBeInTheDocument()
 
@@ -165,9 +166,6 @@ describe('SkillEditor — Files tab', () => {
     const user = userEvent.setup()
     const skill = makeSkill({ skillRoot: undefined, bundledResources: [] })
     render(<SkillEditor skill={skill} onSave={vi.fn()} onCancel={vi.fn()} />)
-
-    // Switch to Files tab manually since the skill starts on the metadata tab when needed.
-    await user.click(screen.getByRole('button', { name: /Files/i }))
 
     const newFileButtons = screen.getAllByRole('button', { name: 'New file' })
     await user.click(newFileButtons[0]) // scripts/
@@ -304,8 +302,7 @@ describe('SkillEditor — Files tab', () => {
     )
   })
 
-  it('renders markdown content in the preview tab while keeping the generated source visible', async () => {
-    const user = userEvent.setup()
+  it('shows generated SKILL.md source in the editor by default', async () => {
     render(
       <SkillEditor
         skill={makeSkill({
@@ -316,11 +313,12 @@ describe('SkillEditor — Files tab', () => {
       />,
     )
 
-    await user.click(screen.getByRole('button', { name: /^Preview$/i }))
-
-    expect(await screen.findByText('Preview Heading')).toBeInTheDocument()
-    expect(screen.getByText('first item')).toBeInTheDocument()
-    expect(screen.getByText(/name: Test Skill/)).toBeInTheDocument()
+    const textarea = await screen.findByLabelText('File content') as HTMLTextAreaElement
+    await waitFor(() => {
+      expect(textarea.value).toContain('name: Test Skill')
+    })
+    expect(textarea.value).toContain('## Preview Heading')
+    expect(textarea.value).toContain('- first item')
   })
 })
 

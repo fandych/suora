@@ -8,12 +8,12 @@ import { useI18n } from '@/hooks/useI18n';
 import type { MCPServerConfig } from '@/types';
 import { confirm } from '@/services/confirmDialog';
 import { toast } from '@/services/toast';
-import { WorkbenchEmptyState } from '@/components/catalyst-ui/workbench-empty-state';
-import { Button as UiButton } from '@/components/catalyst-ui/button';
-import { Checkbox } from '@/components/catalyst-ui/checkbox';
+import { WorkbenchEmptyState } from '@/components/workbench/empty-state';
+import { Button as UiButton } from '@/components/shared/button';
+import { Checkbox } from '@/components/shared/checkbox';
 import { createMcpServerDraft, parseKeyValueLines, stringifyKeyValueLines, testMcpServerConnection, validateMcpServerConfig, } from '@/services/mcpSystem';
-import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
-import { workbenchDangerButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
+import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/shared/form-controls";
+import { workbenchDangerButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/workbench/styles';
 /* ── tiny helpers ─────────────────────────────────────────────── */
 const statusMeta: Record<string, {
     dot: string;
@@ -260,24 +260,24 @@ export function MCPSettingsPanel() {
           <EditorSection eyebrow={t('mcp.connection', 'Connection')} title={selected.transport === 'stdio' ? t('mcp.process', 'Process') : t('mcp.endpoint', 'Endpoint')} description={t('mcp.connectionSectionHint', 'Review the exact command or endpoint shape that the runtime will use when it attempts to connect.')}>
             <div className="space-y-3 text-sm text-text-secondary">
               {selected.transport === 'stdio' ? (<>
-                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4">
+                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 p-4">
                     <SectionLabel>{t('mcp.command', 'Command')}</SectionLabel>
                     <code className="text-[12px] break-all text-text-primary">{selected.command || '—'}</code>
                   </div>
-                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4">
+                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 p-4">
                     <SectionLabel>{t('mcp.arguments', 'Arguments')}</SectionLabel>
                     <code className="text-[12px] break-all text-text-primary">{(selected.args || []).join(' ') || '—'}</code>
                   </div>
-                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4">
+                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 p-4">
                     <SectionLabel>{t('mcp.environmentVariables', 'Environment Variables')}</SectionLabel>
                     <pre className="whitespace-pre-wrap text-[12px] text-text-primary">{stringifyKeyValueLines(selected.env) || '—'}</pre>
                   </div>
                 </>) : (<>
-                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4">
+                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 p-4">
                     <SectionLabel>{t('mcp.url', 'URL')}</SectionLabel>
                     <code className="text-[12px] break-all text-text-primary">{selected.url || '—'}</code>
                   </div>
-                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 p-4">
+                  <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 p-4">
                     <SectionLabel>{t('mcp.headers', 'Headers')}</SectionLabel>
                     <pre className="whitespace-pre-wrap text-[12px] text-text-primary">{stringifyKeyValueLines(selected.headers) || '—'}</pre>
                   </div>
@@ -287,7 +287,7 @@ export function MCPSettingsPanel() {
 
           <EditorSection eyebrow={t('mcp.discoveredToolsLabel', 'Tools')} title={t('mcp.discoveredTools', 'Discovered Tools ({count})').replace('{count}', String(selected.tools?.length ?? 0))} description={t('mcp.discoveredToolsHint', 'These are the capabilities the app currently associates with this server after the latest successful test.')}>
             {selected.tools && selected.tools.length > 0 ? (<div className="flex flex-wrap gap-2">
-                {selected.tools.map((tool) => (<span key={tool} className="inline-flex items-center gap-1.5 rounded-2xl border border-border-subtle/55 bg-surface-0/60 px-3 py-2 text-[11px] font-mono text-text-secondary">
+                {selected.tools.map((tool) => (<span key={tool} className="inline-flex items-center gap-1.5 rounded-2xl border border-border-subtle/55 bg-surface-0/72 px-3 py-2 text-[11px] font-mono text-text-secondary">
                     <IconifyIcon name="ui-plugin" size={12} color="currentColor"/>
                     {tool}
                   </span>))}
@@ -298,7 +298,7 @@ export function MCPSettingsPanel() {
         <div className="space-y-6">
           <EditorSection eyebrow={t('mcp.general', 'General')} title={t('mcp.runtimeState', 'Runtime State')} description={t('mcp.runtimeStateHint', 'Use this summary to decide whether the server is ready for day-to-day use or still needs more setup.')}>
             <div className="space-y-3">
-              <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-3 text-sm text-text-secondary">
+              <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-sm text-text-secondary">
                 <div>{t('mcp.scope', 'Scope')}: <span className="font-semibold text-text-primary">{getScopeLabel(selected.scope)}</span></div>
                 <div className="mt-2">{t('common.status', 'Status')}: <span className="font-semibold text-text-primary">{getStatusLabel(selected.status)}</span></div>
                 <div className="mt-2">{t('mcp.lastConnected', 'Last Connected')}: <span className="font-semibold text-text-primary">{formatLastConnected(selected.lastConnectedAt, t)}</span></div>
@@ -307,7 +307,7 @@ export function MCPSettingsPanel() {
               {selected.error ? (<div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-400">
                   <div className="font-medium">{t('mcp.latestError', 'Latest error')}</div>
                   <div className="mt-1 break-all">{selected.error}</div>
-                </div>) : (<div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-3 text-sm text-text-muted">
+                </div>) : (<div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-sm text-text-muted">
                   {t('mcp.noRecentErrors', 'No recent connection errors recorded for this server.')}
                 </div>)}
             </div>
@@ -402,13 +402,13 @@ export function MCPSettingsPanel() {
         <div className="space-y-6">
           <EditorSection eyebrow={t('common.save', 'Save')} title={t('mcp.reviewAndSave', 'Review & Save')} description={t('mcp.reviewAndSaveHint', 'Save writes the server config into the local store. Run a test after saving to confirm transport and tool discovery.')}>
             <div className="space-y-4">
-              <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-4 text-sm text-text-secondary">
+              <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-4 text-sm text-text-secondary">
                 <div>{t('common.name', 'Name')}: <span className="font-semibold text-text-primary">{form.name || t('mcp.newServer', 'New MCP Server')}</span></div>
                 <div className="mt-2">{t('mcp.transport', 'Transport')}: <span className="font-semibold text-text-primary">{getTransportLabel(form.transport)}</span></div>
                 <div className="mt-2">{t('mcp.scope', 'Scope')}: <span className="font-semibold text-text-primary">{getScopeLabel(form.scope)}</span></div>
               </div>
 
-              <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-4 text-sm text-text-muted">
+              <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-4 text-sm text-text-muted">
                 {form.transport === 'stdio'
             ? t('mcp.stdioGuide', 'For stdio servers, the runtime only validates command shape here; process spawning and deep inspection happen when the server is actually used.')
             : t('mcp.remoteGuide', 'For remote servers, the built-in test performs a lightweight fetch to validate reachability before tools are populated.')}

@@ -9,9 +9,9 @@ import {
   SettingsStat,
   SettingsToggleRow,
 } from './panelUi'
-import { Checkbox } from '@/components/catalyst-ui/checkbox'
-import { Button as UiButton } from '@/components/catalyst-ui/button'
-import { Input as UiInput } from '@/components/catalyst-ui/form-controls'
+import { Checkbox } from '@/components/shared/checkbox'
+import { Button as UiButton } from '@/components/shared/button'
+import { Input as UiInput } from '@/components/shared/form-controls'
 
 function ListEditor({
   items,

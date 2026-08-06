@@ -111,7 +111,7 @@ describe('DocumentsLayout', () => {
     expect(screen.getByText('Intro.md')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'More actions: Docs' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New Folder' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New Folder' }))
     const nodeNameInput = screen.getByRole('textbox', { name: 'Document or folder name' })
     await user.clear(nodeNameInput)
     await user.type(nodeNameInput, 'Specs')
@@ -124,7 +124,7 @@ describe('DocumentsLayout', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'More actions: Specs' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New child document' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New child document' }))
 
     const childDocument = await waitFor(() => {
       const nextDoc = useAppStore.getState().documentNodes.find((node) => node.type === 'document' && node.parentId === folder?.id && node.id !== rootDoc.id)
@@ -192,7 +192,7 @@ describe('DocumentsLayout', () => {
     render(<DocumentsLayout />)
 
     await user.click(screen.getByRole('button', { name: 'More actions: Intro.md' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Rename' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }))
     const nodeNameInput = screen.getByRole('textbox', { name: 'Document or folder name' })
     await user.clear(nodeNameInput)
     await user.type(nodeNameInput, 'deploy.sh')
@@ -498,7 +498,7 @@ describe('DocumentsLayout', () => {
     render(<DocumentsLayout />)
 
     await user.click(screen.getByRole('button', { name: 'More actions: Docs' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New Folder' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New Folder' }))
     expect(screen.getByRole('textbox', { name: 'Document or folder name' })).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: '+ Group' }))
@@ -528,7 +528,7 @@ describe('DocumentsLayout', () => {
     render(<DocumentsLayout />)
 
     await user.click(screen.getByRole('button', { name: 'More actions: Docs' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New Folder' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New Folder' }))
     const nodeNameInput = screen.getByRole('textbox', { name: 'Document or folder name' })
     await user.clear(nodeNameInput)
     await user.type(nodeNameInput, 'Specs')
@@ -541,7 +541,7 @@ describe('DocumentsLayout', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'More actions: Specs' }))
-    await user.click(screen.getByRole('menuitem', { name: 'New child document' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New child document' }))
 
     const childDocument = await waitFor(() => {
       const nextDoc = useAppStore.getState().documentNodes.find((node) => node.type === 'document' && node.parentId === folder?.id)
@@ -550,7 +550,7 @@ describe('DocumentsLayout', () => {
     })
 
     await user.click(screen.getByRole('button', { name: 'More actions: Specs' }))
-    await user.click(screen.getByRole('menuitem', { name: 'Delete' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Delete' }))
 
     await waitFor(() => {
       expect(useAppStore.getState().documentNodes.some((node) => node.id === folder?.id)).toBe(false)

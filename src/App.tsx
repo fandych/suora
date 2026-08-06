@@ -75,22 +75,19 @@ export default function App() {
     const cleanupRuntimeLogging = initRendererRuntimeLogging()
     const cleanup = initChannelMessageListener()
 
-    // Non-critical runtimes (timer + event automation) are deferred to idle
-    // time so they don't compete with first paint. Icon collections are even
-    // less urgent and are also pre-loaded lazily.
+    // Timer and event automation need to be ready immediately after mount so
+    // startup-fired events are not lost. Icon collection warming can remain
+    // deferred because it is not correctness-critical.
     let cleanupTimerRuntime: (() => void) | null = null
     let cleanupEventAutomation: (() => void) | null = null
 
-    const idleRuntime = scheduleWhenIdle(() => {
-      cleanupTimerRuntime = initTimerRuntimeListener()
-      cleanupEventAutomation = initEventAutomationRuntime()
-    })
+    cleanupTimerRuntime = initTimerRuntimeListener()
+    cleanupEventAutomation = initEventAutomationRuntime()
     const idleIcons = scheduleWhenIdle(() => {
       preloadPopularCollections().catch(console.error)
     }, 3500)
 
     return () => {
-      idleRuntime.cancel()
       idleIcons.cancel()
       cleanup()
       cleanupRuntimeLogging()

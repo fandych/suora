@@ -1,7 +1,7 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react';
 import { t as translate } from '@/services/i18n';
 import { logger, reportRendererCrash } from '@/services/logger';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Button as UiButton } from "@/components/shared/button";
 interface Props {
     children: ReactNode;
 }

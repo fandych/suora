@@ -79,7 +79,7 @@ The current top-level modules are:
 | Timer | One-time, interval, and cron schedules |
 | Channels | Messaging platform integrations and reply routing |
 | MCP | Model Context Protocol server configuration |
-| Settings | Preferences, security, data, logs, and diagnostics |
+| Settings | Appearance, security, voice, automation, extensions, data, logs, and diagnostics |
 
 ## 4. Chat Workflow
 
@@ -302,12 +302,16 @@ The current settings sections are:
 - Voice
 - Shortcuts
 - Data
+- Knowledge Base
+- Event Automation
+- External Directories
+- Plugins
 - Logs
 - System
 
 Important settings capabilities include:
 
-- theme (dark/light/system), locale, fonts, and accent color (12 named presets: default blue, amber, sapphire, emerald, amethyst, coral, rose, jade, crimson, copper, arctic, slate)
+- theme (dark/light/system), locale, fonts, and accent color (9 named choices: strong blue, tango pink, dark tangerine, lemon curry, persian green, turquoise, skyline blue, oceanic teal, rose taupe; persisted `default` also resolves to strong blue)
 - auto-start
 - proxy configuration
 - SMTP email settings and connection test
@@ -325,6 +329,31 @@ Important settings capabilities include:
 - replay onboarding
 
 The current implementation tries to store API keys in OS-backed secure storage first. If the system keyring is unavailable or encryption fails, Suora warns that keys remain in memory only and must be re-entered after restart.
+
+### Current visual baseline
+
+The current workbench visual system has been refined around a quieter foundation:
+
+- dark mode uses a black and graphite surface stack instead of tinted decorative backgrounds
+- light mode uses white and gray-white surfaces instead of parchment-style fills
+- shared cards, side panels, empty states, and module headers now use lighter shadows and lower-contrast borders
+- the remaining accent color is primarily carried by actions, focus states, status chips, and selected items rather than full-panel fills
+
+This means the accent selector changes emphasis, not the entire background mood of the app.
+
+### Current Settings section map
+
+- General: theme, accent, fonts, language, startup, workspace path, proxy, and SMTP mail
+- Security: key handling, confirmation policy, filesystem sandboxing, and command restrictions
+- Voice: speech input, playback, and voice interaction preferences
+- Shortcuts: keyboard bindings for chat, navigation, and editing flows
+- Data: import/export, retention, backup, and destructive maintenance actions
+- Knowledge Base: vector memory and semantic knowledge settings
+- Event Automation: startup, schedule, clipboard, and file-triggered automation entry points
+- External Directories: extra skill and agent directories loaded outside the current workspace
+- Plugins: plugin lifecycle, install sources, and runtime extension controls
+- Logs: runtime logs, failure evidence, and troubleshooting views
+- System: onboarding replay, runtime health, and diagnostics
 
 ## 9. Common workflows
 

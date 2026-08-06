@@ -265,6 +265,15 @@ function pushYamlArrayField(lines: string[], key: string, values?: string[]): vo
   }
 }
 
+function escapePromptAttribute(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 // ─── SKILL.md Parser ───────────────────────────────────────────────
 
 /**
@@ -834,6 +843,27 @@ export async function buildSkillPrompts(
     if (!skill.content?.trim()) continue
 
     const lines: string[] = []
+    const activationNotes: string[] = []
+    activationNotes.push(`Description: ${skill.description}`)
+    if (skill.whenToUse?.trim()) {
+      activationNotes.push(`Use this skill only when: ${skill.whenToUse.trim()}`)
+    }
+    if (skill.frontmatter.argumentHint?.trim()) {
+      activationNotes.push(`Arguments hint: ${skill.frontmatter.argumentHint.trim()}`)
+    }
+    if (skill.frontmatter.arguments?.length) {
+      activationNotes.push(`Named arguments: ${skill.frontmatter.arguments.join(', ')}`)
+    }
+    if (skill.frontmatter.userInvocable === false) {
+      activationNotes.push('Direct user invocation is disabled for this skill.')
+    }
+    if (skill.context === 'fork') {
+      activationNotes.push('Execution preference: fork. This runtime does not spawn a dedicated sub-agent for skills, so apply this guidance only when the request clearly matches the activation hint.')
+    }
+
+    if (activationNotes.length > 0) {
+      lines.push(`### Activation metadata\n\n${activationNotes.map((note) => `- ${note}`).join('\n')}`)
+    }
     lines.push(skill.content.trim())
 
     // Load reference files
@@ -878,7 +908,8 @@ export async function buildSkillPrompts(
       lines.push(`### Bundled resources\n\n${rootHint}Use these files and folders as needed; read only the resources relevant to the task.${scriptHint}\n${manifest}`)
     }
 
-    parts.push(`<skill name="${skill.name}">\n${lines.join('\n\n')}\n</skill>`)
+    const contextLabel = skill.context ?? 'inline'
+    parts.push(`<skill name="${escapePromptAttribute(skill.name)}" context="${escapePromptAttribute(contextLabel)}">\n${lines.join('\n\n')}\n</skill>`)
   }
 
   if (parts.length === 0) return ''

@@ -10,11 +10,12 @@ import { toast } from '@/services/toast';
 import { isMainChatSession } from '@/utils/chatSessions';
 import { MessageBubble } from './ChatMessages';
 import { ChatInput } from './ChatInput';
+import { EmptyChatState, NewSessionHero, StreamingStatus, SurfaceBadge } from './ChatStatusPanels';
 import { TodoProgress } from './TodoProgress';
 import type { ExportFormat } from '@/services/exportUtils';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Dropdown, DropdownButton, DropdownMenu, DropdownItem, DropdownSection, DropdownHeading, DropdownDivider } from '@/components/catalyst-ui/dropdown';
-import { workbenchSectionEyebrowClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Dropdown, DropdownButton, DropdownMenu, DropdownItem, DropdownSection, DropdownHeading, DropdownDivider } from '@/components/shared/dropdown';
+import { workbenchSectionEyebrowClass } from '@/components/workbench/styles';
 const LazyAgentStateDebug = lazy(() => import('@/components/debug/AgentStateDebug').then((module) => ({ default: module.AgentStateDebug })));
 const INITIAL_RENDERED_MESSAGES = 40;
 const MESSAGE_BATCH_SIZE = 40;
@@ -33,36 +34,6 @@ function formatRelativeLabel(ts: number, locale = 'en'): string {
     if (absSeconds < 604800)
         return formatter.format(Math.round(diffSeconds / 86400), 'day');
     return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(ts);
-}
-function SurfaceBadge({ children, tone = 'default', }: {
-    children: ReactNode;
-    tone?: 'default' | 'accent' | 'warning' | 'success';
-}) {
-    const toneClass = tone === 'accent'
-        ? 'border-accent/20 bg-accent/10 text-accent'
-        : tone === 'warning'
-            ? 'border-warning/20 bg-warning/10 text-warning'
-            : tone === 'success'
-                ? 'border-success/20 bg-success/10 text-success'
-                : 'border-border-subtle/55 bg-surface-0/60 text-text-secondary';
-    return (<span className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium ${toneClass}`}>
-      {children}
-    </span>);
-}
-function PromptActionCard({ icon, title, detail, onClick, disabled, }: {
-    icon: string;
-    title: string;
-    detail: string;
-    onClick: () => void;
-    disabled?: boolean;
-}) {
-    return (<UiButton unstyled type="button" onClick={onClick} disabled={disabled} className="group rounded-md border border-border-subtle/45 bg-surface-0/42 p-3 text-left transition-all duration-200 hover:border-accent/24 hover:bg-surface-0/70 disabled:opacity-45">
-      <div className="flex h-8 w-8 items-center justify-center rounded-md bg-accent/10 text-accent transition-colors group-hover:bg-accent/14">
-        <IconifyIcon name={icon} size={16} color="currentColor"/>
-      </div>
-      <div className="mt-2.5 text-[13px] font-semibold text-text-primary">{title}</div>
-      <p className="mt-1 text-[12px] leading-5 text-text-secondary/72">{detail}</p>
-    </UiButton>);
 }
 interface BrowserWorkbenchState {
     available: boolean;
@@ -346,7 +317,7 @@ function ModelDropdown({ models, providerNameById, value, onChange, compact = fa
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={compact ? 'shrink-0 text-current/65' : 'shrink-0 text-text-muted/45'}><polyline points="6 9 12 15 18 9"/></svg>
         </UiButton>
 
-        {open && (<div ref={menuRef} className={`absolute left-0 z-[110] min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        {open && (<div ref={menuRef} className={`absolute left-0 z-110 min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
             <UiButton unstyled type="button" onClick={() => { onChange(''); setOpen(false); }} className={`w-full justify-start rounded-md px-3 py-2.5 text-left transition-colors ${!value ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
               <div className="flex items-center gap-3">
                 <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70 text-accent">
@@ -445,7 +416,7 @@ function AgentDropdown({ agents, selectedAgentId, onSelect, compact = false }: {
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className={compact ? 'shrink-0 text-current/65' : 'shrink-0 text-text-muted/45'}><polyline points="6 9 12 15 18 9"/></svg>
         </UiButton>
 
-        {open && (<div ref={menuRef} className={`absolute left-0 z-[110] min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
+        {open && (<div ref={menuRef} className={`absolute left-0 z-110 min-w-72 max-h-96 max-w-104 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 p-1.5 shadow-2xl backdrop-blur-xl animate-fade-in-scale ${placement === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'}`}>
               {enabledAgents.map((a) => (<UiButton unstyled type="button" key={a.id} onClick={() => { onSelect(a); setOpen(false); }} className={`w-full justify-start rounded-md px-3 py-2.5 text-left transition-colors ${a.id === selectedAgentId ? 'bg-accent/8 text-accent' : 'text-text-secondary hover:bg-surface-3/50'}`}>
                 <div className="flex items-center gap-3">
                   <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border-subtle/45 bg-surface-0/70">
@@ -623,6 +594,15 @@ export function ChatMain() {
       ? visibleMessages.slice(0, -1)
       : []), [lastVisibleMessage, visibleMessages]);
     const lastMessage = messages[messages.length - 1];
+    const lastAssistantMessage = useMemo(() => {
+      for (let index = messages.length - 1; index >= 0; index -= 1) {
+        if (messages[index].role === 'assistant') {
+          return messages[index];
+        }
+      }
+      return undefined;
+    }, [messages]);
+    const activeTool = lastAssistantMessage?.toolCalls?.find((toolCall) => toolCall.status === 'running' || toolCall.status === 'pending');
     const messageRenderVersion = lastMessage
         ? `${messages.length}:${lastMessage.id}:${lastMessage.content.length}:${lastMessage.isStreaming ? 1 : 0}:${lastMessage.toolCalls?.length ?? 0}:${lastMessage.contentParts?.length ?? 0}`
         : `${activeSessionId ?? 'none'}:0`;
@@ -645,15 +625,17 @@ export function ChatMain() {
         : sessionAgent?.greeting;
     const lastUpdated = activeSession ? formatRelativeLabel(activeSession.updatedAt, locale) : null;
     useEffect(() => {
-        isNearBottomRef.current = true;
+      isNearBottomRef.current = true;
     }, [activeSessionId]);
-    const updateScrollControls = useCallback(() => {
+    const updateScrollControls = useCallback((syncAutoScroll = false) => {
         const el = messagesContainerRef.current;
         if (!el)
             return;
         const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
         const distanceFromTop = el.scrollTop;
+      if (syncAutoScroll) {
         isNearBottomRef.current = distanceFromBottom < 120;
+      }
         const nextTop = distanceFromTop > SCROLL_CONTROL_THRESHOLD_PX;
         const nextBottom = distanceFromBottom > SCROLL_CONTROL_THRESHOLD_PX;
         if (scrollControlStateRef.current.top !== nextTop) {
@@ -665,12 +647,12 @@ export function ChatMain() {
             setShowScrollToBottom(nextBottom);
         }
     }, []);
-    const scheduleScrollControlsUpdate = useCallback(() => {
+    const scheduleScrollControlsUpdate = useCallback((syncAutoScroll = false) => {
         if (scrollControlsFrameRef.current !== null)
             return;
         scrollControlsFrameRef.current = window.requestAnimationFrame(() => {
             scrollControlsFrameRef.current = null;
-            updateScrollControls();
+        updateScrollControls(syncAutoScroll);
         });
     }, [updateScrollControls]);
     const loadOlderMessages = useCallback(() => {
@@ -684,7 +666,7 @@ export function ChatMain() {
       setRenderedMessageCount((prev) => Math.min(messages.length, prev + MESSAGE_BATCH_SIZE));
     }, [hiddenMessageCount, messages.length]);
     const handleScroll = useCallback(() => {
-        scheduleScrollControlsUpdate();
+      scheduleScrollControlsUpdate(true);
     }, [scheduleScrollControlsUpdate]);
     useEffect(() => {
         return () => {
@@ -699,8 +681,16 @@ export function ChatMain() {
         };
     }, []);
     useEffect(() => {
-        scheduleScrollControlsUpdate();
+      scheduleScrollControlsUpdate(false);
     }, [activeSessionId, messageRenderVersion, scheduleScrollControlsUpdate]);
+    useLayoutEffect(() => {
+        const el = messagesContainerRef.current;
+        if (!el)
+            return;
+        el.scrollTop = el.scrollHeight;
+        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        scheduleScrollControlsUpdate(false);
+    }, [activeSessionId, scheduleScrollControlsUpdate]);
     useLayoutEffect(() => {
       if (!olderMessageRestoreRef.current)
         return;
@@ -712,18 +702,20 @@ export function ChatMain() {
       const { previousScrollHeight, previousScrollTop } = olderMessageRestoreRef.current;
       olderMessageRestoreRef.current = null;
       el.scrollTop = previousScrollTop + (el.scrollHeight - previousScrollHeight);
-      scheduleScrollControlsUpdate();
+        scheduleScrollControlsUpdate(false);
     }, [renderedMessageCount, scheduleScrollControlsUpdate]);
     const scrollToTop = useCallback(() => {
         const el = messagesContainerRef.current;
         if (!el)
             return;
+        isNearBottomRef.current = false;
         el.scrollTo({ top: 0, behavior: 'smooth' });
     }, []);
     const scrollToBottom = useCallback(() => {
         const el = messagesContainerRef.current;
         if (!el)
             return;
+        isNearBottomRef.current = true;
         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
     }, []);
     useEffect(() => {
@@ -743,7 +735,7 @@ export function ChatMain() {
             el.scrollTop = el.scrollHeight;
           }
           messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
-          scheduleScrollControlsUpdate();
+          scheduleScrollControlsUpdate(false);
           return;
         }
         messagesEndRef.current?.scrollIntoView({ behavior: isStreaming ? 'auto' : 'smooth' });
@@ -963,52 +955,10 @@ export function ChatMain() {
         return (<div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
         <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 py-5 xl:px-6">
           <div className="mx-auto max-w-384 space-y-3">
-            <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/35 bg-surface-1/28">
-              <div className="relative z-10 p-4 xl:p-5">
-                <div>
-                  <div className="flex flex-wrap gap-2">
-                    <SurfaceBadge tone="accent">{t('chat.workbench', '企业 AI 工作台')}</SurfaceBadge>
-                    <SurfaceBadge>{t('chat.multimodalWorkspace', '文件、语音和智能体路由集中处理')}</SurfaceBadge>
-                  </div>
-
-                  <div className="mt-4 max-w-3xl">
-                    <h1 className="text-[28px] font-semibold leading-tight text-text-primary xl:text-[32px]">{t('chat.desktopAssistant', 'Suora 内部助手')}</h1>
-                    <p className="mt-2 max-w-2xl text-[13px] leading-6 text-text-secondary/80">{t('chat.selectOrCreate', '选择会话或创建新任务，开始处理内部知识问答、流程执行和文档分析。')}</p>
-                  </div>
-
-                  <div className="mt-5 grid gap-2 sm:grid-cols-2">
-                    {starterPrompts.map((prompt) => (<PromptActionCard key={prompt.label} icon={prompt.icon} title={prompt.label} detail={prompt.detail} onClick={() => createSessionAndSend(prompt.prompt)}/>))}
-                  </div>
-                </div>
-              </div>
-            </section>
-            <section className="rounded-md border border-border-subtle/35 bg-surface-1/22 p-3 xl:p-4">
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-                <div className="max-w-2xl">
-                  <div className={workbenchSectionEyebrowClass}>{t('chat.startHere', '开始处理')}</div>
-                  <h2 className="mt-1 text-[18px] font-semibold text-text-primary">{t('chat.mainPrompt', '选择一个会话，或从下方输入框发起新的内部任务。')}</h2>
-                  <p className="mt-1 text-[12.5px] leading-5 text-text-secondary/78">{t('chat.welcomeBody', '选择智能体与模型后，可以进行知识解释、文档撰写、代码分析或任务拆解，所有上下文都保留在当前工作区。')}</p>
-                </div>
-                <SurfaceBadge>{t('chat.multimodalWorkspace', '文件、语音和智能体路由集中处理')}</SurfaceBadge>
-              </div>
-
-              <div className="mt-3">
-                <ChatInput onSend={createSessionAndSend} disabled={false} noModel={!selectedModel} footer={(<ComposerContextFooter agents={agents} selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''} onSelectAgent={(agent) => {
+            <NewSessionHero starterPrompts={starterPrompts} onPromptSelect={(prompt) => createSessionAndSend(prompt)} createSessionAndSend={createSessionAndSend} canChat={Boolean(selectedModel)} hintsTitle={t('chat.hints', '提示')} pipelineHint={t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')} pasteHint={t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')} badgeOne={t('chat.workbench', '企业 AI 工作台')} badgeTwo={t('chat.multimodalWorkspace', '文件、语音和智能体路由集中处理')} promptEyebrow={t('chat.startHere', 'Start here')} title={t('chat.desktopAssistant', 'Suora 内部助手')} description={t('chat.selectOrCreate', '选择会话或创建新任务，开始处理内部知识问答、流程执行和文档分析。')} promptTitle={t('chat.mainPrompt', '选择一个会话，或从下方输入框发起新的内部任务。')} promptDescription={t('chat.welcomeBody', '选择智能体与模型后，可以进行知识解释、文档撰写、代码分析或任务拆解，所有上下文都保留在当前工作区。')} footer={<ComposerContextFooter agents={agents} selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''} onSelectAgent={(agent) => {
                     setSelectedAgent(agent);
-                }} models={enabledModels} providerNameById={providerNameById} selectedModelId={selectedModel?.id ?? ''} onSelectModel={handleModelChange} status={missingModelBadge}/>)}/>
-              </div>
-            </section>
-
-            <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
-              <div className="rounded-md border border-border-subtle/35 bg-surface-1/18 p-3 text-[12px] leading-5 text-text-secondary/78">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted/45">{t('chat.hints', '提示')}</div>
-                <div className="mt-2 space-y-1.5">
-                  <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')}</div>
-                  <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
-                </div>
-              </div>
-              <BrowserWorkbenchCard />
-            </div>
+                }} models={enabledModels} providerNameById={providerNameById} selectedModelId={selectedModel?.id ?? ''} onSelectModel={handleModelChange} status={missingModelBadge} />} />
+            <BrowserWorkbenchCard />
           </div>
         </div>
       </div>);
@@ -1034,33 +984,8 @@ export function ChatMain() {
         <div className="px-5 pb-4 pt-4 xl:px-6">
           <div className="mx-auto max-w-384">
             {messages.length === 0 ? (<div className="space-y-3">
-                <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/35 bg-surface-1/28">
-                  <div className="relative z-10 p-4 xl:p-5">
-                    <div className="flex h-12 w-12 items-center justify-center rounded-md bg-accent/10 text-accent">
-                      <AgentAvatar avatar={sessionAgent?.avatar ?? 'ui-sparkles'} size={32}/>
-                    </div>
-                    <div className="mt-4 max-w-2xl">
-                      <div className={workbenchSectionEyebrowClass}>{t('chat.readyWhenYouAre', '就绪')}</div>
-                      <h2 className="mt-1.5 text-[22px] font-semibold text-text-primary">{displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')}</h2>
-                      <p className="mt-2 text-[13px] leading-5 text-text-secondary/78">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
-                    </div>
-
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                      {starterPrompts.map((suggestion) => (<PromptActionCard key={suggestion.label} icon={suggestion.icon} title={suggestion.label} detail={suggestion.detail} onClick={() => handleSend(suggestion.prompt)} disabled={isStreaming}/>))}
-                    </div>
-                  </div>
-                </section>
-
-                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_18rem]">
-                  <div className="rounded-md border border-border-subtle/35 bg-surface-1/18 p-3 text-[12px] leading-5 text-text-secondary/78">
-                    <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-text-muted/45">{t('chat.hints', '提示')}</div>
-                    <div className="mt-2 space-y-1.5">
-                      <div>{t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')}</div>
-                      <div>{t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')}</div>
-                    </div>
-                  </div>
-                  <BrowserWorkbenchCard />
-                </div>
+                <EmptyChatState starterPrompts={starterPrompts} sessionAgentAvatar={sessionAgent?.avatar ?? 'ui-sparkles'} displayAgentName={displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')} displayAgentGreeting={displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')} isStreaming={isStreaming} onPromptSelect={(prompt) => handleSend(prompt)} hintsTitle={t('chat.hints', '提示')} pipelineHint={t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')} pasteHint={t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')} />
+                <BrowserWorkbenchCard />
               </div>) : (<section className="relative overflow-visible">
                 <div className="relative z-10 px-1 py-1 sm:px-2 xl:px-3">
                   <TodoProgress />
@@ -1090,7 +1015,9 @@ export function ChatMain() {
           </div>)}
       </div>
 
-      <StreamingStatus isStreaming={isStreaming} messages={messages}/>
+      <StreamingStatus isStreaming={isStreaming} label={activeTool
+        ? `${t('chat.callingTool', 'Calling tool')}: ${activeTool.toolName}`
+        : t('chat.thinking', 'AI is thinking…')} />
 
       {messages.length > 0 && (<div className="px-5 pb-2 xl:px-6">
           <div className="mx-auto max-w-384">
@@ -1105,36 +1032,6 @@ export function ChatMain() {
       {showDebug && (<Suspense fallback={null}>
           <LazyAgentStateDebug />
         </Suspense>)}
-    </div>);
-}
-function StreamingStatus({ isStreaming, messages, }: {
-    isStreaming: boolean;
-    messages: import('@/types').Message[];
-}) {
-    const { t } = useI18n();
-    if (!isStreaming)
-        return null;
-    let last: import('@/types').Message | undefined;
-    for (let index = messages.length - 1; index >= 0; index -= 1) {
-        if (messages[index].role === 'assistant') {
-            last = messages[index];
-            break;
-        }
-    }
-    const activeTool = last?.toolCalls?.find((tc) => tc.status === 'running' || tc.status === 'pending');
-    const label = activeTool
-        ? `${t('chat.callingTool', 'Calling tool')}: ${activeTool.toolName}`
-        : t('chat.thinking', 'AI is thinking…');
-    return (<div className="px-6 pb-3 pt-2 xl:px-8">
-      <div className="mx-auto max-w-384">
-        <div role="status" aria-live="polite" className="inline-flex max-w-full items-center gap-3 rounded-full border border-accent/18 bg-surface-0/72 px-4 py-2 text-[11.5px] text-text-secondary shadow-[0_12px_30px_rgba(var(--t-accent-rgb),0.08)] backdrop-blur-xl">
-          <span className="relative flex h-2.5 w-2.5" aria-hidden="true">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent/60 opacity-75"/>
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent"/>
-          </span>
-          <span className="truncate">{label}</span>
-        </div>
-      </div>
     </div>);
 }
 

@@ -3,11 +3,12 @@ import { useI18n } from '@/hooks/useI18n';
 import { useAppStore } from '@/store/appStore';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { loadTriggers, addTrigger, removeTrigger, resolvePromptTemplate, updateTrigger } from '@/services/eventAutomation';
+import { refreshEventAutomationWatchers } from '@/services/eventAutomationRuntime';
 import { generateId } from '@/utils/helpers';
 import type { EventTrigger } from '@/types';
 import { SettingsSection, SettingsStat } from './panelUi';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/shared/form-controls";
 function getTriggerTypeLabel(type: EventTrigger['type'], t: (key: string, fallback: string) => string) {
     switch (type) {
         case 'clipboard_change':
@@ -68,7 +69,7 @@ export function EventsSettings() {
             previous: t('settings.samplePreviousContent', '(previous content)'),
         })
         : t('common.empty', 'Empty');
-    const createTrigger = () => {
+    const createTrigger = async () => {
         if (!triggerForm.name || !triggerForm.agentId || !triggerForm.promptTemplate)
             return;
         addTrigger({
@@ -81,6 +82,7 @@ export function EventsSettings() {
             enabled: true,
             createdAt: Date.now(),
         });
+          await refreshEventAutomationWatchers();
         reloadTriggers();
         setTriggerForm({
             name: '',
@@ -123,10 +125,10 @@ export function EventsSettings() {
                       <div className="mt-3 rounded-2xl border border-border-subtle/45 bg-surface-2/70 px-3 py-2 text-[11px] leading-6 text-text-secondary">{trigger.promptTemplate}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <UiButton unstyled type="button" onClick={() => { updateTrigger(trigger.id, { enabled: !trigger.enabled }); reloadTriggers(); }} className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors ${trigger.enabled ? 'border-green-500/18 bg-green-500/10 text-green-400 hover:bg-green-500/16' : 'border-border-subtle/55 bg-surface-2/70 text-text-muted hover:bg-surface-3'}`}>
+                      <UiButton unstyled type="button" onClick={async () => { updateTrigger(trigger.id, { enabled: !trigger.enabled }); await refreshEventAutomationWatchers(); reloadTriggers(); }} className={`rounded-xl border px-3 py-2 text-[11px] font-semibold transition-colors ${trigger.enabled ? 'border-green-500/18 bg-green-500/10 text-green-400 hover:bg-green-500/16' : 'border-border-subtle/55 bg-surface-2/70 text-text-muted hover:bg-surface-3'}`}>
                         {trigger.enabled ? t('settings.pause', 'Pause') : t('settings.enable', 'Enable')}
                       </UiButton>
-                      <UiButton unstyled type="button" onClick={() => { removeTrigger(trigger.id); reloadTriggers(); }} className="rounded-xl border border-red-500/18 bg-red-500/8 px-3 py-2 text-[11px] font-semibold text-red-400 transition-colors hover:bg-red-500/14">
+                      <UiButton unstyled type="button" onClick={async () => { removeTrigger(trigger.id); await refreshEventAutomationWatchers(); reloadTriggers(); }} className="rounded-xl border border-red-500/18 bg-red-500/8 px-3 py-2 text-[11px] font-semibold text-red-400 transition-colors hover:bg-red-500/14">
                         {t('settings.delete', 'Delete')}
                       </UiButton>
                     </div>
@@ -140,7 +142,7 @@ export function EventsSettings() {
           </div>)}
       </SettingsSection>
 
-      <SettingsSection eyebrow={t('settings.newTrigger', 'New Trigger')} title={t('settings.composeTrigger', 'Compose Trigger')} description={t('settings.composeTriggerHint', 'Choose an event source, select the receiving agent, and define the prompt template that should be sent when the rule fires.')} action={<UiButton unstyled type="button" onClick={createTrigger} disabled={!triggerForm.name || !triggerForm.agentId || !triggerForm.promptTemplate} className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover disabled:opacity-40">
+      <SettingsSection eyebrow={t('settings.newTrigger', 'New Trigger')} title={t('settings.composeTrigger', 'Compose Trigger')} description={t('settings.composeTriggerHint', 'Choose an event source, select the receiving agent, and define the prompt template that should be sent when the rule fires.')} action={<UiButton unstyled type="button" onClick={() => void createTrigger()} disabled={!triggerForm.name || !triggerForm.agentId || !triggerForm.promptTemplate} className="rounded-2xl bg-accent px-4 py-3 text-sm font-semibold text-white shadow-[0_10px_30px_rgba(var(--t-accent-rgb),0.22)] transition-colors hover:bg-accent-hover disabled:opacity-40">
             {t('settings.addTrigger', 'Add Trigger')}
           </UiButton>}>
         <div className="grid gap-4 md:grid-cols-2">

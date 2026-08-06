@@ -73,6 +73,6 @@ describe('ConfirmDialogHost open guard', () => {
       void confirm({ title: 'Delete?', body: 'Sure?', danger: true })
     })
 
-    expect(screen.getByRole('dialog')).toHaveClass('relative', 'z-[120]')
+    expect(screen.getByRole('alertdialog')).toHaveClass('relative', 'z-[120]')
   })
 })

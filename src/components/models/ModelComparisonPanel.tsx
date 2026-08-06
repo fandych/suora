@@ -4,9 +4,9 @@ import { useI18n } from '@/hooks/useI18n';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { generateResponse } from '@/services/aiService';
 import type { ModelMessage } from 'ai';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { TextArea as UiTextArea } from "@/components/catalyst-ui/form-controls";
-import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { TextArea as UiTextArea } from "@/components/shared/form-controls";
+import { workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/workbench/styles';
 function ComparisonStat({ label, value, accent = false }: {
     label: string;
     value: string;

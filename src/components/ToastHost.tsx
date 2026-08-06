@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react';
 import { useI18n } from '@/hooks/useI18n';
 import { useToastStore, type ToastKind } from '@/services/toast';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
+import { Button as UiButton } from "@/components/shared/button";
 const KIND_STYLES: Record<ToastKind, string> = {
     info: 'bg-surface-2/95 border-border-subtle/60 text-text-primary',
     success: 'bg-surface-2/95 border-success/40 text-text-primary',

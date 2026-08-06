@@ -1,6 +1,7 @@
 import { _electron as electron } from '@playwright/test'
 import fs from 'node:fs'
 import path from 'node:path'
+import { once } from 'node:events'
 
 const electronExecutable = process.platform === 'win32'
   ? path.join('node_modules', 'electron', 'dist', 'electron.exe')
@@ -20,6 +21,7 @@ const app = await electron.launch({
   args: [mainEntry],
   env: { ...process.env },
 })
+const appProcess = app.process()
 
 const page = await app.firstWindow()
 await page.waitForLoadState('domcontentloaded')
@@ -159,10 +161,39 @@ await record('visible navigation controls', async () => {
   return { controls }
 })
 
+let closeResult = { ok: true }
+try {
+  await app.evaluate(({ BrowserWindow }) => {
+    const window = BrowserWindow.getAllWindows()[0]
+    if (!window) throw new Error('Main window not found')
+    window.close()
+  })
+
+  if (appProcess.exitCode === null) {
+    await Promise.race([
+      once(appProcess, 'exit'),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Electron process did not exit after main window close')), 8000)),
+    ])
+  }
+} catch (error) {
+  closeResult = {
+    ok: false,
+    error: error instanceof Error ? error.message.split('\n')[0] : String(error),
+  }
+}
+
+results.push({
+  name: 'window close exits app',
+  ...closeResult,
+  exitCode: appProcess.exitCode,
+})
+
 console.log(JSON.stringify(results, null, 2))
 
 const failed = results.filter((result) => !result.ok)
-await app.close()
+if (appProcess.exitCode === null) {
+  await app.close()
+}
 if (failed.length > 0) {
   process.exitCode = 1
 }

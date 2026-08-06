@@ -3,8 +3,8 @@ import { useI18n } from '@/hooks/useI18n';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { rebuildIndexFromStore, getIndex, getIndexStats, searchSimilar, } from '@/services/vectorMemory';
 import { SettingsSection, SettingsStat } from './panelUi';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
 export function KnowledgeSettings() {
     const { t } = useI18n();
     const [kbStats, setKbStats] = useState({ totalMemories: 0, vocabularySize: 0, indexSize: 0 });

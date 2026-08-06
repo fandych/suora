@@ -3,8 +3,8 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import { toGraphifyExport } from '@/services/graphifyAdapter';
 import type { DocumentGraph, DocumentGraphEdgeType, DocumentGraphInsightKind, DocumentGraphInsightsReport, DocumentGraphNode } from '@/services/documentGraph';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Input as UiInput } from "@/components/catalyst-ui/form-controls";
+import { Button as UiButton } from "@/components/shared/button";
+import { Input as UiInput } from "@/components/shared/form-controls";
 const EDGE_TYPES: DocumentGraphEdgeType[] = ['contains', 'references', 'tagged', 'external-link'];
 // Keep the adapter preview compact enough for the inspector panel without rendering the full graph JSON.
 const GRAPHIFY_PREVIEW_MAX_CHARS = 1400;

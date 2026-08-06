@@ -6,8 +6,8 @@ import { useI18n } from '@/hooks/useI18n';
 import { buildPipelineExecutionPath } from '@/services/pipelineNavigation';
 import type { ScheduledTask, TimerExecution } from '@/types';
 import { electronInvoke, formatRelative, formatDateTime } from './timerHelpers';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { workbenchAccentButtonClass, workbenchDangerButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchInfoCardClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { workbenchAccentButtonClass, workbenchDangerButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchInfoCardClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass } from '@/components/workbench/styles';
 function InfoCard({ label, value }: {
     label: string;
     value: string;
@@ -95,7 +95,7 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
             </div>
 
             <div className="flex flex-wrap gap-3 xl:max-w-100 xl:justify-end">
-              <UiButton unstyled onClick={onToggle} className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${timer.enabled ? 'bg-green-500/15 text-green-400 hover:bg-green-500/25' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`}>
+              <UiButton unstyled onClick={onToggle} className={`px-4 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${timer.enabled ? 'border border-accent/16 bg-accent/8 text-accent hover:bg-accent/12' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`}>
                 {timer.enabled ? t('timer.enabled', '● Enabled') : t('timer.disabled', '○ Disabled')}
               </UiButton>
               <UiButton unstyled onClick={onRunNow} className={workbenchAccentButtonClass}>

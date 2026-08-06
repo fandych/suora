@@ -7,9 +7,9 @@ import { useI18n } from '@/hooks/useI18n';
 import { DOCUMENT_EDITOR_AGENT_ID, useAppStore } from '@/store/appStore';
 import type { DocumentFolder, DocumentGroup, DocumentItem, MessageAttachment, Session } from '@/types';
 import { generateId } from '@/utils/helpers';
-import { Button as UiButton } from "@/components/catalyst-ui/button";
-import { Select as UiSelect } from "@/components/catalyst-ui/form-controls";
-import { workbenchSectionEyebrowClass, workbenchSidebarSubtleActionClass } from '@/components/catalyst-ui/workbench';
+import { Button as UiButton } from "@/components/shared/button";
+import { Select as UiSelect } from "@/components/shared/form-controls";
+import { workbenchSectionEyebrowClass, workbenchSidebarSubtleActionClass } from '@/components/workbench/styles';
 type DocumentsAssistantMode = 'create' | 'edit';
 type Translate = (key: string, fallback: string) => string;
 function ContextChip({ label, value }: {

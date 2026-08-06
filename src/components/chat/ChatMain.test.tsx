@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { Button } from '@/components/catalyst-ui/button'
+import { Button } from '@/components/shared/button'
 import { ChatMain } from './ChatMain'
 import { useAppStore } from '@/store/appStore'
 import type { Agent, Model, Session } from '@/types'
@@ -564,6 +564,138 @@ describe('ChatMain', () => {
     render(<ChatMain />)
 
     await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' }))
+  })
+
+  it('keeps auto-scroll pinned when new streaming content arrives while already at the bottom', async () => {
+    const scrollIntoView = vi.fn()
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoView
+    mockUseAIChatState.isLoading = true
+
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const session: Session = {
+      id: 'session-1',
+      title: 'Streaming chat',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: [
+        {
+          id: 'msg-1',
+          role: 'assistant',
+          content: 'partial response',
+          timestamp: Date.now(),
+          isStreaming: true,
+        },
+      ],
+    }
+
+    useAppStore.setState({
+      sessions: [session],
+      activeSessionId: session.id,
+      openSessionTabs: [session.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    const scroller = screen.getByLabelText('Chat messages')
+    let scrollTop = 800
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value) => {
+        scrollTop = Number(value)
+      },
+    })
+    Object.defineProperty(scroller, 'clientHeight', { value: 200, configurable: true })
+    Object.defineProperty(scroller, 'scrollHeight', { value: 1000, writable: true, configurable: true })
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' }))
+    scrollIntoView.mockClear()
+
+    Object.defineProperty(scroller, 'scrollHeight', { value: 1500, writable: true, configurable: true })
+
+    useAppStore.getState().updateSession(session.id, {
+      messages: [
+        {
+          id: 'msg-1',
+          role: 'assistant',
+          content: 'partial response with more streamed content',
+          timestamp: Date.now(),
+          isStreaming: true,
+        },
+      ],
+      updatedAt: Date.now(),
+    })
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto' }))
+  })
+
+  it('forces the transcript to the bottom when switching to another session', async () => {
+    const model: Model = {
+      id: 'model-1',
+      name: 'GPT-4',
+      provider: 'openai',
+      providerType: 'openai',
+      modelId: 'gpt-4',
+      enabled: true,
+    }
+
+    const sessionOne: Session = {
+      id: 'session-1',
+      title: 'Session one',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: model.id,
+      messages: [{ id: 'msg-1', role: 'assistant', content: 'first', timestamp: Date.now() }],
+    }
+
+    const sessionTwo: Session = {
+      id: 'session-2',
+      title: 'Session two',
+      createdAt: Date.now(),
+      updatedAt: Date.now() + 1000,
+      modelId: model.id,
+      messages: [{ id: 'msg-2', role: 'assistant', content: 'second', timestamp: Date.now() + 1000 }],
+    }
+
+    useAppStore.setState({
+      sessions: [sessionOne, sessionTwo],
+      activeSessionId: sessionOne.id,
+      openSessionTabs: [sessionOne.id, sessionTwo.id],
+      models: [model],
+      agents: [],
+      selectedModel: model,
+      selectedAgent: null,
+    })
+
+    render(<ChatMain />)
+
+    const scroller = screen.getByLabelText('Chat messages')
+    let scrollTop = 0
+    Object.defineProperty(scroller, 'scrollTop', {
+      configurable: true,
+      get: () => scrollTop,
+      set: (value) => {
+        scrollTop = Number(value)
+      },
+    })
+    Object.defineProperty(scroller, 'scrollHeight', { value: 1600, writable: true, configurable: true })
+
+    useAppStore.getState().setActiveSession(sessionTwo.id)
+
+    await waitFor(() => expect(scrollTop).toBe(1600))
   })
 
   it('wires the chat stop button to cancel the active stream', async () => {
