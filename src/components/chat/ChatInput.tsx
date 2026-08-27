@@ -432,7 +432,7 @@ export function ChatInput({ onSend, disabled, isStreaming, onStop, noModel, foot
             : voiceState === 'listening'
                 ? t('chat.listening', 'Listening…')
                 : noModel
-                    ? t('chat.selectModelOrRunPipeline', 'Select a model to chat, or use /pipeline run Morning Run')
+                    ? t('chat.selectModelOrRunPipeline', 'Select a model to start chatting')
                     : t('chat.messagePlaceholder', 'Send a message… (Shift+Enter for new line, paste/drag files)').replace('Shift+Enter', shortcuts['New Line'] || 'Shift+Enter')} rows={1} disabled={disabled} className="w-full min-h-11 max-h-32 text-[14.5px] leading-6"/>
 
               {interimText && (<div className="mt-2 rounded-2xl border border-accent/18 bg-accent/8 px-3 py-2 text-[12px] text-accent/80">

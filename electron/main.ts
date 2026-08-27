@@ -1655,6 +1655,8 @@ interface FetchResponse {
 interface FetchRequest {
   on(event: 'error', listener: (err: Error) => void): FetchRequest
   setTimeout(ms: number, callback: () => void): FetchRequest
+  write(chunk: string): void
+  end(): void
   destroy(): void
 }
 
@@ -1844,6 +1846,15 @@ function startAiFetchRequest(
 }
 
 type HttpGetFn = (url: string, options: Record<string, unknown>, callback: (res: FetchResponse) => void) => FetchRequest
+type HttpRequestFn = (url: string, options: Record<string, unknown>, callback: (res: FetchResponse) => void) => FetchRequest
+
+interface WebRequestPayload {
+  url: string
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  headers?: Record<string, string>
+  body?: string
+  timeoutMs?: number
+}
 
 function getProxyUrl(): string | null {
   if (!currentProxySettings.enabled || !currentProxySettings.host || !currentProxySettings.port) return null
@@ -1916,6 +1927,68 @@ function fetchUrl(url: string, redirectsLeft = 5, accept = 'text/html'): Promise
   })
 }
 
+function requestUrl(payload: WebRequestPayload): Promise<{ status: number; body: string; rawTruncated: boolean; headers: Record<string, string | string[] | undefined> }> {
+  return new Promise((resolve, reject) => {
+    const method = payload.method ?? 'GET'
+    const timeoutMs = Math.max(1000, Math.min(payload.timeoutMs ?? 15_000, 120_000))
+    try {
+      validatePublicHttpUrl(payload.url)
+    } catch (err) {
+      reject(err)
+      return
+    }
+    const mod = payload.url.startsWith('https:') ? https : http
+    if (currentProxySettings.enabled && currentProxySettings.type === 'socks5') {
+      reject(new Error('SOCKS5 proxy transport is not wired in the current desktop runtime yet.'))
+      return
+    }
+
+    const headers: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 Suora/1.0',
+      Accept: 'application/json, text/plain, */*',
+      ...(payload.headers ?? {}),
+    }
+    if (payload.body && !headers['Content-Type']) {
+      headers['Content-Type'] = 'application/json'
+    }
+
+    const req = (mod.request as unknown as HttpRequestFn)(
+      payload.url,
+      { method, headers, lookup: safeDnsLookup, agent: getProxyAgent(payload.url) },
+      (res: FetchResponse) => {
+        const RAW_LIMIT = 512 * 1024
+        let raw = ''
+        let totalLen = 0
+        let rawTruncated = false
+        res.on('data', (chunk: unknown) => {
+          const s = String(chunk)
+          totalLen += s.length
+          if (totalLen <= RAW_LIMIT) {
+            raw += s
+          } else {
+            rawTruncated = true
+          }
+        })
+        res.on('end', () => resolve({
+          status: res.statusCode ?? 0,
+          body: raw,
+          rawTruncated,
+          headers: res.headers as Record<string, string | string[] | undefined>,
+        }))
+      }
+    )
+    req.on('error', reject)
+    req.setTimeout(timeoutMs, () => {
+      req.destroy()
+      reject(new Error('Fetch request timed out'))
+    })
+    if (payload.body) {
+      req.write(payload.body)
+    }
+    req.end()
+  })
+}
+
 ipcMain.handle('web:fetch', async (_event, url: string) => {
   try {
     validatePublicHttpUrl(url)
@@ -1923,6 +1996,42 @@ ipcMain.handle('web:fetch', async (_event, url: string) => {
     const text = stripHtml(raw)
     const truncated = rawTruncated || text.length > 8000
     return { content: text.slice(0, 8000), url, truncated, rawTruncated }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('web:request', async (_event, payload: WebRequestPayload) => {
+  try {
+    if (!payload || typeof payload.url !== 'string' || !payload.url.trim()) {
+      throw new Error('Request URL is required')
+    }
+    const result = await requestUrl(payload)
+    return {
+      status: result.status,
+      content: result.body.length > MAX_IPC_TEXT_FILE_BYTES ? result.body.slice(0, MAX_IPC_TEXT_FILE_BYTES) : result.body,
+      truncated: result.rawTruncated || result.body.length > MAX_IPC_TEXT_FILE_BYTES,
+      headers: result.headers,
+      url: payload.url,
+    }
+  } catch (err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+})
+
+ipcMain.handle('web:requestAsync', async (_event, payload: WebRequestPayload) => {
+  try {
+    if (!payload || typeof payload.url !== 'string' || !payload.url.trim()) {
+      throw new Error('Request URL is required')
+    }
+    validatePublicHttpUrl(payload.url)
+    void requestUrl(payload).catch((error) => {
+      logger.warn('Background web request failed', {
+        url: payload.url,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    })
+    return { queued: true, url: payload.url, method: payload.method ?? 'GET' }
   } catch (err: unknown) {
     return { error: err instanceof Error ? err.message : String(err) }
   }

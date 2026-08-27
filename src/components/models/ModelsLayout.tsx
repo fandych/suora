@@ -229,15 +229,7 @@ export function ModelsLayout() {
                 <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-border-subtle/45 bg-surface-2/65 text-text-muted/60">
                   <IconifyIcon name="ui-building" size={18} color="currentColor"/>
                 </div>
-                <p className="text-[12px] leading-relaxed text-text-muted">{searchQuery ? t('models.noMatchingProviders', 'No matching providers.') : t('models.noProvidersConfigured', 'No providers configured. Click + Provider to add one.')}</p>
-                {!searchQuery && (<div className="mt-4 flex flex-col gap-2">
-                    <UiButton unstyled type="button" onClick={() => handleAddProvider('openai')} className={workbenchSidebarPrimaryActionClass}>
-                      {t('home.configureModels', 'Configure Models')}
-                    </UiButton>
-                    <UiButton unstyled type="button" onClick={() => handleAddProvider('ollama')} className={workbenchSidebarSubtleActionClass}>
-                      {t('models.local', 'Local')} · Ollama
-                    </UiButton>
-                  </div>)}
+                <p className="text-[12px] leading-relaxed text-text-muted">{searchQuery ? t('models.noMatchingProviders', 'No matching providers.') : t('models.noProvidersConfigured', 'No providers configured yet. Choose a preset above or add one manually.')}</p>
               </div>) : (<div className="space-y-2">
                 {filteredProviderConfigs.map((provider) => {
                 const enabledCount = provider.models.filter((m) => m.enabled).length;
@@ -333,8 +325,11 @@ export function ModelsLayout() {
           <LazyProviderEditor key={selectedId} providerId={selectedId} onSaved={handleProviderSaved}/>
         </Suspense>) : viewMode === 'models' ? ((() => {
             if (!editingModelKey) {
+                const hasEnabledModels = enabledModelsCount > 0;
                 return (<div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
-                <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m3.08 3.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m3.08-3.08l4.24-4.24"/></svg>} eyebrow={t('models.library', 'Library')} title={t('models.allModels', 'All Models')} description={t('models.clickModelToEdit', 'Click a model to edit its parameters')} metrics={[
+                <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M4.22 4.22l4.24 4.24m3.08 3.08l4.24 4.24M1 12h6m6 0h6M4.22 19.78l4.24-4.24m3.08-3.08l4.24-4.24"/></svg>} eyebrow={t('models.library', 'Library')} title={t('models.allModels', 'All Models')} description={hasEnabledModels ? t('models.clickModelToEdit', 'Click a model to edit its parameters') : t('models.noModelsConfigured', 'No models configured. Switch to Providers view and add one.')} actions={hasEnabledModels ? undefined : (<UiButton unstyled type="button" onClick={() => navigate('/models/providers')} className={workbenchSidebarSubtleActionClass}>
+                        {t('models.switchToProviders', 'Switch to Providers')}
+                      </UiButton>)} metrics={[
                         {
                             label: t('models.enabled', 'Enabled'),
                             value: enabledModelsCount,
@@ -368,12 +363,15 @@ export function ModelsLayout() {
                 }} onClose={() => setEditingModelKey(null)}/>);
                   </Suspense>);
         })()) : (<div className="flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
-          <WorkbenchEmptyState icon={<IconifyIcon name="ui-building" size={30} color="currentColor"/>} title={providerConfigs.length === 0 ? t('models.addProviderToBegin', 'Add a provider to begin') : t('models.selectProviderToConfigure', 'Select a provider to configure')} description={providerConfigs.length === 0 ? t('models.noProvidersConfigured', 'No providers configured. Click + Provider to add one.') : t('models.providerSelectionHint', 'Choose a provider from the left rail to edit credentials, endpoints, and model availability.')} actions={providerConfigs.length === 0 ? (<div className="flex flex-wrap items-center gap-3">
+          <WorkbenchEmptyState icon={<IconifyIcon name="ui-building" size={30} color="currentColor"/>} title={providerConfigs.length === 0 ? t('models.addProviderToBegin', 'Add a provider to begin') : t('models.selectProviderToConfigure', 'Select a provider to configure')} description={providerConfigs.length === 0 ? t('models.providerEmptyStateHint', 'Start with a preset from the left, or add a custom provider to configure credentials and model availability.') : t('models.providerSelectionHint', 'Choose a provider from the left rail to edit credentials, endpoints, and model availability.')} actions={providerConfigs.length === 0 ? (<div className="flex flex-wrap items-center gap-3">
                 <UiButton unstyled type="button" onClick={() => handleAddProvider('openai')} className={workbenchSidebarPrimaryActionClass}>
-                  {t('models.addProvider', '+ Provider')}
+                  {t('models.addOpenAiProvider', 'Add OpenAI provider')}
                 </UiButton>
                 <UiButton unstyled type="button" onClick={() => handleAddProvider('ollama')} className={workbenchSidebarSubtleActionClass}>
                   {t('models.local', 'Local')} · Ollama
+                </UiButton>
+                <UiButton unstyled type="button" onClick={() => handleAddProvider()} className={workbenchSidebarSubtleActionClass}>
+                  {t('models.addCustomProvider', 'Add custom provider')}
                 </UiButton>
               </div>) : undefined}/>
         </div>)}

@@ -1084,7 +1084,10 @@ export function DocumentsLayout() {
                                                                                                 {documentGroups.length === 0 ? (<div className={`${workbenchSidebarEmptyClass} w-full px-5 py-8 text-left`}>
                                 <div className="text-[13px] font-semibold text-text-primary">{t('documents.emptyGroupsSidebarTitle', 'No groups yet')}</div>
                                 <p className="mt-2 text-[12px] leading-6 text-text-muted/72">{t('documents.emptyGroupsSidebarHint', 'Use AI Create or + Group above to start the workspace structure.')}</p>
-                                <div className="mt-4">
+                                <div className="mt-4 flex flex-wrap gap-2">
+                                    <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarPrimaryActionClass}>
+                                        {t('timer.aiCreate', 'AI Create')}
+                                    </UiButton>
                                     <UiButton unstyled type="button" onClick={createGroup} className={workbenchSidebarSubtleActionClass}>
                                         {t('documents.emptyGroups', 'Create your first document group')}
                                     </UiButton>

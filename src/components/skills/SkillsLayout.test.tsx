@@ -124,6 +124,13 @@ describe('SkillsLayout', () => {
     expect(screen.queryByRole('button', { name: 'Sources' })).not.toBeInTheDocument()
   })
 
+  it('shows direct import and create actions in the installed empty state', () => {
+    renderSkillsLayout('/skills')
+
+    expect(screen.getAllByRole('button', { name: 'Import SKILL.md' }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: 'Create Skill' }).length).toBeGreaterThan(0)
+  })
+
   it('shows only the two built-in local skill sources and maps legacy paths to the new ones', () => {
     useAppStore.setState({
       externalDirectories: [

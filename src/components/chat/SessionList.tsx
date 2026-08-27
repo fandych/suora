@@ -5,7 +5,6 @@ import { generateId } from '@/utils/helpers';
 import type { Session } from '@/types';
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
-import { toast } from '@/services/toast';
 import { isMainChatSession } from '@/utils/chatSessions';
 import { safeStringify } from '@/utils/safeJson';
 import { Button as UiButton } from "@/components/shared/button";
@@ -85,10 +84,6 @@ export function SessionList({ width }: {
     }, []);
     const chatSessions = useMemo(() => sessions.filter(isMainChatSession), [sessions]);
     const handleNewSession = () => {
-        if (!selectedModel) {
-            toast.warning(t('chat.noModelConfigured', 'No model configured'), t('chat.addModelFirst', 'Please add a model provider in Models settings first.'));
-            return;
-        }
         const session: Session = {
             id: generateId('session'),
             title: t('chat.newChat', 'New Chat'),

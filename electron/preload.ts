@@ -49,6 +49,8 @@ const ALLOWED_INVOKE_CHANNELS = [
   'shell:openPath',
   'shell:openUrl',
   'web:fetch',
+  'web:request',
+  'web:requestAsync',
   'web:fetchJson',
   'web:fetchText',
   'ai:fetch:start',

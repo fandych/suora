@@ -84,6 +84,9 @@ export function ShortcutsSettings() {
     const [recordedKeys, setRecordedKeys] = useState<string>('');
     const shortcutEntries = Object.entries(shortcuts);
     const recordingLabel = recording ? getShortcutLabel(recording, t) : null;
+    const shortcutsDescription = recordingLabel
+        ? t('settings.shortcutsDescRecording', 'Recording a live shortcut. Press Escape to cancel.')
+        : t('settings.shortcutsDescIdle', 'Click a live shortcut below to record a new key binding.');
     useEffect(() => {
         if (!recording)
             return;
@@ -113,8 +116,8 @@ export function ShortcutsSettings() {
             window.removeEventListener('keydown', cancel);
         };
     }, [recording, setShortcut]);
-    return (<div className="space-y-6">
-      <SettingsOverview description={t('settings.shortcutsDesc', 'Click a shortcut to record a new key binding. Press Escape to cancel.')} details={recordingLabel ? <span className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent">{t('settings.recordingShortcut', 'Recording')}: {recordingLabel}</span> : undefined} statsClassName="grid gap-2 sm:grid-cols-3 xl:w-[24rem]" stats={(<>
+        return (<div className="space-y-6">
+            <SettingsOverview description={shortcutsDescription} details={recordingLabel ? <span className="inline-flex rounded-full bg-accent/10 px-3 py-1 text-[11px] font-medium text-accent">{t('settings.recordingShortcut', 'Recording')}: {recordingLabel}</span> : undefined} statsClassName="grid gap-2 sm:grid-cols-3 xl:w-[24rem]" stats={(<>
             <SettingsStat label={t('settings.bindings', 'Bindings')} value={String(shortcutEntries.length)} accent/>
             <SettingsStat label={t('settings.recording', 'Recording')} value={recordingLabel || t('settings.idle', 'Idle')}/>
             <UiButton unstyled type="button" onClick={resetShortcuts} className="rounded-lg border border-border-subtle bg-surface-0/45 px-3 py-2.5 text-left transition-colors hover:border-accent/25 hover:bg-accent/8">
@@ -129,14 +132,15 @@ export function ShortcutsSettings() {
                         <div className={workbenchSectionEyebrowClass}>{t('settings.commandMap', 'Command Map')}</div>
             <h3 className="mt-2 text-[20px] font-semibold tracking-tight text-text-primary">{t('settings.activeBindings', 'Active Bindings')}</h3>
           </div>
-          <div className="rounded-full bg-surface-0/70 px-3 py-1 text-[11px] text-text-secondary">{t('settings.escapeCancels', 'Escape cancels capture')}</div>
+                    {recording && <div className="rounded-full bg-surface-0/70 px-3 py-1 text-[11px] text-text-secondary">{t('settings.escapeCancels', 'Escape cancels capture')}</div>}
         </div>
 
         <div className="space-y-3">
           {shortcutEntries.map(([action, shortcut]) => {
             const isRecording = recording === action;
             const actionLabel = getShortcutLabel(action, t);
-                        const supportState = getShortcutSupportState(action);
+                                                const supportState = getShortcutSupportState(action);
+                        const canRecord = supportState === 'live';
             return (<div key={action} className={`rounded-3xl border px-4 py-4 transition-all ${isRecording ? 'border-accent/20 bg-accent/10 shadow-[0_10px_24px_rgba(var(--t-accent-rgb),0.06)]' : 'border-border-subtle/55 bg-surface-0/60'}`}>
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex min-w-0 items-start gap-3">
@@ -155,7 +159,12 @@ export function ShortcutsSettings() {
                     </div>
                   </div>
 
-                  <UiButton unstyled type="button" onClick={() => { setRecording(action); setRecordedKeys(''); }} className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-[JetBrains_Mono,monospace] transition-all ${isRecording ? 'bg-accent/15 border-accent/50 text-accent animate-pulse' : 'bg-surface-2 border-border text-text-muted hover:border-accent/30 hover:text-text-secondary'}`}>
+                                    <UiButton unstyled type="button" disabled={!canRecord} title={!canRecord ? t('settings.shortcutSavedHint', 'This binding is persisted already, but more workbench entry points still need to adopt it.') : undefined} onClick={() => {
+                        if (!canRecord)
+                                return;
+                        setRecording(action);
+                        setRecordedKeys('');
+                }} className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-[JetBrains_Mono,monospace] transition-all ${isRecording ? 'bg-accent/15 border-accent/50 text-accent animate-pulse' : canRecord ? 'bg-surface-2 border-border text-text-muted hover:border-accent/30 hover:text-text-secondary' : 'cursor-not-allowed bg-surface-1/65 border-border-subtle/55 text-text-muted/55'}`}>
                     <IconifyIcon name="settings-shortcuts" size={14} color="currentColor"/>
                     {isRecording ? (recordedKeys || t('settings.pressKeys', 'Press keys...')) : shortcut}
                   </UiButton>

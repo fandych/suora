@@ -60,6 +60,16 @@ export function buildPipelineOptimizationIterations(
   const transformCount = countSteps(activeSteps, (step) => Boolean(step.outputTransform))
   const exportVarCount = countSteps(activeSteps, (step) => Boolean(step.exportVar?.trim()))
   const stopOnErrorCount = countSteps(activeSteps, (step) => step.continueOnError === false)
+  const startNodeCount = countSteps(activeSteps, (step) => step.nodeType === 'start')
+  const endNodeCount = countSteps(activeSteps, (step) => step.nodeType === 'end')
+  const conditionNodeCount = countSteps(activeSteps, (step) => step.nodeType === 'condition')
+  const nestedPipelineCount = countSteps(activeSteps, (step) => step.nodeType === 'pipeline')
+  const scriptNodeCount = countSteps(activeSteps, (step) => step.nodeType === 'script')
+  const httpNodeCount = countSteps(activeSteps, (step) => step.nodeType === 'http')
+  const emailNodeCount = countSteps(activeSteps, (step) => step.nodeType === 'email')
+  const parallelNodeCount = countSteps(activeSteps, (step) => step.nodeType === 'parallel')
+  const joinNodeCount = countSteps(activeSteps, (step) => step.nodeType === 'join')
+  const structuredOutputCount = countSteps(activeSteps, (step) => step.outputType === 'json' || step.outputTransform === 'json-path')
   const warningCount = validation?.warnings.length ?? 0
   const errorCount = validation?.errors.length ?? 0
 
@@ -231,6 +241,88 @@ export function buildPipelineOptimizationIterations(
       hasBudget
         ? 'Whole-pipeline budget caps are configured for duration, tokens, or step count.'
         : 'Add total duration, token, or step caps to protect long automated runs.',
+    ),
+    makeIteration(
+      21,
+      'Boundary nodes',
+      startNodeCount === 1 && endNodeCount === 1 ? 'configured' : 'recommended',
+      startNodeCount === 1 && endNodeCount === 1
+        ? 'The workflow exposes a single start node and a single end node for explicit input/output boundaries.'
+        : 'Add exactly one start node and one end node so the workflow has explicit runtime entry and exit points.',
+    ),
+    makeIteration(
+      22,
+      'Decision routing',
+      conditionNodeCount > 0 ? 'configured' : 'recommended',
+      conditionNodeCount > 0
+        ? `${conditionNodeCount} decision node(s) are available for branch routing.`
+        : 'Add condition nodes when downstream branches should diverge based on a runtime decision.',
+    ),
+    makeIteration(
+      23,
+      'Nested workflow reuse',
+      nestedPipelineCount > 0 ? 'configured' : 'recommended',
+      nestedPipelineCount > 0
+        ? `${nestedPipelineCount} step(s) delegate to reusable downstream workflows.`
+        : 'Move repeated multi-step routines into nested workflows so orchestration stays modular.',
+    ),
+    makeIteration(
+      24,
+      'Script runtime isolation',
+      scriptNodeCount > 0 ? 'configured' : 'recommended',
+      scriptNodeCount > 0
+        ? `${scriptNodeCount} local script step(s) are available for deterministic runtime work.`
+        : 'Use script nodes for deterministic local transforms that should not consume model tokens.',
+    ),
+    makeIteration(
+      25,
+      'External I/O coverage',
+      httpNodeCount + emailNodeCount > 0 ? 'configured' : 'recommended',
+      httpNodeCount + emailNodeCount > 0
+        ? `${httpNodeCount} HTTP node(s) and ${emailNodeCount} email node(s) are wired for external delivery.`
+        : 'Use HTTP or email nodes when the workflow must move data outside the local model runtime.',
+    ),
+    makeIteration(
+      26,
+      'Parallel fan-out',
+      parallelNodeCount > 0 ? 'configured' : 'recommended',
+      parallelNodeCount > 0
+        ? `${parallelNodeCount} parallel fan-out node(s) are configured for concurrent work.`
+        : 'Add parallel nodes when several downstream tasks can run independently from the same input.',
+    ),
+    makeIteration(
+      27,
+      'Branch merge strategy',
+      joinNodeCount > 0 ? 'configured' : 'recommended',
+      joinNodeCount > 0
+        ? `${joinNodeCount} join node(s) define how branch outputs are merged back into the main path.`
+        : 'Use join nodes to make branch merge policy explicit instead of relying on step order alone.',
+    ),
+    makeIteration(
+      28,
+      'Structured outputs',
+      structuredOutputCount > 0 ? 'configured' : 'recommended',
+      structuredOutputCount > 0
+        ? `${structuredOutputCount} step(s) are prepared to emit structured JSON-friendly outputs.`
+        : 'Prefer JSON-oriented outputs or transforms when downstream conditions, exports, or joins consume machine-readable data.',
+    ),
+    makeIteration(
+      29,
+      'Execution observability',
+      exportVarCount > 0 || structuredOutputCount > 0 ? 'configured' : 'recommended',
+      exportVarCount > 0 || structuredOutputCount > 0
+        ? 'The workflow already exposes intermediate state for debugging through exported vars or structured outputs.'
+        : 'Expose key intermediate outputs as variables or structured payloads so dry runs and failures stay explainable.',
+    ),
+    makeIteration(
+      30,
+      'Production readiness review',
+      errorCount === 0 && warningCount === 0 && hasBudget && startNodeCount === 1 && endNodeCount === 1
+        ? 'configured'
+        : 'recommended',
+      errorCount === 0 && warningCount === 0 && hasBudget && startNodeCount === 1 && endNodeCount === 1
+        ? 'The workflow has explicit boundaries, no current validation drift, and budget guardrails in place for production rollout.'
+        : 'Before production rollout, close validation drift, keep explicit boundaries, and add budget guardrails plus branch observability.',
     ),
   ]
 }

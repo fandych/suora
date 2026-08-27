@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore, saveSettingsToWorkspace } from '@/store/appStore';
 import { IconifyIcon } from '@/components/icons/IconifyIcons';
-import { testConnection } from '@/services/aiService';
+import { testConnection, validateModelConfig } from '@/services/aiService';
 import { useI18n } from '@/hooks/useI18n';
 import type { ProviderConfig, ProviderModelEntry } from '@/types';
 import { Button as UiButton } from "@/components/shared/button";
 import { Checkbox } from '@/components/shared/checkbox';
 import { Input as UiInput, Select as UiSelect } from "@/components/shared/form-controls";
 import { workbenchAccentButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass, workbenchSummaryLabelClass, workbenchSummaryStatClass, workbenchSummaryValueClass } from '@/components/workbench/styles';
-const PROVIDER_TYPES: ProviderConfig['providerType'][] = ['openai', 'anthropic', 'google', 'ollama', 'openai-compatible'];
+const PROVIDER_TYPES: ProviderConfig['providerType'][] = ['openai', 'anthropic', 'google', 'ollama', 'deepseek', 'zhipu', 'minimax', 'groq', 'together', 'fireworks', 'perplexity', 'cohere', 'openai-compatible'];
 const PRESET_MODELS: Partial<Record<ProviderConfig['providerType'], {
     modelId: string;
     name: string;
@@ -39,6 +39,7 @@ const PRESET_MODELS: Partial<Record<ProviderConfig['providerType'], {
         { modelId: 'deepseek-r1', name: 'DeepSeek R1' },
     ],
 };
+  const OLLAMA_DEFAULT_BASE_URL = 'http://localhost:11434/v1';
 function EditorSection({ eyebrow, title, description, children, }: {
     eyebrow: string;
     title: string;
@@ -79,6 +80,22 @@ export function ProviderEditor({ providerId, onSaved }: {
                 ? t('models.providerTypeGoogle', 'Google')
                 : type === 'ollama'
                     ? t('models.providerTypeOllama', 'Ollama')
+            : type === 'deepseek'
+              ? t('models.providerTypeDeepSeek', 'DeepSeek')
+              : type === 'zhipu'
+                ? t('models.providerTypeZhipu', 'Zhipu')
+                : type === 'minimax'
+                  ? t('models.providerTypeMiniMax', 'MiniMax')
+                  : type === 'groq'
+                    ? t('models.providerTypeGroq', 'Groq')
+                    : type === 'together'
+                      ? t('models.providerTypeTogether', 'Together AI')
+                      : type === 'fireworks'
+                        ? t('models.providerTypeFireworks', 'Fireworks AI')
+                        : type === 'perplexity'
+                          ? t('models.providerTypePerplexity', 'Perplexity')
+                          : type === 'cohere'
+                            ? t('models.providerTypeCohere', 'Cohere')
                     : type === 'openai-compatible'
                         ? t('models.openAiCompatible', 'OpenAI Compatible')
                         : type);
@@ -150,6 +167,16 @@ export function ProviderEditor({ providerId, onSaved }: {
             markDirty();
         }
     };
+        const handleProviderTypeChange = (nextType: ProviderConfig['providerType']) => {
+          setProviderType(nextType);
+          if (nextType === 'ollama' && !baseUrl.trim()) {
+            setBaseUrl(OLLAMA_DEFAULT_BASE_URL);
+          }
+          else if (providerType === 'ollama' && baseUrl === OLLAMA_DEFAULT_BASE_URL) {
+            setBaseUrl('');
+          }
+          markDirty();
+        };
     const [validationResult, setValidationResult] = useState<{
         valid: boolean;
         error?: string;
@@ -167,6 +194,18 @@ export function ProviderEditor({ providerId, onSaved }: {
             setValidationResult({ valid: false, error: t('models.enabledModelRequired', 'Enable at least one model before saving') });
             setSaving(false);
             return;
+        }
+        const firstEnabledModel = models.find((model) => model.enabled);
+        const runtimeValidation = validateModelConfig({
+          provider: providerId,
+          providerType,
+          modelId: firstEnabledModel?.modelId,
+          apiKey,
+        });
+        if (!runtimeValidation.valid) {
+          setValidationResult(runtimeValidation);
+          setSaving(false);
+          return;
         }
         updateProviderConfig(providerId, { name: trimmedName, providerType, apiKey, baseUrl, models });
         syncModelsFromConfigs();
@@ -190,6 +229,15 @@ export function ProviderEditor({ providerId, onSaved }: {
     const isOllama = providerType === 'ollama';
     const hasPresets = !!PRESET_MODELS[providerType];
     const enabledModelCount = models.filter((model) => model.enabled).length;
+    const presetAdditionsCount = (PRESET_MODELS[providerType] ?? []).filter((preset) => !models.some((model) => model.modelId === preset.modelId)).length;
+    const firstEnabledModel = models.find((model) => model.enabled);
+    const liveValidation = validateModelConfig({
+      provider: providerId,
+      providerType,
+      modelId: firstEnabledModel?.modelId,
+      apiKey,
+    });
+    const canSave = !saving && name.trim().length > 0 && enabledModelCount > 0 && liveValidation.valid;
     const connectionState = testing ? 'checking' : testResult?.success ? 'connected' : testResult ? 'disconnected' : 'draft';
     const connectionLabel = connectionState === 'connected'
         ? t('models.connected', 'Connected')
@@ -235,7 +283,7 @@ export function ProviderEditor({ providerId, onSaved }: {
                 </div>
                 <div>
                   <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-text-muted">{t('models.providerType', 'Provider Type')}</label>
-                  <UiSelect value={providerType} onChange={(e) => { setProviderType(e.target.value as ProviderConfig['providerType']); markDirty(); }} aria-label={t('models.providerType', 'Provider Type')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary">
+                  <UiSelect value={providerType} onChange={(e) => handleProviderTypeChange(e.target.value as ProviderConfig['providerType'])} aria-label={t('models.providerType', 'Provider Type')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2/75 px-4 py-3 text-sm text-text-primary">
                     {PROVIDER_TYPES.map((item) => (<option key={item} value={item}>{getProviderTypeLabel(item)}</option>))}
                   </UiSelect>
                 </div>
@@ -296,7 +344,7 @@ export function ProviderEditor({ providerId, onSaved }: {
                 <div className="rounded-3xl border border-border-subtle/55 bg-surface-0/60 px-4 py-3 text-sm text-text-secondary">
                   {t('models.modelsCount', '{enabled} enabled / {total} total').replace('{enabled}', String(enabledModelCount)).replace('{total}', String(models.length))}
                 </div>
-                {hasPresets && (<UiButton unstyled type="button" onClick={addPresetModels} className={workbenchAccentButtonClass}>
+                {hasPresets && (<UiButton unstyled type="button" onClick={addPresetModels} disabled={presetAdditionsCount === 0} className={`${workbenchAccentButtonClass} disabled:cursor-not-allowed disabled:opacity-45`}>
                     + {t('models.addPresets', 'Add Presets')}
                   </UiButton>)}
               </div>
@@ -328,7 +376,7 @@ export function ProviderEditor({ providerId, onSaved }: {
                         if (found)
                             setSelectedModel(found);
                     }} title={t('models.setDefaultModel', 'Set as default model')} className="rounded-2xl bg-surface-2 px-3 py-1.5 text-[11px] font-semibold text-text-muted transition-colors hover:bg-accent/10 hover:text-accent">
-                              ★ {t('models.defaultBadge', 'Default')}
+                              ★ {t('models.setDefaultModelShort', 'Set default')}
                             </UiButton>)}
                           <UiButton unstyled type="button" onClick={() => removeModel(index)} className="rounded-2xl bg-red-500/10 px-3 py-1.5 text-[11px] font-semibold text-red-400 transition-colors hover:bg-red-500/20">
                             {t('common.remove', 'Remove')}
@@ -363,11 +411,11 @@ export function ProviderEditor({ providerId, onSaved }: {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <UiButton unstyled type="button" onClick={handleSave} disabled={saving} className={`${workbenchPrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}>
+                  <UiButton unstyled type="button" onClick={handleSave} disabled={!canSave} className={`${workbenchPrimaryButtonClass} disabled:cursor-not-allowed disabled:opacity-50`}>
                     {saving ? t('models.saving', 'Saving...') : t('models.saveConfiguration', 'Save Configuration')}
                   </UiButton>
                   {saved && <span className="text-sm font-medium text-green-500 animate-fade-in">{workspacePath ? t('models.savedToWorkspace', 'Saved to workspace') : t('models.saved', 'Saved')}</span>}
-                  {validationResult && !validationResult.valid && <span className="text-sm font-medium text-yellow-500 animate-fade-in"><IconifyIcon name="ui-warning" size={14} color="currentColor"/> {t('models.savedWithValidationWarning', 'Saved, but API key validation failed: {error}').replace('{error}', () => validationResult.error?.slice(0, 60) ?? '')}</span>}
+                  {validationResult && !validationResult.valid && <span className="text-sm font-medium text-yellow-500 animate-fade-in"><IconifyIcon name="ui-warning" size={14} color="currentColor"/> {validationResult.error?.slice(0, 80)}</span>}
                   {validationResult?.valid && !saved && <span className="text-sm font-medium text-green-500 animate-fade-in"><IconifyIcon name="ui-check" size={14} color="currentColor"/> {t('models.apiKeyValid', 'API key valid')}</span>}
                 </div>
               </div>

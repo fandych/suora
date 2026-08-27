@@ -169,7 +169,7 @@ function ChannelDetail({ channel, agents, webhookUrl, serverRunning, onEdit, onD
         <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-text-secondary">
           <span className={`rounded-full border px-3 py-1 ${stateTone}`}>{stateLabel}</span>
           <span className={`rounded-full border px-3 py-1 ${transportTone}`}>{channel.connectionMode === 'stream' ? t('channels.streamMode', 'Stream Mode') : serverRunning ? t('channels.webhookLive', 'Webhook Live') : t('channels.webhookWaiting', 'Webhook Waiting')}</span>
-          <span className="rounded-full bg-surface-0/70 px-3 py-1">{assignedAgent?.name || t('common.noData', 'Unknown agent')}</span>
+          <span className={`rounded-full px-3 py-1 ${assignedAgent ? 'bg-surface-0/70' : 'border border-amber-500/20 bg-amber-500/10 text-amber-500'}`}>{assignedAgent?.name || t('channels.noAgentAssigned', 'No agent assigned')}</span>
           <span className="rounded-full bg-surface-0/70 px-3 py-1">{channel.autoReply ? t('channels.autoReplyEnabled', 'Auto reply on') : t('channels.autoReplyDisabled', 'Auto reply off')}</span>
           <span className={`rounded-full border px-3 py-1 ${healthTone}`}>{health ? (health.isHealthy ? t('channels.healthy', 'Healthy') : t('channels.attentionNeeded', 'Attention needed')) : t('channels.notChecked', 'Not checked')}</span>
         </div>
@@ -317,6 +317,7 @@ export function ChannelLayout() {
             return haystacks.some((value) => value.toLowerCase().includes(query));
         });
     }, [agentNameMap, channels, deferredSearchQuery]);
+        const hasChannels = channels.length > 0;
     useEffect(() => {
         checkServerStatus().catch(console.error);
     }, []);
@@ -453,15 +454,15 @@ export function ChannelLayout() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-3 px-1 py-1 text-[11px] text-text-secondary">
-            <div className="flex min-w-0 items-center gap-2">
-              <span className={`h-2 w-2 shrink-0 rounded-full ${serverRunning ? 'bg-green-400' : 'bg-text-muted/45'}`}/>
-              <span className="truncate">{serverRunning ? t('channels.serverRunning', 'Server Running') : t('channels.serverStopped', 'Server Stopped')}</span>
-            </div>
-            <UiButton unstyled type="button" onClick={serverRunning ? handleStopServer : handleStartServer} className={`shrink-0 rounded-xl px-3 py-2 text-[12px] font-semibold transition-colors ${serverRunning ? 'border border-red-500/18 bg-red-500/8 text-red-400 hover:bg-red-500/14' : workbenchSidebarAccentActionClass}`}>
-              {serverRunning ? t('channels.stopServer', 'Stop Server') : t('channels.startServer', 'Start Server')}
-            </UiButton>
-          </div>
+          {hasChannels && (<div className="flex items-center justify-between gap-3 px-1 py-1 text-[11px] text-text-secondary">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={`h-2 w-2 shrink-0 rounded-full ${serverRunning ? 'bg-green-400' : 'bg-text-muted/45'}`}/>
+                <span className="truncate">{serverRunning ? t('channels.serverRunning', 'Server Running') : t('channels.serverStopped', 'Server Stopped')}</span>
+              </div>
+              <UiButton unstyled type="button" onClick={serverRunning ? handleStopServer : handleStartServer} className={`shrink-0 rounded-xl px-3 py-2 text-[12px] font-semibold transition-colors ${serverRunning ? 'border border-red-500/18 bg-red-500/8 text-red-400 hover:bg-red-500/14' : workbenchSidebarAccentActionClass}`}>
+                {serverRunning ? t('channels.stopServer', 'Stop Server') : t('channels.startServer', 'Start Server')}
+              </UiButton>
+            </div>)}
 
           <div className="space-y-2">
             {filteredChannels.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
@@ -475,7 +476,7 @@ export function ChannelLayout() {
             const platformLabel = channel.platform === 'custom'
                 ? channel.customPlatformName || t('channels.customChannel', 'Custom Channel')
                 : getPlatformDisplayName(channel.platform);
-            const agentLabel = agentNameMap.get(channel.replyAgentId) || t('common.noData', 'Unknown');
+            const agentLabel = agentNameMap.get(channel.replyAgentId) || t('channels.noAgentAssigned', 'No agent assigned');
             const badgeTone = !channel.enabled
                 ? 'bg-surface-3/80 text-text-muted'
                 : channel.status === 'active'
@@ -513,7 +514,7 @@ export function ChannelLayout() {
       <ResizeHandle width={panelWidth} onResize={setPanelWidth} minWidth={240} maxWidth={520}/>
 
       <div className="module-canvas flex-1 min-w-0 overflow-y-auto px-5 py-6 xl:px-8 xl:py-8">
-        {editingChannel ? (<ChannelEditor key={`${isAdding ? 'new' : 'edit'}-${editingChannel.id}`} channel={editingChannel} agents={agents} isNew={isAdding} onSave={handleSaveChannel} onCancel={handleCancelEdit}/>) : selectedChannel ? (<ChannelDetail key={selectedChannel.id} channel={selectedChannel} agents={agents} webhookUrl={webhookUrls[selectedChannel.id]} serverRunning={serverRunning} onEdit={handleEditChannel} onDelete={handleDeleteChannel} onToggle={handleToggleEnabled} onStartServer={handleStartServer}/>) : (<WorkbenchEmptyState icon={<IconifyIcon name="action-chat" size={30} color="currentColor"/>} title={`${t('channels.selectChannel', 'Select a channel')} ${t('channels.orCreateChannel', 'or create a new one')}`} description={t('channels.selectChannelHint', 'Organize inbound chat surfaces, attach a reply agent, and monitor webhook or stream traffic from one place.')} actions={(<UiButton unstyled type="button" onClick={handleAddChannel} className={workbenchSidebarPrimaryActionClass}>
+        {editingChannel ? (<ChannelEditor key={`${isAdding ? 'new' : 'edit'}-${editingChannel.id}`} channel={editingChannel} agents={agents} isNew={isAdding} onSave={handleSaveChannel} onCancel={handleCancelEdit}/>) : selectedChannel ? (<ChannelDetail key={selectedChannel.id} channel={selectedChannel} agents={agents} webhookUrl={webhookUrls[selectedChannel.id]} serverRunning={serverRunning} onEdit={handleEditChannel} onDelete={handleDeleteChannel} onToggle={handleToggleEnabled} onStartServer={handleStartServer}/>) : (<WorkbenchEmptyState icon={<IconifyIcon name="action-chat" size={30} color="currentColor"/>} title={hasChannels ? `${t('channels.selectChannel', 'Select a channel')} ${t('channels.orCreateChannel', 'or create a new one')}` : t('channels.addChannelToBegin', 'Add a channel to begin')} description={hasChannels ? t('channels.selectChannelHint', 'Organize inbound chat surfaces, attach a reply agent, and monitor webhook or stream traffic from one place.') : t('channels.channelEmptyStateHint', 'Start with a channel for Slack, Feishu, Telegram, or a custom webhook to route inbound messages into your agents.')} actions={(<UiButton unstyled type="button" onClick={handleAddChannel} className={workbenchSidebarPrimaryActionClass}>
                 + {t('common.new', 'New')}
               </UiButton>)}/>)}
       </div>

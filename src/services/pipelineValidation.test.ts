@@ -22,6 +22,20 @@ describe('pipelineValidation', () => {
     expect(result.errors.find((issue) => issue.code === 'missing-agent')?.recoveryActions?.[0].label).toBe('Choose another agent')
   })
 
+  it('allows structural nodes to omit task bodies', () => {
+    const result = validateAgentPipeline(
+      pipeline([
+        { agentId: 'agent-1', task: '', nodeType: 'parallel', parallelBranches: 3 },
+        { agentId: 'agent-1', task: '', nodeType: 'join', joinStrategy: 'wait-all' },
+      ]),
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.some((issue) => issue.code === 'empty-task')).toBe(false)
+    expect(result.valid).toBe(true)
+  })
+
   it('rejects forward and missing step references', () => {
     const result = validateAgentPipeline(
       pipeline([
@@ -263,5 +277,194 @@ describe('pipelineValidation', () => {
     expect(collisionResult.warnings.some((issue) => issue.code === 'export-var-collision')).toBe(true)
     // No error should be raised for the legal-but-shadowing case.
     expect(collisionResult.errors.some((issue) => issue.code === 'invalid-export-var')).toBe(false)
+  })
+
+  it('validates iteration node settings', () => {
+    const invalidResult = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: '', nodeType: 'iteration' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(invalidResult.errors.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'missing-iteration-source',
+      'missing-iteration-target',
+    ]))
+
+    const validResult = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: '', nodeType: 'iteration', iterationSource: '{{vars.items}}', iterationPipelineTargetId: 'child', iterationMode: 'parallel', iterationErrorMode: 'continue', iterationItemVar: 'item', iterationIndexVar: 'index' },
+        ],
+        variables: [{ name: 'items' }],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(validResult.errors.some((issue) => issue.code.startsWith('missing-iteration'))).toBe(false)
+  })
+
+  it('warns when pipeline or iteration targets are not saved in the current workspace', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Invoke child', nodeType: 'pipeline', pipelineTargetId: 'missing-child' },
+          { agentId: 'agent-1', task: '', nodeType: 'iteration', iterationSource: '{{vars.items}}', iterationPipelineTargetId: 'missing-child' },
+        ],
+        variables: [{ name: 'items' }],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.warnings.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'unknown-pipeline-target',
+      'unknown-iteration-target',
+    ]))
+  })
+
+  it('requires node-specific configuration for pipeline, script, http, and email nodes', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Invoke nested flow', nodeType: 'pipeline' },
+          { agentId: 'agent-1', task: 'Run script', nodeType: 'script' },
+          { agentId: 'agent-1', task: 'Call api', nodeType: 'http' },
+          { agentId: 'agent-1', task: 'Send mail', nodeType: 'email' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'missing-pipeline-target',
+      'missing-script-path',
+      'missing-http-url',
+      'missing-email-to',
+      'missing-email-subject',
+    ]))
+  })
+
+  it('rejects malformed success status code lists for http and webhook nodes', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Call api', nodeType: 'http', httpUrl: 'https://api.example.com', httpSuccessStatuses: '200 nope' },
+          { agentId: 'agent-1', task: 'Call webhook', nodeType: 'webhook', webhookUrl: 'https://hooks.example.com/workflows', webhookSuccessStatuses: '99,201' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'invalid-http-success-statuses',
+      'invalid-webhook-success-statuses',
+    ]))
+  })
+
+  it('rejects invalid structural-node strategy values', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: '', nodeType: 'parallel', parallelBranches: 1 },
+          // @ts-expect-error invalid join strategy on purpose
+          { agentId: 'agent-1', task: '', nodeType: 'join', joinStrategy: 'wild' },
+          // @ts-expect-error invalid condition mode on purpose
+          { agentId: 'agent-1', task: 'Check', nodeType: 'condition', conditionMode: 'wild' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'invalid-parallel-branches',
+      'invalid-join-strategy',
+      'invalid-condition-mode',
+    ]))
+  })
+
+  it('rejects script runtimes not supported by the current executor', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Run shell', nodeType: 'script', scriptPath: 'scripts/run.sh', scriptRuntime: 'bash' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.some((issue) => issue.code === 'unsupported-script-runtime')).toBe(true)
+  })
+
+  it('requires start to have no incoming edges and end to have no outgoing edges', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { agentId: 'agent-1', task: 'Draft', nodeType: 'agent' },
+          { agentId: 'agent-1', task: '', nodeType: 'start', startParams: [] },
+          { agentId: 'agent-1', task: '', nodeType: 'end', endOutputs: [] },
+          { agentId: 'agent-1', task: 'Review', nodeType: 'agent' },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.map((issue) => issue.code)).toEqual(expect.arrayContaining([
+      'start-has-incoming',
+      'missing-start-params',
+      'end-has-outgoing',
+      'missing-end-outputs',
+    ]))
+  })
+
+  it('rejects cyclic workflow graphs', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { id: 'start', agentId: 'agent-1', task: '', nodeType: 'start', startParams: [{ key: 'topic', defaultValue: 'launch' }], transitions: [{ targetStepId: 'draft' }] },
+          { id: 'draft', agentId: 'agent-1', task: 'Draft', transitions: [{ targetStepId: 'start' }] },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.errors.some((issue) => issue.code === 'cycle-detected')).toBe(true)
+  })
+
+  it('warns when a workflow node is unreachable from the entry path', () => {
+    const result = validateAgentPipeline(
+      {
+        name: 'Pipeline',
+        steps: [
+          { id: 'start', agentId: 'agent-1', task: '', nodeType: 'start', startParams: [{ key: 'topic', defaultValue: 'launch' }], transitions: [{ targetStepId: 'end' }] },
+          { id: 'orphan', agentId: 'agent-1', task: 'Never reached' },
+          { id: 'end', agentId: 'agent-1', task: '', nodeType: 'end', endOutputs: [{ key: 'result', value: '{{previous.output}}' }] },
+        ],
+      },
+      [agent],
+      [model],
+    )
+
+    expect(result.warnings.some((issue) => issue.code === 'unreachable-node' && issue.stepIndex === 1)).toBe(true)
   })
 })

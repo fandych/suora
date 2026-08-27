@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { AgentAvatar, IconifyIcon } from '@/components/icons/IconifyIcons'
 import { Button as UiButton } from '@/components/shared/button'
-import { workbenchSectionEyebrowClass } from '@/components/workbench/styles'
+import { workbenchPrimaryButtonClass, workbenchSectionEyebrowClass } from '@/components/workbench/styles'
+import { useI18n } from '@/hooks/useI18n'
 import { ChatInput } from './ChatInput'
 import type { MessageAttachment } from '@/types'
 
@@ -99,6 +100,8 @@ export function EmptyChatState({
   pipelineHint: string
   pasteHint: string
 }) {
+  const { t } = useI18n()
+
   return (
     <div className="space-y-4">
       <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/35 bg-surface-1/28">
@@ -107,7 +110,7 @@ export function EmptyChatState({
             <AgentAvatar avatar={sessionAgentAvatar} size={32} />
           </div>
           <div className="mt-4 max-w-2xl">
-            <div className={workbenchSectionEyebrowClass}>就绪</div>
+            <div className={workbenchSectionEyebrowClass}>{t('common.ready', 'Ready')}</div>
             <h2 className="mt-1.5 text-[22px] font-semibold text-text-primary">{displayAgentName}</h2>
             <p className="mt-2 text-[13px] leading-5 text-text-secondary/78">{displayAgentGreeting}</p>
           </div>
@@ -173,6 +176,8 @@ export function NewSessionHero({
   promptDescription: string
   footer: ReactNode
 }) {
+  const { t } = useI18n()
+
   return (
     <>
       <section className="chat-stage-panel relative overflow-hidden rounded-md border border-border-subtle/35 bg-surface-1/28">
@@ -203,6 +208,13 @@ export function NewSessionHero({
             <h2 className="mt-1 text-[18px] font-semibold text-text-primary">{promptTitle}</h2>
             <p className="mt-1 text-[12.5px] leading-5 text-text-secondary/78">{promptDescription}</p>
           </div>
+          {!canChat && (<UiButton unstyled type="button" onClick={() => {
+            if (typeof window !== 'undefined') {
+              window.location.hash = '#/models/providers'
+            }
+          }} className={workbenchPrimaryButtonClass}>
+              {t('onboarding.openModels', 'Open Models')}
+            </UiButton>)}
         </div>
 
         <div className="mt-4">

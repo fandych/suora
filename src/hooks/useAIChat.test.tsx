@@ -2,16 +2,18 @@ import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAIChat } from './useAIChat'
 import { useAppStore } from '@/store/appStore'
+import type { AppErrorClassification } from '@/services/aiService'
 import type { Agent, Model, Session } from '@/types'
 
 const streamResponseWithTools = vi.fn()
 const initializeProvider = vi.fn()
+const classifyAppError = vi.fn((_: unknown): AppErrorClassification => ({ category: 'unknown', retryable: false, hint: '' }))
 
 vi.mock('@/services/aiService', () => ({
   initializeProvider: (...args: unknown[]) => initializeProvider(...args),
   validateModelConfig: vi.fn(() => ({ valid: true })),
   streamResponseWithTools: (...args: unknown[]) => streamResponseWithTools(...args),
-  classifyAppError: vi.fn(() => ({ category: 'unknown', retryable: false, hint: '' })),
+  classifyAppError: (error: unknown) => classifyAppError(error),
 }))
 
 vi.mock('@/services/agentSelection', () => ({
@@ -61,6 +63,8 @@ describe('useAIChat', () => {
     vi.useRealTimers()
     streamResponseWithTools.mockReset()
     initializeProvider.mockReset()
+    classifyAppError.mockReset()
+    classifyAppError.mockReturnValue({ category: 'unknown', retryable: false, hint: '' })
     localStorage.clear()
     const testModel = model()
     useAppStore.setState({
@@ -553,7 +557,7 @@ describe('useAIChat', () => {
     })
   })
 
-  it('reuses the previous response id even when the prior assistant message is marked as error', async () => {
+  it('reuses the previous response id even when the prior assistant message failed mid-stream', async () => {
     streamResponseWithTools
       .mockImplementationOnce(async function* () {
         yield { type: 'text-delta', text: 'tool failed, but continueable' }
@@ -572,7 +576,7 @@ describe('useAIChat', () => {
 
     await waitFor(() => {
       const last = useAppStore.getState().sessions[0]?.messages.at(-1)
-      expect(last?.isError).toBe(true)
+      expect(last?.failedMidStream).toBe(true)
       expect(last?.runtime?.providerResponseId).toBe('resp-error-1')
     })
 
@@ -608,7 +612,7 @@ describe('useAIChat', () => {
 
     await waitFor(() => {
       const last = useAppStore.getState().sessions[0]?.messages.at(-1)
-      expect(last?.isError).toBe(true)
+      expect(last?.failedMidStream).toBe(true)
       expect(last?.runtime?.providerResponseId).toBe('resp-retry-1')
     })
 
@@ -620,6 +624,48 @@ describe('useAIChat', () => {
     expect(streamResponseWithTools.mock.calls[1]?.[2]).toMatchObject({
       previousResponseId: 'resp-retry-1',
     })
+  })
+
+  it('auto-retries retryable provider stream errors before surfacing them', async () => {
+    vi.useFakeTimers()
+    classifyAppError.mockReturnValue({
+      category: 'timeout',
+      retryable: true,
+      hint: 'Request timed out. Retry, or check your network / base URL.',
+    })
+
+    streamResponseWithTools
+      .mockImplementationOnce(async function* () {
+        yield { type: 'error', error: 'Request timed out' }
+      })
+      .mockImplementationOnce(async function* () {
+        yield { type: 'text-delta', text: 'recovered on retry' }
+      })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      void result.current.sendMessage('retry this request')
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    const pendingRetry = useAppStore.getState().sessions[0]?.messages.at(-1)
+    expect(pendingRetry?.autoRetryCount).toBe(1)
+    expect(pendingRetry?.content).toContain('Auto-retrying')
+    expect(pendingRetry?.isStreaming).toBe(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(3000)
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(streamResponseWithTools).toHaveBeenCalledTimes(2)
+    const last = useAppStore.getState().sessions[0]?.messages.at(-1)
+    expect(last?.content).toBe('recovered on retry')
+    expect(last?.isStreaming).toBe(false)
+    expect(last?.isError).toBeFalsy()
   })
 
   it('regenerateMessage ignores non-assistant message ids', async () => {
@@ -675,5 +721,32 @@ describe('useAIChat', () => {
       result.current.clearMessages()
     })
     expect(useAppStore.getState().sessions[0]?.messages).toHaveLength(0)
+  })
+
+  it('pushes a no-model error instead of calling the model when no model is available', async () => {
+    useAppStore.setState({
+      models: [],
+      selectedModel: null,
+      agents: [agent()],
+      selectedAgent: null,
+      sessions: [{
+        id: 'session-1',
+        title: 'session-1',
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        messages: [],
+      }],
+      activeSessionId: 'session-1',
+      openSessionTabs: ['session-1'],
+    })
+
+    const { result } = renderHook(() => useAIChat())
+
+    await act(async () => {
+      await result.current.sendMessage('hello')
+    })
+
+    expect(streamResponseWithTools).not.toHaveBeenCalled()
+    expect(useAppStore.getState().sessions[0]?.messages.at(-1)?.content).toBe('No model selected. Please select a model in the toolbar before sending a message.')
   })
 })

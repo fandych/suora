@@ -1078,10 +1078,119 @@ export interface AgentSelectionPreference {
   count: number
 }
 
+export interface AgentPipelineStepTransition {
+  targetStepId: string
+  label?: string
+  sourceHandle?: string
+}
+
+export interface AgentPipelineConditionBranch {
+  key: string
+  label?: string
+}
+
+export type PipelineVariableAssignmentMode = 'overwrite' | 'append' | 'extend' | 'clear'
+export type PipelineIterationMode = 'sequential' | 'parallel'
+export type PipelineIterationErrorMode = 'terminate' | 'continue' | 'remove-failed'
+
+export interface AgentPipelineVariableAssignment {
+  variable: string
+  mode: PipelineVariableAssignmentMode
+  value?: string
+}
+
+export type PipelineRequestAuthType = 'none' | 'bearer' | 'basic' | 'api-key' | 'custom-header'
+export type PipelineRequestBodyType = 'json' | 'form' | 'raw'
+export type PipelineCodeLanguage = 'javascript'
+
 export interface AgentPipelineStep {
+  id?: string
+  nodeType?: 'start' | 'end' | 'condition' | 'agent' | 'pipeline' | 'script' | 'code' | 'template' | 'variable' | 'iteration' | 'http' | 'email' | 'parallel' | 'join' | 'webhook' | 'toolset' | 'rag' | 'wiki'
   agentId: string
   task: string
   name?: string
+  transitions?: AgentPipelineStepTransition[]
+  startParams?: Array<{ key: string; label?: string; defaultValue?: string; required?: boolean }>
+  endOutputs?: Array<{ key: string; label?: string; value?: string }>
+  conditionMode?: 'all' | 'any'
+  conditionTrueLabel?: string
+  conditionFalseLabel?: string
+  conditionBranches?: AgentPipelineConditionBranch[]
+  pipelineTargetId?: string
+  pipelineInputMapping?: string
+  scriptRuntime?: 'javascript' | 'typescript' | 'nodejs' | 'python' | 'shell' | 'bash' | 'powershell'
+  scriptPath?: string
+  scriptArgs?: string
+  scriptInputMapping?: string
+  scriptOutputSchema?: string
+  codeLanguage?: PipelineCodeLanguage
+  codeSource?: string
+  codeInputMapping?: string
+  codeOutputSchema?: string
+  templateBody?: string
+  templateInputMapping?: string
+  variableAssignments?: AgentPipelineVariableAssignment[]
+  iterationSource?: string
+  iterationPipelineTargetId?: string
+  iterationInputMapping?: string
+  iterationItemVar?: string
+  iterationIndexVar?: string
+  iterationMode?: PipelineIterationMode
+  iterationErrorMode?: PipelineIterationErrorMode
+  httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
+  httpUrl?: string
+  httpHeaders?: string
+  httpAuthType?: PipelineRequestAuthType
+  httpAuthHeader?: string
+  httpAuthValue?: string
+  httpBody?: string
+  httpBodyType?: PipelineRequestBodyType
+  httpAsync?: boolean
+  httpCaptureResponse?: boolean
+  httpTreatNon2xxAsError?: boolean
+  httpSuccessStatuses?: string
+  httpResponseBodyVar?: string
+  httpResponseStatusVar?: string
+  httpResponseHeadersVar?: string
+  httpResponseSizeVar?: string
+  emailTo?: string
+  emailCc?: string
+  emailSubject?: string
+  webhookChannelId?: string
+  webhookUrl?: string
+  webhookMethod?: AgentPipelineStep['httpMethod']
+  webhookHeaders?: string
+  webhookAuthType?: PipelineRequestAuthType
+  webhookAuthHeader?: string
+  webhookAuthValue?: string
+  webhookBody?: string
+  webhookBodyType?: PipelineRequestBodyType
+  webhookAsync?: boolean
+  webhookCaptureResponse?: boolean
+  webhookTreatNon2xxAsError?: boolean
+  webhookSuccessStatuses?: string
+  webhookResponseBodyVar?: string
+  webhookResponseStatusVar?: string
+  webhookResponseHeadersVar?: string
+  webhookResponseSizeVar?: string
+  toolsetId?: string
+  toolName?: string
+  toolInput?: string
+  ragKnowledgeBaseId?: string
+  ragKnowledgeBaseIds?: string[]
+  ragQuery?: string
+  ragTopK?: number
+  ragScoreThreshold?: number
+  ragMetadataFilter?: string
+  wikiId?: string
+  wikiIds?: string[]
+  wikiQuery?: string
+  wikiTopK?: number
+  wikiScoreThreshold?: number
+  wikiMetadataFilter?: string
+  parallelBranches?: number
+  parallelJoinStrategy?: 'all' | 'first' | 'best-effort'
+  joinStrategy?: 'wait-all' | 'first-success' | 'merge-output'
   enabled?: boolean
   continueOnError?: boolean
   retryCount?: number
@@ -1173,6 +1282,9 @@ export interface AgentPipelineBudget {
 export interface AgentPipeline {
   id: string
   name: string
+  version?: string
+  publishedVersion?: string
+  lastPublishedAt?: number
   description?: string
   steps: AgentPipelineStep[]
   variables?: AgentPipelineVariable[]
@@ -1238,6 +1350,8 @@ export interface PipelineRuntimeSnapshot {
   modelIds: string[]
   startedAt: number
   trigger: AgentPipelineTrigger
+  visitedStepIds?: string[]
+  visitedStepIndices?: number[]
   /** The execution engine that actually ran this pipeline. */
   executionEngine?: 'legacy' | 'workflow'
   /**

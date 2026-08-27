@@ -89,7 +89,7 @@ export function OnboardingWizard() {
         if (ok)
             setOnboarding({ skipped: true });
     };
-    return (<div className="fixed inset-0 z-9999 flex items-center justify-center bg-surface-0/78 px-4 py-6 backdrop-blur-md">
+    return (<div className="fixed inset-0 z-[100] flex items-center justify-center bg-surface-0/78 px-4 py-6 backdrop-blur-md">
       <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} tabIndex={-1} className="chat-stage-panel w-full max-w-3xl overflow-hidden rounded-md border border-border-subtle/55 bg-surface-1/92 shadow-2xl animate-fade-in focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/30">
         <div className="h-1 bg-surface-3/90">
           <div className="h-full bg-accent transition-all duration-300" style={{ width: `${((step + 1) / STEPS.length) * 100}%` }} aria-valuenow={step + 1} aria-valuemin={1} aria-valuemax={STEPS.length} aria-valuetext={`${t('onboarding.stepPrefix', 'Step')} ${step + 1} / ${STEPS.length}`} role="progressbar" aria-label={t('onboarding.progress', 'Onboarding progress')}/>

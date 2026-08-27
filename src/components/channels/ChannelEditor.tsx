@@ -153,12 +153,14 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
     const [wechatQrPreviewResolvingSource, setWechatQrPreviewResolvingSource] = useState('');
     const [wechatQrImageLoaded, setWechatQrImageLoaded] = useState(false);
     const [showWechatAdvanced, setShowWechatAdvanced] = useState(true);
-    const isValid = draft.name.trim().length > 0;
     const selectableAgents = useMemo(() => agents.filter((agent) => agent.enabled !== false || agent.id === draft.replyAgentId), [agents, draft.replyAgentId]);
     const platformLabel = draft.platform === 'custom'
         ? draft.customPlatformName?.trim() || t('channels.customChannel', 'Custom Channel')
         : getPlatformDisplayName(draft.platform);
     const selectedAgent = agents.find((agent) => agent.id === draft.replyAgentId);
+    const requiresReplyAgent = draft.autoReply;
+    const hasReplyAgent = !requiresReplyAgent || Boolean(draft.replyAgentId && selectedAgent?.enabled !== false);
+    const isValid = draft.name.trim().length > 0 && hasReplyAgent;
     const supportsAppCredentials = draft.platform === 'feishu' || draft.platform === 'dingtalk' || draft.platform === 'wechat' || draft.platform === 'wechat_official' || draft.platform === 'wechat_miniprogram';
     const modeLabel = draft.connectionMode === 'stream' ? t('channels.stream', 'Stream') : t('channels.webhook', 'Webhook');
     const normalizedWeChatQrSource = draft.wechatPersonalQrCodeUrl?.trim() || '';
@@ -176,10 +178,14 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
     }, [normalizedWeChatQrSource]);
     const handleSave = () => {
         setSaveError('');
-        if (!isValid) {
+      if (!draft.name.trim()) {
             setSaveError(t('channels.channelNameRequired', 'Channel name is required'));
             return;
         }
+      if (!hasReplyAgent) {
+        setSaveError(t('channels.replyAgentRequired', 'Select a reply agent before enabling auto reply.'));
+        return;
+      }
         onSave(draft);
     };
     const waitForWeChatLogin = useCallback(async (sessionKey: string, verifyCode?: string) => {
@@ -698,6 +704,7 @@ export function ChannelEditor({ channel, agents, isNew, onSave, onCancel, }: {
             <div className="rounded-3xl border border-border-subtle/45 bg-surface-0/55 p-4">
               <div className="text-[12px] font-medium text-text-primary">{selectedAgent?.name || t('common.noData', 'No agent selected')}</div>
               <p className="mt-2 text-[11px] leading-5 text-text-secondary/80">{t('channels.replyAgentHint', 'This agent will receive incoming channel messages and produce the outbound reply when auto reply is enabled.')}</p>
+              {!hasReplyAgent && <p className="mt-2 text-[11px] leading-5 text-red-400">{t('channels.replyAgentRequired', 'Select a reply agent before enabling auto reply.')}</p>}
             </div>
           </EditorSection>
 

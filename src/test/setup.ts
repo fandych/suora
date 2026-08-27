@@ -61,4 +61,7 @@ if (typeof Element !== 'undefined') {
   Element.prototype.getBoundingClientRect = function () {
     return { width: 200, height: 40, top: 0, left: 0, bottom: 40, right: 200, x: 0, y: 0, toJSON() { return this } }
   }
+  Element.prototype.getAnimations = function () {
+    return []
+  }
 }

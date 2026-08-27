@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { CheckIcon, CopyIcon, LibraryIcon, PlayIcon, XIcon } from 'lucide-react';
 import { SidePanel } from '@/components/layout/SidePanel';
 import { ResizeHandle } from '@/components/layout/ResizeHandle';
 import { flushPendingSplitStoreWrites } from '@/services/fileStorage';
@@ -11,24 +12,31 @@ import { executeAgentPipeline, dryRunAgentPipeline, type AgentPipelineProgressSt
 import { validateAgentPipeline } from '@/services/pipelineValidation';
 import { buildPipelineMermaidSource } from '@/services/pipelineMermaid';
 import { buildPipelineOptimizationIterations, type PipelineOptimizationIteration } from '@/services/pipelineOptimization';
+import { buildIncomingTransitionMap, ensureEditablePipelineGraph, materializePipelineGraph, removePipelineTransition, upsertPipelineTransition } from '@/services/pipelineGraph';
+import { getDisplayPipelineVersion, getNextPipelineVersion, releasePipelineVersion } from '@/services/pipelineVersioning';
 import { formatPipelineExecutionEngineLabel, formatPipelineExecutionFallbackReason } from '@/services/pipelineExecutionPresentation';
-import { deletePipelineFromDisk, loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles';
-import { PipelineImportError, parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability';
-import { confirm } from '@/services/confirmDialog';
+import { loadPipelineExecutionsFromDisk, loadPipelinesFromDisk, savePipelineToDisk } from '@/services/pipelineFiles';
 import { t as translate } from '@/services/i18n';
 import type { AgentPipeline, AgentPipelineBudget, AgentPipelineExecution, AgentPipelineExecutionStep, AgentPipelineStep, AgentPipelineVariable, PipelineStepUsage } from '@/types';
 import { generateId } from '@/utils/helpers';
 import { Button as UiButton } from "@/components/shared/button";
-import { Checkbox } from '@/components/shared/checkbox';
-import { Dialog, DialogBody, DialogTitle } from '@/components/shared/dialog';
-import { Input as UiInput, Select as UiSelect, TextArea as UiTextArea } from "@/components/shared/form-controls";
-import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
+import { Dialog, DialogActions, DialogBody, DialogTitle } from '@/components/shared/dialog';
+import { Input as UiInput } from "@/components/shared/form-controls";
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { parsePipelineImport, serializePipelineExport } from '@/services/pipelinePortability';
+import { nodeTypeRequiresTask, nodeTypeUsesAgentRuntime } from '@/components/pipeline/pipelineNodeBehaviors';
+import { PipelineGeneralPanel } from '@/components/pipeline/PipelineGeneralPanel';
+import { PipelineStepConfigPanel } from '@/components/pipeline/PipelineStepConfigPanel';
+import { PIPELINE_NODE_ICONS } from '@/components/pipeline/PipelineFlowCanvas.nodes';
+import { PIPELINE_NODE_LIBRARY, type PipelineNodeType } from '@/components/pipeline/pipelineNodeLibrary';
+import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
 import { scheduleWhenIdle } from '@/utils/scheduling';
 
 const LazyPipelineAssistantDrawer = lazy(() => import('@/components/pipeline/PipelineAssistantDrawer').then((module) => ({ default: module.PipelineAssistantDrawer })));
 const LazyPipelineFlowDiagram = lazy(() => import('@/components/pipeline/PipelineFlowDiagram').then((module) => ({ default: module.PipelineFlowDiagram })));
 const LazyPipelineFlowCanvas = lazy(() => import('@/components/pipeline/PipelineFlowCanvas').then((module) => ({ default: module.PipelineFlowCanvas })));
 const PIPELINE_HEADER_BACKGROUND = 'bg-[linear-gradient(180deg,color-mix(in_srgb,var(--t-surface-1)_99%,transparent),color-mix(in_srgb,var(--t-surface-0)_98%,transparent))]';
+type PipelineEditorTab = 'general' | 'design' | 'others';
 function formatDuration(durationMs?: number, t?: (key: string, defaultValue?: string) => string) {
     if (durationMs === undefined)
         return t?.('agents.pipelinePendingDuration', 'Waiting...') ?? 'Waiting...';
@@ -38,9 +46,132 @@ function formatDuration(durationMs?: number, t?: (key: string, defaultValue?: st
         return `${(durationMs / 1000).toFixed(1)}s`;
     return `${(durationMs / 60000).toFixed(1)}m`;
 }
-function buildStepOutputToken(stepIndex: number) {
-    return `{{steps[${stepIndex + 1}].output}}`;
+function buildDefaultPipelineNodeStep(nodeType: PipelineNodeType, fallbackAgentId: string): AgentPipelineStep {
+  return {
+    nodeType,
+    agentId: fallbackAgentId,
+    task: nodeType === 'condition'
+      ? 'Evaluate the decision rule and choose the next branch.'
+      : nodeType === 'agent'
+        ? 'Produce the requested result using the workflow context.'
+      : nodeType === 'code'
+        ? 'Transform workflow data with sandboxed JavaScript.'
+      : nodeType === 'template'
+        ? 'Render the final text or structured payload from workflow variables.'
+      : nodeType === 'variable'
+        ? 'Assign workflow variables for downstream nodes.'
+      : nodeType === 'iteration'
+        ? 'Run a child pipeline for each item in the selected array.'
+      : nodeType === 'toolset'
+        ? 'Execute the selected workspace tool and capture its result.'
+      : nodeType === 'pipeline'
+        ? 'Pass the prepared payload to the downstream pipeline.'
+        : nodeType === 'rag'
+          ? 'Retrieve supporting document context for the next step.'
+          : nodeType === 'wiki'
+            ? 'Search the selected wiki or document group for matching pages.'
+        : nodeType === 'script'
+          ? 'Execute the local script with the prepared context.'
+          : nodeType === 'http'
+            ? 'Call the target API and capture the response.'
+            : nodeType === 'webhook'
+              ? 'Send an outgoing webhook to the selected target.'
+            : nodeType === 'email'
+              ? 'Compose and send the notification email.'
+              : '',
+    enabled: true,
+    continueOnError: true,
+    retryCount: 0,
+    startParams: nodeType === 'start' ? [{ key: 'input', label: 'Input', defaultValue: '', required: false }] : undefined,
+    endOutputs: nodeType === 'end' ? [{ key: 'result', label: 'Result', value: '{{previous.output}}' }] : undefined,
+    conditionMode: nodeType === 'condition' ? 'all' : undefined,
+    conditionTrueLabel: nodeType === 'condition' ? 'True' : undefined,
+    conditionFalseLabel: nodeType === 'condition' ? 'False' : undefined,
+    scriptRuntime: nodeType === 'script' ? 'nodejs' : undefined,
+    codeLanguage: nodeType === 'code' ? 'javascript' : undefined,
+    codeSource: nodeType === 'code' ? 'function main(inputs) {\n  return { result: inputs.previous ?? inputs };\n}' : undefined,
+    codeOutputSchema: nodeType === 'code' ? 'result' : undefined,
+    templateBody: nodeType === 'template' ? '{{ previous.output | default("") }}' : undefined,
+    variableAssignments: nodeType === 'variable' ? [{ variable: 'result', mode: 'overwrite', value: '{{previous.output}}' }] : undefined,
+    iterationSource: nodeType === 'iteration' ? '{{previous.output}}' : undefined,
+    iterationItemVar: nodeType === 'iteration' ? 'item' : undefined,
+    iterationIndexVar: nodeType === 'iteration' ? 'index' : undefined,
+    iterationMode: nodeType === 'iteration' ? 'sequential' : undefined,
+    iterationErrorMode: nodeType === 'iteration' ? 'terminate' : undefined,
+    httpMethod: nodeType === 'http' ? 'GET' : undefined,
+    httpAuthType: nodeType === 'http' ? 'none' : undefined,
+    webhookMethod: nodeType === 'webhook' ? 'POST' : undefined,
+    webhookAuthType: nodeType === 'webhook' ? 'none' : undefined,
+    webhookCaptureResponse: nodeType === 'webhook' ? true : undefined,
+    httpCaptureResponse: nodeType === 'http' ? true : undefined,
+    ragTopK: nodeType === 'rag' ? 5 : undefined,
+    wikiTopK: nodeType === 'wiki' ? 5 : undefined,
+    parallelBranches: nodeType === 'parallel' ? 2 : undefined,
+    parallelJoinStrategy: nodeType === 'parallel' ? 'all' : undefined,
+    joinStrategy: nodeType === 'join' ? 'wait-all' : undefined,
+    name: nodeType === 'agent'
+      ? 'Agent step'
+      : nodeType === 'condition'
+        ? 'If / Else'
+        : nodeType === 'code'
+          ? 'Code'
+          : nodeType === 'template'
+            ? 'Template'
+            : nodeType === 'variable'
+              ? 'Variable Assigner'
+              : nodeType === 'iteration'
+                ? 'Iteration'
+        : nodeType === 'pipeline'
+          ? 'Nested pipeline'
+            : nodeType === 'toolset'
+              ? 'Toolset step'
+              : nodeType === 'rag'
+                ? 'Document retrieval'
+                : nodeType === 'wiki'
+                  ? 'Wiki search'
+          : nodeType === 'script'
+              ? 'Script execution'
+            : nodeType === 'http'
+              ? 'HTTP / API'
+                : nodeType === 'webhook'
+                  ? 'Webhook'
+              : nodeType === 'email'
+                ? 'SMTP Email'
+                : nodeType === 'parallel'
+                  ? 'Parallel'
+                  : nodeType === 'join'
+                    ? 'Join'
+                  : nodeType === 'start'
+                    ? 'Start'
+                    : nodeType === 'end'
+                      ? 'End'
+                    : 'Node',
+  };
 }
+
+  function findBoundaryIndex(pipeline: AgentPipelineStep[], nodeType: 'start' | 'end'): number {
+    return pipeline.findIndex((step) => step.nodeType === nodeType);
+  }
+
+  function buildSeededWorkflow(nodeType: PipelineNodeType, fallbackAgentId: string): AgentPipelineStep[] {
+    if (nodeType === 'start') {
+      return [
+        buildDefaultPipelineNodeStep('start', fallbackAgentId),
+        buildDefaultPipelineNodeStep('end', fallbackAgentId),
+      ];
+    }
+    if (nodeType === 'end') {
+      return [
+        buildDefaultPipelineNodeStep('start', fallbackAgentId),
+        buildDefaultPipelineNodeStep('end', fallbackAgentId),
+      ];
+    }
+    return [
+      buildDefaultPipelineNodeStep('start', fallbackAgentId),
+      buildDefaultPipelineNodeStep(nodeType, fallbackAgentId),
+      buildDefaultPipelineNodeStep('end', fallbackAgentId),
+    ];
+  }
 function formatTriggerLabel(trigger: AgentPipelineExecution['trigger'], t: (key: string, defaultValue?: string) => string) {
     if (trigger === 'timer')
         return t('agents.pipelineTriggeredByTimer', 'Triggered by timer');
@@ -176,12 +307,23 @@ export function PipelineLayout() {
     const [diagramView, setDiagramView] = useState<'flow' | 'list' | 'source'>('flow');
     const [copiedMermaid, setCopiedMermaid] = useState(false);
     const [diagramDialogOpen, setDiagramDialogOpen] = useState(false);
+    const [importDialogOpen, setImportDialogOpen] = useState(false);
+    const [importJsonText, setImportJsonText] = useState('');
+    const [importJsonError, setImportJsonError] = useState<string | null>(null);
+    const [exportDialogOpen, setExportDialogOpen] = useState(false);
+    const [copiedExportJson, setCopiedExportJson] = useState(false);
     const [pipelineHistory, setPipelineHistory] = useState<AgentPipelineExecution[]>([]);
     const [optimizationIterations, setOptimizationIterations] = useState<PipelineOptimizationIteration[] | null>(null);
     const [running, setRunning] = useState(false);
+    const [editorTab, setEditorTab] = useState<PipelineEditorTab>('design');
+    const [designDryRunOpen, setDesignDryRunOpen] = useState(false);
+    const [designDryRunInput, setDesignDryRunInput] = useState('{}');
+    const [designDryRunInputError, setDesignDryRunInputError] = useState<string | null>(null);
+    const [copiedDesignOutput, setCopiedDesignOutput] = useState(false);
     const [liveSteps, setLiveSteps] = useState<AgentPipelineProgressStep[]>([]);
     const [activeExecution, setActiveExecution] = useState<AgentPipelineExecution | null>(null);
     const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
+    const [selectedStepIndex, setSelectedStepIndex] = useState<number | null>(null);
     const runAbortControllerRef = useRef<AbortController | null>(null);
     const hydratedRequestedPipelineIdRef = useRef<string | null>(null);
     const hydratedSelectedPipelineIdRef = useRef<string | null>(null);
@@ -194,6 +336,12 @@ export function PipelineLayout() {
     const requestedFiredAtRaw = searchParams.get('firedAt');
     const requestedFiredAt = requestedFiredAtRaw ? Number(requestedFiredAtRaw) : Number.NaN;
     const enabledAgents = agents.filter((agent) => agent.enabled !== false);
+    const runnableAgents = useMemo(() => enabledAgents.filter((agent) => {
+      if (agent.modelId) {
+        return models.some((model) => model.id === agent.modelId && model.enabled !== false);
+      }
+      return models.some((model) => model.enabled !== false);
+    }), [enabledAgents, models]);
     const agentNameMap = useMemo(() => Object.fromEntries(agents.map((agent) => [
         agent.id,
         agent.id === 'default-assistant'
@@ -203,6 +351,7 @@ export function PipelineLayout() {
     const selectedSavedPipeline = selectedAgentPipelineId
         ? agentPipelines.find((item) => item.id === selectedAgentPipelineId) ?? null
         : null;
+    const currentWorkflowVersion = selectedSavedPipeline ? getDisplayPipelineVersion(selectedSavedPipeline) : getDisplayPipelineVersion(null);
     const assistantPipeline = assistantState?.pipelineId
         ? agentPipelines.find((item) => item.id === assistantState.pipelineId) ?? null
         : null;
@@ -216,7 +365,7 @@ export function PipelineLayout() {
         setPipelineVariables(savedPipeline.variables ?? []);
         setVariableValues(buildDefaultVariableValues(savedPipeline.variables));
         setPipelineBudget(savedPipeline.budget);
-        setAgentPipeline(savedPipeline.steps);
+      setAgentPipeline(ensureEditablePipelineGraph(savedPipeline.steps));
         resetPipelineExecutionState();
     }, [setAgentPipeline, setAgentPipelineName]);
     const selectSavedPipeline = useCallback((savedPipeline: AgentPipeline) => {
@@ -262,6 +411,17 @@ export function PipelineLayout() {
     };
     const enabledPipelineSteps = useMemo(() => pipeline.filter((step) => step.enabled !== false), [pipeline]);
     useEffect(() => {
+      if (pipeline.length === 0) {
+        if (selectedStepIndex !== null) {
+          setSelectedStepIndex(null);
+        }
+        return;
+      }
+      if (selectedStepIndex !== null && selectedStepIndex >= pipeline.length) {
+        setSelectedStepIndex(pipeline.length > 0 ? pipeline.length - 1 : null);
+      }
+    }, [pipeline.length, selectedStepIndex]);
+    useEffect(() => {
         const nextMemory: Record<number, string> = {};
         pipelineVariables.forEach((variable, index) => {
             const trimmedName = variable.name.trim();
@@ -275,7 +435,7 @@ export function PipelineLayout() {
         });
         variableNameMemoryRef.current = nextMemory;
     }, [pipelineVariables]);
-    const invalidEnabledSteps = useMemo(() => enabledPipelineSteps.filter((step) => !step.task.trim()).length, [enabledPipelineSteps]);
+    const invalidEnabledSteps = useMemo(() => enabledPipelineSteps.filter((step) => nodeTypeRequiresTask(step.nodeType ?? 'agent') && !step.task.trim()).length, [enabledPipelineSteps]);
     useEffect(() => {
       const scheduled = scheduleWhenIdle(() => {
         void refreshSavedPipelines();
@@ -388,13 +548,20 @@ export function PipelineLayout() {
     const executionDetailFallbackLabel = useMemo(() => formatPipelineExecutionFallbackReason(executionDetail?.runtime?.executionFallbackReason, t), [executionDetail?.runtime?.executionFallbackReason, t]);
     const executionDetailWarnings = executionDetail?.runtime?.validationWarnings ?? [];
     const pipelineValidation = useMemo(() => validateAgentPipeline({ name: agentPipelineName.trim() || 'Draft Pipeline', steps: pipeline, variables: pipelineVariables, budget: pipelineBudget }, agents, models), [agentPipelineName, pipeline, pipelineVariables, pipelineBudget, agents, models]);
+    const shouldShowValidationPanel = pipeline.length > 0 && pipelineValidation.issues.length > 0;
     useEffect(() => {
         setOptimizationIterations(null);
     }, [agentPipelineName, pipelineDescription, pipeline, pipelineVariables, pipelineBudget, pipelineValidation]);
+    useEffect(() => {
+      if (editorTab !== 'design' && designDryRunOpen) {
+        setDesignDryRunOpen(false);
+      }
+    }, [designDryRunOpen, editorTab]);
     const resetPipelineEditor = () => {
         hydratedRequestedPipelineIdRef.current = null;
         hydratedSelectedPipelineIdRef.current = null;
         variableNameMemoryRef.current = {};
+      setSelectedStepIndex(null);
         setSelectedAgentPipelineId(null);
         setAgentPipelineName('');
         setPipelineDescription('');
@@ -418,56 +585,85 @@ export function PipelineLayout() {
     const openAssistantEdit = (pipelineId: string) => {
         setAssistantState({ mode: 'edit', pipelineId });
     };
+    const buildDraftPipelineSnapshot = () => ({
+      id: selectedSavedPipeline?.id ?? 'draft-pipeline',
+      name: agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline',
+      ...(pipelineDescription.trim() ? { description: pipelineDescription.trim() } : {}),
+      steps: pipeline,
+      ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
+      ...(pipelineBudget ? { budget: pipelineBudget } : {}),
+      createdAt: selectedSavedPipeline?.createdAt ?? Date.now(),
+      updatedAt: Date.now(),
+      ...(selectedSavedPipeline?.version ? { version: selectedSavedPipeline.version } : {}),
+      ...(selectedSavedPipeline?.publishedVersion ? { publishedVersion: selectedSavedPipeline.publishedVersion } : {}),
+      ...(selectedSavedPipeline?.lastPublishedAt ? { lastPublishedAt: selectedSavedPipeline.lastPublishedAt } : {}),
+    } satisfies AgentPipeline);
     const replacePipelineDraft = (nextPipeline: AgentPipelineStep[]) => {
-        setAgentPipeline(nextPipeline);
+      setAgentPipeline(ensureEditablePipelineGraph(nextPipeline));
         setOptimizationIterations(null);
         resetPipelineExecutionState();
     };
-    const exportCurrentPipeline = async () => {
-        const trimmedName = agentPipelineName.trim() || selectedSavedPipeline?.name || 'Pipeline';
-        const sanitizedBudget: AgentPipelineBudget | undefined = pipelineBudget
-            && (pipelineBudget.maxTotalDurationMs || pipelineBudget.maxTotalTokens || pipelineBudget.maxStepCount)
-            ? {
-                ...(pipelineBudget.maxTotalDurationMs ? { maxTotalDurationMs: pipelineBudget.maxTotalDurationMs } : {}),
-                ...(pipelineBudget.maxTotalTokens ? { maxTotalTokens: pipelineBudget.maxTotalTokens } : {}),
-                ...(pipelineBudget.maxStepCount ? { maxStepCount: pipelineBudget.maxStepCount } : {}),
-            }
-            : undefined;
-        const json = serializePipelineExport({
-            id: selectedSavedPipeline?.id ?? generateId('pipeline-export'),
-            name: trimmedName,
-            ...(pipelineDescription.trim() ? { description: pipelineDescription.trim() } : {}),
-            steps: pipeline,
-            ...(pipelineVariables.length > 0 ? { variables: pipelineVariables } : {}),
-            ...(sanitizedBudget ? { budget: sanitizedBudget } : {}),
-            createdAt: selectedSavedPipeline?.createdAt ?? Date.now(),
-            updatedAt: Date.now(),
-        });
-        let copied = false;
-        if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-            try {
-                await navigator.clipboard.writeText(json);
-                copied = true;
-            }
-            catch {
-                copied = false;
-            }
-        }
-        addNotification({
-            id: generateId('notif'),
-            type: 'success',
-            title: t('agents.pipelineExportTitle', 'Pipeline exported'),
-            message: copied
-                ? t('agents.pipelineExportCopied', 'Pipeline JSON copied to clipboard.')
-                : t('agents.pipelineExportFallback', 'Could not access clipboard — JSON written to console.'),
-            timestamp: Date.now(),
-            read: false,
-        });
-        if (!copied) {
-            console.log('[suora] Pipeline export JSON:\n' + json);
-        }
+    const exportJson = useMemo(() => pipeline.length > 0 ? serializePipelineExport(buildDraftPipelineSnapshot()) : '', [agentPipelineName, pipelineDescription, pipeline, pipelineVariables, pipelineBudget, selectedSavedPipeline]);
+    const openImportDialog = () => {
+      setImportJsonError(null);
+      setImportJsonText('');
+      setImportDialogOpen(true);
     };
-    const runDryRunPreview = () => {
+    const openExportDialog = () => {
+      setCopiedExportJson(false);
+      setExportDialogOpen(true);
+    };
+    const applyImportedPipeline = () => {
+      try {
+        const { pipeline: importedPipeline, warnings } = parsePipelineImport(importJsonText);
+        setAgentPipelineName(importedPipeline.name);
+        setPipelineDescription(importedPipeline.description ?? '');
+        setPipelineVariables(importedPipeline.variables ?? []);
+        setVariableValues(buildDefaultVariableValues(importedPipeline.variables));
+        setPipelineBudget(importedPipeline.budget);
+        replacePipelineDraft(importedPipeline.steps);
+        setSelectedStepIndex(importedPipeline.steps.length > 0 ? 0 : null);
+        setSelectedAgentPipelineId(null);
+        setImportDialogOpen(false);
+        addNotification({
+          id: generateId('notif'),
+          type: warnings.length > 0 ? 'warning' : 'success',
+          title: warnings.length > 0 ? t('agents.pipelineImportWarningsTitle', 'Pipeline imported with warnings') : t('agents.pipelineImportSuccessTitle', 'Pipeline imported'),
+          message: warnings[0] ?? t('agents.pipelineImportSuccessBody', `${importedPipeline.name} is ready to review before saving.`).replace('{name}', () => importedPipeline.name),
+          timestamp: Date.now(),
+          read: false,
+        });
+      }
+      catch (error) {
+        setImportJsonError((error as Error).message || t('agents.pipelineImportError', 'Import failed.'));
+      }
+    };
+    const copyExportJson = async () => {
+      try {
+        await navigator.clipboard.writeText(exportJson);
+        setCopiedExportJson(true);
+        window.setTimeout(() => setCopiedExportJson(false), 1200);
+      }
+      catch {
+        addNotification({
+          id: generateId('notif'),
+          type: 'error',
+          title: t('agents.pipelineExportCopyFailedTitle', 'Could not copy export JSON'),
+          message: t('agents.pipelineExportCopyFailedBody', 'The workflow export JSON could not be copied to the clipboard.'),
+          timestamp: Date.now(),
+          read: false,
+        });
+      }
+    };
+    const connectPipelineSteps = (sourceStepIndex: number, targetStepIndex: number) => {
+      replacePipelineDraft(upsertPipelineTransition(pipeline, sourceStepIndex, targetStepIndex));
+    };
+    const disconnectPipelineSteps = (sourceStepIndex: number, targetStepIndex: number) => {
+      replacePipelineDraft(removePipelineTransition(pipeline, sourceStepIndex, targetStepIndex));
+    };
+    const runDryRunPreview = (overrideVariables?: Record<string, string>) => {
+      const parsedVariables = overrideVariables ?? variableValues;
+        setDesignDryRunInputError(null);
         const trimmedName = agentPipelineName.trim() || selectedSavedPipeline?.name || 'Draft Pipeline';
         const sanitizedBudget: AgentPipelineBudget | undefined = pipelineBudget
             && (pipelineBudget.maxTotalDurationMs || pipelineBudget.maxTotalTokens || pipelineBudget.maxStepCount)
@@ -481,7 +677,7 @@ export function PipelineLayout() {
             ...(sanitizedBudget ? { budget: sanitizedBudget } : {}),
             createdAt: selectedSavedPipeline?.createdAt ?? Date.now(),
             updatedAt: Date.now(),
-        }, { variables: variableValues });
+          }, { variables: parsedVariables });
         setDryRunResult(result);
         addNotification({
             id: generateId('notif'),
@@ -491,6 +687,24 @@ export function PipelineLayout() {
             timestamp: Date.now(),
             read: false,
         });
+    };
+    const runDesignDryRunPreview = () => {
+        try {
+          const parsedPayload: unknown = JSON.parse(designDryRunInput);
+          if (!parsedPayload || typeof parsedPayload !== 'object' || Array.isArray(parsedPayload)) {
+            setDesignDryRunInputError(t('agents.pipelineDryRunJsonError', 'Enter a valid JSON object before running the workflow.'));
+            return;
+          }
+          const nextVariables = {
+            ...variableValues,
+            ...Object.fromEntries(Object.entries(parsedPayload as Record<string, unknown>).map(([key, value]) => [key, typeof value === 'string' ? value : JSON.stringify(value)])),
+          };
+          setVariableValues(nextVariables);
+          runDryRunPreview(nextVariables);
+        }
+        catch {
+          setDesignDryRunInputError(t('agents.pipelineDryRunJsonError', 'Enter a valid JSON object before running the workflow.'));
+        }
     };
     const runOptimizationReview = () => {
         const iterations = buildPipelineOptimizationIterations({
@@ -505,55 +719,96 @@ export function PipelineLayout() {
             id: generateId('notif'),
             type: pipelineValidation.valid ? 'info' : 'warning',
             title: t('agents.pipelineOptimizationTitle', 'Pipeline optimization complete'),
-            message: t('agents.pipelineOptimizationMessage', 'Generated 20 focused optimization iterations for the current pipeline.'),
+            message: t('agents.pipelineOptimizationMessage', 'Generated 30 focused optimization iterations for the current pipeline.'),
             timestamp: Date.now(),
             read: false,
         });
     };
-    const importPipelineFromJson = async () => {
-        const raw = typeof window !== 'undefined' ? window.prompt(t('agents.pipelineImportPrompt', 'Paste pipeline JSON to import:')) : null;
-        if (!raw)
-            return;
-        try {
-            const { pipeline: imported, warnings } = parsePipelineImport(raw);
-            setSelectedAgentPipelineId(null);
-            setAgentPipelineName(imported.name);
-            setPipelineDescription(imported.description ?? '');
-            setPipelineVariables(imported.variables ?? []);
-            setVariableValues(buildDefaultVariableValues(imported.variables));
-            setPipelineBudget(imported.budget);
-            setAgentPipeline(imported.steps);
-            setLiveSteps([]);
-            setActiveExecution(null);
-            addNotification({
-                id: generateId('notif'),
-                type: warnings.length > 0 ? 'warning' : 'success',
-                title: t('agents.pipelineImportTitle', 'Pipeline imported'),
-                message: warnings.length > 0
-                    ? warnings.join(' ')
-                    : t('agents.pipelineImportSuccess', `${imported.name} loaded into the editor. Review and save to keep it.`).replace('{name}', () => imported.name),
-                timestamp: Date.now(),
-                read: false,
-            });
-        }
-        catch (error) {
-            const message = error instanceof PipelineImportError ? error.message : (error as Error).message;
-            addNotification({
-                id: generateId('notif'),
-                type: 'error',
-                title: t('agents.pipelineImportFailedTitle', 'Pipeline import failed'),
-                message,
-                timestamp: Date.now(),
-                read: false,
-            });
-        }
-    };
     const addStep = () => {
-        if (enabledAgents.length === 0)
+        if (runnableAgents.length === 0)
             return;
-        replacePipelineDraft([...pipeline, { agentId: enabledAgents[0].id, task: '', enabled: true, continueOnError: true, retryCount: 0 }]);
+      addNode('agent');
+    };
+    const addNode = (nodeType: PipelineNodeType) => {
+      if (nodeTypeUsesAgentRuntime(nodeType) && runnableAgents.length === 0)
+        return;
+      const fallbackAgentId = runnableAgents[0]?.id ?? enabledAgents[0]?.id ?? agents[0]?.id ?? 'default-assistant';
+      const hasStart = findBoundaryIndex(pipeline, 'start') !== -1;
+      const hasEnd = findBoundaryIndex(pipeline, 'end') !== -1;
+
+      if (pipeline.length === 0) {
+        const seeded = buildSeededWorkflow(nodeType, fallbackAgentId);
+        replacePipelineDraft(seeded);
+        setSelectedStepIndex(nodeType === 'end' ? 1 : nodeType === 'start' ? 0 : 1);
+        return;
+      }
+
+      if (nodeType === 'start') {
+        if (hasStart) return;
+        replacePipelineDraft([buildDefaultPipelineNodeStep('start', fallbackAgentId), ...pipeline]);
+        setSelectedStepIndex(0);
+        return;
+      }
+
+      if (nodeType === 'end') {
+        if (hasEnd) return;
+        replacePipelineDraft([...pipeline, buildDefaultPipelineNodeStep('end', fallbackAgentId)]);
+        setSelectedStepIndex(pipeline.length);
+        return;
+      }
+
+      const endIndex = findBoundaryIndex(pipeline, 'end');
+      const insertIndex = endIndex === -1 ? pipeline.length : endIndex;
+      replacePipelineDraft([
+        ...pipeline.slice(0, insertIndex),
+        buildDefaultPipelineNodeStep(nodeType, fallbackAgentId),
+        ...pipeline.slice(insertIndex),
+      ]);
+      setSelectedStepIndex(insertIndex);
+    };
+    const insertStepAfter = (idx: number, nodeType: PipelineNodeType = 'agent') => {
+      if (nodeTypeUsesAgentRuntime(nodeType) && runnableAgents.length === 0)
+        return;
+      const fallbackAgentId = runnableAgents[0]?.id ?? enabledAgents[0]?.id ?? agents[0]?.id ?? 'default-assistant';
+      const hasStart = findBoundaryIndex(pipeline, 'start') !== -1;
+      const hasEnd = findBoundaryIndex(pipeline, 'end') !== -1;
+
+      if (nodeType === 'start') {
+        if (hasStart) return;
+        replacePipelineDraft([buildDefaultPipelineNodeStep('start', fallbackAgentId), ...pipeline]);
+        setSelectedStepIndex(0);
+        return;
+      }
+
+      if (nodeType === 'end') {
+        if (hasEnd) return;
+        replacePipelineDraft([...pipeline, buildDefaultPipelineNodeStep('end', fallbackAgentId)]);
+        setSelectedStepIndex(pipeline.length);
+        return;
+      }
+
+      const endIndex = findBoundaryIndex(pipeline, 'end');
+      const nextIndex = endIndex !== -1 ? Math.min(idx + 1, endIndex) : idx + 1;
+      const nextStep: AgentPipelineStep = buildDefaultPipelineNodeStep(nodeType, fallbackAgentId);
+      replacePipelineDraft([
+        ...pipeline.slice(0, nextIndex),
+        nextStep,
+        ...pipeline.slice(nextIndex),
+      ]);
+      setSelectedStepIndex(nextIndex);
     };
     const removeStep = (idx: number) => {
+      setSelectedStepIndex((current) => {
+        if (current === null)
+          return current;
+        if (pipeline.length <= 1)
+          return null;
+        if (current === idx)
+          return Math.max(0, idx - 1);
+        if (current > idx)
+          return current - 1;
+        return current;
+      });
         replacePipelineDraft(pipeline.filter((_, index) => index !== idx));
     };
     const updateStep = (idx: number, updates: Partial<AgentPipelineStep>) => {
@@ -566,6 +821,13 @@ export function PipelineLayout() {
         const nextPipeline = [...pipeline];
         const [movedStep] = nextPipeline.splice(idx, 1);
         nextPipeline.splice(targetIndex, 0, movedStep);
+        setSelectedStepIndex((current) => {
+          if (current === idx)
+            return targetIndex;
+          if (current === targetIndex)
+            return idx;
+          return current;
+        });
         replacePipelineDraft(nextPipeline);
     };
     const duplicateStep = (idx: number) => {
@@ -584,6 +846,7 @@ export function PipelineLayout() {
             },
             ...pipeline.slice(idx + 1),
         ]);
+        setSelectedStepIndex(idx + 1);
     };
     const appendStepReference = (idx: number, token: string) => {
         replacePipelineDraft(pipeline.map((step, index) => {
@@ -595,7 +858,7 @@ export function PipelineLayout() {
             return { ...step, task: nextTask };
         }));
     };
-    const savePipeline = async () => {
+    const savePipeline = async (publishCurrentVersion = false) => {
         if (!workspacePath || pipeline.length === 0)
             return;
         if (!pipelineValidation.valid) {
@@ -623,6 +886,9 @@ export function PipelineLayout() {
         }
         const now = Date.now();
         const savedPipeline = selectedSavedPipeline;
+        const nextVersion = publishCurrentVersion
+          ? releasePipelineVersion({ version: savedPipeline?.version ?? '1.0' })
+          : getNextPipelineVersion(savedPipeline);
         const trimmedDescription = pipelineDescription.trim();
         const sanitizedVariables = pipelineVariables
             .map((variable) => ({
@@ -643,6 +909,9 @@ export function PipelineLayout() {
         const nextPipeline: AgentPipeline = {
             id: savedPipeline?.id ?? generateId('pipeline'),
             name: trimmedName,
+          version: nextVersion,
+          publishedVersion: publishCurrentVersion ? nextVersion : savedPipeline?.publishedVersion,
+          lastPublishedAt: publishCurrentVersion ? now : savedPipeline?.lastPublishedAt,
             ...(trimmedDescription ? { description: trimmedDescription } : {}),
             steps: pipeline,
             ...(sanitizedVariables.length > 0 ? { variables: sanitizedVariables } : {}),
@@ -683,53 +952,13 @@ export function PipelineLayout() {
         addNotification({
             id: generateId('notif'),
             type: 'success',
-            title: t('agents.pipelineSavedTitle', 'Pipeline saved'),
-            message: t('agents.pipelineSavedBody', `${nextPipeline.name} is now available for timers and history tracking.`).replace('{name}', () => nextPipeline.name),
+          title: publishCurrentVersion ? t('agents.pipelinePublishedTitle', 'Pipeline published') : t('agents.pipelineSavedTitle', 'Pipeline saved'),
+          message: publishCurrentVersion
+            ? t('agents.pipelinePublishedBody', `${nextPipeline.name} ${nextVersion} is now published.`).replace('{name}', () => nextPipeline.name)
+            : t('agents.pipelineSavedBody', `${nextPipeline.name} is now available for timers and history tracking.`).replace('{name}', () => nextPipeline.name),
             timestamp: Date.now(),
             read: false,
         });
-    };
-    const deletePipeline = async () => {
-        if (!workspacePath || !selectedSavedPipeline)
-            return;
-        const confirmed = await confirm({
-            title: t('agents.pipelineDeleteTitle', 'Delete pipeline?'),
-            body: t('agents.pipelineDeleteBody', `"${selectedSavedPipeline.name}" will be permanently removed from disk.`).replace('{name}', () => selectedSavedPipeline.name),
-            danger: true,
-            confirmText: t('common.delete', 'Delete'),
-        });
-        if (!confirmed)
-            return;
-        const deleted = await deletePipelineFromDisk(workspacePath, selectedSavedPipeline.id);
-        if (!deleted) {
-            addNotification({
-                id: generateId('notif'),
-                type: 'error',
-                title: t('agents.pipelineDeleteFailedTitle', 'Pipeline delete failed'),
-                message: t('agents.pipelineDeleteFailedBody', 'Could not remove the pipeline file from disk.'),
-                timestamp: Date.now(),
-                read: false,
-            });
-            return;
-        }
-        const nextPipelines = agentPipelines.filter((item) => item.id !== selectedSavedPipeline.id);
-        hydratedSelectedPipelineIdRef.current = null;
-        setAgentPipelines(nextPipelines);
-        setSelectedAgentPipelineId(null);
-        try {
-            await flushPendingSplitStoreWrites();
-        }
-        catch {
-            addNotification({
-                id: generateId('notif'),
-                type: 'warning',
-                title: t('agents.pipelineDeleteSyncWarningTitle', 'Pipeline removed with a sync warning'),
-                message: t('agents.pipelineDeleteSyncWarningBody', 'The pipeline was removed from disk, but the workspace state could not be flushed immediately.'),
-                timestamp: Date.now(),
-                read: false,
-            });
-        }
-        resetPipelineEditor();
     };
     const handleAssistantPipelineMutated = useCallback(async () => {
         const refreshedPipelines = await refreshSavedPipelines();
@@ -838,6 +1067,27 @@ export function PipelineLayout() {
             return monitorSteps;
         return pipelineHistory[0]?.steps.map((step) => mapExecutionStep(step, agentNameMap)) ?? [];
     }, [executionDetailSteps, monitorSteps, pipelineHistory, agentNameMap]);
+    const pipelineGraphSteps = useMemo(() => materializePipelineGraph(pipeline), [pipeline]);
+    const incomingByStepId = useMemo(() => buildIncomingTransitionMap(pipelineGraphSteps), [pipelineGraphSteps]);
+    const selectedStep = selectedStepIndex !== null ? (pipeline[selectedStepIndex] ?? null) : null;
+    const selectedPreviewStep = selectedStepIndex !== null ? latestExecutionReference[selectedStepIndex] : undefined;
+    const selectedPreviousOutput = useMemo(() => {
+      if (selectedStepIndex === null) return '';
+      const selectedGraphStep = pipelineGraphSteps[selectedStepIndex];
+      if (!selectedGraphStep) return '';
+      const incomingSourceIds = incomingByStepId.get(selectedGraphStep.id) ?? [];
+      const indexById = new Map(pipelineGraphSteps.map((step, index) => [step.id, index]));
+      const outputs = incomingSourceIds
+        .map((sourceId) => {
+          const sourceIndex = indexById.get(sourceId);
+          return sourceIndex === undefined ? '' : (latestExecutionReference[sourceIndex]?.output ?? '');
+        })
+        .filter(Boolean);
+      if (outputs.length > 1) {
+        return outputs.join('\n\n---\n\n');
+      }
+      return outputs[0] ?? '';
+    }, [incomingByStepId, latestExecutionReference, pipelineGraphSteps, selectedStepIndex]);
     const diagramProgressSteps = useMemo(() => {
         if (monitorSteps.length > 0)
             return monitorSteps;
@@ -845,6 +1095,7 @@ export function PipelineLayout() {
             return executionDetailSteps;
         return buildPreviewSteps(pipeline, agentNameMap);
     }, [monitorSteps, executionDetailSteps, pipeline, agentNameMap]);
+    const hasPipelineSteps = pipeline.length > 0;
     const mermaidSource = useMemo(() => buildPipelineMermaidSource(pipeline, {
         pipelineName: agentPipelineName.trim() || selectedSavedPipeline?.name || t('agents.pipelineDraft', 'Draft pipeline'),
         description: pipelineDescription.trim() || selectedSavedPipeline?.description,
@@ -868,10 +1119,34 @@ export function PipelineLayout() {
             });
         }
     };
+    const copyDesignDryRunOutput = async () => {
+      if (!dryRunResult)
+        return;
+      const lastPreview = dryRunResult.steps[dryRunResult.steps.length - 1];
+      const serialized = JSON.stringify({
+        variables: dryRunResult.variables,
+        lastStep: lastPreview,
+      }, null, 2);
+      try {
+        await navigator.clipboard.writeText(serialized);
+        setCopiedDesignOutput(true);
+        window.setTimeout(() => setCopiedDesignOutput(false), 1200);
+      }
+      catch {
+        addNotification({
+          id: generateId('notif'),
+          type: 'error',
+          title: t('agents.pipelineCopyOutputFailedTitle', 'Could not copy dry run output'),
+          message: t('agents.pipelineCopyOutputFailedBody', 'The dry run output could not be copied to the clipboard.'),
+          timestamp: Date.now(),
+          read: false,
+        });
+      }
+    };
       const renderDiagramContent = (expanded = false) => {
         if (diagramView === 'flow') {
           return (<Suspense fallback={<div className={`${expanded ? 'h-[70vh]' : 'h-80'} rounded-2xl border border-border-subtle bg-surface-0/40`} />}>
-            <LazyPipelineFlowCanvas steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap} className={expanded ? 'h-[70vh]' : undefined}/>
+            <LazyPipelineFlowCanvas steps={pipeline} progressSteps={diagramProgressSteps} agentNameMap={agentNameMap} className={expanded ? 'h-[70vh]' : undefined} onAddStep={enabledAgents.length > 0 ? addStep : undefined} selectedStepIndex={selectedStepIndex} onStepSelect={setSelectedStepIndex} validationIssues={pipelineValidation.issues}/>
           </Suspense>);
         }
         if (diagramView === 'list') {
@@ -912,9 +1187,17 @@ export function PipelineLayout() {
               </div>)}
 
             {filteredPipelines.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
-                {searchQuery.trim()
+                <div>{searchQuery.trim()
                 ? t('agents.noMatchingPipelines', 'No matching pipelines.')
-                : t('agents.noSavedPipelines', 'No saved pipelines yet.')}
+                : t('agents.noSavedPipelines', 'No saved pipelines yet.')}</div>
+                {!searchQuery.trim() && (<div className="mt-4 flex flex-col gap-2">
+                    <UiButton unstyled type="button" onClick={resetPipelineEditor} className={workbenchSidebarPrimaryActionClass}>
+                      {t('agents.createFirstPipeline', 'Create your first pipeline')}
+                    </UiButton>
+                    <UiButton unstyled type="button" onClick={openAssistantCreate} className={workbenchSidebarSubtleActionClass}>
+                      {t('timer.aiCreate', 'AI Create')}
+                    </UiButton>
+                  </div>)}
               </div>) : (filteredPipelines.map((savedPipeline) => (<UiButton unstyled key={savedPipeline.id} type="button" onClick={() => loadSavedPipeline(savedPipeline.id)} className={workbenchSidebarItemClass(selectedAgentPipelineId === savedPipeline.id, 'border-border-subtle bg-surface-1/70 text-text-secondary hover:border-border hover:bg-surface-2/70')}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
@@ -924,6 +1207,8 @@ export function PipelineLayout() {
                       </div>
                       <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-text-muted">
                         <span>{savedPipeline.steps.length} {t('agents.pipelineSteps', 'steps')}</span>
+                        <span className="h-1 w-1 rounded-full bg-border"/>
+                        <span>v{getDisplayPipelineVersion(savedPipeline)}</span>
                         <span className="h-1 w-1 rounded-full bg-border"/>
                         <span>{formatRelativeTime(savedPipeline.lastRunAt)}</span>
                       </div>
@@ -945,36 +1230,27 @@ export function PipelineLayout() {
 
       <div className="module-workspace flex min-w-0 flex-1 flex-col">
         <div className={`module-hero-strip border-b border-border-subtle px-6 py-5 ${PIPELINE_HEADER_BACKGROUND}`}>
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-text-muted">
                 <span>{t('agents.pipeline', 'Pipeline')}</span>
                 {selectedSavedPipeline && <span className="rounded-full border border-border-subtle bg-surface-3/80 px-2 py-0.5 text-[10px] normal-case tracking-normal text-text-secondary">{selectedSavedPipeline.id}</span>}
+                <span className="rounded-full border border-border-subtle bg-surface-3/80 px-2 py-0.5 text-[10px] normal-case tracking-normal text-text-secondary">v{currentWorkflowVersion}</span>
+                {selectedSavedPipeline?.publishedVersion && selectedSavedPipeline.publishedVersion === selectedSavedPipeline.version ? <span className="rounded-full border border-emerald-300 bg-emerald-50/80 px-2 py-0.5 text-[10px] normal-case tracking-normal text-emerald-700">{t('agents.pipelinePublished', 'Published')}</span> : null}
                 <span className={`rounded-full border px-2 py-0.5 text-[10px] normal-case tracking-normal ${statusStyles(running ? 'running' : (activeExecution?.status ?? 'pending'))}`}>
                   {running ? t('agents.pipelineStatusRunning', 'Running') : t(`agents.pipelineStatus.${activeExecution?.status ?? 'pending'}`, activeExecution?.status ?? 'pending')}
                 </span>
               </div>
               <h1 className="mt-3 text-2xl font-semibold text-text-primary">{agentPipelineName.trim() || t('agents.pipelineDraft', 'Draft pipeline')}</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-relaxed text-text-muted">{pipelineDescription.trim() || selectedSavedPipeline?.description || t('agents.pipelineMonitorHint', 'Track every handoff, inspect upstream context, and review saved runs without leaving the pipeline canvas.')}</p>
-            </div>
-
-            <div className="flex flex-wrap gap-2 text-[11px] text-text-secondary">
-              <span className="rounded-full border border-border-subtle bg-surface-0/60 px-2.5 py-1">{enabledPipelineSteps.length}/{pipeline.length} {t('agents.pipelineActiveSteps', 'active steps')}</span>
-              {selectedSavedPipeline && <span className="rounded-full border border-border-subtle bg-surface-0/60 px-2.5 py-1">{pipelineHistory.length} {t('agents.pipelineRuns', 'runs')}</span>}
             </div>
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
-            <UiButton unstyled type="button" onClick={openAssistantCreate} className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover">{t('timer.aiCreate', 'AI Create')}</UiButton>
             <UiButton unstyled type="button" onClick={() => selectedSavedPipeline && openAssistantEdit(selectedSavedPipeline.id)} disabled={!selectedSavedPipeline} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40">{t('timer.aiEditCurrent', 'AI Edit')}</UiButton>
-            <UiButton unstyled type="button" onClick={resetPipelineEditor} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('common.new', 'New')}</UiButton>
-            <UiButton unstyled type="button" onClick={() => replacePipelineDraft([])} disabled={pipeline.length === 0 || running} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('common.clearAll', 'Clear All')}</UiButton>
-            <UiButton unstyled type="button" onClick={() => void importPipelineFromJson()} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2">{t('agents.pipelineImport', 'Import JSON')}</UiButton>
-            <UiButton unstyled type="button" onClick={() => void exportCurrentPipeline()} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40">{t('agents.pipelineExport', 'Export JSON')}</UiButton>
-            <UiButton unstyled type="button" onClick={runDryRunPreview} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40" title={t('agents.pipelineDryRunButtonHint', 'Simulate the run without calling any model.')}>{t('agents.pipelineDryRunButton', 'Dry run')}</UiButton>
-            <UiButton unstyled type="button" onClick={runOptimizationReview} disabled={pipeline.length === 0} className="rounded-xl bg-surface-3 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:bg-surface-2 disabled:opacity-40" title={t('agents.pipelineOptimizationHint', 'Generate a 20-iteration optimization review for this pipeline.')}>{t('agents.pipelineOptimize20', 'Optimize ×20')}</UiButton>
+            <UiButton unstyled type="button" onClick={openImportDialog} className="rounded-xl border border-border-subtle/70 bg-surface-0/82 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-text-primary">{t('agents.pipelineImport', 'Import JSON')}</UiButton>
+            <UiButton unstyled type="button" onClick={openExportDialog} disabled={pipeline.length === 0} className="rounded-xl border border-border-subtle/70 bg-surface-0/82 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-text-primary disabled:opacity-40">{t('agents.pipelineExport', 'Export JSON')}</UiButton>
             <UiButton unstyled type="button" onClick={() => void savePipeline()} disabled={!workspacePath || pipeline.length === 0} className="rounded-xl bg-accent/15 px-3 py-2 text-xs font-medium text-accent transition-colors hover:bg-accent/25 disabled:opacity-40">{t('common.saveChanges', 'Save Changes')}</UiButton>
-            <UiButton unstyled type="button" onClick={() => void deletePipeline()} disabled={!selectedSavedPipeline} className="rounded-xl bg-red-500/10 px-3 py-2 text-xs font-medium text-red-400 transition-colors hover:bg-red-500/20 disabled:opacity-40">{t('common.delete', 'Delete')}</UiButton>
+            <UiButton unstyled type="button" onClick={() => void savePipeline(true)} disabled={!workspacePath || pipeline.length === 0} className="rounded-xl border border-emerald-300 bg-emerald-50/70 px-3 py-2 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-100 disabled:opacity-40">{t('agents.publishPipeline', 'Publish')}</UiButton>
             <UiButton unstyled type="button" onClick={runPipeline} disabled={enabledPipelineSteps.length === 0 || invalidEnabledSteps > 0 || !pipelineValidation.valid || running} className="rounded-xl bg-accent px-3.5 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-40">
               {running ? t('agents.runningPipeline', 'Running...') : t('agents.runPipeline', '▶ Run Pipeline')}
             </UiButton>
@@ -1007,6 +1283,10 @@ export function PipelineLayout() {
                     </li>);
             })}
               </ol>
+                {dryRunResult.visitedStepIndices?.length > 0 ? <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-text-muted">
+                  <span>{t('agents.pipelineTraversedPath', 'Traversed path')}:</span>
+                  {dryRunResult.visitedStepIndices.map((stepIndex) => <span key={`dry-run-path-${stepIndex}`} className="rounded-full border border-border-subtle bg-surface-1/80 px-2 py-0.5 font-mono">#{stepIndex + 1}</span>)}
+                </div> : null}
             </div>)}
 
           {optimizationIterations && (<div className="mt-3 rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-xs text-text-secondary">
@@ -1031,7 +1311,7 @@ export function PipelineLayout() {
               </ol>
             </div>)}
 
-          {pipelineValidation.issues.length > 0 && (<div className="mt-3 rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-xs text-text-secondary">
+          {shouldShowValidationPanel && (<div className="mt-3 rounded-3xl border border-border-subtle/55 bg-surface-0/72 px-4 py-3 text-xs text-text-secondary">
               <div className="font-semibold">{t('agents.pipelineDryRun', 'Dry-run validation')}</div>
               <div className="mt-2 space-y-1">
                 {pipelineValidation.issues.slice(0, 5).map((issue) => (<div key={`${issue.code}-${issue.stepIndex ?? 'pipeline'}-${issue.message}`}>
@@ -1041,360 +1321,216 @@ export function PipelineLayout() {
             </div>)}
         </div>
 
-        <div className="grid min-h-0 flex-1 gap-0 xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.9fr)]">
-          <div className="module-canvas min-h-0 overflow-y-auto px-6 py-6">
-            <div className="space-y-6">
-              <section className="rounded-[28px] border border-border-subtle/55 bg-surface-1/96 p-5 shadow-[0_10px_24px_rgba(15,23,42,0.05)] backdrop-blur-sm">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineBuilder', 'Pipeline builder')}</h2>
-                    <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineBuilderHint', 'Design each handoff and keep the upstream result visible directly on the canvas.')}</p>
-                  </div>
-                  <div className="rounded-full bg-surface-3 px-2.5 py-1 text-[11px] text-text-secondary">{pipeline.length} {t('agents.pipelineSteps', 'steps')}</div>
-                </div>
+        <div className="border-b border-border-subtle px-6">
+          <div className="flex flex-wrap gap-2 py-4">
+            <UiButton unstyled type="button" onClick={() => setEditorTab('general')} className={`rounded-xl px-3 py-2 text-xs font-medium transition-colors ${editorTab === 'general' ? 'bg-accent/15 text-accent' : 'bg-surface-2 text-text-secondary hover:bg-surface-3'}`}>
+              {t('agents.pipelineGeneral', 'General')}
+            </UiButton>
+            <UiButton unstyled type="button" onClick={() => setEditorTab('design')} className={`rounded-xl px-3 py-2 text-xs font-medium transition-colors ${editorTab === 'design' ? 'bg-accent/15 text-accent' : 'bg-surface-2 text-text-secondary hover:bg-surface-3'}`}>
+              {t('agents.pipelineDesign', 'Design')}
+            </UiButton>
+            <UiButton unstyled type="button" onClick={() => setEditorTab('others')} className={`rounded-xl px-3 py-2 text-xs font-medium transition-colors ${editorTab === 'others' ? 'bg-accent/15 text-accent' : 'bg-surface-2 text-text-secondary hover:bg-surface-3'}`}>
+              {t('agents.pipelineOthers', 'Others')}
+            </UiButton>
+          </div>
+        </div>
 
-                <div className="mt-5 space-y-4">
-                  <div>
-                    <label className="mb-2 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineName', 'Pipeline name')}</label>
-                    <UiInput value={agentPipelineName} onChange={(e) => setAgentPipelineName(e.target.value)} placeholder={t('agents.pipelineName', 'Pipeline name')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary"/>
-                  </div>
-
-                  <div>
-                    <label className="mb-2 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineDescription', 'Description')}</label>
-                    <UiTextArea value={pipelineDescription} onChange={(event) => setPipelineDescription(event.target.value)} placeholder={t('agents.pipelineDescriptionPlaceholder', 'What this workflow prepares, checks, or hands off...')} rows={2} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary"/>
-                  </div>
-
-                  <div className="rounded-2xl border border-border-subtle bg-surface-2/55 px-4 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineVariables', 'Variables')}</div>
-                        <div className="mt-1 text-xs text-text-muted">{t('agents.pipelineVariablesHint', 'Declare run-time inputs, then reference them in any step task as {{vars.name}} or in runIf conditions as vars.name.')}</div>
-                      </div>
-                      <UiButton unstyled type="button" onClick={() => updatePipelineVariables((current) => [...current, { name: '' }])} className="rounded-xl border border-border-subtle bg-surface-1/80 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:text-accent">
-                        {t('agents.pipelineAddVariable', '+ Add variable')}
-                      </UiButton>
-                    </div>
-
-                    {pipelineVariables.length === 0 ? (<div className="mt-3 text-xs text-text-muted">{t('agents.pipelineNoVariables', 'No variables declared yet.')}</div>) : (<div className="mt-3 space-y-2">
-                        {pipelineVariables.map((variable, index) => (<div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-                            <UiInput value={variable.name} onChange={(event) => {
-                    renamePipelineVariable(index, event.target.value);
-                      }} placeholder={t('agents.pipelineVariableName', 'name')} controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
-                            <UiInput value={variable.label ?? ''} onChange={(event) => {
-                    const next = event.target.value;
-                    updatePipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, label: next } : item));
-                      }} placeholder={t('agents.pipelineVariableLabel', 'Label (optional)')} controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
-                            <UiInput value={variable.defaultValue ?? ''} onChange={(event) => {
-                    const next = event.target.value;
-                    updatePipelineVariables((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, defaultValue: next } : item));
-                      }} placeholder={t('agents.pipelineVariableDefault', 'Default value')} controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
-                            <UiButton unstyled type="button" onClick={() => {
-                    updatePipelineVariables((current) => current.filter((_, itemIndex) => itemIndex !== index));
-                }} className="rounded-xl border border-border-subtle bg-surface-1/80 px-2 py-1 text-[11px] font-medium text-text-muted transition-colors hover:border-red-500/30 hover:text-red-300">
-                              {t('common.remove', 'Remove')}
-                            </UiButton>
-                          </div>))}
-                      </div>)}
-
-                    {pipelineVariables.length > 0 && (<div className="mt-4 border-t border-border-subtle pt-3">
-                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineRunValues', 'Run values')}</div>
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                          {pipelineVariables.filter((variable) => variable.name.trim()).map((variable) => (<label key={variable.name} className="flex flex-col gap-1 text-xs text-text-secondary">
-                              <span className="font-medium text-text-primary">{variable.label?.trim() || variable.name}</span>
-                                <UiInput value={variableValues[variable.name] ?? ''} onChange={(event) => {
-                    const next = event.target.value;
-                    setVariableValues((current) => ({ ...current, [variable.name]: next }));
-                        }} placeholder={variable.defaultValue ?? ''} controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
-                            </label>))}
-                        </div>
-                      </div>)}
-                  </div>
-
-                  <div className="rounded-2xl border border-border-subtle bg-surface-2/55 px-4 py-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineBudget', 'Budget caps')}</div>
-                        <div className="mt-1 text-xs text-text-muted">{t('agents.pipelineBudgetHint', 'Optional safety limits enforced by the runtime. Leave a field blank or zero to disable that cap. Remaining steps will be skipped when any cap is exceeded.')}</div>
-                      </div>
-                    </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
-                        <span>{t('agents.pipelineBudgetMaxDuration', 'Max duration (ms)')}</span>
-                        <UiInput type="number" min={0} value={pipelineBudget?.maxTotalDurationMs ?? ''} onChange={(event) => {
-            const raw = event.target.value;
-            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)));
-            setPipelineBudget((current) => {
-                const next = { ...(current ?? {}), maxTotalDurationMs: parsed };
-                return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined;
-            });
-                }} placeholder="0" controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
-                      </label>
-                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
-                        <span>{t('agents.pipelineBudgetMaxTokens', 'Max total tokens')}</span>
-                        <UiInput type="number" min={0} value={pipelineBudget?.maxTotalTokens ?? ''} onChange={(event) => {
-            const raw = event.target.value;
-            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)));
-            setPipelineBudget((current) => {
-                const next = { ...(current ?? {}), maxTotalTokens: parsed };
-                return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined;
-            });
-                }} placeholder="0" controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
-                      </label>
-                      <label className="flex flex-col gap-1 text-xs text-text-secondary">
-                        <span>{t('agents.pipelineBudgetMaxSteps', 'Max steps')}</span>
-                        <UiInput type="number" min={0} value={pipelineBudget?.maxStepCount ?? ''} onChange={(event) => {
-            const raw = event.target.value;
-            const parsed = raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw)));
-            setPipelineBudget((current) => {
-                const next = { ...(current ?? {}), maxStepCount: parsed };
-                return next.maxTotalDurationMs || next.maxTotalTokens || next.maxStepCount ? next : undefined;
-            });
-                }} placeholder="0" controlClassName="h-9 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary"/>
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {pipeline.map((step, idx) => {
-            const previewStep = latestExecutionReference[idx];
-            const previousOutput = idx > 0 ? latestExecutionReference[idx - 1]?.output : '';
-            const referenceTokens = idx > 0
-                ? [
-                    {
-                        label: t('agents.pipelineReferencePrevious', 'Previous output'),
-                        token: '{{previous.output}}',
-                    },
-                    ...pipeline.slice(0, idx).map((_, referenceIndex) => ({
-                        label: `${t('agents.pipelineStep', 'Step')} ${referenceIndex + 1} ${t('agents.pipelineOutput', 'output')}`,
-                        token: buildStepOutputToken(referenceIndex),
-                    })),
-                ]
-                : [];
-            const usesReferences = step.task.includes('{{') && step.task.includes('}}');
-            return (<div key={idx} className={`rounded-3xl border border-border-subtle/55 bg-surface-1/96 p-4 transition-opacity ${step.enabled === false ? 'opacity-65' : 'opacity-100'}`}>
-                          <div className="mb-3 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-accent/12 text-xs font-semibold text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.16)]">{idx + 1}</span>
-                              <div>
-                                <div className="text-xs uppercase tracking-[0.14em] text-text-muted">{t('agents.pipelineStep', 'Step')}</div>
-                                <div className="mt-1 text-sm font-medium text-text-primary">{step.name?.trim() || agentNameMap[step.agentId] || t('agents.pipelineUnknownAgent', 'Unknown agent')}</div>
-                                {step.name?.trim() && <div className="mt-0.5 text-xs text-text-muted">{agentNameMap[step.agentId] ?? t('agents.pipelineUnknownAgent', 'Unknown agent')}</div>}
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span className={`rounded-full border px-2 py-1 text-[10px] font-medium ${statusStyles(previewStep?.status ?? 'pending')}`}>{t(`agents.pipelineStatus.${previewStep?.status ?? 'pending'}`, previewStep?.status ?? 'pending')}</span>
-                              <UiButton unstyled type="button" title={t('agents.moveStepUp', 'Move step up')} disabled={idx === 0} onClick={() => moveStep(idx, -1)} className="rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary disabled:opacity-30"><IconifyIcon name="ui-chevron-up" size={14} color="currentColor"/></UiButton>
-                              <UiButton unstyled type="button" title={t('agents.moveStepDown', 'Move step down')} disabled={idx === pipeline.length - 1} onClick={() => moveStep(idx, 1)} className="rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary disabled:opacity-30"><IconifyIcon name="ui-chevron-down" size={14} color="currentColor"/></UiButton>
-                              <UiButton unstyled type="button" title={t('agents.duplicateStep', 'Duplicate step')} onClick={() => duplicateStep(idx)} className="rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-3 hover:text-text-primary"><IconifyIcon name="ui-copy" size={14} color="currentColor"/></UiButton>
-                              <UiButton unstyled type="button" title={t('agents.removeStep', 'Remove step')} onClick={() => removeStep(idx)} className="rounded-lg p-1 text-text-muted transition-colors hover:bg-red-500/10 hover:text-red-400"><IconifyIcon name="ui-close" size={14} color="currentColor"/></UiButton>
-                            </div>
+        <div className={`grid min-h-0 flex-1 gap-0 ${editorTab === 'others' ? 'xl:grid-cols-[minmax(0,1.3fr)_minmax(360px,0.9fr)]' : ''}`}>
+          <div className={`module-canvas min-h-0 px-6 py-6 ${editorTab === 'design' ? 'flex h-full flex-col overflow-hidden' : 'overflow-y-auto'}`}>
+            {editorTab === 'general' ? (<PipelineGeneralPanel
+                name={agentPipelineName}
+                description={pipelineDescription}
+                variables={pipelineVariables}
+                variableValues={variableValues}
+                budget={pipelineBudget}
+                onNameChange={setAgentPipelineName}
+                onDescriptionChange={setPipelineDescription}
+                onVariablesChange={updatePipelineVariables}
+                onRenameVariable={renamePipelineVariable}
+                onVariableValuesChange={setVariableValues}
+                onBudgetChange={setPipelineBudget}
+                t={t}
+              />) : editorTab === 'design' ? (<div className="flex h-full min-h-0 flex-col">
+                <section className="flex min-h-0 flex-1 rounded-[24px] border border-border-subtle/55 bg-surface-1/96 p-0 shadow-[0_8px_20px_rgba(15,23,42,0.05)] backdrop-blur-sm">
+                  <div className="h-full min-h-0 flex-1">
+                    <Suspense fallback={<div className="h-full rounded-2xl border border-border-subtle bg-surface-0/40" />}>
+                      <LazyPipelineFlowCanvas
+                        steps={pipeline}
+                        progressSteps={diagramProgressSteps}
+                        agentNameMap={agentNameMap}
+                        validationIssues={pipelineValidation.issues}
+                        className="h-full"
+                        onAddStep={runnableAgents.length > 0 ? addStep : undefined}
+                        selectedStepIndex={selectedStepIndex}
+                        onStepSelect={setSelectedStepIndex}
+                        onCanvasClearSelection={() => {
+                          setSelectedStepIndex(null)
+                          setDesignDryRunOpen(false)
+                        }}
+                        leftPanelContent={<div className="flex min-h-0 flex-1 flex-col gap-2">
+                          <div className="flex items-center gap-2 border-b border-border-subtle/60 px-1 pb-2 text-xs font-semibold text-text-primary">
+                            <LibraryIcon className="size-3.5 text-text-muted" />
+                            {t('agents.pipelineNodeLibrary', 'Node library')}
                           </div>
-
-                          <div className="space-y-3">
-                            <UiInput value={step.name ?? ''} onChange={(e) => updateStep(idx, { name: e.target.value })} placeholder={t('agents.pipelineStepNamePlaceholder', 'Optional step label')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary"/>
-                            <UiSelect value={step.agentId} onChange={(e) => updateStep(idx, { agentId: e.target.value })} aria-label={t('agents.pipelineAgent', 'Pipeline agent')} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary">
-                              {enabledAgents.map((agent) => <option key={agent.id} value={agent.id}>{agentNameMap[agent.id] ?? agent.name}</option>)}
-                            </UiSelect>
-                            <UiTextArea value={step.task} onChange={(e) => updateStep(idx, { task: e.target.value })} placeholder={t('agents.taskDesc', 'Task description...')} rows={3} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-2 px-3 py-3 text-sm text-text-primary"/>
-
-                            <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                              <Checkbox checked={step.enabled !== false} onChange={(v) => updateStep(idx, { enabled: v })} color="blue" />
-                              {t('agents.pipelineStepEnabled', 'Enabled')}
-                            </label>
-
-                            <details className="rounded-2xl border border-border-subtle bg-surface-2/35 px-3 py-2">
-                              <summary className="cursor-pointer text-xs font-medium text-text-secondary">{t('common.advanced', 'Advanced')}</summary>
-                              <div className="mt-3 space-y-3">
-                                <div>
-                                  <label className="mb-1 block text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineRunIf', 'Run if (condition)')}</label>
-                                  <UiInput value={step.runIf ?? ''} onChange={(event) => updateStep(idx, { runIf: event.target.value })} placeholder={t('agents.pipelineRunIfPlaceholder', "step1.status == 'success' && previous.output contains 'approved'")} wrapperClassName="w-full" controlClassName="rounded-2xl border border-border bg-surface-1 px-3 py-2 font-mono text-xs text-text-primary"/>
-                                  <div className="mt-1 text-[11px] text-text-muted">{t('agents.pipelineRunIfHint', 'Skip this step when the condition is false. Supports step{N}.field, previous.field, vars.name, ==, !=, contains, not contains, matches, is empty, is not empty, combined with &&.')}</div>
-                                </div>
-
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                  <label className="flex min-h-12 items-center gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <Checkbox checked={step.continueOnError !== false} onChange={(v) => updateStep(idx, { continueOnError: v })} color="blue" />
-                                    {t('agents.pipelineContinueOnError', 'Continue on error')}
-                                  </label>
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineRetryCount', 'Retries')}</span>
-                                    <UiInput type="number" min={0} max={3} value={normalizeRetryCount(step.retryCount)} onChange={(event) => updateStep(idx, { retryCount: normalizeRetryCount(Number(event.target.value)) })} wrapperClassName="w-16" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
-                                  </label>
-                                </div>
-
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineRetryBackoff', 'Retry backoff (ms)')}</span>
-                                    <UiInput type="number" min={0} max={60000} value={step.retryBackoffMs ?? ''} onChange={(event) => {
-                    const raw = event.target.value;
-                    updateStep(idx, { retryBackoffMs: raw === '' ? undefined : Math.max(0, Math.trunc(Number(raw))) });
-                                  }} placeholder="0" wrapperClassName="w-24" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
-                                  </label>
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineRetryStrategy', 'Retry strategy')}</span>
-                                    <UiSelect value={step.retryBackoffStrategy ?? 'fixed'} onChange={(event) => updateStep(idx, { retryBackoffStrategy: event.target.value === 'exponential' ? 'exponential' : 'fixed' })} controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary">
-                                      <option value="fixed">{t('agents.pipelineRetryStrategyFixed', 'Fixed')}</option>
-                                      <option value="exponential">{t('agents.pipelineRetryStrategyExponential', 'Exponential')}</option>
-                                    </UiSelect>
-                                  </label>
-                                </div>
-
-                                <div className="grid gap-2 sm:grid-cols-2">
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineStepModel', 'Model override')}</span>
-                                    <UiSelect value={step.modelId ?? ''} onChange={(event) => updateStep(idx, { modelId: event.target.value || undefined })} wrapperClassName="max-w-40" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary">
-                                      <option value="">{t('agents.pipelineStepModelDefault', 'Use agent default')}</option>
-                                      {models.map((modelOption) => (<option key={modelOption.id} value={modelOption.id} disabled={modelOption.enabled === false}>
-                                          {modelOption.name}{modelOption.enabled === false ? ` (${t('common.disabled', 'disabled')})` : ''}
-                                        </option>))}
-                                    </UiSelect>
-                                  </label>
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineStepOutputTransform', 'Output transform')}</span>
-                                    <UiSelect value={step.outputTransform ?? ''} onChange={(event) => {
-                    const next = event.target.value as AgentPipelineStep['outputTransform'] | '';
-                    updateStep(idx, {
-                        outputTransform: next || undefined,
-                        // Clear the path when leaving json-path mode.
-                        ...(next !== 'json-path' ? { outputTransformPath: undefined } : {}),
-                    });
-                          }} wrapperClassName="max-w-40" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-xs text-text-primary">
-                                      <option value="">{t('agents.pipelineStepOutputTransformNone', 'None')}</option>
-                                      <option value="trim">{t('agents.pipelineStepOutputTransformTrim', 'Trim whitespace')}</option>
-                                      <option value="first-line">{t('agents.pipelineStepOutputTransformFirstLine', 'First line')}</option>
-                                      <option value="last-line">{t('agents.pipelineStepOutputTransformLastLine', 'Last line')}</option>
-                                      <option value="json-path">{t('agents.pipelineStepOutputTransformJsonPath', 'JSON path')}</option>
-                                    </UiSelect>
-                                  </label>
-                                </div>
-
-                                {step.outputTransform === 'json-path' && (<div>
-                                    <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                      <span>{t('agents.pipelineStepOutputTransformPath', 'JSON path')}</span>
-                                      <UiInput type="text" value={step.outputTransformPath ?? ''} onChange={(event) => updateStep(idx, { outputTransformPath: event.target.value || undefined })} placeholder="data.items.0.name" wrapperClassName="w-56" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
-                                    </label>
-                                  </div>)}
-
-                                <div>
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineStepExportVar', 'Export to variable')}</span>
-                                    <UiInput type="text" value={step.exportVar ?? ''} onChange={(event) => updateStep(idx, { exportVar: event.target.value || undefined })} placeholder={t('agents.pipelineStepExportVarPlaceholder', 'e.g. topic')} wrapperClassName="w-56" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
-                                  </label>
-                                </div>
-
-                                <div className="grid gap-2 sm:grid-cols-3">
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineStepTimeout', 'Timeout ms')}</span>
-                                    <UiInput type="number" min={1000} value={step.timeoutMs ?? ''} onChange={(event) => updateStep(idx, { timeoutMs: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="300000" wrapperClassName="w-24" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
-                                  </label>
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineMaxInput', 'Max input')}</span>
-                                    <UiInput type="number" min={1000} value={step.maxInputChars ?? ''} onChange={(event) => updateStep(idx, { maxInputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="80000" wrapperClassName="w-24" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
-                                  </label>
-                                  <label className="flex min-h-12 items-center justify-between gap-2 rounded-2xl border border-border-subtle bg-surface-2/55 px-3 py-2 text-xs font-medium text-text-secondary">
-                                    <span>{t('agents.pipelineMaxOutput', 'Max output')}</span>
-                                    <UiInput type="number" min={1000} value={step.maxOutputChars ?? ''} onChange={(event) => updateStep(idx, { maxOutputChars: event.target.value ? Math.max(1000, Number(event.target.value)) : undefined })} placeholder="32000" wrapperClassName="w-24" controlClassName="h-8 rounded-xl border border-border bg-surface-1 px-2 text-right text-xs text-text-primary"/>
-                                  </label>
-                                </div>
-
-                            {idx > 0 && (<div className="rounded-2xl border border-dashed border-border-subtle bg-surface-2/45 px-3 py-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div>
-                                    <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineReferences', 'Step references')}</div>
-                                    <div className="mt-1 text-xs text-text-muted">{t('agents.pipelineReferencesHint', 'Insert upstream outputs into this task with template tokens before the step runs.')}</div>
+                          <ScrollArea className="min-h-0 flex-1">
+                            <div className="flex flex-col gap-3 p-2.5">
+                              {Array.from(new Set(PIPELINE_NODE_LIBRARY.map((item) => item.category))).map((category) => (<div key={category} className="space-y-1.5">
+                                  <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted">{category}</div>
+                                  <div className="flex flex-col gap-1.5">
+                                    {PIPELINE_NODE_LIBRARY.filter((item) => item.category === category).map((item) => {
+                                      const NodeIcon = PIPELINE_NODE_ICONS[item.value]
+                                      return (<UiButton key={item.value} unstyled type="button" onClick={() => addNode(item.value)} disabled={nodeTypeUsesAgentRuntime(item.value) && runnableAgents.length === 0} className="flex w-full items-center gap-2 rounded-lg border border-border-subtle/70 bg-surface-0/82 px-2.5 py-1.5 text-left text-xs font-medium text-text-primary transition-colors hover:border-accent/25 hover:bg-accent/6 disabled:opacity-45">
+                                          <NodeIcon className="size-3.5 shrink-0 text-text-muted" />
+                                          <span className="truncate">{item.label}</span>
+                                        </UiButton>)
+                                    })}
                                   </div>
-                                  {usesReferences && <span className="rounded-full bg-accent/10 px-2 py-1 text-[10px] font-medium text-accent">{t('agents.pipelineTemplateEnabled', 'Template active')}</span>}
-                                </div>
-
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                  {referenceTokens.map((reference) => (<UiButton unstyled key={`${idx}-${reference.token}`} type="button" onClick={() => appendStepReference(idx, reference.token)} className="rounded-full border border-border-subtle bg-surface-1/80 px-2.5 py-1 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/30 hover:bg-accent/8 hover:text-accent">
-                                      {reference.label}: {reference.token}
-                                    </UiButton>))}
-                                </div>
-                              </div>)}
-
-                          {idx > 0 && (<div className="mt-4 rounded-2xl border border-dashed border-border-subtle bg-surface-2/60 px-3 py-3">
-                              <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelinePreviousResult', 'Previous step result')}</div>
-                              <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap text-sm text-text-secondary">
-                                {previousOutput || t('agents.pipelineAwaitingPreviousResult', 'Run the pipeline to preview what this step receives from upstream.')}
-                              </div>
-                            </div>)}
-
-                          {previewStep?.output && (<div className="mt-4 rounded-2xl border border-border-subtle bg-surface-2/40 px-3 py-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineLatestOutput', 'Latest output')}</div>
-                                <div className="text-[11px] text-text-muted">{formatDuration(previewStep.durationMs, t)}</div>
-                              </div>
-                              <div className="mt-2 max-h-28 overflow-y-auto whitespace-pre-wrap text-sm text-text-secondary">{previewStep.output}</div>
-                            </div>)}
-                              </div>
-                            </details>
-                        </div>
-                        </div>);
-        })}
-
-                    <UiButton unstyled type="button" onClick={addStep} className="w-full rounded-2xl border border-dashed border-accent/30 bg-accent/5 px-4 py-3 text-sm font-medium text-accent transition-colors hover:bg-accent/10">{t('agents.addStep', '+ Add Step')}</UiButton>
-                  </div>
-                </div>
-              </section>
-
-              <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineExecutionMonitor', 'Execution monitor')}</h2>
-                    <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineExecutionMonitorHint', 'Watch the current run unfold step by step, including the exact input each agent received.')}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-[11px] text-text-secondary">
-                    <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineLiveSteps', 'Visible steps')}: {monitorSteps.length || pipeline.length}</span>
-                    <span className="rounded-full bg-surface-3 px-2.5 py-1">{t('agents.pipelineFinalOutput', 'Final output')}: {activeExecution?.finalOutput ? '✓' : '—'}</span>
-                  </div>
-                </div>
-
-                {monitorSteps.length === 0 ? (<div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-10 text-center text-xs text-text-muted">{t('agents.noPipelineResults', 'Run the pipeline to see step outputs here.')}</div>) : (<div className="mt-4 space-y-3">
-                    {monitorSteps.map((step) => (<div key={`${step.stepIndex}-${step.agentId}-${step.startedAt ?? 'idle'}`} className="rounded-3xl border border-border bg-surface-0/40 p-4">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                          <div>
-                            <div className="flex flex-wrap items-center gap-2">
-                              <span className="text-sm font-semibold text-text-primary">{step.name?.trim() || `${t('agents.pipelineStep', 'Step')} ${step.stepIndex + 1}`}</span>
-                              <span className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${statusStyles(step.status)}`}>{t(`agents.pipelineStatus.${step.status}`, step.status)}</span>
+                                </div>))}
                             </div>
-                            <div className="mt-2 text-sm text-text-secondary">{step.agentName || agentNameMap[step.agentId] || step.agentId}</div>
-                            <div className="mt-1 text-xs text-text-muted">{formatDuration(step.durationMs, t)}{step.attempts && step.attempts > 1 ? ` · ${step.attempts} ${t('agents.pipelineAttempts', 'attempts')}` : ''}</div>
-                            {step.usage && (<div className="mt-1 inline-flex items-center gap-1 rounded-full border border-border-subtle bg-surface-2/60 px-2 py-0.5 text-[10px] font-medium text-text-secondary">
-                                <span aria-hidden="true">🜂</span>
-                                <span>{formatUsageLabel(step.usage, t)}</span>
-                              </div>)}
-                            {step.skipReason && step.status === 'skipped' && (<div className="mt-1 text-[11px] text-text-muted">{step.skipReason}</div>)}
+                          </ScrollArea>
+                          <div className="rounded-xl border border-border-subtle/70 bg-surface-0/82 px-3 py-2 text-[11px] text-text-muted">
+                            {runnableAgents.length === 0
+                              ? t('agents.enableAgentBeforeStep', 'Configure at least one runnable agent before adding agent or condition nodes.')
+                              : `${pipeline.length} ${t('agents.pipelineSteps', 'steps')}`}
                           </div>
-                          {step.startedAt && <div className="text-xs text-text-muted">{new Date(step.startedAt).toLocaleString()}</div>}
-                        </div>
-
-                        <div className="mt-4 grid gap-3 lg:grid-cols-2">
-                          <div className="rounded-2xl border border-border-subtle bg-surface-2/60 px-3 py-3">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineInput', 'Input')}</div>
-                            <div className="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm text-text-secondary">{step.input || step.task}</div>
-                          </div>
-                          <div className="rounded-2xl border border-border-subtle bg-surface-2/60 px-3 py-3">
-                            <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{step.status === 'skipped' ? t('agents.pipelineSkipped', 'Skipped') : (step.error ? t('agents.error', 'Error') : t('agents.output', 'Output'))}</div>
-                            <div className={`mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap text-sm ${step.error && step.status !== 'skipped' ? 'text-red-300' : 'text-text-secondary'}`}>
-                              {step.error || step.output || (step.status === 'running' ? t('agents.pipelineStreaming', 'Receiving output...') : t('agents.pipelineNoOutputYet', 'No output yet.'))}
+                        </div>}
+                        onInsertStepAfter={insertStepAfter}
+                        onConnectSteps={connectPipelineSteps}
+                        onDisconnectSteps={disconnectPipelineSteps}
+                        topRightPanelContent={<UiButton unstyled type="button" onClick={() => setDesignDryRunOpen((current) => !current)} className="rounded-xl border border-border-subtle/70 bg-surface-1/96 p-2 text-text-secondary shadow-lg backdrop-blur-sm transition-colors hover:border-accent/25 hover:text-text-primary" aria-label={designDryRunOpen ? t('agents.closeDryRunPanel', 'Close dry run panel') : t('agents.openDryRunPanel', 'Open dry run panel')} title={designDryRunOpen ? t('agents.closeDryRunPanel', 'Close dry run panel') : t('agents.openDryRunPanel', 'Open dry run panel')}>
+                          {designDryRunOpen ? <XIcon className="size-4" /> : <PlayIcon className="size-4" />}
+                        </UiButton>}
+                        rightPanelContent={designDryRunOpen ? <div className="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-border-subtle/70 bg-surface-1/95 p-2 shadow-xl">
+                            <div className="flex items-center justify-between gap-2 border-b border-border-subtle/60 px-1 pb-2 text-xs font-semibold text-text-primary">
+                              <div className="flex items-center gap-2">
+                                <PlayIcon className="size-3.5 text-text-muted" />
+                                {t('agents.pipelineDryRun', 'Dry run')}
+                              </div>
+                              <UiButton unstyled type="button" onClick={() => setDesignDryRunOpen(false)} className="rounded-lg p-1 text-text-muted transition-colors hover:bg-surface-2/80 hover:text-text-primary" aria-label={t('agents.closeDryRunPanel', 'Close dry run panel')}>
+                                <XIcon className="size-3.5" />
+                              </UiButton>
                             </div>
-                            {step.recoveryActions?.length ? (<div className="mt-3 flex flex-wrap gap-2">
-                                {step.recoveryActions.map((action) => (<span key={`${action.id}-${action.stepIndex ?? step.stepIndex}`} className="rounded-full border border-warning/20 bg-warning/10 px-2.5 py-1 text-[10px] font-medium text-warning">
-                                    {action.label}
-                                  </span>))}
-                              </div>) : null}
-                          </div>
-                        </div>
-                      </div>))}
-                  </div>)}
-              </section>
-            </div>
+                            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-1 text-text-secondary">
+                              <div>
+                                <p className="text-[11px] font-medium text-text-primary">{t('agents.pipelineDryRunInput', 'Input parameters')}</p>
+                                <p className="mt-1 text-[10px] leading-4 text-text-muted">{t('agents.pipelineDryRunButtonHint', 'Simulate the run without calling any model.')}</p>
+                              </div>
+                              <textarea
+                                value={designDryRunInput}
+                                onChange={(event) => {
+                                  setDesignDryRunInput(event.target.value)
+                                  setDesignDryRunInputError(null)
+                                }}
+                                className="min-h-28 w-full rounded-xl border border-border-subtle/70 bg-surface-0/88 px-3 py-2 font-mono text-[11px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent/45"
+                                placeholder='{"topic":"launch"}'
+                                spellCheck={false}
+                              />
+                              {designDryRunInputError ? <div className="text-[10px] text-red-400">{designDryRunInputError}</div> : null}
+                              <div className="grid gap-2 sm:grid-cols-2">
+                                <UiButton unstyled type="button" onClick={runDesignDryRunPreview} disabled={pipeline.length === 0} className="rounded-xl bg-accent px-3 py-2 text-[11px] font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-45">{t('agents.pipelineDryRunButton', 'Dry run')}</UiButton>
+                                <UiButton unstyled type="button" onClick={runOptimizationReview} disabled={pipeline.length === 0} className="rounded-xl border border-border-subtle/70 bg-surface-0/82 px-3 py-2 text-[11px] font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-text-primary disabled:opacity-45">{t('agents.pipelineOptimize30', 'Optimize ×30')}</UiButton>
+                              </div>
+                              {dryRunResult ? <div className="rounded-xl border border-border-subtle/70 bg-surface-0/82 px-3 py-3">
+                                  <div className="flex items-center justify-between gap-2 text-[10px] text-text-secondary">
+                                    <span>{t('agents.pipelineDryRunProgress', 'Progress')}</span>
+                                    <span>{dryRunResult.steps.filter((step) => step.status === 'would-run').length}/{dryRunResult.steps.length}</span>
+                                  </div>
+                                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-2/90">
+                                    <div className="h-full rounded-full bg-accent" style={{ width: `${dryRunResult.steps.length === 0 ? 0 : (dryRunResult.steps.filter((step) => step.status === 'would-run').length / dryRunResult.steps.length) * 100}%` }} />
+                                  </div>
+                                  <div className="mt-3 grid grid-cols-2 gap-2">
+                                    <div className="rounded-lg border border-border-subtle/70 bg-surface-1/80 px-2.5 py-2 text-[10px] text-text-secondary">{t('agents.pipelineWouldRun', 'Would run')}: {dryRunResult.steps.filter((step) => step.status === 'would-run').length}</div>
+                                    <div className="rounded-lg border border-border-subtle/70 bg-surface-1/80 px-2.5 py-2 text-[10px] text-text-secondary">{t('agents.pipelineSkipped', 'Skipped')}: {dryRunResult.steps.filter((step) => step.status === 'skipped').length}</div>
+                                    <div className="rounded-lg border border-border-subtle/70 bg-surface-1/80 px-2.5 py-2 text-[10px] text-text-secondary">{t('common.error', 'Error')}: {dryRunResult.steps.filter((step) => step.status === 'error').length}</div>
+                                    <div className="rounded-lg border border-border-subtle/70 bg-surface-1/80 px-2.5 py-2 text-[10px] text-text-secondary">{t('common.disabled', 'Disabled')}: {dryRunResult.steps.filter((step) => step.status === 'disabled').length}</div>
+                                  </div>
+                                  {dryRunResult.visitedStepIndices?.length > 0 ? <div className="mt-3 flex flex-wrap gap-2 text-[10px] text-text-secondary">
+                                      <span>{t('agents.pipelineTraversedPath', 'Traversed path')}:</span>
+                                      {dryRunResult.visitedStepIndices.map((stepIndex) => <span key={`design-dry-run-path-${stepIndex}`} className="rounded-full border border-border-subtle/70 bg-surface-1/80 px-2 py-0.5 font-mono">#{stepIndex + 1}</span>)}
+                                    </div> : null}
+                                </div> : null}
+                              {pipelineVariables.filter((variable) => variable.name.trim()).length > 0 ? <div className="space-y-2">
+                                  {pipelineVariables.filter((variable) => variable.name.trim()).map((variable) => (<div key={variable.name} className="rounded-xl border border-border-subtle/70 bg-surface-0/82 px-3 py-2">
+                                      <div className="text-[9px] font-semibold uppercase tracking-[0.14em] text-text-muted">{variable.label?.trim() || variable.name}</div>
+                                      <div className="mt-1 text-[11px] text-text-primary">{variableValues[variable.name] || variable.defaultValue || '—'}</div>
+                                    </div>))}
+                                </div> : <div className="rounded-xl border border-dashed border-border-subtle/70 px-3 py-3 text-[11px] text-text-muted">{t('agents.pipelineNoVariables', 'No variables declared yet.')}</div>}
+                              {dryRunResult ? <div className="rounded-xl border border-emerald-200/70 bg-emerald-50/60 px-3 py-3">
+                                  <div className="flex items-center justify-between gap-2">
+                                    <div>
+                                      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-emerald-700">{t('agents.pipelineFinalOutput', 'Final output')}</div>
+                                      <div className="mt-1 text-[11px] text-emerald-900">{dryRunResult.steps[dryRunResult.steps.length - 1]?.name || t('agents.pipelineDryRunResultTitle', 'Dry run preview')}</div>
+                                    </div>
+                                    <UiButton unstyled type="button" onClick={() => { void copyDesignDryRunOutput(); }} className="rounded-lg border border-emerald-200/80 bg-white/65 px-2 py-1 text-[10px] font-medium text-emerald-700 transition-colors hover:bg-white" aria-label={t('agents.copyDryRunOutput', 'Copy dry run output')}>
+                                      {copiedDesignOutput ? <CheckIcon className="size-3.5" /> : <CopyIcon className="size-3.5" />}
+                                    </UiButton>
+                                  </div>
+                                  <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-lg bg-white/60 p-2 font-mono text-[10px] leading-4 text-emerald-950">{JSON.stringify({
+                                    variables: dryRunResult.variables,
+                                    output: dryRunResult.steps[dryRunResult.steps.length - 1] ?? null,
+                                  }, null, 2)}</pre>
+                                </div> : null}
+                                {dryRunResult ? (<ol className="space-y-2 rounded-xl border border-border-subtle/70 bg-surface-0/84 px-3 py-3 text-[10px] text-text-secondary">
+                                  {dryRunResult.steps.filter((step) => step.status === 'would-run' || step.status === 'error').map((step) => (<li key={step.stepIndex}>
+                                      <span className="font-mono">#{step.stepIndex + 1}</span>{' '}
+                                      <span className="uppercase tracking-[0.12em]">{step.status}</span>
+                                      {step.reason ? <span className="ml-2 text-text-muted">— {step.reason}</span> : null}
+                                    </li>))}
+                                </ol>) : null}
+                            </div>
+                          </div> : selectedStep && selectedStepIndex !== null ? <div className="flex h-full min-h-0 flex-col gap-2 rounded-xl border border-border-subtle/70 bg-surface-1/95 p-2 shadow-xl">
+                              <div className="border-b border-border-subtle/60 px-1 pb-2 text-xs font-semibold text-text-primary">{t('agents.pipelineNodeProperties', 'Node properties')}</div>
+                              <div className="min-h-0 flex-1 overflow-y-auto">
+                                <PipelineStepConfigPanel
+                                  step={selectedStep}
+                                  stepIndex={selectedStepIndex}
+                                  totalSteps={pipeline.length}
+                                  enabledAgents={enabledAgents.map((agent) => ({ id: agent.id, name: agent.name }))}
+                                  agentNameMap={agentNameMap}
+                                  models={models}
+                                  previousOutput={selectedPreviousOutput}
+                                  previewStep={selectedPreviewStep}
+                                  onUpdateStep={updateStep}
+                                  onMoveStep={moveStep}
+                                  onDuplicateStep={duplicateStep}
+                                  onRemoveStep={removeStep}
+                                  onAppendReference={appendStepReference}
+                                  formatDuration={formatDuration}
+                                  normalizeRetryCount={normalizeRetryCount}
+                                  t={t}
+                                />
+                              </div>
+                            </div> : null}
+                      />
+                    </Suspense>
+                  </div>
+                </section>
+              </div>) : (<div className="space-y-6">
+                <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineOperationalOverview', 'Operational overview')}</h2>
+                      <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineOperationalOverviewHint', 'Use this tab to review run history, fallback diagnostics, and detailed step handoffs once the pipeline has been executed.')}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-[11px] text-text-secondary">
+                      <span className="rounded-full bg-surface-3 px-2.5 py-1">{pipelineHistory.length} {t('agents.pipelineRuns', 'runs')}</span>
+                      <span className="rounded-full bg-surface-3 px-2.5 py-1">{monitorSteps.length || executionDetailSteps.length} {t('agents.pipelineSteps', 'steps')}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">
+                    {selectedSavedPipeline
+                      ? t('agents.pipelineOperationalSelectHint', 'Select a saved run on the right to inspect diagnostics and step handoffs.')
+                      : t('agents.pipelineOperationalDraftHint', 'Save this draft to unlock run history and timer integrations, then inspect executions from the panels on the right.')}
+                  </div>
+                </section>
+              </div>)}
           </div>
 
-          <aside className="min-h-0 border-t border-border-subtle xl:border-t-0 xl:border-l">
+          {editorTab === 'others' ? (<aside className="min-h-0 border-t border-border-subtle xl:border-t-0 xl:border-l">
             <div className="module-canvas h-full overflow-y-auto px-6 py-6">
               <div className="space-y-6">
+                {editorTab === 'others' ? (<>
                 <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
@@ -1402,11 +1538,11 @@ export function PipelineLayout() {
                       <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineWorkflowDiagramHint', 'Preview the pipeline as Mermaid, or copy the source into docs and markdown notes.')}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                      <UiButton unstyled type="button" onClick={() => setDiagramDialogOpen(true)} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-accent">
+                      <UiButton unstyled type="button" onClick={() => setDiagramDialogOpen(true)} disabled={!hasPipelineSteps} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-accent disabled:opacity-45">
                         <IconifyIcon name="ui-export" size={13} color="currentColor"/>
                         {t('common.expand', 'Expand')}
                       </UiButton>
-                      <UiButton unstyled type="button" onClick={() => void copyMermaidSource()} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-accent">
+                      <UiButton unstyled type="button" onClick={() => void copyMermaidSource()} disabled={!hasPipelineSteps} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border-subtle bg-surface-2 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-accent disabled:opacity-45">
                         <IconifyIcon name={copiedMermaid ? 'ui-check' : 'ui-copy'} size={13} color="currentColor"/>
                         {copiedMermaid ? t('common.copied', 'Copied') : t('agents.copyMermaid', 'Copy Mermaid')}
                       </UiButton>
@@ -1447,16 +1583,17 @@ export function PipelineLayout() {
                     </DialogBody>
                   </Dialog>)}
 
+                {editorTab === 'others' ? (<>
                 <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineHistory', 'Execution History')}</h2>
-                      <p className="mt-1 text-xs text-text-muted">{selectedSavedPipeline ? t('agents.pipelineHistoryHint', 'Recent executions for the selected saved pipeline.') : t('agents.pipelineHistoryHint', 'Save the pipeline first to keep execution history and let timers reference it.')}</p>
+                      <p className="mt-1 text-xs text-text-muted">{selectedSavedPipeline ? t('agents.pipelineHistoryHint', 'Recent executions for the selected saved pipeline.') : t('agents.pipelineHistoryHeaderHint', 'Execution history appears after you save this draft as a reusable pipeline.')}</p>
                     </div>
                     {selectedSavedPipeline && <span className="rounded-full bg-surface-3 px-2.5 py-1 text-[11px] text-text-secondary">{pipelineHistory.length}</span>}
                   </div>
 
-                  {!selectedSavedPipeline ? (<div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('agents.pipelineHistoryHint', 'Save the pipeline first to keep execution history and let timers reference it.')}</div>) : pipelineHistory.length === 0 ? (<div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('agents.noPipelineHistory', 'No pipeline executions recorded yet.')}</div>) : (<div className="mt-4 space-y-3">
+                    {!selectedSavedPipeline ? (<div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('agents.pipelineHistoryEmptyHint', 'Save the pipeline first to keep execution history and let timers reference it.')}</div>) : pipelineHistory.length === 0 ? (<div className="mt-4 rounded-2xl border border-dashed border-border-subtle px-4 py-8 text-center text-xs text-text-muted">{t('agents.noPipelineHistory', 'No pipeline executions recorded yet.')}</div>) : (<div className="mt-4 space-y-3">
                       {pipelineHistory.slice(0, 20).map((execution) => {
                 const engineLabel = formatPipelineExecutionEngineLabel(execution.runtime?.executionEngine, t);
                 const fallbackLabel = formatPipelineExecutionFallbackReason(execution.runtime?.executionFallbackReason, t);
@@ -1483,8 +1620,8 @@ export function PipelineLayout() {
                 <section className="rounded-[28px] border border-border-subtle bg-surface-1/75 p-5 shadow-[0_18px_60px_rgba(0,0,0,0.08)] backdrop-blur-sm">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineExecutionDetails', 'Execution details')}</h2>
-                      <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineExecutionDetailsHint', 'Inspect the exact handoff between steps, including errors and final output.')}</p>
+                      <h2 className="text-sm font-semibold text-text-primary">{t('agents.pipelineExecutionDetails', 'Execution trace')}</h2>
+                      <p className="mt-1 text-xs text-text-muted">{t('agents.pipelineExecutionDetailsHint', 'Inspect each node trace, including inputs, outputs, durations, warnings, and final output.')}</p>
                     </div>
                     {executionDetail && <span className={`rounded-full border px-2.5 py-1 text-[11px] ${statusStyles(executionDetail.status)}`}>{t(`agents.pipelineStatus.${executionDetail.status}`, executionDetail.status)}</span>}
                   </div>
@@ -1517,6 +1654,13 @@ export function PipelineLayout() {
                             {executionDetailWarnings.map((warning) => (<div key={warning}>{warning}</div>))}
                           </div>
                         </div>)}
+
+                      {executionDetail.runtime?.visitedStepIndices && executionDetail.runtime.visitedStepIndices.length > 0 ? (<div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.16em] text-text-muted">{t('agents.pipelineTraversedPath', 'Traversed path')}</div>
+                          <div className="mt-2 flex flex-wrap gap-2 text-sm text-text-secondary">
+                            {executionDetail.runtime.visitedStepIndices.map((stepIndex) => <span key={`${executionDetail.id}-path-${stepIndex}`} className="rounded-full border border-border-subtle bg-surface-1/80 px-2.5 py-1 text-[11px]">#{stepIndex + 1}</span>)}
+                          </div>
+                        </div>) : null}
 
                       <div className="rounded-2xl border border-border-subtle bg-surface-2/50 px-4 py-3">
                         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1566,11 +1710,36 @@ export function PipelineLayout() {
                       </div>
                     </div>)}
                 </section>
+                </>) : null}
+                </>) : null}
               </div>
             </div>
-          </aside>
+          </aside>) : null}
         </div>
       </div>
+        {importDialogOpen && (<Dialog open={importDialogOpen} onClose={setImportDialogOpen} size="3xl" className="w-[min(92vw,960px)] max-w-none overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 p-0 text-text-primary shadow-2xl ring-0">
+            <DialogBody className="mt-0 p-5">
+              <DialogTitle className="text-base font-semibold text-text-primary">{t('agents.pipelineImport', 'Import JSON')}</DialogTitle>
+              <div className="mt-2 text-xs text-text-muted">{t('agents.pipelineImportHint', 'Paste a workflow export or a bare pipeline JSON object to load it into the current draft.')}</div>
+              <textarea value={importJsonText} onChange={(event) => { setImportJsonText(event.target.value); setImportJsonError(null); }} className="mt-4 min-h-72 w-full rounded-xl border border-border-subtle bg-surface-0/88 px-3 py-3 font-mono text-[12px] text-text-primary outline-none placeholder:text-text-muted focus:border-accent/45" placeholder='{"name":"Sample","steps":[...]}' spellCheck={false}/>
+              {importJsonError ? <div className="mt-3 text-sm text-red-500">{importJsonError}</div> : null}
+              <DialogActions className="mt-4">
+                <UiButton unstyled type="button" onClick={() => setImportDialogOpen(false)} className="rounded-xl border border-border-subtle/70 bg-surface-0/82 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-text-primary">{t('common.cancel', 'Cancel')}</UiButton>
+                <UiButton unstyled type="button" onClick={applyImportedPipeline} className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover">{t('agents.pipelineImportApply', 'Import')}</UiButton>
+              </DialogActions>
+            </DialogBody>
+          </Dialog>)}
+        {exportDialogOpen && (<Dialog open={exportDialogOpen} onClose={setExportDialogOpen} size="3xl" className="w-[min(92vw,960px)] max-w-none overflow-hidden rounded-2xl border border-border-subtle bg-surface-1 p-0 text-text-primary shadow-2xl ring-0">
+            <DialogBody className="mt-0 p-5">
+              <DialogTitle className="text-base font-semibold text-text-primary">{t('agents.pipelineExport', 'Export JSON')}</DialogTitle>
+              <div className="mt-2 text-xs text-text-muted">{t('agents.pipelineExportHint', 'Copy this portable workflow JSON to move the current draft across workspaces.')}</div>
+              <textarea readOnly value={exportJson} className="mt-4 min-h-72 w-full rounded-xl border border-border-subtle bg-surface-0/88 px-3 py-3 font-mono text-[12px] text-text-primary outline-none" spellCheck={false}/>
+              <DialogActions className="mt-4">
+                <UiButton unstyled type="button" onClick={() => setExportDialogOpen(false)} className="rounded-xl border border-border-subtle/70 bg-surface-0/82 px-3 py-2 text-xs font-medium text-text-secondary transition-colors hover:border-accent/25 hover:text-text-primary">{t('common.close', 'Close')}</UiButton>
+                <UiButton unstyled type="button" onClick={() => { void copyExportJson(); }} className="rounded-xl bg-accent px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-accent-hover">{copiedExportJson ? t('common.copied', 'Copied') : t('common.copy', 'Copy')}</UiButton>
+              </DialogActions>
+            </DialogBody>
+          </Dialog>)}
         {assistantState && (<Suspense fallback={null}>
             <LazyPipelineAssistantDrawer mode={assistantState.mode} pipeline={assistantState.mode === 'edit' ? assistantPipeline : null} onClose={() => setAssistantState(null)} onPipelineMutated={() => { void handleAssistantPipelineMutated(); }}/>
           </Suspense>)}

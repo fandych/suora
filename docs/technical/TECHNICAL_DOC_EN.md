@@ -189,6 +189,33 @@ Do not flatten all three into one list.
 - generate standard text responses
 - stream responses with tool calls through a multi-step loop
 
+### Experimental harness runtime
+
+The repository also includes an experimental AI SDK harness entrypoint in `scripts/harness-pi.mjs`.
+
+- It uses `@ai-sdk/harness`, `@ai-sdk/harness-pi`, and `@ai-sdk/sandbox-just-bash`.
+- It mounts the current workspace into a just-bash sandbox at `/workspace`.
+- Dry-run mode uses an `OverlayFs`, so edits remain ephemeral.
+- Write mode uses a `ReadWriteFs`, so harness file edits persist to the real workspace.
+
+The repository also includes remote runner entrypoints in `scripts/harness-remote.mjs` for bridge-backed adapters:
+
+- `npm run harness:codex`
+- `npm run harness:claude-code`
+
+These remote runners use `@ai-sdk/sandbox-vercel` plus a filtered workspace snapshot copied into the sandbox session before the harness starts.
+
+This integration is intentionally kept outside the main renderer chat path.
+
+Why it is separate:
+
+- The current chat product path is implemented around AI SDK 6 model providers in `src/services/aiService.ts`.
+- Chat requests currently send replayable `ModelMessage[]` history or OpenAI response-chain continuations from `src/hooks/useAIChat.ts`.
+- Harness adapters are session-owning runtimes built around `HarnessAgent`, adapter-managed turn state, and persisted resume/continuation state rather than simple stateless provider calls.
+- The installed harness packages currently bring their own `ai` 7 runtime subtree, so treating them as a drop-in provider inside the existing AI SDK 6 service layer would mix two different integration contracts.
+
+For that reason, the current repository treats harnesses as separate experimental project-level tooling rather than exposing them in the standard Models UI.
+
 ### Current streamed event types
 
 - `text-delta`

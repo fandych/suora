@@ -84,9 +84,17 @@ export function getPluginTools(): ToolSet {
   return merged
 }
 
+export function getPluginToolSet(pluginId: string): ToolSet | undefined {
+  return pluginToolRegistry.get(pluginId)
+}
+
 export function getPluginToolNames(pluginId: string): string[] {
   const tools = pluginToolRegistry.get(pluginId)
   return tools ? Object.keys(tools) : []
+}
+
+export function getPluginToolsFor(pluginId: string): ToolSet {
+  return pluginToolRegistry.get(pluginId) ?? {}
 }
 
 let liveStoreAccessor: (() => Record<string, unknown> | null) | null = null

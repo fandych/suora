@@ -109,4 +109,32 @@ describe('pipelinePortability', () => {
     const { pipeline } = parsePipelineImport(json, { name: 'Renamed copy' })
     expect(pipeline.name).toBe('Renamed copy')
   })
+
+  it('round-trips iteration node fields', () => {
+    const iterationPipeline: AgentPipeline = {
+      id: 'pipeline-iteration',
+      name: 'Iteration Sample',
+      steps: [
+        {
+          agentId: 'agent-1',
+          task: '',
+          nodeType: 'iteration',
+          iterationSource: '{{vars.items}}',
+          iterationPipelineTargetId: 'child-pipeline',
+          iterationInputMapping: 'record={{vars.item}}\nindex={{vars.index}}',
+          iterationItemVar: 'item',
+          iterationIndexVar: 'index',
+          iterationMode: 'parallel',
+          iterationErrorMode: 'continue',
+        },
+      ],
+      variables: [{ name: 'items', defaultValue: '[1,2,3]' }],
+      createdAt: 1,
+      updatedAt: 2,
+    }
+
+    const json = serializePipelineExport(iterationPipeline)
+    const { pipeline } = parsePipelineImport(json)
+    expect(pipeline.steps[0]).toMatchObject(iterationPipeline.steps[0])
+  })
 })

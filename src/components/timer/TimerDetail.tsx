@@ -8,6 +8,24 @@ import type { ScheduledTask, TimerExecution } from '@/types';
 import { electronInvoke, formatRelative, formatDateTime } from './timerHelpers';
 import { Button as UiButton } from "@/components/shared/button";
 import { workbenchAccentButtonClass, workbenchDangerButtonClass, workbenchDetailSectionClass, workbenchHeroSectionClass, workbenchInfoCardClass, workbenchNeutralButtonClass, workbenchPrimaryButtonClass, workbenchSectionDescriptionClass, workbenchSectionEyebrowClass, workbenchSectionTitleClass } from '@/components/workbench/styles';
+function getTimerTypeMeta(timer: ScheduledTask, t: (key: string, fallback: string) => string) {
+  if (timer.type === 'once') {
+    return {
+      icon: 'ui-timer-once',
+      label: t('timer.oneTime', 'One-time'),
+    };
+  }
+  if (timer.type === 'cron') {
+    return {
+      icon: 'ui-clock',
+      label: t('timer.cronLabel', 'Cron'),
+    };
+  }
+  return {
+    icon: 'ui-repeat',
+    label: t('timer.repeating', 'Repeating'),
+  };
+}
 function InfoCard({ label, value }: {
     label: string;
     value: string;
@@ -31,6 +49,7 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
     const navigate = useNavigate();
     const [history, setHistory] = useState<TimerExecution[]>([]);
     const [showHistory, setShowHistory] = useState(false);
+    const timerTypeMeta = getTimerTypeMeta(timer, t);
     const agent = timer.agentId ? agents.find((a) => a.id === timer.agentId) : null;
     const pipeline = timer.pipelineId ? agentPipelines.find((item) => item.id === timer.pipelineId) : null;
     const scheduleValue = timer.type === 'once'
@@ -79,13 +98,13 @@ export function TimerDetail({ timer, onEdit, onOpenAssistant, onDelete, onToggle
           <div className="flex flex-col gap-6 xl:flex-row xl:items-start xl:justify-between">
             <div className="flex min-w-0 items-start gap-4">
               <div className="flex h-18 w-18 items-center justify-center rounded-[26px] border border-accent/12 bg-linear-to-br from-accent/18 via-accent/10 to-transparent text-accent shadow-[0_12px_36px_rgba(var(--t-accent-rgb),0.12)]">
-                <IconifyIcon name={timer.type === 'once' ? 'ui-timer-once' : 'ui-repeat'} size={30} color="currentColor"/>
+                <IconifyIcon name={timerTypeMeta.icon} size={30} color="currentColor"/>
               </div>
               <div className="min-w-0 flex-1">
                 <div className={workbenchSectionEyebrowClass}>{t('timer.detail', 'Detail')}</div>
                 <h2 className="mt-2 text-[30px] font-semibold tracking-tight text-text-primary">{timer.name}</h2>
                 <p className="mt-2 text-[14px] leading-7 text-text-secondary/82">
-                  <span className="inline-flex items-center gap-1.5">{timer.type === 'once' ? <><IconifyIcon name="ui-timer-once" size={12}/> {t('timer.oneTime', 'One-time')}</> : <><IconifyIcon name="ui-repeat" size={12}/> {t('timer.repeating', 'Repeating')}</>}</span>
+                  <span className="inline-flex items-center gap-1.5"><IconifyIcon name={timerTypeMeta.icon} size={12}/> {timerTypeMeta.label}</span>
                   <span className="mx-2 text-text-muted/40">·</span>
                   <span className="inline-flex items-center gap-1.5">{timer.action === 'notify' ? <><IconifyIcon name="ui-notification" size={12}/> {t('timer.notification', 'Notification')}</> : timer.action === 'pipeline' ? <><IconifyIcon name="skill-agent-comm" size={12}/> {t('timer.pipeline', 'Pipeline')}</> : <><IconifyIcon name="agent-robot" size={12}/> {t('timer.agentPrompt', 'Agent Prompt')}</>}</span>
                   {agent && <span className="ml-2 inline-flex items-center gap-1.5">· <AgentAvatar avatar={agent.avatar} size={12}/> {agent.name}</span>}

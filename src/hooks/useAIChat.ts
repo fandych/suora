@@ -678,6 +678,9 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       ?? (activeSession.agentId
       ? agents.find((a) => a.id === activeSession.agentId)
       : (recommendedAgent && recommendedAgent.score >= 20 ? recommendedAgent.agent : (selectedAgent ?? defaultAgent)))
+    const effectiveUserMsg = shortcutCommand
+      ? { ...userMsg, content: buildShortcutCommandPrompt(shortcutCommand) }
+      : userMsg
     const model = activeSession.modelId
       ? models.find((m) => m.id === activeSession.modelId)
       : sessionAgent?.modelId
@@ -685,7 +688,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
         : selectedModel
 
     if (!model) {
-      const errorContent = 'No model selected. Please select a model in the toolbar, or run /pipeline list.'
+      const errorContent = t('chat.noModelSelectedBeforeSend', 'No model selected. Please select a model in the toolbar before sending a message.')
       setError(errorContent)
       pushImmediateAssistantReply(errorContent, true)
       return
@@ -746,9 +749,6 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       const modelIdentifier = `${model.provider}:${model.modelId}`
 
       // Convert app messages to AI SDK v6 ModelMessage[]
-      const effectiveUserMsg = shortcutCommand
-        ? { ...userMsg, content: buildShortcutCommandPrompt(shortcutCommand) }
-        : userMsg
       const contextMessages = [...contextMessagesAtSend, effectiveUserMsg]
       const previousResponseId = model.providerType === 'openai'
         ? (options?.continuationResponseId ?? getPreviousOpenAIResponseId(contextMessagesAtSend))
@@ -1033,10 +1033,8 @@ export function useAIChat(options: UseAIChatOptions = {}) {
             }
 
             case 'error':
-              hasError = true
               logger.error(`[Chat:Error]`, { error: sanitizeToolError(event.error) })
-              fullContent += `\n\n[Tool Error] ${sanitizeToolError(event.error)}`
-              break
+              throw new Error(sanitizeToolError(event.error))
 
             case 'usage':
               tokenUsage = {
@@ -1074,7 +1072,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
           // Only auto-retry if there is no partial content yet — retrying mid-stream
           // would cause duplicate tool calls; the user can manually continue instead.
           const hasPartialProgress = fullContent.length > 0
-            || currentToolCalls.some((tc) => tc.status === 'completed' || tc.status === 'error')
+            || currentToolCalls.length > 0
 
           if (
             !hasPartialProgress

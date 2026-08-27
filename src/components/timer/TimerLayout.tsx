@@ -15,6 +15,8 @@ import { handleTimerFired } from '@/services/timerRuntime';
 import { WorkbenchEmptyState } from '@/components/workbench/empty-state';
 import { Button as UiButton } from '@/components/shared/button';
 import { Input as UiInput } from "@/components/shared/form-controls";
+import { confirm } from '@/services/confirmDialog';
+import { toast } from '@/services/toast';
 import { workbenchSidebarAccentActionClass, workbenchSidebarCardClass, workbenchSidebarDescriptionClass, workbenchSidebarEmptyClass, workbenchSidebarIconClass, workbenchSidebarItemClass, workbenchSidebarMetaClass, workbenchSidebarPillClass, workbenchSidebarPrimaryActionClass, workbenchSidebarSearchInputClass, workbenchSidebarSubtleActionClass, workbenchSidebarTitleClass } from '@/components/workbench/styles';
 export function TimerLayout() {
     const [panelWidth, setPanelWidth] = useResizablePanel('timer', 340);
@@ -30,8 +32,15 @@ export function TimerLayout() {
     const { workspacePath, setAgentPipelines } = useAppStore();
     const { t } = useI18n();
     const deferredSearchQuery = useDeferredValue(searchQuery);
+    const hasElectron = typeof window !== 'undefined' && typeof window.electron?.invoke === 'function';
     const aiCreateLabel = t('timer.aiCreate', 'AI Create');
+    const desktopRuntimeMessage = t('timer.desktopRuntimeRequired', 'Timer creation and execution are available in the Electron desktop app.');
+    const mutationErrorTitle = t('timer.unableToSave', 'Unable to update timer');
     const loadTimers = useCallback(async () => {
+      if (!hasElectron) {
+        setTimers([]);
+        return;
+      }
         try {
             const result = (await electronInvoke('timer:list')) as {
                 timers?: ScheduledTask[];
@@ -43,7 +52,7 @@ export function TimerLayout() {
         catch {
             // ignore — may be in browser mode
         }
-    }, []);
+      }, [hasElectron]);
     // Listen for timer:fired events from main process
     useEffect(() => {
         loadTimers();
@@ -102,76 +111,140 @@ export function TimerLayout() {
     const enabledCount = useMemo(() => timers.filter((timer) => timer.enabled).length, [timers]);
     const pipelineCount = useMemo(() => timers.filter((timer) => timer.action === 'pipeline').length, [timers]);
     async function handleCreate(data: TimerFormData) {
+      if (!hasElectron) {
+        toast.info(desktopRuntimeMessage);
+        return;
+        }
+      try {
         const result = (await electronInvoke('timer:create', {
-            name: data.name,
-            type: data.type,
-            schedule: data.schedule,
-            action: data.action,
-            prompt: data.prompt,
-            agentId: data.agentId || undefined,
-            pipelineId: data.pipelineId || undefined,
-            timezone: data.timezone,
-            missedRunPolicy: data.missedRunPolicy,
-            maxRetries: data.maxRetries,
-            retryIntervalMinutes: data.retryIntervalMinutes,
-            calendarRule: data.calendarRule,
-            enabled: true,
+          name: data.name,
+          type: data.type,
+          schedule: data.schedule,
+          action: data.action,
+          prompt: data.prompt,
+          agentId: data.agentId || undefined,
+          pipelineId: data.pipelineId || undefined,
+          timezone: data.timezone,
+          missedRunPolicy: data.missedRunPolicy,
+          maxRetries: data.maxRetries,
+          retryIntervalMinutes: data.retryIntervalMinutes,
+          calendarRule: data.calendarRule,
+          enabled: true,
         })) as {
-            timer?: ScheduledTask;
-            error?: string;
+          timer?: ScheduledTask;
+          error?: string;
         };
+        if (result.error)
+          throw new Error(result.error);
         if (result.timer) {
-            setSelectedId(result.timer.id);
+          setSelectedId(result.timer.id);
         }
         setCreating(false);
-        loadTimers();
+        void loadTimers();
+      }
+      catch (error) {
+        toast.error(mutationErrorTitle, error instanceof Error ? error.message : String(error));
+      }
     }
     async function handleUpdate(data: TimerFormData) {
-        if (!selectedId)
+      if (!selectedId)
             return;
+      if (!hasElectron) {
+        toast.info(desktopRuntimeMessage);
+        return;
+      }
+      try {
         await electronInvoke('timer:update', selectedId, {
-            name: data.name,
-            type: data.type,
-            schedule: data.schedule,
-            action: data.action,
-            prompt: data.prompt,
-            agentId: data.agentId || undefined,
-            pipelineId: data.pipelineId || undefined,
-            timezone: data.timezone,
-            missedRunPolicy: data.missedRunPolicy,
-            maxRetries: data.maxRetries,
-            retryIntervalMinutes: data.retryIntervalMinutes,
-            calendarRule: data.calendarRule,
+          name: data.name,
+          type: data.type,
+          schedule: data.schedule,
+          action: data.action,
+          prompt: data.prompt,
+          agentId: data.agentId || undefined,
+          pipelineId: data.pipelineId || undefined,
+          timezone: data.timezone,
+          missedRunPolicy: data.missedRunPolicy,
+          maxRetries: data.maxRetries,
+          retryIntervalMinutes: data.retryIntervalMinutes,
+          calendarRule: data.calendarRule,
         });
         setEditing(false);
-        loadTimers();
+        void loadTimers();
+      }
+      catch (error) {
+        toast.error(mutationErrorTitle, error instanceof Error ? error.message : String(error));
+      }
     }
     async function handleDelete() {
-        if (!selectedId)
+      if (!selectedId)
             return;
+      if (!hasElectron) {
+        toast.info(desktopRuntimeMessage);
+        return;
+      }
+      try {
+        const timerName = selectedTimer?.name ?? t('timer.untitledTimer', 'Untitled Timer');
+        const ok = await confirm({
+          title: t('timer.deleteTimerTitle', 'Delete timer?'),
+          body: t('timer.deleteTimerBody', '"{name}" will be removed permanently. This cannot be undone.').replace('{name}', timerName),
+          danger: true,
+          confirmText: t('common.delete', 'Delete'),
+        });
+        if (!ok)
+          return;
         await electronInvoke('timer:delete', selectedId);
         setSelectedId(null);
-        loadTimers();
+        void loadTimers();
+      }
+      catch (error) {
+        toast.error(mutationErrorTitle, error instanceof Error ? error.message : String(error));
+      }
     }
     async function handleToggle() {
-        if (!selectedTimer)
+      if (!selectedTimer)
             return;
+      if (!hasElectron) {
+        toast.info(desktopRuntimeMessage);
+        return;
+      }
+      try {
         await electronInvoke('timer:update', selectedTimer.id, { enabled: !selectedTimer.enabled });
-        loadTimers();
+        void loadTimers();
+      }
+      catch (error) {
+        toast.error(mutationErrorTitle, error instanceof Error ? error.message : String(error));
+      }
     }
     async function handleRunNow() {
-        if (!selectedTimer)
+      if (!selectedTimer)
             return;
+      if (!hasElectron) {
+        toast.info(desktopRuntimeMessage);
+        return;
+      }
+      try {
         await handleTimerFired({ ...selectedTimer, lastRun: Date.now() });
-        loadTimers();
+        void loadTimers();
+      }
+      catch (error) {
+        toast.error(mutationErrorTitle, error instanceof Error ? error.message : String(error));
+      }
     }
     function openAssistantCreate() {
+      if (!hasElectron) {
+        toast.info(desktopRuntimeMessage);
+        return;
+      }
         setCreating(false);
         setEditing(false);
         setSelectedId(null);
         setAssistantState({ mode: 'create', timerId: null });
     }
     function openAssistantEdit(timerId: string) {
+      if (!hasElectron) {
+        toast.info(desktopRuntimeMessage);
+        return;
+      }
         setCreating(false);
         setEditing(false);
         setSelectedId(timerId);
@@ -181,10 +254,13 @@ export function TimerLayout() {
     const sortedTimers = [...filteredTimers].sort((a, b) => b.createdAt - a.createdAt);
     return (<div className="relative flex min-h-0 flex-1">
       <SidePanel title={t('timer.title', 'Timers')} width={panelWidth} action={<div className="flex items-center gap-2">
-          <UiButton unstyled className={workbenchSidebarPrimaryActionClass} onClick={openAssistantCreate}>
+          <UiButton unstyled className={workbenchSidebarPrimaryActionClass} onClick={openAssistantCreate} disabled={!hasElectron}>
             {aiCreateLabel}
           </UiButton>
-          <UiButton unstyled className={workbenchSidebarAccentActionClass} onClick={() => { setCreating(true); setEditing(false); setSelectedId(null); }}>
+          <UiButton unstyled className={workbenchSidebarAccentActionClass} onClick={() => { if (!hasElectron) {
+            toast.info(desktopRuntimeMessage);
+            return;
+        } setCreating(true); setEditing(false); setSelectedId(null); }} disabled={!hasElectron}>
             {t('timer.new', '+ New')}
           </UiButton>
         </div>}>
@@ -198,6 +274,7 @@ export function TimerLayout() {
               <span>{sortedTimers.length} {t('common.results', 'results')}</span>
               {searchQuery && <span>{timers.length} {t('common.total', 'total')}</span>}
             </div>
+            {!hasElectron && <p className="mt-2 text-[11px] leading-relaxed text-text-muted">{desktopRuntimeMessage}</p>}
           </div>
 
           {sortedTimers.length === 0 ? (<div className={workbenchSidebarEmptyClass}>
@@ -205,18 +282,12 @@ export function TimerLayout() {
                 <IconifyIcon name="ui-timer-once" size={18} color="currentColor"/>
               </div>
               <p className="text-[12px] leading-relaxed text-text-muted">
-                {searchQuery
-                ? t('timer.noMatchingTimers', 'No matching timers.')
-                : t('timer.noTimers', 'No timers yet. Create one to get started.')}
+                {!hasElectron
+                ? desktopRuntimeMessage
+                : searchQuery
+                    ? t('timer.noMatchingTimers', 'No matching timers.')
+                    : t('timer.noTimers', 'No timers yet. Create one to get started.')}
               </p>
-              {!searchQuery && (<div className="mt-4 flex flex-col gap-2">
-                  <UiButton unstyled type="button" className={workbenchSidebarPrimaryActionClass} onClick={openAssistantCreate}>
-                    {aiCreateLabel}
-                  </UiButton>
-                  <UiButton unstyled type="button" className={workbenchSidebarSubtleActionClass} onClick={() => { setCreating(true); setEditing(false); setSelectedId(null); }}>
-                    {t('timer.new', '+ New')}
-                  </UiButton>
-                </div>)}
             </div>) : (<div className="space-y-2">
               {sortedTimers.map((timer) => (<UiButton unstyled key={timer.id} onClick={() => { setSelectedId(timer.id); setCreating(false); setEditing(false); }} className={workbenchSidebarItemClass(selectedId === timer.id)}>
                   <div className="flex items-start justify-between gap-3">
@@ -253,16 +324,24 @@ export function TimerLayout() {
       <div className="module-workspace flex-1 min-w-0 flex flex-col overflow-y-auto">
         {creating ? (<TimerForm key="new" onSave={handleCreate} onCancel={() => setCreating(false)}/>) : editing && selectedTimer ? (<TimerForm key={selectedTimer.id} initial={selectedTimer} onSave={handleUpdate} onCancel={() => setEditing(false)}/>) : selectedTimer ? (<TimerDetail timer={selectedTimer} onEdit={() => setEditing(true)} onOpenAssistant={() => openAssistantEdit(selectedTimer.id)} onDelete={handleDelete} onToggle={handleToggle} onRunNow={handleRunNow}/>) : (<div className="module-canvas flex-1 overflow-y-auto px-6 py-8 text-text-muted xl:px-10">
             <WorkbenchEmptyState icon={<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>} eyebrow={t('timer.scheduler', 'Scheduler')} title={t('timer.timersAndReminders', 'Timers & Reminders')} description={(<>
-                  <p>{t('timer.createHint', 'Create timers via the + New button or ask your AI assistant.')}</p>
-                  <p className="mt-4 text-[12px] leading-6 text-text-muted">{t('timer.trySaying', 'Try saying:')} “{t('timer.exampleTimer', 'Set a timer for 10 minutes to remind me to take a break')}”</p>
-                </>)} actions={(<div className="flex flex-wrap items-center gap-3">
-                  <UiButton unstyled type="button" className={workbenchSidebarPrimaryActionClass} onClick={openAssistantCreate}>
+                  {hasElectron ? (<>
+                      <p>{t('timer.createHint', 'Create timers with AI Create or + New, or ask your assistant to draft one for you.')}</p>
+                      <p className="mt-4 text-[12px] leading-6 text-text-muted">{t('timer.trySaying', 'Try saying:')} “{t('timer.exampleTimer', 'Set a timer for 10 minutes to remind me to take a break')}”</p>
+                    </>) : (<>
+                      <p>{desktopRuntimeMessage}</p>
+                      <p className="mt-4 text-[12px] leading-6 text-text-muted">{t('timer.desktopRuntimeHint', 'Open the Electron desktop app to create, run, or edit scheduled timers.')}</p>
+                    </>)}
+                </>)} actions={hasElectron ? (<div className="flex flex-wrap items-center gap-3">
+                  <UiButton unstyled type="button" className={workbenchSidebarPrimaryActionClass} onClick={openAssistantCreate} disabled={!hasElectron}>
                     {aiCreateLabel}
                   </UiButton>
-                  <UiButton unstyled type="button" className={workbenchSidebarSubtleActionClass} onClick={() => { setCreating(true); setEditing(false); setSelectedId(null); }}>
+                  <UiButton unstyled type="button" className={workbenchSidebarSubtleActionClass} onClick={() => { if (!hasElectron) {
+            toast.info(desktopRuntimeMessage);
+            return;
+        } setCreating(true); setEditing(false); setSelectedId(null); }} disabled={!hasElectron}>
                     {t('timer.new', '+ New')}
                   </UiButton>
-                </div>)} metrics={[
+                </div>) : undefined} metrics={[
                 {
                     label: t('common.total', 'Total'),
                     value: timers.length,

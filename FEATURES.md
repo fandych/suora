@@ -34,6 +34,11 @@ Suora is a local-first desktop AI workbench, not a single-chat shell. The curren
 | MCP | MCP server configuration and connection-state tracking |
 | Settings | General, security, voice, shortcuts, data, knowledge, events, external directories, plugins, logs, and system sections |
 
+### Experimental runtime surfaces
+
+- AI SDK Pi harness runner for workspace-scoped dry-run or write-enabled code tasks via `npm run harness:pi` and `npm run harness:pi:write`
+- AI SDK Codex and Claude Code remote harness runners via `npm run harness:codex` and `npm run harness:claude-code`
+
 For future document-intelligence planning, see `docs/LLM_WIKI_CAPABILITIES.md` for an LLM Wiki-inspired capability reference. It is intentionally separate from the current capability table above.
 
 ## Providers and Agents

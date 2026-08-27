@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import clsx from 'clsx'
 
 type WorkbenchEmptyMetric = {
   label: ReactNode
@@ -7,15 +6,7 @@ type WorkbenchEmptyMetric = {
   description?: ReactNode
 }
 
-function metricTone(index: number) {
-  const palette = [
-    'border-border-subtle/55 bg-surface-1/72 text-text-muted/72',
-    'border-accent/12 bg-accent/8 text-accent/82',
-    'border-border-subtle/55 bg-surface-1/72 text-text-muted/72',
-  ]
-
-  return palette[index % palette.length]
-}
+import clsx from 'clsx'
 
 export function WorkbenchEmptyState({
   icon,
@@ -63,12 +54,7 @@ export function WorkbenchEmptyState({
             <div className="grid gap-3 sm:grid-cols-3 xl:w-[24rem] xl:grid-cols-1">
               {metrics?.map((metric, index) => (
                 <div key={index} className="rounded-[22px] border border-border-subtle/55 bg-surface-0/68 p-4">
-                  <div className="flex items-center justify-between gap-3 text-[10px] uppercase tracking-[0.16em] text-text-muted/45">
-                    <span>{metric.label}</span>
-                    <span className={clsx('inline-flex rounded-full border px-1.5 py-0 text-[9px] font-semibold uppercase', metricTone(index))}>
-                      {index + 1}
-                    </span>
-                  </div>
+                  <div className="text-[10px] uppercase tracking-[0.16em] text-text-muted/45">{metric.label}</div>
                   <div className="mt-2 text-2xl font-semibold text-text-primary tabular-nums">{metric.value}</div>
                   {metric.description && <div className="mt-1 text-[12px] text-text-muted">{metric.description}</div>}
                 </div>

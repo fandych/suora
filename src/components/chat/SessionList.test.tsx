@@ -118,4 +118,19 @@ describe('SessionList', () => {
     await waitFor(() => expect(screen.queryByText('Visible chat')).not.toBeInTheDocument())
     expect(useAppStore.getState().sessions.find((session) => session.id === 'session-visible')).toBeUndefined()
   })
+
+  it('creates a new empty chat even when no model is selected yet', async () => {
+    const user = userEvent.setup()
+
+    useAppStore.setState({
+      selectedModel: null,
+      selectedAgent: null,
+    })
+
+    render(<SessionList />)
+
+    await user.click(screen.getByRole('button', { name: 'New' }))
+
+    await waitFor(() => expect(useAppStore.getState().sessions.some((session) => session.title === 'New Chat' && session.modelId === undefined)).toBe(true))
+  })
 })

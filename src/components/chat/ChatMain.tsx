@@ -917,7 +917,7 @@ export function ChatMain() {
         </DropdownButton>
         <DropdownMenu anchor="top end" className="w-56 overflow-y-auto rounded-md border border-border-subtle/70 bg-surface-2/95 py-1 shadow-2xl backdrop-blur-xl">
           <DropdownSection>
-            <DropdownHeading className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportAllMessages', '完整对话')}</DropdownHeading>
+            <DropdownHeading className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportAllMessages', 'Full conversation')}</DropdownHeading>
             {([
               { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
               { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
@@ -935,7 +935,7 @@ export function ChatMain() {
               return null;
             return (<DropdownSection>
               <DropdownDivider/>
-              <DropdownHeading className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportLatestReply', '最新回复')}</DropdownHeading>
+              <DropdownHeading className="px-3.5 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-text-muted/55">{t('chat.exportLatestReply', 'Latest reply')}</DropdownHeading>
               {([
                 { format: 'markdown' as ExportFormat, label: 'Markdown (.md)' },
                 { format: 'pdf' as ExportFormat, label: 'PDF (.pdf)' },
@@ -955,7 +955,7 @@ export function ChatMain() {
         return (<div className="module-workspace flex min-h-0 flex-1 min-w-0 flex-col overflow-hidden">
         <div className="module-canvas min-h-0 flex-1 overflow-y-auto px-5 py-5 xl:px-6">
           <div className="mx-auto max-w-384 space-y-3">
-            <NewSessionHero starterPrompts={starterPrompts} onPromptSelect={(prompt) => createSessionAndSend(prompt)} createSessionAndSend={createSessionAndSend} canChat={Boolean(selectedModel)} hintsTitle={t('chat.hints', '提示')} pipelineHint={t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')} pasteHint={t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')} badgeOne={t('chat.workbench', '企业 AI 工作台')} badgeTwo={t('chat.multimodalWorkspace', '文件、语音和智能体路由集中处理')} promptEyebrow={t('chat.startHere', 'Start here')} title={t('chat.desktopAssistant', 'Suora 内部助手')} description={t('chat.selectOrCreate', '选择会话或创建新任务，开始处理内部知识问答、流程执行和文档分析。')} promptTitle={t('chat.mainPrompt', '选择一个会话，或从下方输入框发起新的内部任务。')} promptDescription={t('chat.welcomeBody', '选择智能体与模型后，可以进行知识解释、文档撰写、代码分析或任务拆解，所有上下文都保留在当前工作区。')} footer={<ComposerContextFooter agents={agents} selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''} onSelectAgent={(agent) => {
+            <NewSessionHero starterPrompts={starterPrompts} onPromptSelect={(prompt) => createSessionAndSend(prompt)} createSessionAndSend={createSessionAndSend} canChat={Boolean(selectedModel)} hintsTitle={t('chat.hints', 'Hints')} pipelineHint={t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')} pasteHint={t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')} badgeOne={t('chat.workbench', 'Enterprise AI Workbench')} badgeTwo={t('chat.multimodalWorkspace', 'Files, voice, and agent routing in one workspace')} promptEyebrow={t('chat.startHere', 'Start here')} title={t('chat.desktopAssistant', 'Suora')} description={t('chat.selectOrCreate', 'Select or create a conversation to begin')} promptTitle={t('chat.mainPrompt', 'Pick a session, or launch a new internal task from the composer below.')} promptDescription={t('chat.welcomeBody', 'Choose an agent and model to handle knowledge questions, document work, code analysis, or task planning inside this workspace.')} footer={<ComposerContextFooter agents={agents} selectedAgentId={sessionAgent?.id ?? selectedAgent?.id ?? defaultAgent?.id ?? ''} onSelectAgent={(agent) => {
                     setSelectedAgent(agent);
                 }} models={enabledModels} providerNameById={providerNameById} selectedModelId={selectedModel?.id ?? ''} onSelectModel={handleModelChange} status={missingModelBadge} />} />
             <BrowserWorkbenchCard />
@@ -968,7 +968,7 @@ export function ChatMain() {
         <div className="sticky top-0 z-20 border-b border-border-subtle/45 bg-surface-0/94 px-5 py-3 xl:px-6">
           <div className="mx-auto max-w-384">
             <div className="min-w-0 max-w-3xl">
-              <div className={workbenchSectionEyebrowClass}>{t('chat.liveSession', '当前会话')}</div>
+              <div className={workbenchSectionEyebrowClass}>{t('chat.liveSession', 'Current session')}</div>
               <h1 className="mt-1 truncate text-[20px] font-semibold text-text-primary">{activeSession.title}</h1>
               <p className="mt-1 line-clamp-1 max-w-2xl text-[12px] leading-5 text-text-secondary/76">{displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')}</p>
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -984,7 +984,7 @@ export function ChatMain() {
         <div className="px-5 pb-4 pt-4 xl:px-6">
           <div className="mx-auto max-w-384">
             {messages.length === 0 ? (<div className="space-y-3">
-                <EmptyChatState starterPrompts={starterPrompts} sessionAgentAvatar={sessionAgent?.avatar ?? 'ui-sparkles'} displayAgentName={displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')} displayAgentGreeting={displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')} isStreaming={isStreaming} onPromptSelect={(prompt) => handleSend(prompt)} hintsTitle={t('chat.hints', '提示')} pipelineHint={t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')} pasteHint={t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')} />
+                <EmptyChatState starterPrompts={starterPrompts} sessionAgentAvatar={sessionAgent?.avatar ?? 'ui-sparkles'} displayAgentName={displayAgentName || t('chat.howCanIHelp', 'How can I help you today?')} displayAgentGreeting={displayAgentGreeting || t('chat.askAnything', 'Ask me anything, or try one of the suggestions below')} isStreaming={isStreaming} onPromptSelect={(prompt) => handleSend(prompt)} hintsTitle={t('chat.hints', 'Hints')} pipelineHint={t('chat.pipelineCommandHint', 'Try /pipeline list, or /pipeline run Morning Run')} pasteHint={t('chat.pasteHint', 'Paste screenshots, drag files, or dictate directly from the composer.')} />
                 <BrowserWorkbenchCard />
               </div>) : (<section className="relative overflow-visible">
                 <div className="relative z-10 px-1 py-1 sm:px-2 xl:px-3">
@@ -1006,10 +1006,10 @@ export function ChatMain() {
         </div>
 
         {(showScrollToTop || showScrollToBottom) && (<div className="pointer-events-none sticky bottom-5 z-30 ml-auto mr-5 flex w-fit flex-col gap-2 xl:mr-6">
-            {showScrollToTop && (<UiButton unstyled type="button" onClick={scrollToTop} title={t('chat.scrollToTop', '回到顶部')} aria-label={t('chat.scrollToTop', '回到顶部')} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle/60 bg-surface-0/88 text-text-secondary shadow-lg backdrop-blur transition-colors hover:border-accent/22 hover:bg-accent/10 hover:text-accent">
+            {showScrollToTop && (<UiButton unstyled type="button" onClick={scrollToTop} title={t('chat.scrollToTop', 'Scroll to top')} aria-label={t('chat.scrollToTop', 'Scroll to top')} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle/60 bg-surface-0/88 text-text-secondary shadow-lg backdrop-blur transition-colors hover:border-accent/22 hover:bg-accent/10 hover:text-accent">
                 <IconifyIcon name="ui-chevron-up" size={16} color="currentColor"/>
               </UiButton>)}
-            {showScrollToBottom && (<UiButton unstyled type="button" onClick={scrollToBottom} title={t('chat.scrollToBottom', '回到底部')} aria-label={t('chat.scrollToBottom', '回到底部')} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle/60 bg-surface-0/88 text-text-secondary shadow-lg backdrop-blur transition-colors hover:border-accent/22 hover:bg-accent/10 hover:text-accent">
+            {showScrollToBottom && (<UiButton unstyled type="button" onClick={scrollToBottom} title={t('chat.scrollToBottom', 'Scroll to bottom')} aria-label={t('chat.scrollToBottom', 'Scroll to bottom')} className="pointer-events-auto flex h-10 w-10 items-center justify-center rounded-full border border-border-subtle/60 bg-surface-0/88 text-text-secondary shadow-lg backdrop-blur transition-colors hover:border-accent/22 hover:bg-accent/10 hover:text-accent">
                 <IconifyIcon name="ui-chevron-down" size={16} color="currentColor"/>
               </UiButton>)}
           </div>)}

@@ -11,6 +11,7 @@ describe('fileStateStorage', () => {
   }
 
   beforeEach(() => {
+    localStorage.clear()
     vi.mocked(window.electron.invoke).mockReset()
     vi.mocked(window.electron.invoke).mockImplementation(async (channel: string, ...args: unknown[]) => {
       const [value] = args as [string?]
@@ -20,6 +21,25 @@ describe('fileStateStorage', () => {
       }
       return { success: true }
     })
+  })
+
+  it('keeps browser-preview state in localStorage when Electron is unavailable', async () => {
+    const originalElectron = window.electron
+    const persistedValue = JSON.stringify({ version: 22, state: { onboarding: { completed: true, currentStep: 0, skipped: false } } })
+
+    Reflect.deleteProperty(window as unknown as Record<string, unknown>, 'electron')
+    localStorage.setItem('browser-preview-store', persistedValue)
+
+    await expect(fileStateStorage.getItem('browser-preview-store')).resolves.toBe(persistedValue)
+    expect(localStorage.getItem('browser-preview-store')).toBe(persistedValue)
+
+    fileStateStorage.setItem('browser-preview-store', '{"version":22,"state":{"theme":"dark"}}')
+    expect(localStorage.getItem('browser-preview-store')).toBe('{"version":22,"state":{"theme":"dark"}}')
+
+    fileStateStorage.removeItem('browser-preview-store')
+    expect(localStorage.getItem('browser-preview-store')).toBeNull()
+
+    window.electron = originalElectron
   })
 
   it('should persist non-skill app state into workspace files while keeping model secrets encrypted', async () => {

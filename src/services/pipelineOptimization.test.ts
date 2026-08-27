@@ -42,14 +42,15 @@ const validResult: PipelineValidationResult = {
 }
 
 describe('pipelineOptimization', () => {
-  it('builds exactly twenty deterministic optimization iterations', () => {
+  it('builds exactly thirty deterministic optimization iterations', () => {
     const iterations = buildPipelineOptimizationIterations(basePipeline, validResult)
 
-    expect(iterations).toHaveLength(20)
-    expect(iterations.map((item) => item.iteration)).toEqual(Array.from({ length: 20 }, (_, index) => index + 1))
+    expect(iterations).toHaveLength(30)
+    expect(iterations.map((item) => item.iteration)).toEqual(Array.from({ length: 30 }, (_, index) => index + 1))
     expect(iterations.every((item) => item.title && item.detail)).toBe(true)
     expect(iterations.find((item) => item.title === 'Retry resilience')?.status).toBe('configured')
     expect(iterations.find((item) => item.title === 'Whole-run budget')?.status).toBe('configured')
+    expect(iterations.find((item) => item.title === 'Boundary nodes')?.status).toBe('recommended')
   })
 
   it('surfaces validation blockers and pipeline gaps as recommendations', () => {
@@ -78,5 +79,6 @@ describe('pipelineOptimization', () => {
     expect(iterations.find((item) => item.title === 'Disabled step cleanup')?.detail).toContain('1 disabled step')
     expect(iterations.find((item) => item.title === 'Duplicate task review')?.detail).toContain('1 duplicate task')
     expect(iterations.find((item) => item.title === 'Whole-run budget')?.status).toBe('recommended')
+    expect(iterations.find((item) => item.title === 'Production readiness review')?.status).toBe('recommended')
   })
 })

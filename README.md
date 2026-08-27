@@ -113,6 +113,34 @@ npm run test:run
 npm run test:e2e
 ```
 
+## Experimental AI SDK Harnesses
+
+Suora now includes project-level experimental AI SDK harness runners. These are repository tooling entrypoints and do not change the default in-app chat or agent runtime.
+
+```bash
+# Dry-run mode: reads the real repo, but edits stay in memory
+npm run harness:pi -- "Summarize the architecture of this repository."
+
+# Explicitly allow writes back into the real workspace
+npm run harness:pi:write -- "Update README wording and keep the diff minimal."
+
+# Remote Codex harness against a sandboxed snapshot of this workspace
+npm run harness:codex -- "Inspect src/services/aiService.ts and summarize the architecture."
+
+# Remote Claude Code harness against a sandboxed snapshot of this workspace
+npm run harness:claude-code -- "Read README.md and propose the smallest documentation cleanup."
+```
+
+Notes:
+
+- The runner lives in `scripts/harness-pi.mjs`.
+- The remote runner lives in `scripts/harness-remote.mjs`.
+- Dry-run mode mounts the workspace through `OverlayFs`, so file edits are discarded after the session.
+- Write mode mounts the workspace through `ReadWriteFs`, so Pi can persist file changes.
+- The Codex and Claude Code runners copy a filtered snapshot of the workspace into a Vercel sandbox; they do not write back into the local repo.
+- Authentication comes from environment variables supported by the Pi harness, such as `AI_GATEWAY_API_KEY`, `VERCEL_OIDC_TOKEN`, `OPENAI_API_KEY`, or `ANTHROPIC_API_KEY`.
+- Bridge-backed harnesses remain separate from the main chat pipeline. Suora's renderer chat currently streams through `src/services/aiService.ts` with AI SDK 6 model providers and replayed `ModelMessage[]` history, while harness adapters own their own runtime session and resume state.
+
 ## Security Notes
 
 - API keys prefer OS-backed secure storage

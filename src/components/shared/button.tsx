@@ -104,7 +104,17 @@ export const Button = forwardRef<HTMLElement, ButtonProps>(function Button(props
     )
 
     if (isLink) {
-      const { href, ...linkProps } = props as ButtonLinkProps
+      const {
+        href,
+        className: _className,
+        children: _children,
+        color: _color,
+        outline: _outline,
+        plain: _plain,
+        unstyled: _unstyled,
+        variant: _variant,
+        ...linkProps
+      } = props as ButtonLinkProps
       return (
         <Anchor {...linkProps} href={href} className={unstyledClasses} ref={ref as React.ForwardedRef<HTMLAnchorElement>}>
           <TouchTarget>{children}</TouchTarget>
@@ -112,7 +122,17 @@ export const Button = forwardRef<HTMLElement, ButtonProps>(function Button(props
       )
     }
 
-    const { type, ...buttonProps } = props as ButtonNativeProps
+    const {
+      type,
+      className: _className,
+      children: _children,
+      color: _color,
+      outline: _outline,
+      plain: _plain,
+      unstyled: _unstyled,
+      variant: _variant,
+      ...buttonProps
+    } = props as ButtonNativeProps
     return (
       <button {...buttonProps} type={type ?? 'button'} className={unstyledClasses} ref={ref as React.ForwardedRef<HTMLButtonElement>}>
         <TouchTarget>{children}</TouchTarget>
@@ -125,7 +145,17 @@ export const Button = forwardRef<HTMLElement, ButtonProps>(function Button(props
   const sharedClassName = cn(toneClass, className)
 
   if (isLink) {
-    const { href, ...linkProps } = props as ButtonLinkProps
+    const {
+      href,
+      className: _className,
+      children: _children,
+      color: _color,
+      outline: _outline,
+      plain: _plain,
+      unstyled: _unstyled,
+      variant: _variant,
+      ...linkProps
+    } = props as ButtonLinkProps
     return (
       <Anchor {...linkProps} href={href} className={sharedClassName} ref={ref as React.ForwardedRef<HTMLAnchorElement>}>
         <TouchTarget>
@@ -135,11 +165,22 @@ export const Button = forwardRef<HTMLElement, ButtonProps>(function Button(props
     )
   }
 
+  const {
+    className: _className,
+    children: _children,
+    color: _color,
+    outline: _outline,
+    plain: _plain,
+    unstyled: _unstyled,
+    variant: _variant,
+    ...buttonProps
+  } = props as ButtonNativeProps
+
   return (
     <ShadButton
-      {...(props as ButtonNativeProps)}
+      {...buttonProps}
       ref={ref as React.ForwardedRef<HTMLButtonElement>}
-      type={(props as ButtonNativeProps).type ?? 'button'}
+      type={buttonProps.type ?? 'button'}
       variant={shadVariant}
       className={sharedClassName}
     >

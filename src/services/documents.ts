@@ -7,6 +7,7 @@ export interface DocumentSearchResult {
   score: number
   excerpt: string
   path: string
+  tags: string[]
   matchedFields: DocumentSearchField[]
   titleMatch: boolean
 }
@@ -820,6 +821,7 @@ export function searchDocumentIndex(index: DocumentSearchIndex, query: string): 
         score,
         excerpt: compactExcerpt(entry.body, q, queryTokens),
         path: entry.path,
+        tags: entry.tags,
         matchedFields: Array.from(matchedFields),
         titleMatch: matchedFields.has('title'),
       }

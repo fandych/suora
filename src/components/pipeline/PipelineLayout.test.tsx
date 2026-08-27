@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { PipelineLayout } from './PipelineLayout'
 import { useAppStore } from '@/store/appStore'
 import { loadPipelineExecutionsFromDisk, loadPipelinesFromDisk } from '@/services/pipelineFiles'
+import { dryRunAgentPipeline } from '@/services/agentPipelineService'
 import type { Agent, AgentPipeline, AgentPipelineExecution, Model } from '@/types'
 
 vi.mock('@/components/icons/IconifyIcons', () => ({
@@ -26,7 +27,13 @@ vi.mock('@/components/pipeline/PipelineFlowDiagram', () => ({
 }))
 
 vi.mock('@/components/pipeline/PipelineFlowCanvas', () => ({
-  PipelineFlowCanvas: () => <div data-testid="pipeline-flow-canvas" />,
+  PipelineFlowCanvas: ({ leftPanelContent, topRightPanelContent, rightPanelContent }: { leftPanelContent?: ReactNode; topRightPanelContent?: ReactNode; rightPanelContent?: ReactNode }) => (
+    <div data-testid="pipeline-flow-canvas">
+      {leftPanelContent}
+      {topRightPanelContent}
+      {rightPanelContent}
+    </div>
+  ),
 }))
 
 vi.mock('@/components/pipeline/PipelineAssistantDrawer', () => ({
@@ -154,6 +161,18 @@ describe('PipelineLayout', () => {
     vi.mocked(window.electron.invoke).mockResolvedValue(undefined)
     vi.mocked(loadPipelinesFromDisk).mockResolvedValue([])
     vi.mocked(loadPipelineExecutionsFromDisk).mockResolvedValue([])
+    vi.mocked(dryRunAgentPipeline).mockReturnValue({
+      pipelineId: savedPipeline.id,
+      pipelineName: savedPipeline.name,
+      steps: [
+        { stepIndex: 0, agentId: agent.id, task: 'Draft {{vars.topic}}', resolvedInput: 'Draft launch', status: 'would-run' },
+      ],
+      visitedStepIndices: [0],
+      variables: { topic: 'launch' },
+      validationWarnings: [],
+      validationErrors: [],
+      valid: true,
+    })
     localStorage.clear()
 
     useAppStore.setState({
@@ -172,6 +191,8 @@ describe('PipelineLayout', () => {
   it('keeps unsaved edits when the saved pipeline list refreshes', async () => {
     const user = userEvent.setup()
     renderPipelineLayout()
+
+    await user.click(screen.getByRole('button', { name: 'General' }))
 
     const description = await screen.findByPlaceholderText('What this workflow prepares, checks, or hands off...')
     await waitFor(() => expect(description).toHaveValue('Saved description'))
@@ -202,6 +223,8 @@ describe('PipelineLayout', () => {
     const user = userEvent.setup()
     renderPipelineLayout()
 
+    await user.click(screen.getByRole('button', { name: 'General' }))
+
     const runValueInput = await screen.findByRole('textbox', { name: 'topic' })
     const variableNameInput = screen.getByDisplayValue('topic')
 
@@ -217,6 +240,7 @@ describe('PipelineLayout', () => {
   })
 
   it('shows execution engine and fallback diagnostics in history details', async () => {
+    const user = userEvent.setup()
     vi.mocked(loadPipelinesFromDisk).mockResolvedValue([savedPipeline])
     vi.mocked(loadPipelineExecutionsFromDisk).mockResolvedValue([savedExecution])
     useAppStore.setState({
@@ -226,6 +250,8 @@ describe('PipelineLayout', () => {
     })
 
     renderPipelineLayout()
+
+  await user.click(await screen.findByRole('button', { name: 'Others' }))
 
     await screen.findByText('Routing diagnostics')
     expect(screen.getByText('Execution engine')).toBeInTheDocument()
@@ -250,13 +276,13 @@ describe('PipelineLayout', () => {
     expect(screen.queryByText('Unsaved')).not.toBeInTheDocument()
   })
 
-  it('opens the AI create drawer from the header action', async () => {
+  it('opens the AI edit drawer from the simplified header action set', async () => {
     const user = userEvent.setup()
     renderPipelineLayout()
 
-    await user.click(await screen.findByRole('button', { name: 'AI Create' }))
+    await user.click(await screen.findByRole('button', { name: 'AI Edit' }))
 
-    expect(await screen.findByTestId('pipeline-assistant-drawer')).toHaveTextContent('create')
+    expect(await screen.findByTestId('pipeline-assistant-drawer')).toHaveTextContent('edit')
   })
 
   it('opens the AI edit drawer for the selected saved pipeline', async () => {
@@ -266,5 +292,122 @@ describe('PipelineLayout', () => {
     await user.click(await screen.findByRole('button', { name: 'AI Edit' }))
 
     expect(await screen.findByTestId('pipeline-assistant-drawer')).toHaveTextContent('edit')
+  })
+
+  it('does not show validation noise for an untouched empty draft', async () => {
+    useAppStore.setState({
+      agentPipeline: [],
+      agentPipelineName: '',
+      selectedAgentPipelineId: null,
+      agentPipelines: [],
+    })
+
+    renderPipelineLayout()
+
+    expect(await screen.findByText('Draft pipeline')).toBeInTheDocument()
+    expect(screen.queryByText('Dry-run validation')).not.toBeInTheDocument()
+    expect(screen.queryByText('ERROR: Pipeline has no enabled steps.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Step configuration')).not.toBeInTheDocument()
+    expect(screen.queryByText('Execution monitor')).not.toBeInTheDocument()
+  })
+
+  it('keeps properties hidden until a node is selected on the design canvas', async () => {
+    useAppStore.setState({
+      agentPipeline: [{ agentId: 'agent-1', task: 'Draft launch brief', name: 'Draft brief' }],
+      agentPipelineName: 'Draft pipeline',
+      selectedAgentPipelineId: null,
+      agentPipelines: [],
+    })
+
+    renderPipelineLayout()
+
+    expect(screen.queryByText('Step configuration')).not.toBeInTheDocument()
+  })
+
+  it('uses distinct execution-history hints before the pipeline is saved', async () => {
+    const user = userEvent.setup()
+    useAppStore.setState({
+      agentPipeline: [],
+      agentPipelineName: '',
+      selectedAgentPipelineId: null,
+      agentPipelines: [],
+    })
+
+    renderPipelineLayout()
+
+  await user.click(screen.getByRole('button', { name: 'Others' }))
+
+    expect((await screen.findAllByText('Execution history appears after you save this draft as a reusable pipeline.')).length).toBeGreaterThan(0)
+    expect(screen.getByText('Save the pipeline first to keep execution history and let timers reference it.')).toBeInTheDocument()
+    expect(screen.getAllByText('Save the pipeline first to keep execution history and let timers reference it.')).toHaveLength(1)
+  })
+
+  it('disables agent-based step creation when no runnable agents are available', async () => {
+    useAppStore.setState({
+      agents: [],
+      agentPipeline: [],
+      selectedAgentPipelineId: null,
+      agentPipelines: [],
+    })
+
+    renderPipelineLayout()
+
+    expect(await screen.findByText('Configure at least one runnable agent before adding agent or condition nodes.')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Agent' })).toBeDisabled()
+  })
+
+  it('shows dry-run progress summary cards when the dry run panel is open', async () => {
+    const user = userEvent.setup()
+    renderPipelineLayout()
+
+    await user.click(await screen.findByRole('button', { name: 'Open dry run panel' }))
+    await user.click(await screen.findByRole('button', { name: 'Dry run' }))
+
+    expect(await screen.findByText('Progress')).toBeInTheDocument()
+    expect(screen.getByText(/Would run:/)).toBeInTheDocument()
+    expect(screen.getByText(/Skipped:/)).toBeInTheDocument()
+    expect(screen.getByText(/Error:/)).toBeInTheDocument()
+    expect(screen.getByText(/Disabled:/)).toBeInTheDocument()
+  })
+
+  it('opens import and export dialogs instead of relying on prompt interactions', async () => {
+    const user = userEvent.setup()
+    useAppStore.setState({
+      workspacePath: '/workspace',
+      agentPipeline: [{ agentId: 'agent-1', task: 'Draft {{vars.topic}}' }],
+      agentPipelineName: 'Launch Flow',
+      selectedAgentPipelineId: null,
+      agentPipelines: [],
+    })
+
+    renderPipelineLayout()
+
+    await user.click(screen.getByRole('button', { name: 'Import JSON' }))
+    expect(await screen.findByText('Paste a workflow export or a bare pipeline JSON object to load it into the current draft.')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    await user.click(screen.getByRole('button', { name: 'Export JSON' }))
+    expect(await screen.findByText('Copy this portable workflow JSON to move the current draft across workspaces.')).toBeInTheDocument()
+  })
+
+  it('creates a first workflow from the node library and enables saving the draft', async () => {
+    const user = userEvent.setup()
+    useAppStore.setState({
+      agentPipeline: [],
+      agentPipelineName: '',
+      selectedAgentPipelineId: null,
+      agentPipelines: [],
+      workspacePath: '/workspace',
+      agents: [agent],
+      models: [model],
+    })
+
+    renderPipelineLayout()
+
+    await user.click(await screen.findByRole('button', { name: 'Script Execution' }))
+
+    expect(await screen.findByText('Draft pipeline')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: '▶ Run Pipeline' })).toBeDisabled()
   })
 })

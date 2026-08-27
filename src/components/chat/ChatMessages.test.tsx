@@ -97,4 +97,32 @@ describe('MessageBubble', () => {
 
     expect(processContainer.compareDocumentPosition(finalAnswer) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
   })
+
+  it('shows the active streaming phase above collapsed execution steps', () => {
+    const message: Message = {
+      id: 'msg-4',
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      isStreaming: true,
+      contentParts: [
+        { type: 'tool-call', toolCallId: 'tool-1' },
+      ],
+      toolCalls: [
+        {
+          id: 'tool-1',
+          toolName: 'run_command',
+          input: { command: 'npm test' },
+          status: 'running',
+          startedAt: Date.now(),
+        },
+      ],
+    }
+
+    render(<MessageBubble message={message} />)
+
+    expect(screen.getByText('Executing')).toBeInTheDocument()
+    expect(screen.getByText('run_command')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Show process/i })).toBeInTheDocument()
+  })
 })

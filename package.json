@@ -26,6 +26,10 @@
     "dev": "electron-vite dev",
     "build": "electron-vite build",
     "preview": "electron-vite preview",
+    "harness:pi": "node ./scripts/harness-pi.mjs",
+    "harness:pi:write": "node ./scripts/harness-pi.mjs --write",
+    "harness:codex": "node ./scripts/harness-remote.mjs --adapter codex",
+    "harness:claude-code": "node ./scripts/harness-remote.mjs --adapter claude-code",
     "package": "electron-vite build && electron-builder",
     "package:win": "electron-vite build && electron-builder --win",
     "lint": "eslint . --ext .ts,.tsx",
@@ -96,6 +100,12 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@ai-sdk/harness": "^1.0.73",
+    "@ai-sdk/harness-claude-code": "^1.0.76",
+    "@ai-sdk/harness-codex": "^1.0.75",
+    "@ai-sdk/harness-pi": "^1.0.75",
+    "@ai-sdk/sandbox-just-bash": "^1.0.73",
+    "@ai-sdk/sandbox-vercel": "^1.0.73",
     "@playwright/test": "^1.58.2",
     "@tailwindcss/vite": "^4.2.2",
     "@testing-library/jest-dom": "^6.9.1",

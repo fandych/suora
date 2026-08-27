@@ -189,6 +189,33 @@ AI 集成位于 `src/services/aiService.ts`。
 - 生成普通文本回复
 - 在多步工具调用循环中流式返回结果
 
+### 实验性 Harness 运行时
+
+仓库现在还包含一个实验性的 AI SDK Harness 入口：`scripts/harness-pi.mjs`。
+
+- 它使用 `@ai-sdk/harness`、`@ai-sdk/harness-pi` 和 `@ai-sdk/sandbox-just-bash`。
+- 它会把当前工作区挂载到 just-bash sandbox 的 `/workspace`。
+- dry-run 模式使用 `OverlayFs`，因此编辑只保存在临时内存层，不会写回真实仓库。
+- write 模式使用 `ReadWriteFs`，因此 Harness 的文件修改会真正落到工作区。
+
+仓库还包含 bridge-backed adapter 的远程 runner：`scripts/harness-remote.mjs`。
+
+- `npm run harness:codex`
+- `npm run harness:claude-code`
+
+这些远程 runner 使用 `@ai-sdk/sandbox-vercel`，并会在 harness 启动前把经过过滤的工作区快照复制到 sandbox 会话中。
+
+这个集成目前被刻意放在主渲染层聊天链路之外。
+
+原因是：
+
+- 当前聊天产品路径仍建立在 `src/services/aiService.ts` 的 AI SDK 6 model provider 调用之上。
+- `src/hooks/useAIChat.ts` 当前仍以可重放的 `ModelMessage[]` 历史或 OpenAI response-chain continuation 方式驱动对话。
+- Harness Adapter 是基于 `HarnessAgent` 的“自带会话状态”的运行时，依赖 adapter 管理的 turn state、resume state 和 continuation state，而不是普通的无状态 provider 调用。
+- 当前安装进来的 harness 包还会自带一套 `ai@7` 运行时子树，因此不能把它直接当成现有 AI SDK 6 服务层里的普通 provider 使用。
+
+因此，当前仓库把 Harness 视为独立的实验性项目级工具能力，而不是直接暴露到标准的模型设置 UI 中。
+
 ### 当前流事件类型
 
 - `text-delta`

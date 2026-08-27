@@ -4,6 +4,8 @@ import { BaseEdge, EdgeLabelRenderer, getBezierPath, type EdgeProps, type Edge }
 interface PipelineEdgeData {
   successOnly?: boolean
   condition?: string
+  label?: string
+  isErrorPath?: boolean
   [key: string]: unknown
 }
 
@@ -21,31 +23,33 @@ export const PipelineEdge = memo(function PipelineEdge(props: EdgeProps<Pipeline
     targetPosition,
   })
 
-  const hasLabel = data?.successOnly || data?.condition
+  const hasLabel = data?.successOnly || data?.condition || data?.label
   const isConditional = !!data?.condition
+  const isErrorPath = data?.isErrorPath === true
 
   return (
     <>
       <BaseEdge
         path={edgePath}
         style={{
-          stroke: isConditional ? 'rgba(139,92,246,0.5)' : 'rgba(148,163,184,0.35)',
+          stroke: isErrorPath ? 'rgba(239,68,68,0.55)' : (isConditional ? 'rgba(139,92,246,0.45)' : 'rgba(148,163,184,0.55)'),
           strokeWidth: 1.5,
-          strokeDasharray: isConditional ? '6 4' : undefined,
+          strokeDasharray: isErrorPath ? '8 5' : (isConditional ? '6 4' : undefined),
         }}
       />
       {hasLabel && (
         <EdgeLabelRenderer>
           <div
-            className="pointer-events-auto nodrag nopan flex items-center gap-1 rounded-lg border border-white/10 bg-slate-800/90 px-2 py-1 text-[9px] text-white/60 shadow-md backdrop-blur-sm"
+            className="pointer-events-auto nodrag nopan flex items-center gap-1 rounded-lg border border-border-subtle/80 bg-surface-1/98 px-2.5 py-1 text-[10px] font-medium text-slate-700 shadow-md backdrop-blur-sm"
             style={{
               position: 'absolute',
               transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)`,
             }}
           >
-            {data?.successOnly && <span className="text-emerald-400">✓</span>}
+            {data?.successOnly && <span className="text-emerald-600">✓</span>}
+            {data?.label && <span className={`max-w-32 truncate ${isErrorPath ? 'text-red-700' : 'text-sky-800'}`}>{data.label}</span>}
             {data?.condition && (
-              <span className="max-w-35 truncate text-violet-300">
+              <span className="max-w-40 truncate text-violet-800">
                 if {data.condition.length > 30 ? `${data.condition.slice(0, 29)}…` : data.condition}
               </span>
             )}

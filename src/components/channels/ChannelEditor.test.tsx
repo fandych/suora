@@ -175,4 +175,39 @@ describe('ChannelEditor', () => {
       wechatPersonalUserId: 'user@im.wechat',
     }))
   })
+
+  it('disables save when auto reply is enabled without a reply agent', () => {
+    render(
+      <ChannelEditor
+        channel={{ ...baseChannel, replyAgentId: '', autoReply: true }}
+        agents={[]}
+        isNew
+        onSave={() => {}}
+        onCancel={() => {}}
+      />,
+    )
+
+    expect(screen.getByRole('button', { name: /save/i })).toBeDisabled()
+    expect(screen.getByText('Select a reply agent before enabling auto reply.')).toBeVisible()
+  })
+
+  it('shows a reply-agent error instead of saving an invalid auto-reply channel', async () => {
+    const user = userEvent.setup()
+    const onSave = vi.fn()
+
+    render(
+      <ChannelEditor
+        channel={{ ...baseChannel, replyAgentId: '', autoReply: true }}
+        agents={[]}
+        isNew
+        onSave={onSave}
+        onCancel={() => {}}
+      />,
+    )
+
+    await user.click(screen.getByRole('button', { name: /save/i }))
+
+    expect(onSave).not.toHaveBeenCalled()
+    expect(screen.getByText('Select a reply agent before enabling auto reply.')).toBeVisible()
+  })
 })

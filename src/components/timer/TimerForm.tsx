@@ -17,6 +17,8 @@ export function TimerForm({ initial, onSave, onCancel }: {
 }) {
     const { agents, agentPipelines } = useAppStore();
     const { t } = useI18n();
+  const fallbackAgent = agents.find((agent) => agent.id === 'default-assistant' && agent.enabled)
+    ?? agents.find((agent) => agent.enabled);
     const [form, setForm] = useState<TimerFormData>({
         name: initial?.name ?? '',
         type: initial?.type ?? 'once',
@@ -31,8 +33,20 @@ export function TimerForm({ initial, onSave, onCancel }: {
         retryIntervalMinutes: initial?.retryIntervalMinutes ?? 5,
         calendarRule: initial?.calendarRule ?? 'all-days',
     });
+      const [scheduleDrafts, setScheduleDrafts] = useState<Record<TimerType, string>>({
+        once: initial?.type === 'once' ? (initial.schedule ?? '') : '',
+        interval: initial?.type === 'interval' ? (initial.schedule ?? '') : '',
+        cron: initial?.type === 'cron' ? (initial.schedule ?? '') : '',
+      });
     const [cronPreview, setCronPreview] = useState<Date[]>([]);
     const [cronError, setCronError] = useState('');
+      const updateSchedule = (schedule: string, type: TimerType = form.type) => {
+        setForm((current) => current.type === type ? { ...current, schedule } : current);
+        setScheduleDrafts((current) => ({ ...current, [type]: schedule }));
+      };
+      const switchType = (type: TimerType) => {
+        setForm((current) => ({ ...current, type, schedule: scheduleDrafts[type] ?? '' }));
+      };
     // Update cron preview when schedule changes
     useEffect(() => {
         if (form.type === 'cron' && form.schedule) {
@@ -55,16 +69,16 @@ export function TimerForm({ initial, onSave, onCancel }: {
     const scheduleInput = form.type === 'once' ? (<UiInput type="datetime-local" aria-label={t('timer.scheduleDateTime', 'Schedule date and time')} wrapperClassName="w-full" controlClassName="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-primary" value={form.schedule ? toLocalDatetimeValue(form.schedule) : ''} onChange={(e) => {
             const d = new Date(e.target.value);
             if (!Number.isNaN(d.getTime())) {
-                setForm({ ...form, schedule: d.toISOString() });
+                updateSchedule(d.toISOString());
             }
             else {
-                setForm({ ...form, schedule: '' });
+                updateSchedule('');
             }
         }}/>) : form.type === 'interval' ? (<div className="flex items-center gap-2">
-      <UiInput type="number" min="1" wrapperClassName="w-20" controlClassName="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-primary" value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} placeholder={t('timer.intervalPlaceholder', '30')}/>
+      <UiInput type="number" min="1" wrapperClassName="w-20" controlClassName="rounded-lg border border-border-subtle bg-surface-2 px-3 py-2 text-xs text-text-primary" value={form.schedule} onChange={(e) => updateSchedule(e.target.value)} placeholder={t('timer.intervalPlaceholder', '30')}/>
       <span className="text-xs text-text-muted">{t('timer.minutes', 'minutes')}</span>
     </div>) : (<div className="space-y-2">
-      <UiInput type="text" wrapperClassName="w-full" controlClassName={`rounded-lg border bg-surface-2 px-3 py-2 text-xs font-mono text-text-primary ${cronError ? 'border-error' : 'border-border-subtle'}`} value={form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.value })} placeholder="0 9 * * 1-5"/>
+      <UiInput type="text" wrapperClassName="w-full" controlClassName={`rounded-lg border bg-surface-2 px-3 py-2 text-xs font-mono text-text-primary ${cronError ? 'border-error' : 'border-border-subtle'}`} value={form.schedule} onChange={(e) => updateSchedule(e.target.value)} placeholder="0 9 * * 1-5"/>
       <p className="text-[10px] text-text-muted">
         Format: <code className="px-1 py-0.5 bg-surface-3 rounded">{t('timer.cronFormat', 'minute hour day month weekday')}</code>
       </p>
@@ -84,6 +98,16 @@ export function TimerForm({ initial, onSave, onCancel }: {
         : form.action === 'prompt'
             ? t('timer.agentPrompt', 'Agent Prompt')
             : t('timer.notify', 'Notify');
+    const intervalMinutes = Number(form.schedule);
+    const isIntervalInvalid = form.type === 'interval'
+      && (!Number.isInteger(intervalMinutes) || intervalMinutes <= 0);
+    const requiresPromptBody = form.action === 'notify' || form.action === 'prompt';
+    const isSaveDisabled = !form.name.trim()
+      || !form.schedule
+      || isIntervalInvalid
+      || (form.type === 'cron' && !!cronError)
+      || (form.action === 'pipeline' && !form.pipelineId)
+      || (requiresPromptBody && !form.prompt.trim());
     return (<div className="animate-fade-in px-5 py-6 xl:px-8 xl:py-8">
       <div className="mx-auto max-w-6xl space-y-6">
         <section className={workbenchHeroSectionClass}>
@@ -137,7 +161,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
               <div>
                 <label className="text-[11px] text-text-muted uppercase tracking-wide block mb-2">{t('timer.type', 'Type')}</label>
                 <div className="flex flex-wrap gap-2">
-                  {(['once', 'interval', 'cron'] as TimerType[]).map((tt) => (<UiButton unstyled key={tt} type="button" className={`px-3.5 py-2 rounded-2xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${form.type === tt ? 'bg-accent/20 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.14)]' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`} onClick={() => setForm({ ...form, type: tt, schedule: '' })}>
+                  {(['once', 'interval', 'cron'] as TimerType[]).map((tt) => (<UiButton unstyled key={tt} type="button" className={`px-3.5 py-2 rounded-2xl text-xs font-semibold transition-colors inline-flex items-center gap-1.5 ${form.type === tt ? 'bg-accent/20 text-accent shadow-[inset_0_0_0_1px_rgba(var(--t-accent-rgb),0.14)]' : 'bg-surface-2 text-text-muted hover:text-text-secondary'}`} onClick={() => switchType(tt)}>
                       {tt === 'once' ? <><IconifyIcon name="ui-timer-once" size={14}/> {t('timer.oneTime', 'One-time')}</> : tt === 'interval' ? <><IconifyIcon name="ui-repeat" size={14}/> {t('timer.repeating', 'Repeating')}</> : <><IconifyIcon name="ui-clock" size={14}/> {t('timer.cronLabel', 'Cron')}</>}
                     </UiButton>))}
                 </div>
@@ -181,7 +205,20 @@ export function TimerForm({ initial, onSave, onCancel }: {
                     <option value="">{t('timer.selectAgent', '-- Select Agent --')}</option>
                     {agents.filter((a) => a.enabled).map((a) => (<option key={a.id} value={a.id}>{ICON_DATA[a.avatar || ''] ? '●' : (a.avatar || '●')} {a.name}</option>))}
                   </UiSelect>
-                  {!form.agentId && (<p className="text-[10px] text-text-muted mt-2">{t('timer.agentHint', 'Select an agent to execute the prompt, or leave empty to use the default assistant.')}</p>)}
+                  {!form.agentId && (<div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-[10px] text-text-muted">
+                        {fallbackAgent
+                            ? t('timer.agentHintWithName', 'Select an agent to execute the prompt, or leave empty to use {agent}.').replace('{agent}', fallbackAgent.name)
+                            : t('timer.agentHint', 'Select an agent to execute the prompt, or leave empty to use the first enabled agent.')}
+                      </p>
+                      <UiButton unstyled type="button" onClick={() => {
+            if (typeof window !== 'undefined') {
+                window.location.hash = '#/agents';
+            }
+        }} className="rounded-xl border border-border-subtle/55 bg-surface-0/72 px-2.5 py-1 text-[10px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent">
+                        {t('timer.openAgents', 'Open Agents')}
+                      </UiButton>
+                    </div>)}
                 </div>)}
 
               {form.action === 'pipeline' && (<div>
@@ -190,7 +227,16 @@ export function TimerForm({ initial, onSave, onCancel }: {
                     <option value="">{t('timer.selectPipeline', '-- Select Pipeline --')}</option>
                     {agentPipelines.map((pipeline) => (<option key={pipeline.id} value={pipeline.id}>{pipeline.name}</option>))}
                   </UiSelect>
-                  {!form.pipelineId && (<p className="text-[10px] text-text-muted mt-2">{t('timer.pipelineHint', 'Only saved pipelines can be scheduled by timers.')}</p>)}
+                  {!form.pipelineId && (<div className="mt-2 flex flex-wrap items-center gap-2">
+                      <p className="text-[10px] text-text-muted">{t('timer.pipelineHint', 'Only saved pipelines can be scheduled by timers.')}</p>
+                      <UiButton unstyled type="button" onClick={() => {
+            if (typeof window !== 'undefined') {
+                window.location.hash = '#/pipeline';
+            }
+        }} className="rounded-xl border border-border-subtle/55 bg-surface-0/72 px-2.5 py-1 text-[10px] font-semibold text-text-secondary transition-colors hover:border-accent/18 hover:bg-accent/8 hover:text-accent">
+                        {t('timer.openPipeline', 'Open Pipeline')}
+                      </UiButton>
+                    </div>)}
                 </div>)}
 
               {form.action !== 'pipeline' && (<div>
@@ -249,7 +295,7 @@ export function TimerForm({ initial, onSave, onCancel }: {
         </div>
 
         <div className="flex gap-3 pt-2">
-          <UiButton unstyled type="button" className={`${workbenchPrimaryButtonClass} disabled:opacity-50`} disabled={!form.name.trim() || !form.schedule || (form.type === 'cron' && !!cronError) || (form.action === 'pipeline' && !form.pipelineId)} onClick={() => onSave(form)}>
+          <UiButton unstyled type="button" className={`${workbenchPrimaryButtonClass} disabled:opacity-50`} disabled={isSaveDisabled} onClick={() => onSave(form)}>
             {initial ? t('common.saveChanges', 'Save Changes') : t('timer.createTimer', 'Create Timer')}
           </UiButton>
           <UiButton unstyled type="button" className={workbenchNeutralButtonClass} onClick={onCancel}>

@@ -385,7 +385,9 @@ export const fileStateStorage = {
         } else if (electron) {
           void electron.invoke('db:savePersistedStore', name, legacy, getPersistedVersion(legacy)).catch(() => {})
         }
-        localStorage.removeItem(name)
+        if (electron) {
+          localStorage.removeItem(name)
+        }
         return legacy
       }
     } catch { /* localStorage may not be available */ }
@@ -396,7 +398,15 @@ export const fileStateStorage = {
   setItem: (name: string, value: string): void => {
     cache.set(name, value)
     const electron = getElectron()
-    if (!electron) return
+    if (!electron) {
+      try {
+        localStorage.setItem(name, value)
+      } catch {
+        // Ignore browser-storage quota or availability failures and keep the
+        // current state in memory for this session.
+      }
+      return
+    }
     if (name === SPLIT_STORE_NAME) {
       scheduleSplitStoreSave(value, electron)
     }
@@ -405,7 +415,14 @@ export const fileStateStorage = {
   removeItem: (name: string): void => {
     cache.delete(name)
     const electron = getElectron()
-    if (!electron) return
+    if (!electron) {
+      try {
+        localStorage.removeItem(name)
+      } catch {
+        // Ignore browser-storage availability failures.
+      }
+      return
+    }
     if (name === SPLIT_STORE_NAME) {
       if (splitStoreDebounceTimer) {
         clearTimeout(splitStoreDebounceTimer)

@@ -1,5 +1,6 @@
 import type { AgentPipelineStep } from '@/types'
 import type { AgentPipelineProgressStep } from '@/services/agentPipelineService'
+import { materializePipelineGraph } from '@/services/pipelineGraph'
 
 type MermaidStepStatus = AgentPipelineProgressStep['status']
 
@@ -60,6 +61,7 @@ export function buildPipelineMermaidSource(
   steps: AgentPipelineStep[],
   options: BuildPipelineMermaidOptions = {},
 ): string {
+  const materializedSteps = materializePipelineGraph(steps)
   const direction = options.direction ?? 'TD'
   const agentNameMap = options.agentNameMap ?? {}
   const progressByIndex = new Map(options.progressSteps?.map((step) => [step.stepIndex, step]) ?? [])
@@ -79,29 +81,39 @@ export function buildPipelineMermaidSource(
     '  finish([Finish])',
   )
 
-  if (steps.length === 0) {
+  if (materializedSteps.length === 0) {
     lines.push('  start --> finish')
   } else {
-    for (const [index, step] of steps.entries()) {
+    for (const [index, step] of materializedSteps.entries()) {
       const progressStep = progressByIndex.get(index)
       const nodeId = `step${index + 1}`
       lines.push(`  ${nodeId}["${buildStepLabel(step, index, agentNameMap, progressStep)}"]`)
     }
 
     lines.push(`  start --> step1`)
-    for (let index = 0; index < steps.length - 1; index += 1) {
+    const stepIndexById = new Map(materializedSteps.map((step, index) => [step.id, index]))
+    materializedSteps.forEach((step, index) => {
       const current = `step${index + 1}`
-      const next = `step${index + 2}`
-      const conditional = steps[index + 1]?.runIf?.trim()
-      const successOnly = steps[index].continueOnError === false
-      const labelParts = [
-        successOnly ? 'success' : '',
-        conditional ? `if ${truncateLabel(normalizeLabel(conditional, ''), 36)}` : '',
-      ].filter(Boolean)
-      const edgeLabel = labelParts.length > 0 ? `|${labelParts.join(' / ')}|` : ''
-      lines.push(`  ${current} -->${edgeLabel} ${next}`)
-    }
-    lines.push(`  step${steps.length} --> finish`)
+      step.transitions.forEach((transition) => {
+        const targetIndex = stepIndexById.get(transition.targetStepId)
+        if (targetIndex === undefined) return
+        const next = `step${targetIndex + 1}`
+        const conditional = materializedSteps[targetIndex]?.runIf?.trim()
+        const branchLabel = step.nodeType === 'condition'
+          ? transition.sourceHandle === 'false'
+            ? step.conditionFalseLabel ?? 'False'
+            : step.conditionTrueLabel ?? 'True'
+          : transition.label
+        const labelParts = [
+          step.continueOnError === false ? 'success' : '',
+          branchLabel ? truncateLabel(normalizeLabel(branchLabel, ''), 24) : '',
+          conditional ? `if ${truncateLabel(normalizeLabel(conditional, ''), 36)}` : '',
+        ].filter(Boolean)
+        const edgeLabel = labelParts.length > 0 ? `|${labelParts.join(' / ')}|` : ''
+        lines.push(`  ${current} -->${edgeLabel} ${next}`)
+      })
+    })
+    lines.push(`  step${materializedSteps.length} --> finish`)
   }
 
   lines.push(
@@ -112,7 +124,7 @@ export function buildPipelineMermaidSource(
     '  classDef skipped fill:#1f2937,stroke:#6b7280,color:#d1d5db',
   )
 
-  for (const [index, step] of steps.entries()) {
+  for (const [index, step] of materializedSteps.entries()) {
     const status = progressByIndex.get(index)?.status ?? (step.enabled === false ? 'skipped' : 'pending')
     lines.push(`  class step${index + 1} ${STATUS_CLASS[status]};`)
   }

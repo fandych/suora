@@ -393,11 +393,7 @@ function ThinkingIndicator() {
     const { t } = useI18n();
     return (<div className="space-y-4 py-1">
       <div className="inline-flex items-center gap-2 rounded-full border border-accent/18 bg-accent/8 px-3 py-1.5 text-[11px] text-text-secondary">
-        <span className="flex gap-1">
-          <span className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-bounce"/>
-          <span className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-bounce [animation-delay:150ms]"/>
-          <span className="h-1.5 w-1.5 rounded-full bg-accent/70 animate-bounce [animation-delay:300ms]"/>
-        </span>
+        <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent/30 border-t-accent" aria-hidden="true"/>
         <span>{t('chat.thinking', 'Thinking…')}</span>
       </div>
       <div className="space-y-2.5 animate-pulse">
@@ -405,6 +401,35 @@ function ThinkingIndicator() {
         <div className="h-3 w-[68%] rounded-full bg-surface-3/45"/>
         <div className="h-3 w-[46%] rounded-full bg-surface-3/35"/>
       </div>
+    </div>);
+}
+
+function StreamingProcessIndicator({ orderedToolCalls, message }: {
+    orderedToolCalls: ToolCall[];
+    message: Message;
+}) {
+    const { t } = useI18n();
+    if (!message.isStreaming)
+        return null;
+    const activeTool = [...orderedToolCalls].reverse().find((call) => call.status === 'running' || call.status === 'pending');
+    const retrying = !activeTool
+        && Boolean(message.autoRetryCount)
+        && orderedToolCalls.length === 0
+        && Boolean(message.content?.trim());
+    const phaseLabel = activeTool
+        ? t('chat.executing', 'Executing')
+        : retrying
+            ? t('chat.retrying', 'Retrying')
+            : t('chat.thinking', 'Thinking…');
+    const detailLabel = activeTool
+        ? activeTool.toolName
+        : retrying
+            ? t('chat.retryAttemptShort', 'Attempt {n}').replace('{n}', String(message.autoRetryCount ?? 1))
+            : undefined;
+    return (<div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-full border border-border-subtle/55 bg-surface-0/62 px-3 py-1.5 text-[10.5px] text-text-muted shadow-sm">
+      <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-accent/30 border-t-accent" aria-hidden="true"/>
+      <span className="truncate font-medium text-text-secondary">{phaseLabel}</span>
+      {detailLabel ? <span className="truncate text-text-muted/70">{detailLabel}</span> : null}
     </div>);
 }
 // ─── Image Lightbox ────────────────────────────────────────────────
@@ -599,6 +624,7 @@ export const MessageBubble = memo(function MessageBubble({ message, onRetry, onR
         </ProcessSection>)
         : null;
     const assistantBody = (<>
+      <StreamingProcessIndicator orderedToolCalls={orderedToolCalls} message={message}/>
       {shouldRenderProcessBeforeResult ? processSection : null}
       {contentParts.length > 0
       ? contentParts.map((part, index) => {

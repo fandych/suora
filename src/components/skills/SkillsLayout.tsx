@@ -490,6 +490,14 @@ export function SkillsLayout() {
                 <p className="text-[12px] text-text-muted leading-relaxed">
                   {t('skills.noInstalled', 'No skills yet. Create or install one.')}
                 </p>
+                                <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                                    <UiButton unstyled type="button" onClick={() => fileInputRef.current?.click()} className={workbenchSidebarPrimaryActionClass}>
+                                        {t('skills.importSkill', 'Import SKILL.md')}
+                                    </UiButton>
+                                    <UiButton unstyled type="button" onClick={handleCreateSkill} className={workbenchSidebarSubtleActionClass}>
+                                        {t('skills.createSkill', 'Create Skill')}
+                                    </UiButton>
+                                </div>
               </div>)}
                         {filteredInstalled.map((skill) => {
             const isActive = editingId === skill.id;
