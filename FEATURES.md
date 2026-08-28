@@ -6,7 +6,6 @@ This file is the shortest implementation-backed capability map for the current p
 
 Suora is a local-first desktop AI workbench, not a single-chat shell. The current app ships these first-class modules:
 
-- Home
 - Chat
 - Documents
 - Pipeline
@@ -22,7 +21,6 @@ Suora is a local-first desktop AI workbench, not a single-chat shell. The curren
 
 | Area | Current capability surface |
 | --- | --- |
-| Home | Task-oriented landing surface with workspace readiness, recent work, quick actions, and a local AI SDK preview panel |
 | Chat | Multi-session conversations, attachments, model/agent switching, tool-call visibility, branching, retry, citations, read-aloud, and command-palette entry points |
 | Documents | Local document groups, nested folders, markdown editing, Mermaid, math, source-aware search expansion, backlinks, graph view, graph insights, related-note expansion, and chat context attachment |
 | Pipeline | Saved multi-step agent workflows with retries, timeouts, budgets, `runIf`, output transforms, exported variables, history, and Mermaid preview |
@@ -57,6 +55,11 @@ For future document-intelligence planning, see `docs/LLM_WIKI_CAPABILITIES.md` f
 ### Built-in agents
 
 - Assistant
+- Agent builder
+- Pipeline builder
+- Timer builder
+- Document editor
+- Channel builder
 - Code Expert
 - Writing Strategist
 - Research Analyst
@@ -75,6 +78,7 @@ For future document-intelligence planning, see `docs/LLM_WIKI_CAPABILITIES.md` f
 ### Channel platforms
 
 - WeChat Work
+- Personal WeChat
 - WeChat Official Account
 - WeChat Mini Program
 - Feishu / Lark
@@ -83,6 +87,7 @@ For future document-intelligence planning, see `docs/LLM_WIKI_CAPABILITIES.md` f
 - Telegram
 - Discord
 - Microsoft Teams
+- Email (IMAP/SMTP)
 - Custom channels
 
 ## Security and Data

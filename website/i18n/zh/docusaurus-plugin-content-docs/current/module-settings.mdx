@@ -1,0 +1,33 @@
+---
+id: module-settings
+title: Settings
+---
+
+# Settings
+
+Settings 是全局控制面，负责界面外观、安全策略、数据管理、自动化、扩展、日志和系统状态。
+
+## 什么时候先打开它
+
+- 你要改的是整个工作区行为，而不是单个页面
+- 你需要核对安全或存储边界
+- 日志、诊断或共享目录已经影响任务本身
+
+## 当前能力面
+
+- `general`、`security`、`voice`、`shortcuts`、`data`、`knowledge`、`events`、`external-dirs`、`plugins`、`logs`、`system`
+- 工作区偏好与安全控制
+- 数据导入、导出和清理
+- 日志、诊断与 onboarding 重放
+
+## 常和哪些模块一起用
+
+- Models 依赖安全密钥处理
+- Skills 和 Agents 依赖外部目录加载
+- Channels 与 MCP 依赖运行安全和诊断能力
+
+## 深入阅读
+
+- GitHub 用户手册：`docs/user/MODULE_PLAYBOOK_ZH.md#10-settings`
+- GitHub Settings 深挖：`docs/user/SETTINGS_DEEP_DIVE_ZH.md`
+- GitHub 技术手册：`docs/technical/MODULE_ARCHITECTURE_ZH.md#10-settings`

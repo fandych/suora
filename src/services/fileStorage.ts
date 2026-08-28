@@ -58,13 +58,20 @@ let deferredFlushed = false
 function flushDeferredWarnings(): void {
   if (deferredFlushed) return
   deferredFlushed = true
-  // Give the UI a moment to mount the ToastHost component.
-  setTimeout(() => {
+  // Retry every 100ms (up to 20 times = 2s total) until the toast host is mounted.
+  let attempts = 0
+  const tryFlush = () => {
+    let allShown = true
     for (const { title, detail } of deferredWarnings) {
-      try { toast.warning(title, detail) } catch { /* still unavailable */ }
+      try { toast.warning(title, detail) } catch { allShown = false }
     }
-    deferredWarnings.length = 0
-  }, 2000)
+    if (allShown) {
+      deferredWarnings.length = 0
+    } else if (attempts++ < 19) {
+      setTimeout(tryFlush, 100)
+    }
+  }
+  setTimeout(tryFlush, 100)
 }
 
 // ─── Resolve workspace path ─────────────────────────────────────────

@@ -61,7 +61,6 @@ Suora 是一款基于 Electron 的本地优先 AI 工作台。当前代码体现
 
 | 模块 | 路由 | 当前需求基线 |
 | --- | --- | --- |
-| Home | `/home` | 支持工作台就绪度总览、最近工作入口、快速操作建议以及任务导向的首次激活路径 |
 | Chat | `/chat` | 支持会话管理、流式回复、附件、模型与 agent 选择、工具事件显示、失败重试与 pipeline 命令 |
 | Documents | `/documents` | 支持文档组、嵌套目录、Markdown、图谱、回链、Mermaid、数学公式与聊天上下文选择 |
 | Pipeline | `/pipeline` | 支持多步 agent 工作流、重试、超时、`runIf`、变量导出、可视化预览、执行历史与导入导出 |
@@ -69,7 +68,7 @@ Suora 是一款基于 Electron 的本地优先 AI 工作台。当前代码体现
 | Agents | `/agents` | 支持内置与自定义 agent、prompt、skills、工具限制、记忆、版本与统计 |
 | Skills | `/skills` | 支持已安装 skills、本地外部来源管理、`SKILL.md` 编辑、资源树、导入与导出 |
 | Timer | `/timer` | 支持 Once、Interval、Cron 三类任务，以及通知、agent prompt、pipeline 执行三类动作 |
-| Channels | `/channels` | 支持渠道配置、reply agent、auto reply、消息历史、用户列表、健康与调试面板 |
+| Channels | `/channels` | 支持 webhook / stream 渠道配置、reply agent、auto reply、消息历史、用户列表、健康与调试面板，以及个人微信与 Email 等平台特定字段 |
 | MCP | `/mcp` | 支持 MCP 服务器配置、连接状态与能力接入 |
 | Settings | `/settings/:section` | 支持 general、security、voice、shortcuts、data、knowledge、events、external-dirs、plugins、logs、system 等设置分区 |
 
@@ -128,7 +127,7 @@ Suora 是一款基于 Electron 的本地优先 AI 工作台。当前代码体现
 
 ### 5.8 Channels
 
-- 必须支持当前类型系统中定义的渠道平台矩阵，而不是只限单个平台。
+- 必须支持当前类型系统中定义的渠道平台矩阵，而不是只限单个平台；当前实现范围包含企业微信、个人微信、公众号、小程序、飞书、钉钉、Slack、Telegram、Discord、Teams、Email 与自定义渠道。
 - 每个渠道必须允许绑定 reply agent、是否自动回复以及平台相关配置。
 - 渠道模块必须提供健康、消息、用户和调试四类观察面。
 - 渠道相关能力必须经由主进程与 preload bridge 暴露，不能在 renderer 直接访问敏感系统接口。

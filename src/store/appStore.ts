@@ -41,7 +41,9 @@ function normalizeExternalDirectoriesInStore(
       ...(existing ?? directory),
       ...directory,
       path: normalizedPath,
-      enabled: existing ? existing.enabled || directory.enabled : directory.enabled,
+      // Preserve the first-seen enabled state; later imports must not re-enable a directory
+      // that the user has explicitly disabled.
+      enabled: existing ? existing.enabled : directory.enabled,
     })
   }
 
@@ -1546,6 +1548,8 @@ export async function loadExternalSkillsAndAgents(): Promise<void> {
     const existing = skillMap.get(key)
     skillMap.set(key, {
       ...skill,
+      id: existing?.id ?? skill.id,
+      enabled: existing?.enabled ?? skill.enabled,
       memories: existing?.memories ?? skill.memories ?? [],
     })
   }

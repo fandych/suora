@@ -1,0 +1,31 @@
+---
+id: module-mcp
+title: MCP
+---
+
+# MCP
+
+MCP configures external Model Context Protocol servers so agents can call more capabilities than the built-in tool surface provides.
+
+## Open MCP when
+
+- built-in tools and ordinary skills are not enough
+- agents need external protocol-backed services
+- you need scoped server configuration at workspace or user level
+
+## Current surface
+
+- `stdio`, `http`, `sse`, and `ws` server configuration
+- scope, env var, header, and argument management
+- connection testing and status tracking
+
+## Works closely with
+
+- Agents for actual tool consumption
+- Chat for task execution
+- Settings for shared runtime assumptions and safety
+
+## Deeper docs
+
+- GitHub user handbook: `docs/user/MODULE_PLAYBOOK_EN.md#9-mcp`
+- GitHub technical handbook: `docs/technical/MODULE_ARCHITECTURE_EN.md#9-mcp`

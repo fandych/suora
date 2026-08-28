@@ -2,7 +2,24 @@
 
 This document describes the current implementation in the repository. It is intended as a code-backed architecture reference for contributors and maintainers.
 
-After the documentation cleanup, this file and `docs/technical/TECHNICAL_DOC_ZH.md` are the long-lived primary technical manuals. Focused topics such as testing, channel setup, and scope boundaries remain in `docs/TESTING.md`, `docs/CHANNEL_INTEGRATION.md`, and `docs/requirements.md`.
+After this documentation pass, this file acts as the English technical entry point: it gives maintainers the system boundary, the owning anchors, and the reading order, then hands off to the deeper module guide at [docs/technical/MODULE_ARCHITECTURE_EN.md](../technical/MODULE_ARCHITECTURE_EN.md). That guide covers the 10 main modules with 10 rounds and 30 technical questions per module.
+
+After the documentation cleanup, this file and `docs/technical/TECHNICAL_DOC_ZH.md` remain the long-lived primary technical manuals. The module architecture guide, testing notes, channel setup, and scope boundaries live in `docs/technical/MODULE_ARCHITECTURE_EN.md`, `docs/TESTING.md`, `docs/CHANNEL_INTEGRATION.md`, and `docs/requirements.md`.
+
+If you want denser technical material, continue to [docs/technical/DEEP_DIVE_INDEX_EN.md](../technical/DEEP_DIVE_INDEX_EN.md).
+
+## 0. Module architecture index
+
+- [Chat technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#1-chat)
+- [Documents technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#2-documents)
+- [Pipeline technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#3-pipeline)
+- [Models technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#4-models)
+- [Agents technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#5-agents)
+- [Skills technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#6-skills)
+- [Timer technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#7-timer)
+- [Channels technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#8-channels)
+- [MCP technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#9-mcp)
+- [Settings technical 30-question guide](../technical/MODULE_ARCHITECTURE_EN.md#10-settings)
 
 ## 1. System Overview
 

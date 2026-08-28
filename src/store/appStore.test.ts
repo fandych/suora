@@ -593,6 +593,63 @@ describe('appStore', () => {
       expect(useAppStore.getState().skills.some((skill) => skill.id === customSkill.id)).toBe(true)
     })
 
+    it('should preserve existing skill ids and enabled state across disk refreshes', async () => {
+      const persistedSkill: Skill = {
+        id: 'skill-persisted',
+        name: 'Review Helper',
+        description: 'Stored skill',
+        enabled: false,
+        content: 'stored instructions',
+        source: 'local',
+        context: 'inline',
+        frontmatter: { name: 'Review Helper', description: 'Stored skill' },
+      }
+      const customAgent: Agent = {
+        id: 'agent-hydrated',
+        name: 'Hydrated Agent',
+        systemPrompt: 'Stored prompt',
+        modelId: 'test:model',
+        skills: ['skill-persisted'],
+        enabled: true,
+        memories: [],
+        autoLearn: false,
+      }
+
+      vi.mocked(loadAllSkills).mockResolvedValueOnce([
+        {
+          id: 'skill-reloaded',
+          name: 'Review Helper',
+          description: 'Reloaded from disk',
+          enabled: true,
+          content: 'disk instructions',
+          source: 'local',
+          context: 'inline',
+          frontmatter: { name: 'Review Helper', description: 'Reloaded from disk' },
+        },
+      ] as never)
+      vi.mocked(loadExternalResources).mockResolvedValueOnce({ skills: [], agents: [] })
+
+      useAppStore.setState({
+        workspacePath: 'C:/workspace',
+        externalDirectories: [],
+        agents: [
+          {
+            id: 'default-assistant', name: 'Assistant', systemPrompt: 'Default prompt',
+            modelId: '', skills: [], enabled: true, memories: [], autoLearn: true,
+          },
+          customAgent,
+        ],
+        skills: [persistedSkill],
+      })
+
+      await loadExternalSkillsAndAgents()
+
+      const refreshedSkill = useAppStore.getState().skills.find((skill) => skill.name === 'Review Helper')
+      expect(refreshedSkill?.id).toBe('skill-persisted')
+      expect(refreshedSkill?.enabled).toBe(false)
+      expect(useAppStore.getState().agents.find((agent) => agent.id === customAgent.id)?.skills).toEqual(['skill-persisted'])
+    })
+
     it('should not clear hydrated settings when workspace settings are empty', async () => {
       useAppStore.setState({
         workspacePath: 'C:/workspace',

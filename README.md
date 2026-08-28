@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-	Home · Chat · Documents · Models · Agents · Skills · Pipeline · Timer · Channels · MCP · Settings
+	Chat · Documents · Models · Agents · Skills · Pipeline · Timer · Channels · MCP · Settings
 </p>
 
 <p align="center">
@@ -36,7 +36,6 @@ Suora is an Electron-based AI workbench for local knowledge work, automation, an
 
 | Module | Current role |
 | --- | --- |
-| Home | Product landing surface for readiness, recent work, next actions, and AI SDK preview |
 | Chat | Conversations, attachments, tool calls, and pipeline commands |
 | Documents | Local notes, folders, backlinks, source-aware graph insights, and chat context |
 | Models | Provider setup, model enablement, testing, and compare |
@@ -73,11 +72,10 @@ npm run dev
 ### First useful setup order
 
 1. Configure at least one model in `Models`
-2. Review readiness and next actions in `Home`
-3. Start a conversation in `Chat`
-4. Create a local knowledge area in `Documents`
-5. Add automation in `Pipeline` and `Timer`
-6. Connect external channels only when needed
+2. Start a conversation in `Chat`
+3. Create a local knowledge area in `Documents`
+4. Add automation in `Pipeline` and `Timer`
+5. Connect external channels only when needed
 
 ## Documentation Map
 
@@ -87,9 +85,13 @@ The repo now keeps a smaller maintained documentation set:
 | --- | --- |
 | [FEATURES.md](./FEATURES.md) | Short capability index |
 | [docs/user/USER_GUIDE_ZH.md](./docs/user/USER_GUIDE_ZH.md) | Primary Chinese user guide |
+| [docs/user/MODULE_PLAYBOOK_ZH.md](./docs/user/MODULE_PLAYBOOK_ZH.md) | Chinese module-by-module user handbook |
 | [docs/user/USER_GUIDE_EN.md](./docs/user/USER_GUIDE_EN.md) | Primary English user guide |
+| [docs/user/MODULE_PLAYBOOK_EN.md](./docs/user/MODULE_PLAYBOOK_EN.md) | English module-by-module user handbook |
 | [docs/technical/TECHNICAL_DOC_ZH.md](./docs/technical/TECHNICAL_DOC_ZH.md) | Primary Chinese technical reference |
+| [docs/technical/MODULE_ARCHITECTURE_ZH.md](./docs/technical/MODULE_ARCHITECTURE_ZH.md) | Chinese module-by-module technical handbook |
 | [docs/technical/TECHNICAL_DOC_EN.md](./docs/technical/TECHNICAL_DOC_EN.md) | Primary English technical reference |
+| [docs/technical/MODULE_ARCHITECTURE_EN.md](./docs/technical/MODULE_ARCHITECTURE_EN.md) | English module-by-module technical handbook |
 | [docs/LLM_WIKI_CAPABILITIES.md](./docs/LLM_WIKI_CAPABILITIES.md) | LLM Wiki-inspired document intelligence capability reference |
 | [docs/TESTING.md](./docs/TESTING.md) | Testing and validation notes |
 | [docs/CHANNEL_INTEGRATION.md](./docs/CHANNEL_INTEGRATION.md) | Channel setup and runtime notes |

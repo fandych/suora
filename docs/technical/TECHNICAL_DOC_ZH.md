@@ -2,7 +2,24 @@
 
 本文档基于当前仓库实现编写，用作贡献者和维护者的代码对齐型架构参考。
 
-文档清理后，本文件与 `docs/technical/TECHNICAL_DOC_EN.md` 是长期维护的主技术文档；测试、渠道与产品范围等专题内容分别放在 `docs/TESTING.md`、`docs/CHANNEL_INTEGRATION.md` 与 `docs/requirements.md`。
+这次重构后，这一页承担“中文技术入口”的角色：先给出系统边界、实现锚点和阅读顺序，再把按模块展开的细节下沉到 [docs/technical/MODULE_ARCHITECTURE_ZH.md](../technical/MODULE_ARCHITECTURE_ZH.md)。该手册覆盖 10 个主模块；每个模块拆成 10 轮、共 30 个技术问题，方便从入口组件一路追到 store、service、持久化和测试。
+
+文档清理后，本文件与 `docs/technical/TECHNICAL_DOC_EN.md` 是长期维护的主技术文档；模块技术手册、测试、渠道与产品范围等专题内容分别放在 `docs/technical/MODULE_ARCHITECTURE_ZH.md`、`docs/TESTING.md`、`docs/CHANNEL_INTEGRATION.md` 与 `docs/requirements.md`。
+
+如果你要看更高密度的技术材料，请继续阅读 [docs/technical/DEEP_DIVE_INDEX_ZH.md](../technical/DEEP_DIVE_INDEX_ZH.md)。
+
+## 0. 模块技术索引
+
+- [Chat 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#1-chat)
+- [Documents 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#2-documents)
+- [Pipeline 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#3-pipeline)
+- [Models 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#4-models)
+- [Agents 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#5-agents)
+- [Skills 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#6-skills)
+- [Timer 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#7-timer)
+- [Channels 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#8-channels)
+- [MCP 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#9-mcp)
+- [Settings 技术 30 问](../technical/MODULE_ARCHITECTURE_ZH.md#10-settings)
 
 ## 1. 系统概览
 

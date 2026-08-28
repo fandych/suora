@@ -52,7 +52,8 @@ function isBlockedIp(ip: string): boolean {
   if (family === 6) {
     const lower = ip.toLowerCase()
     if (lower === '::1' || lower === '0:0:0:0:0:0:0:1') return true
-    if (lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80:')) return true
+    // fc00::/7 (fc/fd) = ULA; fe80::/10 (fe80–febf) = link-local
+    if (lower.startsWith('fc') || lower.startsWith('fd') || /^fe[89ab][0-9a-f]:/i.test(lower)) return true
     const v4Mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/)
     if (v4Mapped) return isPrivateIPv4(v4Mapped[1])
   }
@@ -113,7 +114,8 @@ function isBlockedNetworkHost(hostname: string): boolean {
   const normalized = hostname.toLowerCase().replace(/^\[|\]$/g, '')
   if (normalized === 'localhost' || normalized.endsWith('.localhost')) return true
   if (normalized === '::1' || normalized === '0:0:0:0:0:0:0:1') return true
-  if (normalized.startsWith('fc') || normalized.startsWith('fd') || normalized.startsWith('fe80:')) return true
+  // fc00::/7 (fc/fd) = ULA; fe80::/10 (fe80–febf) = link-local
+  if (normalized.startsWith('fc') || normalized.startsWith('fd') || /^fe[89ab][0-9a-f]:/i.test(normalized)) return true
   return net.isIP(normalized) === 4 && isPrivateIPv4(normalized)
 }
 

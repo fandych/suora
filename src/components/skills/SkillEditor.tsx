@@ -5,7 +5,7 @@ import { IconifyIcon } from '@/components/icons/IconifyIcons';
 import { useI18n } from '@/hooks/useI18n';
 import type { Skill, SkillBundledResource, SkillSource, SkillExecutionContext } from '@/types';
 import { MarkdownEditor } from './SkillEditorPanels';
-import { parseSkillMarkdown } from '@/services/skillRegistry';
+import { parseSkillMarkdown, serializeSkillToMarkdown } from '@/services/skillRegistry';
 import { confirm } from '@/services/confirmDialog';
 import { toast } from '@/services/toast';
 import { SKILL_TOP_LEVEL_FOLDERS, type SkillTopLevelFolder, classifySkillFileKind, getDefaultSkillFileName, getSkillFileIcon, isEditableSkillFile, isSafeSkillResourcePath, isSkillResourceExecutable, isSkillTopLevelFolder, } from '@/utils/skillPaths';
@@ -90,7 +90,7 @@ function fileKindForEditor(pathValue: string): SkillEditorFileKind {
   return classifySkillFileKind(pathValue);
 }
 function buildSkillMarkdownContent(skill: Skill): string {
-  return generatePreview(skill);
+  return serializeSkillToMarkdown(skill);
 }
 function parseEditedSkillMarkdown(raw: string, existingSkill: Skill, parseErrorMessage: string): Partial<Skill> | null {
   const parsed = parseSkillMarkdown(raw, existingSkill.filePath || `${existingSkill.skillRoot || ''}/SKILL.md`, existingSkill.source);
@@ -838,32 +838,4 @@ export function SkillEditor({ skill, onSave, onCancel }: {
       </div>
     </form>);
 }
-function generatePreview(skill: Skill): string {
-    const fm = skill.frontmatter;
-    const lines: string[] = ['---'];
-    if (fm.name || skill.name)
-        lines.push(`name: ${fm.name || skill.name}`);
-    if (fm.description || skill.description)
-        lines.push(`description: ${fm.description || skill.description}`);
-    if (fm.whenToUse || skill.whenToUse)
-        lines.push(`whenToUse: ${fm.whenToUse || skill.whenToUse}`);
-    if (fm.version || skill.version)
-        lines.push(`version: ${fm.version || skill.version}`);
-    if (fm.author || skill.author)
-        lines.push(`author: ${fm.author || skill.author}`);
-    if (fm.icon || skill.icon)
-        lines.push(`icon: ${fm.icon || skill.icon}`);
-    if (fm.category || skill.category)
-        lines.push(`category: ${fm.category || skill.category}`);
-    if (fm.context || skill.context)
-        lines.push(`context: ${fm.context || skill.context}`);
-    if (fm.allowedTools && fm.allowedTools.length > 0) {
-        lines.push(`allowedTools: [${fm.allowedTools.join(', ')}]`);
-    }
-    lines.push('---');
-    lines.push('');
-    lines.push(skill.content || '');
-    return lines.join('\n');
-}
-
 

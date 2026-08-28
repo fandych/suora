@@ -267,20 +267,22 @@ function extractDocumentSearchTags(markdown: string): string[] {
   const frontmatter = /^---\n([\s\S]*?)\n---/.exec(markdown)
 
   if (frontmatter) {
+    // Try inline-array format first: tags: [a, b, c]
     const tagList = /^tags:\s*\[([^\]]+)\]/im.exec(frontmatter[1])
     if (tagList) {
       tagList[1].split(',').forEach((tag) => {
         const normalized = tag.trim().replace(/^['"]|['"]$/g, '')
         if (normalized) tags.add(normalized)
       })
-    }
-
-    const tagBlock = /^tags:\s*\n((?:\s*-\s*.+\n?)+)/im.exec(frontmatter[1])
-    if (tagBlock) {
-      tagBlock[1].split('\n').forEach((line) => {
-        const normalized = line.replace(/^\s*-\s*/, '').trim().replace(/^['"]|['"]$/g, '')
-        if (normalized) tags.add(normalized)
-      })
+    } else {
+      // Fall back to block-list format: tags:\n  - a\n  - b
+      const tagBlock = /^tags:\s*\n((?:\s*-\s*.+\n?)+)/im.exec(frontmatter[1])
+      if (tagBlock) {
+        tagBlock[1].split('\n').forEach((line) => {
+          const normalized = line.replace(/^\s*-\s*/, '').trim().replace(/^['"]|['"]$/g, '')
+          if (normalized) tags.add(normalized)
+        })
+      }
     }
   }
 

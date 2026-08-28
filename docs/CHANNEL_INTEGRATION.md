@@ -18,6 +18,7 @@ The current channel editor supports these platforms:
 | Telegram | `telegram` | Bot token from BotFather |
 | Discord | `discord` | Bot token and application ID |
 | Microsoft Teams | `teams` | App ID, password, and optional tenant |
+| Email (IMAP/SMTP) | `email` | Mailbox polling, filter rules, and reply/action automation |
 | Custom Channel | `custom` | User-defined outbound webhook shape |
 
 ## Channel Concepts
@@ -30,6 +31,13 @@ Each channel record contains four groups of information:
 4. Behavior: enabled state, auto-reply, assigned reply agent, and allowed chat whitelist.
 
 Suora also tracks runtime information per channel, including message count, last activity time, health checks, users, and debug history.
+
+Email channels extend this model with mailbox polling and post-filter actions. In practice, they add:
+
+- IMAP inbox connection settings
+- optional SMTP reply settings
+- ordered filter rules
+- ordered actions such as auto-reply, forward, label, agent-process, and webhook
 
 ## Webhook vs Stream
 
@@ -134,6 +142,60 @@ Typical fields:
 - `teamsAppId`
 - `teamsAppPassword`
 - `teamsTenantId` (optional for single-tenant setups)
+
+### Email (IMAP/SMTP)
+
+Current email channel fields cover both inbound polling and outbound reply automation.
+
+Inbound IMAP fields include:
+
+- `emailImapHost`
+- `emailImapPort`
+- `emailImapUser`
+- `emailImapPassword`
+- `emailImapMailbox`
+- `emailImapTls`
+- `emailPollInterval`
+
+Outbound SMTP fields include:
+
+- `emailSmtpHost`
+- `emailSmtpPort`
+- `emailSmtpUser`
+- `emailSmtpPassword`
+- `emailSmtpTls`
+- `emailFromName`
+- `emailFromAddress`
+- `emailMarkAsRead`
+
+Current filter rules can match on:
+
+- `subject`
+- `from`
+- `to`
+- `cc`
+- `body`
+- `has_attachment`
+
+Current filter operators include:
+
+- `contains`
+- `not_contains`
+- `equals`
+- `starts_with`
+- `ends_with`
+- `regex`
+- `is_true`
+
+Current email actions include:
+
+- `auto_reply`
+- `forward`
+- `label`
+- `agent_process`
+- `webhook`
+
+This makes the email channel the most workflow-oriented channel type in the current UI: it can poll a mailbox, apply multiple enabled filters, and then execute one or more actions for each matched message.
 
 ### Custom Channel
 

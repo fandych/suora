@@ -2,7 +2,34 @@
 
 本指南基于当前代码实现编写，面向日常使用者，重点说明 Suora 现在已经具备的用户功能、推荐操作顺序、常见工作流和排查方法，而不是历史规划或旧版设计稿中的能力。
 
-文档清理后，`docs/user/USER_GUIDE_ZH.md` 与 `docs/user/USER_GUIDE_EN.md` 是仓库里长期维护的主用户文档；更细分的测试、渠道与产品边界说明分别放在 `docs/TESTING.md`、`docs/CHANNEL_INTEGRATION.md` 与 `docs/requirements.md`。
+这次重构后，这一页承担“中文用户入口”的角色：先告诉你该去哪个模块，再把细节下沉到模块手册。按模块逐轮阅读的主入口是 [docs/user/MODULE_PLAYBOOK_ZH.md](../user/MODULE_PLAYBOOK_ZH.md)。新手册覆盖 10 个模块；每个模块拆成 10 轮、共 30 个高频问题，便于按任务阅读，而不是被一整篇长文压住。
+
+文档清理后，`docs/user/USER_GUIDE_ZH.md` 与 `docs/user/USER_GUIDE_EN.md` 仍是仓库里的主用户文档；更细分的模块问答、测试、渠道与产品边界说明分别放在 `docs/user/MODULE_PLAYBOOK_ZH.md`、`docs/TESTING.md`、`docs/CHANNEL_INTEGRATION.md` 与 `docs/requirements.md`。
+
+## 0. 快速模块索引
+
+如果你已经知道自己要做什么，可以直接跳到对应模块：
+
+- [Chat 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#1-chat)
+- [Documents 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#2-documents)
+- [Pipeline 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#3-pipeline)
+- [Models 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#4-models)
+- [Agents 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#5-agents)
+- [Skills 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#6-skills)
+- [Timer 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#7-timer)
+- [Channels 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#8-channels)
+- [MCP 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#9-mcp)
+- [Settings 模块 30 问](../user/MODULE_PLAYBOOK_ZH.md#10-settings)
+
+## 0.1 推荐首次使用顺序
+
+1. 先在 `Models` 配 provider，并启用至少一个模型。
+2. 再在 `Agents` 理解默认 Agent 与专业 Agent 的分工。
+3. 回到 `Chat` 跑第一轮实际任务。
+4. 需要长期资料时，再进 `Documents` 建知识区。
+5. 需要重复流程时，再进 `Pipeline` 和 `Timer`。
+6. 只有需要外部消息或外部服务时，再配置 `Channels` 和 `MCP`。
+7. 最后用 `Settings` 收口主题、安全、数据、日志和系统状态。
 
 ## 1. 产品定位
 
@@ -636,7 +663,7 @@ MCP 模块用于配置 MCP 服务器，并把外部能力纳入 Agent 可用范�
 - External Directories：当前工作区之外的技能和 Agent 外部目录
 - Plugins：插件安装源、运行时扩展和插件生命周期管理
 - Logs：运行日志、故障证据和排错视图
-- System：重新运行引导、运行健康状态和系统诊断
+- System：运行健康状态、资源指标和系统诊断
 
 ### 13.3 Security
 

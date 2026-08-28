@@ -57,7 +57,7 @@ export function validateAgentPipeline(
       issues.push({
         severity: 'warning',
         code: 'budget-step-count-too-low',
-        message: `Pipeline budget caps execution at ${stepCap} step(s) but ${enabledSteps.length} are enabled — later steps will be skipped.`,
+        message: `Pipeline budget caps execution at ${stepCap} step(s) but ${enabledSteps.length} are enabled — steps beyond the cap will be skipped unless an earlier step is already skipped by its runIf condition.`,
       })
     }
   }

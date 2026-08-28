@@ -80,7 +80,7 @@ function isStreamDebugEnabled(): boolean {
   }
 }
 
-const STREAM_DEBUG = isStreamDebugEnabled()
+const STREAM_DEBUG = isStreamDebugEnabled
 
 function getElectronBridge(): ElectronBridge | undefined {
   try {
@@ -106,12 +106,7 @@ function encodeBase64(bytes: Uint8Array): string {
 }
 
 function decodeBase64(base64: string): Uint8Array {
-  const binary = atob(base64)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) {
-    bytes[index] = binary.charCodeAt(index)
-  }
-  return bytes
+  return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0))
 }
 
 function finiteNumber(value: unknown): number | undefined {
@@ -859,7 +854,7 @@ export async function* streamResponseWithTools(
   logger.debug('[streamResponseWithTools] Input messages', messages.map((m, i) => ({
     idx: i, role: m.role, contentType: typeof m.content === 'string' ? 'string' : 'array',
   })))
-  if (STREAM_DEBUG) {
+  if (STREAM_DEBUG()) {
     console.group(`[streamResponseWithTools] model=${modelId}, messages=${messages.length}, hasTools=${hasTools}, stopWhen=stepCountIs(${stepLimit})`)
     if (hasTools && options?.tools) {
       console.log('[streamResponseWithTools] Available tools:', Object.keys(options.tools))
@@ -882,7 +877,7 @@ export async function* streamResponseWithTools(
     ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
   })
 
-  if (STREAM_DEBUG) {
+  if (STREAM_DEBUG()) {
     console.log('[streamResponseWithTools] streamText called, iterating fullStream...')
     console.groupEnd()
   }
@@ -916,7 +911,7 @@ export async function* streamResponseWithTools(
             toolName: part.toolName,
             input: part.input,
           })
-          if (STREAM_DEBUG) {
+          if (STREAM_DEBUG()) {
             const inputStr = safeSerializeStreamPayload(part.input, 10_000)
             console.group(`%c[AI SDK] 🔧 Tool Call #${toolCallCount}: ${part.toolName}`, 'color: #2196F3; font-weight: bold')
             console.log(`Tool Call ID: ${part.toolCallId}`)
@@ -949,7 +944,7 @@ export async function* streamResponseWithTools(
             durationMs: toolDuration,
             output: outputStr.length <= 4000 ? outputStr : outputStr.slice(0, 4000) + `... [truncated ${outputStr.length - 4000} chars]`,
           })
-          if (STREAM_DEBUG) {
+          if (STREAM_DEBUG()) {
             console.group(`%c[AI SDK] ✅ Tool Result: ${part.toolName}`, 'color: #4CAF50; font-weight: bold')
             console.log(`Tool Call ID: ${part.toolCallId}`)
             console.log(`Tool Name:    ${part.toolName}`)
@@ -985,7 +980,7 @@ export async function* streamResponseWithTools(
             error: String(part.error),
             stack: part.error instanceof Error ? part.error.stack : undefined,
           })
-          if (STREAM_DEBUG) {
+          if (STREAM_DEBUG()) {
             console.group(`%c[AI SDK] ❌ Tool Error: ${part.toolName}`, 'color: #F44336; font-weight: bold')
             console.log(`Tool Call ID: ${part.toolCallId}`)
             console.log(`Tool Name:    ${part.toolName}`)
@@ -1015,7 +1010,7 @@ export async function* streamResponseWithTools(
             ? `input=${stepUsage.promptTokens}, output=${stepUsage.completionTokens}, total=${stepUsage.totalTokens}`
             : 'no usage data'
           logger.info(`[StepFinished] #${stepCount} | reason=${part.finishReason} | toolCalls=${toolCallCount} | text=${hasEmittedText ? 'yes' : 'no'} | tokens: ${stepTokens} | elapsed=${(performance.now() - streamStartTime).toFixed(0)}ms`)
-          if (STREAM_DEBUG) {
+          if (STREAM_DEBUG()) {
             console.log(`%c[AI SDK] 📍 Step #${stepCount} finished`, 'color: #FF9800; font-weight: bold',
               `| reason=${part.finishReason} | toolCalls=${toolCallCount} | text=${hasEmittedText ? 'yes' : 'no'} | tokens: ${stepTokens} | elapsed=${(performance.now() - streamStartTime).toFixed(0)}ms`)
           }
@@ -1029,7 +1024,7 @@ export async function* streamResponseWithTools(
         case 'error':
           streamError = String(part.error)
           logger.error(`[StreamError] ${streamError}`)
-          if (STREAM_DEBUG) {
+          if (STREAM_DEBUG()) {
             console.error(`%c[AI SDK] 💥 Stream error`, 'color: #F44336; font-weight: bold', streamError)
           }
           yield { type: 'error', error: describeAppError(streamError) }
@@ -1060,7 +1055,7 @@ export async function* streamResponseWithTools(
     tokens: { input: accumulatedInputTokens, output: accumulatedOutputTokens, total: accumulatedTotalTokens },
     toolTimings: Object.entries(toolTimings).map(([id, start]) => ({ id, elapsed: `${(performance.now() - start).toFixed(0)}ms` })),
   })
-  if (STREAM_DEBUG) {
+  if (STREAM_DEBUG()) {
     if (hasTools) {
       console.group(`%c[AI SDK] 🏁 Stream Complete`, 'color: #9C27B0; font-weight: bold')
       console.log(`Total duration: ${totalDuration}ms`)

@@ -271,7 +271,7 @@ function clampStepOutput(step: AgentPipeline['steps'][number], output: string): 
 function createStepAbortSignal(parentSignal: AbortSignal | undefined, timeoutMs: number): { signal: AbortSignal; cleanup: () => void; timedOut: () => boolean } {
   const controller = new AbortController()
   let didTimeOut = false
-  const timeout = window.setTimeout(() => {
+  const timeout = setTimeout(() => {
     didTimeOut = true
     controller.abort()
   }, timeoutMs)
@@ -280,7 +280,7 @@ function createStepAbortSignal(parentSignal: AbortSignal | undefined, timeoutMs:
   return {
     signal: controller.signal,
     cleanup: () => {
-      window.clearTimeout(timeout)
+      clearTimeout(timeout)
       parentSignal?.removeEventListener('abort', abortFromParent)
     },
     timedOut: () => didTimeOut,
@@ -380,22 +380,22 @@ export async function listSavedPipelines(): Promise<AgentPipeline[]> {
   return loadAvailablePipelines()
 }
 
-export async function findPipelineByReference(reference: string): Promise<AgentPipeline | null> {
-  const normalizedReference = reference.trim().replace(/^['"]|['"]$/g, '')
-  if (!normalizedReference) return null
-
+/** Shared three-step lookup: exact ID → exact name → single partial-name match. */
+async function lookupPipelineByReference(reference: string): Promise<{ normalized: string; exact?: AgentPipeline; partial: AgentPipeline[] }> {
+  const normalized = reference.trim().replace(/^['"]|['"]$/g, '')
+  if (!normalized) return { normalized, partial: [] }
   const pipelines = await loadAvailablePipelines()
-  if (pipelines.length === 0) return null
+  if (pipelines.length === 0) return { normalized, partial: [] }
+  const exact = pipelines.find((p) => p.id === normalized)
+    ?? pipelines.find((p) => p.name.toLowerCase() === normalized.toLowerCase())
+  const partial = exact ? [] : pipelines.filter((p) => p.name.toLowerCase().includes(normalized.toLowerCase()))
+  return { normalized, exact, partial }
+}
 
-  const exactIdMatch = pipelines.find((pipeline) => pipeline.id === normalizedReference)
-  if (exactIdMatch) return exactIdMatch
-
-  const lowerReference = normalizedReference.toLowerCase()
-  const exactNameMatch = pipelines.find((pipeline) => pipeline.name.toLowerCase() === lowerReference)
-  if (exactNameMatch) return exactNameMatch
-
-  const partialMatches = pipelines.filter((pipeline) => pipeline.name.toLowerCase().includes(lowerReference))
-  return partialMatches.length === 1 ? partialMatches[0] : null
+export async function findPipelineByReference(reference: string): Promise<AgentPipeline | null> {
+  const { exact, partial } = await lookupPipelineByReference(reference)
+  if (exact) return exact
+  return partial.length === 1 ? partial[0] : null
 }
 
 export type PipelineReferenceResolution =
@@ -404,23 +404,12 @@ export type PipelineReferenceResolution =
   | { status: 'missing'; reference: string }
 
 export async function resolvePipelineByReference(reference: string): Promise<PipelineReferenceResolution> {
-  const normalizedReference = reference.trim().replace(/^['"]|['"]$/g, '')
-  if (!normalizedReference) return { status: 'missing', reference }
-
-  const pipelines = await loadAvailablePipelines()
-  if (pipelines.length === 0) return { status: 'missing', reference: normalizedReference }
-
-  const exactIdMatch = pipelines.find((pipeline) => pipeline.id === normalizedReference)
-  if (exactIdMatch) return { status: 'found', pipeline: exactIdMatch }
-
-  const lowerReference = normalizedReference.toLowerCase()
-  const exactNameMatch = pipelines.find((pipeline) => pipeline.name.toLowerCase() === lowerReference)
-  if (exactNameMatch) return { status: 'found', pipeline: exactNameMatch }
-
-  const partialMatches = pipelines.filter((pipeline) => pipeline.name.toLowerCase().includes(lowerReference))
-  if (partialMatches.length === 1) return { status: 'found', pipeline: partialMatches[0] }
-  if (partialMatches.length > 1) return { status: 'ambiguous', reference: normalizedReference, matches: partialMatches }
-  return { status: 'missing', reference: normalizedReference }
+  const { normalized, exact, partial } = await lookupPipelineByReference(reference)
+  if (!normalized) return { status: 'missing', reference }
+  if (exact) return { status: 'found', pipeline: exact }
+  if (partial.length === 1) return { status: 'found', pipeline: partial[0] }
+  if (partial.length > 1) return { status: 'ambiguous', reference: normalized, matches: partial }
+  return { status: 'missing', reference: normalized }
 }
 
 async function executeAgentPipelineLegacy(
@@ -479,7 +468,7 @@ async function executeAgentPipelineLegacy(
       runtime: {
         runId,
         agentIds: pipeline.steps.map((step) => step.agentId),
-        modelIds: runtimeStateAtStart.models.map((model) => model.id),
+        modelIds: [],
         startedAt: executionStart,
         trigger: options.trigger ?? 'manual',
         validationWarnings: validation.warnings.map((issue) => issue.message),
@@ -1106,7 +1095,7 @@ async function executeAgentPipelineLegacy(
     runtime: {
       runId,
       agentIds: pipeline.steps.map((step) => step.agentId),
-      modelIds: useAppStore.getState().models.map((model) => model.id),
+      modelIds: [...new Set(executionSteps.filter((s) => s.modelId).map((s) => s.modelId as string))],
       startedAt: executionStart,
       trigger: options.trigger ?? 'manual',
       validationWarnings: validation.warnings.map((issue) => issue.message),

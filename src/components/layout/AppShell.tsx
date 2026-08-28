@@ -10,7 +10,6 @@ import { markPerf, measurePerf } from '@/utils/perf'
 import { scheduleAfterPaint, scheduleWhenIdle, yieldToMainThread } from '@/utils/scheduling'
 
 const LazyNavBar = lazy(() => import('./NavBar').then((module) => ({ default: module.NavBar })))
-const LazyOnboardingWizard = lazy(() => import('@/components/OnboardingWizard').then((module) => ({ default: module.OnboardingWizard })))
 const LazyCommandPalette = lazy(() => import('@/components/CommandPalette').then((module) => ({ default: module.CommandPalette })))
 
 async function restorePluginsFromStore(): Promise<void> {
@@ -59,7 +58,6 @@ export function AppShell() {
   const { t } = useI18n()
   const location = useLocation()
   const [bootReady, setBootReady] = useState(false)
-  const shouldShowOnboarding = useAppStore((state) => !state.onboarding.completed && !state.onboarding.skipped)
   const deferredCleanupRef = useRef<Array<() => void>>([])
 
   // Stage 1 (blocking minimum): hydrate only, so the shell can paint quickly.
@@ -182,9 +180,6 @@ export function AppShell() {
       </main>
       <Suspense fallback={null}>
         <LazyCommandPalette />
-      </Suspense>
-      <Suspense fallback={null}>
-        {shouldShowOnboarding ? <LazyOnboardingWizard /> : null}
       </Suspense>
     </div>
   )

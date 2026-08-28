@@ -4,6 +4,7 @@ import { getToolsForAgent, getSkillSystemPrompts, mergeSkillsWithBuiltins, build
 import { parseChatControlCommand, resolveAgentControlReference, resolveModelControlReference } from './chatControlCommands'
 import { buildShortcutCommandPrompt, parseShortcutCommand, type ShortcutCommand } from './shortcutCommands'
 import { buildSlashCommandHelp, formatSlashMessage } from './slashCommandDispatcher'
+import { t } from '@/services/i18n'
 import type { ChannelConfig, ChannelMessage, ChannelHistoryMessage, ChannelUser, ChannelUserConversationMessage, Agent } from '@/types'
 import type { ModelMessage } from 'ai'
 import { logger } from './logger'
@@ -20,6 +21,9 @@ function getElectronBridge(): ElectronBridge | undefined {
 
 // Maximum number of conversation history entries per user
 const MAX_USER_CONVERSATION_HISTORY = 20
+
+/** Tracks in-progress message processing per channel:senderId to prevent concurrent floods. */
+const messageProcessingInProgress = new Set<string>()
 
 function storeChannelMessage(msg: ChannelHistoryMessage) {
   useAppStore.getState().addChannelMessage(msg)
@@ -61,38 +65,43 @@ function trackChannelUser(channel: ChannelConfig, message: ChannelMessage): Chan
  * Append a message to user's conversation history and persist
  */
 function appendUserConversation(channelId: string, senderId: string, entry: ChannelUserConversationMessage): void {
-  const state = useAppStore.getState()
   const userKey = `${channelId}:${senderId}`
-  const user = state.channelUsers[userKey]
-  if (!user) return
-
-  const updated: ChannelUser = {
-    ...user,
-    conversationHistory: [
-      ...user.conversationHistory,
-      entry,
-    ].slice(-MAX_USER_CONVERSATION_HISTORY), // Keep only recent entries
-  }
-  state.upsertChannelUser(updated)
+  // Use the state updater to atomically read + write, preventing concurrent-message race conditions.
+  useAppStore.setState((state) => {
+    const user = state.channelUsers[userKey]
+    if (!user) return {}
+    return {
+      channelUsers: {
+        ...state.channelUsers,
+        [userKey]: {
+          ...user,
+          conversationHistory: [...user.conversationHistory, entry].slice(-MAX_USER_CONVERSATION_HISTORY),
+        },
+      },
+    }
+  })
 }
 
 function updateChannelUserContext(channelId: string, senderId: string, patch: Partial<Pick<ChannelUser, 'agentId' | 'modelId' | 'conversationHistory'>>): void {
-  const state = useAppStore.getState()
   const userKey = `${channelId}:${senderId}`
-  const user = state.channelUsers[userKey]
-  if (!user) return
-
-  state.upsertChannelUser({
-    ...user,
-    ...patch,
+  useAppStore.setState((state) => {
+    const user = state.channelUsers[userKey]
+    if (!user) return {}
+    return { channelUsers: { ...state.channelUsers, [userKey]: { ...user, ...patch } } }
   })
 }
 
 function getPreviousOpenAIChannelResponseId(history: ChannelUserConversationMessage[]): string | undefined {
+  // Only reuse a response ID within a short window; stale IDs cause API errors when the
+  // server-side conversation has expired.
+  const RESPONSE_ID_TTL_MS = 60 * 60 * 1000
+  const now = Date.now()
   for (let index = history.length - 1; index >= 0; index -= 1) {
     const entry = history[index]
     if (entry.role !== 'assistant') continue
-    if (entry.providerResponseId) return entry.providerResponseId
+    if (!entry.providerResponseId) continue
+    if (entry.timestamp && now - entry.timestamp > RESPONSE_ID_TTL_MS) return undefined
+    return entry.providerResponseId
   }
   return undefined
 }
@@ -320,6 +329,23 @@ export async function handleChannelMessage(
   channel: ChannelConfig,
   message: ChannelMessage
 ): Promise<string> {
+  const concurrencyKey = `${channel.id}:${message.senderId}`
+  if (messageProcessingInProgress.has(concurrencyKey)) {
+    logger.warn('Dropping duplicate in-flight message', { channelId: channel.id, senderId: message.senderId })
+    return ''
+  }
+  messageProcessingInProgress.add(concurrencyKey)
+  try {
+    return await handleChannelMessageInternal(channel, message)
+  } finally {
+    messageProcessingInProgress.delete(concurrencyKey)
+  }
+}
+
+async function handleChannelMessageInternal(
+  channel: ChannelConfig,
+  message: ChannelMessage
+): Promise<string> {
   try {
     logger.info('Processing channel message', {
       channelId: channel.id,
@@ -373,14 +399,14 @@ export async function handleChannelMessage(
     const currentUser = state.channelUsers[user.id]
     if (!currentUser) {
       logger.warn('Channel user not found after tracking', { userId: user.id })
-      return '抱歉，当前用户上下文不可用。'
+      return t('channels.errorUserContextUnavailable', 'Sorry, the current user context is unavailable.')
     }
     const agent = shortcutAgentOverride
       ?? state.agents.find((a) => a.id === (currentUser.agentId ?? channel.replyAgentId))
 
     if (!agent) {
       logger.warn('Agent not found for channel', { agentId: channel.replyAgentId })
-      return '抱歉，当前助手不可用。'
+      return t('channels.errorAgentUnavailable', 'Sorry, the current assistant is unavailable.')
     }
 
     // Get the model for this agent or use the default
@@ -394,14 +420,14 @@ export async function handleChannelMessage(
 
     if (!model) {
       logger.warn('No model available')
-      return '抱歉，当前模型不可用。'
+      return t('channels.errorModelUnavailable', 'Sorry, the current model is unavailable.')
     }
 
     // Validate model configuration
     const validation = validateModelConfig(model)
     if (!validation.valid) {
       logger.warn('Model configuration invalid', { error: validation.error })
-      return `抱歉，模型配置不完整：${validation.error}`
+      return t('channels.errorModelConfigIncomplete', 'Sorry, the model configuration is incomplete: {error}').replace('{error}', validation.error ?? '')
     }
 
     // Initialize AI provider (must be done before streaming)
@@ -412,7 +438,7 @@ export async function handleChannelMessage(
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Failed to initialize AI provider'
       logger.error('Failed to initialize provider for channel', { error: errorMsg })
-      return `抱歉，AI 服务初始化失败：${errorMsg}`
+      return t('channels.errorAiServiceInit', 'Sorry, the AI service failed to initialize: {error}').replace('{error}', errorMsg)
     }
 
     // Build conversation messages with per-user context for multi-turn conversations
@@ -443,14 +469,8 @@ export async function handleChannelMessage(
           },
         ]
 
-    // Store the user's *original* message in their conversation history so
-    // that subsequent turns see what the user actually typed, not the
-    // builder-routing prompt.
-    appendUserConversation(channel.id, message.senderId, {
-      role: 'user',
-      content: formattedContent,
-      timestamp: Date.now(),
-    })
+    // Store the user's *original* message in their conversation history only
+    // after streaming succeeds, so a failure doesn't leave an orphaned entry.
 
     // Add agent memories to system prompt if autoLearn is enabled
     let agentPromptBase = agent.systemPrompt
@@ -565,6 +585,12 @@ export async function handleChannelMessage(
       ),
     }))
 
+    // Both turns appended atomically after a successful stream to keep history consistent.
+    appendUserConversation(channel.id, message.senderId, {
+      role: 'user',
+      content: formattedContent,
+      timestamp: Date.now(),
+    })
     // Store assistant response in user's conversation history for multi-turn context
     appendUserConversation(channel.id, message.senderId, {
       role: 'assistant',
@@ -591,7 +617,7 @@ export async function handleChannelMessage(
       ),
     }))
 
-    return '抱歉，处理消息时出现错误，请稍后重试。'
+    return t('channels.errorProcessingMessage', 'Sorry, an error occurred while processing your message. Please try again later.')
   }
 }
 

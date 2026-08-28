@@ -52,8 +52,8 @@ export async function testMcpServerConnection(
   }
 
   if (server.transport === 'stdio') {
-    // Renderer process cannot spawn stdio process directly; this validates config shape.
-    return { ok: true, tools: ['tools:list', 'resources:list', 'prompts:list'] }
+    // Renderer process cannot spawn a subprocess; config shape has been validated above.
+    return { ok: true }
   }
 
   if (server.transport === 'ws') {
@@ -121,7 +121,11 @@ export function parseKeyValueLines(input: string): Record<string, string> {
     const idx = trimmed.indexOf('=')
     if (idx <= 0) continue
     const key = trimmed.slice(0, idx).trim()
-    const val = trimmed.slice(idx + 1).trim()
+    let val = trimmed.slice(idx + 1).trim()
+    // Strip surrounding quotes so `KEY="value"` stores as `value`.
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1)
+    }
     if (key) out[key] = val
   }
   return out

@@ -2,7 +2,34 @@
 
 This guide is based on the current implementation in the codebase. It focuses on what Suora can do today, not on older plans or historical documentation.
 
-After the documentation cleanup, `docs/user/USER_GUIDE_EN.md` and `docs/user/USER_GUIDE_ZH.md` are the long-lived primary user manuals. Focused references for testing, channels, and product scope live in `docs/TESTING.md`, `docs/CHANNEL_INTEGRATION.md`, and `docs/requirements.md`.
+After this documentation pass, this file acts as the English user entry point: it tells you where to start, then hands off to the deeper module handbooks. The main module-driven handbook is [docs/user/MODULE_PLAYBOOK_EN.md](../user/MODULE_PLAYBOOK_EN.md). It covers 10 modules, with 10 rounds and 30 questions per module, so readers can move by task instead of reading one giant wall of prose.
+
+After the documentation cleanup, `docs/user/USER_GUIDE_EN.md` and `docs/user/USER_GUIDE_ZH.md` remain the long-lived primary user manuals. Module Q&A, testing notes, channel setup, and product scope references live in `docs/user/MODULE_PLAYBOOK_EN.md`, `docs/TESTING.md`, `docs/CHANNEL_INTEGRATION.md`, and `docs/requirements.md`.
+
+## 0. Fast module index
+
+If you already know what you need to do, jump straight to the matching module:
+
+- [Chat 30-question guide](../user/MODULE_PLAYBOOK_EN.md#1-chat)
+- [Documents 30-question guide](../user/MODULE_PLAYBOOK_EN.md#2-documents)
+- [Pipeline 30-question guide](../user/MODULE_PLAYBOOK_EN.md#3-pipeline)
+- [Models 30-question guide](../user/MODULE_PLAYBOOK_EN.md#4-models)
+- [Agents 30-question guide](../user/MODULE_PLAYBOOK_EN.md#5-agents)
+- [Skills 30-question guide](../user/MODULE_PLAYBOOK_EN.md#6-skills)
+- [Timer 30-question guide](../user/MODULE_PLAYBOOK_EN.md#7-timer)
+- [Channels 30-question guide](../user/MODULE_PLAYBOOK_EN.md#8-channels)
+- [MCP 30-question guide](../user/MODULE_PLAYBOOK_EN.md#9-mcp)
+- [Settings 30-question guide](../user/MODULE_PLAYBOOK_EN.md#10-settings)
+
+## 0.1 Recommended first-use order
+
+1. Set up at least one provider in `Models` and enable at least one model.
+2. Review the built-in and specialist agents in `Agents`.
+3. Return to `Chat` for the first real task.
+4. Use `Documents` once you need durable knowledge instead of transient prompts.
+5. Use `Pipeline` and `Timer` once you need repeatable or scheduled workflows.
+6. Add `Channels` and `MCP` only when you need outside integrations.
+7. Use `Settings` to close the loop around theme, security, data, logs, and diagnostics.
 
 ## 1. What Suora Is
 
@@ -326,7 +353,7 @@ Important settings capabilities include:
 - retention policy
 - logs and crash history
 - runtime metrics
-- replay onboarding
+- system diagnostics and runtime health
 
 The current implementation tries to store API keys in OS-backed secure storage first. If the system keyring is unavailable or encryption fails, Suora warns that keys remain in memory only and must be re-entered after restart.
 

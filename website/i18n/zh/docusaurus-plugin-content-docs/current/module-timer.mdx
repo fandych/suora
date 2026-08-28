@@ -1,0 +1,33 @@
+---
+id: module-timer
+title: Timer
+---
+
+# Timer
+
+Timer 用来把通知、Agent Prompt 或已保存流水线安排成单次、间隔或 Cron 任务。
+
+## 什么时候先打开它
+
+- 工作流需要时间触发
+- 已保存流水线要按计划执行
+- 你需要轻量的周期性 Agent 任务
+
+## 当前能力面
+
+- Once、Interval、Cron 三类任务
+- 通知、Prompt、Pipeline 三类动作
+- Run now 验证与任务观察
+- AI 辅助创建定时器
+
+## 常和哪些模块一起用
+
+- Pipeline 负责多步定时流程
+- Agents 负责提示型任务
+- Settings 与 Logs 负责无人值守诊断
+
+## 深入阅读
+
+- GitHub 用户手册：`docs/user/MODULE_PLAYBOOK_ZH.md#7-timer`
+- GitHub Timer 深挖：`docs/user/TIMER_DEEP_DIVE_ZH.md`
+- GitHub 技术手册：`docs/technical/MODULE_ARCHITECTURE_ZH.md#7-timer`

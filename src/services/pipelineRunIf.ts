@@ -52,7 +52,17 @@ export class RunIfParseError extends Error {
 
 const NUMBER_PATTERN = /^-?\d+(?:\.\d+)?$/
 const REGEX_LITERAL_PATTERN = /^\/(.+)\/([gimsuy]*)$/
-
+/** Cache compiled RegExp objects to avoid recompilation on repeated evaluations. */
+const regexCache = new Map<string, RegExp>()
+function getCachedRegex(pattern: string, flags: string): RegExp {
+  const key = `${flags}:${pattern}`
+  let re = regexCache.get(key)
+  if (!re) {
+    re = new RegExp(pattern, flags)
+    regexCache.set(key, re)
+  }
+  return re
+}
 function tryParseStringLiteral(raw: string): string | undefined {
   const trimmed = raw.trim()
   if (trimmed.length < 2) return undefined
@@ -130,7 +140,7 @@ function compareValues(left: string, op: string, right: string): boolean {
       const pattern = literal ? literal[1] : right
       const flags = literal ? literal[2] : ''
       try {
-        return new RegExp(pattern, flags).test(left)
+        return getCachedRegex(pattern, flags).test(left)
       } catch (error) {
         throw new RunIfParseError(`Invalid regex in 'matches' clause: ${(error as Error).message}`)
       }

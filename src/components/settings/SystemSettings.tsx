@@ -1,9 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useI18n } from '@/hooks/useI18n'
 import { IconifyIcon } from '@/components/icons/IconifyIcons'
 import { sanitizeReleaseNotesHtml } from '@/services/releaseNotes'
-import { useAppStore } from '@/store/appStore'
 import { getElectron } from './shared'
 import {
   SettingsOverview,
@@ -41,8 +39,6 @@ function getUsageMeterTone(pct: number): string {
 
 export function SystemSettings() {
   const { t } = useI18n()
-  const navigate = useNavigate()
-  const setOnboarding = useAppStore((state) => state.setOnboarding)
   const [metrics, setMetrics] = useState<PerfMetrics | null>(null)
   const [appVersion, setAppVersion] = useState('—')
   const [updaterState, setUpdaterState] = useState<UpdaterSnapshot | null>(null)
@@ -224,7 +220,7 @@ export function SystemSettings() {
   return (
     <div className="space-y-6">
       <SettingsOverview
-        description={t('settings.systemWorkbenchDesc', 'Inspect the desktop runtime, replay onboarding, monitor resource usage, and clean up crash traces from the current machine.')}
+        description={t('settings.systemWorkbenchDesc', 'Inspect the desktop runtime, monitor resource usage, and clean up crash traces from the current machine.')}
         statsClassName="grid gap-2 sm:grid-cols-2 xl:w-md xl:grid-cols-4"
         stats={(
           <>
@@ -357,29 +353,6 @@ export function SystemSettings() {
           </div>
         </SettingsSection>
       )}
-
-      <SettingsSection
-        eyebrow={t('settings.setup', 'Setup')}
-        title={t('settings.replayOnboarding', 'Replay Onboarding')}
-        description={t('settings.replayOnboardingDesc', 'Jump back into the guided first-run flow to reconfigure basics, provider setup, and recommended workbench entry points.')}
-      >
-        <div className="rounded-lg border border-border-subtle bg-surface-0/45 p-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold text-text-primary">{t('settings.onboardingTitle', 'Onboarding Walkthrough')}</p>
-            <p className="mt-1 text-[12px] leading-relaxed text-text-muted">{t('settings.onboardingDesc', 'Replay the first-run setup guide and jump back into the recommended starting flow.')}</p>
-          </div>
-          <UiButton
-            type="button"
-            color="blue"
-            onClick={() => {
-              setOnboarding({ completed: false, skipped: false, currentStep: 0 })
-              navigate('/chat')
-            }}
-          >
-            {t('settings.rerunOnboarding', 'Re-run Walkthrough')}
-          </UiButton>
-        </div>
-      </SettingsSection>
 
       <SettingsSection
         eyebrow={t('settings.performance', 'Performance')}
