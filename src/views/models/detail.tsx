@@ -24,6 +24,14 @@ const ModelsDetailPage = () => {
   const [editingModelIndex, setEditingModelIndex] = useState<number | null>(null)
   const [modelForm, setModelForm] = useState<ModelFormState>(createModelFormState())
 
+  const persistProvider = async (nextProvider: ProviderConfigRecord) => {
+    const saved = await saveModelProvider(nextProvider)
+    setData(saved)
+    setDraft(saved)
+    emitDataChanged("/models")
+    return saved
+  }
+
   useEffect(() => {
     if (data) {
       setDraft(data)
@@ -36,15 +44,7 @@ const ModelsDetailPage = () => {
 
   const handleSave = async () => {
     if (!draft) return
-    const next = await saveModelProvider(draft)
-    setData(next)
-    setDraft(next)
-    emitDataChanged("/models")
-  }
-
-  const handleModelChange = (index: number, patch: Partial<ProviderConfigRecord["models"][number]>) => {
-    if (!draft) return
-    setDraft({ ...draft, models: draft.models.map((model, cursor) => cursor === index ? { ...model, ...patch } : model) })
+    await persistProvider(draft)
   }
 
   const handleDeleteProvider = async () => {
@@ -90,15 +90,18 @@ const ModelsDetailPage = () => {
       supportsReasoning: modelForm.supportsReasoning,
     }
 
-    setDraft({
+    const nextProvider = {
       ...draft,
       models: editingModelIndex === null
         ? [...draft.models, nextModel]
         : draft.models.map((model, index) => index === editingModelIndex ? nextModel : model),
+    }
+
+    void persistProvider(nextProvider).then(() => {
+      setIsModelDialogOpen(false)
+      setEditingModelIndex(null)
+      setModelForm(createModelFormState())
     })
-    setIsModelDialogOpen(false)
-    setEditingModelIndex(null)
-    setModelForm(createModelFormState())
   }
 
   const handleDeleteModel = (index: number) => {
@@ -106,9 +109,20 @@ const ModelsDetailPage = () => {
       return
     }
 
-    setDraft({
+    void persistProvider({
       ...draft,
       models: draft.models.filter((_model, cursor) => cursor !== index),
+    })
+  }
+
+  const handleToggleModel = (index: number, enabled: boolean) => {
+    if (!draft) {
+      return
+    }
+
+    void persistProvider({
+      ...draft,
+      models: draft.models.map((model, cursor) => cursor === index ? { ...model, enabled } : model),
     })
   }
 
@@ -186,7 +200,7 @@ const ModelsDetailPage = () => {
                 onAddModel={handleOpenCreateModel}
                 onDeleteModel={handleDeleteModel}
                 onEditModel={handleOpenEditModel}
-                onToggleModel={(index, enabled) => handleModelChange(index, { enabled })}
+                onToggleModel={handleToggleModel}
               />
             </div>
           ) : null}

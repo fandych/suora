@@ -6,8 +6,9 @@ import type {
 } from "@/data/domain/models"
 
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { normalizeDocumentNodes } from "@/lib/document-tree"
+import { buildDefaultDocumentNodes, getDocumentDisplayName, normalizeDocumentNodes } from "@/lib/document-tree"
 import { suoraIpc } from "@/lib/ipc"
+import { readArchiveEntries } from "@/lib/resource-files"
 
 function normalizeDocument(detail: DocumentDetail) {
   return {
@@ -24,6 +25,18 @@ export async function listDocuments() {
 export async function createDocument() {
   await ensureSeeded()
   return suoraIpc.documents.create() as Promise<DocumentDetail>
+}
+
+export async function createDocumentWithMetadata(payload: { title: string; summary: string }) {
+  await ensureSeeded()
+  const created = await createDocument()
+  return saveDocumentDraft(created.document.id, {
+    title: payload.title,
+    summary: payload.summary,
+    pages: normalizeDocumentNodes(created.pages, payload.title),
+    graphEdges: created.graphEdges,
+    settings: created.settings,
+  })
 }
 
 export async function getDocumentDetail(documentId: string, selectedVersionId?: string) {
@@ -53,4 +66,57 @@ export async function publishDocumentVersion(documentId: string, versionId: stri
 export async function deleteDocument(documentId: string) {
   await ensureSeeded()
   return suoraIpc.documents.delete(documentId)
+}
+
+export async function importDocumentArchive(file: File) {
+  await ensureSeeded()
+  const name = file.name.replace(/\.zip$/i, "") || "Imported document"
+  const created = await createDocumentWithMetadata({ title: name, summary: `Imported from ${file.name}` })
+  const rootFolderId = created.pages.find((page) => (page.type ?? "document") === "folder" && page.parentId === null)?.id ?? created.pages[0]?.id ?? crypto.randomUUID()
+  const entries = await readArchiveEntries(file)
+
+  const pathToId = new Map<string, string>()
+  const nextPages: DocumentPageRecord[] = []
+
+  for (const entry of entries) {
+    const parts = entry.path.split("/").filter(Boolean)
+    if (parts.length === 0) {
+      continue
+    }
+
+    let parentId: string | null = rootFolderId
+    for (let index = 0; index < parts.length; index += 1) {
+      const currentPath = parts.slice(0, index + 1).join("/")
+      const isLeaf = index === parts.length - 1
+      const isDirectory = !isLeaf || entry.kind === "directory"
+
+      if (pathToId.has(currentPath)) {
+        parentId = pathToId.get(currentPath) ?? parentId
+        continue
+      }
+
+      const id = crypto.randomUUID()
+      pathToId.set(currentPath, id)
+      nextPages.push({
+        id,
+        title: isDirectory ? parts[index] : getDocumentDisplayName(parts[index]),
+        content: isDirectory ? "" : entry.content,
+        type: isDirectory ? "folder" : "document",
+        parentId,
+      })
+      parentId = id
+    }
+  }
+
+  return saveDocumentDraft(created.document.id, {
+    title: created.document.title,
+    summary: created.document.summary,
+    pages: [
+      ...buildDefaultDocumentNodes(created.document.title).filter(() => false),
+      ...created.pages.filter((page) => page.id === rootFolderId),
+      ...nextPages,
+    ],
+    graphEdges: [],
+    settings: created.settings,
+  })
 }

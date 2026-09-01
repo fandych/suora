@@ -63,7 +63,7 @@ export function ModelFormDialog({ form, mode, open, onFormChange, onOpenChange, 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{mode === "create" ? "Add model" : "Edit model"}</DialogTitle>
+          <DialogTitle>{mode === "create" ? "Create model" : "Edit model"}</DialogTitle>
           <DialogDescription>Manage model metadata, capabilities, and enablement for this provider.</DialogDescription>
         </DialogHeader>
         <form className="space-y-4" onSubmit={(event) => { event.preventDefault(); onSubmit() }}>
@@ -127,7 +127,7 @@ export function ModelFormDialog({ form, mode, open, onFormChange, onOpenChange, 
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit">{mode === "create" ? "Add model" : "Save model"}</Button>
+            <Button type="submit">Save model</Button>
           </DialogFooter>
         </form>
       </DialogContent>

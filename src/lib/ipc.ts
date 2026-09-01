@@ -229,14 +229,16 @@ export const suoraIpc = {
       const result = await getBridge().skills.save({ ...payload, filesJson: JSON.stringify(payload.files) }) as {
         skill: { id: string; title: string; source: string; summary: string; updatedAt: number }
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; filesJson: string }>
+        selectedVersionId?: string | null
       }
       const versions = result.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
+      const selectedVersion = versions.find((version) => version.id === result.selectedVersionId) ?? versions[0]
       return {
         skill: result.skill,
         versions,
         latestVersion: versions[0],
-        selectedVersion: versions[0],
-        files: JSON.parse(result.versions[0].filesJson) as SkillFileRecord[],
+        selectedVersion,
+        files: JSON.parse((result.versions.find((version) => version.id === selectedVersion.id) ?? result.versions[0]).filesJson) as SkillFileRecord[],
       } satisfies SkillConfigRecord
     },
     delete: async (skillId: string) => getBridge().skills.delete(skillId),

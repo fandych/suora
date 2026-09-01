@@ -2,6 +2,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
 import type { ProviderConfigRecord } from "@/data/domain/models"
 import { providerPresets } from "@/data/repositories/model-config-repository"
@@ -58,7 +59,23 @@ export function ProviderSettingsForm({ draft, description, hasApiKey, canDelete,
         </label>
 
         <div className="flex items-center justify-end gap-2 border-t pt-4">
-          {canDelete ? <Button type="button" variant="ghost" onClick={onDelete}>Delete provider</Button> : null}
+          {canDelete ? (
+            <Popover>
+              <PopoverTrigger render={<Button type="button" variant="destructive" />}>
+                Delete provider
+              </PopoverTrigger>
+              <PopoverContent align="end">
+                <PopoverHeader>
+                  <PopoverTitle>Delete provider?</PopoverTitle>
+                  <PopoverDescription>This removes the provider and its model inventory from the workspace.</PopoverDescription>
+                </PopoverHeader>
+                <div className="flex items-center justify-end gap-2">
+                  <Button type="button" variant="outline">Cancel</Button>
+                  <Button type="button" variant="destructive" onClick={onDelete}>Delete</Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          ) : null}
           <Button type="button" onClick={onSave}>Save provider</Button>
         </div>
       </CardContent>

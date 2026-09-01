@@ -137,16 +137,25 @@ export function registerContentIpc() {
     const database = openDatabase()
     applyMigrations(database)
     const latest = database.prepare(`SELECT major, minor, is_release as isRelease FROM document_versions WHERE document_id = ? ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { major: number; minor: number; isRelease: number } | undefined
-    const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
-    const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
-    const versionId = crypto.randomUUID()
     const now = Date.now()
     database.prepare(`UPDATE documents SET title = ?, summary = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.summary, now, payload.id)
-    database.prepare(`INSERT INTO document_versions (id, document_id, major, minor, is_release, structure_json, graph_json, settings_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.structureJson, payload.graphJson, payload.settingsJson, now)
+
+    let selectedVersionId = database.prepare(`SELECT id FROM document_versions WHERE document_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
+
+    if (!payload.publish && selectedVersionId) {
+      database.prepare(`UPDATE document_versions SET structure_json = ?, graph_json = ?, settings_json = ?, created_at = ? WHERE id = ?`).run(payload.structureJson, payload.graphJson, payload.settingsJson, now, selectedVersionId.id)
+    } else {
+      const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
+      const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
+      const versionId = crypto.randomUUID()
+      database.prepare(`INSERT INTO document_versions (id, document_id, major, minor, is_release, structure_json, graph_json, settings_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.structureJson, payload.graphJson, payload.settingsJson, now)
+      selectedVersionId = { id: versionId }
+    }
+
     return {
       document: database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM documents WHERE id = ?`).get(payload.id),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, structure_json as structureJson, graph_json as graphJson, settings_json as settingsJson FROM document_versions WHERE document_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(payload.id),
-      selectedVersionId: versionId,
+      selectedVersionId: selectedVersionId?.id ?? null,
     }
   })
 

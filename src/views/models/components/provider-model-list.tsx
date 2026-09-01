@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
 import type { ProviderConfigRecord } from "@/data/domain/models"
 
@@ -52,7 +53,21 @@ export function ProviderModelList({ hasApiKey, models, onAddModel, onDeleteModel
                   <Switch checked={model.enabled} disabled={!hasApiKey} onCheckedChange={(checked) => onToggleModel(index, checked)} />
                 </label>
                 <Button size="sm" variant="outline" onClick={() => onEditModel(index)}>Edit</Button>
-                <Button size="sm" variant="ghost" onClick={() => onDeleteModel(index)}>Remove</Button>
+                <Popover>
+                  <PopoverTrigger render={<Button size="sm" variant="destructive" />}>
+                    Remove
+                  </PopoverTrigger>
+                  <PopoverContent align="end">
+                    <PopoverHeader>
+                      <PopoverTitle>Delete model?</PopoverTitle>
+                      <PopoverDescription>This change is saved immediately.</PopoverDescription>
+                    </PopoverHeader>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button size="sm" variant="outline">Cancel</Button>
+                      <Button size="sm" variant="destructive" onClick={() => onDeleteModel(index)}>Delete</Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             </div>
           </div>

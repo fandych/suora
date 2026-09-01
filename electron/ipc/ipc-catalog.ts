@@ -99,15 +99,25 @@ export function registerCatalogIpc() {
     const database = openDatabase()
     applyMigrations(database)
     const latest = database.prepare(`SELECT major, minor, is_release as isRelease FROM skill_versions WHERE skill_id = ? ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { major: number; minor: number; isRelease: number } | undefined
-    const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
-    const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
-    const versionId = crypto.randomUUID()
     const now = Date.now()
     database.prepare(`UPDATE skills SET title = ?, source = ?, summary = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.source, payload.summary, now, payload.id)
-    database.prepare(`INSERT INTO skill_versions (id, skill_id, major, minor, is_release, files_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.filesJson, now)
+
+    let selectedVersionId = database.prepare(`SELECT id FROM skill_versions WHERE skill_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
+
+    if (!payload.publish && selectedVersionId) {
+      database.prepare(`UPDATE skill_versions SET files_json = ?, created_at = ? WHERE id = ?`).run(payload.filesJson, now, selectedVersionId.id)
+    } else {
+      const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
+      const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
+      const versionId = crypto.randomUUID()
+      database.prepare(`INSERT INTO skill_versions (id, skill_id, major, minor, is_release, files_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.filesJson, now)
+      selectedVersionId = { id: versionId }
+    }
+
     return {
       skill: database.prepare(`SELECT id, title, source, summary, updated_at as updatedAt FROM skills WHERE id = ?`).get(payload.id),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, files_json as filesJson FROM skill_versions WHERE skill_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(payload.id),
+      selectedVersionId: selectedVersionId?.id ?? null,
     }
   })
 

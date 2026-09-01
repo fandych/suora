@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { ProviderConfigRecord } from "@/data/domain/models"
 
@@ -16,7 +15,18 @@ export function ProviderCard({ provider, onOpen }: ProviderCardProps) {
     : provider.apiKey
 
   return (
-    <Card className="min-w-0">
+    <Card
+      className="min-w-0 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm"
+      onClick={() => onOpen(provider.id)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault()
+          onOpen(provider.id)
+        }
+      }}
+      role="button"
+      tabIndex={0}
+    >
       <CardHeader className="pb-4">
         <div className="flex min-w-0 items-center gap-3">
           <ProviderLogoBadge providerType={provider.providerType} className="size-10 shrink-0" iconClassName="size-5" />
@@ -41,9 +51,6 @@ export function ProviderCard({ provider, onOpen }: ProviderCardProps) {
         <div className="rounded-lg border bg-muted/20 px-3 py-2">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Key</div>
           <div className="mt-1 font-mono text-foreground">{maskedKey}</div>
-        </div>
-        <div className="flex items-center justify-end">
-          <Button variant="outline" onClick={() => onOpen(provider.id)}>Open provider</Button>
         </div>
       </CardContent>
     </Card>

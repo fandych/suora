@@ -1,6 +1,7 @@
 import type { SkillConfigRecord, SkillDetail, SkillFileRecord, SkillSummary } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { ensureSkillFiles } from "@/lib/skill-files"
+import { readArchiveEntries } from "@/lib/resource-files"
+import { buildSkillMarkdown, ensureSkillFiles, normalizeSkillPath, parseSkillFrontmatter } from "@/lib/skill-files"
 import { suoraIpc } from "@/lib/ipc"
 
 function getSkillSidebarName(files: SkillFileRecord[], fallbackTitle: string) {
@@ -38,6 +39,26 @@ export async function listSkills() {
 export async function createSkill() {
   await ensureSeeded()
   return suoraIpc.skills.create() as Promise<SkillConfigRecord>
+}
+
+export async function importSkillArchive(file: File) {
+  await ensureSeeded()
+  const created = await createSkill()
+  const entries = await readArchiveEntries(file)
+  const files = ensureSkillFiles(entries.map((entry) => ({
+    path: normalizeSkillPath(entry.path),
+    content: entry.content,
+    kind: entry.kind,
+    language: undefined as unknown as string,
+  } as SkillFileRecord)), created.skill.title, created.skill.summary)
+  const skillMarkdown = files.find((entry) => entry.path === "SKILL.md")?.content ?? buildSkillMarkdown(created.skill.title, created.skill.summary)
+  const frontmatter = parseSkillFrontmatter(skillMarkdown)
+  return saveSkillDraft(created.skill.id, {
+    title: frontmatter.name || created.skill.title,
+    source: created.skill.source,
+    summary: frontmatter.description || created.skill.summary,
+    files,
+  })
 }
 
 export async function getSkillDetail(skillId: string, selectedVersionId?: string) {
