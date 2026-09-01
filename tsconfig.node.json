@@ -6,7 +6,16 @@
     "moduleResolution": "bundler",
     "allowSyntheticDefaultImports": true,
     "strict": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+
+    "paths": {
+      "@electron/*": [
+        "./electron/*"
+      ],
+      "@/*": [
+        "./src/*"
+      ]
+    },
   },
-  "include": ["electron.vite.config.ts"]
+  "include": ["electron.vite.config.ts", "electron/**/*.ts"]
 }

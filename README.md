@@ -1,127 +1,78 @@
-<p align="center">
-	<img src="resources/logo.svg" alt="Suora logo" width="104" />
-</p>
+# React + TypeScript + Vite
 
-<h1 align="center">Suora</h1>
+This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
-<p align="center">
-	<strong>A local-first desktop AI workbench.</strong>
-</p>
+Currently, two official plugins are available:
 
-<p align="center">
-	Chat · Documents · Models · Agents · Skills · Pipeline · Timer · Channels · MCP · Settings
-</p>
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
 
-<p align="center">
-	<a href="https://fandych.github.io/suora/"><img alt="Docs" src="https://img.shields.io/badge/docs-homepage-0f766e?style=flat-square" /></a>
-	<a href="https://github.com/fandych/suora/releases"><img alt="Release" src="https://img.shields.io/github/v/release/fandych/suora?display_name=tag&style=flat-square" /></a>
-	<a href="https://github.com/fandych/suora/releases"><img alt="Platforms" src="https://img.shields.io/badge/platforms-Windows%20%7C%20macOS%20%7C%20Linux-c86a3a?style=flat-square" /></a>
-</p>
+## React Compiler
 
-<p align="center">
-	<a href="https://fandych.github.io/suora/"><strong>Docs</strong></a>
-	·
-	<a href="https://github.com/fandych/suora/releases"><strong>Releases</strong></a>
-	·
-	<a href="https://github.com/fandych/suora/blob/main/FEATURES.md"><strong>Features</strong></a>
-	·
-	<a href="https://github.com/fandych/suora/blob/main/docs/technical/TECHNICAL_DOC_EN.md"><strong>Technical Docs</strong></a>
-</p>
+The React Compiler is enabled on this template. See [this documentation](https://react.dev/learn/react-compiler) for more information.
 
-## What Suora Is
+Note: This will impact Vite dev & build performances.
+You can also try [the experimental native React Compiler support in plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md#rust-react-compiler) by using `compiler: true` in the plugin options instead of using the Babel plugin.
 
-Suora is an Electron-based AI workbench for local knowledge work, automation, and integrations.
+## Expanding the ESLint configuration
 
-## Current Product Surface
+If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-| Module | Current role |
-| --- | --- |
-| Chat | Conversations, attachments, tool calls, and pipeline commands |
-| Documents | Local notes, folders, backlinks, source-aware graph insights, and chat context |
-| Models | Provider setup, model enablement, testing, and compare |
-| Agents | Built-in and custom agents with testing and versioning |
-| Skills | Installed skills, registry browsing, `SKILL.md` editing, and import/export |
-| Pipeline | Multi-step agent workflows with history and Mermaid preview |
-| Timer | Once / interval / cron schedules |
-| Channels | External messaging integrations and reply routing |
-| MCP | MCP server configuration |
-| Settings | Preferences, security, data, knowledge, plugins, logs, external sources, automation, and system diagnostics |
+```js
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
 
-## Why It Feels Different
+      // Remove tseslint.configs.recommended and replace with this
+      tseslint.configs.recommendedTypeChecked,
+      // Alternatively, use this for stricter rules
+      tseslint.configs.strictTypeChecked,
+      // Optionally, add this for stylistic rules
+      tseslint.configs.stylisticTypeChecked,
 
-- local-first desktop workspace instead of a browser-only shell
-- chat, documents, automation, and integrations in one app
-- multi-provider model strategy with BYOK and local-model support
-- built-in agents, skills, pipelines, timers, channels, and MCP as real product modules
+      // Other configs...
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 
-## Get Started
-
-### Download
-
-Get the latest build from:
-
-- <https://github.com/fandych/suora/releases/latest>
-
-### Run from source
-
-```bash
-npm install
-npm run dev
 ```
 
-### First useful setup order
+You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
 
-1. Configure at least one model in `Models`
-2. Start a conversation in `Chat`
-3. Create a local knowledge area in `Documents`
-4. Add automation in `Pipeline` and `Timer`
-5. Connect external channels only when needed
+```js
+// eslint.config.js
+import reactX from 'eslint-plugin-react-x'
+import reactDom from 'eslint-plugin-react-dom'
 
-## Documentation Map
+export default defineConfig([
+  globalIgnores(['dist']),
+  {
+    files: ['**/*.{ts,tsx}'],
+    extends: [
+      // Other configs...
+      // Enable lint rules for React
+      reactX.configs['recommended-typescript'],
+      // Enable lint rules for React DOM
+      reactDom.configs.recommended,
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: ['./tsconfig.node.json', './tsconfig.app.json'],
+        tsconfigRootDir: import.meta.dirname,
+      },
+      // other options...
+    },
+  },
+])
 
-The repo now keeps a smaller maintained documentation set:
-
-| Doc | Purpose |
-| --- | --- |
-| [FEATURES.md](./FEATURES.md) | Short capability index |
-| [docs/user/USER_GUIDE_ZH.md](./docs/user/USER_GUIDE_ZH.md) | Primary Chinese user guide |
-| [docs/user/MODULE_PLAYBOOK_ZH.md](./docs/user/MODULE_PLAYBOOK_ZH.md) | Chinese module-by-module user handbook |
-| [docs/user/USER_GUIDE_EN.md](./docs/user/USER_GUIDE_EN.md) | Primary English user guide |
-| [docs/user/MODULE_PLAYBOOK_EN.md](./docs/user/MODULE_PLAYBOOK_EN.md) | English module-by-module user handbook |
-| [docs/technical/TECHNICAL_DOC_ZH.md](./docs/technical/TECHNICAL_DOC_ZH.md) | Primary Chinese technical reference |
-| [docs/technical/MODULE_ARCHITECTURE_ZH.md](./docs/technical/MODULE_ARCHITECTURE_ZH.md) | Chinese module-by-module technical handbook |
-| [docs/technical/TECHNICAL_DOC_EN.md](./docs/technical/TECHNICAL_DOC_EN.md) | Primary English technical reference |
-| [docs/technical/MODULE_ARCHITECTURE_EN.md](./docs/technical/MODULE_ARCHITECTURE_EN.md) | English module-by-module technical handbook |
-| [docs/LLM_WIKI_CAPABILITIES.md](./docs/LLM_WIKI_CAPABILITIES.md) | LLM Wiki-inspired document intelligence capability reference |
-| [docs/TESTING.md](./docs/TESTING.md) | Testing and validation notes |
-| [docs/CHANNEL_INTEGRATION.md](./docs/CHANNEL_INTEGRATION.md) | Channel setup and runtime notes |
-| [docs/requirements.md](./docs/requirements.md) | Scope and requirements baseline |
-
-GitHub Pages is built from `website/` with Docusaurus and publishes `website/build`.
-
-## Development
-
-### Common commands
-
-```bash
-npm install
-npm run dev
-npm run build
-npm run preview
-npm run package
-npm run lint
-npm run type-check
-npm run test:run
-npm run test:e2e
 ```
-
-## Security Notes
-
-- API keys prefer OS-backed secure storage
-- if secure storage is unavailable, keys remain in memory only
-- filesystem access can be sandboxed
-- tool execution can require confirmation
-
-## License
-
-MIT

@@ -1,23 +1,24 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
 node_modules
 dist
-dist-electron
-out
-release
-build
-*.log
-*.tsbuildinfo
+dist-ssr
 *.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
 .DS_Store
-.env
-.env.local
-.env*.local
-*.log
-dev-app-update.yml
-
-
-# Coverage
-coverage/
-playwright-report/
-test-results/
-temp/
-tmp/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

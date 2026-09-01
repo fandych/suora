@@ -1,72 +1,71 @@
-import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
-import react from '@vitejs/plugin-react'
-import tailwindcss from '@tailwindcss/vite'
-import { resolve } from 'path'
+import { resolve } from "path"
+
+import react from "@vitejs/plugin-react"
+import tailwindcss from "@tailwindcss/vite"
+import { defineConfig, externalizeDepsPlugin } from "electron-vite"
+
+const alias = {
+  "@": resolve(__dirname, "./src"),
+  "@electron": resolve(__dirname, "./electron"),
+}
+
+function handleRollupWarning(
+  warning: { code?: string; message: string },
+  warn: (warning: { code?: string; message: string }) => void
+) {
+  if (warning.message.includes("contains an annotation that Rollup cannot interpret due to the position of the comment")) {
+    return
+  }
+
+  warn(warning)
+}
 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias,
+    },
     build: {
-      outDir: 'out/main',
+      outDir: "out/main",
       lib: {
-        entry: resolve(__dirname, 'electron/main.ts'),
+        entry: resolve(__dirname, "electron/main.ts"),
       },
     },
   },
   preload: {
     plugins: [externalizeDepsPlugin()],
+    resolve: {
+      alias,
+    },
     build: {
-      outDir: 'out/preload',
+      outDir: "out/preload",
       lib: {
-        entry: resolve(__dirname, 'electron/preload.ts'),
-        formats: ['cjs'],
+        entry: resolve(__dirname, "electron/preload.ts"),
+        formats: ["cjs"],
       },
     },
   },
   renderer: {
-    root: '.',
+    root: ".",
     build: {
-      outDir: 'out/renderer',
-      // Electron ships with a recent Chromium; targeting a modern baseline
-      // skips unnecessary transpilation and shrinks the bundle.
-      target: 'chrome120',
-      // Production sourcemaps are not needed in the packaged renderer; they
-      // slow down the build and inflate the output.
+      outDir: "out/renderer",
+      target: "chrome120",
       sourcemap: false,
       cssCodeSplit: true,
       rollupOptions: {
-        input: resolve(__dirname, 'index.html'),
-        output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom', 'zustand'],
-            'vendor-ai': ['ai', '@ai-sdk/anthropic', '@ai-sdk/openai', '@ai-sdk/openai-compatible'],
-            'vendor-markdown': ['react-markdown', 'remark-gfm'],
-            'vendor-zod': ['zod'],
-            'vendor-flow': ['@xyflow/react', 'dagre'],
-            'vendor-mermaid': ['mermaid'],
-            'vendor-tiptap': [
-              '@tiptap/react',
-              '@tiptap/starter-kit',
-              '@tiptap/extension-image',
-              '@tiptap/extension-link',
-              '@tiptap/extension-placeholder',
-            ],
-            'vendor-katex': ['katex', 'rehype-katex', 'remark-math'],
-            'vendor-icons': ['@iconify/react', '@iconify/utils'],
-          },
-        },
+        input: resolve(__dirname, "index.html"),
+        onwarn: handleRollupWarning,
       },
     },
     plugins: [react(), tailwindcss()],
     resolve: {
-      alias: {
-        '@': resolve(__dirname, './src'),
-      },
+      alias,
     },
     server: {
-      host: '127.0.0.1',
+      host: "127.0.0.1",
       port: 5173,
-      strictPort: true,
+      strictPort: false,
     },
   },
 })

@@ -1,0 +1,115 @@
+import { useEffect } from "react"
+
+import MonacoEditor from "@monaco-editor/react"
+import { EditorContent, useEditor } from "@tiptap/react"
+import Image from "@tiptap/extension-image"
+import Placeholder from "@tiptap/extension-placeholder"
+import { Table } from "@tiptap/extension-table"
+import { TableCell } from "@tiptap/extension-table-cell"
+import { TableHeader } from "@tiptap/extension-table-header"
+import { TableRow } from "@tiptap/extension-table-row"
+import { TaskItem } from "@tiptap/extension-task-item"
+import { TaskList } from "@tiptap/extension-task-list"
+import StarterKit from "@tiptap/starter-kit"
+
+import { Button } from "@/components/ui/button"
+import { InlineMath, MathBlock, MermaidBlock } from "@/views/components/document-extensions"
+import { markdownToTiptapHtml, tiptapJsonToMarkdown } from "@/views/components/document-markdown"
+
+type DocumentContentEditorProps = {
+  mode: "rich" | "source"
+  value: string
+  onChange: (value: string) => void
+  sourceLanguage?: string
+}
+
+const DocumentContentEditor = ({ mode, value, onChange, sourceLanguage = "html" }: DocumentContentEditorProps) => {
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Placeholder.configure({ placeholder: "Start writing..." }),
+      Image.configure({ inline: true }),
+      Table.configure({ resizable: false }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TaskList,
+      TaskItem.configure({ nested: true }),
+      MathBlock,
+      InlineMath,
+      MermaidBlock,
+    ],
+    content: markdownToTiptapHtml(value),
+    immediatelyRender: false,
+    onUpdate: ({ editor: nextEditor }) => {
+      onChange(tiptapJsonToMarkdown(nextEditor.getJSON() as Parameters<typeof tiptapJsonToMarkdown>[0]))
+    },
+    editorProps: {
+      attributes: {
+        class: "document-prose h-full min-h-full rounded-xl border border-border bg-background px-4 py-3 text-sm outline-none",
+      },
+    },
+  })
+
+  useEffect(() => {
+    if (!editor || mode !== "rich") {
+      return
+    }
+
+    const nextContent = markdownToTiptapHtml(value)
+    if (editor.getHTML() !== nextContent) {
+      editor.commands.setContent(nextContent, { emitUpdate: false })
+    }
+  }, [editor, mode, value])
+
+  if (mode === "source") {
+    return (
+      <div className="h-full overflow-hidden rounded-xl border border-border bg-background">
+        <MonacoEditor
+          height="100%"
+          defaultLanguage={sourceLanguage}
+          theme="vs-light"
+          value={value}
+          onChange={(nextValue) => onChange(nextValue ?? "")}
+          options={{
+            minimap: { enabled: false },
+            fontSize: 13,
+            lineNumbersMinChars: 3,
+            padding: { top: 12 },
+          }}
+        />
+      </div>
+    )
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-3">
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleBold().run()}>
+          Bold
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleItalic().run()}>
+          Italic
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
+          H2
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleBulletList().run()}>
+          Bullets
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleCodeBlock().run()}>
+          Code
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().insertContent({ type: "mathBlock", attrs: { content: "x^2 + y^2 = z^2" } }).run()}>
+          Math
+        </Button>
+        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().insertContent({ type: "mermaidBlock", attrs: { code: "graph TD\nA[Start] --> B[Step]" } }).run()}>
+          Mermaid
+        </Button>
+      </div>
+      <EditorContent editor={editor} className="min-h-0 flex-1 overflow-auto" />
+    </div>
+  )
+}
+
+export default DocumentContentEditor

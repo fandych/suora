@@ -1,124 +1,64 @@
-import { createHashRouter, RouterProvider, Navigate } from 'react-router-dom'
-import { useEffect, useMemo, lazy, Suspense } from 'react'
-import { AppShell } from '@/components/layout/AppShell'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { ConfirmDialogHost } from '@/components/ConfirmDialog'
-import { ToastHost } from '@/components/ToastHost'
-import { useI18n } from '@/hooks/useI18n'
-import { useTheme } from '@/hooks/useTheme'
-import { initChannelMessageListener } from '@/services/channelMessageHandler'
-import { initEventAutomationRuntime } from '@/services/eventAutomationRuntime'
-import { preloadPopularCollections } from '@/services/iconService'
-import { initTimerRuntimeListener } from '@/services/timerRuntime'
-import { toast } from '@/services/toast'
-import { initRendererRuntimeLogging } from '@/services/logger'
-import { loadAgentsLayout, loadChannelLayout, loadChatLayout, loadDocumentsLayout, loadIntegrationsLayout, loadModelsLayout, loadPipelineLayout, loadSettingsLayout, loadSkillsLayout, loadTimerLayout } from '@/services/routePrefetch'
-import { scheduleWhenIdle } from '@/utils/scheduling'
+import { HashRouter, Navigate, Route, Routes } from 'react-router'
+import { ToastProvider } from '@/components/ui/toast'
+import RootLayout from './views/layout'
+import ChatIndexPage from './views/chats'
+import DashboardPage from './views/dashboard'
+import WorkflowsPage from './views/workflows'
+import SkillsPage from './views/skills'
+import DocumentsPage from './views/documents'
+import IntegrationsPage from './views/integrations'
+import ModelsPage from './views/models'
+import AgentsPage from './views/agents'
+import ChannelsPage from './views/channels'
+import SchedulersPage from './views/schedulers'
+import PreferencePage from './views/preference'
+import ChatDetailPage from './views/chats/detail'
+import WorkflowDetailPage from './views/workflows/detail'
+import SkillsDetailPage from './views/skills/detail'
+import DocumentsDetailPage from './views/documents/detail'
+import IntegrationsDetailPage from './views/integrations/detail'
+import ModelsDetailPage from './views/models/detail'
+import AgentsDetailPage from './views/agents/detail'
+import ChannelDetailPage from './views/channels/detail'
+import SchedulerDetailPage from './views/schedulers/detail'
+import ErrorPage from './views/error'
+import { preferenceRoute } from './views/nav-config'
 
-const ChatLayout = lazy(() => loadChatLayout().then(m => ({ default: m.ChatLayout })))
-const DocumentsLayout = lazy(() => loadDocumentsLayout().then(m => ({ default: m.DocumentsLayout })))
-const PipelineLayout = lazy(() => loadPipelineLayout().then(m => ({ default: m.PipelineLayout })))
-const ModelsLayout = lazy(() => loadModelsLayout().then(m => ({ default: m.ModelsLayout })))
-const AgentsLayout = lazy(() => loadAgentsLayout().then(m => ({ default: m.AgentsLayout })))
-const SkillsLayout = lazy(() => loadSkillsLayout().then(m => ({ default: m.SkillsLayout })))
-const TimerLayout = lazy(() => loadTimerLayout().then(m => ({ default: m.TimerLayout })))
-const SettingsLayout = lazy(() => loadSettingsLayout().then(m => ({ default: m.SettingsLayout })))
-const ChannelLayout = lazy(() => loadChannelLayout().then(m => ({ default: m.ChannelLayout })))
-const IntegrationsLayout = lazy(() => loadIntegrationsLayout().then(m => ({ default: m.IntegrationsLayout })))
+const App = () => {
 
-function LazyPage({ children, label }: { children: React.ReactNode; label?: string }) {
   return (
-    <Suspense
-      fallback={
-        <div role="status" aria-live="polite" aria-label={label} className="route-transition-fallback animate-fade-in flex-1 flex flex-col items-center justify-center gap-3 text-text-muted">
-          <div className="w-6 h-6 border-2 border-accent/30 border-t-accent rounded-full animate-spin" />
-          {label && <span className="text-xs text-text-muted/60">{label}</span>}
-        </div>
-      }
-    >
-      {children}
-    </Suspense>
+    <ToastProvider>
+      <HashRouter>
+        <Routes>
+          <Route path="/" element={<RootLayout />}>
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
+            <Route path="chats" element={<ChatIndexPage />} />
+            <Route path="chats/:chatId" element={<ChatDetailPage />} />
+            <Route path="workflows" element={<WorkflowsPage />} />
+            <Route path="workflows/:workflowId" element={<WorkflowDetailPage />} />
+            <Route path="skills" element={<SkillsPage />} />
+            <Route path="skills/:skillId" element={<SkillsDetailPage />} />
+            <Route path="documents" element={<DocumentsPage />} />
+            <Route path="documents/:documentId" element={<DocumentsDetailPage />} />
+            <Route path="agents" element={<AgentsPage />} />
+            <Route path="agents/:agentId" element={<AgentsDetailPage />} />
+            <Route path="models" element={<ModelsPage />} />
+            <Route path="models/:modelId" element={<ModelsDetailPage />} />
+            <Route path="integrations" element={<IntegrationsPage />} />
+            <Route path="integrations/:integrationId" element={<IntegrationsDetailPage />} />
+            <Route path="schedulers" element={<SchedulersPage />} />
+            <Route path="schedulers/:schedulerId" element={<SchedulerDetailPage />} />
+            <Route path="channels" element={<ChannelsPage />} />
+            <Route path="channels/:channelId" element={<ChannelDetailPage />} />
+            <Route path={preferenceRoute.url.slice(1)} element={<PreferencePage />} />
+            <Route path="*" element={<ErrorPage />} />
+          </Route>
+        </Routes>
+      </HashRouter>
+
+    </ToastProvider>
   )
 }
 
-export default function App() {
-  const { t } = useI18n()
-  useTheme()
-
-  const router = useMemo(() => createHashRouter([
-    {
-      path: '/',
-      element: <AppShell />,
-      children: [
-        { index: true, element: <Navigate to="/chat" replace /> },
-        { path: 'chat', element: <LazyPage label={t('app.loadingChat', 'Loading Chat…')}><ChatLayout /></LazyPage> },
-        { path: 'documents', element: <LazyPage label={t('app.loadingDocuments', 'Loading Documents…')}><DocumentsLayout /></LazyPage> },
-        { path: 'pipeline', element: <LazyPage label={t('app.loadingPipeline', 'Loading Pipeline…')}><PipelineLayout /></LazyPage> },
-        { path: 'models', element: <Navigate to="/models/providers" replace /> },
-        { path: 'models/:view', element: <LazyPage label={t('app.loadingModels', 'Loading Models…')}><ModelsLayout /></LazyPage> },
-        { path: 'agents', element: <LazyPage label={t('app.loadingAgents', 'Loading Agents…')}><AgentsLayout /></LazyPage> },
-        { path: 'skills', element: <LazyPage label={t('app.loadingSkills', 'Loading Skills…')}><SkillsLayout /></LazyPage> },
-        { path: 'skills/:view', element: <Navigate to="/skills" replace /> },
-        { path: 'timer', element: <LazyPage label={t('app.loadingTimers', 'Loading Timers…')}><TimerLayout /></LazyPage> },
-        { path: 'channels', element: <LazyPage label={t('app.loadingChannels', 'Loading Channels…')}><ChannelLayout /></LazyPage> },
-        { path: 'mcp', element: <LazyPage label={t('app.loadingIntegrations', 'Loading Integrations…')}><IntegrationsLayout /></LazyPage> },
-        { path: 'settings/:section', element: <LazyPage label={t('app.loadingSettings', 'Loading Settings…')}><SettingsLayout /></LazyPage> },
-        { path: 'settings', element: <Navigate to="/settings/general" replace /> },
-      ],
-    },
-  ]), [t])
-
-  // Initialize channel message listener on mount
-  useEffect(() => {
-    // Must run synchronously: IPC listener has to be registered before any
-    // channel messages arrive, and so does the renderer runtime logger.
-    const cleanupRuntimeLogging = initRendererRuntimeLogging()
-    const cleanup = initChannelMessageListener()
-
-    // Timer and event automation need to be ready immediately after mount so
-    // startup-fired events are not lost. Icon collection warming can remain
-    // deferred because it is not correctness-critical.
-    let cleanupTimerRuntime: (() => void) | null = null
-    let cleanupEventAutomation: (() => void) | null = null
-
-    cleanupTimerRuntime = initTimerRuntimeListener()
-    cleanupEventAutomation = initEventAutomationRuntime()
-    const idleIcons = scheduleWhenIdle(() => {
-      preloadPopularCollections().catch(console.error)
-    }, 3500)
-
-    return () => {
-      idleIcons.cancel()
-      cleanup()
-      cleanupRuntimeLogging()
-      cleanupTimerRuntime?.()
-      cleanupEventAutomation?.()
-    }
-  }, [])
-
-  // Surface secure-storage warnings emitted by secureState.ts when API-key
-  // encryption is unavailable/failing — keys are kept in memory only and not
-  // written to disk in that case.
-  useEffect(() => {
-    const handler = (ev: Event) => {
-      const detail = (ev as CustomEvent<{ reason: 'unavailable' | 'encryption-failed' }>).detail
-      const reason = detail?.reason ?? 'unavailable'
-      toast.warning(
-        t('app.secureStorageUnavailable', 'Secure Storage Unavailable'),
-        reason === 'encryption-failed'
-          ? t('app.secureStorageEncryptionFailed', 'API key encryption failed. Keys will remain in memory only and must be re-entered after restart.')
-          : t('app.secureStorageUnavailableBody', 'OS keyring is not available. API keys will be kept in memory only and must be re-entered after restart.'),
-      )
-    }
-    window.addEventListener('suora:secure-storage-warning', handler)
-    return () => window.removeEventListener('suora:secure-storage-warning', handler)
-  }, [t])
-
-  return (
-    <ErrorBoundary>
-      <RouterProvider router={router} />
-      <ConfirmDialogHost />
-      <ToastHost />
-    </ErrorBoundary>
-  )
-}
+export default App

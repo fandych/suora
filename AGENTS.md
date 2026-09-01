@@ -1,245 +1,141 @@
+
 # AGENTS.md
 
-Shared guidance for coding agents working in this repository. Keep this file and `CLAUDE.md` aligned on implementation-backed facts.
+Shared guidance for coding agents working in this repository.
 
-## Project Snapshot
+## Project Goal
 
-**Suora (朔枢)** is an Electron-based AI workbench, not a single-chat toy app. The user-facing surface spans chat, documents, pipelines, model/provider management, agents, skills, timers, channels, MCP integrations, and settings.
+This workspace builds a brand-new UI for [suora](C:/Users/fandych/Documents/Codespace/suora), using a cleaner information architecture and a more modular React renderer.
 
-Core stack:
+Terminology rule:
 
-- Electron 41 with electron-vite 5
-- React 19 with React Router 7
-- Tailwind CSS 4
-- Zustand 5 persisted application state
-- Vercel AI SDK 6
-- TypeScript 5
-- Vitest, Testing Library, and Playwright
+- use `workflow` or `workflows` in new UI copy, routes, and components
+- do not introduce new `pipeline` naming in this workspace unless referring to legacy behavior from the source project
 
-## Current Product Surface
+Legacy-to-new naming guidance:
 
-Top-level routes are defined in `src/App.tsx`:
+- `pipeline` -> `workflow`
+- `timer` -> `scheduler`
+- legacy MCP-only entry points can be represented inside `integrations` when working on the new shell UI
 
-- `/chat`
-- `/documents`
-- `/pipeline`
-- `/models/:view` with `/models -> /models/providers`
+## Current Surface
+
+The current top-level route shell is defined in [src/App.tsx](src/App.tsx) and [src/views/nav-config.ts](src/views/nav-config.ts).
+
+Primary routes:
+
+- `/dashboard`
+- `/chats`
 - `/agents`
-- `/skills`
-- `/timer`
+- `/workflows`
+- `/schedulers`
+- `/integrations`
+- `/documents`
 - `/channels`
-- `/mcp`
-- `/settings/:section` with `/settings -> /settings/general`
+- `/skills`
+- `/models`
+- `/preference`
 
-Current settings sections are defined in `src/components/settings/SettingsLayout.tsx`:
+Secondary sidebar behavior:
 
-- `general`
-- `security`
-- `voice`
-- `shortcuts`
-- `data`
-- `logs`
-- `system`
+- route metadata belongs in [src/views/nav-config.ts](src/views/nav-config.ts)
+- dynamic or async sidebar item loading belongs in [src/views/secondary-sidebar-data.ts](src/views/secondary-sidebar-data.ts)
+- sidebar rendering belongs in [src/views/components/app-sidebar.tsx](src/views/components/app-sidebar.tsx) and [src/views/components/secondary-sidebar/section-sidebar.tsx](src/views/components/secondary-sidebar/section-sidebar.tsx)
 
-Useful subviews to remember when editing navigation or docs:
+## Source-of-Truth Reference
 
-- Models: `providers`, `models`, `compare`
+When deciding what modules the new UI must cover, use the source project at [C:/Users/fandych/Documents/Codespace/suora](C:/Users/fandych/Documents/Codespace/suora) as the product reference, but do not copy its route names blindly.
 
-## Primary Anchors
+The source project currently exposes modules for:
 
-Start from the owning implementation instead of broad exploration.
+- chat
+- documents
+- pipeline
+- models and providers
+- agents
+- skills
+- timer
+- channels
+- MCP
+- settings
 
-- `src/App.tsx`: actual route surface, lazy-loaded module entry points, secure-storage warning wiring
-- `src/store/appStore.ts`: canonical persisted state, built-in agents, import/export scope, global module state
-- `src/store/slices/modelConfigSlice.ts`: provider presets, tool-security defaults, model catalog syncing
-- `src/services/aiService.ts`: provider initialization, validation, client caching, streaming, error classification
-- `src/services/agentPipelineService.ts`: pipeline execution lifecycle and step behavior
-- `src/services/pipelineChatCommands.ts`: chat-driven pipeline command parsing
-- `src/services/skillRegistry.ts`: SKILL.md parsing, serialization, load/save behavior
-- `src/services/skillMarketplace.ts`: registry browsing and install/uninstall flows
-- `src/services/documents.ts`: document tree persistence and graph behavior
-- `src/services/channelMessageHandler.ts`: renderer-side channel runtime behavior
-- `src/services/mcpSystem.ts`: MCP server configuration and status handling
-- `src/components/settings/SettingsLayout.tsx`: settings sections and layout contract
-- `package.json`: supported scripts and dependency versions
+In this workspace, prefer the renamed UI surface:
 
-## Architecture Guardrails
+- chats
+- documents
+- workflows
+- models
+- agents
+- skills
+- schedulers
+- channels
+- integrations
+- preference
 
-### State and Persistence
+## UI Direction
 
-The app uses a single persisted Zustand store rooted in `src/store/appStore.ts`, with feature slices under `src/store/slices/`. Treat store changes as cross-module changes by default.
+This repo is not a direct clone of the source app UI. Build a new UI that keeps the module coverage while improving clarity and structure.
 
-Important persisted domains include:
+Expectations:
 
-- chat sessions and tabs
-- documents, folders, groups, and graph-like document nodes
-- provider configs and enabled model catalogs
-- agents, versions, memories, and performance stats
-- skills, registry sources, and imported bundles
-- pipelines and execution history
-- timers and timer runtime metadata
-- channels, message history, users, tokens, and health
-- notifications
-- MCP server config and status
-- UI preferences and workspace-scoped settings
-- plugin metadata, external directories, proxy, email, and environment variables
+- the left icon rail defines the primary product areas
+- the secondary sidebar is module-specific and should be able to load dynamic data
+- page shells should be reusable and avoid copy-paste layouts
+- placeholders are acceptable only when the route contract is clear and the UI structure is reusable
 
-### Models and Providers
+## Dynamic Data Rule
 
-Runtime provider initialization in `src/services/aiService.ts` currently supports:
+Do not hardcode future runtime lists directly inside route config.
 
-- `anthropic`
-- `openai`
-- `google`
-- `ollama`
-- `deepseek`
-- `zhipu`
-- `minimax`
-- `groq`
-- `together`
-- `fireworks`
-- `perplexity`
-- `cohere`
-- `openai-compatible`
+Use this split instead:
 
-Current UI/provider preset reality is narrower and split across files:
+- `nav-config.ts`: route metadata, labels, sidebar group definitions, search placeholder
+- `secondary-sidebar-data.ts`: async data loader or adapter layer for sidebar lists
+- page or store layer: real API calls, persisted state, caching, and mutations when runtime data arrives
 
-- `src/store/slices/modelConfigSlice.ts` seeds presets for OpenAI, Anthropic, Google Gemini, Ollama, DashScope, Kimi, and generic OpenAI-compatible
-- `src/components/models/ProviderEditor.tsx` currently exposes provider type selection for `openai`, `anthropic`, `google`, `ollama`, and `openai-compatible`
+When replacing mock sidebar data with real data, preserve the rendering contract so UI components do not need to change.
 
-Document runtime support and UI exposure separately. Do not collapse them into one list.
+## Code Rules
 
-### Agents
+- `ts` and `tsx` files must stay under 400 lines; extract components into nearby `components` folders when needed
+- always use `@/` imports in repo code; do not introduce new `../` or `./` local imports
+- do not use scripts or bulk automation to rewrite code; make targeted manual edits
+- every code change must leave the app in a runnable state and must be validated with a real check such as `npm run build`
+- preserve shadcn UI source files in [src/components/ui](src/components/ui) instead of restyling them in place
+- `electron/` source must be grouped by concern: `ipc/`, `database/`, `others/`, and `types/`; do not flatten new helper modules at the `electron/` root
+- when `npm run dev` is used for Electron validation during agent work, stop the spawned dev process before finishing the task
 
-Built-in agents are defined in `src/store/appStore.ts`:
+## Directory Notes
 
-- Assistant
-- Agent builder
-- Pipeline builder
-- Timer builder
-- Document editor
-- Code Expert
-- Writing Strategist
-- Research Analyst
-- Security Auditor
-- Data Analyst
-- DevOps Expert
+The current directory intent is:
 
-Agent behavior is richer than a prompt preset. Preserve fields like skill bindings, tool allow/deny lists, permission mode, memories, response style, and max turn limits.
+```text
+src/
+    components/           global components
+        ui/                 shadcn UI primitives, keep upstream style intact
+    views/                route-level pages and route UI contracts
+        components/         shared view components
+        chats/              chats page area
+            components/       chat-specific components
+        preferences/        preference pages when expanded
+            components/       preference-specific components
+            general/          preference/general route
+                components/     general-settings-only components
 
-### Skills
-
-The skills system is prompt-based and centered on `SKILL.md` files.
-
-Important rules:
-
-- skills are not the same as the built-in tool registry
-- `SKILL.md` content is parsed and serialized by `skillRegistry.ts`
-- installed, browse, and registry-source management are first-class UI flows
-- local/project/user/registry-backed skills all exist in the current product surface
-
-Do not reintroduce stale assumptions that each skill directly implements a tool.
-
-### Pipelines, Timers, Channels, and MCP
-
-- Pipelines are a real runtime feature with step execution, retries, timeouts, `runIf`, output transforms, exported variables, and saved execution history
-- Timers can trigger desktop notifications, agent prompts, and saved pipelines
-- Channels are first-class modules, not side demos
-- MCP configuration and status are part of the persisted workspace state and the `/mcp` route
-
-Channel platform coverage currently includes:
-
-- WeChat Work
-- WeChat Official Account
-- WeChat Mini Program
-- Feishu / Lark
-- DingTalk
-- Slack
-- Telegram
-- Discord
-- Microsoft Teams
-- Custom channels
-
-### Electron Security
-
-When touching Electron-facing code, keep these constraints intact:
-
-- `contextIsolation` stays enabled
-- renderer code does not reach Node.js APIs directly
-- privileged operations go through `electron/preload.ts` and `electron/main.ts`
-- secure-storage failures must still surface clear warnings to the renderer
-- filesystem, shell, and tool restrictions must not be bypassed casually
+electron/
+    ipc/                  IPC registration grouped by domain
+    database/             database core and db helpers
+    others/               Electron-only helpers that are not entrypoints
+    types/                Electron process types and payload contracts
+```
 
 ## Working Rules
 
 When implementing changes:
 
-1. Start from the owning route, service, or store domain.
-2. Update shared types in `src/types/` when changes cross module boundaries.
-3. Add store actions only when the data truly belongs in persisted global state.
-4. Prefer feature-local services in `src/services/` for runtime behavior.
-5. Keep Electron main/preload changes in sync.
-6. Add focused tests when a nearby test surface already exists.
-7. Update docs when routes, providers, built-in agents, settings sections, or security behavior change.
-8. After any code change, validate against the GitHub Actions `test` job in `.github/workflows/test.yml`, matching its Node 22.x environment and steps as closely as practical before handing off. Do not claim the work is complete if that workflow-level validation has not been run or if a step is still blocked.
-
-When editing documentation, prefer implementation-backed facts over inherited prose. The most drift-prone items in this repo are:
-
-- route counts and redirect targets
-- provider support versus provider presets
-- built-in agent names
-- settings sections
-- test totals or coverage claims
-- IPC/tool counts
-
-Only write exact counts after revalidating them from code or commands.
-
-## Common Commands
-
-Install:
-
-```bash
-npm install
-```
-
-Development:
-
-```bash
-npm run dev
-```
-
-Build and preview:
-
-```bash
-npm run build
-npm run preview
-npm run package
-```
-
-Code quality and tests:
-
-```bash
-npm run lint
-npm run type-check
-npm run test
-npm run test:ui
-npm run test:run
-npm run test:coverage
-npm run test:e2e
-npm run test:e2e:ui
-```
-
-## Testing Notes
-
-- Vitest covers renderer and Electron slices where `*.test.*` and `*.spec.*` files already exist
-- Playwright is currently renderer-focused smoke coverage against the Vite app, not full Electron window automation
-- For targeted work, prefer the narrowest relevant validation first, then widen only if needed
-- For any code-editing task, the final validation bar is the current GitHub Actions `test` job in `.github/workflows/test.yml` on Node 22.x: start from `npm ci` when dependencies or the lockfile could affect results, then run `npm run lint`, `npm run type-check`, `npm run test:run`, `npm run test:coverage`, `npm audit --audit-level=moderate`, Playwright browser setup as needed for `npm run test:e2e`, and `npm run build`
-- If the local environment prevents one of those workflow steps from running, report the exact blocked step and reason explicitly instead of implying that the Actions test flow should pass
-
-## Notes
-
-- Use the `@` alias for renderer imports
-- Tailwind CSS v4 styling is driven through the current Vite/Electron setup and `src/index.css`
-- External directory loading exists for both agents and skills
-- A plugin runtime exists in services/store, but it is still a supporting subsystem rather than a primary top-level route
+1. Start from the owning route or view contract instead of broad exploration.
+2. Keep sidebar structure reusable; do not fork separate implementations unless the interaction model is truly different.
+3. Put mock data behind an adapter or loader if the user will later replace it with API data.
+4. Keep naming aligned with `workflow`, never new `pipeline` UI labels.
+5. Validate with `npm run build` after route or layout changes.
+6. Update this file when route names, module coverage, or UI architecture rules change.

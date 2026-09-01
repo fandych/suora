@@ -1,148 +1,102 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer } from "electron"
 
-// Only allow known IPC channels to prevent arbitrary main-process calls
-const ALLOWED_INVOKE_CHANNELS = [
-  'system:getDefaultWorkspacePath',
-  'system:homePath',
-  'system:ensureDirectory',
-  'system:info',
-  'system:notify',
-  'system:screenshot',
-  'workspace:init',
-  'workspace:getBootConfig',
-  'workspace:setExternalDirectories',
-  'workspace:setProxySettings',
-  'workspace:setToolSecurity',
-  'db:getSnapshot',
-  'db:saveStateSlice',
-  'db:loadPersistedStore',
-  'db:savePersistedStore',
-  'db:deletePersistedStore',
-  'db:listEntities',
-  'db:saveEntity',
-  'db:deleteEntity',
-  'safe-storage:encrypt',
-  'safe-storage:decrypt',
-  'safe-storage:isAvailable',
-  'app:setAutoStart',
-  'app:getAutoStart',
-  'fs:listDir',
-  'fs:readFile',
-  'fs:readFileRange',
-  'fs:writeFile',
-  'fs:writeBinaryFile',
-  'fs:appendFile',
-  'fs:deleteFile',
-  'fs:deleteDir',
-  'fs:editFile',
-  'fs:searchFiles',
-  'fs:moveFile',
-  'fs:copyFile',
-  'fs:stat',
-  'fs:glob',
-  'git:status',
-  'git:diff',
-  'git:log',
-  'git:add',
-  'git:commit',
-  'shell:exec',
-  'shell:openPath',
-  'shell:openUrl',
-  'web:fetch',
-  'web:fetchJson',
-  'web:fetchText',
-  'ai:fetch:start',
-  'ai:fetch:abort',
-  'clipboard:read',
-  'clipboard:write',
-  'timer:list',
-  'timer:create',
-  'timer:update',
-  'timer:delete',
-  'timer:history',
-  'timer:startExecution',
-  'timer:updateExecution',
-  'browser:navigate',
-  'browser:show',
-  'browser:hide',
-  'browser:getState',
-  'browser:screenshot',
-  'browser:evaluate',
-  'browser:extractLinks',
-  'browser:extractText',
-  'browser:fillForm',
-  'browser:click',
-  'fs:watch:start',
-  'fs:watch:stop',
-  'log:write',
-  'log:listFiles',
-  'log:readFile',
-  'log:clearFiles',
-  'channel:start',
-  'channel:stop',
-  'channel:status',
-  'channel:register',
-  'channel:getWebhookUrl',
-  'channel:sendMessage',
-  'channel:sendMessageQueued',
-  'channel:getAccessToken',
-  'channel:healthCheck',
-  'channel:streamStatus',
-  'channel:debugSend',
-  'channel:wechatPersonalLoginStart',
-  'channel:wechatPersonalLoginWait',
-  'updater:check',
-  'updater:getVersion',
-  'updater:getState',
-  'updater:install',
-  'email:send',
-  'email:test',
-  'deep-link:getProtocol',
-  'crash:report',
-  'crash:getLogs',
-  'crash:clearLogs',
-  'perf:getMetrics',
-  'iconify:listCollections',
-  'iconify:loadCollection',
-  'iconify:getIconNames',
-  'export:saveFileDialog',
-  'export:printToPDF',
-]
-
-export const allowedInvokeChannels = Object.freeze([...ALLOWED_INVOKE_CHANNELS])
-
-const ALLOWED_SEND_CHANNELS = [
-  'app:ready',
-]
-
-const ALLOWED_RECEIVE_CHANNELS = [
-  'app:update',
-  'timer:fired',
-  'fs:watch:changed',
-  'channel:message',
-  'ai:fetch:event',
-  'updater:available',
-  'updater:state',
-  'deep-link',
-]
-
-contextBridge.exposeInMainWorld('electron', {
+contextBridge.exposeInMainWorld("electron", {
   invoke: (channel: string, ...args: unknown[]) => {
-    if (!ALLOWED_INVOKE_CHANNELS.includes(channel)) {
-      return Promise.reject(new Error(`IPC channel not allowed: ${channel}`))
-    }
     return ipcRenderer.invoke(channel, ...args)
   },
   on: (channel: string, listener: (...args: unknown[]) => void) => {
-    if (!ALLOWED_RECEIVE_CHANNELS.includes(channel)) return
     ipcRenderer.on(channel, listener)
   },
   off: (channel: string, listener: (...args: unknown[]) => void) => {
-    if (!ALLOWED_RECEIVE_CHANNELS.includes(channel)) return
     ipcRenderer.off(channel, listener)
   },
-  send: (channel: string, ...args: unknown[]) => {
-    if (!ALLOWED_SEND_CHANNELS.includes(channel)) return
-    ipcRenderer.send(channel, ...args)
+})
+
+contextBridge.exposeInMainWorld("suora", {
+  system: {
+    info: () => ipcRenderer.invoke("system:info"),
+  },
+  workspace: {
+    getPaths: () => ipcRenderer.invoke("workspace:getPaths"),
+    setProxySettings: (settings: unknown) => ipcRenderer.invoke("workspace:setProxySettings", settings),
+    getProxySettings: () => ipcRenderer.invoke("workspace:getProxySettings"),
+  },
+  chats: {
+    list: () => ipcRenderer.invoke("chats:list"),
+    get: (chatId: string) => ipcRenderer.invoke("chats:get", chatId),
+    create: () => ipcRenderer.invoke("chats:create"),
+    appendUser: (payload: unknown) => ipcRenderer.invoke("chats:appendUser", payload),
+    appendAssistant: (payload: unknown) => ipcRenderer.invoke("chats:appendAssistant", payload),
+    getSettings: () => ipcRenderer.invoke("chats:getSettings"),
+    saveSettings: (payload: unknown) => ipcRenderer.invoke("chats:saveSettings", payload),
+  },
+  documents: {
+    list: () => ipcRenderer.invoke("documents:list"),
+    get: (documentId: string, versionId?: string) => ipcRenderer.invoke("documents:get", documentId, versionId),
+    create: () => ipcRenderer.invoke("documents:create"),
+    save: (payload: unknown) => ipcRenderer.invoke("documents:save", payload),
+    delete: (documentId: string) => ipcRenderer.invoke("documents:delete", documentId),
+  },
+  db: {
+    execute: (payload: unknown) => ipcRenderer.invoke("db:execute", payload),
+  },
+  models: {
+    list: () => ipcRenderer.invoke("models:list"),
+    get: (providerId: string) => ipcRenderer.invoke("models:get", providerId),
+    create: (payload?: unknown) => ipcRenderer.invoke("models:create", payload),
+    save: (payload: unknown) => ipcRenderer.invoke("models:save", payload),
+    delete: (providerId: string) => ipcRenderer.invoke("models:delete", providerId),
+  },
+  skills: {
+    list: () => ipcRenderer.invoke("skills:list"),
+    get: (skillId: string) => ipcRenderer.invoke("skills:get", skillId),
+    create: () => ipcRenderer.invoke("skills:create"),
+    save: (payload: unknown) => ipcRenderer.invoke("skills:save", payload),
+    delete: (skillId: string) => ipcRenderer.invoke("skills:delete", skillId),
+  },
+  agents: {
+    list: () => ipcRenderer.invoke("agents:list"),
+    get: (agentId: string) => ipcRenderer.invoke("agents:get", agentId),
+    create: () => ipcRenderer.invoke("agents:create"),
+    save: (payload: unknown) => ipcRenderer.invoke("agents:save", payload),
+    delete: (agentId: string) => ipcRenderer.invoke("agents:delete", agentId),
+  },
+  integrations: {
+    list: () => ipcRenderer.invoke("integrations:list"),
+    get: (integrationId: string) => ipcRenderer.invoke("integrations:get", integrationId),
+    create: (payload?: unknown) => ipcRenderer.invoke("integrations:create", payload),
+    save: (payload: unknown) => ipcRenderer.invoke("integrations:save", payload),
+    recordExecution: (payload: unknown) => ipcRenderer.invoke("integrations:recordExecution", payload),
+    execute: (payload: unknown) => ipcRenderer.invoke("integration:execute", payload),
+  },
+  workflows: {
+    list: () => ipcRenderer.invoke("workflows:list"),
+    get: (workflowId: string) => ipcRenderer.invoke("workflows:get", workflowId),
+    create: () => ipcRenderer.invoke("workflows:create"),
+    save: (payload: unknown) => ipcRenderer.invoke("workflows:save", payload),
+    recordInvocation: (payload: unknown) => ipcRenderer.invoke("workflows:recordInvocation", payload),
+  },
+  channels: {
+    list: () => ipcRenderer.invoke("channels:list"),
+    get: (channelId: string) => ipcRenderer.invoke("channels:get", channelId),
+    create: () => ipcRenderer.invoke("channels:create"),
+    save: (payload: unknown) => ipcRenderer.invoke("channels:save", payload),
+    delete: (channelId: string) => ipcRenderer.invoke("channels:delete", channelId),
+  },
+  schedulers: {
+    list: () => ipcRenderer.invoke("schedulers:list"),
+    get: (schedulerId: string) => ipcRenderer.invoke("schedulers:get", schedulerId),
+    create: () => ipcRenderer.invoke("schedulers:create"),
+    save: (payload: unknown) => ipcRenderer.invoke("schedulers:save", payload),
+  },
+  preferences: {
+    get: () => ipcRenderer.invoke("preferences:get"),
+    save: (value: string) => ipcRenderer.invoke("preferences:save", value),
+  },
+  updater: {
+    getState: () => ipcRenderer.invoke("updater:getState"),
+    check: () => ipcRenderer.invoke("updater:check"),
   },
 })
+
+export {}
