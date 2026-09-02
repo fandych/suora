@@ -58,6 +58,7 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
           title: record.title,
           meta: record.summary,
           group: now - record.updatedAt < oneDay ? "today" : now - record.updatedAt < sevenDays ? "recent" : "older",
+          actions: [{ id: "delete", label: "Delete", variant: "destructive" as const }],
         }))
       )
     }

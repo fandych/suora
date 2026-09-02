@@ -1,4 +1,5 @@
 import type { Edge, Node, Viewport } from "@xyflow/react"
+import type { ChatMessagePart } from "@/data/domain/chat-message-parts"
 
 import type {
   ResolvedSecondarySidebarGroup,
@@ -21,6 +22,7 @@ export type ChatMessageRecord = {
   role: "user" | "assistant" | "system"
   content: string
   createdAt: number
+  parts?: ChatMessagePart[]
 }
 
 export type ChatDetail = {

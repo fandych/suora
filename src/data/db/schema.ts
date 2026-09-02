@@ -13,6 +13,7 @@ export const chatMessages = sqliteTable("chat_messages", {
   chatId: text("chat_id").notNull(),
   role: text("role", { enum: ["user", "assistant", "system"] }).notNull(),
   content: text("content").notNull(),
+  partsJson: text("parts_json").notNull().default("[]"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
 })
 

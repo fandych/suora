@@ -1,7 +1,4 @@
-import { eq } from "drizzle-orm"
-
-import { executePersistedMutation, getDatabaseContext } from "@/data/db/client"
-import { appMeta } from "@/data/db/schema"
+import { suoraIpc } from "@/lib/ipc"
 
 export type ChatModelConfig = {
   providerId: string
@@ -28,6 +25,23 @@ export type ChatRuntimeSettings = {
   proxy: ProxyConfig
 }
 
+export type ChatSessionSettings = {
+  runtime: ChatRuntimeSettings
+  selectedAgentId: string
+}
+
+type StoredChatSessionSettings = {
+  runtime?: Partial<ChatRuntimeSettings>
+  selectedAgentId?: string
+}
+
+type ChatSettingsStore = {
+  defaultRuntime?: Partial<ChatRuntimeSettings>
+  defaultSelectedAgentId?: string
+  drafts?: Record<string, string>
+  chats?: Record<string, StoredChatSessionSettings>
+}
+
 const DEFAULT_SETTINGS: ChatRuntimeSettings = {
   model: {
     providerId: "provider-ollama",
@@ -49,30 +63,47 @@ const DEFAULT_SETTINGS: ChatRuntimeSettings = {
   },
 }
 
-function parseSettings(value?: string | null): ChatRuntimeSettings {
-  if (!value) {
-    return DEFAULT_SETTINGS
-  }
-
+function parseRuntimeSettings(value?: Partial<ChatRuntimeSettings> | null): ChatRuntimeSettings {
   try {
-    const parsed = JSON.parse(value) as Partial<ChatRuntimeSettings>
     return {
-      model: { ...DEFAULT_SETTINGS.model, ...(parsed.model ?? {}) },
-      proxy: { ...DEFAULT_SETTINGS.proxy, ...(parsed.proxy ?? {}) },
+      model: { ...DEFAULT_SETTINGS.model, ...(value?.model ?? {}) },
+      proxy: { ...DEFAULT_SETTINGS.proxy, ...(value?.proxy ?? {}) },
     }
   } catch {
     return DEFAULT_SETTINGS
   }
 }
 
-export async function getChatRuntimeSettings() {
-  const context = await getDatabaseContext()
-  const row = (await context.db.select().from(appMeta).where(eq(appMeta.key, "chat_runtime_settings")).all())[0]
-  return parseSettings(row?.value)
+function parseStore(value?: string | null): ChatSettingsStore {
+  if (!value) {
+    return {}
+  }
+
+  try {
+    const parsed = JSON.parse(value) as Partial<ChatRuntimeSettings> & ChatSettingsStore
+
+    if (parsed.model || parsed.proxy) {
+      return {
+        defaultRuntime: parsed,
+        defaultSelectedAgentId: "agent-general-assistant",
+        drafts: {},
+        chats: {},
+      }
+    }
+
+    return {
+      defaultRuntime: parsed.defaultRuntime,
+      defaultSelectedAgentId: parsed.defaultSelectedAgentId,
+      drafts: parsed.drafts ?? {},
+      chats: parsed.chats ?? {},
+    }
+  } catch {
+    return {}
+  }
 }
 
-export async function saveChatRuntimeSettings(settings: ChatRuntimeSettings) {
-  const sanitized: ChatRuntimeSettings = {
+function sanitizeRuntimeSettings(settings: ChatRuntimeSettings): ChatRuntimeSettings {
+  return {
     model: {
       ...settings.model,
       providerId: settings.model.providerId.trim() || settings.model.providerType,
@@ -89,14 +120,87 @@ export async function saveChatRuntimeSettings(settings: ChatRuntimeSettings) {
       port: Number.isFinite(settings.proxy.port) ? settings.proxy.port : 0,
     },
   }
+}
 
-  await executePersistedMutation(async ({ db }) => {
-    await db.insert(appMeta)
-      .values({ key: "chat_runtime_settings", value: JSON.stringify(sanitized) })
-      .onConflictDoUpdate({ target: appMeta.key, set: { value: JSON.stringify(sanitized) } })
-      .run()
+export async function getChatSessionSettings(chatId?: string | null): Promise<ChatSessionSettings> {
+  const value = await suoraIpc.chats.getSettings() as string | null
+  const store = parseStore(value)
+  const chatSettings = chatId ? store.chats?.[chatId] : undefined
+  const defaultRuntime = parseRuntimeSettings(store.defaultRuntime)
+  const runtime = parseRuntimeSettings({
+    model: { ...defaultRuntime.model, ...(chatSettings?.runtime?.model ?? {}) },
+    proxy: { ...defaultRuntime.proxy, ...(chatSettings?.runtime?.proxy ?? {}) },
   })
 
-  await window.electron?.invoke("workspace:setProxySettings", sanitized.proxy)
-  return sanitized
+  return {
+    runtime,
+    selectedAgentId: chatSettings?.selectedAgentId ?? store.defaultSelectedAgentId ?? "agent-general-assistant",
+  }
+}
+
+export async function saveChatSessionSettings(chatId: string | null, settings: ChatSessionSettings) {
+  const value = await suoraIpc.chats.getSettings() as string | null
+  const store = parseStore(value)
+  const runtime = sanitizeRuntimeSettings(settings.runtime)
+
+  const nextStore: ChatSettingsStore = {
+    defaultRuntime: store.defaultRuntime,
+    defaultSelectedAgentId: store.defaultSelectedAgentId,
+    drafts: store.drafts ?? {},
+    chats: { ...(store.chats ?? {}) },
+  }
+
+  if (chatId) {
+    nextStore.chats![chatId] = {
+      runtime,
+      selectedAgentId: settings.selectedAgentId.trim(),
+    }
+  } else {
+    nextStore.defaultRuntime = runtime
+    nextStore.defaultSelectedAgentId = settings.selectedAgentId.trim()
+  }
+
+  await suoraIpc.chats.saveSettings(nextStore)
+
+  return {
+    runtime,
+    selectedAgentId: settings.selectedAgentId.trim(),
+  } satisfies ChatSessionSettings
+}
+
+export async function getChatDraft(chatId?: string | null) {
+  const value = await suoraIpc.chats.getSettings() as string | null
+  const store = parseStore(value)
+  const draftKey = chatId ?? "__draft__"
+  return store.drafts?.[draftKey] ?? ""
+}
+
+export async function saveChatDraft(chatId: string | null, draft: string) {
+  const value = await suoraIpc.chats.getSettings() as string | null
+  const store = parseStore(value)
+  const draftKey = chatId ?? "__draft__"
+
+  const nextStore: ChatSettingsStore = {
+    defaultRuntime: store.defaultRuntime,
+    defaultSelectedAgentId: store.defaultSelectedAgentId,
+    drafts: { ...(store.drafts ?? {}) },
+    chats: { ...(store.chats ?? {}) },
+  }
+
+  nextStore.drafts![draftKey] = draft
+  await suoraIpc.chats.saveSettings(nextStore)
+  return draft
+}
+
+export async function getChatRuntimeSettings(chatId?: string | null) {
+  const session = await getChatSessionSettings(chatId)
+  return session.runtime
+}
+
+export async function saveChatRuntimeSettings(settings: ChatRuntimeSettings, chatId?: string | null) {
+  const session = await saveChatSessionSettings(chatId ?? null, {
+    runtime: settings,
+    selectedAgentId: "agent-general-assistant",
+  })
+  return session.runtime
 }

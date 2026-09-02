@@ -2,8 +2,10 @@ import fs from "node:fs/promises"
 import path from "node:path"
 import { spawn } from "node:child_process"
 
-import { ipcMain, shell } from "electron"
+import { app, dialog, ipcMain, shell } from "electron"
 
+import { appState } from "@electron/others/app-state"
+import { navigateBrowserWindow } from "@electron/others/browser-window"
 import { ensureWorkspace } from "@electron/others/workspace"
 import { getWorkspacePath } from "@electron/others/paths"
 
@@ -88,5 +90,25 @@ export function registerToolsIpc() {
   ipcMain.handle("tools:openExternal", async (_event, url: string) => {
     await shell.openExternal(url)
     return { ok: true, url }
+  })
+
+  ipcMain.handle("tools:browserNavigate", async (_event, payload: { url?: string; visible?: boolean }) => {
+    return await navigateBrowserWindow(payload)
+  })
+
+  ipcMain.handle("tools:saveFile", async (_event, payload: { defaultName: string; filters?: Array<{ name: string; extensions: string[] }>; dataBase64: string }) => {
+    const browserWindow = appState.mainWindow ?? undefined
+    const result = await dialog.showSaveDialog(browserWindow, {
+      defaultPath: path.join(app.getPath("documents"), payload.defaultName),
+      filters: payload.filters,
+    })
+
+    if (result.canceled || !result.filePath) {
+      return { ok: true, canceled: true, path: null }
+    }
+
+    const buffer = Buffer.from(payload.dataBase64, "base64")
+    await fs.writeFile(result.filePath, buffer)
+    return { ok: true, canceled: false, path: result.filePath }
   })
 }

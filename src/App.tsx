@@ -1,5 +1,5 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router'
-import { ToastProvider } from '@/components/ui/toast'
+import { Toaster } from '@/components/ui/toast'
 import RootLayout from './views/layout'
 import DashboardPage from './views/dashboard'
 import WorkflowsPage from './views/workflows'
@@ -26,7 +26,7 @@ import { preferenceRoute } from './views/nav-config'
 const App = () => {
 
   return (
-    <ToastProvider>
+    <Toaster>
       <HashRouter>
         <Routes>
           <Route path="/" element={<RootLayout />}>
@@ -56,7 +56,7 @@ const App = () => {
         </Routes>
       </HashRouter>
 
-    </ToastProvider>
+    </Toaster>
   )
 }
 

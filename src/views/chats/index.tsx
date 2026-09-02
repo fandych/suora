@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button"
+import { toast } from "@/components/ui/toast"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { createChat, listChats } from "@/data/repositories/chat-repository"
+import { listChats } from "@/data/repositories/chat-repository"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
@@ -11,9 +12,9 @@ const ChatsPage = () => {
 	const navigate = useNavigate()
 	const { data, error, isLoading, reload } = useAsyncResource(() => listChats(), [])
 
-	const handleCreate = async () => {
-		const detail = await createChat()
-		navigate(`/chats/${detail.chat.id}`)
+	const handleCreate = () => {
+		navigate("/chats")
+		toast.add({ title: "New draft", description: "Start typing to create a real chat.", type: "info", timeout: 2500 })
 	}
 
 	return (

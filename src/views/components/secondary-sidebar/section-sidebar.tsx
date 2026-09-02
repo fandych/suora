@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { EllipsisIcon, Trash2Icon } from "lucide-react"
 
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router"
@@ -22,6 +23,7 @@ import { deleteDocument } from "@/data/repositories/document-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { deleteModelProvider, listModelProviders, saveModelProvider } from "@/data/repositories/model-config-repository"
 import { deleteSkill, getSkillDetail, saveSkillDraft } from "@/data/repositories/skill-repository"
+import { ChatDeleteButton } from "@/views/chats/components/chat-delete-button"
 
 import type { ResolvedSecondarySidebarGroup } from "@/views/nav-config"
 
@@ -75,6 +77,7 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
         emitDataChanged("/documents")
         if (location.pathname === `/documents/${itemId}`) navigate("/documents")
       }
+      return
     }
   }
 
@@ -98,9 +101,9 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
   return (
     <Sidebar collapsible="none" className="hidden flex-1 border-l md:flex">
       <SidebarHeader className="gap-2.5 border-b p-3">
-        <div className="flex w-full items-center justify-between">
-          <div className="text-base font-medium text-foreground">{title}</div>
-          {headerAction}
+        <div className="flex min-w-0 w-full items-center justify-between gap-2">
+          <div className="min-w-0 truncate text-base font-medium text-foreground">{title}</div>
+          {headerAction ? <div className="shrink-0">{headerAction}</div> : null}
         </div>
         <SidebarInput placeholder={searchPlaceholder} value={query} onChange={(event) => setQuery(event.target.value)} />
       </SidebarHeader>
@@ -126,19 +129,22 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
                         </SidebarMenuItem>
                       ))
                     : group.items.map((item) => (
-                        <SidebarMenuItem key={item.id}>
-                          <div className="flex items-center gap-1">
+                        <SidebarMenuItem key={item.id} {...(title === "Chats" ? { "data-chat-history-item": item.id } : {})}>
+                          <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
                             <SidebarMenuButton isActive={location.pathname === item.href} onClick={() => navigate(item.href)} className="min-w-0 justify-between gap-2">
-                              <span className="flex min-w-0 items-center gap-2">
+                              <span className="flex min-w-0 items-center gap-2 overflow-hidden">
                                 {item.icon ? <item.icon className="size-4 shrink-0 text-muted-foreground" /> : null}
-                                <span className="truncate">{item.label}</span>
+                                <span className="block min-w-0 flex-1 truncate">{item.label}</span>
                               </span>
                               {typeof item.count === "number" ? <Badge variant="secondary" className="shrink-0">{item.count}</Badge> : null}
                             </SidebarMenuButton>
-                            {title !== "Models" && item.actions?.length ? (
+                            {title === "Chats" && item.actions?.some((action) => action.id === "delete") ? (
+                              <ChatDeleteButton className="opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" chatId={item.id} isActive={location.pathname === item.href} />
+                            ) : null}
+                            {title !== "Models" && title !== "Chats" && item.actions?.length ? (
                               <DropdownMenu>
                                 <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0" />}>
-                                    <span>...</span>
+                                  <EllipsisIcon />
                                 </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end" className="w-40 min-w-40">
                                   {item.actions.map((action) => (

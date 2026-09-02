@@ -9,6 +9,7 @@ import SectionSidebar from "@/views/components/secondary-sidebar/section-sidebar
 import { CreateProviderButton } from "@/views/models/components/create-provider-button";
 import { SkillCreateButton } from "@/views/skills/components/skill-create-button";
 import { DocumentCreateButton } from "@/views/documents/components/document-create-button";
+import { NewChatButton } from "@/views/chats/components/new-chat-button";
 import { SuoraLogo } from "@/views/components/suora-logo";
 
 const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
@@ -89,6 +90,8 @@ const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
                 isLoading={isLoading}
                                 headerAction={activeItem.url === "/models"
                                     ? <CreateProviderButton size="sm" variant="outline" />
+                                    : activeItem.url === "/chats"
+                                        ? <NewChatButton />
                                     : activeItem.url === "/skills"
                                         ? <SkillCreateButton />
                                         : activeItem.url === "/documents"

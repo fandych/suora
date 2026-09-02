@@ -1,15 +1,16 @@
-import katex from "katex"
-import { CopyIcon, DownloadIcon, Volume2Icon } from "lucide-react"
-import { useEffect, useId, useMemo, useRef } from "react"
+import { CopyIcon, DownloadIcon, SquareIcon, Volume2Icon } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Message, MessageAvatar, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message"
-import { downloadText, exportTextAsDocx, exportTextAsPdf } from "@/lib/browser-files"
+import { Spinner } from "@/components/ui/spinner"
+import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
+import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser-files"
+import { showToast } from "@/lib/app-toast"
 import { cn } from "@/lib/utils"
-import { markdownToTiptapHtml } from "@/views/components/document-markdown"
+import { ChatRichContent } from "@/views/chats/components/chat-rich-content"
 import { getProviderLogo } from "@/views/components/provider-logo"
 
 type ChatMessageItemProps = {
@@ -19,126 +20,59 @@ type ChatMessageItemProps = {
   label: string
   providerType?: string
   role: "user" | "assistant" | "system"
-}
-
-async function renderMermaid(target: HTMLElement, id: string, code: string) {
-  const mermaid = (await import("mermaid")).default
-  mermaid.initialize({ startOnLoad: false, theme: "default" })
-  try {
-    const { svg } = await mermaid.render(id, code)
-    target.innerHTML = svg
-  } catch (error) {
-    target.textContent = String(error)
-  }
+  isPending?: boolean
+  pendingLabel?: string
 }
 
 function buildExportName(label: string) {
   return (label || "message").replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase() || "message"
 }
 
-export function ChatMessageItem({ content, createdAt, kind = "message", label, providerType = "openai", role }: ChatMessageItemProps) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const messageId = useId().replace(/:/g, "_")
+export function ChatMessageItem({
+  content,
+  createdAt,
+  kind = "message",
+  label,
+  providerType = "openai",
+  role,
+  isPending = false,
+  pendingLabel = "Assistant is responding...",
+}: ChatMessageItemProps) {
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const [isSpeaking, setIsSpeaking] = useState(false)
   const AssistantLogo = getProviderLogo(providerType)
   const align = role === "user" ? "end" : "start"
-
-  const html = useMemo(() => markdownToTiptapHtml(content || ""), [content])
+  const hasContent = content.trim().length > 0
 
   useEffect(() => {
-    const container = containerRef.current
-    if (!container) {
-      return
-    }
-
-    const cleanupCallbacks: Array<() => void> = []
-
-    container.querySelectorAll("a").forEach((anchor) => {
-      anchor.setAttribute("target", "_blank")
-      anchor.setAttribute("rel", "noreferrer noopener")
-    })
-
-    container.querySelectorAll("[data-math-inline]").forEach((node) => {
-      const contentValue = node.getAttribute("data-math-inline") ?? ""
-      try {
-        node.innerHTML = katex.renderToString(contentValue, { displayMode: false, throwOnError: false })
-        node.classList.add("document-math-inline")
-      } catch {
-        node.textContent = contentValue
-      }
-    })
-
-    container.querySelectorAll("[data-math-block]").forEach((node) => {
-      const contentValue = node.getAttribute("data-math-block") ?? ""
-      try {
-        node.innerHTML = katex.renderToString(contentValue, { displayMode: true, throwOnError: false })
-        node.classList.add("document-math-block")
-      } catch {
-        node.textContent = contentValue
-      }
-    })
-
-    container.querySelectorAll("[data-mermaid]").forEach((node, index) => {
-      node.classList.add("document-mermaid-block")
-      void renderMermaid(node as HTMLElement, `${messageId}-mermaid-${index}`, node.getAttribute("data-mermaid") ?? "")
-    })
-
-    container.querySelectorAll("pre").forEach((pre, index) => {
-      if ((pre as HTMLElement).dataset.enhanced === "true") {
-        return
-      }
-
-      ;(pre as HTMLElement).dataset.enhanced = "true"
-      const codeText = pre.textContent ?? ""
-      const wrapper = document.createElement("div")
-      wrapper.className = "chat-code-block"
-
-      const toolbar = document.createElement("div")
-      toolbar.className = "chat-code-toolbar"
-
-      const copyButton = document.createElement("button")
-      copyButton.type = "button"
-      copyButton.className = "chat-code-copy"
-      copyButton.textContent = "Copy code"
-      copyButton.addEventListener("click", () => {
-        void navigator.clipboard.writeText(codeText)
-      })
-      cleanupCallbacks.push(() => copyButton.replaceWith(copyButton.cloneNode(true)))
-
-      toolbar.appendChild(copyButton)
-      pre.parentNode?.insertBefore(wrapper, pre)
-      wrapper.appendChild(toolbar)
-      wrapper.appendChild(pre)
-
-      const codeElement = pre.querySelector("code")
-      if (codeElement) {
-        const languageMatch = Array.from(codeElement.classList).find((item) => item.startsWith("language-"))
-        if (languageMatch) {
-          const labelNode = document.createElement("span")
-          labelNode.className = "chat-code-language"
-          labelNode.textContent = languageMatch.replace("language-", "")
-          toolbar.insertBefore(labelNode, copyButton)
-        }
-      }
-
-      wrapper.dataset.index = String(index)
-    })
-
     return () => {
-      cleanupCallbacks.forEach((callback) => callback())
+      if (utteranceRef.current) {
+        window.speechSynthesis?.cancel()
+        utteranceRef.current = null
+      }
     }
-  }, [html, messageId])
+  }, [])
 
   const exportMessage = async (format: "markdown" | "pdf" | "docx") => {
     const fileBase = buildExportName(label)
     if (format === "markdown") {
-      downloadText(`${fileBase}.md`, content, "text/markdown;charset=utf-8")
+      const result = await saveTextFile(`${fileBase}.md`, content, "text/markdown;charset=utf-8")
+      if (!result.canceled) {
+        showToast({ title: "Message exported", description: result.path ?? `${fileBase}.md saved.`, type: "success" })
+      }
       return
     }
     if (format === "pdf") {
-      await exportTextAsPdf(`${fileBase}.pdf`, content)
+      const result = await savePdfFile(`${fileBase}.pdf`, content)
+      if (!result.canceled) {
+        showToast({ title: "Message exported", description: result.path ?? `${fileBase}.pdf saved.`, type: "success" })
+      }
       return
     }
-    await exportTextAsDocx(`${fileBase}.docx`, content)
+    const result = await saveDocxFile(`${fileBase}.docx`, content)
+    if (!result.canceled) {
+      showToast({ title: "Message exported", description: result.path ?? `${fileBase}.docx saved.`, type: "success" })
+    }
   }
 
   const handleCopy = async () => {
@@ -150,8 +84,26 @@ export function ChatMessageItem({ content, createdAt, kind = "message", label, p
       return
     }
 
+    if (isSpeaking) {
+      window.speechSynthesis.cancel()
+      utteranceRef.current = null
+      setIsSpeaking(false)
+      return
+    }
+
     window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(new SpeechSynthesisUtterance(content))
+    const utterance = new SpeechSynthesisUtterance(content)
+    utterance.onstart = () => setIsSpeaking(true)
+    utterance.onend = () => {
+      utteranceRef.current = null
+      setIsSpeaking(false)
+    }
+    utterance.onerror = () => {
+      utteranceRef.current = null
+      setIsSpeaking(false)
+    }
+    utteranceRef.current = utterance
+    window.speechSynthesis.speak(utterance)
   }
 
   return (
@@ -172,32 +124,44 @@ export function ChatMessageItem({ content, createdAt, kind = "message", label, p
       </MessageAvatar>
       <MessageContent>
         <MessageHeader>{label}</MessageHeader>
-        <Bubble variant={role === "user" ? "default" : role === "assistant" ? "outline" : "muted"} align={align} className="max-w-[min(100%,56rem)]">
-          <BubbleContent>
-            <div ref={containerRef} className="document-prose chat-prose min-w-0 max-w-none text-sm" dangerouslySetInnerHTML={{ __html: html }} />
-          </BubbleContent>
-        </Bubble>
-        <MessageFooter className="flex flex-wrap items-center gap-2 text-[11px]">
-          <div>{createdAt ? new Date(createdAt).toLocaleString() : null}</div>
-          <div className="ml-auto flex items-center gap-1">
-            <Button size="icon-sm" variant="ghost" onClick={handleSpeak}>
-              <Volume2Icon />
-            </Button>
-            <Button size="icon-sm" variant="ghost" onClick={() => void handleCopy()}>
-              <CopyIcon />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" />}>
-                <DownloadIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-36 min-w-36">
-                <DropdownMenuItem onClick={() => void exportMessage("markdown")}>Markdown</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void exportMessage("pdf")}>PDF</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => void exportMessage("docx")}>DOCX</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        <div className={cn("flex max-w-[min(100%,56rem)] min-w-0 flex-col gap-1", role === "user" ? "self-end" : "self-start")}>
+          <Bubble variant={role === "user" ? "default" : role === "assistant" ? "outline" : "muted"} align={align} className="max-w-full">
+            <BubbleContent>
+              {isPending ? (
+                <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+                  {content}
+                  <span aria-hidden="true" className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded bg-current align-middle" />
+                  {!hasContent ? <span className="sr-only">{pendingLabel}</span> : null}
+                </div>
+              ) : (
+                <ChatRichContent content={content} />
+              )}
+            </BubbleContent>
+          </Bubble>
+          <div className="flex min-w-0 items-center justify-end gap-1 px-1 text-[11px] text-muted-foreground">
+            {createdAt ? <div className="mr-auto truncate">{new Date(createdAt).toLocaleString()}</div> : <div className="mr-auto" />}
+            {isPending ? null : (
+              <>
+                <Button size="icon-sm" variant="ghost" type="button" onClick={handleSpeak} disabled={!hasContent}>
+                  {isSpeaking ? <SquareIcon /> : <Volume2Icon />}
+                </Button>
+                <Button size="icon-sm" variant="ghost" type="button" onClick={() => void handleCopy()} disabled={!hasContent}>
+                  <CopyIcon />
+                </Button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger render={<Button size="icon-sm" variant="ghost" type="button" disabled={!hasContent} />}>
+                    <DownloadIcon />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-36 min-w-36">
+                    <DropdownMenuItem onClick={() => void exportMessage("markdown")}>Markdown</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void exportMessage("pdf")}>PDF</DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => void exportMessage("docx")}>DOCX</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </>
+            )}
           </div>
-        </MessageFooter>
+        </div>
       </MessageContent>
     </Message>
   )

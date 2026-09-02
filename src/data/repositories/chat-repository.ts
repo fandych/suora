@@ -1,4 +1,5 @@
 import type { ChatDetail, ChatSummary } from "@/data/domain/models"
+import type { ChatMessagePart } from "@/data/domain/chat-message-parts"
 
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { suoraIpc } from "@/lib/ipc"
@@ -22,6 +23,11 @@ export async function createChat() {
   return suoraIpc.chats.create() as Promise<ChatDetail>
 }
 
+export async function deleteChat(chatId: string) {
+  await ensureSeeded()
+  return suoraIpc.chats.delete(chatId) as Promise<boolean>
+}
+
 export async function appendUserChatMessage(chatId: string, content: string) {
   await ensureSeeded()
   const detail = await suoraIpc.chats.appendUser(chatId, content) as ChatDetail | null
@@ -31,9 +37,18 @@ export async function appendUserChatMessage(chatId: string, content: string) {
   return detail
 }
 
-export async function appendAssistantChatMessage(chatId: string, content: string) {
+export async function appendAssistantChatMessage(chatId: string, content: string, parts?: ChatMessagePart[]) {
   await ensureSeeded()
-  const detail = await suoraIpc.chats.appendAssistant(chatId, content) as ChatDetail | null
+  const detail = await suoraIpc.chats.appendAssistant(chatId, content, parts) as ChatDetail | null
+  if (!detail) {
+    throw new Error(`Chat ${chatId} was not found.`)
+  }
+  return detail
+}
+
+export async function updateChatMessageParts(chatId: string, messageId: string, parts: ChatMessagePart[]) {
+  await ensureSeeded()
+  const detail = await suoraIpc.chats.updateMessageParts(chatId, messageId, parts) as ChatDetail | null
   if (!detail) {
     throw new Error(`Chat ${chatId} was not found.`)
   }

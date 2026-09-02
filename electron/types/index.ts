@@ -53,6 +53,7 @@ export type ChatRuntimeSettingsPayload = {
 export type AppState = {
   isDev: boolean
   mainWindow: BrowserWindow | null
+  browserWindow: BrowserWindow | null
   sqlite: SqliteDatabase | null
   activeAiRequests: Map<string, ClientRequest>
   currentProxySettings: ProxySettings

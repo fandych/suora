@@ -1,4 +1,5 @@
 import type { AgentConfigRecord, AgentDetail, AgentSummary, ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary, ChatDetail, ChatSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, ProviderConfigRecord, SchedulerDetail, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeData, WorkflowSummary } from "@/data/domain/models"
+import type { ChatMessagePart } from "@/data/domain/chat-message-parts"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { buildDefaultDocumentNodes, normalizeDocumentNodes } from "@/lib/document-tree"
 
@@ -30,6 +31,15 @@ type RawChannelRow = {
   configJson?: string
   runtimeJson?: string
   updatedAt: number
+}
+
+type RawChatMessageRow = {
+  id: string
+  role: "user" | "assistant" | "system"
+  content: string
+  partsJson?: string
+  parts?: ChatMessagePart[]
+  createdAt: number
 }
 
 function parseProviderRow(row: RawProviderRow): ProviderConfigRecord {
@@ -66,6 +76,16 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
     return JSON.parse(value) as T
   } catch {
     return fallback
+  }
+}
+
+function parseChatMessageRow(row: RawChatMessageRow) {
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    parts: row.parts ?? parseJson<ChatMessagePart[]>(row.partsJson, []),
+    createdAt: row.createdAt,
   }
 }
 
@@ -264,23 +284,29 @@ export const suoraIpc = {
   chats: {
     list: async () => getBridge().chats.list() as Promise<ChatSummary[]>,
     get: async (chatId: string) => {
-      const payload = await getBridge().chats.get(chatId) as { chat: ChatSummary | null; messages: ChatDetail["messages"] }
+      const payload = await getBridge().chats.get(chatId) as { chat: ChatSummary | null; messages: RawChatMessageRow[] }
       if (!payload.chat) return null
-      return { chat: payload.chat, messages: payload.messages } satisfies ChatDetail
+      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
     create: async () => {
-      const payload = await getBridge().chats.create() as { chat: ChatSummary; messages: ChatDetail["messages"] }
-      return { chat: payload.chat, messages: payload.messages } satisfies ChatDetail
+      const payload = await getBridge().chats.create() as { chat: ChatSummary; messages: RawChatMessageRow[] }
+      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
+    delete: async (chatId: string) => getBridge().chats.delete(chatId) as Promise<boolean>,
     appendUser: async (chatId: string, content: string) => {
-      const payload = await getBridge().chats.appendUser({ chatId, content }) as { chat: ChatSummary | null; messages: ChatDetail["messages"] } | null
+      const payload = await getBridge().chats.appendUser({ chatId, content }) as { chat: ChatSummary | null; messages: RawChatMessageRow[] } | null
       if (!payload?.chat) return null
-      return { chat: payload.chat, messages: payload.messages } satisfies ChatDetail
+      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
-    appendAssistant: async (chatId: string, content: string) => {
-      const payload = await getBridge().chats.appendAssistant({ chatId, content }) as { chat: ChatSummary | null; messages: ChatDetail["messages"] } | null
+    appendAssistant: async (chatId: string, content: string, parts?: ChatMessagePart[]) => {
+      const payload = await getBridge().chats.appendAssistant({ chatId, content, parts }) as { chat: ChatSummary | null; messages: RawChatMessageRow[] } | null
       if (!payload?.chat) return null
-      return { chat: payload.chat, messages: payload.messages } satisfies ChatDetail
+      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
+    },
+    updateMessageParts: async (chatId: string, messageId: string, parts: ChatMessagePart[]) => {
+      const payload = await getBridge().chats.updateMessageParts({ chatId, messageId, parts }) as { chat: ChatSummary | null; messages: RawChatMessageRow[] } | null
+      if (!payload?.chat) return null
+      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
     getSettings: async () => getBridge().chats.getSettings(),
     saveSettings: async (payload: unknown) => getBridge().chats.saveSettings(payload),
@@ -661,6 +687,8 @@ export const suoraIpc = {
     readFile: async (relativePath: string) => getBridge().tools.readFile(relativePath) as Promise<{ path: string; content: string }>,
     writeFile: async (payload: { path: string; content: string }) => getBridge().tools.writeFile(payload) as Promise<{ ok: boolean; path: string }>,
     runCommand: async (payload: { command: string; cwd?: string; timeoutMs?: number }) => getBridge().tools.runCommand(payload) as Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>,
+    browserNavigate: async (payload: { url?: string; visible?: boolean }) => getBridge().tools.browserNavigate(payload) as Promise<{ ok: boolean; url: string; visible: boolean }>,
+    saveFile: async (payload: { defaultName: string; filters?: Array<{ name: string; extensions: string[] }>; dataBase64: string }) => getBridge().tools.saveFile(payload) as Promise<{ ok: boolean; canceled: boolean; path: string | null }>,
     openExternal: async (url: string) => getBridge().tools.openExternal(url) as Promise<{ ok: boolean; url: string }>,
   },
 }

@@ -98,10 +98,12 @@ When replacing mock sidebar data with real data, preserve the rendering contract
 ## Code Rules
 
 - `ts` and `tsx` files must stay under 400 lines; extract components into nearby `components` folders when needed
+- treat the 400-line cap for `ts` and `tsx` files as a hard limit; if a change would exceed it, extract nearby components before finishing
 - always use `@/` imports in repo code; do not introduce new `../` or `./` local imports
 - do not use scripts or bulk automation to rewrite code; make targeted manual edits
 - every code change must leave the app in a runnable state and must be validated with a real check such as `npm run build`
 - preserve shadcn UI source files in [src/components/ui](src/components/ui) instead of restyling them in place
+- when building UI, prefer composing existing shadcn components before writing custom markup, and consult the `shadcn` skill for component APIs and patterns
 - `electron/` source must be grouped by concern: `ipc/`, `database/`, `others/`, and `types/`; do not flatten new helper modules at the `electron/` root
 - when `npm run dev` is used for Electron validation during agent work, stop the spawned dev process before finishing the task
 

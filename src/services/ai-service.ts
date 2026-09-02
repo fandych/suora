@@ -1,4 +1,4 @@
-import { ToolLoopAgent, stepCountIs, tool, type LanguageModel, type ModelMessage, type UserModelMessage } from "ai"
+import { ToolLoopAgent, stepCountIs, tool, type LanguageModel } from "ai"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
@@ -6,6 +6,7 @@ import { z } from "zod"
 
 import type { ChatMessageRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
+import { buildChatModelMessages } from "@/services/chat-model-messages"
 import { listDocuments, getDocumentDetail } from "@/data/repositories/document-repository"
 import { getIntegrationDetail } from "@/data/repositories/integration-repository"
 import { executeIntegration } from "@/data/repositories/integration-execution-repository"
@@ -322,7 +323,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
     },
   })
 
-  const result = await agent.stream({ messages: toModelMessages(history, options?.attachments), abortSignal: options?.abortSignal })
+  const result = await agent.stream({ messages: buildChatModelMessages(history, options?.attachments), abortSignal: options?.abortSignal })
 
   for await (const part of result.fullStream) {
     switch (part.type) {
@@ -349,27 +350,3 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
   }
 }
 
-export function toModelMessages(history: ChatMessageRecord[], attachments: ChatAttachment[] = []): ModelMessage[] {
-  if (history.length === 0 && attachments.length === 0) {
-    return []
-  }
-
-  return history.map((message, index) => {
-    if (message.role === "user" && index === history.length - 1 && attachments.length > 0) {
-      return {
-        role: "user",
-        content: [
-          { type: "text", text: message.content },
-          ...attachments.map((attachment) => ({
-            type: "file" as const,
-            mediaType: attachment.kind === "image" ? "image" : attachment.mediaType,
-            filename: attachment.name,
-            data: attachment.data,
-          })),
-        ],
-      } satisfies UserModelMessage
-    }
-
-    return { role: message.role, content: message.content }
-  })
-}

@@ -1,6 +1,6 @@
 import path from "node:path"
 
-import { BrowserWindow, nativeImage } from "electron"
+import { BrowserWindow, Menu, nativeImage } from "electron"
 
 import { appState, setMainWindow } from "@electron/others/app-state"
 
@@ -12,6 +12,7 @@ export async function createWindow() {
     height: 920,
     minWidth: 1180,
     minHeight: 760,
+    autoHideMenuBar: true,
     title: "SUORA",
     icon,
     webPreferences: {
@@ -20,6 +21,28 @@ export async function createWindow() {
       nodeIntegration: false,
       sandbox: true,
     },
+  })
+
+  Menu.setApplicationMenu(null)
+  mainWindow.setMenuBarVisibility(false)
+  mainWindow.setAutoHideMenuBar(true)
+  mainWindow.removeMenu()
+
+  const session = mainWindow.webContents.session
+  session.setPermissionCheckHandler((_webContents, permission, _requestingOrigin, details) => {
+    if (permission !== "media") {
+      return false
+    }
+
+    return details.mediaType === "audio"
+  })
+  session.setPermissionRequestHandler((_webContents, permission, callback, details) => {
+    if (permission !== "media") {
+      callback(false)
+      return
+    }
+
+    callback("mediaTypes" in details && Array.isArray(details.mediaTypes) && details.mediaTypes.includes("audio"))
   })
 
   setMainWindow(mainWindow)

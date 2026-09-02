@@ -20,8 +20,10 @@ declare global {
         list: () => Promise<unknown>
         get: (chatId: string) => Promise<unknown>
         create: () => Promise<unknown>
+        delete: (chatId: string) => Promise<unknown>
         appendUser: (payload: unknown) => Promise<unknown>
         appendAssistant: (payload: unknown) => Promise<unknown>
+        updateMessageParts: (payload: unknown) => Promise<unknown>
         getSettings: () => Promise<unknown>
         saveSettings: (payload: unknown) => Promise<unknown>
       }
@@ -97,6 +99,8 @@ declare global {
         readFile: (relativePath: string) => Promise<unknown>
         writeFile: (payload: unknown) => Promise<unknown>
         runCommand: (payload: unknown) => Promise<unknown>
+        browserNavigate: (payload: unknown) => Promise<unknown>
+        saveFile: (payload: unknown) => Promise<unknown>
         openExternal: (url: string) => Promise<unknown>
       }
     }

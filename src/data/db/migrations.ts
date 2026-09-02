@@ -307,4 +307,13 @@ export const runtimeMigrations = [
       /duplicate column name: runtime_json/i,
     ],
   },
+  {
+    id: 10,
+    statements: [
+      `ALTER TABLE chat_messages ADD COLUMN parts_json TEXT NOT NULL DEFAULT '[]'`,
+    ],
+    ignoreErrorsMatching: [
+      /duplicate column name: parts_json/i,
+    ],
+  },
 ]
