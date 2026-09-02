@@ -102,7 +102,12 @@ export function registerCatalogIpc() {
     const now = Date.now()
     database.prepare(`UPDATE skills SET title = ?, source = ?, summary = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.source, payload.summary, now, payload.id)
 
-    let selectedVersionId = database.prepare(`SELECT id FROM skill_versions WHERE skill_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
+    const targetDraft = payload.selectedVersionId
+      ? database.prepare(`SELECT id, is_release as isRelease FROM skill_versions WHERE skill_id = ? AND id = ? LIMIT 1`).get(payload.id, payload.selectedVersionId) as { id: string; isRelease: number } | undefined
+      : undefined
+    let selectedVersionId = targetDraft && !targetDraft.isRelease
+      ? { id: targetDraft.id }
+      : database.prepare(`SELECT id FROM skill_versions WHERE skill_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
 
     if (!payload.publish && selectedVersionId) {
       database.prepare(`UPDATE skill_versions SET files_json = ?, created_at = ? WHERE id = ?`).run(payload.filesJson, now, selectedVersionId.id)
@@ -160,23 +165,38 @@ export function registerCatalogIpc() {
     return {
       agent: database.prepare(`SELECT id, title, kind, summary, updated_at as updatedAt FROM agents WHERE id = ?`).get(agentId),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, config_json as configJson FROM agent_versions WHERE agent_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(agentId),
+      selectedVersionId: versionId,
     }
   })
 
-  ipcMain.handle("agents:save", async (_event, payload: { id: string; title: string; kind: string; summary: string; configJson: string; publish?: boolean }) => {
+  ipcMain.handle("agents:save", async (_event, payload: { id: string; title: string; kind: string; summary: string; configJson: string; selectedVersionId?: string; publish?: boolean }) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
     const latest = database.prepare(`SELECT major, minor, is_release as isRelease FROM agent_versions WHERE agent_id = ? ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { major: number; minor: number; isRelease: number } | undefined
-    const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
-    const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
-    const versionId = crypto.randomUUID()
+    const targetDraft = payload.selectedVersionId
+      ? database.prepare(`SELECT id, major, minor, is_release as isRelease FROM agent_versions WHERE agent_id = ? AND id = ? LIMIT 1`).get(payload.id, payload.selectedVersionId) as { id: string; major: number; minor: number; isRelease: number } | undefined
+      : undefined
+    let selectedVersionId = targetDraft && !targetDraft.isRelease
+      ? { id: targetDraft.id }
+      : undefined
     const now = Date.now()
     database.prepare(`UPDATE agents SET title = ?, kind = ?, summary = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.kind, payload.summary, now, payload.id)
-    database.prepare(`INSERT INTO agent_versions (id, agent_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.configJson, now)
+
+    if (!payload.publish && selectedVersionId) {
+      database.prepare(`UPDATE agent_versions SET config_json = ?, created_at = ? WHERE id = ?`).run(payload.configJson, now, selectedVersionId.id)
+    } else {
+      const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
+      const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
+      const versionId = crypto.randomUUID()
+      database.prepare(`INSERT INTO agent_versions (id, agent_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.configJson, now)
+      selectedVersionId = { id: versionId }
+    }
+
     return {
       agent: database.prepare(`SELECT id, title, kind, summary, updated_at as updatedAt FROM agents WHERE id = ?`).get(payload.id),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, config_json as configJson FROM agent_versions WHERE agent_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(payload.id),
+      selectedVersionId: selectedVersionId?.id ?? null,
     }
   })
 

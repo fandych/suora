@@ -15,6 +15,29 @@ export type ImportedArchiveEntry = {
   kind: "file" | "directory"
 }
 
+export type ArchiveImportStrategy = "overwrite" | "skip" | "rename"
+
+export type ArchiveImportIssue = {
+  path: string
+  message: string
+  severity: "error" | "warning"
+}
+
+export type ArchiveImportPlanEntry = ImportedArchiveEntry & {
+  conflictSource?: "archive" | "workspace"
+  message?: string
+  normalizedPath: string
+  resolvedPath: string | null
+  status: "ready" | "renamed" | "overwritten" | "skipped" | "error"
+}
+
+export type ArchiveImportPlan = {
+  entries: ArchiveImportPlanEntry[]
+  issues: ArchiveImportIssue[]
+  importCount: number
+  hasBlockingIssues: boolean
+}
+
 function getExtension(path: string) {
   const normalized = path.split(/[\\/]/).pop() ?? path
   const dotIndex = normalized.lastIndexOf(".")
@@ -102,6 +125,201 @@ export function getResourcePreviewKind(path: string, content: string): ResourceP
 
 function toDataUrl(path: string, base64: string) {
   return `data:${guessMimeType(path)};base64,${base64}`
+}
+
+function normalizeArchivePath(path: string) {
+  return path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/g, "").replace(/\/+/g, "/")
+}
+
+function getArchivePathExtension(path: string) {
+  const slashIndex = path.lastIndexOf("/")
+  const dotIndex = path.lastIndexOf(".")
+  return dotIndex > slashIndex ? path.slice(dotIndex) : ""
+}
+
+function getArchivePathStem(path: string) {
+  const extension = getArchivePathExtension(path)
+  return extension ? path.slice(0, -extension.length) : path
+}
+
+function getUniqueArchivePath(path: string, usedPaths: Set<string>) {
+  if (!usedPaths.has(path)) {
+    return path
+  }
+
+  const extension = getArchivePathExtension(path)
+  const stem = getArchivePathStem(path)
+  let index = 2
+  let candidate = `${stem}-${index}${extension}`
+
+  while (usedPaths.has(candidate)) {
+    index += 1
+    candidate = `${stem}-${index}${extension}`
+  }
+
+  return candidate
+}
+
+export function createArchiveImportPlan(
+  entries: ImportedArchiveEntry[],
+  options: {
+    existingPaths?: Iterable<string>
+    strategy: ArchiveImportStrategy
+    validatePath: (path: string, kind: ImportedArchiveEntry["kind"]) => string | null
+  },
+) {
+  const issues: ArchiveImportIssue[] = []
+  const plannedEntries: ArchiveImportPlanEntry[] = []
+  const activeEntryByPath = new Map<string, number>()
+  const usedPaths = new Set<string>(Array.from(options.existingPaths ?? [], (path) => normalizeArchivePath(path)).filter(Boolean))
+
+  for (const entry of entries) {
+    const normalizedPath = normalizeArchivePath(entry.path)
+    const validationError = options.validatePath(normalizedPath, entry.kind)
+
+    if (validationError) {
+      plannedEntries.push({
+        ...entry,
+        conflictSource: "archive",
+        normalizedPath,
+        resolvedPath: null,
+        status: "error",
+        message: validationError,
+      })
+      issues.push({ path: normalizedPath, message: validationError, severity: "error" })
+      continue
+    }
+
+    const previousEntryIndex = activeEntryByPath.get(normalizedPath)
+    if (previousEntryIndex !== undefined) {
+      if (options.strategy === "skip") {
+        const message = "Skipped because the archive already contains the same normalized path."
+        plannedEntries.push({
+          ...entry,
+          conflictSource: "archive",
+          normalizedPath,
+          resolvedPath: null,
+          status: "skipped",
+          message,
+        })
+        issues.push({ path: normalizedPath, message, severity: "warning" })
+        continue
+      }
+
+      if (options.strategy === "rename") {
+        const resolvedPath = getUniqueArchivePath(normalizedPath, usedPaths)
+        const message = `Renamed from ${normalizedPath} to avoid a duplicate path in the archive.`
+        plannedEntries.push({
+          ...entry,
+          conflictSource: "archive",
+          normalizedPath,
+          resolvedPath,
+          status: "renamed",
+          message,
+        })
+        usedPaths.add(resolvedPath)
+        activeEntryByPath.set(resolvedPath, plannedEntries.length - 1)
+        issues.push({ path: normalizedPath, message, severity: "warning" })
+        continue
+      }
+
+      plannedEntries[previousEntryIndex] = {
+        ...plannedEntries[previousEntryIndex],
+        conflictSource: "archive",
+        resolvedPath: null,
+        status: "skipped",
+        message: "Overwritten by a later archive entry with the same normalized path.",
+      }
+      const message = "This entry overwrites an earlier archive entry with the same normalized path."
+      plannedEntries.push({
+        ...entry,
+        conflictSource: "archive",
+        normalizedPath,
+        resolvedPath: normalizedPath,
+        status: "overwritten",
+        message,
+      })
+      activeEntryByPath.set(normalizedPath, plannedEntries.length - 1)
+      issues.push({ path: normalizedPath, message, severity: "warning" })
+      continue
+    }
+
+    if (usedPaths.has(normalizedPath)) {
+      if (options.strategy === "skip") {
+        const message = "Skipped because the workspace already contains this path."
+        plannedEntries.push({
+          ...entry,
+          conflictSource: "workspace",
+          normalizedPath,
+          resolvedPath: null,
+          status: "skipped",
+          message,
+        })
+        issues.push({ path: normalizedPath, message, severity: "warning" })
+        continue
+      }
+
+      if (options.strategy === "rename") {
+        const resolvedPath = getUniqueArchivePath(normalizedPath, usedPaths)
+        const message = `Renamed from ${normalizedPath} because the workspace already contains that path.`
+        plannedEntries.push({
+          ...entry,
+          conflictSource: "workspace",
+          normalizedPath,
+          resolvedPath,
+          status: "renamed",
+          message,
+        })
+        usedPaths.add(resolvedPath)
+        activeEntryByPath.set(resolvedPath, plannedEntries.length - 1)
+        issues.push({ path: normalizedPath, message, severity: "warning" })
+        continue
+      }
+
+      const message = "This entry will overwrite an existing workspace path."
+      plannedEntries.push({
+        ...entry,
+        conflictSource: "workspace",
+        normalizedPath,
+        resolvedPath: normalizedPath,
+        status: "overwritten",
+        message,
+      })
+      activeEntryByPath.set(normalizedPath, plannedEntries.length - 1)
+      issues.push({ path: normalizedPath, message, severity: "warning" })
+      continue
+    }
+
+    plannedEntries.push({
+      ...entry,
+      normalizedPath,
+      resolvedPath: normalizedPath,
+      status: "ready",
+    })
+    usedPaths.add(normalizedPath)
+    activeEntryByPath.set(normalizedPath, plannedEntries.length - 1)
+  }
+
+  if (!plannedEntries.some((entry) => entry.kind === "file" && entry.resolvedPath)) {
+    issues.push({ path: "", message: "The archive does not contain any importable files.", severity: "error" })
+  }
+
+  return {
+    entries: plannedEntries,
+    issues,
+    importCount: plannedEntries.filter((entry) => entry.kind === "file" && entry.resolvedPath).length,
+    hasBlockingIssues: issues.some((issue) => issue.severity === "error"),
+  } satisfies ArchiveImportPlan
+}
+
+export function getImportableArchiveEntries(plan: ArchiveImportPlan) {
+  return plan.entries
+    .filter((entry) => entry.resolvedPath)
+    .map((entry) => ({
+      path: entry.resolvedPath ?? entry.normalizedPath,
+      content: entry.content,
+      kind: entry.kind,
+    }))
 }
 
 export async function readArchiveEntries(file: File) {

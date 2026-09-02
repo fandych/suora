@@ -15,6 +15,29 @@ function slugifyTitle(value: string) {
   return slug || "untitled"
 }
 
+export function normalizeDocumentArchivePath(path: string) {
+  return path.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+$/g, "").replace(/\/+/g, "/")
+}
+
+export function getDocumentArchivePathError(path: string) {
+  const normalized = normalizeDocumentArchivePath(path)
+
+  if (!normalized) {
+    return "Archive entries must include a non-empty relative path."
+  }
+
+  if (normalized.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(normalized)) {
+    return "Archive entries must stay inside the document workspace."
+  }
+
+  const segments = normalized.split("/").filter(Boolean)
+  if (segments.length === 0 || segments.includes(".") || segments.includes("..")) {
+    return "Archive entries cannot contain empty, '.' , or '..' path segments."
+  }
+
+  return null
+}
+
 export function getDocumentExtension(title: string) {
   const basename = title.trim().split(/[\\/]/).pop() ?? ""
   const dotIndex = basename.lastIndexOf(".")

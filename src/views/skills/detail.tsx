@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "react-router"
-import { ChevronDownIcon, ChevronRightIcon, DownloadIcon, FileCode2Icon, FilePlus2Icon, FileTextIcon, FolderIcon, FolderPlusIcon, PencilIcon, Trash2Icon, UploadIcon } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { ConfirmDeleteDialog } from "@/views/components/confirm-delete-dialog"
+import { ResourceEntryDialog } from "@/views/components/resource-entry-dialog"
+import { getSkillSourceLanguage } from "@/lib/skill-files"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { useAutosaveStatus } from "@/hooks/use-autosave-status"
+import { emitDataChanged } from "@/data/repositories/data-events"
 import type { SkillDetail, SkillFileRecord } from "@/data/domain/models"
 import { getSkillDetail, publishSkillVersion, saveSkillDraft } from "@/data/repositories/skill-repository"
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser-files"
-import { buildSkillTree, getDefaultSkillFileName, getSkillSourceLanguage, isEditableSkillFile, isSafeSkillResourcePath, normalizeSkillPath, parseSkillFrontmatter } from "@/lib/skill-files"
-import DocumentContentEditor from "@/views/components/document-content-editor"
+import { buildSkillTree, getDefaultSkillFileName, isSafeSkillResourcePath, normalizeSkillPath, parseSkillFrontmatter } from "@/lib/skill-files"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import VersionSelect from "@/views/components/version-select"
+import { SkillEditorPanel } from "@/views/skills/components/skill-editor-panel"
+import { SkillTreePanel } from "@/views/skills/components/skill-tree-panel"
 
 function getUniqueSkillPath(files: SkillFileRecord[], preferredPath: string) {
   const used = new Set(files.map((file) => normalizeSkillPath(file.path)))
@@ -28,10 +30,6 @@ function getUniqueSkillPath(files: SkillFileRecord[], preferredPath: string) {
   return `${base}-${index}${extension}`
 }
 
-function isCoreSkillNode(path: string) {
-  return path === "SKILL.md" || ["scripts", "references", "assets", "other"].includes(path)
-}
-
 function isVisibleSkillEntry(path: string, collapsedPaths: Set<string>) {
   for (const collapsedPath of collapsedPaths) {
     if (path !== collapsedPath && path.startsWith(`${collapsedPath}/`)) return false
@@ -39,8 +37,24 @@ function isVisibleSkillEntry(path: string, collapsedPaths: Set<string>) {
   return true
 }
 
-const rowClass = "group flex w-full items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-muted/60"
-const actionButtonClassName = "shrink-0 opacity-0 group-hover:opacity-100"
+function isCoreSkillNode(path: string) {
+  return path === "SKILL.md" || ["scripts", "references", "assets", "other"].includes(path)
+}
+
+function buildSkillSnapshot(detail: SkillDetail | null) {
+  if (!detail) {
+    return ""
+  }
+
+  return JSON.stringify({
+    id: detail.skill.id,
+    selectedVersionId: detail.selectedVersion.id,
+    title: detail.skill.title,
+    summary: detail.skill.summary,
+    source: detail.skill.source,
+    files: detail.files.map((file) => ({ path: file.path, content: file.content, kind: file.kind, executable: file.executable, language: file.language })),
+  })
+}
 
 const SkillsDetailPage = () => {
   const { skillId } = useParams<{ skillId: string }>()
@@ -48,29 +62,78 @@ const SkillsDetailPage = () => {
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => getSkillDetail(skillId ?? "", selectedVersionId), [skillId, selectedVersionId])
   const [draft, setDraft] = useState<SkillDetail | null>(null)
   const [selectedFilePath, setSelectedFilePath] = useState("")
-  const [fileContent, setFileContent] = useState("")
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set())
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const [uploadTargetPath, setUploadTargetPath] = useState("other")
+  const [hasLoadedInitialState, setHasLoadedInitialState] = useState(false)
+  const [entryDialogValue, setEntryDialogValue] = useState("")
+  const [entryDialogError, setEntryDialogError] = useState("")
+  const [entryDialogMode, setEntryDialogMode] = useState<{ kind: "add-file" | "add-directory" | "rename"; parentPath?: string; targetPath?: string } | null>(null)
+  const [deleteTargetPath, setDeleteTargetPath] = useState<string | null>(null)
+
+  const persistDraft = async (nextDraft: SkillDetail) => {
+    const skillMarkdown = nextDraft.files.find((file) => normalizeSkillPath(file.path) === "SKILL.md")?.content ?? ""
+    const frontmatter = parseSkillFrontmatter(skillMarkdown)
+    const saved = await saveSkillDraft(skillId ?? "", {
+      title: frontmatter.name || nextDraft.skill.title,
+      source: nextDraft.skill.source,
+      summary: frontmatter.description || nextDraft.skill.summary,
+      files: nextDraft.files,
+      selectedVersionId: nextDraft.selectedVersion.id,
+    })
+    const next = {
+      ...saved,
+      skill: {
+        ...saved.skill,
+        title: frontmatter.name || saved.skill.title,
+        summary: frontmatter.description || saved.skill.summary,
+      },
+    }
+    const hasSelectedFile = next.files.some((file) => normalizeSkillPath(file.path) === normalizeSkillPath(selectedFilePath))
+    setData(next)
+    setDraft(next)
+    setSelectedVersionId(next.selectedVersion.id)
+    if (hasSelectedFile) {
+      setSelectedFilePath((current) => current)
+    } else {
+      setSelectedFilePath(next.files[0]?.path ?? "")
+    }
+    emitDataChanged("/skills")
+    return buildSkillSnapshot(next)
+  }
+
+  const autosave = useAutosaveStatus({
+    enabled: hasLoadedInitialState && Boolean(skillId && draft),
+    onSave: async () => draft ? persistDraft(draft) : "",
+    snapshotKey: buildSkillSnapshot(draft),
+  })
 
   useEffect(() => {
     if (!data) return
     setDraft(data)
     setSelectedVersionId(data.selectedVersion.id)
-    setSelectedFilePath(data.files[0]?.path ?? "")
-    setFileContent(data.files[0]?.content ?? "")
+    setSelectedFilePath((current) => {
+      if (current && data.files.some((file) => normalizeSkillPath(file.path) === normalizeSkillPath(current))) {
+        return current
+      }
+
+      return data.files[0]?.path ?? ""
+    })
     setCollapsedPaths(new Set())
+    setHasLoadedInitialState(true)
+    autosave.markClean(buildSkillSnapshot(data))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
   const treeEntries = useMemo(() => buildSkillTree(draft?.files ?? []), [draft?.files])
   const visibleEntries = useMemo(() => treeEntries.filter((entry) => isVisibleSkillEntry(entry.path, collapsedPaths)), [collapsedPaths, treeEntries])
   const selectedEntry = treeEntries.find((entry) => entry.path === selectedFilePath) ?? treeEntries[0]
   const selectedFile = selectedEntry?.kind === "file" ? selectedEntry.file ?? null : null
+  const selectedFileContent = selectedFile?.content ?? ""
+  const autosaveLabel = autosave.state === "error" ? "Save failed" : autosave.state === "saving" ? "Saving..." : autosave.state === "pending" ? "Unsaved changes" : "Saved"
 
   const handleSelectEntry = (path: string) => {
     setSelectedFilePath(path)
-    const nextFile = draft?.files.find((file) => normalizeSkillPath(file.path) === normalizeSkillPath(path) && (file.kind ?? "file") === "file")
-    setFileContent(nextFile?.content ?? "")
   }
 
   const toggleFolder = (path: string) => {
@@ -82,33 +145,63 @@ const SkillsDetailPage = () => {
     })
   }
 
-  const addResourceAt = (kind: "file" | "directory", parentPath: string) => {
-    if (!draft) return
-    const proposedPath = kind === "file" ? `${parentPath}/${getDefaultSkillFileName(parentPath)}` : `${parentPath}/new-folder`
-    const nextPath = getUniqueSkillPath(draft.files, proposedPath)
-    if (!isSafeSkillResourcePath(nextPath)) return
-    const nextFile: SkillFileRecord = kind === "directory"
+  const commitAddOrRename = () => {
+    if (!draft || !entryDialogMode) {
+      return
+    }
+
+    const rawValue = entryDialogValue.trim()
+    if (!rawValue) {
+      setEntryDialogError("Path is required.")
+      return
+    }
+
+    if (entryDialogMode.kind === "rename") {
+      const sourcePath = entryDialogMode.targetPath ?? ""
+      const normalizedNext = normalizeSkillPath(rawValue)
+      if (normalizedNext === sourcePath) {
+        setEntryDialogMode(null)
+        setEntryDialogError("")
+        return
+      }
+      if (!isSafeSkillResourcePath(normalizedNext)) {
+        setEntryDialogError("Use SKILL.md or a path under scripts, references, assets, or other.")
+        return
+      }
+      if (draft.files.some((file) => normalizeSkillPath(file.path) === normalizedNext && normalizeSkillPath(file.path) !== sourcePath)) {
+        setEntryDialogError("Another file or folder already uses that path.")
+        return
+      }
+
+      const nextFiles = draft.files.map((file) => {
+        const currentPath = normalizeSkillPath(file.path)
+        if (currentPath === sourcePath) return { ...file, path: normalizedNext }
+        if (currentPath.startsWith(`${sourcePath}/`)) return { ...file, path: `${normalizedNext}/${currentPath.slice(sourcePath.length + 1)}` }
+        return file
+      })
+      setDraft({ ...draft, files: nextFiles })
+      setSelectedFilePath(normalizedNext)
+      setEntryDialogMode(null)
+      setEntryDialogError("")
+      return
+    }
+
+    const parentPath = entryDialogMode.parentPath ?? "other"
+    const basePath = rawValue.includes("/") ? rawValue : `${parentPath}/${rawValue}`
+    const nextPath = getUniqueSkillPath(draft.files, normalizeSkillPath(basePath))
+    if (!isSafeSkillResourcePath(nextPath)) {
+      setEntryDialogError("Use a path inside scripts, references, assets, or other.")
+      return
+    }
+
+    const nextFile: SkillFileRecord = entryDialogMode.kind === "add-directory"
       ? { path: nextPath, content: "", language: "plaintext", kind: "directory", executable: false }
       : { path: nextPath, content: nextPath.startsWith("scripts/") ? "export async function main(input: unknown) {\n  return { ok: true, input }\n}\n" : "", language: getSkillSourceLanguage(nextPath), kind: "file", executable: nextPath.startsWith("scripts/") }
     setDraft({ ...draft, files: [...draft.files, nextFile] })
     setCollapsedPaths((current) => { const next = new Set(current); next.delete(parentPath); return next })
     handleSelectEntry(nextPath)
-  }
-
-  const renameEntry = (path: string) => {
-    if (!draft || isCoreSkillNode(path)) return
-    const proposedPath = window.prompt("Rename path", path)
-    if (!proposedPath) return
-    const normalizedNext = normalizeSkillPath(proposedPath)
-    if (normalizedNext === path || !isSafeSkillResourcePath(normalizedNext)) return
-    const nextFiles = draft.files.map((file) => {
-      const currentPath = normalizeSkillPath(file.path)
-      if (currentPath === path) return { ...file, path: normalizedNext }
-      if (currentPath.startsWith(`${path}/`)) return { ...file, path: `${normalizedNext}/${currentPath.slice(path.length + 1)}` }
-      return file
-    })
-    setDraft({ ...draft, files: nextFiles })
-    setSelectedFilePath(normalizedNext)
+    setEntryDialogMode(null)
+    setEntryDialogError("")
   }
 
   const deleteEntry = (path: string) => {
@@ -120,7 +213,7 @@ const SkillsDetailPage = () => {
     setDraft({ ...draft, files: nextFiles })
     const fallback = nextFiles.find((file) => (file.kind ?? "file") === "file")
     setSelectedFilePath(fallback?.path ?? "SKILL.md")
-    setFileContent(fallback?.content ?? "")
+    setDeleteTargetPath(null)
   }
 
   const exportEntry = (path: string) => {
@@ -129,7 +222,7 @@ const SkillsDetailPage = () => {
     if (!entry) return
     const file = draft.files.find((candidate) => normalizeSkillPath(candidate.path) === normalizeSkillPath(path))
     if (entry.kind === "file" && file) {
-      downloadStoredContent(entry.label, path === selectedFilePath ? fileContent : file.content)
+      downloadStoredContent(entry.label, file.content)
       return
     }
     const subtree = draft.files.filter((candidate) => {
@@ -156,87 +249,49 @@ const SkillsDetailPage = () => {
     event.target.value = ""
   }
 
-  const handleSave = async () => {
-    if (!skillId || !draft) return
-    const nextFiles = draft.files.map((file) => normalizeSkillPath(file.path) === normalizeSkillPath(selectedFilePath) && (file.kind ?? "file") === "file" ? { ...file, content: fileContent } : file)
-    const skillMarkdown = nextFiles.find((file) => normalizeSkillPath(file.path) === "SKILL.md")?.content ?? ""
-    const frontmatter = parseSkillFrontmatter(skillMarkdown)
-    const next = await saveSkillDraft(skillId, { title: frontmatter.name || draft.skill.title, source: draft.skill.source, summary: frontmatter.description || draft.skill.summary, files: nextFiles })
-    setData(next)
-    setDraft(next)
-    setSelectedVersionId(next.selectedVersion.id)
+  const handleFileContentChange = (value: string) => {
+    if (!draft || !selectedFile) {
+      return
+    }
+
+    setDraft({
+      ...draft,
+      files: draft.files.map((file) => normalizeSkillPath(file.path) === normalizeSkillPath(selectedFile.path) ? { ...file, content: value } : file),
+    })
   }
 
   const handlePublish = async () => {
     if (!skillId || !draft) return
+    await autosave.saveNow()
     const next = await publishSkillVersion(skillId, draft.selectedVersion.id)
     setData(next)
     setDraft(next)
     setSelectedVersionId(next.selectedVersion.id)
+    autosave.markClean(buildSkillSnapshot(next))
+    emitDataChanged("/skills")
   }
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title={draft?.skill.title ?? "Skill"} actions={draft ? <><VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /><Button variant="outline" onClick={handlePublish}>Publish</Button><Button onClick={handleSave}>Save</Button></> : null} />
+      <PageHeader title={draft?.skill.title ?? "Skill"} description={draft?.skill.summary || "Versioned skill bundle."} actions={draft ? <VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /> : null} />
       <input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUploadChange} />
-      <div className="min-h-0 flex-1 p-4">
+      <div className="min-h-0 flex-1 p-3">
         {isLoading ? <LoadingCard title="Loading skill..." /> : null}
         {error ? <ErrorCard error={error} onRetry={reload} /> : null}
         {!isLoading && !error && draft ? (
-          <ResizablePanelGroup direction="horizontal" className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background">
+          <ResizablePanelGroup direction="horizontal" className="min-h-[calc(100vh-9.5rem)] overflow-hidden rounded-xl border bg-background">
             <ResizablePanel defaultSize={28} minSize={18} className="min-w-0">
-              <ContextMenu>
-                <ContextMenuTrigger className="h-full">
-                  <div className="min-h-0 h-full overflow-y-auto p-2">
-                {visibleEntries.map((entry) => {
-                  const isDirectory = entry.kind === "directory"
-                  const isCollapsed = collapsedPaths.has(entry.path)
-                  return (
-                    <div key={entry.path} className={`${rowClass} ${entry.path === selectedFilePath ? "bg-muted" : ""}`}>
-                      <button className="flex min-w-0 flex-1 items-center gap-1 text-left" onClick={() => handleSelectEntry(entry.path)}>
-                        <span className="flex min-w-0 items-center gap-1" style={{ paddingLeft: `${entry.depth * 12}px` }}>
-                          {isDirectory ? <span className="flex size-4 items-center justify-center" onClick={(event) => { event.stopPropagation(); toggleFolder(entry.path) }}>{isCollapsed ? <ChevronRightIcon className="size-4 text-muted-foreground" /> : <ChevronDownIcon className="size-4 text-muted-foreground" />}</span> : <span className="size-4" />}
-                          {isDirectory ? <FolderIcon className="size-4 shrink-0 text-muted-foreground" /> : entry.path === "SKILL.md" ? <FileTextIcon className="size-4 shrink-0 text-muted-foreground" /> : <FileCode2Icon className="size-4 shrink-0 text-muted-foreground" />}
-                          <span className="truncate">{entry.label}</span>
-                        </span>
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className={actionButtonClassName} />}>
-                          <span>...</span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44 min-w-44">
-                          {isDirectory ? <DropdownMenuItem onClick={() => addResourceAt("file", entry.path)}><FilePlus2Icon className="size-4" />New file</DropdownMenuItem> : null}
-                          {isDirectory ? <DropdownMenuItem onClick={() => addResourceAt("directory", entry.path)}><FolderPlusIcon className="size-4" />New folder</DropdownMenuItem> : null}
-                          {isDirectory ? <DropdownMenuItem onClick={() => { setUploadTargetPath(entry.path); uploadInputRef.current?.click() }}><UploadIcon className="size-4" />Upload</DropdownMenuItem> : null}
-                          <DropdownMenuItem onClick={() => exportEntry(entry.path)}><DownloadIcon className="size-4" />Export</DropdownMenuItem>
-                          {!isCoreSkillNode(entry.path) ? <DropdownMenuItem onClick={() => renameEntry(entry.path)}><PencilIcon className="size-4" />Rename</DropdownMenuItem> : null}
-                          {!isCoreSkillNode(entry.path) ? <DropdownMenuItem variant="destructive" onClick={() => deleteEntry(entry.path)}><Trash2Icon className="size-4" />Delete</DropdownMenuItem> : null}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  )
-                })}
-                  </div>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem onClick={() => addResourceAt("file", "other")}><FilePlus2Icon className="size-4" />New file</ContextMenuItem>
-                  <ContextMenuItem onClick={() => addResourceAt("directory", "other")}><FolderPlusIcon className="size-4" />New folder</ContextMenuItem>
-                  <ContextMenuItem onClick={() => { setUploadTargetPath("other"); uploadInputRef.current?.click() }}><UploadIcon className="size-4" />Upload</ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
+              <SkillTreePanel collapsedPaths={collapsedPaths} entries={visibleEntries} onAddDirectory={(parentPath) => { setEntryDialogMode({ kind: "add-directory", parentPath }); setEntryDialogValue("new-folder"); setEntryDialogError("") }} onAddFile={(parentPath) => { setEntryDialogMode({ kind: "add-file", parentPath }); setEntryDialogValue(getDefaultSkillFileName(parentPath)); setEntryDialogError("") }} onDelete={(path) => setDeleteTargetPath(path)} onExport={exportEntry} onRename={(path) => { setEntryDialogMode({ kind: "rename", targetPath: path }); setEntryDialogValue(path); setEntryDialogError("") }} onSelect={handleSelectEntry} onToggle={toggleFolder} onUpload={(path) => { setUploadTargetPath(path); uploadInputRef.current?.click() }} selectedPath={selectedFilePath} />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={72} minSize={30} className="min-w-0">
-              <div className="flex h-full min-h-0 flex-col">
-                <div className="border-b px-3 py-2 text-sm text-muted-foreground">{selectedEntry?.path ?? "Editor"}</div>
-                <div className="min-h-0 flex-1 overflow-hidden p-0">
-                  {selectedFile && isEditableSkillFile(selectedFile.path) ? <DocumentContentEditor mode="source" value={fileContent} onChange={setFileContent} sourceLanguage={getSkillSourceLanguage(selectedFile.path, selectedFile.language)} /> : <div className="flex h-full items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">{selectedEntry?.kind === "directory" ? "Create or upload files into this folder." : "This resource type is not editable as plain text."}</div>}
-                </div>
-              </div>
+              <SkillEditorPanel autosaveLabel={autosaveLabel} fileContent={selectedFileContent} selectedFile={selectedFile} selectedPath={selectedEntry?.path ?? ""} versionLabel={draft.selectedVersion.label} onChange={handleFileContentChange} onPublish={handlePublish} onSaveNow={() => void autosave.saveNow()} />
             </ResizablePanel>
           </ResizablePanelGroup>
         ) : null}
       </div>
+      <ResourceEntryDialog description={entryDialogMode?.kind === "rename" ? "Rename the selected file or folder. Descendant paths will move with the folder." : "Create a new item inside the selected folder."} errorMessage={entryDialogError} fieldLabel={entryDialogMode?.kind === "rename" ? "New path" : "File or folder name"} onOpenChange={(open) => { if (!open) { setEntryDialogMode(null); setEntryDialogError("") } }} onSubmit={commitAddOrRename} onValueChange={setEntryDialogValue} open={Boolean(entryDialogMode)} placeholder={entryDialogMode?.kind === "rename" ? "references/guide.md" : "guide.md"} submitLabel={entryDialogMode?.kind === "rename" ? "Rename" : "Create"} title={entryDialogMode?.kind === "rename" ? "Rename item" : entryDialogMode?.kind === "add-directory" ? "Create folder" : "Create file"} value={entryDialogValue} />
+      <ConfirmDeleteDialog description={deleteTargetPath ? `Delete ${deleteTargetPath} and any nested items?` : "Delete this item?"} onConfirm={() => deleteTargetPath ? deleteEntry(deleteTargetPath) : undefined} onOpenChange={(open) => { if (!open) setDeleteTargetPath(null) }} open={Boolean(deleteTargetPath)} title="Delete item" />
     </div>
   )
 }

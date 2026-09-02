@@ -295,6 +295,7 @@ export type AgentConfigRecord = {
   modelId: string
   skillIds: string[]
   toolsetIds: string[]
+  documentIds?: string[]
 }
 
 export type AgentSummary = {

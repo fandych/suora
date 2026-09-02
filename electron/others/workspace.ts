@@ -9,5 +9,8 @@ export async function ensureWorkspace() {
 }
 
 export function configureAppStoragePaths() {
+  if (!app.isPackaged) {
+    app.commandLine.appendSwitch("disable-http-cache")
+  }
   app.commandLine.appendSwitch("disable-gpu-shader-disk-cache")
 }

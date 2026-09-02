@@ -1,13 +1,16 @@
 import type { SkillConfigRecord, SkillDetail, SkillFileRecord, SkillSummary } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { readArchiveEntries } from "@/lib/resource-files"
-import { buildSkillMarkdown, ensureSkillFiles, normalizeSkillPath, parseSkillFrontmatter } from "@/lib/skill-files"
+import { createArchiveImportPlan, getImportableArchiveEntries, readArchiveEntries, type ArchiveImportPlan, type ArchiveImportStrategy } from "@/lib/resource-files"
+import { buildSkillMarkdown, ensureSkillFiles, getSkillArchivePathError, getSkillSourceLanguage, normalizeSkillPath, parseSkillFrontmatter } from "@/lib/skill-files"
 import { suoraIpc } from "@/lib/ipc"
 
-function getSkillSidebarName(files: SkillFileRecord[], fallbackTitle: string) {
+function getSkillMetadata(files: SkillFileRecord[], fallbackTitle: string, fallbackSummary: string) {
   const skillMarkdown = files.find((file) => file.path === "SKILL.md")?.content ?? ""
-  const match = /^name:\s*"?([^"\n]+)"?$/im.exec(skillMarkdown)
-  return match?.[1]?.trim() || fallbackTitle
+  const frontmatter = parseSkillFrontmatter(skillMarkdown)
+  return {
+    summary: frontmatter.description || fallbackSummary,
+    title: frontmatter.name || fallbackTitle,
+  }
 }
 
 function normalizeSkill(detail: SkillConfigRecord | SkillDetail) {
@@ -26,10 +29,12 @@ export async function listSkills() {
       return row
     }
 
+    const metadata = getSkillMetadata(detail.files, row.title, row.summary)
+
     return {
       ...row,
-      title: getSkillSidebarName(detail.files, row.title),
-      summary: detail.skill.summary || row.summary,
+      title: metadata.title,
+      summary: metadata.summary,
     } satisfies SkillSummary
   }))
 
@@ -41,15 +46,50 @@ export async function createSkill() {
   return suoraIpc.skills.create() as Promise<SkillConfigRecord>
 }
 
-export async function importSkillArchive(file: File) {
+export async function previewSkillArchiveImport(file: File, strategy: ArchiveImportStrategy): Promise<ArchiveImportPlan> {
+  await ensureSeeded()
+  const name = file.name.replace(/\.zip$/i, "") || "Imported skill"
+  const existingPaths = ensureSkillFiles([], name, `Imported from ${file.name}`).map((entry) => entry.path)
+  const entries = await readArchiveEntries(file)
+  const plan = createArchiveImportPlan(entries, {
+    existingPaths,
+    strategy,
+    validatePath: (path, kind) => getSkillArchivePathError(path, kind),
+  })
+
+  if (!plan.entries.some((entry) => entry.kind === "file" && entry.normalizedPath === "SKILL.md" && entry.resolvedPath)) {
+    return {
+      ...plan,
+      issues: [...plan.issues, { path: "SKILL.md", message: "Skill archives must include a root SKILL.md file.", severity: "error" }],
+      hasBlockingIssues: true,
+    }
+  }
+
+  return plan
+}
+
+export async function importSkillArchive(file: File, strategy: ArchiveImportStrategy = "overwrite") {
   await ensureSeeded()
   const created = await createSkill()
+  const existingPaths = ensureSkillFiles(created.files, created.skill.title, created.skill.summary).map((entry) => entry.path)
   const entries = await readArchiveEntries(file)
-  const files = ensureSkillFiles(entries.map((entry) => ({
+  const plan = createArchiveImportPlan(entries, {
+    existingPaths,
+    strategy,
+    validatePath: (path, kind) => getSkillArchivePathError(path, kind),
+  })
+  if (!plan.entries.some((entry) => entry.kind === "file" && entry.normalizedPath === "SKILL.md" && entry.resolvedPath)) {
+    throw new Error("Skill archives must include a root SKILL.md file.")
+  }
+  if (plan.hasBlockingIssues) {
+    throw new Error(plan.issues.find((issue) => issue.severity === "error")?.message ?? "Skill archive validation failed.")
+  }
+
+  const files = ensureSkillFiles(getImportableArchiveEntries(plan).map((entry) => ({
     path: normalizeSkillPath(entry.path),
     content: entry.content,
     kind: entry.kind,
-    language: undefined as unknown as string,
+    language: getSkillSourceLanguage(entry.path),
   } as SkillFileRecord)), created.skill.title, created.skill.summary)
   const skillMarkdown = files.find((entry) => entry.path === "SKILL.md")?.content ?? buildSkillMarkdown(created.skill.title, created.skill.summary)
   const frontmatter = parseSkillFrontmatter(skillMarkdown)
@@ -77,7 +117,7 @@ export async function getSkillDetail(skillId: string, selectedVersionId?: string
   } satisfies SkillDetail
 }
 
-export async function saveSkillDraft(skillId: string, payload: { title: string; source: string; summary: string; files: SkillFileRecord[] }) {
+export async function saveSkillDraft(skillId: string, payload: { title: string; source: string; summary: string; files: SkillFileRecord[]; selectedVersionId?: string }) {
   await ensureSeeded()
   return suoraIpc.skills.save({
     id: skillId,
@@ -95,6 +135,7 @@ export async function publishSkillVersion(skillId: string, versionId: string) {
     source: detail.skill.source,
     summary: detail.skill.summary,
     files: detail.files,
+    selectedVersionId: detail.selectedVersion.id,
     publish: true,
   }) as Promise<SkillConfigRecord>
 }

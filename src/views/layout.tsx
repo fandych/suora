@@ -7,7 +7,7 @@ const RootLayout = () => {
     return (<SidebarProvider
         style={
             {
-                "--sidebar-width": "350px",
+                "--sidebar-width": "320px",
             } as React.CSSProperties
         }
     >

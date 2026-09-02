@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useParams } from "react-router"
-import { ChevronDownIcon, ChevronRightIcon, DownloadIcon, FilePlus2Icon, FileTextIcon, FolderIcon, FolderPlusIcon, PencilIcon, Trash2Icon, UploadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { useAutosaveStatus } from "@/hooks/use-autosave-status"
+import { emitDataChanged } from "@/data/repositories/data-events"
+import type { DocumentDetail } from "@/data/domain/models"
 import { getDocumentDetail, publishDocumentVersion, saveDocumentDraft } from "@/data/repositories/document-repository"
-import { buildDocumentTree, getDocumentDisplayName, getDocumentSourceLanguage, isMarkdownDocumentTitle } from "@/lib/document-tree"
+import { buildDocumentTree, getDocumentDisplayName } from "@/lib/document-tree"
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser-files"
-import DocumentContentEditor from "@/views/components/document-content-editor"
 import PageHeader from "@/views/components/page-header"
+import { ConfirmDeleteDialog } from "@/views/components/confirm-delete-dialog"
+import { ResourceEntryDialog } from "@/views/components/resource-entry-dialog"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import VersionSelect from "@/views/components/version-select"
+import { DocumentCreateDialog } from "@/views/documents/components/document-create-dialog"
+import { DocumentEditorPanel } from "@/views/documents/components/document-editor-panel"
+import { DocumentTreePanel } from "@/views/documents/components/document-tree-panel"
 
 function getUniqueDocumentTitle(existingTitles: string[], preferredTitle: string) {
   if (!existingTitles.includes(preferredTitle)) return preferredTitle
@@ -31,34 +34,84 @@ function isVisibleDocumentNode(path: string[], collapsedIds: Set<string>) {
   return !path.some((id) => collapsedIds.has(id))
 }
 
-const rowClass = "group flex w-full items-center gap-1 rounded-md px-2 py-1 text-sm hover:bg-muted/60"
-const actionButtonClassName = "shrink-0 opacity-0 group-hover:opacity-100"
+function buildDocumentSnapshot(detail: ReturnType<typeof normalizeDocumentState>) {
+  return JSON.stringify(detail)
+}
+
+function normalizeDocumentState(detail: DocumentDetail) {
+  return {
+    document: detail.document,
+    graphEdges: detail.graphEdges,
+    pages: detail.pages,
+    selectedVersionId: detail.selectedVersion.id,
+    settings: detail.settings,
+  }
+}
 
 const DocumentsDetailPage = () => {
   const { documentId } = useParams<{ documentId: string }>()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => getDocumentDetail(documentId ?? "", selectedVersionId), [documentId, selectedVersionId])
-  const [title, setTitle] = useState("")
-  const [summary, setSummary] = useState("")
   const [selectedNodeId, setSelectedNodeId] = useState("")
-  const [pageContent, setPageContent] = useState("")
   const [editorMode, setEditorMode] = useState<"rich" | "source">("rich")
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const uploadParentIdRef = useRef<string | null>(null)
+  const [draft, setDraft] = useState<DocumentDetail | null>(null)
+  const [entryDialogMode, setEntryDialogMode] = useState<{ kind: "add-file" | "add-directory" | "rename"; parentId?: string | null; targetId?: string } | null>(null)
+  const [entryDialogValue, setEntryDialogValue] = useState("")
+  const [entryDialogError, setEntryDialogError] = useState("")
+  const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false)
+  const [hasLoadedInitialState, setHasLoadedInitialState] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+
+  const persistDraft = async (nextDraft: DocumentDetail) => {
+    const saved = await saveDocumentDraft(documentId ?? "", {
+      title: nextDraft.document.title,
+      summary: nextDraft.document.summary,
+      pages: nextDraft.pages,
+      graphEdges: nextDraft.graphEdges,
+      settings: nextDraft.settings,
+      selectedVersionId: nextDraft.selectedVersion.id,
+    })
+    const hasSelectedPage = saved.pages.some((page) => page.id === selectedNodeId)
+    setData(saved)
+    setDraft(saved)
+    setSelectedVersionId(saved.selectedVersion.id)
+    if (hasSelectedPage) {
+      setSelectedNodeId((current) => current)
+    } else {
+      setSelectedNodeId(saved.pages[0]?.id ?? "")
+    }
+    emitDataChanged("/documents")
+    return buildDocumentSnapshot(normalizeDocumentState(saved))
+  }
+
+  const autosave = useAutosaveStatus({
+    enabled: hasLoadedInitialState && Boolean(documentId && draft),
+    onSave: async () => draft ? persistDraft(draft) : "",
+    snapshotKey: draft ? buildDocumentSnapshot(normalizeDocumentState(draft)) : "",
+  })
 
   useEffect(() => {
     if (!data) return
-    setTitle(data.document.title)
-    setSummary(data.document.summary)
+    setDraft(data)
     setSelectedVersionId(data.selectedVersion.id)
-    const firstDocument = data.pages.find((page) => (page.type ?? "document") === "document") ?? data.pages[0]
-    setSelectedNodeId(firstDocument?.id ?? "")
-    setPageContent(firstDocument?.content ?? "")
+    setSelectedNodeId((current) => {
+      if (current && data.pages.some((page) => page.id === current)) {
+        return current
+      }
+
+      const firstDocument = data.pages.find((page) => (page.type ?? "document") === "document") ?? data.pages[0]
+      return firstDocument?.id ?? ""
+    })
     setCollapsedIds(new Set())
+    setHasLoadedInitialState(true)
+    autosave.markClean(buildDocumentSnapshot(normalizeDocumentState(data)))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
 
-  const pages = useMemo(() => data?.pages ?? [], [data])
+  const pages = useMemo(() => draft?.pages ?? [], [draft])
   const pagesById = useMemo(() => new Map(pages.map((page) => [page.id, page])), [pages])
   const treeEntries = useMemo(() => buildDocumentTree(pages), [pages])
   const visibleEntries = useMemo(() => treeEntries.filter(({ node }) => {
@@ -71,13 +124,11 @@ const DocumentsDetailPage = () => {
     return isVisibleDocumentNode(ancestorIds, collapsedIds)
   }), [collapsedIds, pagesById, treeEntries])
   const selectedPage = pages.find((page) => page.id === selectedNodeId) ?? pages[0]
-  const selectedIsDocument = (selectedPage?.type ?? "document") === "document"
-  const effectiveEditorMode = selectedIsDocument && selectedPage && !isMarkdownDocumentTitle(selectedPage.title) ? "source" : editorMode
+  const pageContent = selectedPage?.content ?? ""
+  const autosaveLabel = autosave.state === "error" ? "Save failed" : autosave.state === "saving" ? "Saving..." : autosave.state === "pending" ? "Unsaved changes" : "Saved"
 
   const handleSelectNode = (nodeId: string) => {
     setSelectedNodeId(nodeId)
-    const nextNode = pages.find((page) => page.id === nodeId)
-    setPageContent(nextNode?.content ?? "")
   }
 
   const toggleFolder = (nodeId: string) => {
@@ -89,14 +140,52 @@ const DocumentsDetailPage = () => {
     })
   }
 
-  const addNodeAt = (type: "document" | "folder", parentId: string | null) => {
-    if (!data) return
-    const existingTitles = data.pages.map((page) => page.title)
-    const nodeTitle = type === "folder" ? getUniqueDocumentTitle(existingTitles, "new-folder") : getUniqueDocumentTitle(existingTitles, "new-document.md")
-    const nextNode = { id: crypto.randomUUID(), title: nodeTitle, content: type === "document" ? "# New Document\n\nStart writing here.\n" : "", type, parentId } as const
-    setData({ ...data, pages: [...data.pages, nextNode] })
+  const commitAddOrRename = () => {
+    if (!draft || !entryDialogMode) {
+      return
+    }
+
+    const rawValue = entryDialogValue.trim()
+    if (!rawValue) {
+      setEntryDialogError("Name is required.")
+      return
+    }
+
+    if (entryDialogMode.kind === "rename") {
+      const target = draft.pages.find((page) => page.id === entryDialogMode.targetId)
+      if (!target) {
+        return
+      }
+
+      const nextTitle = rawValue
+      const siblingTitles = draft.pages.filter((page) => page.id !== target.id && page.parentId === target.parentId).map((page) => page.title)
+      if (siblingTitles.includes(nextTitle) || ((target.type ?? "document") === "document" && siblingTitles.includes(getUniqueDocumentTitle(siblingTitles, nextTitle)))) {
+        setEntryDialogError("Another item in this folder already uses that name.")
+        return
+      }
+
+      setDraft({
+        ...draft,
+        pages: draft.pages.map((page) => page.id === target.id ? {
+          ...page,
+          title: (page.type ?? "document") === "document" ? getUniqueDocumentTitle(draft.pages.filter((candidate) => candidate.id !== page.id).map((candidate) => candidate.title), nextTitle) : nextTitle,
+        } : page),
+      })
+      setEntryDialogMode(null)
+      setEntryDialogError("")
+      return
+    }
+
+    const parentId = entryDialogMode.parentId ?? null
+    const type = entryDialogMode.kind === "add-directory" ? "folder" : "document"
+    const siblingTitles = draft.pages.filter((page) => page.parentId === parentId).map((page) => page.title)
+    const nodeTitle = type === "folder" ? getUniqueDocumentTitle(siblingTitles, rawValue) : getUniqueDocumentTitle(siblingTitles, rawValue)
+    const nextNode = { id: globalThis.crypto.randomUUID(), title: nodeTitle, content: type === "document" ? "# New Document\n\nStart writing here.\n" : "", type, parentId } as const
+    setDraft({ ...draft, pages: [...draft.pages, nextNode] })
     setCollapsedIds((current) => { const next = new Set(current); if (parentId) next.delete(parentId); return next })
     handleSelectNode(nextNode.id)
+    setEntryDialogMode(null)
+    setEntryDialogError("")
   }
 
   const getDescendantIds = (nodeId: string) => {
@@ -114,35 +203,20 @@ const DocumentsDetailPage = () => {
   }
 
   const deleteNode = (nodeId: string) => {
-    if (!data || data.pages.length <= 1) return
+    if (!draft || draft.pages.length <= 1) return
     const descendantIds = getDescendantIds(nodeId)
-    const nextPages = data.pages.filter((page) => page.id !== nodeId && !descendantIds.has(page.id))
-    setData({ ...data, pages: nextPages })
+    const nextPages = draft.pages.filter((page) => page.id !== nodeId && !descendantIds.has(page.id))
+    setDraft({ ...draft, pages: nextPages })
     const fallback = nextPages.find((page) => (page.type ?? "document") === "document") ?? nextPages[0]
     setSelectedNodeId(fallback?.id ?? "")
-    setPageContent(fallback?.content ?? "")
-  }
-
-  const renameNode = (nodeId: string) => {
-    if (!data) return
-    const target = data.pages.find((page) => page.id === nodeId)
-    if (!target) return
-    const nextTitle = window.prompt("Rename item", target.title)
-    if (!nextTitle?.trim()) return
-    setData({
-      ...data,
-      pages: data.pages.map((page) => page.id === nodeId ? {
-        ...page,
-        title: (page.type ?? "document") === "document" ? getUniqueDocumentTitle(data.pages.filter((candidate) => candidate.id !== page.id).map((candidate) => candidate.title), nextTitle.trim()) : nextTitle.trim(),
-      } : page),
-    })
+    setDeleteTargetId(null)
   }
 
   const exportNode = (nodeId: string) => {
     const target = pages.find((page) => page.id === nodeId)
     if (!target) return
     if ((target.type ?? "document") === "document") {
-      downloadStoredContent(getDocumentDisplayName(target.title), target.id === selectedNodeId ? pageContent : target.content)
+      downloadStoredContent(getDocumentDisplayName(target.title), target.content)
       return
     }
     const descendantIds = getDescendantIds(nodeId)
@@ -151,104 +225,68 @@ const DocumentsDetailPage = () => {
   }
 
   const handleUploadChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (!data) return
+    if (!draft) return
     const parentId = uploadParentIdRef.current
     const files = Array.from(event.target.files ?? [])
     if (files.length === 0) return
-    const nextPages = [...data.pages]
+    const nextPages = [...draft.pages]
     for (const file of files) {
-      nextPages.push({ id: crypto.randomUUID(), title: getUniqueDocumentTitle(nextPages.map((page) => page.title), file.name), content: await readBrowserFile(file), type: "document", parentId })
+      nextPages.push({ id: globalThis.crypto.randomUUID(), title: getUniqueDocumentTitle(nextPages.map((page) => page.title), file.name), content: await readBrowserFile(file), type: "document", parentId })
     }
-    setData({ ...data, pages: nextPages })
+    setDraft({ ...draft, pages: nextPages })
     const firstUploaded = nextPages[nextPages.length - files.length]
     if (firstUploaded) handleSelectNode(firstUploaded.id)
     event.target.value = ""
   }
 
-  const handleSave = async () => {
-    if (!documentId || !data) return
-    const nextPages = data.pages.map((page) => {
-      if ((page.type ?? "document") === "folder" && page.parentId === null) return { ...page, title }
-      if (page.id === selectedPage?.id && (page.type ?? "document") === "document") return { ...page, content: pageContent }
-      return page
+  const handleContentChange = (value: string) => {
+    if (!draft || !selectedPage) {
+      return
+    }
+
+    setDraft({
+      ...draft,
+      pages: draft.pages.map((page) => page.id === selectedPage.id ? { ...page, content: value } : page),
     })
-    const next = await saveDocumentDraft(documentId, { title, summary, pages: nextPages, graphEdges: data.graphEdges, settings: data.settings })
-    setData(next)
-    setSelectedVersionId(next.selectedVersion.id)
+  }
+
+  const handleSaveNow = async () => {
+    await autosave.saveNow()
   }
 
   const handlePublish = async () => {
-    if (!documentId || !data) return
-    const next = await publishDocumentVersion(documentId, data.selectedVersion.id)
+    if (!documentId || !draft) return
+    await autosave.saveNow()
+    const next = await publishDocumentVersion(documentId, draft.selectedVersion.id)
     setData(next)
+    setDraft(next)
     setSelectedVersionId(next.selectedVersion.id)
+    autosave.markClean(buildDocumentSnapshot(normalizeDocumentState(next)))
+    emitDataChanged("/documents")
   }
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title={data?.document.title ?? "Document"} actions={data ? <><VersionSelect versions={data.versions} value={data.selectedVersion.id} onChange={setSelectedVersionId} /><Button variant="outline" onClick={handlePublish}>Publish</Button><Button onClick={handleSave}>Save</Button></> : null} />
+      <PageHeader title={draft?.document.title ?? "Document"} description={draft?.document.summary || "Versioned document workspace."} actions={draft ? <><VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /><Button variant="outline" onClick={() => setIsMetadataDialogOpen(true)}>Edit info</Button></> : null} />
       <input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUploadChange} />
-      <div className="min-h-0 flex-1 p-4">
+      <div className="min-h-0 flex-1 p-3">
         {isLoading ? <LoadingCard title="Loading document..." /> : null}
         {error ? <ErrorCard error={error} onRetry={reload} /> : null}
-        {!isLoading && !error && data ? (
-          <ResizablePanelGroup direction="horizontal" className="min-h-[calc(100vh-11rem)] overflow-hidden rounded-xl border bg-background">
+        {!isLoading && !error && draft ? (
+          <ResizablePanelGroup direction="horizontal" className="min-h-[calc(100vh-9.5rem)] overflow-hidden rounded-xl border bg-background">
             <ResizablePanel defaultSize={28} minSize={18} className="min-w-0">
-              <ContextMenu>
-                <ContextMenuTrigger className="h-full">
-                  <div className="min-h-0 h-full overflow-y-auto p-2">
-                {visibleEntries.map(({ node, depth }) => {
-                  const isFolder = (node.type ?? "document") === "folder"
-                  const isCollapsed = collapsedIds.has(node.id)
-                  return (
-                    <div key={node.id} className={`${rowClass} ${node.id === selectedNodeId ? "bg-muted" : ""}`}>
-                      <button className="flex min-w-0 flex-1 items-center gap-1 text-left" onClick={() => handleSelectNode(node.id)}>
-                        <span className="flex min-w-0 items-center gap-1" style={{ paddingLeft: `${depth * 12}px` }}>
-                          {isFolder ? <span className="flex size-4 items-center justify-center" onClick={(event) => { event.stopPropagation(); toggleFolder(node.id) }}>{isCollapsed ? <ChevronRightIcon className="size-4 text-muted-foreground" /> : <ChevronDownIcon className="size-4 text-muted-foreground" />}</span> : <span className="size-4" />}
-                          {isFolder ? <FolderIcon className="size-4 shrink-0 text-muted-foreground" /> : <FileTextIcon className="size-4 shrink-0 text-muted-foreground" />}
-                          <span className="truncate">{isFolder ? node.title : getDocumentDisplayName(node.title)}</span>
-                        </span>
-                      </button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className={actionButtonClassName} />}>
-                          <span>...</span>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44 min-w-44">
-                          {isFolder ? <DropdownMenuItem onClick={() => addNodeAt("document", node.id)}><FilePlus2Icon className="size-4" />New file</DropdownMenuItem> : null}
-                          {isFolder ? <DropdownMenuItem onClick={() => addNodeAt("folder", node.id)}><FolderPlusIcon className="size-4" />New folder</DropdownMenuItem> : null}
-                          {isFolder ? <DropdownMenuItem onClick={() => { uploadParentIdRef.current = node.id; uploadInputRef.current?.click() }}><UploadIcon className="size-4" />Upload</DropdownMenuItem> : null}
-                          <DropdownMenuItem onClick={() => exportNode(node.id)}><DownloadIcon className="size-4" />Export</DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => renameNode(node.id)}><PencilIcon className="size-4" />Rename</DropdownMenuItem>
-                          <DropdownMenuItem variant="destructive" onClick={() => deleteNode(node.id)}><Trash2Icon className="size-4" />Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  )
-                })}
-                  </div>
-                </ContextMenuTrigger>
-                <ContextMenuContent>
-                  <ContextMenuItem onClick={() => addNodeAt("document", pages.find((page) => (page.type ?? "document") === "folder" && page.parentId === null)?.id ?? null)}><FilePlus2Icon className="size-4" />New file</ContextMenuItem>
-                  <ContextMenuItem onClick={() => addNodeAt("folder", pages.find((page) => (page.type ?? "document") === "folder" && page.parentId === null)?.id ?? null)}><FolderPlusIcon className="size-4" />New folder</ContextMenuItem>
-                  <ContextMenuItem onClick={() => { uploadParentIdRef.current = pages.find((page) => (page.type ?? "document") === "folder" && page.parentId === null)?.id ?? null; uploadInputRef.current?.click() }}><UploadIcon className="size-4" />Upload</ContextMenuItem>
-                </ContextMenuContent>
-              </ContextMenu>
+              <DocumentTreePanel collapsedIds={collapsedIds} entries={visibleEntries} onAddDirectory={(parentId) => { setEntryDialogMode({ kind: "add-directory", parentId }); setEntryDialogValue("new-folder"); setEntryDialogError("") }} onAddFile={(parentId) => { setEntryDialogMode({ kind: "add-file", parentId }); setEntryDialogValue("new-document.md"); setEntryDialogError("") }} onDelete={(nodeId) => setDeleteTargetId(nodeId)} onExport={exportNode} onRename={(nodeId) => { const target = draft.pages.find((page) => page.id === nodeId); setEntryDialogMode({ kind: "rename", targetId: nodeId }); setEntryDialogValue(target?.title ?? ""); setEntryDialogError("") }} onSelect={handleSelectNode} onToggle={toggleFolder} onUpload={(parentId) => { uploadParentIdRef.current = parentId; uploadInputRef.current?.click() }} selectedNodeId={selectedNodeId} />
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={72} minSize={30} className="min-w-0">
-              <div className="flex h-full min-h-0 flex-col">
-                <div className="flex items-center justify-between border-b px-3 py-2 text-sm text-muted-foreground">
-                  <span className="truncate">{selectedPage ? ((selectedPage.type ?? "document") === "document" ? getDocumentDisplayName(selectedPage.title) : selectedPage.title) : "Editor"}</span>
-                  {selectedIsDocument ? <NativeSelect value={effectiveEditorMode} onChange={(event) => setEditorMode(event.target.value as "rich" | "source")} size="sm"><NativeSelectOption value="rich" disabled={selectedPage ? !isMarkdownDocumentTitle(selectedPage.title) : false}>Rich</NativeSelectOption><NativeSelectOption value="source">Source</NativeSelectOption></NativeSelect> : null}
-                </div>
-                <div className="min-h-0 flex-1 overflow-hidden p-0">
-                  {selectedIsDocument ? <DocumentContentEditor mode={effectiveEditorMode} value={pageContent} onChange={setPageContent} sourceLanguage={effectiveEditorMode === "source" ? getDocumentSourceLanguage(selectedPage?.title ?? "") : undefined} /> : <div className="flex h-full items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">Create or upload files into this folder.</div>}
-                </div>
-              </div>
+              <DocumentEditorPanel autosaveLabel={autosaveLabel} editorMode={editorMode} onChange={handleContentChange} onEditorModeChange={setEditorMode} onPublish={handlePublish} onSaveNow={() => void handleSaveNow()} pageContent={pageContent} selectedPage={selectedPage} versionLabel={draft.selectedVersion.label} />
             </ResizablePanel>
           </ResizablePanelGroup>
         ) : null}
       </div>
+      <DocumentCreateDialog dialogDescription="Update the document name and summary for this workspace." dialogTitle="Edit document info" onDescriptionChange={(value) => setDraft((current) => current ? { ...current, document: { ...current.document, summary: value } } : current)} onOpenChange={setIsMetadataDialogOpen} onSubmit={() => { setIsMetadataDialogOpen(false) }} onTitleChange={(value) => setDraft((current) => current ? { ...current, document: { ...current.document, title: value } } : current)} open={isMetadataDialogOpen} submitLabel="Done" title={draft?.document.title ?? ""} description={draft?.document.summary ?? ""} />
+      <ResourceEntryDialog description={entryDialogMode?.kind === "rename" ? "Rename the selected page or folder." : "Create a new document or folder inside the selected parent."} errorMessage={entryDialogError} fieldLabel={entryDialogMode?.kind === "rename" ? "New name" : "Name"} onOpenChange={(open) => { if (!open) { setEntryDialogMode(null); setEntryDialogError("") } }} onSubmit={commitAddOrRename} onValueChange={setEntryDialogValue} open={Boolean(entryDialogMode)} placeholder={entryDialogMode?.kind === "add-file" ? "new-document.md" : "new-folder"} submitLabel={entryDialogMode?.kind === "rename" ? "Rename" : "Create"} title={entryDialogMode?.kind === "rename" ? "Rename item" : entryDialogMode?.kind === "add-directory" ? "Create folder" : "Create document"} value={entryDialogValue} />
+      <ConfirmDeleteDialog description={deleteTargetId ? `Delete this item and all nested content under it?` : "Delete this item?"} onConfirm={() => deleteTargetId ? deleteNode(deleteTargetId) : undefined} onOpenChange={(open) => { if (!open) setDeleteTargetId(null) }} open={Boolean(deleteTargetId)} title="Delete item" />
     </div>
   )
 }

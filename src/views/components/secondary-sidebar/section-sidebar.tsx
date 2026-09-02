@@ -97,7 +97,7 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
 
   return (
     <Sidebar collapsible="none" className="hidden flex-1 border-l md:flex">
-      <SidebarHeader className="gap-3.5 border-b p-4">
+      <SidebarHeader className="gap-2.5 border-b p-3">
         <div className="flex w-full items-center justify-between">
           <div className="text-base font-medium text-foreground">{title}</div>
           {headerAction}
@@ -112,7 +112,7 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
           return (
             <SidebarGroup key={groupKey}>
               {group.title || groupAction ? (
-                <div className="flex items-center justify-between gap-2 px-2 pb-1">
+                <div className="flex items-center justify-between gap-2 px-2 pb-0.5">
                   {group.title ? <SidebarGroupLabel className="h-auto px-0 py-0">{group.title}</SidebarGroupLabel> : <span />}
                   {groupAction}
                 </div>

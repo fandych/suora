@@ -1,3 +1,6 @@
+import { jsPDF } from "jspdf"
+import { Document, Packer, Paragraph, TextRun } from "docx"
+
 function downloadHref(filename: string, href: string) {
   const anchor = document.createElement("a")
   anchor.href = href
@@ -47,4 +50,36 @@ export async function readBrowserFile(file: File) {
     reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "")
     reader.readAsDataURL(file)
   })
+}
+
+export async function exportTextAsPdf(filename: string, content: string) {
+  const pdf = new jsPDF({ unit: "pt", format: "a4" })
+  const lines = pdf.splitTextToSize(content || "", 520)
+  let y = 48
+
+  for (const line of lines) {
+    if (y > 780) {
+      pdf.addPage()
+      y = 48
+    }
+    pdf.text(line, 40, y)
+    y += 16
+  }
+
+  pdf.save(filename)
+}
+
+export async function exportTextAsDocx(filename: string, content: string) {
+  const document = new Document({
+    sections: [
+      {
+        children: (content || "")
+          .split(/\r?\n/)
+          .map((line) => new Paragraph({ children: [new TextRun(line)] })),
+      },
+    ],
+  })
+
+  const blob = await Packer.toBlob(document)
+  downloadBlob(filename, blob)
 }

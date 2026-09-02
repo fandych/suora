@@ -7,6 +7,8 @@ import { useLocation, useNavigate } from "react-router";
 import PreferenceSidebar from "@/views/components/secondary-sidebar/preference-sidebar";
 import SectionSidebar from "@/views/components/secondary-sidebar/section-sidebar";
 import { CreateProviderButton } from "@/views/models/components/create-provider-button";
+import { SkillCreateButton } from "@/views/skills/components/skill-create-button";
+import { DocumentCreateButton } from "@/views/documents/components/document-create-button";
 
 const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
     const { setOpen } = useSidebar()
@@ -82,7 +84,13 @@ const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
                 searchPlaceholder={activeItem.secondarySidebar.searchPlaceholder}
                 groups={groups}
                 isLoading={isLoading}
-                headerAction={activeItem.url === "/models" ? <CreateProviderButton size="sm" variant="outline" /> : null}
+                                headerAction={activeItem.url === "/models"
+                                    ? <CreateProviderButton size="sm" variant="outline" />
+                                    : activeItem.url === "/skills"
+                                        ? <SkillCreateButton />
+                                        : activeItem.url === "/documents"
+                                            ? <DocumentCreateButton />
+                                            : null}
             />
         )}
 

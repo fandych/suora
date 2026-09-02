@@ -33,6 +33,24 @@ export function isSafeSkillResourcePath(path: string) {
   return segments.length > 0 && !segments.includes("..") && !segments.includes(".") && isSkillTopLevelFolder(segments[0])
 }
 
+export function getSkillArchivePathError(path: string, kind: "file" | "directory") {
+  const normalized = normalizeSkillPath(path)
+
+  if (!normalized) {
+    return "Archive entries must include a non-empty relative path."
+  }
+
+  if (normalized === "SKILL.md") {
+    return kind === "file" ? null : "SKILL.md must be a file, not a directory."
+  }
+
+  if (!isSafeSkillResourcePath(normalized)) {
+    return "Skill archives can only include SKILL.md or content under scripts, references, assets, or other."
+  }
+
+  return null
+}
+
 export function getSkillSourceLanguage(path: string, language?: string) {
   if (language) {
     switch (language) {
@@ -255,7 +273,9 @@ export function buildSkillTree(files: SkillFileRecord[]): SkillTreeEntry[] {
 
   for (const folder of SKILL_TOP_LEVEL_FOLDERS) {
     pushEntry(folder, "directory", files.find((file) => normalizeSkillPath(file.path) === folder))
-    for (const file of files.filter((candidate) => normalizeSkillPath(candidate.path).startsWith(`${folder}/`))) {
+    for (const file of files
+      .filter((candidate) => normalizeSkillPath(candidate.path).startsWith(`${folder}/`))
+      .sort((left, right) => normalizeSkillPath(left.path).localeCompare(normalizeSkillPath(right.path)))) {
       const parts = normalizeSkillPath(file.path).split("/")
       for (let index = 0; index < parts.length - 1; index += 1) {
         const folderPath = parts.slice(0, index + 1).join("/")
@@ -266,11 +286,5 @@ export function buildSkillTree(files: SkillFileRecord[]): SkillTreeEntry[] {
     }
   }
 
-  return entries.sort((left, right) => {
-    if (left.path === "SKILL.md") return -1
-    if (right.path === "SKILL.md") return 1
-    if (left.depth !== right.depth) return left.depth - right.depth
-    if (left.kind !== right.kind) return left.kind === "directory" ? -1 : 1
-    return left.path.localeCompare(right.path)
-  })
+  return entries
 }

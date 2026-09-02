@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 
 export type AutosaveState = "saved" | "pending" | "saving" | "error"
 
@@ -13,19 +13,25 @@ export function useAutosaveStatus({ delayMs = 900, enabled, onSave, snapshotKey 
   const [state, setState] = useState<AutosaveState>("saved")
   const [error, setError] = useState<Error | null>(null)
   const cleanSnapshotRef = useRef(snapshotKey)
-  const runSave = useEffectEvent(async (nextSnapshotKey: string) => {
+  const onSaveRef = useRef(onSave)
+
+  useEffect(() => {
+    onSaveRef.current = onSave
+  }, [onSave])
+
+  const runSave = async (nextSnapshotKey: string) => {
     setState("saving")
     setError(null)
 
     try {
-      const cleanSnapshotKey = await onSave()
+      const cleanSnapshotKey = await onSaveRef.current()
       cleanSnapshotRef.current = cleanSnapshotKey ?? nextSnapshotKey
       setState("saved")
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError : new Error("Autosave failed."))
       setState("error")
     }
-  })
+  }
 
   useEffect(() => {
     if (!enabled) {
@@ -43,7 +49,7 @@ export function useAutosaveStatus({ delayMs = 900, enabled, onSave, snapshotKey 
     return () => {
       window.clearTimeout(timeoutId)
     }
-  }, [delayMs, enabled, runSave, snapshotKey])
+  }, [delayMs, enabled, snapshotKey])
 
   return {
     error,

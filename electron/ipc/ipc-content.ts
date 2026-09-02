@@ -132,7 +132,7 @@ export function registerContentIpc() {
     }
   })
 
-  ipcMain.handle("documents:save", async (_event, payload: { id: string; title: string; summary: string; structureJson: string; graphJson: string; settingsJson: string; publish?: boolean }) => {
+  ipcMain.handle("documents:save", async (_event, payload: { id: string; title: string; summary: string; structureJson: string; graphJson: string; settingsJson: string; selectedVersionId?: string; publish?: boolean }) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
@@ -140,7 +140,12 @@ export function registerContentIpc() {
     const now = Date.now()
     database.prepare(`UPDATE documents SET title = ?, summary = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.summary, now, payload.id)
 
-    let selectedVersionId = database.prepare(`SELECT id FROM document_versions WHERE document_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
+    const targetDraft = payload.selectedVersionId
+      ? database.prepare(`SELECT id, is_release as isRelease FROM document_versions WHERE document_id = ? AND id = ? LIMIT 1`).get(payload.id, payload.selectedVersionId) as { id: string; isRelease: number } | undefined
+      : undefined
+    let selectedVersionId = targetDraft && !targetDraft.isRelease
+      ? { id: targetDraft.id }
+      : database.prepare(`SELECT id FROM document_versions WHERE document_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
 
     if (!payload.publish && selectedVersionId) {
       database.prepare(`UPDATE document_versions SET structure_json = ?, graph_json = ?, settings_json = ?, created_at = ? WHERE id = ?`).run(payload.structureJson, payload.graphJson, payload.settingsJson, now, selectedVersionId.id)

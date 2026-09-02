@@ -132,7 +132,7 @@ export const suoraIpc = {
         settings: JSON.parse(selectedPayload.settingsJson),
       } satisfies DocumentDetail
     },
-    save: async (payload: { id: string; title: string; summary: string; pages: DocumentPageRecord[]; graphEdges: DocumentGraphEdge[]; settings: { isPublic: boolean; includeInLlmsTxt: boolean }; publish?: boolean }) => {
+    save: async (payload: { id: string; title: string; summary: string; pages: DocumentPageRecord[]; graphEdges: DocumentGraphEdge[]; settings: { isPublic: boolean; includeInLlmsTxt: boolean }; selectedVersionId?: string; publish?: boolean }) => {
       const result = await getBridge().documents.save({
         id: payload.id,
         title: payload.title,
@@ -140,11 +140,12 @@ export const suoraIpc = {
         structureJson: JSON.stringify({ pages: payload.pages }),
         graphJson: JSON.stringify({ edges: payload.graphEdges }),
         settingsJson: JSON.stringify(payload.settings),
+        selectedVersionId: payload.selectedVersionId,
         publish: payload.publish,
       }) as {
         document: DocumentSummary
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; structureJson: string; graphJson: string; settingsJson: string }>
-        selectedVersionId: string
+        selectedVersionId: string | null
       }
       const versions = result.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
       const selectedPayload = result.versions.find((version) => version.id === result.selectedVersionId) ?? result.versions[0]
@@ -225,7 +226,7 @@ export const suoraIpc = {
         files: JSON.parse(payload.versions[0].filesJson) as SkillFileRecord[],
       } satisfies SkillConfigRecord
     },
-    save: async (payload: { id: string; title: string; source: string; summary: string; files: SkillFileRecord[]; publish?: boolean }) => {
+    save: async (payload: { id: string; title: string; source: string; summary: string; files: SkillFileRecord[]; selectedVersionId?: string; publish?: boolean }) => {
       const result = await getBridge().skills.save({ ...payload, filesJson: JSON.stringify(payload.files) }) as {
         skill: { id: string; title: string; source: string; summary: string; updatedAt: number }
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; filesJson: string }>
@@ -248,7 +249,7 @@ export const suoraIpc = {
       const rows = await getBridge().agents.list() as AgentSummary[]
       return rows
     },
-    get: async (agentId: string) => {
+    get: async (agentId: string, selectedVersionId?: string) => {
       const payload = await getBridge().agents.get(agentId) as {
         agent: AgentSummary | null
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; configJson: string }>
@@ -257,12 +258,13 @@ export const suoraIpc = {
         return null
       }
       const versions = payload.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
+      const selectedPayload = payload.versions.find((version) => version.id === selectedVersionId) ?? payload.versions[0]
       return {
         agent: payload.agent,
         versions,
         latestVersion: versions[0],
-        selectedVersion: versions[0],
-        config: JSON.parse(payload.versions[0].configJson) as AgentConfigRecord,
+        selectedVersion: versions.find((version) => version.id === selectedPayload.id) ?? versions[0],
+        config: JSON.parse(selectedPayload.configJson) as AgentConfigRecord,
       } satisfies AgentDetail
     },
     create: async () => {
@@ -279,18 +281,20 @@ export const suoraIpc = {
         config: JSON.parse(payload.versions[0].configJson) as AgentConfigRecord,
       } satisfies AgentDetail
     },
-    save: async (payload: { id: string; title: string; kind: string; summary: string; config: AgentConfigRecord; publish?: boolean }) => {
+    save: async (payload: { id: string; title: string; kind: string; summary: string; config: AgentConfigRecord; selectedVersionId?: string; publish?: boolean }) => {
       const result = await getBridge().agents.save({ ...payload, configJson: JSON.stringify(payload.config) }) as {
         agent: AgentSummary
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; configJson: string }>
+        selectedVersionId: string | null
       }
       const versions = result.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
+      const selectedPayload = result.versions.find((version) => version.id === result.selectedVersionId) ?? result.versions[0]
       return {
         agent: result.agent,
         versions,
         latestVersion: versions[0],
-        selectedVersion: versions[0],
-        config: JSON.parse(result.versions[0].configJson) as AgentConfigRecord,
+        selectedVersion: versions.find((version) => version.id === selectedPayload.id) ?? versions[0],
+        config: JSON.parse(selectedPayload.configJson) as AgentConfigRecord,
       } satisfies AgentDetail
     },
     delete: async (agentId: string) => getBridge().agents.delete(agentId),

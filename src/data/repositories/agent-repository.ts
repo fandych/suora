@@ -7,9 +7,9 @@ export async function listAgents() {
   return suoraIpc.agents.list() as Promise<AgentSummary[]>
 }
 
-export async function getAgentDetail(agentId: string) {
+export async function getAgentDetail(agentId: string, selectedVersionId?: string) {
   await ensureSeeded()
-  return suoraIpc.agents.get(agentId) as Promise<AgentDetail | null>
+  return suoraIpc.agents.get(agentId, selectedVersionId) as Promise<AgentDetail | null>
 }
 
 export async function createAgent() {
@@ -25,6 +25,7 @@ export async function saveAgentDraft(agent: AgentDetail, publish = false) {
     kind: agent.agent.kind,
     summary: agent.agent.summary,
     config: agent.config,
+    selectedVersionId: agent.selectedVersion.id,
     publish,
   }) as Promise<AgentDetail>
 }

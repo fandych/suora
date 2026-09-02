@@ -188,7 +188,11 @@ export const primaryNavItems: PrimaryNavItem[] = [
       groups: [
         {
           id: "builtin",
-          title: "Skills",
+          title: "Built-in",
+        },
+        {
+          id: "custom",
+          title: "Custom",
         },
       ],
     },
@@ -202,7 +206,12 @@ export const primaryNavItems: PrimaryNavItem[] = [
       searchPlaceholder: "搜索 providers...",
       groups: [
         {
-          id: "providers",
+          id: "connected",
+          title: "Connected",
+        },
+        {
+          id: "catalog",
+          title: "Provider Catalog",
         },
       ],
     },

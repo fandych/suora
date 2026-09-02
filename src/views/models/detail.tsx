@@ -24,6 +24,8 @@ const ModelsDetailPage = () => {
   const [editingModelIndex, setEditingModelIndex] = useState<number | null>(null)
   const [modelForm, setModelForm] = useState<ModelFormState>(createModelFormState())
 
+  const persistedProvider = data ?? draft
+
   const persistProvider = async (nextProvider: ProviderConfigRecord) => {
     const saved = await saveModelProvider(nextProvider)
     setData(saved)
@@ -74,7 +76,7 @@ const ModelsDetailPage = () => {
   }
 
   const handleSubmitModel = () => {
-    if (!draft || !modelForm.id.trim()) {
+    if (!draft || !persistedProvider || !modelForm.id.trim()) {
       return
     }
 
@@ -91,7 +93,7 @@ const ModelsDetailPage = () => {
     }
 
     const nextProvider = {
-      ...draft,
+      ...persistedProvider,
       models: editingModelIndex === null
         ? [...draft.models, nextModel]
         : draft.models.map((model, index) => index === editingModelIndex ? nextModel : model),
@@ -105,23 +107,23 @@ const ModelsDetailPage = () => {
   }
 
   const handleDeleteModel = (index: number) => {
-    if (!draft) {
+    if (!draft || !persistedProvider) {
       return
     }
 
     void persistProvider({
-      ...draft,
+      ...persistedProvider,
       models: draft.models.filter((_model, cursor) => cursor !== index),
     })
   }
 
   const handleToggleModel = (index: number, enabled: boolean) => {
-    if (!draft) {
+    if (!draft || !persistedProvider) {
       return
     }
 
     void persistProvider({
-      ...draft,
+      ...persistedProvider,
       models: draft.models.map((model, cursor) => cursor === index ? { ...model, enabled } : model),
     })
   }
@@ -149,13 +151,13 @@ const ModelsDetailPage = () => {
         description="Manage endpoint configuration, provider defaults, and the model inventory exposed to chats, agents, and workflows."
       />
 
-      <div className="flex-1 overflow-x-hidden p-6">
+      <div className="flex-1 overflow-x-hidden p-4">
         <div className="flex w-full min-w-0 flex-col gap-4">
           {isLoading ? <LoadingCard title="Loading provider..." /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error && draft ? (
-            <div className="grid gap-4 xl:grid-cols-[0.86fr_1.14fr]">
-              <div className="space-y-4">
+            <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
+              <div className="min-w-0 space-y-3">
                 <Card>
                   <CardHeader>
                     <div className="flex min-w-0 items-start gap-3">
@@ -170,7 +172,7 @@ const ModelsDetailPage = () => {
                       </div>
                     </div>
                   </CardHeader>
-                  <CardContent className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
+                  <CardContent className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
                     <div className="rounded-xl border bg-muted/20 px-3 py-3">
                       <div className="text-sm text-muted-foreground">Enabled models</div>
                       <div className="mt-1 text-2xl font-semibold text-foreground">{enabledCount}<span className="ml-1 text-sm font-normal text-muted-foreground">/ {draft.models.length}</span></div>

@@ -1,3 +1,5 @@
+import { useState } from "react"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,13 +21,15 @@ type ProviderSettingsFormProps = {
 }
 
 export function ProviderSettingsForm({ draft, description, hasApiKey, canDelete, onChange, onDelete, onProviderTypeChange, onSave }: ProviderSettingsFormProps) {
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Provider settings</CardTitle>
         <CardDescription>{description}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">Title</div>
@@ -58,9 +62,9 @@ export function ProviderSettingsForm({ draft, description, hasApiKey, canDelete,
           <Switch checked={draft.enabled} disabled={!hasApiKey} onCheckedChange={(checked) => onChange({ ...draft, enabled: checked })} />
         </label>
 
-        <div className="flex items-center justify-end gap-2 border-t pt-4">
+        <div className="flex items-center justify-end gap-2 border-t pt-3">
           {canDelete ? (
-            <Popover>
+            <Popover open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
               <PopoverTrigger render={<Button type="button" variant="destructive" />}>
                 Delete provider
               </PopoverTrigger>
@@ -70,8 +74,8 @@ export function ProviderSettingsForm({ draft, description, hasApiKey, canDelete,
                   <PopoverDescription>This removes the provider and its model inventory from the workspace.</PopoverDescription>
                 </PopoverHeader>
                 <div className="flex items-center justify-end gap-2">
-                  <Button type="button" variant="outline">Cancel</Button>
-                  <Button type="button" variant="destructive" onClick={onDelete}>Delete</Button>
+                  <Button type="button" variant="outline" onClick={() => setIsDeleteOpen(false)}>Cancel</Button>
+                  <Button type="button" variant="destructive" onClick={() => { setIsDeleteOpen(false); onDelete() }}>Delete</Button>
                 </div>
               </PopoverContent>
             </Popover>
