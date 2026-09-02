@@ -90,7 +90,7 @@ const ChatDetailPage = () => {
       return
     }
 
-    const viewport = messageViewportRef.current
+    const viewport = messageViewportRef.current?.querySelector("[data-slot='scroll-area-viewport']") as HTMLDivElement | null
     if (!viewport) {
       return
     }
@@ -253,29 +253,30 @@ const ChatDetailPage = () => {
           </>
         }
       />
-
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
         {activeChatId && isLoading ? <LoadingCard title="Loading chat session..." /> : null}
         {settingsLoading ? <LoadingCard title="Loading chat runtime settings..." /> : null}
         {combinedError ? <ErrorCard error={combinedError} onRetry={() => { reload(); reloadSettings() }} /> : null}
         {!settingsLoading && !combinedError && settingsDraft ? (
-          <Card size="sm" className=" flex-1 rounded-2xl py-0 shadow-sm">
-            <CardContent className="min-h-0 flex-1 -mb-(--card-spacing) px-0 ">
-              <div>
-                <ScrollArea ref={messageViewportRef} className="h-full min-h-0 overflow-y-auto px-(--card-spacing) py-4">
-                  <div className="flex min-h-full flex-col gap-4">
-                    {selectedChat?.messages.map((message) => (
-                      <ChatMessageItem key={message.id} content={message.content} createdAt={message.createdAt} label={message.role === "user" ? "You" : message.role === "assistant" ? "Assistant" : "System"} providerType={activeProviderType} role={message.role} />
-                    ))}
-                    {toolEvents.map((event, index) => (
-                      <ChatMessageItem key={`${event.type}-${index}`} content={event.type === "tool-call" ? `tool ${event.toolName} called with ${JSON.stringify(event.input, null, 2)}` : event.type === "tool-result" ? `tool ${event.toolName} returned ${event.output}` : event.type === "error" ? `error: ${event.error}` : event.text} label="Tool event" kind="tool" providerType={activeProviderType} role="system" />
-                    ))}
-                    {isResponding && streamingText ? (
-                      <ChatMessageItem content={streamingText} label="Assistant" providerType={activeProviderType} role="assistant" />
-                    ) : null}
-                    <div className="h-px shrink-0" />
-                  </div>
-                </ScrollArea>
+          <Card size="sm" className="min-h-0 flex-1 rounded-2xl py-0 shadow-sm">
+            <div className="flex min-h-0 flex-1 flex-col">
+              <CardContent className="grow min-h-0 -mb-(--card-spacing) px-0">
+                <div ref={messageViewportRef} className="h-full min-h-0">
+                  <ScrollArea className="h-full">
+                    <div className="space-y-4 border-t bg-muted/20 px-(--card-spacing) py-4">
+                      {selectedChat?.messages.map((message) => (
+                        <ChatMessageItem key={message.id} content={message.content} createdAt={message.createdAt} label={message.role === "user" ? "You" : message.role === "assistant" ? "Assistant" : "System"} providerType={activeProviderType} role={message.role} />
+                      ))}
+                      {toolEvents.map((event, index) => (
+                        <ChatMessageItem key={`${event.type}-${index}`} content={event.type === "tool-call" ? `tool ${event.toolName} called with ${JSON.stringify(event.input, null, 2)}` : event.type === "tool-result" ? `tool ${event.toolName} returned ${event.output}` : event.type === "error" ? `error: ${event.error}` : event.text} label="Tool event" kind="tool" providerType={activeProviderType} role="system" />
+                      ))}
+                      {isResponding && streamingText ? (
+                        <ChatMessageItem content={streamingText} label="Assistant" providerType={activeProviderType} role="assistant" />
+                      ) : null}
+                      <div className="h-px shrink-0" />
+                    </div>
+                  </ScrollArea>
+                </div>
                 {!selectedChat && !isResponding ? (
                   <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
                     <div className="w-full max-w-2xl rounded-2xl border border-dashed bg-background/88 px-6 py-12 text-center text-sm text-muted-foreground shadow-sm backdrop-blur-xs">
@@ -283,10 +284,9 @@ const ChatDetailPage = () => {
                     </div>
                   </div>
                 ) : null}
-                </div>
-            </CardContent>
+              </CardContent>
 
-            <CardFooter className="flex-col items-stretch gap-3 bg-card sticky bottom-0">
+              <CardFooter className="flex-none flex-col items-stretch gap-3 bg-card">
               <div className="flex min-w-0 items-end gap-2">
                 <Input className="h-11 min-w-0 flex-1" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about documents, workflows, or skills..." disabled={isResponding} />
                 {supportsAttachments ? (
@@ -374,7 +374,8 @@ const ChatDetailPage = () => {
                   </Button>
                 </div>
               </div>
-            </CardFooter>
+              </CardFooter>
+            </div>
           </Card>
         ) : null}
       </div>
