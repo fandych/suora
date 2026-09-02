@@ -148,6 +148,18 @@ export const channels = sqliteTable("channels", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   platform: text("platform").notNull(),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(false),
+  status: text("status").notNull().default("inactive"),
+  connectionMode: text("connection_mode").notNull().default("webhook"),
+  webhookPath: text("webhook_path").notNull().default(""),
+  webhookSecret: text("webhook_secret").notNull().default(""),
+  autoReply: integer("auto_reply", { mode: "boolean" }).notNull().default(true),
+  replyAgentId: text("reply_agent_id").notNull().default(""),
+  createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
+  lastMessageAt: integer("last_message_at", { mode: "timestamp_ms" }),
+  messageCount: integer("message_count").notNull().default(0),
+  configJson: text("config_json").notNull().default("{}"),
+  runtimeJson: text("runtime_json").notNull().default("{}"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 })
 

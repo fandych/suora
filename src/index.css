@@ -120,11 +120,15 @@
 }
 
 @layer base {
+  html, body, #root {
+    @apply h-full w-full overflow-hidden;
+  }
+
   * {
     @apply border-border outline-ring/50;
     }
   body {
-    @apply bg-background text-foreground;
+    @apply m-0 bg-background text-foreground;
     }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
@@ -181,5 +185,29 @@
 
   .document-math-inline {
     @apply rounded bg-muted/50 px-1;
+  }
+
+  .chat-prose {
+    @apply min-w-0 overflow-hidden;
+  }
+
+  .chat-prose img {
+    @apply max-w-full rounded-xl;
+  }
+
+  .chat-code-block {
+    @apply overflow-hidden rounded-xl border border-border bg-muted/40;
+  }
+
+  .chat-code-toolbar {
+    @apply flex items-center justify-between gap-2 border-b border-border bg-background/80 px-3 py-2 text-[11px] text-muted-foreground;
+  }
+
+  .chat-code-language {
+    @apply rounded bg-muted px-1.5 py-0.5 uppercase tracking-[0.12em];
+  }
+
+  .chat-code-copy {
+    @apply ml-auto rounded border border-border bg-background px-2 py-1 text-[11px] text-foreground transition-colors hover:bg-muted;
   }
 }

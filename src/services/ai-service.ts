@@ -1,4 +1,4 @@
-import { ToolLoopAgent, stepCountIs, tool, type LanguageModel, type ModelMessage } from "ai"
+import { ToolLoopAgent, stepCountIs, tool, type LanguageModel, type ModelMessage, type UserModelMessage } from "ai"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
@@ -7,8 +7,11 @@ import { z } from "zod"
 import type { ChatMessageRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { listDocuments, getDocumentDetail } from "@/data/repositories/document-repository"
+import { getIntegrationDetail } from "@/data/repositories/integration-repository"
+import { executeIntegration } from "@/data/repositories/integration-execution-repository"
 import { listSkills, getSkillDetail } from "@/data/repositories/skill-repository"
 import { listWorkflows, getWorkflowDetail } from "@/data/repositories/workflow-repository"
+import { createBuiltInTools, listScopedDocuments, listScopedSkills, listScopedWorkflows, mergeAgentInstructions, resolveAgentContext } from "@/services/ai-tools"
 
 type AiFetchStartResult = {
   requestId?: string
@@ -25,6 +28,13 @@ export type ChatAgentEvent =
   | { type: "tool-call"; toolCallId: string; toolName: string; input: Record<string, unknown> }
   | { type: "tool-result"; toolCallId: string; toolName: string; output: string }
   | { type: "error"; error: string }
+
+export type ChatAttachment = {
+  name: string
+  mediaType: string
+  data: string
+  kind: "image" | "file"
+}
 
 function decodeBase64(base64: string) {
   return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
@@ -203,20 +213,38 @@ async function createResearchSubagent(settings: ChatRuntimeSettings) {
   })
 }
 
-export async function* streamChatAgentResponse(history: ChatMessageRecord[], settings: ChatRuntimeSettings, abortSignal?: AbortSignal): AsyncGenerator<ChatAgentEvent> {
-  const model = createModel(settings)
+export async function* streamChatAgentResponse(history: ChatMessageRecord[], settings: ChatRuntimeSettings, options?: { abortSignal?: AbortSignal; selectedAgentId?: string; attachments?: ChatAttachment[] }): AsyncGenerator<ChatAgentEvent> {
+  const agentContext = await resolveAgentContext(options?.selectedAgentId)
+  const effectiveSettings = agentContext?.detail
+    ? {
+        ...settings,
+        model: {
+          ...settings.model,
+          providerId: agentContext.detail.config.providerId || settings.model.providerId,
+          modelId: agentContext.detail.config.modelId || settings.model.modelId,
+        },
+      }
+    : settings
+  const model = createModel(effectiveSettings)
   const researchSubagent = await createResearchSubagent(settings)
+  const builtInTools = await createBuiltInTools()
+
+  const scopedSearchDocuments = agentContext?.documents?.filter(Boolean) ?? []
+  const scopedSearchSkills = agentContext?.skills?.filter(Boolean) ?? []
+  const scopedSearchWorkflows = agentContext?.workflows?.filter(Boolean) ?? []
+  const scopedIntegrations = agentContext?.integrations?.filter(Boolean) ?? []
 
   const agent = new ToolLoopAgent({
     model,
-    instructions: settings.model.systemPrompt,
+    instructions: mergeAgentInstructions(effectiveSettings, agentContext?.detail ?? null),
     stopWhen: stepCountIs(6),
     tools: {
+      ...builtInTools,
       searchDocuments: tool({
         description: "Find a document and inspect its content.",
         inputSchema: z.object({ query: z.string() }),
         execute: async ({ query }) => {
-          const documents = await listDocuments()
+          const documents = await listScopedDocuments(scopedSearchDocuments.length > 0, scopedSearchDocuments)
           const match = documents.find((item) => item.title.toLowerCase().includes(query.toLowerCase()))
           if (!match) {
             return { found: false, reason: "No matching document" }
@@ -234,7 +262,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
         description: "Find a workflow and inspect its latest version.",
         inputSchema: z.object({ query: z.string() }),
         execute: async ({ query }) => {
-          const workflows = await listWorkflows()
+          const workflows = await listScopedWorkflows(scopedSearchWorkflows.length > 0, scopedSearchWorkflows)
           const match = workflows.find((item) => item.title.toLowerCase().includes(query.toLowerCase()))
           if (!match) {
             return { found: false, reason: "No matching workflow" }
@@ -253,7 +281,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
         description: "Find a skill and inspect its file list.",
         inputSchema: z.object({ query: z.string() }),
         execute: async ({ query }) => {
-          const skills = await listSkills()
+          const skills = await listScopedSkills(scopedSearchSkills.length > 0, scopedSearchSkills)
           const match = skills.find((item) => item.title.toLowerCase().includes(query.toLowerCase()))
           if (!match) {
             return { found: false, reason: "No matching skill" }
@@ -276,10 +304,25 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
           return result.text
         },
       }),
+      runIntegration: tool({
+        description: "Execute a configured integration bound to the selected agent.",
+        inputSchema: z.object({ integrationId: z.string(), inputJson: z.string().default("{}") }),
+        execute: async ({ integrationId, inputJson }) => {
+          const boundIntegration = scopedIntegrations.find((item) => item?.integration.id === integrationId)
+          const detail = boundIntegration ?? await getIntegrationDetail(integrationId)
+          const result = await executeIntegration(detail.config, inputJson)
+          return {
+            integration: detail.integration.title,
+            ok: result.ok,
+            status: result.status,
+            body: result.body,
+          }
+        },
+      }),
     },
   })
 
-  const result = await agent.stream({ messages: toModelMessages(history), abortSignal })
+  const result = await agent.stream({ messages: toModelMessages(history, options?.attachments), abortSignal: options?.abortSignal })
 
   for await (const part of result.fullStream) {
     switch (part.type) {
@@ -306,6 +349,27 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
   }
 }
 
-export function toModelMessages(history: ChatMessageRecord[]): ModelMessage[] {
-  return history.map((message) => ({ role: message.role, content: message.content }))
+export function toModelMessages(history: ChatMessageRecord[], attachments: ChatAttachment[] = []): ModelMessage[] {
+  if (history.length === 0 && attachments.length === 0) {
+    return []
+  }
+
+  return history.map((message, index) => {
+    if (message.role === "user" && index === history.length - 1 && attachments.length > 0) {
+      return {
+        role: "user",
+        content: [
+          { type: "text", text: message.content },
+          ...attachments.map((attachment) => ({
+            type: "file" as const,
+            mediaType: attachment.kind === "image" ? "image" : attachment.mediaType,
+            filename: attachment.name,
+            data: attachment.data,
+          })),
+        ],
+      } satisfies UserModelMessage
+    }
+
+    return { role: message.role, content: message.content }
+  })
 }

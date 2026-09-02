@@ -1,18 +1,87 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useParams } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import { Textarea } from "@/components/ui/textarea"
 import PageHeader from "@/views/components/page-header"
 import VersionSelect from "@/views/components/version-select"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig, ScriptIntegrationConfig, ScriptWorkbenchItem } from "@/data/domain/models"
+import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig } from "@/data/domain/models"
 import { getIntegrationDetail, publishIntegrationVersion, runIntegrationAndPersist, saveIntegrationDraft } from "@/data/repositories/integration-repository"
+import { IntegrationBasicEditor } from "@/views/integrations/components/integration-basic-editor"
+import { IntegrationHttpEndpointsPanel } from "@/views/integrations/components/integration-http-endpoints-panel"
+import { IntegrationMcpToolsPanel } from "@/views/integrations/components/integration-mcp-tools-panel"
+import { IntegrationParameterEditor } from "@/views/integrations/components/integration-parameter-editor"
+import { IntegrationScriptWorkbench } from "@/views/integrations/components/integration-script-workbench"
+import { IntegrationTryRunSheet } from "@/views/integrations/components/integration-try-run-sheet"
+import { buildHttpEndpointUrl, createDefaultHttpIntegrationConfig, getSelectedHttpEndpoint, readMcpTools, syncHttpIntegrationConfig } from "@/lib/integration-http"
+
+const FALLBACK_HTTP_CONFIG: IntegrationConfig = createDefaultHttpIntegrationConfig()
+
+function buildIntegrationFingerprint(input: { title: string; config: IntegrationConfig }) {
+  return JSON.stringify(input)
+}
+
+function getIntegrationIssues(config: IntegrationConfig | null) {
+  if (!config) {
+    return [] as Array<{ severity: "warning" | "error"; message: string }>
+  }
+
+  if (config.kind === "http") {
+    return [
+      !config.baseUrl.trim() ? { severity: "error" as const, message: "HTTP toolset requires a base URL before it can run." } : null,
+      config.endpoints.length === 0 ? { severity: "error" as const, message: "HTTP toolset needs at least one endpoint." } : null,
+      !config.endpoints.every((endpoint) => endpoint.path.trim()) ? { severity: "error" as const, message: "Every HTTP endpoint needs a path." } : null,
+      !config.description.trim() ? { severity: "warning" as const, message: "HTTP toolset is missing a description for operators." } : null,
+    ].filter(Boolean)
+  }
+
+  if (config.kind === "mcp") {
+    return [
+      !config.description.trim()
+        ? { severity: "warning" as const, message: "MCP toolset is missing a description for operators." }
+        : null,
+      !config.endpoint.trim() && !config.launchCommand.trim()
+        ? { severity: "error" as const, message: "MCP toolset needs an endpoint or launch command." }
+        : null,
+      config.protocols.length === 0
+        ? { severity: "error" as const, message: "MCP toolset needs at least one protocol." }
+        : null,
+    ].filter(Boolean)
+  }
+
+  const selectedScript = config.scripts.find((script) => script.id === config.selectedScriptId)
+  return [
+    !config.description.trim()
+      ? { severity: "warning" as const, message: "Script toolset is missing a description for operators." }
+      : null,
+    config.scripts.length === 0
+      ? { severity: "error" as const, message: "Script toolset needs at least one script entry." }
+      : null,
+    !selectedScript?.code.trim()
+      ? { severity: "error" as const, message: "Selected script has no code body." }
+      : null,
+  ].filter(Boolean)
+}
+
+function getResolvedEndpoint(config: IntegrationConfig | null) {
+  if (!config) {
+    return "Pending config"
+  }
+
+  if (config.kind === "http") {
+    const endpoint = getSelectedHttpEndpoint(config)
+    return endpoint ? buildHttpEndpointUrl(config.baseUrl, endpoint.path) : "Pending config"
+  }
+
+  if (config.kind === "mcp") {
+    return config.endpoint || config.launchCommand || "Pending config"
+  }
+
+  return config.scripts.find((script) => script.id === config.selectedScriptId)?.handler || config.scripts[0]?.handler || "Pending config"
+}
 
 const IntegrationsDetailPage = () => {
   const { integrationId } = useParams<{ integrationId: string }>()
@@ -26,6 +95,8 @@ const IntegrationsDetailPage = () => {
   const [config, setConfig] = useState<IntegrationConfig | null>(null)
   const [runInput, setRunInput] = useState("{}")
   const [isRunning, setIsRunning] = useState(false)
+  const [isTryRunOpen, setIsTryRunOpen] = useState(false)
+
   useEffect(() => {
     if (!data) {
       return
@@ -36,12 +107,34 @@ const IntegrationsDetailPage = () => {
     setSelectedVersionId(data.selectedVersion.id)
   }, [data])
 
+  const handleConfigChange = (next: IntegrationConfig) => {
+    if (next.kind === "http") {
+      setConfig(syncHttpIntegrationConfig(next))
+      return
+    }
+
+    if (next.kind === "mcp") {
+      setConfig({
+        ...next,
+        tools: readMcpTools(next.toolCatalogJson),
+      } satisfies McpIntegrationConfig)
+      return
+    }
+
+    setConfig(next)
+  }
+
   const handleSave = async () => {
     if (!integrationId || !config) {
       return
     }
 
-    const next = await saveIntegrationDraft(integrationId, { title, kind: config.kind, config })
+    const next = await saveIntegrationDraft(integrationId, {
+      title,
+      kind: config.kind,
+      config,
+      selectedVersionId: data?.selectedVersion.id,
+    })
     setData(next)
     setSelectedVersionId(next.selectedVersion.id)
   }
@@ -74,289 +167,143 @@ const IntegrationsDetailPage = () => {
     }
   }
 
+  const issues = useMemo(() => getIntegrationIssues(config), [config])
+  const hasBlockingIssues = issues.some((issue) => issue.severity === "error")
+  const currentFingerprint = useMemo(
+    () => buildIntegrationFingerprint({ title, config: config ?? FALLBACK_HTTP_CONFIG }),
+    [config, title]
+  )
+  const savedFingerprint = useMemo(() => {
+    if (!data) {
+      return ""
+    }
+
+    return buildIntegrationFingerprint({
+      title: data.integration.title,
+      config: data.config,
+    })
+  }, [data])
+  const hasUnsavedChanges = Boolean(data && config) && currentFingerprint !== savedFingerprint
+  const resolvedEndpoint = useMemo(() => getResolvedEndpoint(config), [config])
+  const isReleaseVersion = Boolean(data?.selectedVersion.isRelease)
+  const canTryRun = !hasUnsavedChanges && !hasBlockingIssues
+
+  const openTryRunForHttpEndpoint = (endpointId: string) => {
+    if (!config || config.kind !== "http") {
+      return
+    }
+
+    setConfig(syncHttpIntegrationConfig({
+      ...config,
+      selectedEndpointId: endpointId,
+    }))
+    setIsTryRunOpen(true)
+  }
+
+  const openTryRunForScript = (scriptId: string) => {
+    if (!config || config.kind !== "scripts") {
+      return
+    }
+
+    setConfig({
+      ...config,
+      selectedScriptId: scriptId,
+    })
+    setIsTryRunOpen(true)
+  }
+
   return (
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={data?.integration.title ?? "Integration"}
-        description="Type-specific editor for HTTP, script, and MCP integrations with version history."
-        actions={data ? <VersionSelect versions={data.versions} value={data.selectedVersion.id} onChange={setSelectedVersionId} /> : null}
+        description="Forhub-style toolset editor with split basic editing, parameters, workbench, try-run, and version history."
+        actions={data ? (
+          <>
+            <VersionSelect versions={data.versions} value={data.selectedVersion.id} onChange={setSelectedVersionId} />
+            <Badge variant={isReleaseVersion ? "secondary" : "outline"}>{isReleaseVersion ? "Release revision" : "Draft revision"}</Badge>
+            <Badge variant={hasUnsavedChanges ? "destructive" : "outline"}>{hasUnsavedChanges ? "Unsaved changes" : "Saved"}</Badge>
+            <Badge variant={issues.length ? "destructive" : "outline"}>{issues.length} config issue{issues.length === 1 ? "" : "s"}</Badge>
+            <Button size="sm" variant="outline" onClick={() => setIsTryRunOpen(true)} disabled={hasUnsavedChanges || hasBlockingIssues}>Try run</Button>
+            <Button size="sm" onClick={handleSave} disabled={!hasUnsavedChanges}>Save draft</Button>
+            <Button size="sm" variant="outline" onClick={handlePublish} disabled={hasUnsavedChanges || hasBlockingIssues}>Publish</Button>
+          </>
+        ) : null}
       />
 
-      <div className="flex-1 p-6">
-        <div className="mx-auto grid max-w-6xl gap-4 xl:grid-cols-[1.3fr_0.7fr]">
+      <div className="flex min-h-0 flex-1 p-6">
+        <div className="mx-auto flex min-h-0 w-full max-w-7xl flex-col gap-4">
           {isLoading ? <LoadingCard title="Loading integration..." /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error && data && config ? (
             <>
-              <Card>
-                <CardHeader>
-                  <CardTitle>Integration config</CardTitle>
-                  <CardDescription>Different forms are rendered for HTTP, scripts, and MCP.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <div className="text-sm text-muted-foreground">Name</div>
-                      <Input value={title} onChange={(event) => setTitle(event.target.value)} />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-sm text-muted-foreground">Kind</div>
-                      <NativeSelect value={config.kind} onChange={(event) => setConfig(createChangedKindConfig(event.target.value as IntegrationConfig["kind"], config))}>
-                        <NativeSelectOption value="http">HTTP</NativeSelectOption>
-                        <NativeSelectOption value="scripts">Scripts</NativeSelectOption>
-                        <NativeSelectOption value="mcp">MCP</NativeSelectOption>
-                      </NativeSelect>
-                    </div>
-                  </div>
-
-                  {config.kind === "http" ? <HttpForm config={config} onChange={setConfig} /> : null}
-                  {config.kind === "scripts" ? <ScriptForm config={config} onChange={setConfig} /> : null}
-                  {config.kind === "mcp" ? <McpForm config={config} onChange={setConfig} /> : null}
-
-                  <div className="flex gap-2">
-                    <Button onClick={handleSave}>Save draft</Button>
-                    <Button variant="outline" onClick={handlePublish}>Publish</Button>
-                    <Button variant="outline" onClick={handleRun} disabled={isRunning}>{isRunning ? "Running..." : "Run"}</Button>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <CardTitle>Version meta</CardTitle>
-                    <Badge variant="outline">{data.integration.kind}</Badge>
-                  </div>
-                  <CardDescription>Current selected version and endpoint preview.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <div>
-                    <div className="text-muted-foreground">Selected version</div>
-                    <div className="font-medium">{data.selectedVersion.label}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Latest visible</div>
-                    <div className="font-medium">{data.latestVersion.label}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Resolved endpoint</div>
-                    <div className="font-medium break-all">{data.integration.endpoint || "Pending config"}</div>
-                  </div>
-                  <div className="space-y-2 pt-2">
-                    <div className="text-muted-foreground">Run input JSON</div>
-                    <Textarea value={runInput} onChange={(event) => setRunInput(event.target.value)} rows={6} className="font-mono" />
-                  </div>
-                  {data.executions.length ? (
-                    <div className="space-y-2 rounded-xl border p-3">
-                      <div className="font-medium">Recent executions</div>
-                      <div className="space-y-2">
-                        {data.executions.slice(0, 4).map((execution) => (
-                          <div key={execution.id} className="rounded-lg border p-2 text-xs">
-                            <div className="flex items-center justify-between gap-2">
-                              <Badge variant={execution.status === "success" ? "default" : "destructive"}>{execution.status}</Badge>
-                              <span className="text-muted-foreground">{new Date(execution.createdAt).toLocaleString()}</span>
-                            </div>
-                            <pre className="mt-2 overflow-auto whitespace-pre-wrap text-muted-foreground">{execution.output}</pre>
-                          </div>
-                        ))}
+              <div className="flex min-h-0 flex-col gap-4 overflow-hidden">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Toolset hub</CardTitle>
+                    <CardDescription>Use the current draft as the operator-facing source of truth before running or publishing.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 md:grid-cols-[minmax(0,1fr)_20rem]">
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="rounded-xl border bg-muted/20 p-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Kind</div>
+                        <div className="mt-1 text-sm font-medium text-foreground">{config.kind}</div>
+                      </div>
+                      <div className="rounded-xl border bg-muted/20 p-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Selected revision</div>
+                        <div className="mt-1 text-sm font-medium text-foreground">{data.selectedVersion.label}</div>
+                      </div>
+                      <div className="rounded-xl border bg-muted/20 p-3">
+                        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Executions</div>
+                        <div className="mt-1 text-sm font-medium text-foreground">{data.executions.length}</div>
                       </div>
                     </div>
+                    <div className="rounded-xl border p-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Resolved endpoint</div>
+                      <div className="mt-1 break-all text-sm font-medium text-foreground">{resolvedEndpoint}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">Try run is blocked while the draft is unsaved or has configuration errors.</div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {issues.length > 0 ? (
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>Config checks</CardTitle>
+                      <CardDescription>These checks mirror the missing operator guidance from the forhub toolset flow.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {issues.map((issue) => (
+                        <div key={issue.message} className={`rounded-xl border px-3 py-2 text-sm ${issue.severity === "error" ? "border-destructive/35 bg-destructive/5 text-destructive" : "border-amber-500/35 bg-amber-500/5 text-amber-700 dark:text-amber-300"}`}>
+                          {issue.message}
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                ) : null}
+
+                <div className="grid min-h-0 gap-4 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                  <div className="flex min-h-0 flex-col gap-4">
+                    <IntegrationBasicEditor config={config} title={title} onChange={handleConfigChange} onTitleChange={setTitle} />
+                    {config.kind === "scripts" ? <IntegrationParameterEditor config={config} onChange={handleConfigChange} /> : null}
+                  </div>
+
+                  {config.kind === "http" ? (
+                    <IntegrationHttpEndpointsPanel config={config as HttpIntegrationConfig} canTryRun={canTryRun} onChange={handleConfigChange} onTryRun={openTryRunForHttpEndpoint} />
                   ) : null}
-                </CardContent>
-              </Card>
+                  {config.kind === "scripts" ? (
+                    <IntegrationScriptWorkbench config={config} canTryRun={canTryRun} onChange={handleConfigChange} onTryRun={openTryRunForScript} />
+                  ) : null}
+                  {config.kind === "mcp" ? (
+                    <IntegrationMcpToolsPanel config={config as McpIntegrationConfig} />
+                  ) : null}
+                </div>
+              </div>
             </>
           ) : null}
         </div>
       </div>
-    </div>
-  )
-}
 
-function createChangedKindConfig(kind: IntegrationConfig["kind"], current: IntegrationConfig): IntegrationConfig {
-  if (current.kind === kind) {
-    return current
-  }
-
-  if (kind === "mcp") {
-    return { kind: "mcp", endpoint: "", launchCommand: "", protocols: ["stdio"], authModes: ["none"], authConfigJson: "{}" }
-  }
-
-  if (kind === "scripts") {
-    return { kind: "scripts", runtime: "node", timeoutMs: 30000, inputSchemaJson: "{}", outputSchemaJson: "{}", selectedScriptId: "script-main", scripts: [{ id: "script-main", name: "Main Script", handler: "main", code: "export async function main(input) {\n  return { ok: true, input }\n}\n" }] }
-  }
-
-  return { kind: "http", method: "POST", url: "", description: "", headersJson: "{}", queryJson: "{}", bodyJson: "{}", authType: "none", authConfigJson: "{}", parameterSchemaJson: "{}" }
-}
-
-function HttpForm({ config, onChange }: { config: HttpIntegrationConfig; onChange: (config: IntegrationConfig) => void }) {
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Method</div>
-          <NativeSelect value={config.method} onChange={(event) => onChange({ ...config, method: event.target.value })}>
-            <NativeSelectOption value="GET">GET</NativeSelectOption>
-            <NativeSelectOption value="POST">POST</NativeSelectOption>
-            <NativeSelectOption value="PUT">PUT</NativeSelectOption>
-            <NativeSelectOption value="PATCH">PATCH</NativeSelectOption>
-            <NativeSelectOption value="DELETE">DELETE</NativeSelectOption>
-          </NativeSelect>
-        </div>
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">URL</div>
-          <Input value={config.url} onChange={(event) => onChange({ ...config, url: event.target.value })} />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Description</div>
-        <Input value={config.description} onChange={(event) => onChange({ ...config, description: event.target.value })} />
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Headers JSON</div>
-          <Textarea value={config.headersJson} onChange={(event) => onChange({ ...config, headersJson: event.target.value })} rows={8} className="font-mono" />
-        </div>
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Query JSON</div>
-          <Textarea value={config.queryJson} onChange={(event) => onChange({ ...config, queryJson: event.target.value })} rows={8} className="font-mono" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Body JSON</div>
-        <Textarea value={config.bodyJson} onChange={(event) => onChange({ ...config, bodyJson: event.target.value })} rows={8} className="font-mono" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Auth</div>
-          <NativeSelect value={config.authType} onChange={(event) => onChange({ ...config, authType: event.target.value as HttpIntegrationConfig["authType"] })}>
-            <NativeSelectOption value="none">None</NativeSelectOption>
-            <NativeSelectOption value="bearer">Bearer</NativeSelectOption>
-            <NativeSelectOption value="basic">Basic</NativeSelectOption>
-            <NativeSelectOption value="api-key">API Key</NativeSelectOption>
-          </NativeSelect>
-        </div>
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Parameter schema JSON</div>
-          <Textarea value={config.parameterSchemaJson} onChange={(event) => onChange({ ...config, parameterSchemaJson: event.target.value })} rows={4} className="font-mono" />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Auth config JSON</div>
-        <Textarea value={config.authConfigJson} onChange={(event) => onChange({ ...config, authConfigJson: event.target.value })} rows={4} className="font-mono" />
-      </div>
-    </div>
-  )
-}
-
-function ScriptForm({ config, onChange }: { config: ScriptIntegrationConfig; onChange: (config: IntegrationConfig) => void }) {
-  const selectedScript = config.scripts.find((item) => item.id === config.selectedScriptId) ?? config.scripts[0]
-
-  const updateSelectedScript = (patch: Partial<ScriptWorkbenchItem>) => {
-    onChange({
-      ...config,
-      scripts: config.scripts.map((script) => script.id === selectedScript.id ? { ...script, ...patch } : script),
-    })
-  }
-
-  const addScript = () => {
-    const nextId = `script-${config.scripts.length + 1}`
-    onChange({
-      ...config,
-      selectedScriptId: nextId,
-      scripts: [...config.scripts, { id: nextId, name: `Script ${config.scripts.length + 1}`, handler: `script${config.scripts.length + 1}`, code: "export async function handler(input) {\n  return { ok: true, input }\n}\n" }],
-    })
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between gap-2 rounded-xl border p-3">
-        <div>
-          <div className="font-medium">Script workbench</div>
-          <div className="text-sm text-muted-foreground">Manage multiple scripts inside one toolset config.</div>
-        </div>
-        <Button size="sm" variant="outline" onClick={addScript}>Add script</Button>
-      </div>
-      <div className="grid gap-4 md:grid-cols-[0.8fr_1.2fr]">
-        <div className="space-y-2 rounded-xl border p-3">
-          {config.scripts.map((script) => (
-            <button key={script.id} className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm ${script.id === config.selectedScriptId ? "border-primary bg-primary/5" : "border-border"}`} onClick={() => onChange({ ...config, selectedScriptId: script.id })}>
-              <span>{script.name}</span>
-            </button>
-          ))}
-        </div>
-        <div className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-3">
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Runtime</div>
-              <Input value={config.runtime} onChange={(event) => onChange({ ...config, runtime: event.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Selected handler</div>
-              <Input value={selectedScript?.handler ?? ""} onChange={(event) => updateSelectedScript({ handler: event.target.value })} />
-            </div>
-            <div className="space-y-2">
-              <div className="text-sm text-muted-foreground">Timeout ms</div>
-              <Input type="number" value={String(config.timeoutMs)} onChange={(event) => onChange({ ...config, timeoutMs: Number(event.target.value) || 0 })} />
-            </div>
-          </div>
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Script name</div>
-            <Input value={selectedScript?.name ?? ""} onChange={(event) => updateSelectedScript({ name: event.target.value })} />
-          </div>
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Input schema JSON</div>
-            <Textarea value={config.inputSchemaJson} onChange={(event) => onChange({ ...config, inputSchemaJson: event.target.value })} rows={5} className="font-mono" />
-          </div>
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Output schema JSON</div>
-            <Textarea value={config.outputSchemaJson} onChange={(event) => onChange({ ...config, outputSchemaJson: event.target.value })} rows={5} className="font-mono" />
-          </div>
-          <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Code</div>
-            <Textarea value={selectedScript?.code ?? ""} onChange={(event) => updateSelectedScript({ code: event.target.value })} rows={12} className="font-mono" />
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function McpForm({ config, onChange }: { config: McpIntegrationConfig; onChange: (config: IntegrationConfig) => void }) {
-  const validationError = !config.endpoint && !config.launchCommand
-    ? "MCP config needs either an endpoint or a launch command."
-    : config.protocols.length === 0
-      ? "Pick at least one protocol."
-      : config.authModes.length === 0
-        ? "Pick at least one auth mode."
-        : ""
-
-  return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Endpoint</div>
-          <Input value={config.endpoint} onChange={(event) => onChange({ ...config, endpoint: event.target.value })} />
-        </div>
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Launch command</div>
-          <Input value={config.launchCommand} onChange={(event) => onChange({ ...config, launchCommand: event.target.value })} />
-        </div>
-      </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Protocols</div>
-          <Input value={config.protocols.join(", ")} onChange={(event) => onChange({ ...config, protocols: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} />
-        </div>
-        <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Auth modes</div>
-          <Input value={config.authModes.join(", ")} onChange={(event) => onChange({ ...config, authModes: event.target.value.split(",").map((value) => value.trim()).filter(Boolean) })} />
-        </div>
-      </div>
-      <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Auth config JSON</div>
-        <Textarea value={config.authConfigJson} onChange={(event) => onChange({ ...config, authConfigJson: event.target.value })} rows={10} className="font-mono" />
-      </div>
-      {validationError ? <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{validationError}</div> : null}
+      {data ? <IntegrationTryRunSheet executions={data.executions} input={runInput} isOpen={isTryRunOpen} isRunning={isRunning} onChangeInput={setRunInput} onOpenChange={setIsTryRunOpen} onRun={() => void handleRun()} /> : null}
     </div>
   )
 }

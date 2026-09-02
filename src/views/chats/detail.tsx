@@ -1,51 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { MicIcon, SendHorizonalIcon } from "lucide-react"
+import { PaperclipIcon, XIcon, MicIcon, SendHorizonalIcon } from "lucide-react"
 import { useNavigate, useParams } from "react-router"
 
+import { Attachment, AttachmentAction, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentGroup, AttachmentMedia, AttachmentTitle } from "@/components/ui/attachment"
 import { Badge } from "@/components/ui/badge"
-import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
-import { Message, MessageContent, MessageFooter, MessageHeader } from "@/components/ui/message"
-import { MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerViewport } from "@/components/ui/message-scroller"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
+import { ChatMessageItem } from "@/views/chats/components/chat-message-item"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import type { ChatDetail } from "@/data/domain/models"
 import { listAgents } from "@/data/repositories/agent-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { appendAssistantChatMessage, appendUserChatMessage, createChat, getChatDetail } from "@/data/repositories/chat-repository"
 import { getChatRuntimeSettings, saveChatRuntimeSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
-import { listModelProviders } from "@/data/repositories/model-config-repository"
-import { exportTextAsDocx, exportTextAsPdf, downloadText } from "@/lib/browser-files"
-import { streamChatAgentResponse, type ChatAgentEvent } from "@/services/ai-service"
+import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
+import { downloadText, exportTextAsDocx, exportTextAsPdf } from "@/lib/browser-files"
+import { streamChatAgentResponse, type ChatAgentEvent, type ChatAttachment } from "@/services/ai-service"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 type ChatProviderType = ChatRuntimeSettings["model"]["providerType"]
 
 function isChatProviderType(value: string): value is ChatProviderType {
   return ["ollama", "openai", "anthropic", "openai-compatible", "google"].includes(value)
-}
-
-function buildTranscript(detail: ChatDetail, streamingText: string, toolEvents: ChatAgentEvent[]) {
-  const messageBlocks = detail.messages.map((message) => `${message.role.toUpperCase()}\n${message.content}`).join("\n\n")
-  const toolBlocks = toolEvents.map((event) => {
-    if (event.type === "tool-call") {
-      return `TOOL CALL ${event.toolName}\n${JSON.stringify(event.input, null, 2)}`
-    }
-    if (event.type === "tool-result") {
-      return `TOOL RESULT ${event.toolName}\n${event.output}`
-    }
-    if (event.type === "error") {
-      return `ERROR\n${event.error}`
-    }
-    return ""
-  }).join("\n\n")
-
-  return [messageBlocks, streamingText ? `ASSISTANT (STREAMING)\n${streamingText}` : "", toolBlocks].filter(Boolean).join("\n\n")
 }
 
 const ChatDetailPage = () => {
@@ -59,7 +40,10 @@ const ChatDetailPage = () => {
   const [activeChatId, setActiveChatId] = useState<string | null>(chatId ?? null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [selectedAgentId, setSelectedAgentId] = useState("")
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const abortControllerRef = useRef<AbortController | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const messageViewportRef = useRef<HTMLDivElement | null>(null)
 
   const { data, error, isLoading, reload, setData } = useAsyncResource(
     async () => {
@@ -76,12 +60,14 @@ const ChatDetailPage = () => {
     []
   )
   const { data: agentsData } = useAsyncResource(() => listAgents(), [])
-  const { data: providerData } = useAsyncResource(() => listModelProviders(), [])
-  const agents = agentsData ?? []
-  const providers = providerData ?? []
-  const selectedProvider = providers.find((provider) => provider.id === settingsDraft?.model.providerId) ?? providers.find((provider) => provider.providerType === settingsDraft?.model.providerType) ?? null
-  const providerModels = selectedProvider?.models ?? []
+  const { data: providerData } = useAsyncResource(() => listConfiguredModelProviders(), [])
+  const agents = useMemo(() => agentsData ?? [], [agentsData])
+  const providers = useMemo(() => providerData ?? [], [providerData])
   const selectedChat = data
+  const groupedProviders = providers.filter((provider) => provider.models.length > 0)
+  const selectedModelRecord = providers.flatMap((provider) => provider.models).find((model) => model.id === settingsDraft?.model.modelId) ?? null
+  const activeProviderType = providers.find((provider) => provider.id === settingsDraft?.model.providerId)?.providerType ?? settingsDraft?.model.providerType ?? "openai"
+  const supportsAttachments = Boolean(selectedModelRecord?.capabilities?.includes("vision") || ["anthropic", "google", "openai"].includes(activeProviderType))
 
   useEffect(() => {
     setActiveChatId(chatId ?? null)
@@ -93,32 +79,49 @@ const ChatDetailPage = () => {
     }
   }, [runtimeSettings])
 
-  const combinedError = (activeChatId ? error : null) ?? settingsError
-
-  const modelMeta = useMemo(() => {
-    if (!settingsDraft) {
-      return []
+  useEffect(() => {
+    if (!selectedAgentId && agents.some((agent) => agent.id === "agent-general-assistant")) {
+      setSelectedAgentId("agent-general-assistant")
     }
+  }, [agents, selectedAgentId])
 
-    return [
-      ["Provider", settingsDraft.model.providerType],
-      ["Model", settingsDraft.model.modelId],
-      ["Base URL", settingsDraft.model.baseUrl],
-    ]
-  }, [settingsDraft])
-
-  const handleSaveSettings = async () => {
-    if (!settingsDraft) {
+  useEffect(() => {
+    if (!autoScroll) {
       return
     }
 
-    const next = await saveChatRuntimeSettings(settingsDraft)
-    setRuntimeSettings(next)
+    const viewport = messageViewportRef.current
+    if (!viewport) {
+      return
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      viewport.scrollTop = viewport.scrollHeight
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [autoScroll, selectedChat?.messages, toolEvents, streamingText])
+
+  const combinedError = (activeChatId ? error : null) ?? settingsError
+
+  const modelValue = useMemo(() => {
+    if (!settingsDraft) {
+      return ""
+    }
+
+    return `${settingsDraft.model.providerId}::${settingsDraft.model.modelId}`
+  }, [settingsDraft])
+
+  const applyRuntimeSettings = (next: ChatRuntimeSettings) => {
     setSettingsDraft(next)
+    void saveChatRuntimeSettings(next).then((saved) => {
+      setRuntimeSettings(saved)
+      setSettingsDraft(saved)
+    })
   }
 
   const handleSend = async () => {
-    if (!draft.trim() || !settingsDraft || isResponding) {
+    if ((!draft.trim() && attachments.length === 0) || !settingsDraft || isResponding) {
       return
     }
 
@@ -139,7 +142,8 @@ const ChatDetailPage = () => {
       return
     }
 
-    const next = await appendUserChatMessage(workingChatId, draft)
+    const outgoingText = draft.trim() || attachments.map((attachment) => `[Attachment] ${attachment.name}`).join("\n")
+    const next = await appendUserChatMessage(workingChatId, outgoingText)
     setData(next)
     setDraft("")
     setToolEvents([])
@@ -152,7 +156,11 @@ const ChatDetailPage = () => {
     try {
       let finalText = ""
 
-      for await (const event of streamChatAgentResponse(next.messages, settingsDraft, abortController.signal)) {
+      for await (const event of streamChatAgentResponse(next.messages, settingsDraft, {
+        abortSignal: abortController.signal,
+        selectedAgentId: selectedAgentId || undefined,
+        attachments,
+      })) {
         if (event.type === "text-delta") {
           finalText += event.text
           setStreamingText((value) => value + event.text)
@@ -173,258 +181,214 @@ const ChatDetailPage = () => {
       abortControllerRef.current = null
       setIsResponding(false)
       setStreamingText("")
+      setAttachments([])
     }
+  }
+
+  const handleAttachmentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    if (files.length === 0) {
+      return
+    }
+
+    const nextAttachments = await Promise.all(files.map(async (file) => ({
+      name: file.name,
+      mediaType: file.type || "application/octet-stream",
+      kind: file.type.startsWith("image/") ? "image" as const : "file" as const,
+      data: await fileToPayload(file),
+    })))
+
+    setAttachments((current) => [...current, ...nextAttachments])
+    event.target.value = ""
+  }
+
+  const removeAttachment = (attachmentName: string) => {
+    setAttachments((current) => current.filter((attachment) => attachment.name !== attachmentName))
   }
 
   const handleStop = () => {
     abortControllerRef.current?.abort()
   }
 
-  const handleExport = async (format: "markdown" | "pdf" | "docx") => {
-    if (!selectedChat) {
-      return
-    }
+  const buildTranscript = () => {
+    const messageBlocks = (selectedChat?.messages ?? []).map((message) => `${message.role.toUpperCase()}\n${message.content}`).join("\n\n")
+    const toolBlocks = toolEvents.map((event) => {
+      if (event.type === "tool-call") {
+        return `TOOL CALL ${event.toolName}\n${JSON.stringify(event.input, null, 2)}`
+      }
+      if (event.type === "tool-result") {
+        return `TOOL RESULT ${event.toolName}\n${event.output}`
+      }
+      if (event.type === "error") {
+        return `ERROR\n${event.error}`
+      }
+      return ""
+    }).join("\n\n")
+    return [messageBlocks, streamingText ? `ASSISTANT (STREAMING)\n${streamingText}` : "", toolBlocks].filter(Boolean).join("\n\n")
+  }
 
-    const transcript = buildTranscript(selectedChat, streamingText, toolEvents)
-    const baseName = `${selectedChat.chat.title || "chat"}`.replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase() || "chat"
-
+  const handleExportChat = async (format: "markdown" | "pdf" | "docx") => {
+    const baseName = `${selectedChat?.chat.title || "chat"}`.replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase() || "chat"
+    const transcript = buildTranscript()
     if (format === "markdown") {
       downloadText(`${baseName}.md`, transcript, "text/markdown;charset=utf-8")
       return
     }
-
     if (format === "pdf") {
       await exportTextAsPdf(`${baseName}.pdf`, transcript)
       return
     }
-
     await exportTextAsDocx(`${baseName}.docx`, transcript)
   }
 
   return (
-    <div className="flex min-h-full flex-col bg-background">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <PageHeader
         title={selectedChat?.chat.title ?? "New chat"}
-        description={selectedChat?.chat.summary || "Start a fresh session from the main canvas. Your historical sessions remain in the sidebar."}
-        actions={isResponding ? <Button variant="outline" onClick={handleStop}>Stop</Button> : null}
+        description={selectedChat?.chat.summary || "Use the workbench to resume a session or start a fresh conversation thread."}
+        actions={
+          <>
+            <Badge variant="outline">Chat workbench</Badge>
+            {isResponding ? <Button variant="outline" onClick={handleStop}>Stop</Button> : null}
+          </>
+        }
       />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden p-3">
-        <div className="grid min-h-0 w-full min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_19rem]">
-          {activeChatId && isLoading ? <LoadingCard title="Loading chat session..." /> : null}
-          {settingsLoading ? <LoadingCard title="Loading chat runtime settings..." /> : null}
-          {combinedError ? <ErrorCard error={combinedError} onRetry={() => { reload(); reloadSettings() }} /> : null}
-          {!settingsLoading && !combinedError && settingsDraft ? (
-            <>
-              <Card className="min-h-0 overflow-hidden">
-                <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <CardTitle>Chat content</CardTitle>
-                      <CardDescription>{selectedChat ? "Continue the active session or branch from the latest reply." : "This canvas stays empty until you send the first message."}</CardDescription>
-                    </div>
-                    <Badge variant={isResponding ? "default" : "outline"}>{isResponding ? "Streaming" : "Idle"}</Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
-                  <MessageScroller className="min-h-0 flex-1 rounded-xl border bg-muted/20">
-                    <MessageScrollerViewport className="p-3">
-                      <MessageScrollerContent>
-                        {selectedChat?.messages.map((message, index) => (
-                          <MessageScrollerItem key={message.id} scrollAnchor={autoScroll && index === selectedChat.messages.length - 1 && !isResponding}>
-                            <Message align={message.role === "user" ? "end" : "start"}>
-                              <MessageContent>
-                                <MessageHeader>{message.role === "user" ? "You" : message.role === "assistant" ? "Assistant" : "System"}</MessageHeader>
-                                <Bubble variant={message.role === "user" ? "default" : message.role === "assistant" ? "outline" : "muted"} align={message.role === "user" ? "end" : "start"}>
-                                  <BubbleContent>{message.content}</BubbleContent>
-                                </Bubble>
-                                <MessageFooter>{new Date(message.createdAt).toLocaleString()}</MessageFooter>
-                              </MessageContent>
-                            </Message>
-                          </MessageScrollerItem>
-                        ))}
-                        {toolEvents.map((event, index) => (
-                          <MessageScrollerItem key={`${event.type}-${index}`}>
-                            <Message>
-                              <MessageContent>
-                                <MessageHeader>Tool event</MessageHeader>
-                                <Bubble variant={event.type === "error" ? "destructive" : "muted"}>
-                                  <BubbleContent>
-                                    {event.type === "tool-call" ? `tool ${event.toolName} called with ${JSON.stringify(event.input)}` : null}
-                                    {event.type === "tool-result" ? `tool ${event.toolName} returned ${event.output}` : null}
-                                    {event.type === "error" ? `error: ${event.error}` : null}
-                                  </BubbleContent>
-                                </Bubble>
-                              </MessageContent>
-                            </Message>
-                          </MessageScrollerItem>
-                        ))}
-                        {isResponding && streamingText ? (
-                          <MessageScrollerItem scrollAnchor={autoScroll}>
-                            <Message>
-                              <MessageContent>
-                                <MessageHeader>Assistant</MessageHeader>
-                                <Bubble variant="outline">
-                                  <BubbleContent>{streamingText}</BubbleContent>
-                                </Bubble>
-                                <MessageFooter>Streaming response...</MessageFooter>
-                              </MessageContent>
-                            </Message>
-                          </MessageScrollerItem>
-                        ) : null}
-                        {!selectedChat && !isResponding ? (
-                          <MessageScrollerItem scrollAnchor>
-                            <div className="flex min-h-[40vh] items-center justify-center rounded-xl border border-dashed bg-background/70 px-6 py-10 text-center text-sm text-muted-foreground">
-                              Start a new chat from here. Pick an agent or model below, then send the first message.
-                            </div>
-                          </MessageScrollerItem>
-                        ) : null}
-                      </MessageScrollerContent>
-                    </MessageScrollerViewport>
-                    <MessageScrollerButton />
-                  </MessageScroller>
-
-                  <div className="rounded-xl border bg-background p-3">
-                    <div className="flex items-end gap-2">
-                      <Input className="h-10 w-full" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about documents, workflows, or skills..." disabled={isResponding} />
-                    </div>
-                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex min-w-0 flex-wrap items-center gap-2">
-                        <NativeSelect size="sm" value={selectedAgentId} onChange={(event) => setSelectedAgentId(event.target.value)}>
-                          <NativeSelectOption value="">Agent</NativeSelectOption>
-                          {agents.map((agent) => <NativeSelectOption key={agent.id} value={agent.id}>{agent.title}</NativeSelectOption>)}
-                        </NativeSelect>
-                        <NativeSelect size="sm" value={settingsDraft.model.modelId} onChange={(event) => {
-                          const providerType = selectedProvider?.providerType && isChatProviderType(selectedProvider.providerType)
-                            ? selectedProvider.providerType
-                            : settingsDraft.model.providerType
-                          setSettingsDraft({ ...settingsDraft, model: { ...settingsDraft.model, providerType, providerId: selectedProvider?.id || settingsDraft.model.providerId, modelId: event.target.value } })
-                        }}>
-                          <NativeSelectOption value="">Model</NativeSelectOption>
-                          {providerModels.map((model) => <NativeSelectOption key={model.id} value={model.id}>{model.name}</NativeSelectOption>)}
-                        </NativeSelect>
-                        <label className="flex items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs text-muted-foreground">
-                          <span>Auto scroll</span>
-                          <Switch checked={autoScroll} onCheckedChange={setAutoScroll} />
-                        </label>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>Export</DropdownMenuTrigger>
-                          <DropdownMenuContent align="start" className="w-36 min-w-36">
-                            <DropdownMenuItem onClick={() => void handleExport("pdf")}>PDF</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => void handleExport("markdown")}>Markdown</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => void handleExport("docx")}>DOCX</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline" disabled>
-                          <MicIcon />
-                        </Button>
-                        <Button size="sm" onClick={() => void handleSend()} disabled={isResponding || !draft.trim()}>
-                          <SendHorizonalIcon />
-                          Send
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="min-h-0 overflow-hidden">
-                <CardHeader className="pb-3">
-                  <CardTitle>Runtime controls</CardTitle>
-                  <CardDescription>Keep the current session lean while still adjusting provider and proxy defaults.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-3 overflow-y-auto text-sm">
-                  <div className="grid gap-3">
-                    <div className="space-y-2">
-                      <div className="text-muted-foreground">Provider type</div>
-                      <NativeSelect value={settingsDraft.model.providerId} onChange={(event) => {
-                        const provider = providers.find((item) => item.id === event.target.value)
-                        if (!provider) {
-                          return
-                        }
-
-                        const enabledModel = provider.models.find((model) => model.enabled) ?? provider.models[0]
-                        setSettingsDraft({
-                          ...settingsDraft,
-                          model: {
-                            ...settingsDraft.model,
-                            providerId: provider.id,
-                            providerType: isChatProviderType(provider.providerType) ? provider.providerType : settingsDraft.model.providerType,
-                            baseUrl: provider.baseUrl,
-                            apiKey: provider.apiKey,
-                            modelId: enabledModel?.id ?? "",
-                          },
-                        })
-                      }}>
-                        {providers.map((provider) => <NativeSelectOption key={provider.id} value={provider.id}>{provider.title}</NativeSelectOption>)}
-                      </NativeSelect>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-muted-foreground">Model ID</div>
-                      <NativeSelect value={settingsDraft.model.modelId} onChange={(event) => setSettingsDraft({ ...settingsDraft, model: { ...settingsDraft.model, modelId: event.target.value } })}>
-                        {providerModels.map((model) => <NativeSelectOption key={model.id} value={model.id}>{model.name}</NativeSelectOption>)}
-                      </NativeSelect>
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-muted-foreground">Base URL</div>
-                      <Input value={settingsDraft.model.baseUrl} onChange={(event) => setSettingsDraft({ ...settingsDraft, model: { ...settingsDraft.model, baseUrl: event.target.value } })} />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-muted-foreground">API key</div>
-                      <Input type="password" value={settingsDraft.model.apiKey} onChange={(event) => setSettingsDraft({ ...settingsDraft, model: { ...settingsDraft.model, apiKey: event.target.value } })} />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="text-muted-foreground">System prompt</div>
-                      <Input value={settingsDraft.model.systemPrompt} onChange={(event) => setSettingsDraft({ ...settingsDraft, model: { ...settingsDraft.model, systemPrompt: event.target.value } })} />
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border p-3">
-                    <div className="mb-2 font-medium">Proxy</div>
-                    <div className="space-y-2.5">
-                      <label className="flex items-center justify-between">
-                        <span>Enable proxy</span>
-                        <Switch checked={settingsDraft.proxy.enabled} onCheckedChange={(checked) => setSettingsDraft({ ...settingsDraft, proxy: { ...settingsDraft.proxy, enabled: checked } })} />
-                      </label>
-                      <NativeSelect value={settingsDraft.proxy.type} onChange={(event) => setSettingsDraft({ ...settingsDraft, proxy: { ...settingsDraft.proxy, type: event.target.value as ChatRuntimeSettings["proxy"]["type"] } })}>
-                        <NativeSelectOption value="http">HTTP</NativeSelectOption>
-                        <NativeSelectOption value="https">HTTPS</NativeSelectOption>
-                        <NativeSelectOption value="socks5">SOCKS5</NativeSelectOption>
-                      </NativeSelect>
-                      <Input value={settingsDraft.proxy.host} placeholder="Proxy host" onChange={(event) => setSettingsDraft({ ...settingsDraft, proxy: { ...settingsDraft.proxy, host: event.target.value } })} />
-                      <Input type="number" value={String(settingsDraft.proxy.port || "")} placeholder="Proxy port" onChange={(event) => setSettingsDraft({ ...settingsDraft, proxy: { ...settingsDraft.proxy, port: Number(event.target.value) } })} />
-                      <Input value={settingsDraft.proxy.username} placeholder="Proxy username" onChange={(event) => setSettingsDraft({ ...settingsDraft, proxy: { ...settingsDraft.proxy, username: event.target.value } })} />
-                      <Input type="password" value={settingsDraft.proxy.password} placeholder="Proxy password" onChange={(event) => setSettingsDraft({ ...settingsDraft, proxy: { ...settingsDraft.proxy, password: event.target.value } })} />
-                      <label className="flex items-center justify-between">
-                        <span>Ignore SSL errors</span>
-                        <Switch checked={settingsDraft.proxy.ignoreSslErrors} onCheckedChange={(checked) => setSettingsDraft({ ...settingsDraft, proxy: { ...settingsDraft.proxy, ignoreSslErrors: checked } })} />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5 rounded-xl border p-3">
-                    {modelMeta.map(([label, value]) => (
-                      <div key={label}>
-                        <div className="text-muted-foreground">{label}</div>
-                        <div className="font-medium break-all">{value}</div>
-                      </div>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+        {activeChatId && isLoading ? <LoadingCard title="Loading chat session..." /> : null}
+        {settingsLoading ? <LoadingCard title="Loading chat runtime settings..." /> : null}
+        {combinedError ? <ErrorCard error={combinedError} onRetry={() => { reload(); reloadSettings() }} /> : null}
+        {!settingsLoading && !combinedError && settingsDraft ? (
+          <Card size="sm" className=" flex-1 rounded-2xl py-0 shadow-sm">
+            <CardContent className="min-h-0 flex-1 -mb-(--card-spacing) px-0 ">
+              <div>
+                <ScrollArea ref={messageViewportRef} className="h-full min-h-0 overflow-y-auto px-(--card-spacing) py-4">
+                  <div className="flex min-h-full flex-col gap-4">
+                    {selectedChat?.messages.map((message) => (
+                      <ChatMessageItem key={message.id} content={message.content} createdAt={message.createdAt} label={message.role === "user" ? "You" : message.role === "assistant" ? "Assistant" : "System"} providerType={activeProviderType} role={message.role} />
                     ))}
+                    {toolEvents.map((event, index) => (
+                      <ChatMessageItem key={`${event.type}-${index}`} content={event.type === "tool-call" ? `tool ${event.toolName} called with ${JSON.stringify(event.input, null, 2)}` : event.type === "tool-result" ? `tool ${event.toolName} returned ${event.output}` : event.type === "error" ? `error: ${event.error}` : event.text} label="Tool event" kind="tool" providerType={activeProviderType} role="system" />
+                    ))}
+                    {isResponding && streamingText ? (
+                      <ChatMessageItem content={streamingText} label="Assistant" providerType={activeProviderType} role="assistant" />
+                    ) : null}
+                    <div className="h-px shrink-0" />
                   </div>
+                </ScrollArea>
+                {!selectedChat && !isResponding ? (
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+                    <div className="w-full max-w-2xl rounded-2xl border border-dashed bg-background/88 px-6 py-12 text-center text-sm text-muted-foreground shadow-sm backdrop-blur-xs">
+                      Start typing below to create a new chat. Existing sessions stay available in the sidebar.
+                    </div>
+                  </div>
+                ) : null}
+                </div>
+            </CardContent>
 
-                  <div className="flex gap-2">
-                    <Button size="sm" onClick={handleSaveSettings}>Save settings</Button>
-                    <Button size="sm" variant="outline" onClick={reloadSettings}>Reload</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            </>
-          ) : null}
-        </div>
+            <CardFooter className="flex-col items-stretch gap-3 bg-card sticky bottom-0">
+              <div className="flex min-w-0 items-end gap-2">
+                <Input className="h-11 min-w-0 flex-1" value={draft} onChange={(event) => setDraft(event.target.value)} placeholder="Ask about documents, workflows, or skills..." disabled={isResponding} />
+                {supportsAttachments ? (
+                  <>
+                    <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => void handleAttachmentChange(event)} />
+                    <Button size="sm" variant="outline" onClick={() => fileInputRef.current?.click()} disabled={isResponding}>
+                      <PaperclipIcon />
+                    </Button>
+                  </>
+                ) : null}
+              </div>
+              {attachments.length ? (
+                <AttachmentGroup>
+                  {attachments.map((attachment) => (
+                    <Attachment key={`${attachment.name}-${attachment.data.length}`} size="sm">
+                      <AttachmentMedia variant={attachment.kind === "image" ? "image" : "icon"}>
+                        {attachment.kind === "image" ? <img src={attachment.data} alt={attachment.name} className="size-full object-cover" /> : <PaperclipIcon className="size-4" />}
+                      </AttachmentMedia>
+                      <AttachmentContent>
+                        <AttachmentTitle>{attachment.name}</AttachmentTitle>
+                        <AttachmentDescription>{attachment.mediaType}</AttachmentDescription>
+                      </AttachmentContent>
+                      <AttachmentActions>
+                        <AttachmentAction size="icon-xs" variant="ghost" onClick={() => removeAttachment(attachment.name)}>
+                          <XIcon />
+                        </AttachmentAction>
+                      </AttachmentActions>
+                    </Attachment>
+                  ))}
+                </AttachmentGroup>
+              ) : null}
+              <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+                  <NativeSelect className="min-w-0 w-full sm:w-32" size="sm" value={selectedAgentId} onChange={(event) => setSelectedAgentId(event.target.value)}>
+                    <NativeSelectOption value="">Agent</NativeSelectOption>
+                    {agents.map((agent) => <NativeSelectOption key={agent.id} value={agent.id}>{agent.title}</NativeSelectOption>)}
+                  </NativeSelect>
+                  <NativeSelect className="min-w-0 w-full sm:w-44" size="sm" value={modelValue} onChange={(event) => {
+                    const [providerId, modelId] = event.target.value.split("::")
+                    const provider = groupedProviders.find((item) => item.id === providerId)
+                    if (!provider || !settingsDraft) {
+                      return
+                    }
+
+                    const nextSettings = {
+                      ...settingsDraft,
+                      model: {
+                        ...settingsDraft.model,
+                        providerId: provider.id,
+                        providerType: isChatProviderType(provider.providerType) ? provider.providerType : settingsDraft.model.providerType,
+                        baseUrl: provider.baseUrl,
+                        apiKey: provider.apiKey,
+                        modelId,
+                      },
+                    }
+                    applyRuntimeSettings(nextSettings)
+                  }}>
+                    <NativeSelectOption value="">Model</NativeSelectOption>
+                    {groupedProviders.map((provider) => (
+                      <NativeSelectOptGroup key={provider.id} label={provider.title}>
+                        {provider.models.map((model) => <NativeSelectOption key={`${provider.id}-${model.id}`} value={`${provider.id}::${model.id}`}>{model.name}</NativeSelectOption>)}
+                      </NativeSelectOptGroup>
+                    ))}
+                  </NativeSelect>
+                  <label className="flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs text-muted-foreground">
+                    <span>Auto scroll</span>
+                    <Switch checked={autoScroll} onCheckedChange={setAutoScroll} />
+                  </label>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger render={<Button size="sm" variant="outline" className="h-8 text-xs" />}>Export</DropdownMenuTrigger>
+                    <DropdownMenuContent align="start" className="w-36 min-w-36">
+                      <DropdownMenuItem onClick={() => void handleExportChat("markdown")}>Markdown</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void handleExportChat("pdf")}>PDF</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void handleExportChat("docx")}>DOCX</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="flex shrink-0 items-center gap-2 self-end lg:self-auto">
+                  <Button size="sm" variant="outline" disabled>
+                    <MicIcon />
+                  </Button>
+                  <Button size="sm" onClick={() => void handleSend()} disabled={isResponding || (!draft.trim() && attachments.length === 0)}>
+                    <SendHorizonalIcon />
+                    Send
+                  </Button>
+                </div>
+              </div>
+            </CardFooter>
+          </Card>
+        ) : null}
       </div>
     </div>
   )
+}
+
+async function fileToPayload(file: File) {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error ?? new Error(`Failed to read ${file.name}`))
+    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "")
+    reader.readAsDataURL(file)
+  })
 }
 
 export default ChatDetailPage

@@ -1,11 +1,13 @@
 import { useNavigate } from "react-router"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { createChannel, listChannels } from "@/data/repositories/channel-repository"
 import PageHeader from "@/views/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
+import { getChannelPlatformLabel, getChannelStatusLabel, getChannelStatusVariant } from "@/views/channels/components/channel-utils"
 
 const ChannelsPage = () => {
   const navigate = useNavigate()
@@ -13,7 +15,7 @@ const ChannelsPage = () => {
 
   const handleCreate = async () => {
     const item = await createChannel()
-    navigate(`/channels/${item.id}`)
+    navigate(`/channels/${item.channel.id}`)
   }
 
   return (
@@ -28,8 +30,11 @@ const ChannelsPage = () => {
             ? data.map((item) => (
                 <Card key={item.id}>
                   <CardHeader>
-                    <CardTitle>{item.title}</CardTitle>
-                    <CardDescription>{item.kind}</CardDescription>
+                    <div className="flex items-center justify-between gap-2">
+                      <CardTitle>{item.title}</CardTitle>
+                      <Badge variant={getChannelStatusVariant(item.status)}>{getChannelStatusLabel(item.status)}</Badge>
+                    </div>
+                    <CardDescription>{getChannelPlatformLabel(item.platform)} · {item.messageCount} messages</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button variant="outline" onClick={() => navigate(`/channels/${item.id}`)}>Open channel</Button>

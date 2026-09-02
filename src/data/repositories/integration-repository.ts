@@ -9,25 +9,30 @@ import type {
 import { executeIntegration } from "@/data/repositories/integration-execution-repository"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { suoraIpc } from "@/lib/ipc"
+import { buildHttpEndpointUrl, createDefaultHttpIntegrationConfig, getSelectedHttpEndpoint, normalizeHttpIntegrationConfig, readMcpTools, DEFAULT_PARAMETER_SCHEMA_JSON } from "@/lib/integration-http"
 
 function getDefaultConfig(kind: string): IntegrationConfig {
   if (kind === "mcp") {
     return {
       kind: "mcp",
+      description: "",
       endpoint: "",
       launchCommand: "",
       protocols: ["stdio"],
       authModes: ["none"],
       authConfigJson: "{}",
+      toolCatalogJson: "[]",
+      tools: [],
     } satisfies McpIntegrationConfig
   }
 
   if (kind === "scripts") {
     return {
       kind: "scripts",
+      description: "",
       runtime: "node",
       timeoutMs: 30000,
-      inputSchemaJson: "{\n  \"type\": \"object\",\n  \"properties\": {}\n}",
+      inputSchemaJson: DEFAULT_PARAMETER_SCHEMA_JSON,
       outputSchemaJson: "{\n  \"type\": \"object\"\n}",
       selectedScriptId: "script-main",
       scripts: [
@@ -41,24 +46,13 @@ function getDefaultConfig(kind: string): IntegrationConfig {
     } satisfies ScriptIntegrationConfig
   }
 
-  return {
-    kind: "http",
-    method: "POST",
-    url: "",
-    description: "",
-    headersJson: "{}",
-    queryJson: "{}",
-    bodyJson: "{}",
-    authType: "none",
-    authConfigJson: "{}",
-    parameterSchemaJson: "{\n  \"type\": \"object\",\n  \"properties\": {}\n}",
-  } satisfies HttpIntegrationConfig
+  return createDefaultHttpIntegrationConfig()
 }
 
 function getConfigEndpoint(config: IntegrationConfig) {
   switch (config.kind) {
     case "http":
-      return config.url
+      return buildHttpEndpointUrl(config.baseUrl, getSelectedHttpEndpoint(config)?.path ?? "/")
     case "mcp":
       return config.endpoint || config.launchCommand
     case "scripts":
@@ -68,10 +62,7 @@ function getConfigEndpoint(config: IntegrationConfig) {
 
 function normalizeIntegrationConfig(config: IntegrationConfig): IntegrationConfig {
   if (config.kind === "http") {
-    return {
-      ...getDefaultConfig("http"),
-      ...config,
-    } as HttpIntegrationConfig
+    return normalizeHttpIntegrationConfig(config)
   }
 
   if (config.kind === "scripts") {
@@ -84,6 +75,7 @@ function normalizeIntegrationConfig(config: IntegrationConfig): IntegrationConfi
     return {
       ...fallback,
       ...config,
+      description: maybeLegacy.description ?? fallback.description,
       scripts,
       selectedScriptId: maybeLegacy.selectedScriptId || scripts[0].id,
       outputSchemaJson: maybeLegacy.outputSchemaJson || fallback.outputSchemaJson,
@@ -93,13 +85,22 @@ function normalizeIntegrationConfig(config: IntegrationConfig): IntegrationConfi
   return {
     ...getDefaultConfig("mcp"),
     ...config,
+    description: (config as Partial<McpIntegrationConfig>).description ?? "",
+    toolCatalogJson: (config as Partial<McpIntegrationConfig>).toolCatalogJson ?? "[]",
+    tools: readMcpTools((config as Partial<McpIntegrationConfig>).toolCatalogJson ?? "[]"),
   } as McpIntegrationConfig
 }
 
 function validateIntegrationConfig(config: IntegrationConfig) {
   if (config.kind === "http") {
-    if (!config.url.trim()) {
-      throw new Error("HTTP integration URL is required.")
+    if (!config.baseUrl.trim()) {
+      throw new Error("HTTP integration base URL is required.")
+    }
+    if (config.endpoints.length === 0) {
+      throw new Error("At least one HTTP endpoint is required.")
+    }
+    if (!config.endpoints.every((endpoint) => endpoint.path.trim())) {
+      throw new Error("Every HTTP endpoint requires a path.")
     }
     return
   }
@@ -133,15 +134,11 @@ export async function listIntegrationSummaries() {
 
 export async function getIntegrationDetail(integrationId: string, selectedVersionId?: string) {
   await ensureSeeded()
-  const detail = await suoraIpc.integrations.get(integrationId) as IntegrationDetail | null
+  const detail = await suoraIpc.integrations.get(integrationId, selectedVersionId) as IntegrationDetail | null
   if (!detail) {
     throw new Error(`Integration ${integrationId} was not found.`)
   }
-  if (!selectedVersionId || detail.selectedVersion.id === selectedVersionId) {
-    return { ...detail, config: normalizeIntegrationConfig(detail.config) }
-  }
-  const selectedVersion = detail.versions.find((version) => version.id === selectedVersionId) ?? detail.selectedVersion
-  return { ...detail, selectedVersion, config: normalizeIntegrationConfig(detail.config) }
+  return { ...detail, config: normalizeIntegrationConfig(detail.config) }
 }
 
 export async function createIntegration(kind: IntegrationConfig["kind"] = "http") {
@@ -150,16 +147,16 @@ export async function createIntegration(kind: IntegrationConfig["kind"] = "http"
   return suoraIpc.integrations.create({ kind, title: `New ${kind} integration`, endpoint: getConfigEndpoint(config), configJson: JSON.stringify(config) }) as Promise<IntegrationDetail>
 }
 
-export async function saveIntegrationDraft(integrationId: string, payload: { title: string; kind: IntegrationConfig["kind"]; config: IntegrationConfig }) {
+export async function saveIntegrationDraft(integrationId: string, payload: { title: string; kind: IntegrationConfig["kind"]; config: IntegrationConfig; selectedVersionId?: string }) {
   await ensureSeeded()
   validateIntegrationConfig(payload.config)
-  return suoraIpc.integrations.save({ id: integrationId, title: payload.title, kind: payload.kind, endpoint: getConfigEndpoint(payload.config), config: payload.config }) as Promise<IntegrationDetail>
+  return suoraIpc.integrations.save({ id: integrationId, title: payload.title, kind: payload.kind, endpoint: getConfigEndpoint(payload.config), config: payload.config, selectedVersionId: payload.selectedVersionId }) as Promise<IntegrationDetail>
 }
 
 export async function publishIntegrationVersion(integrationId: string, versionId: string) {
   await ensureSeeded()
   const detail = await getIntegrationDetail(integrationId, versionId)
-  return suoraIpc.integrations.save({ id: integrationId, title: detail.integration.title, kind: detail.integration.kind, endpoint: detail.integration.endpoint, config: detail.config, publish: true }) as Promise<IntegrationDetail>
+  return suoraIpc.integrations.save({ id: integrationId, title: detail.integration.title, kind: detail.integration.kind, endpoint: getConfigEndpoint(detail.config), config: detail.config, publish: true }) as Promise<IntegrationDetail>
 }
 
 export async function runIntegrationAndPersist(integrationId: string, selectedVersionId?: string, inputJson = "{}") {

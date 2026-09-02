@@ -40,12 +40,65 @@ export type VersionOption = {
 export type WorkflowNodeData = {
   label: string
   prompt: string
-  kind: "start" | "agent" | "condition" | "output"
+  kind: "start" | "end" | "document-retrieval" | "agent" | "fork" | "join" | "if-else" | "http" | "script"
+  agentId?: string
+  task?: string
+  description?: string
+  enabled?: boolean
+  continueOnError?: boolean
+  retryCount?: number
+  timeoutMs?: number
+  modelId?: string
+  runIf?: string
+  inputTemplate?: string
+  outputKey?: string
+  maxInputChars?: number
+  maxOutputChars?: number
+  documentId?: string
+  documentName?: string
+  queryExpression?: string
+  resultLimit?: number
+  integrationId?: string
+  integrationName?: string
+  method?: string
+  url?: string
+  headersJson?: string
+  queryJson?: string
+  bodyJson?: string
+  runtime?: string
+  script?: string
+  timeoutSeconds?: number
+  branchCount?: number
+  joinStrategy?: "wait-all" | "wait-any"
+  trueLabel?: string
+  falseLabel?: string
+  branches?: Array<{
+    id: string
+    label: string
+    expression: string
+  }>
+}
+
+export type WorkflowEdgeData = {
+  condition?: string
+  successOnly?: boolean
+}
+
+export type WorkflowVariable = {
+  id: string
+  name: string
+  defaultValue: string
+  required: boolean
+}
+
+export type WorkflowBudget = {
+  maxSteps: number
+  maxDurationMs: number
 }
 
 export type WorkflowDefinition = {
   nodes: Node<WorkflowNodeData>[]
-  edges: Edge[]
+  edges: Edge<WorkflowEdgeData>[]
   viewport: Viewport
   resourceBindings?: {
     providerId: string
@@ -54,6 +107,8 @@ export type WorkflowDefinition = {
     integrationId: string
   }
   dryRunInputJson?: string
+  variables?: WorkflowVariable[]
+  budget?: WorkflowBudget
 }
 
 export type WorkflowSummary = {
@@ -155,15 +210,48 @@ export type DocumentDetail = {
   settings: DocumentSettings
 }
 
+export type HttpIntegrationAuthType = "none" | "bearer" | "basic" | "api-key" | "custom"
+
+export type HttpEndpointBodyMode = "none" | "json" | "form-data" | "x-www-form-urlencoded"
+
+export type HttpEndpointParameterLocation = "path" | "query" | "header" | "form-data" | "json"
+
+export type HttpEndpointParameter = {
+  id: string
+  name: string
+  in: HttpEndpointParameterLocation
+  type: string
+  required: boolean
+  description: string
+  defaultValue: string
+}
+
+export type HttpEndpointConfig = {
+  id: string
+  name: string
+  description: string
+  method: string
+  path: string
+  bodyMode: HttpEndpointBodyMode
+  headersJson: string
+  queryJson: string
+  bodyJson: string
+  parameterSchemaJson: string
+  parameters: HttpEndpointParameter[]
+}
+
 export type HttpIntegrationConfig = {
   kind: "http"
+  baseUrl: string
+  selectedEndpointId: string
+  endpoints: HttpEndpointConfig[]
   method: string
   url: string
   description: string
   headersJson: string
   queryJson: string
   bodyJson: string
-  authType: "none" | "bearer" | "basic" | "api-key"
+  authType: HttpIntegrationAuthType
   authConfigJson: string
   parameterSchemaJson: string
 }
@@ -177,6 +265,7 @@ export type ScriptWorkbenchItem = {
 
 export type ScriptIntegrationConfig = {
   kind: "scripts"
+  description: string
   runtime: string
   timeoutMs: number
   inputSchemaJson: string
@@ -185,13 +274,23 @@ export type ScriptIntegrationConfig = {
   scripts: ScriptWorkbenchItem[]
 }
 
+export type McpToolRecord = {
+  id: string
+  name: string
+  description: string
+  inputSchemaJson: string
+}
+
 export type McpIntegrationConfig = {
   kind: "mcp"
+  description: string
   endpoint: string
   launchCommand: string
   protocols: string[]
   authModes: string[]
   authConfigJson: string
+  toolCatalogJson: string
+  tools: McpToolRecord[]
 }
 
 export type IntegrationConfig =
@@ -293,6 +392,7 @@ export type AgentConfigRecord = {
   instructions: string
   providerId: string
   modelId: string
+  workflowIds?: string[]
   skillIds: string[]
   toolsetIds: string[]
   documentIds?: string[]
@@ -312,6 +412,174 @@ export type AgentDetail = {
   latestVersion: VersionOption
   selectedVersion: VersionOption
   config: AgentConfigRecord
+}
+
+export type ChannelPlatform =
+  | "web"
+  | "email"
+  | "wechat_personal"
+  | "wechat_official"
+  | "slack"
+  | "telegram"
+  | "discord"
+  | "teams"
+  | "custom"
+
+export type ChannelStatus = "inactive" | "active" | "error"
+
+export type ChannelConnectionMode = "webhook" | "stream"
+
+export type WeChatPersonalBindingStatus = "unbound" | "pending" | "bound" | "error"
+
+export type EmailFilterField = "subject" | "from" | "to" | "cc" | "body" | "has_attachment"
+
+export type EmailFilterOperator = "contains" | "not_contains" | "equals" | "starts_with" | "ends_with" | "regex" | "is_true"
+
+export type EmailActionType = "auto_reply" | "forward" | "label" | "agent_process" | "webhook"
+
+export type EmailFilterRule = {
+  id: string
+  field: EmailFilterField
+  operator: EmailFilterOperator
+  value: string
+  enabled: boolean
+}
+
+export type EmailAction = {
+  id: string
+  type: EmailActionType
+  value?: string
+  enabled: boolean
+  useAgent?: boolean
+}
+
+export type ChannelMessageRecord = {
+  id: string
+  direction: "incoming" | "outgoing" | "system"
+  senderName: string
+  senderId: string
+  content: string
+  status: "received" | "sent" | "failed"
+  createdAt: number
+}
+
+export type ChannelConversationEntry = {
+  role: "user" | "assistant"
+  content: string
+  timestamp: number
+}
+
+export type ChannelUserRecord = {
+  id: string
+  channelId: string
+  senderName: string
+  senderId: string
+  firstSeenAt: number
+  lastActiveAt: number
+  messageCount: number
+  conversationHistory: ChannelConversationEntry[]
+}
+
+export type ChannelHealthRecord = {
+  isHealthy: boolean | null
+  lastCheckAt?: number
+  latencyMs?: number
+  errorCount: number
+  lastError?: string
+}
+
+export type ChannelDebugEntry = {
+  id: string
+  timestamp: number
+  tone: "info" | "success" | "error"
+  text: string
+}
+
+export type ChannelConfigRecord = {
+  id: string
+  title: string
+  platform: ChannelPlatform
+  enabled: boolean
+  status: ChannelStatus
+  connectionMode: ChannelConnectionMode
+  webhookPath: string
+  webhookSecret: string
+  autoReply: boolean
+  replyAgentId: string
+  createdAt: number
+  updatedAt: number
+  lastMessageAt?: number
+  messageCount: number
+  appId?: string
+  appSecret?: string
+  verificationToken?: string
+  encryptKey?: string
+  slackBotToken?: string
+  slackSigningSecret?: string
+  telegramBotToken?: string
+  discordBotToken?: string
+  discordApplicationId?: string
+  teamsAppId?: string
+  teamsAppPassword?: string
+  teamsTenantId?: string
+  wechatOfficialAppId?: string
+  wechatOfficialAppSecret?: string
+  wechatOfficialToken?: string
+  wechatPersonalWebhookUrl?: string
+  wechatPersonalAuthToken?: string
+  wechatPersonalQrCodeUrl?: string
+  wechatPersonalBindingStatus?: WeChatPersonalBindingStatus
+  wechatPersonalBotToken?: string
+  wechatPersonalBaseUrl?: string
+  wechatPersonalAccountId?: string
+  wechatPersonalUserId?: string
+  customWebhookUrl?: string
+  customAuthHeader?: string
+  customAuthValue?: string
+  customPayloadTemplate?: string
+  customPlatformName?: string
+  customPlatformIcon?: string
+  emailImapHost?: string
+  emailImapPort?: number
+  emailImapUser?: string
+  emailImapPassword?: string
+  emailImapTls?: boolean
+  emailImapMailbox?: string
+  emailSmtpHost?: string
+  emailSmtpPort?: number
+  emailSmtpUser?: string
+  emailSmtpPassword?: string
+  emailSmtpTls?: boolean
+  emailFromName?: string
+  emailFromAddress?: string
+  emailPollInterval?: number
+  emailFilters?: EmailFilterRule[]
+  emailActions?: EmailAction[]
+  emailMarkAsRead?: boolean
+}
+
+export type ChannelRuntimeState = {
+  messages: ChannelMessageRecord[]
+  users: ChannelUserRecord[]
+  health: ChannelHealthRecord
+  debugLog: ChannelDebugEntry[]
+}
+
+export type ChannelSummary = {
+  id: string
+  title: string
+  platform: ChannelPlatform
+  enabled: boolean
+  status: ChannelStatus
+  updatedAt: number
+  lastMessageAt?: number
+  messageCount: number
+  meta?: string
+}
+
+export type ChannelDetail = {
+  channel: ChannelConfigRecord
+  runtime: ChannelRuntimeState
 }
 
 export type SimpleCatalogItem = {

@@ -1,4 +1,4 @@
-import type { AgentConfigRecord, AgentDetail, AgentSummary, ChatDetail, ChatSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, ProviderConfigRecord, SchedulerDetail, SimpleCatalogItem, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowSummary } from "@/data/domain/models"
+import type { AgentConfigRecord, AgentDetail, AgentSummary, ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary, ChatDetail, ChatSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, ProviderConfigRecord, SchedulerDetail, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeData, WorkflowSummary } from "@/data/domain/models"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { buildDefaultDocumentNodes, normalizeDocumentNodes } from "@/lib/document-tree"
 
@@ -17,6 +17,18 @@ type RawChannelRow = {
   id: string
   title: string
   platform: string
+  enabled?: number | boolean
+  status?: string
+  connectionMode?: string
+  webhookPath?: string
+  webhookSecret?: string
+  autoReply?: number | boolean
+  replyAgentId?: string
+  createdAt?: number
+  lastMessageAt?: number | null
+  messageCount?: number
+  configJson?: string
+  runtimeJson?: string
   updatedAt: number
 }
 
@@ -33,13 +45,193 @@ function parseProviderRow(row: RawProviderRow): ProviderConfigRecord {
   }
 }
 
-function parseChannelRow(row: RawChannelRow): SimpleCatalogItem {
+function createDefaultAgentConfig(): AgentConfigRecord {
+  return {
+    instructions: "You are a helpful agent.",
+    providerId: "provider-openai",
+    modelId: "gpt-5",
+    workflowIds: [],
+    skillIds: [],
+    toolsetIds: [],
+    documentIds: [],
+  }
+}
+
+function parseJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) {
+    return fallback
+  }
+
+  try {
+    return JSON.parse(value) as T
+  } catch {
+    return fallback
+  }
+}
+
+function createDefaultChannelRuntime(): ChannelRuntimeState {
+  return {
+    messages: [],
+    users: [],
+    health: {
+      isHealthy: null,
+      errorCount: 0,
+    },
+    debugLog: [],
+  }
+}
+
+function createDefaultChannelConfig(row: RawChannelRow): ChannelConfigRecord {
   return {
     id: row.id,
     title: row.title,
-    kind: row.platform,
-    meta: row.platform,
+    platform: (row.platform || "web") as ChannelConfigRecord["platform"],
+    enabled: Boolean(row.enabled),
+    status: (row.status || "inactive") as ChannelConfigRecord["status"],
+    connectionMode: (row.connectionMode || "webhook") as ChannelConfigRecord["connectionMode"],
+    webhookPath: row.webhookPath || `/channels/${row.id}`,
+    webhookSecret: row.webhookSecret || "",
+    autoReply: row.autoReply == null ? true : Boolean(row.autoReply),
+    replyAgentId: row.replyAgentId || "",
+    createdAt: row.createdAt ?? row.updatedAt,
     updatedAt: row.updatedAt,
+    lastMessageAt: row.lastMessageAt ?? undefined,
+    messageCount: row.messageCount ?? 0,
+    emailFilters: [],
+    emailActions: [],
+    emailMarkAsRead: true,
+  }
+}
+
+function parseChannelDetailRow(row: RawChannelRow): ChannelDetail {
+  const baseConfig = createDefaultChannelConfig(row)
+  const parsedConfig = parseJson<Partial<ChannelConfigRecord>>(row.configJson, {})
+  const parsedRuntime = parseJson<Partial<ChannelRuntimeState>>(row.runtimeJson, {})
+  const baseRuntime = createDefaultChannelRuntime()
+
+  return {
+    channel: {
+      ...baseConfig,
+      ...parsedConfig,
+      id: row.id,
+      title: row.title,
+      platform: (row.platform || parsedConfig.platform || "web") as ChannelConfigRecord["platform"],
+      enabled: row.enabled == null ? (parsedConfig.enabled ?? false) : Boolean(row.enabled),
+      status: (row.status || parsedConfig.status || "inactive") as ChannelConfigRecord["status"],
+      connectionMode: (row.connectionMode || parsedConfig.connectionMode || "webhook") as ChannelConfigRecord["connectionMode"],
+      webhookPath: row.webhookPath || parsedConfig.webhookPath || `/channels/${row.id}`,
+      webhookSecret: row.webhookSecret || parsedConfig.webhookSecret || "",
+      autoReply: row.autoReply == null ? (parsedConfig.autoReply ?? true) : Boolean(row.autoReply),
+      replyAgentId: row.replyAgentId || parsedConfig.replyAgentId || "",
+      createdAt: row.createdAt ?? parsedConfig.createdAt ?? row.updatedAt,
+      updatedAt: row.updatedAt,
+      lastMessageAt: row.lastMessageAt ?? parsedConfig.lastMessageAt,
+      messageCount: row.messageCount ?? parsedConfig.messageCount ?? 0,
+      emailFilters: parsedConfig.emailFilters ?? [],
+      emailActions: parsedConfig.emailActions ?? [],
+      emailMarkAsRead: parsedConfig.emailMarkAsRead ?? true,
+    },
+    runtime: {
+      ...baseRuntime,
+      ...parsedRuntime,
+      messages: parsedRuntime.messages ?? baseRuntime.messages,
+      users: parsedRuntime.users ?? baseRuntime.users,
+      debugLog: parsedRuntime.debugLog ?? baseRuntime.debugLog,
+      health: {
+        ...baseRuntime.health,
+        ...(parsedRuntime.health ?? {}),
+      },
+    },
+  }
+}
+
+function parseChannelSummaryRow(row: RawChannelRow): ChannelSummary {
+  const detail = parseChannelDetailRow(row)
+  return {
+    id: detail.channel.id,
+    title: detail.channel.title,
+    platform: detail.channel.platform,
+    enabled: detail.channel.enabled,
+    status: detail.channel.status,
+    updatedAt: detail.channel.updatedAt,
+    lastMessageAt: detail.channel.lastMessageAt,
+    messageCount: detail.channel.messageCount,
+    meta: `${detail.channel.platform} · ${detail.channel.connectionMode}`,
+  }
+}
+
+function normalizeWorkflowNodeData(data: Partial<WorkflowNodeData>, fallback: Pick<WorkflowNodeData, "kind" | "label" | "prompt">): WorkflowNodeData {
+  return {
+    label: data.label ?? fallback.label,
+    prompt: data.prompt ?? fallback.prompt,
+    kind: data.kind ?? fallback.kind,
+    agentId: data.agentId ?? "",
+    task: data.task ?? data.prompt ?? fallback.prompt,
+    description: data.description ?? "",
+    enabled: data.enabled ?? true,
+    continueOnError: data.continueOnError ?? fallback.kind === "start",
+    retryCount: data.retryCount ?? 0,
+    timeoutMs: data.timeoutMs ?? 30000,
+    modelId: data.modelId ?? "",
+    runIf: data.runIf ?? "",
+    inputTemplate: data.inputTemplate ?? "",
+    outputKey: data.outputKey ?? "",
+    maxInputChars: data.maxInputChars ?? 8000,
+    maxOutputChars: data.maxOutputChars ?? 8000,
+    documentId: data.documentId ?? "",
+    documentName: data.documentName ?? "",
+    queryExpression: data.queryExpression ?? "$input.query",
+    resultLimit: data.resultLimit ?? 5,
+    integrationId: data.integrationId ?? "",
+    integrationName: data.integrationName ?? "",
+    method: data.method ?? "POST",
+    url: data.url ?? "",
+    headersJson: data.headersJson ?? "{}",
+    queryJson: data.queryJson ?? "{}",
+    bodyJson: data.bodyJson ?? "{}",
+    runtime: data.runtime ?? "node",
+    script: data.script ?? "export async function main(input) {\n  return { ok: true, input }\n}\n",
+    timeoutSeconds: data.timeoutSeconds ?? 60,
+    branchCount: data.branchCount ?? 2,
+    joinStrategy: data.joinStrategy ?? "wait-all",
+    trueLabel: data.trueLabel ?? "True",
+    falseLabel: data.falseLabel ?? "False",
+    branches: data.branches ?? [
+      { id: `${fallback.label}-true`, label: "True", expression: "$input.ok === true" },
+      { id: `${fallback.label}-false`, label: "False", expression: "" },
+    ],
+  }
+}
+
+function normalizeWorkflowDefinition(definition: WorkflowDefinition): WorkflowDefinition {
+  return {
+    ...definition,
+    nodes: definition.nodes.map((node, index) => ({
+      ...node,
+      type: node.type ?? "workflowNode",
+      data: normalizeWorkflowNodeData(node.data, {
+        kind: node.data.kind ?? "agent",
+        label: node.data.label ?? `Step ${index + 1}`,
+        prompt: node.data.prompt ?? "Describe what this node should do.",
+      }),
+    })),
+    edges: definition.edges.map((edge) => ({
+      ...edge,
+      data: {
+        condition: edge.data?.condition ?? "",
+        successOnly: edge.data?.successOnly ?? false,
+      },
+    })),
+    viewport: definition.viewport ?? { x: 0, y: 0, zoom: 1 },
+    resourceBindings: definition.resourceBindings ?? {
+      providerId: "provider-openai",
+      skillId: "skill-plan",
+      documentId: "document-product-manual",
+      integrationId: "integration-webhook",
+    },
+    dryRunInputJson: definition.dryRunInputJson ?? "{\n  \"leadId\": \"LD-1001\"\n}",
+    variables: definition.variables ?? [],
+    budget: definition.budget ?? { maxSteps: 8, maxDurationMs: 120000 },
   }
 }
 
@@ -259,6 +451,17 @@ export const suoraIpc = {
       }
       const versions = payload.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
       const selectedPayload = payload.versions.find((version) => version.id === selectedVersionId) ?? payload.versions[0]
+      if (!selectedPayload || versions.length === 0) {
+        const fallbackVersion = { id: "draft", major: 1, minor: 0, isRelease: false, createdAt: Date.now(), label: "v1.0-draft" } satisfies VersionOption
+        return {
+          agent: payload.agent,
+          versions: [fallbackVersion],
+          latestVersion: fallbackVersion,
+          selectedVersion: fallbackVersion,
+          config: createDefaultAgentConfig(),
+        } satisfies AgentDetail
+      }
+
       return {
         agent: payload.agent,
         versions,
@@ -304,7 +507,7 @@ export const suoraIpc = {
       const rows = await getBridge().integrations.list() as IntegrationSummary[]
       return rows
     },
-    get: async (integrationId: string) => {
+    get: async (integrationId: string, selectedVersionId?: string) => {
       const payload = await getBridge().integrations.get(integrationId) as {
         integration: IntegrationSummary | null
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; configJson: string }>
@@ -314,12 +517,14 @@ export const suoraIpc = {
         return null
       }
       const versions = payload.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
+      const selectedPayload = payload.versions.find((version) => version.id === selectedVersionId) ?? payload.versions[0]
+      const selectedVersion = versions.find((version) => version.id === selectedPayload?.id) ?? versions[0]
       return {
         integration: payload.integration,
         versions,
         latestVersion: versions[0],
-        selectedVersion: versions[0],
-        config: JSON.parse(payload.versions[0].configJson) as IntegrationConfig,
+        selectedVersion,
+        config: JSON.parse(selectedPayload?.configJson ?? payload.versions[0].configJson) as IntegrationConfig,
         executions: payload.executions,
       } satisfies IntegrationDetail
     },
@@ -339,7 +544,7 @@ export const suoraIpc = {
         executions: result.executions,
       } satisfies IntegrationDetail
     },
-    save: async (payload: { id: string; title: string; kind: string; endpoint: string; config: IntegrationConfig; publish?: boolean }) => {
+    save: async (payload: { id: string; title: string; kind: string; endpoint: string; config: IntegrationConfig; selectedVersionId?: string; publish?: boolean }) => {
       const result = await getBridge().integrations.save({ ...payload, configJson: JSON.stringify(payload.config) }) as {
         integration: IntegrationSummary
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; configJson: string }>
@@ -365,7 +570,7 @@ export const suoraIpc = {
       const rows = await getBridge().workflows.list() as WorkflowSummary[]
       return rows
     },
-    get: async (workflowId: string) => {
+    get: async (workflowId: string, selectedVersionId?: string) => {
       const payload = await getBridge().workflows.get(workflowId) as {
         workflow: WorkflowSummary | null
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; definitionJson: string }>
@@ -375,12 +580,14 @@ export const suoraIpc = {
         return null
       }
       const versions = payload.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
+      const selectedPayload = payload.versions.find((version) => version.id === selectedVersionId) ?? payload.versions[0]
+      const selectedVersion = versions.find((version) => version.id === selectedPayload?.id) ?? versions[0]
       return {
         workflow: payload.workflow,
         versions,
         latestVersion: versions[0],
-        selectedVersion: versions[0],
-        definition: JSON.parse(payload.versions[0].definitionJson) as WorkflowDefinition,
+        selectedVersion,
+        definition: normalizeWorkflowDefinition(parseJson(selectedPayload?.definitionJson, { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } as WorkflowDefinition)),
         invocations: payload.invocations.map((invocation) => ({ ...invocation, traces: JSON.parse(invocation.traceJson) })) as WorkflowInvocationRecord[],
       } satisfies WorkflowDetail
     },
@@ -396,11 +603,11 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion: versions[0],
-        definition: JSON.parse(payload.versions[0].definitionJson) as WorkflowDefinition,
+        definition: normalizeWorkflowDefinition(parseJson(payload.versions[0]?.definitionJson, { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } as WorkflowDefinition)),
         invocations: payload.invocations.map((invocation) => ({ ...invocation, traces: JSON.parse(invocation.traceJson) })) as WorkflowInvocationRecord[],
       } satisfies WorkflowDetail
     },
-    save: async (payload: { id: string; title: string; summary: string; definition: WorkflowDefinition; publish?: boolean }) => {
+    save: async (payload: { id: string; title: string; summary: string; definition: WorkflowDefinition; selectedVersionId?: string; publish?: boolean }) => {
       const result = await getBridge().workflows.save({ ...payload, definitionJson: JSON.stringify(payload.definition) }) as {
         workflow: WorkflowSummary
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; definitionJson: string }>
@@ -412,7 +619,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion: versions[0],
-        definition: JSON.parse(result.versions[0].definitionJson) as WorkflowDefinition,
+        definition: normalizeWorkflowDefinition(parseJson(result.versions[0]?.definitionJson, { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } as WorkflowDefinition)),
         invocations: result.invocations.map((invocation) => ({ ...invocation, traces: JSON.parse(invocation.traceJson) })) as WorkflowInvocationRecord[],
       } satisfies WorkflowDetail
     },
@@ -423,19 +630,19 @@ export const suoraIpc = {
   channels: {
     list: async () => {
       const rows = await getBridge().channels.list() as RawChannelRow[]
-      return rows.map(parseChannelRow)
+      return rows.map(parseChannelSummaryRow)
     },
     get: async (channelId: string) => {
       const row = await getBridge().channels.get(channelId) as RawChannelRow | null
-      return row ? parseChannelRow(row) : null
+      return row ? parseChannelDetailRow(row) : null
     },
     create: async () => {
       const row = await getBridge().channels.create() as RawChannelRow
-      return parseChannelRow(row)
+      return parseChannelDetailRow(row)
     },
-    save: async (payload: { id: string; title: string; platform: string }) => {
+    save: async (payload: ChannelDetail) => {
       const row = await getBridge().channels.save(payload) as RawChannelRow
-      return parseChannelRow(row)
+      return parseChannelDetailRow(row)
     },
     delete: async (channelId: string) => getBridge().channels.delete(channelId) as Promise<{ success: boolean }>,
   },
@@ -448,5 +655,12 @@ export const suoraIpc = {
   preferences: {
     get: async () => getBridge().preferences.get() as Promise<string | null>,
     save: async (value: string) => getBridge().preferences.save(value) as Promise<string>,
+  },
+  tools: {
+    listFiles: async (relativePath?: string) => getBridge().tools.listFiles(relativePath) as Promise<Array<{ name: string; path: string; type: "file" | "directory" }>>,
+    readFile: async (relativePath: string) => getBridge().tools.readFile(relativePath) as Promise<{ path: string; content: string }>,
+    writeFile: async (payload: { path: string; content: string }) => getBridge().tools.writeFile(payload) as Promise<{ ok: boolean; path: string }>,
+    runCommand: async (payload: { command: string; cwd?: string; timeoutMs?: number }) => getBridge().tools.runCommand(payload) as Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>,
+    openExternal: async (url: string) => getBridge().tools.openExternal(url) as Promise<{ ok: boolean; url: string }>,
   },
 }

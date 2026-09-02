@@ -1,7 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from 'react-router'
 import { ToastProvider } from '@/components/ui/toast'
 import RootLayout from './views/layout'
-import ChatIndexPage from './views/chats'
 import DashboardPage from './views/dashboard'
 import WorkflowsPage from './views/workflows'
 import SkillsPage from './views/skills'
@@ -33,7 +32,7 @@ const App = () => {
           <Route path="/" element={<RootLayout />}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="chats" element={<ChatIndexPage />} />
+            <Route path="chats" element={<ChatDetailPage />} />
             <Route path="chats/:chatId" element={<ChatDetailPage />} />
             <Route path="workflows" element={<WorkflowsPage />} />
             <Route path="workflows/:workflowId" element={<WorkflowDetailPage />} />

@@ -249,6 +249,19 @@ export async function listModelProviders() {
   return (await ensurePresetProviders()).map(normalizeProvider)
 }
 
+export function getConfiguredModelProviders(providers: ProviderConfigRecord[]) {
+  return providers
+    .filter((provider) => provider.enabled && provider.models.some((model) => model.enabled))
+    .map((provider) => ({
+      ...provider,
+      models: provider.models.filter((model) => model.enabled),
+    }))
+}
+
+export async function listConfiguredModelProviders() {
+  return getConfiguredModelProviders(await listModelProviders())
+}
+
 export async function getModelProvider(providerId: string) {
   await ensureSeeded()
   const provider = await suoraIpc.models.get(providerId)

@@ -9,6 +9,7 @@ import SectionSidebar from "@/views/components/secondary-sidebar/section-sidebar
 import { CreateProviderButton } from "@/views/models/components/create-provider-button";
 import { SkillCreateButton } from "@/views/skills/components/skill-create-button";
 import { DocumentCreateButton } from "@/views/documents/components/document-create-button";
+import { SuoraLogo } from "@/views/components/suora-logo";
 
 const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
     const { setOpen } = useSidebar()
@@ -29,7 +30,9 @@ const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
             className="w-[calc(var(--sidebar-width-icon)+1px)]! border-r"
         >
             <SidebarHeader>
-                SOURA
+                <div className="flex items-center justify-center py-1 text-foreground">
+                    <SuoraLogo className="size-7" />
+                </div>
             </SidebarHeader>
             <SidebarContent>
                 <SidebarGroup>

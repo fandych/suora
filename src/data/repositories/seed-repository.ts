@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm"
 
 import type {
+  ChannelConfigRecord,
+  ChannelRuntimeState,
   DocumentGraphEdge,
   DocumentPageRecord,
   DocumentSettings,
@@ -29,7 +31,7 @@ import {
   workflowVersions,
 } from "@/data/db/schema"
 
-const SEED_VERSION = "2026-09-01-ui-v3"
+const SEED_VERSION = "2026-09-02-ui-v5"
 
 let seedPromise: Promise<void> | undefined
 
@@ -38,38 +40,197 @@ function createWorkflowDefinition(title: string): WorkflowDefinition {
     nodes: [
       {
         id: `${title}-start`,
-        type: "input",
+        type: "workflowNode",
         position: { x: 40, y: 120 },
         data: {
           label: "Start",
           prompt: "Collect the incoming request and normalize variables.",
           kind: "start",
+          task: "Normalize the inbound request payload.",
+          enabled: true,
+          continueOnError: true,
+          retryCount: 0,
+          timeoutMs: 15000,
+          outputKey: "request",
         },
       },
       {
         id: `${title}-agent`,
+        type: "workflowNode",
         position: { x: 280, y: 120 },
         data: {
           label: "Agent Step",
           prompt: `Generate output for ${title}.`,
           kind: "agent",
+          task: `Generate the main result for ${title}.`,
+          agentId: "agent-support",
+          enabled: true,
+          continueOnError: false,
+          retryCount: 1,
+          timeoutMs: 45000,
+          modelId: "gpt-5",
+          inputTemplate: "{{request}}",
+          outputKey: "result",
+          maxInputChars: 8000,
+          maxOutputChars: 8000,
         },
       },
       {
         id: `${title}-output`,
+        type: "workflowNode",
         position: { x: 540, y: 120 },
         data: {
-          label: "Output",
+          label: "End",
           prompt: "Return the final response payload.",
-          kind: "output",
+          kind: "end",
+          task: "Shape the final response and dispatch it.",
+          enabled: true,
+          continueOnError: true,
+          retryCount: 0,
+          timeoutMs: 15000,
+          inputTemplate: "{{result}}",
+          outputKey: "response",
         },
       },
     ],
     edges: [
-      { id: `${title}-edge-1`, source: `${title}-start`, target: `${title}-agent` },
-      { id: `${title}-edge-2`, source: `${title}-agent`, target: `${title}-output` },
+      { id: `${title}-edge-1`, source: `${title}-start`, target: `${title}-agent`, data: { successOnly: true } },
+      { id: `${title}-edge-2`, source: `${title}-agent`, target: `${title}-output`, data: { successOnly: true } },
     ],
     viewport: { x: 0, y: 0, zoom: 1 },
+    resourceBindings: {
+      providerId: "provider-openai",
+      skillId: "skill-plan",
+      documentId: "document-product-manual",
+      integrationId: "integration-webhook",
+    },
+    dryRunInputJson: "{\n  \"leadId\": \"LD-1001\"\n}",
+    variables: [
+      { id: `${title}-var-lead`, name: "leadId", defaultValue: "LD-1001", required: true },
+    ],
+    budget: {
+      maxSteps: 8,
+      maxDurationMs: 120000,
+    },
+  }
+}
+
+function createChannelRuntime(now: number): ChannelRuntimeState {
+  return {
+    messages: [
+      {
+        id: crypto.randomUUID(),
+        direction: "incoming",
+        senderName: "Visitor",
+        senderId: "visitor-1001",
+        content: "Hello, I need help with onboarding.",
+        status: "received",
+        createdAt: now - 90 * 60 * 1000,
+      },
+      {
+        id: crypto.randomUUID(),
+        direction: "outgoing",
+        senderName: "SUORA",
+        senderId: "agent-support",
+        content: "Sure. I can walk you through the setup steps.",
+        status: "sent",
+        createdAt: now - 89 * 60 * 1000,
+      },
+    ],
+    users: [
+      {
+        id: crypto.randomUUID(),
+        channelId: "",
+        senderName: "Visitor",
+        senderId: "visitor-1001",
+        firstSeenAt: now - 24 * 60 * 60 * 1000,
+        lastActiveAt: now - 89 * 60 * 1000,
+        messageCount: 1,
+        conversationHistory: [
+          { role: "user", content: "Hello, I need help with onboarding.", timestamp: now - 90 * 60 * 1000 },
+          { role: "assistant", content: "Sure. I can walk you through the setup steps.", timestamp: now - 89 * 60 * 1000 },
+        ],
+      },
+    ],
+    health: {
+      isHealthy: true,
+      lastCheckAt: now - 30 * 60 * 1000,
+      latencyMs: 164,
+      errorCount: 0,
+    },
+    debugLog: [
+      {
+        id: crypto.randomUUID(),
+        timestamp: now - 29 * 60 * 1000,
+        tone: "success",
+        text: "Last health check completed successfully.",
+      },
+    ],
+  }
+}
+
+function createChannelConfig(now: number, overrides: Partial<ChannelConfigRecord>): ChannelConfigRecord {
+  return {
+    id: overrides.id ?? crypto.randomUUID(),
+    title: overrides.title ?? "New channel",
+    platform: overrides.platform ?? "web",
+    enabled: overrides.enabled ?? false,
+    status: overrides.status ?? "inactive",
+    connectionMode: overrides.connectionMode ?? "webhook",
+    webhookPath: overrides.webhookPath ?? `/channels/${overrides.id ?? "new-channel"}`,
+    webhookSecret: overrides.webhookSecret ?? "",
+    autoReply: overrides.autoReply ?? true,
+    replyAgentId: overrides.replyAgentId ?? "agent-document-editor",
+    createdAt: overrides.createdAt ?? now,
+    updatedAt: overrides.updatedAt ?? now,
+    lastMessageAt: overrides.lastMessageAt,
+    messageCount: overrides.messageCount ?? 0,
+    appId: overrides.appId,
+    appSecret: overrides.appSecret,
+    verificationToken: overrides.verificationToken,
+    encryptKey: overrides.encryptKey,
+    slackBotToken: overrides.slackBotToken,
+    slackSigningSecret: overrides.slackSigningSecret,
+    telegramBotToken: overrides.telegramBotToken,
+    discordBotToken: overrides.discordBotToken,
+    discordApplicationId: overrides.discordApplicationId,
+    teamsAppId: overrides.teamsAppId,
+    teamsAppPassword: overrides.teamsAppPassword,
+    teamsTenantId: overrides.teamsTenantId,
+    wechatOfficialAppId: overrides.wechatOfficialAppId,
+    wechatOfficialAppSecret: overrides.wechatOfficialAppSecret,
+    wechatOfficialToken: overrides.wechatOfficialToken,
+    wechatPersonalWebhookUrl: overrides.wechatPersonalWebhookUrl,
+    wechatPersonalAuthToken: overrides.wechatPersonalAuthToken,
+    wechatPersonalQrCodeUrl: overrides.wechatPersonalQrCodeUrl,
+    wechatPersonalBindingStatus: overrides.wechatPersonalBindingStatus,
+    wechatPersonalBotToken: overrides.wechatPersonalBotToken,
+    wechatPersonalBaseUrl: overrides.wechatPersonalBaseUrl,
+    wechatPersonalAccountId: overrides.wechatPersonalAccountId,
+    wechatPersonalUserId: overrides.wechatPersonalUserId,
+    customWebhookUrl: overrides.customWebhookUrl,
+    customAuthHeader: overrides.customAuthHeader,
+    customAuthValue: overrides.customAuthValue,
+    customPayloadTemplate: overrides.customPayloadTemplate,
+    customPlatformName: overrides.customPlatformName,
+    customPlatformIcon: overrides.customPlatformIcon,
+    emailImapHost: overrides.emailImapHost,
+    emailImapPort: overrides.emailImapPort,
+    emailImapUser: overrides.emailImapUser,
+    emailImapPassword: overrides.emailImapPassword,
+    emailImapTls: overrides.emailImapTls,
+    emailImapMailbox: overrides.emailImapMailbox,
+    emailSmtpHost: overrides.emailSmtpHost,
+    emailSmtpPort: overrides.emailSmtpPort,
+    emailSmtpUser: overrides.emailSmtpUser,
+    emailSmtpPassword: overrides.emailSmtpPassword,
+    emailSmtpTls: overrides.emailSmtpTls,
+    emailFromName: overrides.emailFromName,
+    emailFromAddress: overrides.emailFromAddress,
+    emailPollInterval: overrides.emailPollInterval,
+    emailFilters: overrides.emailFilters ?? [],
+    emailActions: overrides.emailActions ?? [],
+    emailMarkAsRead: overrides.emailMarkAsRead ?? true,
   }
 }
 
@@ -177,6 +338,9 @@ export function ensureSeeded() {
       }
 
       await executePersistedMutation(async ({ db }) => {
+        const now = Date.now()
+        const oneDay = 24 * 60 * 60 * 1000
+
         const hasData =
           (await db.select().from(chats).all()).length > 0 ||
           (await db.select().from(workflows).all()).length > 0 ||
@@ -186,9 +350,6 @@ export function ensureSeeded() {
         const hasAgentVersions = (await db.select().from(agentVersions).all()).length > 0
 
         if (!hasData) {
-          const now = Date.now()
-          const oneDay = 24 * 60 * 60 * 1000
-
           await db.insert(chats)
             .values([
               {
@@ -250,8 +411,6 @@ export function ensureSeeded() {
 
           await db.insert(agents)
             .values([
-              { id: "agent-support", title: "Support Agent", kind: "builtin", summary: "Handle customer support intake.", updatedAt: new Date(now - oneDay) },
-              { id: "agent-review", title: "Review Agent", kind: "builtin", summary: "Review drafts before publication.", updatedAt: new Date(now - 2 * oneDay) },
               { id: "agent-crm-sync", title: "CRM Sync Agent", kind: "custom", summary: "Sync inbound leads into CRM.", updatedAt: new Date(now - 3 * oneDay) },
             ])
             .run()
@@ -259,8 +418,6 @@ export function ensureSeeded() {
           if (!hasAgentVersions) {
             await db.insert(agentVersions)
               .values([
-                { id: "agent-support-v1-0", agentId: "agent-support", major: 1, minor: 0, isRelease: true, configJson: JSON.stringify({ instructions: "Handle customer support intake with concise answers.", providerId: "provider-openai", modelId: "gpt-4.1-mini", skillIds: ["skill-plan"], toolsetIds: ["integration-webhook"] }), createdAt: new Date(now - oneDay) },
-                { id: "agent-review-v1-0", agentId: "agent-review", major: 1, minor: 0, isRelease: true, configJson: JSON.stringify({ instructions: "Review drafts before they are published.", providerId: "provider-anthropic", modelId: "claude-sonnet-4-6", skillIds: ["skill-agent-customization"], toolsetIds: [] }), createdAt: new Date(now - 2 * oneDay) },
                 { id: "agent-crm-sync-v1-0", agentId: "agent-crm-sync", major: 1, minor: 0, isRelease: false, configJson: JSON.stringify({ instructions: "Synchronize inbound leads into CRM and report failures.", providerId: "provider-openai", modelId: "gpt-4.1", skillIds: ["skill-brand-tone"], toolsetIds: ["integration-webhook", "integration-cleanup-script"] }), createdAt: new Date(now - 3 * oneDay) },
               ])
               .run()
@@ -363,8 +520,94 @@ export function ensureSeeded() {
 
           await db.insert(channels)
             .values([
-              { id: "channel-website-chat", title: "Website Chat", platform: "web", updatedAt: new Date(now - oneDay) },
-              { id: "channel-email-inbox", title: "Email Inbox", platform: "email", updatedAt: new Date(now - 2 * oneDay) },
+              {
+                id: "channel-website-chat",
+                title: "Website Chat",
+                platform: "web",
+                enabled: true,
+                status: "active",
+                connectionMode: "webhook",
+                webhookPath: "/channels/website-chat",
+                webhookSecret: "website-secret",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 7 * oneDay),
+                lastMessageAt: new Date(now - 89 * 60 * 1000),
+                messageCount: 2,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-website-chat",
+                  title: "Website Chat",
+                  platform: "web",
+                  enabled: true,
+                  status: "active",
+                  connectionMode: "webhook",
+                  webhookPath: "/channels/website-chat",
+                  webhookSecret: "website-secret",
+                  autoReply: true,
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 7 * oneDay,
+                  updatedAt: now - oneDay,
+                  lastMessageAt: now - 89 * 60 * 1000,
+                  messageCount: 2,
+                })),
+                runtimeJson: JSON.stringify(createChannelRuntime(now - 30 * 60 * 1000)),
+                updatedAt: new Date(now - oneDay),
+              },
+              {
+                id: "channel-email-inbox",
+                title: "Email Inbox",
+                platform: "email",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "stream",
+                webhookPath: "/channels/email-inbox",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-skill-editor",
+                createdAt: new Date(now - 10 * oneDay),
+                lastMessageAt: new Date(now - 2 * oneDay),
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - 2 * oneDay, {
+                  id: "channel-email-inbox",
+                  title: "Email Inbox",
+                  platform: "email",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "stream",
+                  webhookPath: "/channels/email-inbox",
+                  autoReply: true,
+                  replyAgentId: "agent-skill-editor",
+                  createdAt: now - 10 * oneDay,
+                  updatedAt: now - 2 * oneDay,
+                  lastMessageAt: now - 2 * oneDay,
+                  emailImapHost: "imap.example.com",
+                  emailImapPort: 993,
+                  emailImapUser: "support@example.com",
+                  emailImapTls: true,
+                  emailImapMailbox: "INBOX",
+                  emailSmtpHost: "smtp.example.com",
+                  emailSmtpPort: 465,
+                  emailSmtpTls: true,
+                  emailFromName: "Support Bot",
+                  emailFromAddress: "support@example.com",
+                  emailPollInterval: 60,
+                  emailFilters: [
+                    { id: crypto.randomUUID(), field: "subject", operator: "contains", value: "support", enabled: true },
+                  ],
+                  emailActions: [
+                    { id: crypto.randomUUID(), type: "auto_reply", enabled: true, useAgent: true },
+                  ],
+                  emailMarkAsRead: true,
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - 2 * oneDay),
+              },
             ])
             .run()
         }

@@ -72,7 +72,7 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
     case "/documents":
       return mapItems(item, (await listDocuments()).map((record) => ({ id: record.id, title: record.title, group: "documents", meta: record.summary, actions: [{ id: "delete", label: "Delete", variant: "destructive" }] })))
     case "/channels":
-      return mapItems(item, (await listChannels()).map((record) => ({ id: record.id, title: record.title, group: "channels", meta: record.meta || record.kind })))
+      return mapItems(item, (await listChannels()).map((record) => ({ id: record.id, title: record.title, group: "channels", meta: record.meta || `${record.platform} · ${record.status}` })))
     case "/skills":
       return mapItems(item, (await listSkills()).map((record) => ({ id: record.id, title: record.title, group: record.source === "custom" ? "custom" : "builtin", meta: record.summary, actions: [{ id: "disable", label: "Disable" }, { id: "delete", label: "Delete", variant: "destructive" }] })))
     case "/models":

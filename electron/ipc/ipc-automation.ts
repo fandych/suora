@@ -5,6 +5,76 @@ import { ipcMain } from "electron"
 import { applyMigrations, openDatabase } from "@electron/database/db-core"
 import { ensureWorkspace } from "@electron/others/workspace"
 
+function createDefaultWorkflowDefinition() {
+  return {
+    nodes: [
+      {
+        id: "start",
+        type: "workflowNode",
+        position: { x: 60, y: 140 },
+        data: {
+          label: "Start",
+          prompt: "Capture input variables.",
+          kind: "start",
+          task: "Normalize incoming input.",
+          enabled: true,
+          continueOnError: true,
+          retryCount: 0,
+          timeoutMs: 15000,
+          outputKey: "request",
+        },
+      },
+    ],
+    edges: [],
+    viewport: { x: 0, y: 0, zoom: 1 },
+    resourceBindings: {
+      providerId: "provider-openai",
+      skillId: "skill-plan",
+      documentId: "document-product-manual",
+      integrationId: "integration-webhook",
+    },
+    dryRunInputJson: "{\n  \"leadId\": \"LD-1001\"\n}",
+    variables: [],
+    budget: {
+      maxSteps: 8,
+      maxDurationMs: 120000,
+    },
+  }
+}
+
+function createDefaultChannelConfig(channelId: string, title: string, platform: string, now: number) {
+  return {
+    id: channelId,
+    title,
+    platform,
+    enabled: false,
+    status: "inactive",
+    connectionMode: "webhook",
+    webhookPath: `/channels/${channelId}`,
+    webhookSecret: "",
+    autoReply: true,
+    replyAgentId: "",
+    createdAt: now,
+    updatedAt: now,
+    messageCount: 0,
+    emailFilters: [],
+    emailActions: [],
+    emailMarkAsRead: true,
+  }
+}
+
+function createDefaultChannelRuntime() {
+  return {
+    messages: [],
+    users: [],
+    health: {
+      isHealthy: null,
+      errorCount: 0,
+    },
+    debugLog: [],
+  }
+}
+
 export function registerAutomationIpc() {
   ipcMain.handle("integrations:list", async () => {
     await ensureWorkspace()
@@ -40,17 +110,28 @@ export function registerAutomationIpc() {
     }
   })
 
-  ipcMain.handle("integrations:save", async (_event, payload: { id: string; title: string; kind: string; endpoint: string; configJson: string; publish?: boolean }) => {
+  ipcMain.handle("integrations:save", async (_event, payload: { id: string; title: string; kind: string; endpoint: string; configJson: string; selectedVersionId?: string; publish?: boolean }) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
     const latest = database.prepare(`SELECT major, minor, is_release as isRelease FROM integration_versions WHERE integration_id = ? ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { major: number; minor: number; isRelease: number } | undefined
+    const targetDraft = payload.selectedVersionId
+      ? database.prepare(`SELECT id, major, minor, is_release as isRelease FROM integration_versions WHERE integration_id = ? AND id = ? LIMIT 1`).get(payload.id, payload.selectedVersionId) as { id: string; major: number; minor: number; isRelease: number } | undefined
+      : undefined
     const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
     const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
-    const versionId = crypto.randomUUID()
+    let selectedVersion = targetDraft && !targetDraft.isRelease
+      ? { id: targetDraft.id }
+      : database.prepare(`SELECT id FROM integration_versions WHERE integration_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
     const now = Date.now()
     database.prepare(`UPDATE integrations SET title = ?, kind = ?, endpoint = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.kind, payload.endpoint, now, payload.id)
-    database.prepare(`INSERT INTO integration_versions (id, integration_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.configJson, now)
+    if (!payload.publish && selectedVersion) {
+      database.prepare(`UPDATE integration_versions SET config_json = ?, created_at = ? WHERE id = ?`).run(payload.configJson, now, selectedVersion.id)
+    } else {
+      const versionId = crypto.randomUUID()
+      database.prepare(`INSERT INTO integration_versions (id, integration_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.configJson, now)
+      selectedVersion = { id: versionId }
+    }
     return {
       integration: database.prepare(`SELECT id, title, kind, endpoint, updated_at as updatedAt FROM integrations WHERE id = ?`).get(payload.id),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, config_json as configJson FROM integration_versions WHERE integration_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(payload.id),
@@ -91,7 +172,7 @@ export function registerAutomationIpc() {
     const workflowId = crypto.randomUUID()
     const versionId = crypto.randomUUID()
     const now = Date.now()
-    const definition = JSON.stringify({ nodes: [{ id: "start", type: "input", position: { x: 60, y: 140 }, data: { label: "Start", prompt: "Capture input variables.", kind: "start" } }], edges: [], viewport: { x: 0, y: 0, zoom: 1 } })
+    const definition = JSON.stringify(createDefaultWorkflowDefinition())
     database.prepare(`INSERT INTO workflows (id, title, summary, updated_at) VALUES (?, ?, ?, ?)`).run(workflowId, "New workflow", "", now)
     database.prepare(`INSERT INTO workflow_versions (id, workflow_id, major, minor, is_release, definition_json, created_at) VALUES (?, ?, 1, 0, 0, ?, ?)`).run(versionId, workflowId, definition, now)
     return {
@@ -101,17 +182,28 @@ export function registerAutomationIpc() {
     }
   })
 
-  ipcMain.handle("workflows:save", async (_event, payload: { id: string; title: string; summary: string; definitionJson: string; publish?: boolean }) => {
+  ipcMain.handle("workflows:save", async (_event, payload: { id: string; title: string; summary: string; definitionJson: string; selectedVersionId?: string; publish?: boolean }) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
     const latest = database.prepare(`SELECT major, minor, is_release as isRelease FROM workflow_versions WHERE workflow_id = ? ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { major: number; minor: number; isRelease: number } | undefined
+    const targetDraft = payload.selectedVersionId
+      ? database.prepare(`SELECT id, major, minor, is_release as isRelease FROM workflow_versions WHERE workflow_id = ? AND id = ? LIMIT 1`).get(payload.id, payload.selectedVersionId) as { id: string; major: number; minor: number; isRelease: number } | undefined
+      : undefined
     const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
     const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
-    const versionId = crypto.randomUUID()
+    let selectedVersion = targetDraft && !targetDraft.isRelease
+      ? { id: targetDraft.id }
+      : database.prepare(`SELECT id FROM workflow_versions WHERE workflow_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
     const now = Date.now()
     database.prepare(`UPDATE workflows SET title = ?, summary = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.summary, now, payload.id)
-    database.prepare(`INSERT INTO workflow_versions (id, workflow_id, major, minor, is_release, definition_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.definitionJson, now)
+    if (!payload.publish && selectedVersion) {
+      database.prepare(`UPDATE workflow_versions SET definition_json = ?, created_at = ? WHERE id = ?`).run(payload.definitionJson, now, selectedVersion.id)
+    } else {
+      const versionId = crypto.randomUUID()
+      database.prepare(`INSERT INTO workflow_versions (id, workflow_id, major, minor, is_release, definition_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.definitionJson, now)
+      selectedVersion = { id: versionId }
+    }
     return {
       workflow: database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM workflows WHERE id = ?`).get(payload.id),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, definition_json as definitionJson FROM workflow_versions WHERE workflow_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(payload.id),
@@ -131,14 +223,14 @@ export function registerAutomationIpc() {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
-    return database.prepare(`SELECT id, title, platform, updated_at as updatedAt FROM channels ORDER BY updated_at DESC`).all()
+    return database.prepare(`SELECT id, title, platform, enabled, status, connection_mode as connectionMode, webhook_path as webhookPath, webhook_secret as webhookSecret, auto_reply as autoReply, reply_agent_id as replyAgentId, created_at as createdAt, last_message_at as lastMessageAt, message_count as messageCount, config_json as configJson, runtime_json as runtimeJson, updated_at as updatedAt FROM channels ORDER BY updated_at DESC`).all()
   })
 
   ipcMain.handle("channels:get", async (_event, channelId: string) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
-    return database.prepare(`SELECT id, title, platform, updated_at as updatedAt FROM channels WHERE id = ?`).get(channelId) ?? null
+    return database.prepare(`SELECT id, title, platform, enabled, status, connection_mode as connectionMode, webhook_path as webhookPath, webhook_secret as webhookSecret, auto_reply as autoReply, reply_agent_id as replyAgentId, created_at as createdAt, last_message_at as lastMessageAt, message_count as messageCount, config_json as configJson, runtime_json as runtimeJson, updated_at as updatedAt FROM channels WHERE id = ?`).get(channelId) ?? null
   })
 
   ipcMain.handle("channels:create", async () => {
@@ -147,16 +239,53 @@ export function registerAutomationIpc() {
     applyMigrations(database)
     const channelId = crypto.randomUUID()
     const now = Date.now()
-    database.prepare(`INSERT INTO channels (id, title, platform, updated_at) VALUES (?, ?, ?, ?)`).run(channelId, "New channel", "web", now)
-    return database.prepare(`SELECT id, title, platform, updated_at as updatedAt FROM channels WHERE id = ?`).get(channelId)
+    const config = createDefaultChannelConfig(channelId, "New channel", "web", now)
+    const runtime = createDefaultChannelRuntime()
+    database.prepare(`INSERT INTO channels (id, title, platform, enabled, status, connection_mode, webhook_path, webhook_secret, auto_reply, reply_agent_id, created_at, last_message_at, message_count, config_json, runtime_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
+      channelId,
+      config.title,
+      config.platform,
+      config.enabled ? 1 : 0,
+      config.status,
+      config.connectionMode,
+      config.webhookPath,
+      config.webhookSecret,
+      config.autoReply ? 1 : 0,
+      config.replyAgentId,
+      config.createdAt,
+      null,
+      0,
+      JSON.stringify(config),
+      JSON.stringify(runtime),
+      now
+    )
+    return database.prepare(`SELECT id, title, platform, enabled, status, connection_mode as connectionMode, webhook_path as webhookPath, webhook_secret as webhookSecret, auto_reply as autoReply, reply_agent_id as replyAgentId, created_at as createdAt, last_message_at as lastMessageAt, message_count as messageCount, config_json as configJson, runtime_json as runtimeJson, updated_at as updatedAt FROM channels WHERE id = ?`).get(channelId)
   })
 
-  ipcMain.handle("channels:save", async (_event, payload: { id: string; title: string; platform: string }) => {
+  ipcMain.handle("channels:save", async (_event, payload: { channel: { id: string; title: string; platform: string; enabled: boolean; status: string; connectionMode: string; webhookPath: string; webhookSecret: string; autoReply: boolean; replyAgentId: string; createdAt: number; updatedAt: number; lastMessageAt?: number; messageCount: number }; runtime: unknown }) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
-    database.prepare(`UPDATE channels SET title = ?, platform = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.platform, Date.now(), payload.id)
-    return database.prepare(`SELECT id, title, platform, updated_at as updatedAt FROM channels WHERE id = ?`).get(payload.id)
+    const now = Date.now()
+    database.prepare(`UPDATE channels SET title = ?, platform = ?, enabled = ?, status = ?, connection_mode = ?, webhook_path = ?, webhook_secret = ?, auto_reply = ?, reply_agent_id = ?, created_at = ?, last_message_at = ?, message_count = ?, config_json = ?, runtime_json = ?, updated_at = ? WHERE id = ?`).run(
+      payload.channel.title,
+      payload.channel.platform,
+      payload.channel.enabled ? 1 : 0,
+      payload.channel.status,
+      payload.channel.connectionMode,
+      payload.channel.webhookPath,
+      payload.channel.webhookSecret,
+      payload.channel.autoReply ? 1 : 0,
+      payload.channel.replyAgentId,
+      payload.channel.createdAt,
+      payload.channel.lastMessageAt ?? null,
+      payload.channel.messageCount,
+      JSON.stringify({ ...payload.channel, updatedAt: now }),
+      JSON.stringify(payload.runtime),
+      now,
+      payload.channel.id
+    )
+    return database.prepare(`SELECT id, title, platform, enabled, status, connection_mode as connectionMode, webhook_path as webhookPath, webhook_secret as webhookSecret, auto_reply as autoReply, reply_agent_id as replyAgentId, created_at as createdAt, last_message_at as lastMessageAt, message_count as messageCount, config_json as configJson, runtime_json as runtimeJson, updated_at as updatedAt FROM channels WHERE id = ?`).get(payload.channel.id)
   })
 
   ipcMain.handle("channels:delete", async (_event, channelId: string) => {

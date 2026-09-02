@@ -97,6 +97,13 @@ contextBridge.exposeInMainWorld("suora", {
     getState: () => ipcRenderer.invoke("updater:getState"),
     check: () => ipcRenderer.invoke("updater:check"),
   },
+  tools: {
+    listFiles: (relativePath?: string) => ipcRenderer.invoke("tools:listFiles", relativePath),
+    readFile: (relativePath: string) => ipcRenderer.invoke("tools:readFile", relativePath),
+    writeFile: (payload: unknown) => ipcRenderer.invoke("tools:writeFile", payload),
+    runCommand: (payload: unknown) => ipcRenderer.invoke("tools:runCommand", payload),
+    openExternal: (url: string) => ipcRenderer.invoke("tools:openExternal", url),
+  },
 })
 
 export {}

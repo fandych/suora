@@ -92,6 +92,13 @@ declare global {
         getState: () => Promise<unknown>
         check: () => Promise<unknown>
       }
+      tools: {
+        listFiles: (relativePath?: string) => Promise<unknown>
+        readFile: (relativePath: string) => Promise<unknown>
+        writeFile: (payload: unknown) => Promise<unknown>
+        runCommand: (payload: unknown) => Promise<unknown>
+        openExternal: (url: string) => Promise<unknown>
+      }
     }
   }
 }
