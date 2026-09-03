@@ -38,6 +38,12 @@ export type IntegrationExecutePayload = {
   inputJson?: string
 }
 
+export type SendMailPayload = {
+  to: string
+  subject: string
+  content: string
+}
+
 export type ChatRuntimeSettingsPayload = {
   model: {
     providerId: string

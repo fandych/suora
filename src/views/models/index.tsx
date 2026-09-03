@@ -13,10 +13,7 @@ const ModelsPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader
-        title="Models"
-        description="Manage provider endpoints, API credentials, and the model catalog exposed to the rest of the workspace."
-      />
+      <PageHeader title="Models" />
 
       <div className="flex-1 overflow-x-hidden p-6">
         <div className="flex w-full min-w-0 flex-col gap-4">

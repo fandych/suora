@@ -31,9 +31,37 @@ import {
   workflowVersions,
 } from "@/data/db/schema"
 
-const SEED_VERSION = "2026-09-02-ui-v5"
+const SEED_VERSION = "2026-09-03-agent-v1"
+
+const GENERAL_ASSISTANT_AGENT_ID = "agent-general-assistant"
+const LEGACY_SYSTEM_AGENT_IDS = new Set(["agent-document-editor", "agent-skill-editor", "agent-support"])
+
+function replaceLegacyAgentId(value?: string | null) {
+  if (!value) {
+    return value ?? ""
+  }
+
+  return LEGACY_SYSTEM_AGENT_IDS.has(value) ? GENERAL_ASSISTANT_AGENT_ID : value
+}
 
 let seedPromise: Promise<void> | undefined
+
+function parseStoredJson<T>(value: string | null | undefined, fallback: T): T {
+  if (!value) {
+    return fallback
+  }
+
+  const normalized = value.trim()
+  if (!normalized || normalized === "undefined" || normalized === "null") {
+    return fallback
+  }
+
+  try {
+    return JSON.parse(normalized) as T
+  } catch {
+    return fallback
+  }
+}
 
 function createWorkflowDefinition(title: string): WorkflowDefinition {
   return {
@@ -63,7 +91,7 @@ function createWorkflowDefinition(title: string): WorkflowDefinition {
           prompt: `Generate output for ${title}.`,
           kind: "agent",
           task: `Generate the main result for ${title}.`,
-          agentId: "agent-support",
+          agentId: GENERAL_ASSISTANT_AGENT_ID,
           enabled: true,
           continueOnError: false,
           retryCount: 1,
@@ -131,7 +159,7 @@ function createChannelRuntime(now: number): ChannelRuntimeState {
         id: crypto.randomUUID(),
         direction: "outgoing",
         senderName: "SUORA",
-        senderId: "agent-support",
+        senderId: GENERAL_ASSISTANT_AGENT_ID,
         content: "Sure. I can walk you through the setup steps.",
         status: "sent",
         createdAt: now - 89 * 60 * 1000,
@@ -174,29 +202,34 @@ function createChannelConfig(now: number, overrides: Partial<ChannelConfigRecord
     id: overrides.id ?? crypto.randomUUID(),
     title: overrides.title ?? "New channel",
     platform: overrides.platform ?? "web",
+    catalogId: overrides.catalogId,
+    bindingState: overrides.bindingState ?? "unconfigured",
     enabled: overrides.enabled ?? false,
     status: overrides.status ?? "inactive",
     connectionMode: overrides.connectionMode ?? "webhook",
     webhookPath: overrides.webhookPath ?? `/channels/${overrides.id ?? "new-channel"}`,
     webhookSecret: overrides.webhookSecret ?? "",
     autoReply: overrides.autoReply ?? true,
-    replyAgentId: overrides.replyAgentId ?? "agent-document-editor",
+    replyAgentId: replaceLegacyAgentId(overrides.replyAgentId) || GENERAL_ASSISTANT_AGENT_ID,
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
     lastMessageAt: overrides.lastMessageAt,
     messageCount: overrides.messageCount ?? 0,
     appId: overrides.appId,
     appSecret: overrides.appSecret,
+    callbackUrl: overrides.callbackUrl,
     verificationToken: overrides.verificationToken,
     encryptKey: overrides.encryptKey,
-    slackBotToken: overrides.slackBotToken,
-    slackSigningSecret: overrides.slackSigningSecret,
     telegramBotToken: overrides.telegramBotToken,
-    discordBotToken: overrides.discordBotToken,
-    discordApplicationId: overrides.discordApplicationId,
     teamsAppId: overrides.teamsAppId,
     teamsAppPassword: overrides.teamsAppPassword,
     teamsTenantId: overrides.teamsTenantId,
+    teamsWebhookUrl: overrides.teamsWebhookUrl,
+    teamsBotEndpoint: overrides.teamsBotEndpoint,
+    wechatCorpId: overrides.wechatCorpId,
+    wechatAgentId: overrides.wechatAgentId,
+    wechatToken: overrides.wechatToken,
+    wechatEncodingAesKey: overrides.wechatEncodingAesKey,
     wechatOfficialAppId: overrides.wechatOfficialAppId,
     wechatOfficialAppSecret: overrides.wechatOfficialAppSecret,
     wechatOfficialToken: overrides.wechatOfficialToken,
@@ -204,11 +237,24 @@ function createChannelConfig(now: number, overrides: Partial<ChannelConfigRecord
     wechatPersonalAuthToken: overrides.wechatPersonalAuthToken,
     wechatPersonalQrCodeUrl: overrides.wechatPersonalQrCodeUrl,
     wechatPersonalBindingStatus: overrides.wechatPersonalBindingStatus,
+    wechatPersonalSessionKey: overrides.wechatPersonalSessionKey,
     wechatPersonalBotToken: overrides.wechatPersonalBotToken,
     wechatPersonalBaseUrl: overrides.wechatPersonalBaseUrl,
     wechatPersonalAccountId: overrides.wechatPersonalAccountId,
     wechatPersonalUserId: overrides.wechatPersonalUserId,
+    feishuAppId: overrides.feishuAppId,
+    feishuAppSecret: overrides.feishuAppSecret,
+    feishuVerificationToken: overrides.feishuVerificationToken,
+    feishuEncryptKey: overrides.feishuEncryptKey,
+    feishuWebhookUrl: overrides.feishuWebhookUrl,
+    dingtalkClientId: overrides.dingtalkClientId,
+    dingtalkClientSecret: overrides.dingtalkClientSecret,
+    dingtalkRobotCode: overrides.dingtalkRobotCode,
+    dingtalkWebhookUrl: overrides.dingtalkWebhookUrl,
+    dingtalkSigningSecret: overrides.dingtalkSigningSecret,
     customWebhookUrl: overrides.customWebhookUrl,
+    customWebsocketUrl: overrides.customWebsocketUrl,
+    customWebsocketProtocol: overrides.customWebsocketProtocol,
     customAuthHeader: overrides.customAuthHeader,
     customAuthValue: overrides.customAuthValue,
     customPayloadTemplate: overrides.customPayloadTemplate,
@@ -538,6 +584,8 @@ export function ensureSeeded() {
                   id: "channel-website-chat",
                   title: "Website Chat",
                   platform: "web",
+                  catalogId: "catalog-web",
+                  bindingState: "connected",
                   enabled: true,
                   status: "active",
                   connectionMode: "webhook",
@@ -571,6 +619,8 @@ export function ensureSeeded() {
                   id: "channel-email-inbox",
                   title: "Email Inbox",
                   platform: "email",
+                  catalogId: "catalog-email",
+                  bindingState: "draft",
                   enabled: false,
                   status: "inactive",
                   connectionMode: "stream",
@@ -608,9 +658,358 @@ export function ensureSeeded() {
                 }),
                 updatedAt: new Date(now - 2 * oneDay),
               },
+              {
+                id: "channel-wechat-personal",
+                title: "Personal WeChat",
+                platform: "wechat_personal",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "stream",
+                webhookPath: "/channels/wechat-personal",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 6 * oneDay),
+                lastMessageAt: null,
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-wechat-personal",
+                  title: "Personal WeChat",
+                  platform: "wechat_personal",
+                  catalogId: "catalog-wechat-personal",
+                  bindingState: "unconfigured",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "stream",
+                  webhookPath: "/channels/wechat-personal",
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 6 * oneDay,
+                  updatedAt: now - oneDay,
+                  wechatPersonalBindingStatus: "unbound",
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - oneDay),
+              },
+              {
+                id: "channel-wecom-enterprise",
+                title: "Enterprise WeChat",
+                platform: "wechat",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "webhook",
+                webhookPath: "/channels/wecom-enterprise",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 5 * oneDay),
+                lastMessageAt: null,
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-wecom-enterprise",
+                  title: "Enterprise WeChat",
+                  platform: "wechat",
+                  catalogId: "catalog-wechat",
+                  bindingState: "draft",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "webhook",
+                  webhookPath: "/channels/wecom-enterprise",
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 5 * oneDay,
+                  updatedAt: now - oneDay,
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - oneDay),
+              },
+              {
+                id: "channel-feishu",
+                title: "Feishu",
+                platform: "feishu",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "webhook",
+                webhookPath: "/channels/feishu",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 4 * oneDay),
+                lastMessageAt: null,
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-feishu",
+                  title: "Feishu",
+                  platform: "feishu",
+                  catalogId: "catalog-feishu",
+                  bindingState: "draft",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "webhook",
+                  webhookPath: "/channels/feishu",
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 4 * oneDay,
+                  updatedAt: now - oneDay,
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - oneDay),
+              },
+              {
+                id: "channel-dingtalk",
+                title: "DingTalk",
+                platform: "dingtalk",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "stream",
+                webhookPath: "/channels/dingtalk",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 4 * oneDay),
+                lastMessageAt: null,
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-dingtalk",
+                  title: "DingTalk",
+                  platform: "dingtalk",
+                  catalogId: "catalog-dingtalk",
+                  bindingState: "draft",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "stream",
+                  webhookPath: "/channels/dingtalk",
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 4 * oneDay,
+                  updatedAt: now - oneDay,
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - oneDay),
+              },
+              {
+                id: "channel-teams",
+                title: "Microsoft Teams",
+                platform: "teams",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "webhook",
+                webhookPath: "/channels/teams",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 3 * oneDay),
+                lastMessageAt: null,
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-teams",
+                  title: "Microsoft Teams",
+                  platform: "teams",
+                  catalogId: "catalog-teams",
+                  bindingState: "draft",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "webhook",
+                  webhookPath: "/channels/teams",
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 3 * oneDay,
+                  updatedAt: now - oneDay,
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - oneDay),
+              },
+              {
+                id: "channel-telegram",
+                title: "Telegram",
+                platform: "telegram",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "webhook",
+                webhookPath: "/channels/telegram",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 3 * oneDay),
+                lastMessageAt: null,
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-telegram",
+                  title: "Telegram",
+                  platform: "telegram",
+                  catalogId: "catalog-telegram",
+                  bindingState: "draft",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "webhook",
+                  webhookPath: "/channels/telegram",
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 3 * oneDay,
+                  updatedAt: now - oneDay,
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - oneDay),
+              },
+              {
+                id: "channel-custom-webhook",
+                title: "Custom Webhook",
+                platform: "custom",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "webhook",
+                webhookPath: "/channels/custom-webhook",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 2 * oneDay),
+                lastMessageAt: null,
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-custom-webhook",
+                  title: "Custom Webhook",
+                  platform: "custom",
+                  catalogId: "catalog-custom-webhook",
+                  bindingState: "draft",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "webhook",
+                  webhookPath: "/channels/custom-webhook",
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 2 * oneDay,
+                  updatedAt: now - oneDay,
+                  customPlatformName: "Custom Webhook",
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - oneDay),
+              },
+              {
+                id: "channel-custom-websocket",
+                title: "Custom WebSocket",
+                platform: "custom",
+                enabled: false,
+                status: "inactive",
+                connectionMode: "stream",
+                webhookPath: "/channels/custom-websocket",
+                webhookSecret: "",
+                autoReply: true,
+                replyAgentId: "agent-document-editor",
+                createdAt: new Date(now - 2 * oneDay),
+                lastMessageAt: null,
+                messageCount: 0,
+                configJson: JSON.stringify(createChannelConfig(now - oneDay, {
+                  id: "channel-custom-websocket",
+                  title: "Custom WebSocket",
+                  platform: "custom",
+                  catalogId: "catalog-custom-websocket",
+                  bindingState: "draft",
+                  enabled: false,
+                  status: "inactive",
+                  connectionMode: "stream",
+                  webhookPath: "/channels/custom-websocket",
+                  replyAgentId: "agent-document-editor",
+                  createdAt: now - 2 * oneDay,
+                  updatedAt: now - oneDay,
+                  customPlatformName: "Custom WebSocket",
+                })),
+                runtimeJson: JSON.stringify({
+                  ...createChannelRuntime(now - oneDay),
+                  messages: [],
+                  users: [],
+                  health: { isHealthy: null, errorCount: 0 },
+                  debugLog: [],
+                }),
+                updatedAt: new Date(now - oneDay),
+              },
             ])
             .run()
         }
+
+          const existingChannels = await db.select().from(channels).all()
+          for (const channel of existingChannels) {
+            const parsedConfig = parseStoredJson<Partial<ChannelConfigRecord>>(channel.configJson, {})
+            const nextReplyAgentId = replaceLegacyAgentId((channel.replyAgentId as string | undefined) ?? parsedConfig.replyAgentId)
+            const nextConfig = JSON.stringify({
+              ...parsedConfig,
+              replyAgentId: nextReplyAgentId,
+            })
+
+            if (nextReplyAgentId !== channel.replyAgentId || nextConfig !== channel.configJson) {
+              await db.update(channels)
+                .set({ replyAgentId: nextReplyAgentId, configJson: nextConfig })
+                .where(eq(channels.id, channel.id))
+            }
+          }
+
+          const existingWorkflowVersions = await db.select().from(workflowVersions).all()
+          for (const version of existingWorkflowVersions) {
+            const definition = parseStoredJson<WorkflowDefinition>(version.definitionJson, createWorkflowDefinition("Recovered workflow"))
+            let changed = false
+            const nextDefinition: WorkflowDefinition = {
+              ...definition,
+              nodes: definition.nodes.map((node) => {
+                if (node.data.kind !== "agent") {
+                  return node
+                }
+
+                const nextAgentId = replaceLegacyAgentId(node.data.agentId)
+                if (nextAgentId === node.data.agentId) {
+                  return node
+                }
+
+                changed = true
+                return {
+                  ...node,
+                  data: {
+                    ...node.data,
+                    agentId: nextAgentId,
+                  },
+                }
+              }),
+            }
+
+            if (changed) {
+              await db.update(workflowVersions)
+                .set({ definitionJson: JSON.stringify(nextDefinition) })
+                .where(eq(workflowVersions.id, version.id))
+            }
+          }
 
           await db.insert(appMeta)
           .values({ key: "seed_version", value: SEED_VERSION })

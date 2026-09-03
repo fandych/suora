@@ -5,7 +5,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import type { DocumentSummary, IntegrationSummary, WorkflowInvocationRecord, WorkflowNodeData } from "@/data/domain/models"
+import type { DocumentSummary, IntegrationSummary, WorkflowInvocationRecord, WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/models"
 import { WorkflowTraceExplorer } from "@/views/workflows/components/workflow-trace-explorer"
 
 type WorkflowPropertiesPanelProps = {
@@ -20,10 +20,12 @@ type WorkflowPropertiesPanelProps = {
   onSelectTraceNode: (nodeId: string) => void
   readOnly: boolean
   resourceBindings: { providerId: string; skillId: string; documentId: string; integrationId: string }
+  notifications: WorkflowNotificationSettings
   runDraftDisabled: boolean
   selectedNode: { id: string; data: WorkflowNodeData } | null
   selectedNodeId: string | null
   setDryRunInput: (value: string) => void
+  setNotifications: (value: WorkflowNotificationSettings) => void
   setResourceBindings: (value: { providerId: string; skillId: string; documentId: string; integrationId: string }) => void
   saveDisabled: boolean
   setSummary: (value: string) => void
@@ -48,10 +50,12 @@ export function WorkflowPropertiesPanel(props: WorkflowPropertiesPanelProps) {
     onSelectTraceNode,
     readOnly,
     resourceBindings,
+    notifications,
     runDraftDisabled,
     selectedNode,
     selectedNodeId,
     setDryRunInput,
+    setNotifications,
     setResourceBindings,
     saveDisabled,
     setSummary,
@@ -165,6 +169,22 @@ export function WorkflowPropertiesPanel(props: WorkflowPropertiesPanelProps) {
               <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onRunDraft} disabled={readOnly || runDraftDisabled}>Dry run</Button>
               <Button size="sm" className="h-8 text-xs" onClick={onSave} disabled={readOnly || saveDisabled}>Save draft</Button>
             </div>
+          </section>
+
+          <section className="space-y-2 rounded-xl border p-2.5">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Notifications</div>
+            <fieldset disabled={readOnly} className="space-y-2">
+              <label className="flex items-center justify-between rounded-lg border px-2.5 py-2 text-[11px] text-muted-foreground"><span>Send workflow email notifications</span><Switch checked={notifications.enabled} onCheckedChange={(checked) => setNotifications({ ...notifications, enabled: checked })} /></label>
+              <Input className="h-8 text-xs" value={notifications.to} onChange={(event) => setNotifications({ ...notifications, to: event.target.value })} placeholder="recipient@example.com" />
+              <Input className="h-8 text-xs" value={notifications.subjectTemplate} onChange={(event) => setNotifications({ ...notifications, subjectTemplate: event.target.value })} placeholder="Workflow {{workflowTitle}} {{status}}" />
+              <NativeSelect size="sm" value={notifications.triggerOn} onChange={(event) => setNotifications({ ...notifications, triggerOn: event.target.value as WorkflowNotificationSettings["triggerOn"] })}>
+                <NativeSelectOption value="both">Dry run and manual run</NativeSelectOption>
+                <NativeSelectOption value="manual">Manual run only</NativeSelectOption>
+                <NativeSelectOption value="dry-run">Dry run only</NativeSelectOption>
+              </NativeSelect>
+              <label className="flex items-center justify-between rounded-lg border px-2.5 py-2 text-[11px] text-muted-foreground"><span>Include summary</span><Switch checked={notifications.includeSummary} onCheckedChange={(checked) => setNotifications({ ...notifications, includeSummary: checked })} /></label>
+              <label className="flex items-center justify-between rounded-lg border px-2.5 py-2 text-[11px] text-muted-foreground"><span>Include trace</span><Switch checked={notifications.includeTrace} onCheckedChange={(checked) => setNotifications({ ...notifications, includeTrace: checked })} /></label>
+            </fieldset>
           </section>
 
           <WorkflowTraceExplorer invocations={traces} selectedNodeId={selectedNodeId} onSelectNode={onSelectTraceNode} />

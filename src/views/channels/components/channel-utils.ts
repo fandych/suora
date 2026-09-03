@@ -1,16 +1,34 @@
 import type { ChannelConfigRecord, ChannelPlatform, ChannelStatus } from "@/data/domain/models"
+import {
+  buildChannelWebhookUrl as resolveChannelWebhookUrl,
+  hasChannelCredentialFootprint as resolveChannelCredentialFootprint,
+  inferChannelBindingState as resolveChannelBindingState,
+} from "@/lib/channel-config"
 
 export const channelPlatformOptions: Array<{ value: ChannelPlatform; label: string }> = [
   { value: "web", label: "Web" },
   { value: "email", label: "Email" },
+  { value: "wechat", label: "Enterprise WeChat" },
   { value: "wechat_personal", label: "WeChat Personal" },
   { value: "wechat_official", label: "WeChat Official" },
-  { value: "slack", label: "Slack" },
+  { value: "feishu", label: "Feishu" },
+  { value: "dingtalk", label: "DingTalk" },
   { value: "telegram", label: "Telegram" },
-  { value: "discord", label: "Discord" },
   { value: "teams", label: "Microsoft Teams" },
   { value: "custom", label: "Custom" },
 ]
+
+export function getChannelCatalogLabel(channel: ChannelConfigRecord) {
+  if (channel.platform === "custom" && channel.customPlatformName?.trim()) {
+    return channel.customPlatformName.trim()
+  }
+
+  return getChannelPlatformLabel(channel.platform)
+}
+
+export function inferChannelBindingState(channel: ChannelConfigRecord): NonNullable<ChannelConfigRecord["bindingState"]> {
+  return resolveChannelBindingState(channel)
+}
 
 export function getChannelPlatformLabel(platform: ChannelPlatform) {
   return channelPlatformOptions.find((item) => item.value === platform)?.label ?? platform
@@ -39,34 +57,39 @@ export function getChannelStatusVariant(status: ChannelStatus): "default" | "sec
 }
 
 export function buildChannelWebhookUrl(channel: ChannelConfigRecord) {
-  if (channel.connectionMode === "stream") {
-    return "Stream transport"
-  }
-
-  const normalizedPath = channel.webhookPath.startsWith("/") ? channel.webhookPath : `/${channel.webhookPath}`
-  return `https://local.suora.test${normalizedPath}`
+  return resolveChannelWebhookUrl(channel)
 }
 
 export function hasChannelCredentialFootprint(channel: ChannelConfigRecord) {
-  switch (channel.platform) {
-    case "email":
-      return Boolean(channel.emailImapHost && channel.emailImapUser)
-    case "wechat_personal":
-      return Boolean(channel.wechatPersonalWebhookUrl || channel.wechatPersonalBotToken)
-    case "wechat_official":
-      return Boolean(channel.wechatOfficialAppId && channel.wechatOfficialToken)
-    case "slack":
-      return Boolean(channel.slackBotToken)
-    case "telegram":
-      return Boolean(channel.telegramBotToken)
-    case "discord":
-      return Boolean(channel.discordBotToken)
-    case "teams":
-      return Boolean(channel.teamsAppId && channel.teamsAppPassword)
-    case "custom":
-      return Boolean(channel.customWebhookUrl)
-    case "web":
+  return resolveChannelCredentialFootprint(channel)
+}
+
+export function getChannelBindingLabel(bindingState: ChannelConfigRecord["bindingState"]) {
+  switch (bindingState) {
+    case "connected":
+      return "Connected"
+    case "ready":
+      return "Ready"
+    case "draft":
+      return "Draft"
+    case "error":
+      return "Attention"
     default:
-      return true
+      return "Unconfigured"
+  }
+}
+
+export function getChannelBindingVariant(bindingState: ChannelConfigRecord["bindingState"]): "default" | "secondary" | "destructive" | "outline" {
+  switch (bindingState) {
+    case "connected":
+      return "default"
+    case "ready":
+      return "outline"
+    case "error":
+      return "destructive"
+    case "draft":
+    case "unconfigured":
+    default:
+      return "secondary"
   }
 }

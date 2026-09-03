@@ -1,10 +1,66 @@
-import type { VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeTraceRecord, WorkflowSummary } from "@/data/domain/models"
+import type { VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeTraceRecord, WorkflowNotificationSettings, WorkflowSummary } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
+import { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS, normalizeWorkflowNotifications } from "@/data/repositories/workflow-notifications"
 import { suoraIpc } from "@/lib/ipc"
 
+async function sendWorkflowNotification(input: {
+  workflowTitle: string
+  trigger: string
+  invocation: WorkflowInvocationRecord
+  definition: WorkflowDefinition
+}) {
+  const notifications = input.definition.notifications ?? DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS
+  if (!notifications.enabled || !notifications.to.trim()) {
+    return
+  }
+
+  if (notifications.triggerOn === "manual" && input.trigger !== "manual") {
+    return
+  }
+
+  if (notifications.triggerOn === "dry-run" && input.trigger !== "dry-run") {
+    return
+  }
+
+  const output = JSON.parse(input.invocation.output) as { summary?: string; traversedNodes?: string; skippedNodes?: number }
+  const subject = notifications.subjectTemplate
+    .replace(/\{\{workflowTitle\}\}/g, input.workflowTitle)
+    .replace(/\{\{status\}\}/g, input.invocation.status)
+    .replace(/\{\{trigger\}\}/g, input.trigger)
+  const lines = [
+    `Workflow: ${input.workflowTitle}`,
+    `Trigger: ${input.trigger}`,
+    `Status: ${input.invocation.status}`,
+  ]
+
+  if (notifications.includeSummary) {
+    lines.push("", output.summary ?? "No summary available.")
+    if (output.traversedNodes) {
+      lines.push(`Traversed nodes: ${output.traversedNodes}`)
+    }
+    if (typeof output.skippedNodes === "number") {
+      lines.push(`Skipped nodes: ${output.skippedNodes}`)
+    }
+  }
+
+  if (notifications.includeTrace) {
+    lines.push("", "Trace:")
+    for (const trace of input.invocation.traces) {
+      lines.push(`- ${trace.label}: ${trace.status} | ${trace.output}`)
+    }
+  }
+
+  await suoraIpc.mail.send({
+    to: notifications.to.trim(),
+    subject,
+    content: lines.join("\n"),
+  })
+}
+
 function buildWorkflowTraces(definition: WorkflowDefinition) {
+  const normalizedDefinition = normalizeWorkflowNotifications(definition)
   const start = Date.now()
-  return definition.nodes.map((node, index) => {
+  return normalizedDefinition.nodes.map((node, index) => {
     const isDisabled = node.data.enabled === false
     const isConditionSkipped = node.data.kind === "if-else" && /(^|\s)(false|skip|0)(\s|$)/i.test(node.data.runIf ?? node.data.branches?.[0]?.expression ?? "")
     const isAgentError = node.data.kind === "agent" && !node.data.prompt.trim()
@@ -58,7 +114,8 @@ async function recordWorkflowInvocation(input: {
   definition: WorkflowDefinition
   trigger: string
 }): Promise<WorkflowInvocationRecord> {
-  const traces = buildWorkflowTraces(input.definition)
+  const normalizedDefinition = normalizeWorkflowNotifications(input.definition)
+  const traces = buildWorkflowTraces(normalizedDefinition)
   const hasError = traces.some((trace) => trace.status === "error")
   const traversedNodes = traces.filter((trace) => trace.status === "success").map((trace) => trace.label).join(" -> ")
   const invocation: WorkflowInvocationRecord = {
@@ -70,7 +127,7 @@ async function recordWorkflowInvocation(input: {
       version: input.selectedVersion.label,
       nodeCount: input.definition.nodes.length,
       resourceBindings: input.definition.resourceBindings,
-      dryRunInput: input.definition.dryRunInputJson,
+      dryRunInput: normalizedDefinition.dryRunInputJson,
     }),
     output: JSON.stringify({
       summary: `${input.trigger === "dry-run" ? "Dry run" : "Executed"} ${input.workflowTitle}`,
@@ -91,6 +148,13 @@ async function recordWorkflowInvocation(input: {
     traceJson: JSON.stringify(invocation.traces),
   })
 
+  await sendWorkflowNotification({
+    workflowTitle: input.workflowTitle,
+    trigger: input.trigger,
+    invocation,
+    definition: normalizedDefinition,
+  }).catch(() => undefined)
+
   return invocation
 }
 
@@ -110,18 +174,21 @@ export async function getWorkflowDetail(workflowId: string, selectedVersionId?: 
   if (!detail) {
     throw new Error(`Workflow ${workflowId} was not found.`)
   }
-  return detail
+  return {
+    ...detail,
+    definition: normalizeWorkflowNotifications(detail.definition),
+  }
 }
 
 export async function saveWorkflowDraft(workflowId: string, payload: { title: string; summary: string; definition: WorkflowDefinition; selectedVersionId?: string }) {
   await ensureSeeded()
-  return suoraIpc.workflows.save({ id: workflowId, title: payload.title, summary: payload.summary, definition: payload.definition, selectedVersionId: payload.selectedVersionId }) as Promise<WorkflowDetail>
+  return suoraIpc.workflows.save({ id: workflowId, title: payload.title, summary: payload.summary, definition: normalizeWorkflowNotifications(payload.definition), selectedVersionId: payload.selectedVersionId }) as Promise<WorkflowDetail>
 }
 
 export async function publishWorkflowVersion(workflowId: string, versionId: string) {
   await ensureSeeded()
   const detail = await getWorkflowDetail(workflowId, versionId)
-  return suoraIpc.workflows.save({ id: workflowId, title: detail.workflow.title, summary: detail.workflow.summary, definition: detail.definition, publish: true }) as Promise<WorkflowDetail>
+  return suoraIpc.workflows.save({ id: workflowId, title: detail.workflow.title, summary: detail.workflow.summary, definition: normalizeWorkflowNotifications(detail.definition), publish: true }) as Promise<WorkflowDetail>
 }
 
 export async function dryRunWorkflowSnapshot(input: {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router"
 
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listAgents } from "@/data/repositories/agent-repository"
+import { listAvailableAgents } from "@/data/repositories/agent-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { appendAssistantChatMessage, appendUserChatMessage, createChat, getChatDetail, updateChatMessageParts } from "@/data/repositories/chat-repository"
 import { getChatDraft, getChatSessionSettings, saveChatDraft, saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
@@ -55,7 +55,7 @@ export function useChatDetailController() {
     () => getChatSessionSettings(activeChatId),
     [activeChatId]
   )
-  const { data: agentsData } = useAsyncResource(() => listAgents(), [])
+  const { data: agentsData } = useAsyncResource(() => listAvailableAgents(), [])
   const { data: providerData } = useAsyncResource(() => listConfiguredModelProviders(), [])
 
   const agents = useMemo(() => agentsData ?? [], [agentsData])
@@ -89,12 +89,19 @@ export function useChatDetailController() {
   }, [sessionSettings])
 
   useEffect(() => {
-    if (selectedAgentId || !agents.some((agent) => agent.id === "agent-general-assistant")) {
+    if (selectedAgentId && agents.some((agent) => agent.id === selectedAgentId)) {
+      return
+    }
+
+    if (!agents.some((agent) => agent.id === "agent-general-assistant")) {
       return
     }
 
     setSelectedAgentId("agent-general-assistant")
-  }, [agents, selectedAgentId])
+    if (settingsDraft) {
+      persistChatSessionSettings(settingsDraft, "agent-general-assistant")
+    }
+  }, [agents, selectedAgentId, settingsDraft])
 
   useEffect(() => {
     if (skipRouteResetRef.current) {

@@ -12,18 +12,22 @@ import {
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
 import { Badge } from "@/components/ui/badge"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { toast } from "@/components/ui/toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { EllipsisIcon, Trash2Icon } from "lucide-react"
 
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 import { useLocation } from "react-router"
+import { deleteAgent, setSystemAgentDisabled } from "@/data/repositories/agent-repository"
 import { deleteDocument } from "@/data/repositories/document-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { deleteModelProvider, listModelProviders, saveModelProvider } from "@/data/repositories/model-config-repository"
 import { deleteSkill, getSkillDetail, saveSkillDraft } from "@/data/repositories/skill-repository"
 import { ChatDeleteButton } from "@/views/chats/components/chat-delete-button"
+import { cn } from "@/lib/utils"
 
 import type { ResolvedSecondarySidebarGroup } from "@/views/nav-config"
 
@@ -34,6 +38,89 @@ type SectionSidebarProps = {
   isLoading?: boolean
   headerAction?: React.ReactNode
   renderGroupAction?: (group: ResolvedSecondarySidebarGroup) => React.ReactNode
+}
+
+type AgentSidebarActionButtonProps = {
+  actionId: string
+  itemId: string
+  isActive: boolean
+}
+
+function AgentSidebarActionButton({ actionId, itemId, isActive }: AgentSidebarActionButtonProps) {
+  const navigate = useNavigate()
+  const [isPending, setIsPending] = useState(false)
+
+  const handleDisableToggle = async () => {
+    setIsPending(true)
+    try {
+      await setSystemAgentDisabled(itemId, actionId === "disable")
+      emitDataChanged("/agents")
+      toast.add({ title: actionId === "disable" ? "Agent disabled" : "Agent enabled", description: "The system agent availability was updated.", type: "success" })
+    } catch (error) {
+      toast.add({ title: "Update failed", description: error instanceof Error ? error.message : String(error), type: "error" })
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    setIsPending(true)
+    try {
+      await deleteAgent(itemId)
+      emitDataChanged("/agents")
+      if (isActive) {
+        navigate("/agents")
+      }
+      toast.add({ title: "Agent deleted", description: "The custom agent was removed.", type: "success" })
+    } catch (error) {
+      toast.add({ title: "Delete failed", description: error instanceof Error ? error.message : String(error), type: "error" })
+    } finally {
+      setIsPending(false)
+    }
+  }
+
+  if (actionId === "delete") {
+    return (
+      <AlertDialog>
+        <AlertDialogTrigger render={<Button variant="ghost" size="icon-sm" className={cn("shrink-0 opacity-0 transition-opacity group-hover/sidebar-item:opacity-100 group-focus-within/sidebar-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground")} disabled={isPending} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} />}>
+          <Trash2Icon />
+        </AlertDialogTrigger>
+        <AlertDialogContent size="sm">
+          <AlertDialogHeader>
+            <AlertDialogMedia>
+              <Trash2Icon />
+            </AlertDialogMedia>
+            <AlertDialogTitle>Delete agent</AlertDialogTitle>
+            <AlertDialogDescription>
+              This permanently deletes the custom agent and all of its versions. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={isPending} onClick={(event) => { event.stopPropagation(); void handleDelete() }}>
+              {isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    )
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="h-7 shrink-0 px-2 text-xs"
+      disabled={isPending}
+      onClick={(event) => {
+        event.stopPropagation()
+        void handleDisableToggle()
+      }}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      {isPending ? "Saving..." : actionId === "disable" ? "Disable" : "Enable"}
+    </Button>
+  )
 }
 
 const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, headerAction, renderGroupAction }: SectionSidebarProps) => {
@@ -129,7 +216,7 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
                         </SidebarMenuItem>
                       ))
                     : group.items.map((item) => (
-                        <SidebarMenuItem key={item.id} className={title === "Chats" ? "group/sidebar-item" : undefined} {...(title === "Chats" ? { "data-chat-history-item": item.id } : {})}>
+                        <SidebarMenuItem key={item.id} className={title === "Chats" || title === "Agents" ? "group/sidebar-item" : undefined} {...(title === "Chats" ? { "data-chat-history-item": item.id } : {})}>
                           <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
                             <SidebarMenuButton isActive={location.pathname === item.href} onClick={() => navigate(item.href)} className="min-w-0 justify-between gap-2">
                               <span className="flex min-w-0 items-center gap-2 overflow-hidden">
@@ -141,7 +228,10 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
                             {title === "Chats" && item.actions?.some((action) => action.id === "delete") ? (
                               <ChatDeleteButton className="opacity-0 transition-opacity group-hover/sidebar-item:opacity-100 group-focus-within/sidebar-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" chatId={item.id} isActive={location.pathname === item.href} />
                             ) : null}
-                            {title !== "Models" && title !== "Chats" && item.actions?.length ? (
+                            {title === "Agents" && item.actions?.length ? (
+                              <AgentSidebarActionButton actionId={item.actions[0].id} itemId={item.id} isActive={location.pathname === item.href} />
+                            ) : null}
+                            {title !== "Models" && title !== "Chats" && title !== "Agents" && item.actions?.length ? (
                               <DropdownMenu>
                                 <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0" />}>
                                   <EllipsisIcon />

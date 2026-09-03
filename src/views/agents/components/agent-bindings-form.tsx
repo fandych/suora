@@ -27,18 +27,23 @@ function BindingChecklist({
   description,
   disabled = false,
   items,
+  query,
   selectedIds,
+  onQueryChange,
   onToggle,
 }: {
   description: string
   disabled?: boolean
   items: SelectableItem[]
+  query: string
   selectedIds: string[]
+  onQueryChange: (value: string) => void
   onToggle: (itemId: string, checked: boolean) => void
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col space-y-2">
       <div className="text-xs text-muted-foreground">{description}</div>
+      <Input value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search in this section" className="h-8 text-xs" />
       <ScrollArea className="min-h-0 flex-1 rounded-xl border bg-muted/20">
         <div className="space-y-2 p-3">
         {items.length === 0 ? <div className="text-sm text-muted-foreground">No items available.</div> : null}
@@ -61,28 +66,49 @@ function BindingChecklist({
 }
 
 export function AgentBindingsForm({ documents, draft, integrations, isReadOnly = false, onToggle, skills, workflows }: AgentBindingsFormProps) {
-  const [query, setQuery] = useState("")
   const [openSection, setOpenSection] = useState("workflows")
-  const keyword = query.trim().toLowerCase()
+  const [queries, setQueries] = useState({
+    workflows: "",
+    integrations: "",
+    skills: "",
+    documents: "",
+  })
 
-  const filterItems = useMemo(() => (items: SelectableItem[]) => {
-    if (!keyword) {
-      return items
-    }
+  const buildItems = useMemo(() => (
+    items: SelectableItem[],
+    selectedIds: string[],
+    query: string,
+  ) => {
+    const keyword = query.trim().toLowerCase()
+    const filtered = keyword
+      ? items.filter((item) => `${item.title} ${item.description ?? ""} ${item.id}`.toLowerCase().includes(keyword))
+      : items
 
-    return items.filter((item) => `${item.title} ${item.description ?? ""} ${item.id}`.toLowerCase().includes(keyword))
-  }, [keyword])
+    return [...filtered].sort((left, right) => {
+      const leftSelected = selectedIds.includes(left.id)
+      const rightSelected = selectedIds.includes(right.id)
+      if (leftSelected !== rightSelected) {
+        return leftSelected ? -1 : 1
+      }
 
-  const workflowItems = filterItems(workflows.map((workflow) => ({ id: workflow.id, title: workflow.title, description: workflow.summary })))
-  const integrationItems = filterItems(integrations.map((integration) => ({ id: integration.id, title: integration.title, description: integration.endpoint || integration.kind })))
-  const skillItems = filterItems(skills.map((skill) => ({ id: skill.id, title: skill.title, description: skill.summary })))
-  const documentItems = filterItems(documents.map((document) => ({ id: document.id, title: document.title, description: document.summary })))
+      return left.title.localeCompare(right.title)
+    })
+  }, [])
+
+  const workflowSelectedIds = draft.config.workflowIds ?? []
+  const integrationSelectedIds = draft.config.toolsetIds
+  const skillSelectedIds = draft.config.skillIds
+  const documentSelectedIds = draft.config.documentIds ?? []
+
+  const workflowItems = buildItems(workflows.map((workflow) => ({ id: workflow.id, title: workflow.title, description: workflow.summary })), workflowSelectedIds, queries.workflows)
+  const integrationItems = buildItems(integrations.map((integration) => ({ id: integration.id, title: integration.title, description: integration.endpoint || integration.kind })), integrationSelectedIds, queries.integrations)
+  const skillItems = buildItems(skills.map((skill) => ({ id: skill.id, title: skill.title, description: skill.summary })), skillSelectedIds, queries.skills)
+  const documentItems = buildItems(documents.map((document) => ({ id: document.id, title: document.title, description: document.summary })), documentSelectedIds, queries.documents)
 
   return (
     <Card className="h-full min-h-0 min-w-0 overflow-hidden">
       <CardHeader className="gap-3 border-b">
         <CardTitle>Bindings</CardTitle>
-        <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search bindings" className="h-8 text-xs" />
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
         <Accordion className="flex min-h-0 flex-1 flex-col overflow-hidden" value={openSection ? [openSection] : []} onValueChange={(value) => setOpenSection(Array.isArray(value) ? String(value[0] ?? "") : String(value ?? ""))}>
@@ -93,7 +119,9 @@ export function AgentBindingsForm({ documents, draft, integrations, isReadOnly =
                 description="Attach reusable workflows this agent can coordinate."
                 disabled={isReadOnly}
                 items={workflowItems}
-                selectedIds={draft.config.workflowIds ?? []}
+                query={queries.workflows}
+                selectedIds={workflowSelectedIds}
+                onQueryChange={(value) => setQueries((current) => ({ ...current, workflows: value }))}
                 onToggle={(itemId, checked) => onToggle("workflows", itemId, checked)}
               />
             </AccordionContent>
@@ -105,7 +133,9 @@ export function AgentBindingsForm({ documents, draft, integrations, isReadOnly =
                 description="Attach tool and runtime integrations."
                 disabled={isReadOnly}
                 items={integrationItems}
-                selectedIds={draft.config.toolsetIds}
+                query={queries.integrations}
+                selectedIds={integrationSelectedIds}
+                onQueryChange={(value) => setQueries((current) => ({ ...current, integrations: value }))}
                 onToggle={(itemId, checked) => onToggle("integrations", itemId, checked)}
               />
             </AccordionContent>
@@ -117,7 +147,9 @@ export function AgentBindingsForm({ documents, draft, integrations, isReadOnly =
                 description="Attach reusable prompt packages."
                 disabled={isReadOnly}
                 items={skillItems}
-                selectedIds={draft.config.skillIds}
+                query={queries.skills}
+                selectedIds={skillSelectedIds}
+                onQueryChange={(value) => setQueries((current) => ({ ...current, skills: value }))}
                 onToggle={(itemId, checked) => onToggle("skills", itemId, checked)}
               />
             </AccordionContent>
@@ -129,7 +161,9 @@ export function AgentBindingsForm({ documents, draft, integrations, isReadOnly =
                 description="Attach knowledge documents and working notes."
                 disabled={isReadOnly}
                 items={documentItems}
-                selectedIds={draft.config.documentIds ?? []}
+                query={queries.documents}
+                selectedIds={documentSelectedIds}
+                onQueryChange={(value) => setQueries((current) => ({ ...current, documents: value }))}
                 onToggle={(itemId, checked) => onToggle("documents", itemId, checked)}
               />
             </AccordionContent>

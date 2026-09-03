@@ -2,14 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Background, Controls, Panel, ReactFlow, addEdge, useEdgesState, useNodesState, type Connection, type Edge, type Node, type NodeMouseHandler } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import { useParams } from "react-router"
-import { listAgents } from "@/data/repositories/agent-repository"
+import { listAvailableAgents } from "@/data/repositories/agent-repository"
 import { listDocuments } from "@/data/repositories/document-repository"
 import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { showToast } from "@/lib/app-toast"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
-import { createWorkflowNodeData, defaultWorkflowBindings, workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
+import { createWorkflowNodeData, defaultWorkflowBindings, defaultWorkflowNotifications, workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
 import { DEFAULT_WORKFLOW_DRY_RUN_INPUT, buildWorkflowFingerprint, getWorkflowDesignIssues, getWorkflowDryRunInputIssue } from "@/views/workflows/components/workflow-editor-state"
 import { WorkflowHeaderActions } from "@/views/workflows/components/workflow-header-actions"
 import { WorkflowInspectorShell } from "@/views/workflows/components/workflow-inspector-shell"
@@ -19,7 +19,7 @@ import { WorkflowPropertiesPanel } from "@/views/workflows/components/workflow-p
 import { exportWorkflowJson, parseWorkflowJson } from "@/views/workflows/components/workflow-transfer"
 import { WorkflowDesignIssuesSummary, WorkflowLibraryPanel } from "@/views/workflows/components/workflow-workbench-panels"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import type { WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/models"
 import { dryRunWorkflowSnapshot, getWorkflowDetail, publishWorkflowVersion, runWorkflow, saveWorkflowDraft } from "@/data/repositories/workflow-repository"
 
 const WorkflowDetailPage = () => {
@@ -29,7 +29,7 @@ const WorkflowDetailPage = () => {
     () => getWorkflowDetail(workflowId ?? "", selectedVersionId),
     [workflowId, selectedVersionId]
   )
-  const { data: agentsData } = useAsyncResource(() => listAgents(), [])
+  const { data: agentsData } = useAsyncResource(() => listAvailableAgents(), [])
   const { data: providersData } = useAsyncResource(() => listConfiguredModelProviders(), [])
   const { data: documentsData } = useAsyncResource(() => listDocuments(), [])
   const { data: integrationsData } = useAsyncResource(() => listIntegrationSummaries(), [])
@@ -39,6 +39,7 @@ const WorkflowDetailPage = () => {
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [resourceBindings, setResourceBindings] = useState(defaultWorkflowBindings)
+  const [notifications, setNotifications] = useState<WorkflowNotificationSettings>(defaultWorkflowNotifications)
   const [dryRunInput, setDryRunInput] = useState(DEFAULT_WORKFLOW_DRY_RUN_INPUT)
   const [libraryQuery, setLibraryQuery] = useState("")
   const [showLibrary, setShowLibrary] = useState(true)
@@ -58,6 +59,7 @@ const WorkflowDetailPage = () => {
     setNodes(data.definition.nodes)
     setEdges(data.definition.edges)
     setResourceBindings(data.definition.resourceBindings ?? defaultWorkflowBindings)
+    setNotifications(data.definition.notifications ?? defaultWorkflowNotifications)
     setDryRunInput(data.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT)
     setSelectedVersionId(data.selectedVersion.id)
     setSelectedNodeId(data.definition.nodes[0]?.id ?? null)
@@ -73,7 +75,8 @@ const WorkflowDetailPage = () => {
     dryRunInputJson: dryRunInput,
     variables: data?.definition.variables ?? [],
     budget: data?.definition.budget,
-  }), [data, dryRunInput, edges, nodes, resourceBindings])
+    notifications,
+  }), [data, dryRunInput, edges, nodes, notifications, resourceBindings])
   const nodeSearchResults = useMemo(() => {
     const keyword = libraryQuery.trim().toLowerCase()
     if (!keyword) {
@@ -321,7 +324,6 @@ const WorkflowDetailPage = () => {
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={data?.workflow.title ?? "Workflow"}
-        description="Forhub-style workflow editor with a full-width graph canvas and compact side panels."
         actions={data ? (
           <WorkflowHeaderActions
             versions={data.versions}
@@ -398,12 +400,14 @@ const WorkflowDetailPage = () => {
                     onSave={handleSave}
                     onSelectTraceNode={setSelectedNodeId}
                     readOnly={isReadOnly}
+                    notifications={notifications}
                     resourceBindings={resourceBindings}
                     runDraftDisabled={blockingIssues.length > 0}
                     saveDisabled={!hasUnsavedChanges}
                     selectedNode={selectedNode ? { id: selectedNode.id, data: selectedNode.data } : null}
                     selectedNodeId={selectedNodeId}
                     setDryRunInput={setDryRunInput}
+                    setNotifications={setNotifications}
                     setResourceBindings={setResourceBindings}
                     setSummary={setSummary}
                     setTitle={setTitle}

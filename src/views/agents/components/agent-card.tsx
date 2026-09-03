@@ -8,6 +8,8 @@ type AgentCardProps = {
 }
 
 export function AgentCard({ agent, onOpen }: AgentCardProps) {
+  const kindLabel = agent.source === "system" ? "System" : agent.kind
+
   return (
     <Card
       className="min-w-0 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm"
@@ -27,7 +29,8 @@ export function AgentCard({ agent, onOpen }: AgentCardProps) {
           <div className="min-w-0 flex-1">
             <CardTitle className="truncate text-base">{agent.title}</CardTitle>
             <div className="mt-1 flex flex-wrap items-center gap-2">
-              <Badge variant="outline">{agent.kind}</Badge>
+              <Badge variant="outline">{kindLabel}</Badge>
+              {agent.isDisabled ? <Badge variant="secondary">Disabled</Badge> : null}
             </div>
           </div>
         </div>
@@ -39,7 +42,7 @@ export function AgentCard({ agent, onOpen }: AgentCardProps) {
         </div>
         <div className="rounded-lg border bg-muted/20 px-3 py-2">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Kind</div>
-          <div className="mt-1 truncate text-foreground">{agent.kind}</div>
+          <div className="mt-1 truncate text-foreground">{kindLabel}</div>
         </div>
         <div className="rounded-lg border bg-muted/20 px-3 py-2">
           <div className="text-xs uppercase tracking-wide text-muted-foreground">Summary</div>

@@ -21,7 +21,6 @@ const ChatsPage = () => {
 		<div className="flex min-h-full flex-col bg-background">
 			<PageHeader
 				title="Chat Home"
-				description="Open an existing conversation from the sidebar or recent list, or create a new chat when you actually need one."
 				actions={<Button onClick={() => void handleCreate()}>New chat</Button>}
 			/>
 

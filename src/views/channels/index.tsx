@@ -7,7 +7,7 @@ import { useAsyncResource } from "@/hooks/use-async-resource"
 import { createChannel, listChannels } from "@/data/repositories/channel-repository"
 import PageHeader from "@/views/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
-import { getChannelPlatformLabel, getChannelStatusLabel, getChannelStatusVariant } from "@/views/channels/components/channel-utils"
+import { getChannelBindingLabel, getChannelBindingVariant, getChannelPlatformLabel, getChannelStatusLabel, getChannelStatusVariant } from "@/views/channels/components/channel-utils"
 
 const ChannelsPage = () => {
   const navigate = useNavigate()
@@ -20,7 +20,7 @@ const ChannelsPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title="Channels" description="Manage channel definitions through the module bridge." actions={<Button onClick={handleCreate}>New channel</Button>} />
+      <PageHeader title="Channels" actions={<Button onClick={handleCreate}>New channel</Button>} />
       <div className="flex-1 p-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-4">
           {isLoading ? <LoadingCard title="Loading channels..." /> : null}
@@ -32,9 +32,12 @@ const ChannelsPage = () => {
                   <CardHeader>
                     <div className="flex items-center justify-between gap-2">
                       <CardTitle>{item.title}</CardTitle>
-                      <Badge variant={getChannelStatusVariant(item.status)}>{getChannelStatusLabel(item.status)}</Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={getChannelBindingVariant(item.bindingState)}>{getChannelBindingLabel(item.bindingState)}</Badge>
+                        <Badge variant={getChannelStatusVariant(item.status)}>{getChannelStatusLabel(item.status)}</Badge>
+                      </div>
                     </div>
-                    <CardDescription>{getChannelPlatformLabel(item.platform)} · {item.messageCount} messages</CardDescription>
+                    <CardDescription>{getChannelPlatformLabel(item.platform)} · {item.messageCount} messages{item.meta ? ` · ${item.meta}` : ""}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <Button variant="outline" onClick={() => navigate(`/channels/${item.id}`)}>Open channel</Button>

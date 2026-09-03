@@ -13,10 +13,7 @@ const SkillsPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader
-        title="Skills"
-        description="Skill packages with a compact file tree and Monaco source editing."
-      />
+      <PageHeader title="Skills" />
 
       <div className="flex-1 overflow-x-hidden p-6">
         <div className="flex w-full min-w-0 flex-col gap-4">

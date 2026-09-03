@@ -12,7 +12,6 @@ const ChatDetailPage = () => {
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <PageHeader
         title={controller.selectedChat?.chat.title ?? "New chat"}
-        description={controller.selectedChat?.chat.summary || "Use the workbench to resume a session or start a fresh conversation thread."}
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {controller.activeChatId && controller.isLoading && !controller.selectedChat ? <LoadingCard title="Loading chat session..." /> : null}

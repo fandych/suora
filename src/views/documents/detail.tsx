@@ -267,7 +267,7 @@ const DocumentsDetailPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title={draft?.document.title ?? "Document"} description={draft?.document.summary || "Versioned document workspace."} actions={draft ? <><VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /><Button variant="outline" onClick={() => setIsMetadataDialogOpen(true)}>Edit info</Button></> : null} />
+      <PageHeader title={draft?.document.title ?? "Document"} actions={draft ? <><VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /><Button variant="outline" onClick={() => setIsMetadataDialogOpen(true)}>Edit info</Button></> : null} />
       <input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUploadChange} />
       <div className="min-h-0 flex-1 p-3">
         {isLoading ? <LoadingCard title="Loading document..." /> : null}

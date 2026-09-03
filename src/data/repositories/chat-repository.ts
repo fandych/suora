@@ -27,6 +27,15 @@ export async function createChat() {
   return suoraIpc.chats.create() as Promise<ChatDetail>
 }
 
+export async function ensureChatDetail(payload: { chatId: string; title: string; chatbotId: string; summary?: string }) {
+  await ensureSeeded()
+  const detail = await suoraIpc.chats.ensure(payload) as ChatDetail | null
+  if (!detail) {
+    throw new Error(`Chat ${payload.chatId} could not be ensured.`)
+  }
+  return detail
+}
+
 export async function deleteChat(chatId: string) {
   await ensureSeeded()
   return suoraIpc.chats.delete(chatId) as Promise<boolean>

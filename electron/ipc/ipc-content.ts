@@ -50,6 +50,37 @@ export function registerContentIpc() {
     }
   })
 
+  ipcMain.handle("chats:ensure", async (_event, payload: { chatId: string; title: string; chatbotId: string; summary?: string }) => {
+    await ensureWorkspace()
+    const database = openDatabase()
+    applyMigrations(database)
+    const now = Date.now()
+    const existing = database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId) as { id: string; title: string; chatbotId: string; summary: string; updatedAt: number } | undefined
+
+    if (existing) {
+      database.prepare(`UPDATE chats SET title = ?, chatbot_id = ?, summary = ?, updated_at = ? WHERE id = ?`).run(
+        payload.title,
+        payload.chatbotId,
+        payload.summary ?? existing.summary,
+        now,
+        payload.chatId,
+      )
+    } else {
+      database.prepare(`INSERT INTO chats (id, title, chatbot_id, summary, updated_at) VALUES (?, ?, ?, ?, ?)`).run(
+        payload.chatId,
+        payload.title,
+        payload.chatbotId,
+        payload.summary ?? "",
+        now,
+      )
+    }
+
+    return {
+      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId),
+      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(payload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseChatMessageParts(message.partsJson) })),
+    }
+  })
+
   ipcMain.handle("chats:delete", async (_event, chatId: string) => {
     await ensureWorkspace()
     const database = openDatabase()

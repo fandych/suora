@@ -93,7 +93,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
         },
         {
           id: "builtin",
-          title: "内置",
+          title: "System",
         },
       ],
     },
@@ -173,7 +173,12 @@ export const primaryNavItems: PrimaryNavItem[] = [
       searchPlaceholder: "搜索 channels...",
       groups: [
         {
-          id: "channels",
+          id: "connected",
+          title: "Connected",
+        },
+        {
+          id: "catalog",
+          title: "Channel Catalog",
         },
       ],
     },

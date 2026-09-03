@@ -241,4 +241,20 @@ export function registerCatalogIpc() {
     database.prepare(`DELETE FROM agents WHERE id = ?`).run(agentId)
     return { success: true }
   })
+
+  ipcMain.handle("agents:getSettings", async () => {
+    await ensureWorkspace()
+    const database = openDatabase()
+    applyMigrations(database)
+    const row = database.prepare(`SELECT value FROM app_meta WHERE key = 'agent_settings'`).get() as { value?: string } | undefined
+    return row?.value ?? null
+  })
+
+  ipcMain.handle("agents:saveSettings", async (_event, payload: unknown) => {
+    await ensureWorkspace()
+    const database = openDatabase()
+    applyMigrations(database)
+    database.prepare(`INSERT INTO app_meta (key, value) VALUES ('agent_settings', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(JSON.stringify(payload))
+    return payload
+  })
 }

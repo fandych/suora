@@ -19,7 +19,7 @@ const SchedulersPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title="Schedulers" description="Manage scheduler definitions through the module bridge." actions={<Button onClick={handleCreate}>New scheduler</Button>} />
+      <PageHeader title="Schedulers" actions={<Button onClick={handleCreate}>New scheduler</Button>} />
       <div className="flex-1 p-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-4">
           {isLoading ? <LoadingCard title="Loading schedulers..." /> : null}

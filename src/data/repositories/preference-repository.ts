@@ -1,33 +1,28 @@
+export type {
+  PreferenceCommandConfirmationMode,
+  PreferenceEnvironmentVariable,
+  PreferenceFileAccessPolicy,
+  PreferenceFontScale,
+  PreferenceLanguage,
+  PreferenceSettings,
+  PreferenceThemeAccent,
+  PreferenceThemeMode,
+} from "@/data/domain/preference-settings"
+export {
+  COMMAND_CONFIRMATION_STORAGE_KEY,
+  createDefaultPreferenceSettings,
+  getCommandBlacklistMatch,
+  getFileAccessDecision,
+  getTodayPreferenceDateKey,
+  resolvePreferenceSettings,
+  sanitizePreferenceSettings,
+  shouldConfirmWorkspaceCommand,
+  validateSystemMailSettings,
+} from "@/data/domain/preference-settings"
+
+import type { PreferenceSettings } from "@/data/domain/preference-settings"
+import { FONT_SCALE_MAP, PREFERENCE_STORAGE_KEY, THEME_ACCENTS, createDefaultPreferenceSettings, resolvePreferenceSettings, sanitizePreferenceSettings } from "@/data/domain/preference-settings"
 import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
-
-export type PreferenceThemeMode = "system" | "light" | "dark"
-export type PreferenceLanguage = "zh" | "en"
-
-export type PreferenceSettings = {
-  themeMode: PreferenceThemeMode
-  language: PreferenceLanguage
-  workspaceName: string
-  workspacePath: string
-  autoSaveConversations: boolean
-  autoStartEnabled: boolean
-  defaultModelProviderId: string
-  chatRequestTimeoutMs: number
-  notes: string
-}
-
-const DEFAULT_PREFERENCES: PreferenceSettings = {
-  themeMode: "system",
-  language: "zh",
-  workspaceName: "SUORA Workspace",
-  workspacePath: "",
-  autoSaveConversations: true,
-  autoStartEnabled: false,
-  defaultModelProviderId: "provider-openai",
-  chatRequestTimeoutMs: 0,
-  notes: "",
-}
-
-const PREFERENCE_STORAGE_KEY = "suora:preference-settings"
 
 function readBrowserPreferences() {
   if (typeof window === "undefined") {
@@ -45,7 +40,7 @@ function writeBrowserPreferences(value: string) {
   window.localStorage.setItem(PREFERENCE_STORAGE_KEY, value)
 }
 
-export function applyPreferenceSettingsToDocument(settings: Pick<PreferenceSettings, "themeMode" | "language">) {
+export function applyPreferenceSettingsToDocument(settings: Pick<PreferenceSettings, "themeMode" | "themeAccent" | "fontScale" | "language">) {
   if (typeof document === "undefined") {
     return
   }
@@ -55,9 +50,20 @@ export function applyPreferenceSettingsToDocument(settings: Pick<PreferenceSetti
     ? window.matchMedia("(prefers-color-scheme: dark)").matches
     : false
   const useDarkMode = settings.themeMode === "dark" || (settings.themeMode === "system" && prefersDark)
+  const accent = THEME_ACCENTS[settings.themeAccent] ?? THEME_ACCENTS.ocean
+  const fontScale = FONT_SCALE_MAP[settings.fontScale] ?? FONT_SCALE_MAP.md
 
   root.classList.toggle("dark", useDarkMode)
   root.lang = settings.language === "zh" ? "zh-CN" : "en"
+  root.dataset.themeAccent = settings.themeAccent
+  root.style.setProperty("--app-font-scale", fontScale)
+  root.style.setProperty("--primary", accent.primary)
+  root.style.setProperty("--primary-foreground", accent.primaryForeground)
+  root.style.setProperty("--accent", accent.accent)
+  root.style.setProperty("--accent-foreground", accent.primaryForeground)
+  root.style.setProperty("--sidebar-primary", accent.sidebarPrimary)
+  root.style.setProperty("--sidebar-primary-foreground", accent.primaryForeground)
+  root.style.setProperty("--ring", accent.ring)
 }
 
 export async function getPreferenceSettings() {
@@ -72,18 +78,12 @@ export async function getPreferenceSettings() {
     raw = readBrowserPreferences()
   }
 
-  if (!raw) {
-    return DEFAULT_PREFERENCES
-  }
-  try {
-    return { ...DEFAULT_PREFERENCES, ...(JSON.parse(raw) as Partial<PreferenceSettings>) }
-  } catch {
-    return DEFAULT_PREFERENCES
-  }
+  return resolvePreferenceSettings(raw)
 }
 
 export async function savePreferenceSettings(settings: PreferenceSettings) {
-  const serialized = JSON.stringify(settings)
+  const normalized = sanitizePreferenceSettings(settings)
+  const serialized = JSON.stringify(normalized)
   if (hasSuoraBridge()) {
     try {
       await suoraIpc.preferences.save(serialized)
@@ -94,7 +94,7 @@ export async function savePreferenceSettings(settings: PreferenceSettings) {
     writeBrowserPreferences(serialized)
   }
 
-  applyPreferenceSettingsToDocument(settings)
+  applyPreferenceSettingsToDocument(normalized)
 
-  return settings
+  return normalized
 }

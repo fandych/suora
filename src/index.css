@@ -134,6 +134,7 @@
     cursor: pointer;
     }
   html {
+    font-size: calc(16px * var(--app-font-scale, 1));
     @apply font-serif;
     }
 }

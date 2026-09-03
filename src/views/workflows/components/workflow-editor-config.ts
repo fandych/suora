@@ -1,4 +1,5 @@
 import type { WorkflowNodeData } from "@/data/domain/models"
+import { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS } from "@/data/repositories/workflow-notifications"
 
 export const workflowPresetNodes: Array<{
   kind: WorkflowNodeData["kind"]
@@ -22,6 +23,8 @@ export const defaultWorkflowBindings = {
   documentId: "document-product-manual",
   integrationId: "integration-webhook",
 }
+
+export const defaultWorkflowNotifications = DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS
 
 export function createWorkflowNodeData(kind: WorkflowNodeData["kind"], index: number): WorkflowNodeData {
   const base = {

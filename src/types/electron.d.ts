@@ -1,5 +1,7 @@
 export {}
 
+import type { SendMailPayload } from "@electron/types"
+
 declare global {
   interface Window {
     electron?: {
@@ -10,6 +12,7 @@ declare global {
     suora?: {
       system: {
         info: () => Promise<unknown>
+        diagnostics: () => Promise<unknown>
       }
       workspace: {
         getPaths: () => Promise<unknown>
@@ -20,6 +23,7 @@ declare global {
         list: () => Promise<unknown>
         get: (chatId: string) => Promise<unknown>
         create: () => Promise<unknown>
+        ensure: (payload: unknown) => Promise<unknown>
         delete: (chatId: string) => Promise<unknown>
         appendUser: (payload: unknown) => Promise<unknown>
         appendAssistant: (payload: unknown) => Promise<unknown>
@@ -57,6 +61,8 @@ declare global {
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (agentId: string) => Promise<unknown>
+        getSettings: () => Promise<unknown>
+        saveSettings: (payload: unknown) => Promise<unknown>
       }
       integrations: {
         list: () => Promise<unknown>
@@ -79,6 +85,19 @@ declare global {
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (channelId: string) => Promise<unknown>
+        startRuntime: () => Promise<unknown>
+        stopRuntime: () => Promise<unknown>
+        getRuntimeStatus: () => Promise<unknown>
+        registerRuntime: () => Promise<unknown>
+        getWebhookUrl: (channel: unknown) => Promise<unknown>
+        sendMessage: (payload: unknown) => Promise<unknown>
+        sendMessageQueued: (payload: unknown) => Promise<unknown>
+        getAccessToken: (channelId: string) => Promise<unknown>
+        healthCheck: (channelId: string) => Promise<unknown>
+        getStreamStatus: (channelId: string) => Promise<unknown>
+        debugSend: (payload: unknown) => Promise<unknown>
+        startWeChatPersonalLogin: (force?: boolean) => Promise<unknown>
+        waitForWeChatPersonalLogin: (sessionKey: string, verifyCode?: string, timeoutMs?: number) => Promise<unknown>
       }
       schedulers: {
         list: () => Promise<unknown>
@@ -93,6 +112,9 @@ declare global {
       updater: {
         getState: () => Promise<unknown>
         check: () => Promise<unknown>
+      }
+      mail: {
+        send: (payload: SendMailPayload) => Promise<unknown>
       }
       tools: {
         listFiles: (relativePath?: string) => Promise<unknown>

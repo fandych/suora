@@ -95,7 +95,6 @@ const AgentsDetailPage = () => {
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={draft?.agent.title ?? "Agent"}
-        description={isReadOnly ? "Release versions are locked. Switch to a draft version to change general info or bindings." : "Edit the basic agent setup on the left and manage bindings on the right."}
         actions={draft ? <VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /> : null}
       />
       <div className="flex min-h-0 flex-1 overflow-hidden p-4">

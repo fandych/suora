@@ -13,10 +13,7 @@ const DocumentsPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader
-        title="Documents"
-        description="Document pages with a compact tree and TipTap or Monaco editing."
-      />
+      <PageHeader title="Documents" />
 
       <div className="flex-1 overflow-x-hidden p-6">
         <div className="flex w-full min-w-0 flex-col gap-4">

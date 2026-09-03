@@ -273,7 +273,7 @@ const SkillsDetailPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title={draft?.skill.title ?? "Skill"} description={draft?.skill.summary || "Versioned skill bundle."} actions={draft ? <VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /> : null} />
+      <PageHeader title={draft?.skill.title ?? "Skill"} actions={draft ? <VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /> : null} />
       <input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUploadChange} />
       <div className="min-h-0 flex-1 p-3">
         {isLoading ? <LoadingCard title="Loading skill..." /> : null}

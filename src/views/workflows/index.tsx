@@ -21,7 +21,6 @@ const WorkflowsPage = () => {
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title="Workflows"
-        description="Model multi-step operational flows and publish release versions."
         actions={<Button onClick={handleCreate}>New workflow</Button>}
       />
 

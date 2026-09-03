@@ -98,6 +98,15 @@ export type WorkflowBudget = {
   maxDurationMs: number
 }
 
+export type WorkflowNotificationSettings = {
+  enabled: boolean
+  to: string
+  subjectTemplate: string
+  includeSummary: boolean
+  includeTrace: boolean
+  triggerOn: "manual" | "dry-run" | "both"
+}
+
 export type WorkflowDefinition = {
   nodes: Node<WorkflowNodeData>[]
   edges: Edge<WorkflowEdgeData>[]
@@ -111,6 +120,7 @@ export type WorkflowDefinition = {
   dryRunInputJson?: string
   variables?: WorkflowVariable[]
   budget?: WorkflowBudget
+  notifications?: WorkflowNotificationSettings
 }
 
 export type WorkflowSummary = {
@@ -406,6 +416,8 @@ export type AgentSummary = {
   kind: string
   summary: string
   updatedAt: number
+  isDisabled?: boolean
+  source?: "custom" | "system"
 }
 
 export type AgentDetail = {
@@ -419,11 +431,12 @@ export type AgentDetail = {
 export type ChannelPlatform =
   | "web"
   | "email"
+  | "wechat"
   | "wechat_personal"
   | "wechat_official"
-  | "slack"
+  | "feishu"
+  | "dingtalk"
   | "telegram"
-  | "discord"
   | "teams"
   | "custom"
 
@@ -432,6 +445,8 @@ export type ChannelStatus = "inactive" | "active" | "error"
 export type ChannelConnectionMode = "webhook" | "stream"
 
 export type WeChatPersonalBindingStatus = "unbound" | "pending" | "bound" | "error"
+
+export type ChannelBindingState = "unconfigured" | "draft" | "ready" | "connected" | "error"
 
 export type EmailFilterField = "subject" | "from" | "to" | "cc" | "body" | "has_attachment"
 
@@ -501,6 +516,8 @@ export type ChannelConfigRecord = {
   id: string
   title: string
   platform: ChannelPlatform
+  catalogId?: string
+  bindingState?: ChannelBindingState
   enabled: boolean
   status: ChannelStatus
   connectionMode: ChannelConnectionMode
@@ -514,16 +531,19 @@ export type ChannelConfigRecord = {
   messageCount: number
   appId?: string
   appSecret?: string
+  callbackUrl?: string
   verificationToken?: string
   encryptKey?: string
-  slackBotToken?: string
-  slackSigningSecret?: string
   telegramBotToken?: string
-  discordBotToken?: string
-  discordApplicationId?: string
   teamsAppId?: string
   teamsAppPassword?: string
   teamsTenantId?: string
+  teamsWebhookUrl?: string
+  teamsBotEndpoint?: string
+  wechatCorpId?: string
+  wechatAgentId?: string
+  wechatToken?: string
+  wechatEncodingAesKey?: string
   wechatOfficialAppId?: string
   wechatOfficialAppSecret?: string
   wechatOfficialToken?: string
@@ -531,11 +551,24 @@ export type ChannelConfigRecord = {
   wechatPersonalAuthToken?: string
   wechatPersonalQrCodeUrl?: string
   wechatPersonalBindingStatus?: WeChatPersonalBindingStatus
+  wechatPersonalSessionKey?: string
   wechatPersonalBotToken?: string
   wechatPersonalBaseUrl?: string
   wechatPersonalAccountId?: string
   wechatPersonalUserId?: string
+  feishuAppId?: string
+  feishuAppSecret?: string
+  feishuVerificationToken?: string
+  feishuEncryptKey?: string
+  feishuWebhookUrl?: string
+  dingtalkClientId?: string
+  dingtalkClientSecret?: string
+  dingtalkRobotCode?: string
+  dingtalkWebhookUrl?: string
+  dingtalkSigningSecret?: string
   customWebhookUrl?: string
+  customWebsocketUrl?: string
+  customWebsocketProtocol?: string
   customAuthHeader?: string
   customAuthValue?: string
   customPayloadTemplate?: string
@@ -552,6 +585,7 @@ export type ChannelConfigRecord = {
   emailSmtpUser?: string
   emailSmtpPassword?: string
   emailSmtpTls?: boolean
+  emailUseGlobalMailService?: boolean
   emailFromName?: string
   emailFromAddress?: string
   emailPollInterval?: number
@@ -571,6 +605,8 @@ export type ChannelSummary = {
   id: string
   title: string
   platform: ChannelPlatform
+  catalogId?: string
+  bindingState?: ChannelBindingState
   enabled: boolean
   status: ChannelStatus
   updatedAt: number

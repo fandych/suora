@@ -1,7 +1,10 @@
 import { useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router'
 import { Toaster } from '@/components/ui/toast'
+import { restoreChannelRuntime } from '@/data/repositories/channel-repository'
 import { applyPreferenceSettingsToDocument, getPreferenceSettings } from '@/data/repositories/preference-repository'
+import { hasSuoraBridge, suoraIpc } from '@/lib/ipc'
+import { initChannelRuntimeListener } from '@/services/channel-runtime-listener'
 import RootLayout from './views/layout'
 import DashboardPage from './views/dashboard'
 import WorkflowsPage from './views/workflows'
@@ -27,9 +30,20 @@ import { preferenceRoute } from './views/nav-config'
 
 const App = () => {
   useEffect(() => {
+    const cleanupChannelRuntime = initChannelRuntimeListener()
+    if (hasSuoraBridge()) {
+      void restoreChannelRuntime().catch(() => undefined)
+    }
     void getPreferenceSettings().then((settings) => {
       applyPreferenceSettingsToDocument(settings)
+      if (settings.autoCheckUpdates && hasSuoraBridge()) {
+        void suoraIpc.updater.check().catch(() => undefined)
+      }
     })
+
+    return () => {
+      cleanupChannelRuntime()
+    }
   }, [])
 
   return (

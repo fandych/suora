@@ -11,6 +11,10 @@ import { listWorkflows } from "@/data/repositories/workflow-repository"
 import { getProviderLogo } from "@/views/components/provider-logo"
 import type { PrimaryNavItem } from "@/views/nav-config"
 
+function getChannelCatalogGroup(record: { platform: string; bindingState?: string; enabled: boolean }) {
+  return record.bindingState === "connected" || record.enabled ? "connected" : "catalog"
+}
+
 function emptyGroups(item: PrimaryNavItem): SidebarGroupData[] {
   return item.secondarySidebar.groups.map((group) => ({ id: group.id, title: group.title, items: [] }))
 }
@@ -66,8 +70,11 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
       return mapItems(item, (await listAgents()).map((record) => ({
         id: record.id,
         title: record.title,
-        group: record.kind === "custom" ? "custom" : "builtin",
-        meta: record.summary,
+        group: record.source === "custom" ? "custom" : "builtin",
+        meta: record.isDisabled ? `${record.summary} · Disabled` : record.summary,
+        actions: record.source === "custom"
+          ? [{ id: "delete", label: "Delete", variant: "destructive" as const }]
+          : [{ id: record.isDisabled ? "enable" : "disable", label: record.isDisabled ? "Enable" : "Disable" }],
       })))
     case "/workflows":
       return mapItems(item, (await listWorkflows()).map((record) => ({ id: record.id, title: record.title, group: "workflows", meta: record.summary })))
@@ -78,7 +85,12 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
     case "/documents":
       return mapItems(item, (await listDocuments()).map((record) => ({ id: record.id, title: record.title, group: "documents", meta: record.summary, actions: [{ id: "delete", label: "Delete", variant: "destructive" }] })))
     case "/channels":
-      return mapItems(item, (await listChannels()).map((record) => ({ id: record.id, title: record.title, group: "channels", meta: record.meta || `${record.platform} · ${record.status}` })))
+      return mapItems(item, (await listChannels()).map((record) => ({
+        id: record.id,
+        title: record.title,
+        group: getChannelCatalogGroup(record),
+        meta: record.meta || `${record.platform} · ${record.bindingState || record.status}`,
+      })))
     case "/skills":
       return mapItems(item, (await listSkills()).map((record) => ({ id: record.id, title: record.title, group: record.source === "custom" ? "custom" : "builtin", meta: record.summary, actions: [{ id: "disable", label: "Disable" }, { id: "delete", label: "Delete", variant: "destructive" }] })))
     case "/models":

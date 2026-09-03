@@ -216,7 +216,6 @@ const IntegrationsDetailPage = () => {
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={data?.integration.title ?? "Integration"}
-        description="Forhub-style toolset editor with split basic editing, parameters, workbench, try-run, and version history."
         actions={data ? (
           <>
             <VersionSelect versions={data.versions} value={data.selectedVersion.id} onChange={setSelectedVersionId} />

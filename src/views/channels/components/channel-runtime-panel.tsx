@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { AgentSummary, ChannelDetail } from "@/data/domain/models"
-import { buildChannelWebhookUrl, getChannelPlatformLabel, getChannelStatusLabel, getChannelStatusVariant } from "@/views/channels/components/channel-utils"
+import { buildChannelWebhookUrl, getChannelBindingLabel, getChannelPlatformLabel, getChannelStatusLabel, getChannelStatusVariant } from "@/views/channels/components/channel-utils"
 
 type ChannelRuntimePanelProps = {
   detail: ChannelDetail
@@ -56,6 +56,7 @@ export function ChannelRuntimePanel({ detail, agents, onHealthCheck, onSendMock,
           <TabsContent value="overview" className="mt-0 space-y-3">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               <StatCard label="Platform" value={getChannelPlatformLabel(channel.platform)} />
+              <StatCard label="Binding" value={getChannelBindingLabel(channel.bindingState)} />
               <StatCard label="Reply agent" value={replyAgentName} />
               <StatCard label="Webhook" value={buildChannelWebhookUrl(channel)} />
               <StatCard label="Messages" value={String(channel.messageCount)} />

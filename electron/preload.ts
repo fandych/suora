@@ -1,5 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron"
 
+import type { SendMailPayload } from "@electron/types"
+
 contextBridge.exposeInMainWorld("electron", {
   invoke: (channel: string, ...args: unknown[]) => {
     return ipcRenderer.invoke(channel, ...args)
@@ -15,6 +17,7 @@ contextBridge.exposeInMainWorld("electron", {
 contextBridge.exposeInMainWorld("suora", {
   system: {
     info: () => ipcRenderer.invoke("system:info"),
+    diagnostics: () => ipcRenderer.invoke("system:diagnostics"),
   },
   workspace: {
     getPaths: () => ipcRenderer.invoke("workspace:getPaths"),
@@ -25,6 +28,7 @@ contextBridge.exposeInMainWorld("suora", {
     list: () => ipcRenderer.invoke("chats:list"),
     get: (chatId: string) => ipcRenderer.invoke("chats:get", chatId),
     create: () => ipcRenderer.invoke("chats:create"),
+    ensure: (payload: unknown) => ipcRenderer.invoke("chats:ensure", payload),
     delete: (chatId: string) => ipcRenderer.invoke("chats:delete", chatId),
     appendUser: (payload: unknown) => ipcRenderer.invoke("chats:appendUser", payload),
     appendAssistant: (payload: unknown) => ipcRenderer.invoke("chats:appendAssistant", payload),
@@ -62,6 +66,8 @@ contextBridge.exposeInMainWorld("suora", {
     create: () => ipcRenderer.invoke("agents:create"),
     save: (payload: unknown) => ipcRenderer.invoke("agents:save", payload),
     delete: (agentId: string) => ipcRenderer.invoke("agents:delete", agentId),
+    getSettings: () => ipcRenderer.invoke("agents:getSettings"),
+    saveSettings: (payload: unknown) => ipcRenderer.invoke("agents:saveSettings", payload),
   },
   integrations: {
     list: () => ipcRenderer.invoke("integrations:list"),
@@ -84,6 +90,19 @@ contextBridge.exposeInMainWorld("suora", {
     create: () => ipcRenderer.invoke("channels:create"),
     save: (payload: unknown) => ipcRenderer.invoke("channels:save", payload),
     delete: (channelId: string) => ipcRenderer.invoke("channels:delete", channelId),
+    startRuntime: () => ipcRenderer.invoke("channel:start"),
+    stopRuntime: () => ipcRenderer.invoke("channel:stop"),
+    getRuntimeStatus: () => ipcRenderer.invoke("channel:status"),
+    registerRuntime: () => ipcRenderer.invoke("channel:register"),
+    getWebhookUrl: (channel: unknown) => ipcRenderer.invoke("channel:getWebhookUrl", channel),
+    sendMessage: (payload: unknown) => ipcRenderer.invoke("channel:sendMessage", payload),
+    sendMessageQueued: (payload: unknown) => ipcRenderer.invoke("channel:sendMessageQueued", payload),
+    getAccessToken: (channelId: string) => ipcRenderer.invoke("channel:getAccessToken", channelId),
+    healthCheck: (channelId: string) => ipcRenderer.invoke("channel:healthCheck", channelId),
+    getStreamStatus: (channelId: string) => ipcRenderer.invoke("channel:streamStatus", channelId),
+    debugSend: (payload: unknown) => ipcRenderer.invoke("channel:debugSend", payload),
+    startWeChatPersonalLogin: (force?: boolean) => ipcRenderer.invoke("channel:wechatPersonalLoginStart", force),
+    waitForWeChatPersonalLogin: (sessionKey: string, verifyCode?: string, timeoutMs?: number) => ipcRenderer.invoke("channel:wechatPersonalLoginWait", sessionKey, verifyCode, timeoutMs),
   },
   schedulers: {
     list: () => ipcRenderer.invoke("schedulers:list"),
@@ -98,6 +117,9 @@ contextBridge.exposeInMainWorld("suora", {
   updater: {
     getState: () => ipcRenderer.invoke("updater:getState"),
     check: () => ipcRenderer.invoke("updater:check"),
+  },
+  mail: {
+    send: (payload: SendMailPayload) => ipcRenderer.invoke("mail:send", payload),
   },
   tools: {
     listFiles: (relativePath?: string) => ipcRenderer.invoke("tools:listFiles", relativePath),

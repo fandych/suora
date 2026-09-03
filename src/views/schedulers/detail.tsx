@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import type { SchedulerDetail } from "@/data/domain/models"
-import { listAgents } from "@/data/repositories/agent-repository"
+import { listAvailableAgents } from "@/data/repositories/agent-repository"
 import { getScheduler, saveScheduler } from "@/data/repositories/scheduler-repository"
 import { listWorkflows } from "@/data/repositories/workflow-repository"
 import PageHeader from "@/views/components/page-header"
@@ -20,7 +20,7 @@ const SchedulerDetailPage = () => {
   const { schedulerId } = useParams<{ schedulerId: string }>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => getScheduler(schedulerId ?? ""), [schedulerId])
   const { data: workflowOptions } = useAsyncResource(() => listWorkflows(), [])
-  const { data: agentOptions } = useAsyncResource(() => listAgents(), [])
+  const { data: agentOptions } = useAsyncResource(() => listAvailableAgents(), [])
   const [draft, setDraft] = useState<SchedulerDetail | null>(null)
 
   useEffect(() => {
@@ -95,7 +95,6 @@ const SchedulerDetailPage = () => {
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={draft?.title ?? "Scheduler"}
-        description="Scheduler configuration with target binding, retry policy, and structured payload storage."
         actions={draft ? <Button onClick={handleSave}>Save scheduler</Button> : null}
       />
       <div className="flex-1 p-6">

@@ -1,6 +1,8 @@
 import type { AgentConfigRecord, AgentDetail, AgentSummary, ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary, ChatDetail, ChatSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, ProviderConfigRecord, SchedulerDetail, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeData, WorkflowSummary } from "@/data/domain/models"
+import type { SendMailPayload } from "@electron/types"
 import type { ChatMessagePart } from "@/data/domain/chat-message-parts"
 import { getVersionLabel } from "@/data/domain/versioning"
+import { inferChannelBindingState } from "@/lib/channel-config"
 import { buildDefaultDocumentNodes, normalizeDocumentNodes } from "@/lib/document-tree"
 
 type RawProviderRow = {
@@ -42,6 +44,20 @@ type RawChatMessageRow = {
   createdAt: number
 }
 
+type PreferenceCommandConfirmationMode = "daily" | "never" | "always"
+
+type PreferenceEnvironmentVariable = {
+  key: string
+  value: string
+}
+
+type ToolPreferenceSettings = {
+  commandConfirmationMode?: PreferenceCommandConfirmationMode
+  globalEnvironmentVariables?: PreferenceEnvironmentVariable[]
+}
+
+const COMMAND_CONFIRMATION_STORAGE_KEY = "suora:command-confirmation-last-date"
+
 function parseProviderRow(row: RawProviderRow): ProviderConfigRecord {
   return {
     id: row.id,
@@ -50,7 +66,7 @@ function parseProviderRow(row: RawProviderRow): ProviderConfigRecord {
     baseUrl: row.baseUrl,
     apiKey: row.apiKey,
     enabled: Boolean(row.enabled),
-    models: JSON.parse(row.modelsJson) as ProviderConfigRecord["models"],
+    models: parseArrayJson<ProviderConfigRecord["models"][number]>(row.modelsJson, []),
     updatedAt: row.updatedAt,
   }
 }
@@ -72,11 +88,26 @@ function parseJson<T>(value: string | null | undefined, fallback: T): T {
     return fallback
   }
 
+  const normalized = value.trim()
+  if (!normalized || normalized === "undefined" || normalized === "null") {
+    return fallback
+  }
+
   try {
-    return JSON.parse(value) as T
+    return JSON.parse(normalized) as T
   } catch {
     return fallback
   }
+}
+
+function parseObjectJson<T extends Record<string, unknown>>(value: string | null | undefined, fallback: T): T {
+  const parsed = parseJson<unknown>(value, fallback)
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as T : fallback
+}
+
+function parseArrayJson<T>(value: string | null | undefined, fallback: T[]): T[] {
+  const parsed = parseJson<unknown>(value, fallback)
+  return Array.isArray(parsed) ? parsed as T[] : fallback
 }
 
 function parseChatMessageRow(row: RawChatMessageRow) {
@@ -106,6 +137,8 @@ function createDefaultChannelConfig(row: RawChannelRow): ChannelConfigRecord {
     id: row.id,
     title: row.title,
     platform: (row.platform || "web") as ChannelConfigRecord["platform"],
+    catalogId: row.id,
+    bindingState: "unconfigured",
     enabled: Boolean(row.enabled),
     status: (row.status || "inactive") as ChannelConfigRecord["status"],
     connectionMode: (row.connectionMode || "webhook") as ChannelConfigRecord["connectionMode"],
@@ -120,6 +153,7 @@ function createDefaultChannelConfig(row: RawChannelRow): ChannelConfigRecord {
     emailFilters: [],
     emailActions: [],
     emailMarkAsRead: true,
+    emailUseGlobalMailService: false,
   }
 }
 
@@ -128,28 +162,34 @@ function parseChannelDetailRow(row: RawChannelRow): ChannelDetail {
   const parsedConfig = parseJson<Partial<ChannelConfigRecord>>(row.configJson, {})
   const parsedRuntime = parseJson<Partial<ChannelRuntimeState>>(row.runtimeJson, {})
   const baseRuntime = createDefaultChannelRuntime()
+  const mergedChannel = {
+    ...baseConfig,
+    ...parsedConfig,
+    id: row.id,
+    title: row.title,
+    platform: (row.platform || parsedConfig.platform || "web") as ChannelConfigRecord["platform"],
+    enabled: row.enabled == null ? (parsedConfig.enabled ?? false) : Boolean(row.enabled),
+    status: (row.status || parsedConfig.status || "inactive") as ChannelConfigRecord["status"],
+    connectionMode: (row.connectionMode || parsedConfig.connectionMode || "webhook") as ChannelConfigRecord["connectionMode"],
+    webhookPath: row.webhookPath || parsedConfig.webhookPath || `/channels/${row.id}`,
+    webhookSecret: row.webhookSecret || parsedConfig.webhookSecret || "",
+    autoReply: row.autoReply == null ? (parsedConfig.autoReply ?? true) : Boolean(row.autoReply),
+    replyAgentId: row.replyAgentId || parsedConfig.replyAgentId || "",
+    createdAt: row.createdAt ?? parsedConfig.createdAt ?? row.updatedAt,
+    updatedAt: row.updatedAt,
+    lastMessageAt: row.lastMessageAt ?? parsedConfig.lastMessageAt,
+    messageCount: row.messageCount ?? parsedConfig.messageCount ?? 0,
+    emailFilters: parsedConfig.emailFilters ?? [],
+    emailActions: parsedConfig.emailActions ?? [],
+    emailMarkAsRead: parsedConfig.emailMarkAsRead ?? true,
+    emailUseGlobalMailService: parsedConfig.emailUseGlobalMailService ?? false,
+  } satisfies ChannelConfigRecord
 
   return {
     channel: {
-      ...baseConfig,
-      ...parsedConfig,
-      id: row.id,
-      title: row.title,
-      platform: (row.platform || parsedConfig.platform || "web") as ChannelConfigRecord["platform"],
-      enabled: row.enabled == null ? (parsedConfig.enabled ?? false) : Boolean(row.enabled),
-      status: (row.status || parsedConfig.status || "inactive") as ChannelConfigRecord["status"],
-      connectionMode: (row.connectionMode || parsedConfig.connectionMode || "webhook") as ChannelConfigRecord["connectionMode"],
-      webhookPath: row.webhookPath || parsedConfig.webhookPath || `/channels/${row.id}`,
-      webhookSecret: row.webhookSecret || parsedConfig.webhookSecret || "",
-      autoReply: row.autoReply == null ? (parsedConfig.autoReply ?? true) : Boolean(row.autoReply),
-      replyAgentId: row.replyAgentId || parsedConfig.replyAgentId || "",
-      createdAt: row.createdAt ?? parsedConfig.createdAt ?? row.updatedAt,
-      updatedAt: row.updatedAt,
-      lastMessageAt: row.lastMessageAt ?? parsedConfig.lastMessageAt,
-      messageCount: row.messageCount ?? parsedConfig.messageCount ?? 0,
-      emailFilters: parsedConfig.emailFilters ?? [],
-      emailActions: parsedConfig.emailActions ?? [],
-      emailMarkAsRead: parsedConfig.emailMarkAsRead ?? true,
+      ...mergedChannel,
+      catalogId: parsedConfig.catalogId || row.id,
+      bindingState: parsedConfig.bindingState || inferChannelBindingState(mergedChannel),
     },
     runtime: {
       ...baseRuntime,
@@ -171,6 +211,8 @@ function parseChannelSummaryRow(row: RawChannelRow): ChannelSummary {
     id: detail.channel.id,
     title: detail.channel.title,
     platform: detail.channel.platform,
+    catalogId: detail.channel.catalogId,
+    bindingState: detail.channel.bindingState,
     enabled: detail.channel.enabled,
     status: detail.channel.status,
     updatedAt: detail.channel.updatedAt,
@@ -272,13 +314,53 @@ function parseDocumentStructure(structureJson: string | undefined, documentTitle
     return buildDefaultDocumentNodes(documentTitle)
   }
 
-  const parsed = JSON.parse(structureJson) as { pages?: DocumentPageRecord[] }
+  const parsed = parseObjectJson<{ pages?: DocumentPageRecord[] }>(structureJson, {})
   return normalizeDocumentNodes(parsed.pages ?? [], documentTitle)
+}
+
+function parseDocumentGraphEdges(graphJson: string | undefined) {
+  const parsed = parseObjectJson<{ edges?: DocumentGraphEdge[] }>(graphJson, {})
+  return Array.isArray(parsed.edges) ? parsed.edges : []
+}
+
+function parseDocumentSettings(settingsJson: string | undefined) {
+  return parseObjectJson<{ isPublic: boolean; includeInLlmsTxt: boolean }>(settingsJson, { isPublic: false, includeInLlmsTxt: true })
+}
+
+function parseSkillFiles(filesJson: string | undefined) {
+  return parseArrayJson<SkillFileRecord>(filesJson, [])
+}
+
+function parseAgentConfig(configJson: string | undefined) {
+  return parseObjectJson<AgentConfigRecord>(configJson, createDefaultAgentConfig())
+}
+
+function parseIntegrationConfig(configJson: string | undefined): IntegrationConfig {
+  return parseObjectJson<IntegrationConfig>(configJson, {
+    kind: "http",
+    baseUrl: "",
+    selectedEndpointId: "",
+    endpoints: [],
+    method: "GET",
+    url: "",
+    description: "",
+    headersJson: "{}",
+    queryJson: "{}",
+    bodyJson: "{}",
+    authType: "none",
+    authConfigJson: "{}",
+    parameterSchemaJson: "{}",
+  })
+}
+
+function parseWorkflowInvocationTraces(traceJson: string | undefined) {
+  return parseArrayJson<WorkflowInvocationRecord["traces"][number]>(traceJson, [])
 }
 
 export const suoraIpc = {
   system: {
     info: async () => getBridge().system.info(),
+    diagnostics: async () => getBridge().system.diagnostics(),
   },
   workspace: {
     getPaths: async () => getBridge().workspace.getPaths(),
@@ -295,6 +377,11 @@ export const suoraIpc = {
     create: async () => {
       const payload = await getBridge().chats.create() as { chat: ChatSummary; messages: RawChatMessageRow[] }
       return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
+    },
+    ensure: async (payload: { chatId: string; title: string; chatbotId: string; summary?: string }) => {
+      const result = await getBridge().chats.ensure(payload) as { chat: ChatSummary | null; messages: RawChatMessageRow[] }
+      if (!result.chat) return null
+      return { chat: result.chat, messages: result.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
     delete: async (chatId: string) => getBridge().chats.delete(chatId) as Promise<boolean>,
     appendUser: async (chatId: string, content: string) => {
@@ -332,8 +419,8 @@ export const suoraIpc = {
         latestVersion: versions[0],
         selectedVersion: versions.find((version) => version.id === payload.selectedVersionId) ?? versions[0],
         pages: selectedPayload ? parseDocumentStructure(selectedPayload.structureJson, payload.document.title) : buildDefaultDocumentNodes(payload.document.title),
-        graphEdges: selectedPayload ? (JSON.parse(selectedPayload.graphJson) as { edges: DocumentGraphEdge[] }).edges : [],
-        settings: selectedPayload ? JSON.parse(selectedPayload.settingsJson) : { isPublic: false, includeInLlmsTxt: true },
+        graphEdges: selectedPayload ? parseDocumentGraphEdges(selectedPayload.graphJson) : [],
+        settings: selectedPayload ? parseDocumentSettings(selectedPayload.settingsJson) : { isPublic: false, includeInLlmsTxt: true },
       } satisfies DocumentDetail
     },
     create: async () => {
@@ -350,8 +437,8 @@ export const suoraIpc = {
         latestVersion: versions[0],
         selectedVersion: versions[0],
         pages: parseDocumentStructure(selectedPayload.structureJson, payload.document.title),
-        graphEdges: JSON.parse(selectedPayload.graphJson).edges as DocumentGraphEdge[],
-        settings: JSON.parse(selectedPayload.settingsJson),
+        graphEdges: parseDocumentGraphEdges(selectedPayload.graphJson),
+        settings: parseDocumentSettings(selectedPayload.settingsJson),
       } satisfies DocumentDetail
     },
     save: async (payload: { id: string; title: string; summary: string; pages: DocumentPageRecord[]; graphEdges: DocumentGraphEdge[]; settings: { isPublic: boolean; includeInLlmsTxt: boolean }; selectedVersionId?: string; publish?: boolean }) => {
@@ -377,8 +464,8 @@ export const suoraIpc = {
         latestVersion: versions[0],
         selectedVersion: versions.find((version) => version.id === result.selectedVersionId) ?? versions[0],
         pages: parseDocumentStructure(selectedPayload.structureJson, result.document.title),
-        graphEdges: JSON.parse(selectedPayload.graphJson).edges as DocumentGraphEdge[],
-        settings: JSON.parse(selectedPayload.settingsJson),
+        graphEdges: parseDocumentGraphEdges(selectedPayload.graphJson),
+        settings: parseDocumentSettings(selectedPayload.settingsJson),
       } satisfies DocumentDetail
     },
     delete: async (documentId: string) => getBridge().documents.delete(documentId),
@@ -431,7 +518,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion,
-        files: selectedPayload ? JSON.parse(selectedPayload.filesJson) as SkillFileRecord[] : [],
+        files: selectedPayload ? parseSkillFiles(selectedPayload.filesJson) : [],
       } satisfies SkillConfigRecord
     },
     create: async () => {
@@ -445,7 +532,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion: versions[0],
-        files: JSON.parse(payload.versions[0].filesJson) as SkillFileRecord[],
+        files: parseSkillFiles(payload.versions[0].filesJson),
       } satisfies SkillConfigRecord
     },
     save: async (payload: { id: string; title: string; source: string; summary: string; files: SkillFileRecord[]; selectedVersionId?: string; publish?: boolean }) => {
@@ -461,7 +548,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion,
-        files: JSON.parse((result.versions.find((version) => version.id === selectedVersion.id) ?? result.versions[0]).filesJson) as SkillFileRecord[],
+        files: parseSkillFiles((result.versions.find((version) => version.id === selectedVersion.id) ?? result.versions[0]).filesJson),
       } satisfies SkillConfigRecord
     },
     delete: async (skillId: string) => getBridge().skills.delete(skillId),
@@ -497,7 +584,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion: versions.find((version) => version.id === selectedPayload.id) ?? versions[0],
-        config: JSON.parse(selectedPayload.configJson) as AgentConfigRecord,
+        config: parseAgentConfig(selectedPayload.configJson),
       } satisfies AgentDetail
     },
     create: async () => {
@@ -511,7 +598,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion: versions[0],
-        config: JSON.parse(payload.versions[0].configJson) as AgentConfigRecord,
+        config: parseAgentConfig(payload.versions[0].configJson),
       } satisfies AgentDetail
     },
     save: async (payload: { id: string; title: string; kind: string; summary: string; config: AgentConfigRecord; selectedVersionId?: string; publish?: boolean }) => {
@@ -527,10 +614,12 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion: versions.find((version) => version.id === selectedPayload.id) ?? versions[0],
-        config: JSON.parse(selectedPayload.configJson) as AgentConfigRecord,
+        config: parseAgentConfig(selectedPayload.configJson),
       } satisfies AgentDetail
     },
     delete: async (agentId: string) => getBridge().agents.delete(agentId),
+    getSettings: async () => getBridge().agents.getSettings() as Promise<string | null>,
+    saveSettings: async (payload: unknown) => getBridge().agents.saveSettings(payload),
   },
   integrations: {
     list: async () => {
@@ -554,7 +643,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion,
-        config: JSON.parse(selectedPayload?.configJson ?? payload.versions[0].configJson) as IntegrationConfig,
+        config: parseIntegrationConfig(selectedPayload?.configJson ?? payload.versions[0].configJson),
         executions: payload.executions,
       } satisfies IntegrationDetail
     },
@@ -570,7 +659,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion: versions[0],
-        config: JSON.parse(result.versions[0].configJson) as IntegrationConfig,
+        config: parseIntegrationConfig(result.versions[0].configJson),
         executions: result.executions,
       } satisfies IntegrationDetail
     },
@@ -586,7 +675,7 @@ export const suoraIpc = {
         versions,
         latestVersion: versions[0],
         selectedVersion: versions[0],
-        config: JSON.parse(result.versions[0].configJson) as IntegrationConfig,
+        config: parseIntegrationConfig(result.versions[0].configJson),
         executions: result.executions,
       } satisfies IntegrationDetail
     },
@@ -618,7 +707,7 @@ export const suoraIpc = {
         latestVersion: versions[0],
         selectedVersion,
         definition: normalizeWorkflowDefinition(parseJson(selectedPayload?.definitionJson, { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } as WorkflowDefinition)),
-        invocations: payload.invocations.map((invocation) => ({ ...invocation, traces: JSON.parse(invocation.traceJson) })) as WorkflowInvocationRecord[],
+        invocations: payload.invocations.map((invocation) => ({ ...invocation, traces: parseWorkflowInvocationTraces(invocation.traceJson) })) as WorkflowInvocationRecord[],
       } satisfies WorkflowDetail
     },
     create: async () => {
@@ -634,7 +723,7 @@ export const suoraIpc = {
         latestVersion: versions[0],
         selectedVersion: versions[0],
         definition: normalizeWorkflowDefinition(parseJson(payload.versions[0]?.definitionJson, { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } as WorkflowDefinition)),
-        invocations: payload.invocations.map((invocation) => ({ ...invocation, traces: JSON.parse(invocation.traceJson) })) as WorkflowInvocationRecord[],
+        invocations: payload.invocations.map((invocation) => ({ ...invocation, traces: parseWorkflowInvocationTraces(invocation.traceJson) })) as WorkflowInvocationRecord[],
       } satisfies WorkflowDetail
     },
     save: async (payload: { id: string; title: string; summary: string; definition: WorkflowDefinition; selectedVersionId?: string; publish?: boolean }) => {
@@ -650,7 +739,7 @@ export const suoraIpc = {
         latestVersion: versions[0],
         selectedVersion: versions[0],
         definition: normalizeWorkflowDefinition(parseJson(result.versions[0]?.definitionJson, { nodes: [], edges: [], viewport: { x: 0, y: 0, zoom: 1 } } as WorkflowDefinition)),
-        invocations: result.invocations.map((invocation) => ({ ...invocation, traces: JSON.parse(invocation.traceJson) })) as WorkflowInvocationRecord[],
+        invocations: result.invocations.map((invocation) => ({ ...invocation, traces: parseWorkflowInvocationTraces(invocation.traceJson) })) as WorkflowInvocationRecord[],
       } satisfies WorkflowDetail
     },
     recordInvocation: async (payload: { workflowId: string; versionId: string; status: string; trigger: string; input: string; output: string; traceJson: string }) => {
@@ -675,6 +764,19 @@ export const suoraIpc = {
       return parseChannelDetailRow(row)
     },
     delete: async (channelId: string) => getBridge().channels.delete(channelId) as Promise<{ success: boolean }>,
+    startRuntime: async () => getBridge().channels.startRuntime(),
+    stopRuntime: async () => getBridge().channels.stopRuntime(),
+    getRuntimeStatus: async () => getBridge().channels.getRuntimeStatus(),
+    registerRuntime: async () => getBridge().channels.registerRuntime(),
+    getWebhookUrl: async (channel: ChannelConfigRecord) => getBridge().channels.getWebhookUrl(channel),
+    sendMessage: async (payload: { channelId: string; chatId: string; content: string }) => getBridge().channels.sendMessage(payload),
+    sendMessageQueued: async (payload: { channelId: string; chatId: string; content: string }) => getBridge().channels.sendMessageQueued(payload),
+    getAccessToken: async (channelId: string) => getBridge().channels.getAccessToken(channelId),
+    healthCheck: async (channelId: string) => getBridge().channels.healthCheck(channelId),
+    getStreamStatus: async (channelId: string) => getBridge().channels.getStreamStatus(channelId),
+    debugSend: async (payload: { channelId: string; content: string }) => getBridge().channels.debugSend(payload),
+    startWeChatPersonalLogin: async (force?: boolean) => getBridge().channels.startWeChatPersonalLogin(force),
+    waitForWeChatPersonalLogin: async (sessionKey: string, verifyCode?: string, timeoutMs?: number) => getBridge().channels.waitForWeChatPersonalLogin(sessionKey, verifyCode, timeoutMs),
   },
   schedulers: {
     list: async () => getBridge().schedulers.list() as Promise<SchedulerDetail[]>,
@@ -686,13 +788,91 @@ export const suoraIpc = {
     get: async () => getBridge().preferences.get() as Promise<string | null>,
     save: async (value: string) => getBridge().preferences.save(value) as Promise<string>,
   },
+  updater: {
+    getState: async () => getBridge().updater.getState(),
+    check: async () => getBridge().updater.check(),
+  },
+  mail: {
+    send: async (payload: SendMailPayload) => getBridge().mail.send(payload) as Promise<{ success: boolean; error?: string }>,
+  },
   tools: {
     listFiles: async (relativePath?: string) => getBridge().tools.listFiles(relativePath) as Promise<Array<{ name: string; path: string; type: "file" | "directory" }>>,
     readFile: async (relativePath: string) => getBridge().tools.readFile(relativePath) as Promise<{ path: string; content: string }>,
     writeFile: async (payload: { path: string; content: string }) => getBridge().tools.writeFile(payload) as Promise<{ ok: boolean; path: string }>,
-    runCommand: async (payload: { command: string; cwd?: string; timeoutMs?: number }) => getBridge().tools.runCommand(payload) as Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>,
+    runCommand: async (payload: { command: string; cwd?: string; timeoutMs?: number }) => {
+      const bridge = getBridge()
+      const preferences = await readToolPreferenceSettings(bridge)
+      const mode = preferences.commandConfirmationMode === "never" || preferences.commandConfirmationMode === "always"
+        ? preferences.commandConfirmationMode
+        : "daily"
+
+      if (shouldConfirmWorkspaceCommand(mode) && typeof window !== "undefined" && typeof window.confirm === "function") {
+        const confirmed = window.confirm(["SUORA command guardrail", "", `Command: ${payload.command}`, payload.cwd ? `Directory: ${payload.cwd}` : "Directory: workspace root", "", "Continue execution?"].join("\n"))
+        if (!confirmed) {
+          return {
+            ok: false,
+            exitCode: null,
+            stdout: "",
+            stderr: "Command cancelled by preference guardrail.",
+          }
+        }
+
+        markWorkspaceCommandConfirmed(mode)
+      }
+
+      const env = Object.fromEntries((preferences.globalEnvironmentVariables ?? []).filter((item) => item && typeof item.key === "string" && item.key.trim()).map((item) => [item.key.trim(), typeof item.value === "string" ? item.value : ""]))
+
+      return bridge.tools.runCommand({ ...payload, env }) as Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>
+    },
     browserNavigate: async (payload: { url?: string; visible?: boolean }) => getBridge().tools.browserNavigate(payload) as Promise<{ ok: boolean; url: string; visible: boolean }>,
     saveFile: async (payload: { defaultName: string; filters?: Array<{ name: string; extensions: string[] }>; dataBase64: string }) => getBridge().tools.saveFile(payload) as Promise<{ ok: boolean; canceled: boolean; path: string | null }>,
     openExternal: async (url: string) => getBridge().tools.openExternal(url) as Promise<{ ok: boolean; url: string }>,
   },
+}
+
+async function readToolPreferenceSettings(bridge: ReturnType<typeof getBridge>): Promise<ToolPreferenceSettings> {
+  try {
+    const raw = await bridge.preferences.get() as string | null
+    if (!raw) {
+      return {}
+    }
+
+    return parseObjectJson<ToolPreferenceSettings>(raw, {})
+  } catch {
+    if (typeof window === "undefined") {
+      return {}
+    }
+
+    try {
+      const raw = window.localStorage.getItem("suora:preference-settings")
+      return parseObjectJson<ToolPreferenceSettings>(raw, {})
+    } catch {
+      return {}
+    }
+  }
+}
+
+function shouldConfirmWorkspaceCommand(mode: PreferenceCommandConfirmationMode) {
+  if (mode === "never") {
+    return false
+  }
+
+  if (mode === "always") {
+    return true
+  }
+
+  if (typeof window === "undefined") {
+    return false
+  }
+
+  const today = new Date().toISOString().slice(0, 10)
+  return window.localStorage.getItem(COMMAND_CONFIRMATION_STORAGE_KEY) !== today
+}
+
+function markWorkspaceCommandConfirmed(mode: PreferenceCommandConfirmationMode) {
+  if (mode !== "daily" || typeof window === "undefined") {
+    return
+  }
+
+  window.localStorage.setItem(COMMAND_CONFIRMATION_STORAGE_KEY, new Date().toISOString().slice(0, 10))
 }
