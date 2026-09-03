@@ -1,6 +1,8 @@
 import katex from "katex"
 import { useEffect, useId, useMemo, useRef } from "react"
 
+import { showToast } from "@/lib/app-toast"
+import { copyTextToClipboard } from "@/lib/clipboard"
 import { markdownToTiptapHtml } from "@/views/components/document-markdown"
 
 async function renderMermaid(target: HTMLElement, id: string, code: string) {
@@ -79,7 +81,13 @@ export function ChatRichContent({ content }: ChatRichContentProps) {
       copyButton.className = "chat-code-copy"
       copyButton.textContent = "Copy code"
       copyButton.addEventListener("click", () => {
-        void navigator.clipboard.writeText(codeText)
+        void copyTextToClipboard(codeText)
+          .then(() => {
+            showToast({ title: "Code copied", description: "The code block was copied to clipboard.", type: "success", timeout: 2000 })
+          })
+          .catch((error) => {
+            showToast({ title: "Copy failed", description: error instanceof Error ? error.message : String(error), type: "error", timeout: 3000 })
+          })
       })
       cleanupCallbacks.push(() => copyButton.replaceWith(copyButton.cloneNode(true)))
 

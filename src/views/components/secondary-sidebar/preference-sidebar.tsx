@@ -14,7 +14,9 @@ import {
 const PreferenceSidebar = () => {
   const sections = [
     { label: "General", href: "#general" },
+    { label: "Workspace", href: "#workspace" },
     { label: "Models", href: "#models" },
+    { label: "Chat", href: "#chat" },
     { label: "Notes", href: "#notes" },
   ]
 

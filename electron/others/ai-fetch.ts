@@ -58,9 +58,11 @@ export function startAiFetch(payload: AiFetchStartPayload) {
     sendAiEvent({ requestId, type: "error", error: error instanceof Error ? error.message : String(error) })
   })
 
-  request.setTimeout(payload.timeoutMs ?? 120_000, () => {
-    request.destroy(new Error("AI request timed out"))
-  })
+  if (payload.timeoutMs && payload.timeoutMs > 0) {
+    request.setTimeout(payload.timeoutMs, () => {
+      request.destroy(new Error("AI request timed out"))
+    })
+  }
 
   if (body) {
     request.write(body)

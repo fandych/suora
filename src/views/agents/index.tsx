@@ -1,25 +1,19 @@
 import { useNavigate } from "react-router"
 
-import { Button } from "@/components/ui/button"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import PageHeader from "@/views/components/page-header"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { createAgent, listAgents } from "@/data/repositories/agent-repository"
+import { listAgents } from "@/data/repositories/agent-repository"
 import { AgentCard } from "@/views/agents/components/agent-card"
 
 const AgentsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => listAgents(), [])
 
-  const handleCreate = async () => {
-    const detail = await createAgent()
-    navigate(`/agents/${detail.agent.id}`)
-  }
-
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title="Agents" description="Manage agent definitions through the module-specific IPC bridge." actions={<Button onClick={handleCreate}>New agent</Button>} />
+      <PageHeader title="Agents" description="Manage agent definitions through the module-specific IPC bridge." />
       <div className="flex-1 overflow-x-hidden p-6">
         <div className="flex w-full min-w-0 flex-col gap-4">
           {isLoading ? <LoadingCard title="Loading agents..." /> : null}

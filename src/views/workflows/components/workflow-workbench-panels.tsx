@@ -13,6 +13,7 @@ export function WorkflowLibraryPanel({
   query,
   matchingNodes,
   presets,
+  canEdit,
   onQueryChange,
   onSelectNode,
   onAddNode,
@@ -23,6 +24,7 @@ export function WorkflowLibraryPanel({
   query: string
   matchingNodes: Node<WorkflowNodeData>[]
   presets: Array<{ kind: WorkflowNodeData["kind"]; label: string; summary: string }>
+  canEdit: boolean
   onQueryChange: (value: string) => void
   onSelectNode: (nodeId: string) => void
   onAddNode: () => void
@@ -71,12 +73,13 @@ export function WorkflowLibraryPanel({
               ))}
             </div>
           ) : null}
-          <Button size="sm" variant="outline" className="h-8 w-full justify-start text-xs" onClick={onAddNode}>Add blank node</Button>
+          <Button size="sm" variant="outline" className="h-8 w-full justify-start text-xs" onClick={onAddNode} disabled={!canEdit}>Add blank node</Button>
           {presets.map((item) => (
             <button
               key={item.kind}
               type="button"
               onClick={() => onAddPresetNode(item.kind)}
+              disabled={!canEdit}
               className="flex w-full flex-col items-start gap-1 rounded-xl border px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
             >
               <div className="text-xs font-medium text-foreground">{item.label}</div>

@@ -2,9 +2,13 @@ import type { ChatDetail, ChatSummary } from "@/data/domain/models"
 import type { ChatMessagePart } from "@/data/domain/chat-message-parts"
 
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { suoraIpc } from "@/lib/ipc"
+import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
 
 export async function listChats() {
+  if (!hasSuoraBridge()) {
+    return [] as ChatSummary[]
+  }
+
   await ensureSeeded()
   return suoraIpc.chats.list() as Promise<ChatSummary[]>
 }

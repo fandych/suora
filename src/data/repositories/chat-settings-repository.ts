@@ -1,4 +1,5 @@
-import { suoraIpc } from "@/lib/ipc"
+import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
+import { getPreferenceSettings } from "@/data/repositories/preference-repository"
 
 export type ChatModelConfig = {
   providerId: string
@@ -23,6 +24,7 @@ export type ProxyConfig = {
 export type ChatRuntimeSettings = {
   model: ChatModelConfig
   proxy: ProxyConfig
+  requestTimeoutMs: number
 }
 
 export type ChatSessionSettings = {
@@ -61,6 +63,51 @@ const DEFAULT_SETTINGS: ChatRuntimeSettings = {
     rejectUnauthorized: true,
     ignoreSslErrors: false,
   },
+  requestTimeoutMs: 0,
+}
+
+const CHAT_SETTINGS_STORAGE_KEY = "suora:chat-settings"
+
+function readBrowserSettings() {
+  if (typeof window === "undefined") {
+    return null
+  }
+
+  return window.localStorage.getItem(CHAT_SETTINGS_STORAGE_KEY)
+}
+
+function writeBrowserSettings(store: ChatSettingsStore) {
+  if (typeof window === "undefined") {
+    return
+  }
+
+  window.localStorage.setItem(CHAT_SETTINGS_STORAGE_KEY, JSON.stringify(store))
+}
+
+async function readSettingsValue() {
+  if (hasSuoraBridge()) {
+    try {
+      return await suoraIpc.chats.getSettings() as string | null
+    } catch {
+      return readBrowserSettings()
+    }
+  }
+
+  return readBrowserSettings()
+}
+
+async function saveSettingsStore(store: ChatSettingsStore) {
+  if (hasSuoraBridge()) {
+    try {
+      await suoraIpc.chats.saveSettings(store)
+      return
+    } catch {
+      writeBrowserSettings(store)
+      return
+    }
+  }
+
+  writeBrowserSettings(store)
 }
 
 function parseRuntimeSettings(value?: Partial<ChatRuntimeSettings> | null): ChatRuntimeSettings {
@@ -68,6 +115,7 @@ function parseRuntimeSettings(value?: Partial<ChatRuntimeSettings> | null): Chat
     return {
       model: { ...DEFAULT_SETTINGS.model, ...(value?.model ?? {}) },
       proxy: { ...DEFAULT_SETTINGS.proxy, ...(value?.proxy ?? {}) },
+      requestTimeoutMs: typeof value?.requestTimeoutMs === "number" && Number.isFinite(value.requestTimeoutMs) ? value.requestTimeoutMs : DEFAULT_SETTINGS.requestTimeoutMs,
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -119,17 +167,20 @@ function sanitizeRuntimeSettings(settings: ChatRuntimeSettings): ChatRuntimeSett
       password: settings.proxy.password,
       port: Number.isFinite(settings.proxy.port) ? settings.proxy.port : 0,
     },
+    requestTimeoutMs: Number.isFinite(settings.requestTimeoutMs) && settings.requestTimeoutMs > 0 ? settings.requestTimeoutMs : 0,
   }
 }
 
 export async function getChatSessionSettings(chatId?: string | null): Promise<ChatSessionSettings> {
-  const value = await suoraIpc.chats.getSettings() as string | null
+  const value = await readSettingsValue()
   const store = parseStore(value)
   const chatSettings = chatId ? store.chats?.[chatId] : undefined
+  const preferences = await getPreferenceSettings().catch(() => null)
   const defaultRuntime = parseRuntimeSettings(store.defaultRuntime)
   const runtime = parseRuntimeSettings({
     model: { ...defaultRuntime.model, ...(chatSettings?.runtime?.model ?? {}) },
     proxy: { ...defaultRuntime.proxy, ...(chatSettings?.runtime?.proxy ?? {}) },
+    requestTimeoutMs: chatSettings?.runtime?.requestTimeoutMs ?? defaultRuntime.requestTimeoutMs ?? preferences?.chatRequestTimeoutMs ?? DEFAULT_SETTINGS.requestTimeoutMs,
   })
 
   return {
@@ -139,7 +190,7 @@ export async function getChatSessionSettings(chatId?: string | null): Promise<Ch
 }
 
 export async function saveChatSessionSettings(chatId: string | null, settings: ChatSessionSettings) {
-  const value = await suoraIpc.chats.getSettings() as string | null
+  const value = await readSettingsValue()
   const store = parseStore(value)
   const runtime = sanitizeRuntimeSettings(settings.runtime)
 
@@ -160,7 +211,7 @@ export async function saveChatSessionSettings(chatId: string | null, settings: C
     nextStore.defaultSelectedAgentId = settings.selectedAgentId.trim()
   }
 
-  await suoraIpc.chats.saveSettings(nextStore)
+  await saveSettingsStore(nextStore)
 
   return {
     runtime,
@@ -169,14 +220,14 @@ export async function saveChatSessionSettings(chatId: string | null, settings: C
 }
 
 export async function getChatDraft(chatId?: string | null) {
-  const value = await suoraIpc.chats.getSettings() as string | null
+  const value = await readSettingsValue()
   const store = parseStore(value)
   const draftKey = chatId ?? "__draft__"
   return store.drafts?.[draftKey] ?? ""
 }
 
 export async function saveChatDraft(chatId: string | null, draft: string) {
-  const value = await suoraIpc.chats.getSettings() as string | null
+  const value = await readSettingsValue()
   const store = parseStore(value)
   const draftKey = chatId ?? "__draft__"
 
@@ -188,7 +239,7 @@ export async function saveChatDraft(chatId: string | null, draft: string) {
   }
 
   nextStore.drafts![draftKey] = draft
-  await suoraIpc.chats.saveSettings(nextStore)
+  await saveSettingsStore(nextStore)
   return draft
 }
 

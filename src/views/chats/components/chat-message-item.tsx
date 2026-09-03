@@ -57,7 +57,7 @@ export function ChatMessageItem({
       <MessageContent>
         <MessageHeader>{label}</MessageHeader>
         <div className={cn("flex max-w-[min(100%,56rem)] min-w-0 flex-col gap-1", role === "user" ? "self-end" : "self-start")}>
-          <Bubble variant={role === "user" ? "default" : role === "assistant" ? "outline" : "muted"} align={align} className="max-w-full">
+          <Bubble variant={role === "user" ? "outline" : role === "assistant" ? "outline" : "muted"} align={align} className="max-w-full">
             <BubbleContent>
               {isPending ? (
                 <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">

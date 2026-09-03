@@ -8,9 +8,11 @@ import { appendAssistantChatMessage, appendUserChatMessage, createChat, getChatD
 import { getChatDraft, getChatSessionSettings, saveChatDraft, saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser-files"
+import { hasSuoraBridge } from "@/lib/ipc"
 import { showToast } from "@/lib/app-toast"
 import { retryBuiltInToolActivity } from "@/services/ai-tools"
 import { streamChatAgentResponse, type ChatAgentEvent, type ChatAttachment } from "@/services/ai-service"
+import { buildChatTranscript, createPersistedAssistantPayload, fileToChatAttachment, mergeChatAttachments, resolveFallbackRuntime } from "@/views/chats/chat-controller-utils"
 import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts, updateAssistantToolActivity } from "@/views/chats/assistant-response-parts"
 import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
 import type { ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
@@ -60,9 +62,10 @@ export function useChatDetailController() {
   const providers = useMemo(() => providerData ?? [], [providerData])
   const selectedChat = data
   const groupedProviders = providers.filter((provider) => provider.models.length > 0)
-  const selectedModelRecord = providers.flatMap((provider) => provider.models).find((model) => model.id === settingsDraft?.model.modelId) ?? null
+  const selectedProviderRecord = providers.find((provider) => provider.id === settingsDraft?.model.providerId) ?? null
+  const selectedModelRecord = selectedProviderRecord?.models.find((model) => model.id === settingsDraft?.model.modelId) ?? null
   const activeProviderType = providers.find((provider) => provider.id === settingsDraft?.model.providerId)?.providerType ?? settingsDraft?.model.providerType ?? "openai"
-  const supportsAttachments = Boolean(selectedModelRecord?.capabilities?.includes("vision") || ["anthropic", "google", "openai"].includes(activeProviderType))
+  const supportsAttachments = Boolean(selectedModelRecord?.capabilities?.includes("vision"))
   const combinedError = (activeChatId ? error : null) ?? settingsError
   const modelValue = useMemo(() => {
     if (!settingsDraft) {
@@ -99,6 +102,8 @@ export function useChatDetailController() {
       return
     }
 
+    abortControllerRef.current?.abort()
+
     setAssistantResponseMessageId(null)
     setToolEvents([])
     setStreamingText("")
@@ -106,6 +111,21 @@ export function useChatDetailController() {
     setAssistantResponseParts([])
     setIsDraftHydrated(false)
   }, [chatId])
+
+  useEffect(() => {
+    if (!settingsDraft || groupedProviders.length === 0) {
+      return
+    }
+
+    const fallbackRuntime = resolveFallbackRuntime(settingsDraft, groupedProviders)
+    if (!fallbackRuntime) {
+      return
+    }
+
+    setSettingsDraft(fallbackRuntime)
+    persistChatSessionSettings(fallbackRuntime, selectedAgentId)
+    showToast({ title: "Model unavailable", description: `Switched to ${fallbackRuntime.model.modelId}.`, type: "warning" })
+  }, [groupedProviders, selectedAgentId, settingsDraft])
 
   useEffect(() => {
     let cancelled = false
@@ -159,6 +179,16 @@ export function useChatDetailController() {
 
   const handleSend = async () => {
     if ((!draft.trim() && attachments.length === 0) || !settingsDraft || isResponding) {
+      return
+    }
+
+    if (!hasSuoraBridge()) {
+      showToast({ title: "Desktop runtime required", description: "Sending messages requires the Electron runtime and IPC bridge.", type: "warning" })
+      return
+    }
+
+    if (attachments.length > 0 && !supportsAttachments) {
+      showToast({ title: "Attachments not supported", description: "The selected model does not accept attachments.", type: "warning" })
       return
     }
 
@@ -226,14 +256,21 @@ export function useChatDetailController() {
       }
 
       const finalizedParts = finalizeAssistantResponseParts(streamedParts)
-      if (finalText.trim() || finalizedParts.length > 0) {
-        const withAssistant = await appendAssistantChatMessage(workingChatId, finalText.trim(), finalizedParts)
+      const completedWithAbort = abortController.signal.aborted
+      const { persistedText, persistedParts } = createPersistedAssistantPayload(finalText, finalizedParts, completedWithAbort)
+
+      if (persistedText.trim() || persistedParts.length > 0) {
+        const withAssistant = await appendAssistantChatMessage(workingChatId, persistedText.trim(), persistedParts)
         setData(withAssistant)
         setAssistantResponseMessageId(withAssistant.messages[withAssistant.messages.length - 1]?.id ?? null)
-        setAssistantResponseParts(finalizedParts)
+        setAssistantResponseParts(persistedParts)
         emitDataChanged("/chats")
       }
     } catch (nextError) {
+      if (nextError instanceof DOMException && nextError.name === "AbortError") {
+        return
+      }
+
       setToolEvents((value) => [...value, { type: "error", error: nextError instanceof Error ? nextError.message : String(nextError) }])
       showToast({ title: "Response failed", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error" })
     } finally {
@@ -250,19 +287,14 @@ export function useChatDetailController() {
       return
     }
 
-    const nextAttachments = await Promise.all(files.map(async (file) => ({
-      name: file.name,
-      mediaType: file.type || "application/octet-stream",
-      kind: file.type.startsWith("image/") ? "image" as const : "file" as const,
-      data: await fileToPayload(file),
-    })))
+    const nextAttachments = await Promise.all(files.map((file) => fileToChatAttachment(file)))
 
-    setAttachments((current) => [...current, ...nextAttachments])
+    setAttachments((current) => mergeChatAttachments(current, nextAttachments))
     event.target.value = ""
   }
 
-  const removeAttachment = (attachmentName: string) => {
-    setAttachments((current) => current.filter((attachment) => attachment.name !== attachmentName))
+  const removeAttachment = (attachmentId: string) => {
+    setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))
   }
 
   const handleRetryTool = async (messageId: string | null, activity: ChatToolActivity) => {
@@ -295,30 +327,9 @@ export function useChatDetailController() {
     }
   }
 
-  const buildTranscript = () => {
-    const messageBlocks = (selectedChat?.messages ?? []).map((message) => `${message.role.toUpperCase()}\n${message.content}`).join("\n\n")
-    const assistantBlocks = assistantResponseParts.map((part) => {
-      if (part.type === "text") {
-        return part.content ? `ASSISTANT\n${part.content}` : ""
-      }
-
-      if (part.activity.error) {
-        return `TOOL ERROR ${part.activity.toolName}\n${part.activity.error}`
-      }
-
-      if (part.activity.output) {
-        return `TOOL RESULT ${part.activity.toolName}\n${part.activity.output}`
-      }
-
-      return `TOOL CALL ${part.activity.toolName}\n${JSON.stringify(part.activity.input ?? {}, null, 2)}`
-    }).filter(Boolean).join("\n\n")
-
-    return [messageBlocks, assistantBlocks].filter(Boolean).join("\n\n")
-  }
-
   const handleExportChat = async (format: "markdown" | "pdf" | "docx") => {
     const baseName = `${selectedChat?.chat.title || "chat"}`.replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase() || "chat"
-    const transcript = buildTranscript()
+    const transcript = buildChatTranscript(selectedChat, assistantResponseParts)
 
     if (format === "markdown") {
       const result = await saveTextFile(`${baseName}.md`, transcript, "text/markdown;charset=utf-8")
@@ -402,13 +413,4 @@ export function useChatDetailController() {
     toolEvents,
     streamingText,
   }
-}
-
-async function fileToPayload(file: File) {
-  return await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-    reader.onerror = () => reject(reader.error ?? new Error(`Failed to read ${file.name}`))
-    reader.onload = () => resolve(typeof reader.result === "string" ? reader.result : "")
-    reader.readAsDataURL(file)
-  })
 }

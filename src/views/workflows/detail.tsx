@@ -2,28 +2,25 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { Background, Controls, Panel, ReactFlow, addEdge, useEdgesState, useNodesState, type Connection, type Edge, type Node, type NodeMouseHandler } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import { useParams } from "react-router"
-import { DownloadIcon, PanelRightOpenIcon, PanelRightCloseIcon, PlayIcon, SaveIcon, UploadIcon } from "lucide-react"
-
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { Separator } from "@/components/ui/separator"
 import { listAgents } from "@/data/repositories/agent-repository"
 import { listDocuments } from "@/data/repositories/document-repository"
 import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
+import { showToast } from "@/lib/app-toast"
 import PageHeader from "@/views/components/page-header"
-import VersionSelect from "@/views/components/version-select"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { createWorkflowNodeData, defaultWorkflowBindings, workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
-import { DEFAULT_WORKFLOW_DRY_RUN_INPUT, buildWorkflowFingerprint, getWorkflowDesignIssues } from "@/views/workflows/components/workflow-editor-state"
+import { DEFAULT_WORKFLOW_DRY_RUN_INPUT, buildWorkflowFingerprint, getWorkflowDesignIssues, getWorkflowDryRunInputIssue } from "@/views/workflows/components/workflow-editor-state"
+import { WorkflowHeaderActions } from "@/views/workflows/components/workflow-header-actions"
+import { WorkflowInspectorShell } from "@/views/workflows/components/workflow-inspector-shell"
+import { WorkflowStatusPill } from "@/views/workflows/components/workflow-status-pill"
 import { workflowNodeTypes } from "@/views/workflows/components/workflow-canvas-node"
 import { WorkflowPropertiesPanel } from "@/views/workflows/components/workflow-properties-panel"
 import { exportWorkflowJson, parseWorkflowJson } from "@/views/workflows/components/workflow-transfer"
 import { WorkflowDesignIssuesSummary, WorkflowLibraryPanel } from "@/views/workflows/components/workflow-workbench-panels"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import type { WorkflowNodeData } from "@/data/domain/models"
-import { getWorkflowDetail, publishWorkflowVersion, runWorkflow, saveWorkflowDraft } from "@/data/repositories/workflow-repository"
+import { dryRunWorkflowSnapshot, getWorkflowDetail, publishWorkflowVersion, runWorkflow, saveWorkflowDraft } from "@/data/repositories/workflow-repository"
 
 const WorkflowDetailPage = () => {
   const { workflowId } = useParams<{ workflowId: string }>()
@@ -36,7 +33,6 @@ const WorkflowDetailPage = () => {
   const { data: providersData } = useAsyncResource(() => listConfiguredModelProviders(), [])
   const { data: documentsData } = useAsyncResource(() => listDocuments(), [])
   const { data: integrationsData } = useAsyncResource(() => listIntegrationSummaries(), [])
-
   const [title, setTitle] = useState("")
   const [summary, setSummary] = useState("")
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>([])
@@ -57,7 +53,6 @@ const WorkflowDetailPage = () => {
     if (!data) {
       return
     }
-
     setTitle(data.workflow.title)
     setSummary(data.workflow.summary)
     setNodes(data.definition.nodes)
@@ -68,24 +63,36 @@ const WorkflowDetailPage = () => {
     setSelectedNodeId(data.definition.nodes[0]?.id ?? null)
   }, [data, setEdges, setNodes])
 
-  const selectedNode = useMemo(
-    () => nodes.find((node) => node.id === selectedNodeId) ?? null,
-    [nodes, selectedNodeId]
-  )
+  const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId])
   const latestInvocation = data?.invocations[0] ?? null
+  const currentDefinition = useMemo(() => ({
+    nodes,
+    edges,
+    viewport: data?.definition.viewport ?? { x: 0, y: 0, zoom: 1 },
+    resourceBindings,
+    dryRunInputJson: dryRunInput,
+    variables: data?.definition.variables ?? [],
+    budget: data?.definition.budget,
+  }), [data, dryRunInput, edges, nodes, resourceBindings])
   const nodeSearchResults = useMemo(() => {
     const keyword = libraryQuery.trim().toLowerCase()
     if (!keyword) {
       return []
     }
-
     return nodes.filter((node) => `${node.data.label} ${node.data.task ?? ""} ${node.data.kind}`.toLowerCase().includes(keyword))
   }, [libraryQuery, nodes])
-  const designIssues = useMemo(() => getWorkflowDesignIssues(nodes), [nodes])
-  const currentFingerprint = useMemo(
-    () => buildWorkflowFingerprint({ title, summary, nodes, edges, resourceBindings, dryRunInput }),
-    [dryRunInput, edges, nodes, resourceBindings, summary, title]
-  )
+  const designIssues = useMemo(() => getWorkflowDesignIssues({
+    nodes,
+    edges,
+    availableAgentIds: agents.map((agent) => agent.id),
+    availableDocumentIds: documents.map((document) => document.id),
+    availableIntegrationIds: integrations.map((integration) => integration.id),
+    availableModelIds: modelOptions.map((model) => model.id),
+  }), [agents, documents, edges, integrations, modelOptions, nodes])
+  const dryRunInputIssue = useMemo(() => getWorkflowDryRunInputIssue(dryRunInput), [dryRunInput])
+  const visibleIssues = useMemo(() => dryRunInputIssue ? [...designIssues, dryRunInputIssue] : designIssues, [designIssues, dryRunInputIssue])
+  const blockingIssues = useMemo(() => visibleIssues.filter((issue) => issue.severity === "error"), [visibleIssues])
+  const currentFingerprint = useMemo(() => buildWorkflowFingerprint({ title, summary, definition: currentDefinition }), [currentDefinition, summary, title])
   const savedFingerprint = useMemo(() => {
     if (!data) {
       return ""
@@ -94,14 +101,17 @@ const WorkflowDetailPage = () => {
     return buildWorkflowFingerprint({
       title: data.workflow.title,
       summary: data.workflow.summary,
-      nodes: data.definition.nodes,
-      edges: data.definition.edges,
-      resourceBindings: data.definition.resourceBindings ?? defaultWorkflowBindings,
-      dryRunInput: data.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT,
+      definition: {
+        ...data.definition,
+        resourceBindings: data.definition.resourceBindings ?? defaultWorkflowBindings,
+        dryRunInputJson: data.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT,
+      },
     })
   }, [data])
   const hasUnsavedChanges = Boolean(data) && currentFingerprint !== savedFingerprint
   const isReleaseVersion = Boolean(data?.selectedVersion.isRelease)
+  const isDraftVersion = Boolean(data && !data.selectedVersion.isRelease)
+  const isReadOnly = isReleaseVersion
   const tracedNodes = useMemo(() => {
     const traceMap = new Map(latestInvocation?.traces.map((trace) => [trace.nodeId, trace]) ?? [])
     return nodes.map((node) => {
@@ -122,27 +132,25 @@ const WorkflowDetailPage = () => {
   }, [latestInvocation, nodes])
 
   const handleConnect = (connection: Connection) => {
+    if (isReadOnly) {
+      return
+    }
     setEdges((current) => addEdge(connection, current))
   }
 
   const handleSave = async () => {
-    if (!workflowId) {
+    if (!workflowId || !data) {
       return
     }
-
+    if (isReadOnly) {
+      showToast({ title: "Release revisions are read-only", description: "Switch back to a draft revision before editing this workflow.", type: "warning" })
+      return
+    }
     const next = await saveWorkflowDraft(workflowId, {
       title,
       summary,
       selectedVersionId: data?.selectedVersion.id,
-      definition: {
-        nodes,
-        edges,
-        viewport: data?.definition.viewport ?? { x: 0, y: 0, zoom: 1 },
-        resourceBindings,
-        dryRunInputJson: dryRunInput,
-        variables: data?.definition.variables ?? [],
-        budget: data?.definition.budget,
-      },
+      definition: currentDefinition,
     })
 
     setData(next)
@@ -153,26 +161,63 @@ const WorkflowDetailPage = () => {
     if (!workflowId || !data) {
       return
     }
-
+    if (!isDraftVersion) {
+      showToast({ title: "Select a draft revision", description: "Published revisions stay read-only. Switch to a draft before publishing a new release.", type: "warning" })
+      return
+    }
+    if (hasUnsavedChanges) {
+      showToast({ title: "Save the draft first", description: "Publishing only works from the latest saved draft snapshot.", type: "warning" })
+      return
+    }
+    if (blockingIssues[0]) {
+      showToast({ title: "Resolve workflow issues", description: blockingIssues[0].message, type: "error" })
+      return
+    }
     const next = await publishWorkflowVersion(workflowId, data.selectedVersion.id)
     setData(next)
     setSelectedVersionId(next.selectedVersion.id)
   }
 
-  const handleRun = async () => {
+  const handleRunRelease = async () => {
     if (!workflowId || !data) {
       return
     }
-
+    if (!isReleaseVersion) {
+      showToast({ title: "Publish a release first", description: "Use Dry run while iterating on a draft. Header Run is reserved for published revisions.", type: "warning" })
+      return
+    }
     const next = await runWorkflow(workflowId, data.selectedVersion.id)
     setData(next)
   }
 
-  const handleNodeClick: NodeMouseHandler<Node<WorkflowNodeData>> = (_event, node) => {
-    setSelectedNodeId(node.id)
+  const handleDryRun = async () => {
+    if (!workflowId || !data) {
+      return
+    }
+    if (isReadOnly) {
+      showToast({ title: "Switch to a draft revision", description: "Dry run works from editable draft revisions so you can test the current canvas state.", type: "warning" })
+      return
+    }
+    if (blockingIssues[0]) {
+      showToast({ title: "Resolve workflow issues", description: blockingIssues[0].message, type: "error" })
+      return
+    }
+    const invocation = await dryRunWorkflowSnapshot({
+      workflowId,
+      workflowTitle: title || data.workflow.title,
+      selectedVersion: data.selectedVersion,
+      definition: currentDefinition,
+    })
+
+    setData((current) => current ? { ...current, invocations: [invocation, ...current.invocations] } : current)
   }
 
+  const handleNodeClick: NodeMouseHandler<Node<WorkflowNodeData>> = (_event, node) => setSelectedNodeId(node.id)
+
   const handleAddNode = () => {
+    if (isReadOnly) {
+      return
+    }
     const nextIndex = nodes.length + 1
     const nextId = `node-${nextIndex}`
     setNodes((current) => [
@@ -188,6 +233,9 @@ const WorkflowDetailPage = () => {
   }
 
   const handleAddPresetNode = (kind: WorkflowNodeData["kind"]) => {
+    if (isReadOnly) {
+      return
+    }
     const nextIndex = nodes.length + 1
     const nextId = `${kind}-${nextIndex}`
     setNodes((current) => [
@@ -203,25 +251,23 @@ const WorkflowDetailPage = () => {
   }
 
   const handleSelectedNodeChange = (patch: Partial<WorkflowNodeData>) => {
-    if (!selectedNodeId) {
+    if (!selectedNodeId || isReadOnly) {
       return
     }
-
     setNodes((current) => current.map((node) => node.id === selectedNodeId ? { ...node, data: { ...node.data, ...patch } } : node))
   }
 
   const handleDuplicateNode = () => {
-    if (!selectedNode) {
+    if (!selectedNode || isReadOnly) {
       return
     }
-
     const nextId = `${selectedNode.id}-copy-${nodes.length + 1}`
     setNodes((current) => [...current, { ...selectedNode, id: nextId, position: { x: selectedNode.position.x + 48, y: selectedNode.position.y + 48 } }])
     setSelectedNodeId(nextId)
   }
 
   const handleDeleteNode = () => {
-    if (!selectedNodeId) {
+    if (!selectedNodeId || isReadOnly) {
       return
     }
 
@@ -235,10 +281,15 @@ const WorkflowDetailPage = () => {
       return
     }
 
-    exportWorkflowJson({ title, summary, definition: { nodes, edges, viewport: data.definition.viewport, resourceBindings, dryRunInputJson: dryRunInput, variables: data.definition.variables ?? [], budget: data.definition.budget }, versionLabel: data.selectedVersion.label })
+    exportWorkflowJson({ title, summary, definition: currentDefinition, versionLabel: data.selectedVersion.label })
   }
 
   const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (isReadOnly) {
+      event.target.value = ""
+      return
+    }
+
     const file = event.target.files?.[0]
     event.target.value = ""
     if (!file) {
@@ -272,43 +323,28 @@ const WorkflowDetailPage = () => {
         title={data?.workflow.title ?? "Workflow"}
         description="Forhub-style workflow editor with a full-width graph canvas and compact side panels."
         actions={data ? (
-          <>
-            <VersionSelect versions={data.versions} value={data.selectedVersion.id} onChange={setSelectedVersionId} />
-            <Badge variant={isReleaseVersion ? "secondary" : "outline"}>{isReleaseVersion ? "Release revision" : "Draft revision"}</Badge>
-            <Badge variant={hasUnsavedChanges ? "destructive" : "outline"}>{hasUnsavedChanges ? "Unsaved changes" : "Saved"}</Badge>
-            <Badge variant={designIssues.length ? "destructive" : "outline"}>{designIssues.length} design issue{designIssues.length === 1 ? "" : "s"}</Badge>
-            <Button size="sm" variant="outline" onClick={() => setShowLibrary((value) => !value)}>
-              {showLibrary ? <PanelLeftCloseIcon /> : <PanelLeftOpenIcon />}
-              Library
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setShowInspector((value) => !value)}>
-              {showInspector ? <PanelRightCloseIcon /> : <PanelRightOpenIcon />}
-              Panels
-            </Button>
-            <Button size="sm" variant="outline" onClick={handleRun}>
-              <PlayIcon />
-              Run
-            </Button>
-            <Button size="sm" onClick={handleSave} disabled={!hasUnsavedChanges}>
-              <SaveIcon />
-              Save draft
-            </Button>
-            <Button size="sm" variant="outline" onClick={handlePublish} disabled={hasUnsavedChanges || !isReleaseVersion && designIssues.some((issue) => issue.severity === "error")}>
-              <UploadIcon />
-              Publish
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>
-                <DownloadIcon />
-                Transfer
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-40 min-w-40">
-                <DropdownMenuItem onClick={handleExport}>Export JSON</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => importInputRef.current?.click()}>Import JSON</DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void handleImport(event)} />
-          </>
+          <WorkflowHeaderActions
+            versions={data.versions}
+            selectedVersionId={data.selectedVersion.id}
+            onVersionChange={setSelectedVersionId}
+            isReleaseVersion={isReleaseVersion}
+            hasUnsavedChanges={hasUnsavedChanges}
+            issueCount={visibleIssues.length}
+            showLibrary={showLibrary}
+            showInspector={showInspector}
+            canRunRelease={isReleaseVersion}
+            canSaveDraft={!isReadOnly && hasUnsavedChanges}
+            canPublish={isDraftVersion && !hasUnsavedChanges && blockingIssues.length === 0}
+            onToggleLibrary={() => setShowLibrary((value) => !value)}
+            onToggleInspector={() => setShowInspector((value) => !value)}
+            onRunRelease={handleRunRelease}
+            onSaveDraft={handleSave}
+            onPublish={handlePublish}
+            onExport={handleExport}
+            onImport={() => importInputRef.current?.click()}
+            importInputRef={importInputRef}
+            onImportChange={handleImport}
+          />
         ) : null}
       />
 
@@ -321,10 +357,13 @@ const WorkflowDetailPage = () => {
               nodes={tracedNodes}
               edges={edges}
               nodeTypes={workflowNodeTypes}
-              onNodesChange={onNodesChange}
-              onEdgesChange={onEdgesChange}
+              onNodesChange={isReadOnly ? undefined : onNodesChange}
+              onEdgesChange={isReadOnly ? undefined : onEdgesChange}
               onConnect={handleConnect}
               onNodeClick={handleNodeClick}
+              nodesDraggable={!isReadOnly}
+              nodesConnectable={!isReadOnly}
+              elementsSelectable
               fitView
             >
               <Background gap={20} size={1} color="var(--color-border)" />
@@ -336,6 +375,7 @@ const WorkflowDetailPage = () => {
                   query={libraryQuery}
                   matchingNodes={nodeSearchResults}
                   presets={filteredPresets}
+                  canEdit={!isReadOnly}
                   onQueryChange={setLibraryQuery}
                   onSelectNode={setSelectedNodeId}
                   onAddNode={handleAddNode}
@@ -345,49 +385,39 @@ const WorkflowDetailPage = () => {
               </Panel>
 
               <Panel position="top-right" className="m-3 w-88 max-w-[calc(100vw-2rem)] pointer-events-auto">
-                {showInspector ? (
-                  <div className="max-h-[calc(100vh-10rem)] overflow-hidden rounded-2xl border bg-card shadow-sm">
-                    <WorkflowDesignIssuesSummary issues={designIssues} onSelectNode={setSelectedNodeId} />
-                    <WorkflowPropertiesPanel
-                      agents={agents}
-                      documents={documents}
-                      integrations={integrations}
-                      modelOptions={modelOptions}
-                      onDeleteNode={handleDeleteNode}
-                      onDuplicateNode={handleDuplicateNode}
-                      onRun={handleRun}
-                      onSave={handleSave}
-                      onSelectTraceNode={setSelectedNodeId}
-                      resourceBindings={resourceBindings}
-                      selectedNode={selectedNode ? { id: selectedNode.id, data: selectedNode.data } : null}
-                      selectedNodeId={selectedNodeId}
-                      setDryRunInput={setDryRunInput}
-                      setResourceBindings={setResourceBindings}
-                      setSummary={setSummary}
-                      setTitle={setTitle}
-                      summary={summary}
-                      title={title}
-                      traces={data.invocations}
-                      updateNode={handleSelectedNodeChange}
-                      dryRunInput={dryRunInput}
-                    />
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border bg-card p-2 shadow-sm">
-                    <Button size="sm" variant="ghost" onClick={() => setShowInspector(true)}>
-                      <PanelRightOpenIcon />
-                    </Button>
-                  </div>
-                )}
+                <WorkflowInspectorShell isOpen={showInspector} onOpen={() => setShowInspector(true)}>
+                  <WorkflowDesignIssuesSummary issues={visibleIssues} onSelectNode={setSelectedNodeId} />
+                  <WorkflowPropertiesPanel
+                    agents={agents}
+                    documents={documents}
+                    integrations={integrations}
+                    modelOptions={modelOptions}
+                    onDeleteNode={handleDeleteNode}
+                    onDuplicateNode={handleDuplicateNode}
+                    onRunDraft={handleDryRun}
+                    onSave={handleSave}
+                    onSelectTraceNode={setSelectedNodeId}
+                    readOnly={isReadOnly}
+                    resourceBindings={resourceBindings}
+                    runDraftDisabled={blockingIssues.length > 0}
+                    saveDisabled={!hasUnsavedChanges}
+                    selectedNode={selectedNode ? { id: selectedNode.id, data: selectedNode.data } : null}
+                    selectedNodeId={selectedNodeId}
+                    setDryRunInput={setDryRunInput}
+                    setResourceBindings={setResourceBindings}
+                    setSummary={setSummary}
+                    setTitle={setTitle}
+                    summary={summary}
+                    title={title}
+                    traces={data.invocations}
+                    updateNode={handleSelectedNodeChange}
+                    dryRunInput={dryRunInput}
+                  />
+                </WorkflowInspectorShell>
               </Panel>
 
               <Panel position="bottom-left" className="m-3 pointer-events-none">
-                <div className="flex items-center gap-2 rounded-full border bg-background/92 px-3 py-1.5 backdrop-blur">
-                  <span className="text-[11px] font-medium">{title || data.workflow.title}</span>
-                  <Separator orientation="vertical" className="h-3" />
-                  <Badge variant="outline" className="h-5 px-1.5 text-[10px]">{data.selectedVersion.label}</Badge>
-                  <span className="text-[10px] text-muted-foreground">{nodes.length} nodes</span>
-                </div>
+                <WorkflowStatusPill title={title || data.workflow.title} versionLabel={data.selectedVersion.label} nodeCount={nodes.length} />
               </Panel>
             </ReactFlow>
           </div>

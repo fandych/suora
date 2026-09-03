@@ -63,7 +63,12 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
       )
     }
     case "/agents":
-      return mapItems(item, (await listAgents()).map((record) => ({ id: record.id, title: record.title, group: record.kind, meta: record.summary })))
+      return mapItems(item, (await listAgents()).map((record) => ({
+        id: record.id,
+        title: record.title,
+        group: record.kind === "custom" ? "custom" : "builtin",
+        meta: record.summary,
+      })))
     case "/workflows":
       return mapItems(item, (await listWorkflows()).map((record) => ({ id: record.id, title: record.title, group: "workflows", meta: record.summary })))
     case "/schedulers":

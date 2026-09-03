@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser-files"
+import { copyTextToClipboard } from "@/lib/clipboard"
 import { showToast } from "@/lib/app-toast"
 
 type ChatMessageActionsProps = {
@@ -50,7 +51,12 @@ export function ChatMessageActions({ baseName, className, content, createdAt }: 
   }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(content)
+    try {
+      await copyTextToClipboard(content)
+      showToast({ title: "Message copied", description: "The message content was copied to clipboard.", type: "success", timeout: 2000 })
+    } catch (error) {
+      showToast({ title: "Copy failed", description: error instanceof Error ? error.message : String(error), type: "error", timeout: 3000 })
+    }
   }
 
   const handleSpeak = () => {

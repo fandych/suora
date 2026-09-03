@@ -15,14 +15,17 @@ type WorkflowPropertiesPanelProps = {
   modelOptions: Array<{ id: string; label: string }>
   onDeleteNode: () => void
   onDuplicateNode: () => void
-  onRun: () => void
+  onRunDraft: () => void
   onSave: () => void
   onSelectTraceNode: (nodeId: string) => void
+  readOnly: boolean
   resourceBindings: { providerId: string; skillId: string; documentId: string; integrationId: string }
+  runDraftDisabled: boolean
   selectedNode: { id: string; data: WorkflowNodeData } | null
   selectedNodeId: string | null
   setDryRunInput: (value: string) => void
   setResourceBindings: (value: { providerId: string; skillId: string; documentId: string; integrationId: string }) => void
+  saveDisabled: boolean
   setSummary: (value: string) => void
   setTitle: (value: string) => void
   summary: string
@@ -40,14 +43,17 @@ export function WorkflowPropertiesPanel(props: WorkflowPropertiesPanelProps) {
     modelOptions,
     onDeleteNode,
     onDuplicateNode,
-    onRun,
+    onRunDraft,
     onSave,
     onSelectTraceNode,
+    readOnly,
     resourceBindings,
+    runDraftDisabled,
     selectedNode,
     selectedNodeId,
     setDryRunInput,
     setResourceBindings,
+    saveDisabled,
     setSummary,
     setTitle,
     summary,
@@ -71,8 +77,10 @@ export function WorkflowPropertiesPanel(props: WorkflowPropertiesPanelProps) {
         <div className="space-y-3 p-3 text-xs">
           <section className="space-y-2 rounded-xl border p-2.5">
             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Workflow</div>
-            <Input className="h-8 text-xs" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Workflow name" />
-            <Textarea className="min-h-20 text-xs" value={summary} onChange={(event) => setSummary(event.target.value)} rows={4} placeholder="Workflow summary" />
+            <fieldset disabled={readOnly} className="space-y-2">
+              <Input className="h-8 text-xs" value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Workflow name" />
+              <Textarea className="min-h-20 text-xs" value={summary} onChange={(event) => setSummary(event.target.value)} rows={4} placeholder="Workflow summary" />
+            </fieldset>
           </section>
 
           <section className="space-y-2 rounded-xl border p-2.5">
@@ -81,7 +89,7 @@ export function WorkflowPropertiesPanel(props: WorkflowPropertiesPanelProps) {
               {selectedNode ? <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">{selectedNode.id}</Badge> : null}
             </div>
             {node ? (
-              <>
+              <fieldset disabled={readOnly} className="space-y-2">
                 <Input className="h-8 text-xs" value={node.label} onChange={(event) => updateNode({ label: event.target.value })} placeholder="Node label" />
                 <NativeSelect size="sm" value={node.kind} onChange={(event) => updateNode({ kind: event.target.value as WorkflowNodeData["kind"] })}>
                   <NativeSelectOption value="start">Start</NativeSelectOption>
@@ -135,22 +143,27 @@ export function WorkflowPropertiesPanel(props: WorkflowPropertiesPanelProps) {
                   <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onDuplicateNode}>Duplicate</Button>
                   <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onDeleteNode}>Delete</Button>
                 </div>
-              </>
+              </fieldset>
             ) : <div className="rounded-lg border border-dashed px-3 py-4 text-[11px] text-muted-foreground">Select a node from the graph to edit its behavior.</div>}
           </section>
 
           <section className="space-y-2 rounded-xl border p-2.5">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Try run</div>
-            <Textarea className="min-h-24 font-mono text-[11px]" value={dryRunInput} onChange={(event) => setDryRunInput(event.target.value)} rows={5} placeholder="{ }" />
-            <div className="grid gap-2">
-              <Input className="h-8 text-xs" value={resourceBindings.providerId} onChange={(event) => setResourceBindings({ ...resourceBindings, providerId: event.target.value })} placeholder="Provider ID" />
-              <Input className="h-8 text-xs" value={resourceBindings.skillId} onChange={(event) => setResourceBindings({ ...resourceBindings, skillId: event.target.value })} placeholder="Skill ID" />
-              <Input className="h-8 text-xs" value={resourceBindings.documentId} onChange={(event) => setResourceBindings({ ...resourceBindings, documentId: event.target.value })} placeholder="Document ID" />
-              <Input className="h-8 text-xs" value={resourceBindings.integrationId} onChange={(event) => setResourceBindings({ ...resourceBindings, integrationId: event.target.value })} placeholder="Integration ID" />
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Dry run</div>
+              {readOnly ? <Badge variant="outline" className="h-5 px-1.5 text-[10px]">Release is read-only</Badge> : null}
             </div>
+            <fieldset disabled={readOnly} className="space-y-2">
+              <Textarea className="min-h-24 font-mono text-[11px]" value={dryRunInput} onChange={(event) => setDryRunInput(event.target.value)} rows={5} placeholder="{ }" />
+              <div className="grid gap-2">
+                <Input className="h-8 text-xs" value={resourceBindings.providerId} onChange={(event) => setResourceBindings({ ...resourceBindings, providerId: event.target.value })} placeholder="Provider ID" />
+                <Input className="h-8 text-xs" value={resourceBindings.skillId} onChange={(event) => setResourceBindings({ ...resourceBindings, skillId: event.target.value })} placeholder="Skill ID" />
+                <Input className="h-8 text-xs" value={resourceBindings.documentId} onChange={(event) => setResourceBindings({ ...resourceBindings, documentId: event.target.value })} placeholder="Document ID" />
+                <Input className="h-8 text-xs" value={resourceBindings.integrationId} onChange={(event) => setResourceBindings({ ...resourceBindings, integrationId: event.target.value })} placeholder="Integration ID" />
+              </div>
+            </fieldset>
             <div className="grid grid-cols-2 gap-2">
-              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onRun}>Run now</Button>
-              <Button size="sm" className="h-8 text-xs" onClick={onSave}>Save state</Button>
+              <Button size="sm" variant="outline" className="h-8 text-xs" onClick={onRunDraft} disabled={readOnly || runDraftDisabled}>Dry run</Button>
+              <Button size="sm" className="h-8 text-xs" onClick={onSave} disabled={readOnly || saveDisabled}>Save draft</Button>
             </div>
           </section>
 

@@ -33,7 +33,23 @@ export function applyEventToAssistantResponseParts(parts: AssistantResponsePart[
 }
 
 export function finalizeAssistantResponseParts(parts: AssistantResponsePart[]): AssistantResponsePart[] {
-  return parts.map((part) => part.type === "text" ? { ...part, isPending: false } : part)
+  return parts.map((part) => {
+    if (part.type === "text") {
+      return { ...part, isPending: false }
+    }
+
+    if (part.activity.output === undefined && !part.activity.error) {
+      return {
+        ...part,
+        activity: {
+          ...part.activity,
+          stopped: true,
+        },
+      }
+    }
+
+    return part
+  })
 }
 
 export function updateAssistantToolActivity(parts: AssistantResponsePart[], activityId: string, updates: Partial<ChatToolActivity>): AssistantResponsePart[] {

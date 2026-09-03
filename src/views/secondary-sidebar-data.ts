@@ -43,16 +43,27 @@ export function useSecondarySidebarData(item?: PrimaryNavItem) {
     setGroups(createEmptyGroups(item))
     setIsLoading(true)
 
-    loadSidebarGroups(item).then((nextGroups) => {
-      if (cancelled) {
-        return
-      }
+    loadSidebarGroups(item)
+      .then((nextGroups) => {
+        if (cancelled) {
+          return
+        }
 
-      startTransition(() => {
-        setGroups(nextGroups)
-        setIsLoading(false)
+        startTransition(() => {
+          setGroups(nextGroups)
+          setIsLoading(false)
+        })
       })
-    })
+      .catch(() => {
+        if (cancelled) {
+          return
+        }
+
+        startTransition(() => {
+          setGroups(createEmptyGroups(item))
+          setIsLoading(false)
+        })
+      })
 
     return () => {
       cancelled = true

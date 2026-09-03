@@ -42,7 +42,7 @@ export function ChatDeleteButton({ className, chatId, isActive }: ChatDeleteButt
 
   return (
     <AlertDialog>
-      <AlertDialogTrigger render={<Button variant="ghost" size="icon-sm" className={cn("shrink-0", className)} data-chat-delete-trigger={chatId} disabled={isDeleting} />}>
+      <AlertDialogTrigger render={<Button variant="ghost" size="icon-sm" className={cn("shrink-0", className)} data-chat-delete-trigger={chatId} disabled={isDeleting} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()} />}>
         <Trash2Icon />
       </AlertDialogTrigger>
       <AlertDialogContent size="sm">
@@ -57,7 +57,7 @@ export function ChatDeleteButton({ className, chatId, isActive }: ChatDeleteButt
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" disabled={isDeleting} onClick={() => void handleDelete()}>
+          <AlertDialogAction variant="destructive" disabled={isDeleting} onClick={(event) => { event.stopPropagation(); void handleDelete() }}>
             {isDeleting ? "Deleting..." : "Delete"}
           </AlertDialogAction>
         </AlertDialogFooter>

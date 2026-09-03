@@ -23,7 +23,7 @@ function summarizeMessage(message: ChatMessageRecord) {
         return `[tool ${part.activity.toolName} error: ${truncate(part.activity.error, 80)}]`
       }
 
-      if (part.activity.output) {
+      if (part.activity.output !== undefined) {
         return `[tool ${part.activity.toolName} success]`
       }
 
@@ -67,7 +67,7 @@ function toAssistantText(message: ChatMessageRecord) {
       return `[tool ${part.activity.toolName} error]\n${truncate(part.activity.error, MAX_TOOL_OUTPUT_CHARS)}`
     }
 
-    if (part.activity.output) {
+    if (part.activity.output !== undefined) {
       return `[tool ${part.activity.toolName} result]\n${truncate(part.activity.output, MAX_TOOL_OUTPUT_CHARS)}`
     }
 
@@ -90,7 +90,7 @@ export function buildChatModelMessages(history: ChatMessageRecord[], attachments
           { type: "text", text: message.content },
           ...attachments.map((attachment) => ({
             type: "file" as const,
-            mediaType: attachment.kind === "image" ? "image" : attachment.mediaType,
+            mediaType: attachment.mediaType || (attachment.kind === "image" ? "image/png" : "application/octet-stream"),
             filename: attachment.name,
             data: attachment.data,
           })),

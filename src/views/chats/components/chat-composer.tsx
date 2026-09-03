@@ -38,7 +38,7 @@ type ChatComposerProps = {
   onDraftChange: (value: string) => void
   onExportChat: (format: "markdown" | "pdf" | "docx") => Promise<void>
   onModelChange: (value: string) => void
-  onRemoveAttachment: (attachmentName: string) => void
+  onRemoveAttachment: (attachmentId: string) => void
   onSelectedAgentChange: (value: string) => void
   onSend: () => Promise<void>
   onStop: () => void
@@ -81,6 +81,8 @@ export function ChatComposer({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const draftRef = useRef(draft)
+  const dictatedTranscriptRef = useRef("")
   const [isListening, setIsListening] = useState(false)
   const recognitionSupported = useMemo(() => Boolean(getRecognitionConstructor()), [])
   const canSend = draft.trim().length > 0 || attachments.length > 0
@@ -104,6 +106,10 @@ export function ChatComposer({
       ...groupedProviders,
     ]
   }, [groupedProviders, settingsDraft.model.apiKey, settingsDraft.model.baseUrl, settingsDraft.model.modelId, settingsDraft.model.providerId, settingsDraft.model.providerType])
+
+  useEffect(() => {
+    draftRef.current = draft
+  }, [draft])
 
   useEffect(() => {
     return () => {
@@ -150,26 +156,36 @@ export function ChatComposer({
     recognition.onstart = () => setIsListening(true)
     recognition.onend = () => {
       recognitionRef.current = null
+      dictatedTranscriptRef.current = ""
       setIsListening(false)
     }
     recognition.onerror = (event) => {
       recognitionRef.current = null
+      dictatedTranscriptRef.current = ""
       setIsListening(false)
       const description = event.error === "not-allowed" ? "Allow microphone permission to use voice input." : `Voice input failed: ${event.error}`
       toast.add({ title: "Voice input error", description, type: "error" })
     }
     recognition.onresult = (event) => {
       const transcript = Array.from(event.results)
-        .slice(event.resultIndex)
         .map((result) => result[0]?.transcript ?? "")
         .join("")
         .trim()
 
-      if (transcript) {
-        onDraftChange(transcript)
-      }
+      const previousTranscript = dictatedTranscriptRef.current
+      const currentDraft = draftRef.current
+      const baseDraft = previousTranscript && currentDraft.endsWith(previousTranscript)
+        ? currentDraft.slice(0, -previousTranscript.length).trimEnd()
+        : currentDraft
+      const nextDraft = transcript
+        ? `${baseDraft}${baseDraft ? "\n" : ""}${transcript}`
+        : baseDraft
+
+      dictatedTranscriptRef.current = transcript
+      onDraftChange(nextDraft)
     }
 
+    dictatedTranscriptRef.current = ""
     recognitionRef.current = recognition
     recognition.start()
   }
@@ -191,20 +207,12 @@ export function ChatComposer({
     <div className="flex flex-col gap-3">
       <ChatStatusLine isResponding={isResponding} toolEvents={toolEvents} />
       <div className="flex min-w-0 items-end gap-2">
-        <Textarea ref={textareaRef} rows={1} className="min-h-11 max-h-48 min-w-0 flex-1 resize-none overflow-hidden" value={draft} onChange={(event) => onDraftChange(event.target.value)} onKeyDown={handleKeyDown} placeholder={isListening ? "Listening... speak now" : "Ask about documents, workflows, or skills..."} disabled={isResponding} />
-        {supportsAttachments ? (
-          <>
-            <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => void onAttachmentChange(event)} />
-            <Button size="sm" variant="outline" type="button" onClick={() => fileInputRef.current?.click()} disabled={isResponding}>
-              <PaperclipIcon />
-            </Button>
-          </>
-        ) : null}
+        <Textarea ref={textareaRef} rows={1} className="min-h-11 max-h-48 min-w-0 flex-1 resize-none overflow-hidden" value={draft} onChange={(event) => onDraftChange(event.target.value)} onKeyDown={handleKeyDown} placeholder={isListening ? "Listening... speak now" : "Ask about documents, workflows, or skills..."} />
       </div>
       {attachments.length ? (
         <AttachmentGroup>
           {attachments.map((attachment) => (
-            <Attachment key={`${attachment.name}-${attachment.data.length}`} size="sm">
+            <Attachment key={attachment.id} size="sm">
               <AttachmentMedia variant={attachment.kind === "image" ? "image" : "icon"}>
                 {attachment.kind === "image" ? <img src={attachment.data} alt={attachment.name} className="size-full object-cover" /> : <PaperclipIcon />}
               </AttachmentMedia>
@@ -213,7 +221,7 @@ export function ChatComposer({
                 <AttachmentDescription>{attachment.mediaType}</AttachmentDescription>
               </AttachmentContent>
               <AttachmentActions>
-                <AttachmentAction size="icon-xs" variant="ghost" onClick={() => onRemoveAttachment(attachment.name)}>
+                <AttachmentAction size="icon-xs" variant="ghost" onClick={() => onRemoveAttachment(attachment.id)}>
                   <XIcon />
                 </AttachmentAction>
               </AttachmentActions>
@@ -242,6 +250,14 @@ export function ChatComposer({
           <ChatExportButtons disabled={exportDisabled} onExport={onExportChat} />
         </div>
         <div className="flex shrink-0 items-center gap-2 self-end lg:self-auto">
+          {supportsAttachments ? (
+            <>
+              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => void onAttachmentChange(event)} />
+              <Button size="sm" variant="outline" type="button" onClick={() => fileInputRef.current?.click()}>
+                <PaperclipIcon />
+              </Button>
+            </>
+          ) : null}
           <Button size="sm" variant="outline" type="button" onClick={() => void handleMicToggle()} disabled={!recognitionSupported || isResponding}>
             {isListening ? <SquareIcon /> : <MicIcon />}
           </Button>

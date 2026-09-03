@@ -6,6 +6,7 @@ import { SettingsIcon } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import PreferenceSidebar from "@/views/components/secondary-sidebar/preference-sidebar";
 import SectionSidebar from "@/views/components/secondary-sidebar/section-sidebar";
+import { NewAgentButton } from "@/views/agents/components/new-agent-button";
 import { CreateProviderButton } from "@/views/models/components/create-provider-button";
 import { SkillCreateButton } from "@/views/skills/components/skill-create-button";
 import { DocumentCreateButton } from "@/views/documents/components/document-create-button";
@@ -92,6 +93,8 @@ const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
                                     ? <CreateProviderButton size="sm" variant="outline" />
                                     : activeItem.url === "/chats"
                                         ? <NewChatButton />
+                                    : activeItem.url === "/agents"
+                                        ? <NewAgentButton />
                                     : activeItem.url === "/skills"
                                         ? <SkillCreateButton />
                                         : activeItem.url === "/documents"

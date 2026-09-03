@@ -31,7 +31,7 @@ const ChatDetailPage = () => {
                   attachments={controller.attachments}
                   autoScroll={controller.autoScroll}
                   draft={controller.draft}
-                  exportDisabled={!controller.selectedChat && !controller.streamingText && controller.toolEvents.length === 0}
+                  exportDisabled={controller.isResponding || (!controller.selectedChat && !controller.streamingText && controller.toolEvents.length === 0)}
                   groupedProviders={controller.groupedProviders}
                   isResponding={controller.isResponding}
                   modelValue={controller.modelValue}

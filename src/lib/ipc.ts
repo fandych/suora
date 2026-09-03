@@ -263,6 +263,10 @@ function getBridge() {
   return bridge
 }
 
+export function hasSuoraBridge() {
+  return typeof window !== "undefined" && Boolean(window.suora)
+}
+
 function parseDocumentStructure(structureJson: string | undefined, documentTitle: string) {
   if (!structureJson) {
     return buildDefaultDocumentNodes(documentTitle)

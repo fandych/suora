@@ -4,6 +4,7 @@ import { BotIcon } from "lucide-react"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerProvider, MessageScrollerViewport } from "@/components/ui/message-scroller"
 import type { ChatDetail } from "@/data/domain/models"
+import { finalizeAssistantResponseParts } from "@/views/chats/assistant-response-parts"
 import { ChatMessageItem } from "@/views/chats/components/chat-message-item"
 import type { ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
 import { ChatAssistantResponseGroup, type AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
@@ -38,7 +39,7 @@ export function ChatTranscript({ activeProviderType, assistantResponseMessageId,
                   {message.id === assistantResponseMessageId && assistantResponseParts.length > 0 ? (
                     <ChatAssistantResponseGroup createdAt={responseMessageCreatedAt} messageId={message.id} onRetryTool={onRetryTool} parts={assistantResponseParts} providerType={activeProviderType} />
                   ) : message.role === "assistant" && message.parts?.length ? (
-                    <ChatAssistantResponseGroup createdAt={message.createdAt} messageId={message.id} onRetryTool={onRetryTool} parts={message.parts} providerType={activeProviderType} />
+                    <ChatAssistantResponseGroup createdAt={message.createdAt} messageId={message.id} onRetryTool={onRetryTool} parts={finalizeAssistantResponseParts(message.parts)} providerType={activeProviderType} />
                   ) : (
                     <ChatMessageItem content={message.content} createdAt={message.createdAt} label={message.role === "user" ? "You" : message.role === "assistant" ? "Assistant" : "System"} providerType={activeProviderType} role={message.role} />
                   )}

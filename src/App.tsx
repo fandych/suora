@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router'
 import { Toaster } from '@/components/ui/toast'
+import { applyPreferenceSettingsToDocument, getPreferenceSettings } from '@/data/repositories/preference-repository'
 import RootLayout from './views/layout'
 import DashboardPage from './views/dashboard'
 import WorkflowsPage from './views/workflows'
@@ -24,6 +26,11 @@ import ErrorPage from './views/error'
 import { preferenceRoute } from './views/nav-config'
 
 const App = () => {
+  useEffect(() => {
+    void getPreferenceSettings().then((settings) => {
+      applyPreferenceSettingsToDocument(settings)
+    })
+  }, [])
 
   return (
     <Toaster>

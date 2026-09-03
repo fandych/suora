@@ -31,6 +31,8 @@ export type ChatAgentEvent =
   | { type: "error"; error: string }
 
 export type ChatAttachment = {
+  id: string
+  sourceKey: string
   name: string
   mediaType: string
   data: string
@@ -45,7 +47,7 @@ function createAbortError() {
   return new DOMException("The operation was aborted.", "AbortError")
 }
 
-function createProxyFetch(): typeof fetch | undefined {
+function createProxyFetch(settings: ChatRuntimeSettings): typeof fetch | undefined {
   const bridge = window.electron
   if (!bridge?.invoke || !bridge.on || !bridge.off) {
     return undefined
@@ -124,7 +126,7 @@ function createProxyFetch(): typeof fetch | undefined {
         method: request.method,
         headers,
         bodyText,
-        timeoutMs: 120000,
+        ...(settings.requestTimeoutMs > 0 ? { timeoutMs: settings.requestTimeoutMs } : {}),
       }).then((result) => {
         requestId = (result as AiFetchStartResult).requestId
       }).catch((error) => {
@@ -136,7 +138,7 @@ function createProxyFetch(): typeof fetch | undefined {
 }
 
 function createModel(settings: ChatRuntimeSettings): LanguageModel {
-  const providerFetch = createProxyFetch()
+  const providerFetch = createProxyFetch(settings)
   const sharedOptions = providerFetch ? { fetch: providerFetch } : {}
 
   switch (settings.model.providerType) {
@@ -227,7 +229,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
       }
     : settings
   const model = createModel(effectiveSettings)
-  const researchSubagent = await createResearchSubagent(settings)
+  const researchSubagent = await createResearchSubagent(effectiveSettings)
   const builtInTools = await createBuiltInTools()
 
   const scopedSearchDocuments = agentContext?.documents?.filter(Boolean) ?? []
@@ -342,7 +344,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
         yield { type: "error", error: part.error instanceof Error ? part.error.message : String(part.error) }
         break
       case "abort":
-        yield { type: "error", error: "Generation aborted." }
+        return
         break
       default:
         break

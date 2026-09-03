@@ -88,12 +88,12 @@ export const primaryNavItems: PrimaryNavItem[] = [
       searchPlaceholder: "搜索 agents...",
       groups: [
         {
-          id: "builtin",
-          title: "内置",
-        },
-        {
           id: "custom",
           title: "自定义",
+        },
+        {
+          id: "builtin",
+          title: "内置",
         },
       ],
     },

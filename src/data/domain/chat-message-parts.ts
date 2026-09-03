@@ -4,6 +4,7 @@ export type ChatToolActivity = {
   input?: Record<string, unknown>
   output?: string
   error?: string
+  stopped?: boolean
 }
 
 export type ChatMessagePart =
