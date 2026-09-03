@@ -1,4 +1,4 @@
-import type { AssistantModelMessage, ModelMessage, UserModelMessage } from "ai"
+import type { ModelMessage, UserModelMessage } from "ai"
 
 import type { ChatMessageRecord } from "@/data/domain/models"
 import type { ChatAttachment } from "@/services/ai-service"
@@ -53,43 +53,26 @@ function buildSessionMemory(history: ChatMessageRecord[]) {
   } satisfies ModelMessage
 }
 
-function toAssistantContent(message: ChatMessageRecord) {
+function toAssistantText(message: ChatMessageRecord) {
   if (!message.parts?.length) {
     return message.content
   }
 
   return message.parts.map((part) => {
     if (part.type === "text") {
-      return { type: "text", text: part.content }
+      return part.content
     }
 
     if (part.activity.error) {
-      return {
-        type: "tool-error",
-        toolCallId: part.activity.id,
-        toolName: part.activity.toolName,
-        input: part.activity.input ?? {},
-        error: truncate(part.activity.error, MAX_TOOL_OUTPUT_CHARS),
-      } as const
+      return `[tool ${part.activity.toolName} error]\n${truncate(part.activity.error, MAX_TOOL_OUTPUT_CHARS)}`
     }
 
     if (part.activity.output) {
-      return {
-        type: "tool-result",
-        toolCallId: part.activity.id,
-        toolName: part.activity.toolName,
-        input: part.activity.input ?? {},
-        output: truncate(part.activity.output, MAX_TOOL_OUTPUT_CHARS),
-      } as const
+      return `[tool ${part.activity.toolName} result]\n${truncate(part.activity.output, MAX_TOOL_OUTPUT_CHARS)}`
     }
 
-    return {
-      type: "tool-call",
-      toolCallId: part.activity.id,
-      toolName: part.activity.toolName,
-      input: part.activity.input ?? {},
-    } as const
-  })
+    return `[tool ${part.activity.toolName} called]\n${JSON.stringify(part.activity.input ?? {}, null, 2)}`
+  }).filter(Boolean).join("\n\n")
 }
 
 export function buildChatModelMessages(history: ChatMessageRecord[], attachments: ChatAttachment[] = []): ModelMessage[] {
@@ -118,8 +101,8 @@ export function buildChatModelMessages(history: ChatMessageRecord[], attachments
     if (message.role === "assistant") {
       return {
         role: "assistant",
-        content: toAssistantContent(message),
-      } satisfies AssistantModelMessage
+        content: toAssistantText(message),
+      } satisfies ModelMessage
     }
 
     return { role: message.role, content: message.content } satisfies ModelMessage

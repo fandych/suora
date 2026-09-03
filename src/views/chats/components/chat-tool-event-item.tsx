@@ -1,4 +1,4 @@
-import { CircleAlertIcon, CircleCheckIcon, CopyIcon, Loader2Icon, RotateCcwIcon, WrenchIcon } from "lucide-react"
+import { CircleAlertIcon, CircleCheckIcon, CopyIcon, Loader2Icon, RotateCcwIcon } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 
 import { Badge } from "@/components/ui/badge"
@@ -30,23 +30,23 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
   const Icon = status === "error" ? CircleAlertIcon : status === "success" ? CircleCheckIcon : Loader2Icon
   const badgeVariant = status === "error" ? "destructive" : status === "success" ? "secondary" : "outline"
   const storageKey = useMemo(() => buildStorageKey(activity), [activity])
-  const [isOpen, setIsOpen] = useState(status === "error")
+  const [isOpen, setIsOpen] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
   const summary = status === "error"
-    ? `${activity.toolName} failed.`
+    ? `Failed ${activity.toolName}`
     : status === "success"
-      ? `${activity.toolName} returned a result.`
-      : `${activity.toolName} is running.`
+      ? `Completed ${activity.toolName}`
+      : `Executing ${activity.toolName}`
 
   useEffect(() => {
     const stored = window.localStorage.getItem(storageKey)
     if (stored == null) {
-      setIsOpen(status === "error")
+      setIsOpen(false)
       return
     }
 
     setIsOpen(stored === "1")
-  }, [status, storageKey])
+  }, [storageKey])
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open)
@@ -78,18 +78,12 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
         status === "error" ? "border-destructive/35 bg-destructive/8" : status === "success" ? "border-emerald-200 bg-emerald-50/60" : "border-border bg-background/70"
       )}>
         <div className="flex items-center gap-2.5">
-          <div className={cn(
-            "flex size-6 shrink-0 items-center justify-center rounded-md",
-            status === "error" ? "bg-destructive/12 text-destructive" : status === "success" ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"
-          )}>
-            <Icon className={cn(status === "running" ? "animate-spin" : "", "size-4")} />
-          </div>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Icon className={cn(status === "running" ? "animate-spin" : "", "size-3.5 shrink-0")} />
+              <span className="truncate text-xs font-medium text-foreground">{summary}</span>
               {stepLabel ? <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{stepLabel}</span> : null}
-              <span className="truncate text-xs font-medium text-foreground">{activity.toolName}</span>
               <Badge variant={badgeVariant}>{status === "error" ? "Error" : status === "success" ? "Success" : "Running"}</Badge>
-              <span className="truncate text-[11px] text-muted-foreground">{summary}</span>
             </div>
           </div>
           {activity.input ? <Button size="icon-sm" variant="ghost" type="button" onClick={() => void handleCopy(JSON.stringify(activity.input, null, 2), "Input")}> <CopyIcon /> </Button> : null}

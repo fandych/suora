@@ -3,7 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Attachment, AttachmentAction, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentGroup, AttachmentMedia, AttachmentTitle } from "@/components/ui/attachment"
 import { Button } from "@/components/ui/button"
-import { ButtonGroup } from "@/components/ui/button-group"
 import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -11,6 +10,7 @@ import { toast } from "@/components/ui/toast"
 import type { AgentSummary, ProviderConfigRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import type { ChatAgentEvent, ChatAttachment } from "@/services/ai-service"
+import { ChatExportButtons } from "@/views/chats/components/chat-export-buttons"
 import { ChatStatusLine } from "@/views/chats/components/chat-status-line"
 
 type SpeechRecognitionConstructor = {
@@ -239,11 +239,7 @@ export function ChatComposer({
             <span>Auto scroll</span>
             <Switch checked={autoScroll} onCheckedChange={onAutoScrollChange} />
           </label>
-          <ButtonGroup>
-            <Button size="sm" variant="outline" className="h-8 text-xs" data-chat-export="markdown" disabled={exportDisabled} onClick={() => void onExportChat("markdown")}>MD</Button>
-            <Button size="sm" variant="outline" className="h-8 text-xs" data-chat-export="pdf" disabled={exportDisabled} onClick={() => void onExportChat("pdf")}>PDF</Button>
-            <Button size="sm" variant="outline" className="h-8 text-xs" data-chat-export="docx" disabled={exportDisabled} onClick={() => void onExportChat("docx")}>DOCX</Button>
-          </ButtonGroup>
+          <ChatExportButtons disabled={exportDisabled} onExport={onExportChat} />
         </div>
         <div className="flex shrink-0 items-center gap-2 self-end lg:self-auto">
           <Button size="sm" variant="outline" type="button" onClick={() => void handleMicToggle()} disabled={!recognitionSupported || isResponding}>

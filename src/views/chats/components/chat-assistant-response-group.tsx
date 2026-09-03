@@ -3,6 +3,7 @@ import { Fragment } from "react"
 import { Avatar, AvatarFallback } from "@/components/ui/avatar"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
+import { ChatMessageActions } from "@/views/chats/components/chat-message-actions"
 import { ChatRichContent } from "@/views/chats/components/chat-rich-content"
 import { ChatToolEventItem, type ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
 import { getProviderLogo } from "@/views/components/provider-logo"
@@ -23,6 +24,8 @@ export function ChatAssistantResponseGroup({ createdAt, messageId = null, onRetr
   const AssistantLogo = getProviderLogo(providerType)
   let toolIndex = 0
   const toolCount = parts.filter((part) => part.type === "tool").length
+  const combinedText = parts.filter((part) => part.type === "text").map((part) => part.content).join("\n\n")
+  const hasPendingText = parts.some((part) => part.type === "text" && part.isPending)
 
   return (
     <Message align="start">
@@ -60,8 +63,9 @@ export function ChatAssistantResponseGroup({ createdAt, messageId = null, onRetr
               )}
             </Fragment>
           ))}
+          {!hasPendingText && combinedText.trim() ? <ChatMessageActions baseName="assistant-message" className="w-full" content={combinedText} createdAt={createdAt} /> : null}
         </div>
-        {createdAt ? <div className="px-1 pt-1 text-[11px] text-muted-foreground">{new Date(createdAt).toLocaleString()}</div> : null}
+        {hasPendingText && createdAt ? <div className="px-1 pt-1 text-[11px] text-muted-foreground">{new Date(createdAt).toLocaleString()}</div> : null}
       </MessageContent>
     </Message>
   )

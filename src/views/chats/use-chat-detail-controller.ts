@@ -195,7 +195,6 @@ export function useChatDetailController() {
     setAssistantResponseMessageId(null)
     setAssistantResponseParts([{ id: "assistant-stream", type: "text", content: "", isPending: true }])
     setIsResponding(true)
-    showToast({ title: "Message sent", description: "Waiting for the assistant response.", type: "info", timeout: 2500 })
 
     const abortController = new AbortController()
     abortControllerRef.current = abortController
@@ -233,7 +232,6 @@ export function useChatDetailController() {
         setAssistantResponseMessageId(withAssistant.messages[withAssistant.messages.length - 1]?.id ?? null)
         setAssistantResponseParts(finalizedParts)
         emitDataChanged("/chats")
-        showToast({ title: "Response received", description: "Assistant reply completed.", type: "success", timeout: 2500 })
       }
     } catch (nextError) {
       setToolEvents((value) => [...value, { type: "error", error: nextError instanceof Error ? nextError.message : String(nextError) }])
