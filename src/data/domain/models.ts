@@ -145,6 +145,7 @@ export type WorkflowNodeTraceRecord = {
   nodeId: string
   label: string
   status: "queued" | "running" | "success" | "error"
+  input?: string
   output: string
   startedAt: number
   finishedAt: number
@@ -446,6 +447,8 @@ export type ChannelConnectionMode = "webhook" | "stream"
 
 export type WeChatPersonalBindingStatus = "unbound" | "pending" | "bound" | "error"
 
+export type WeChatPersonalQrUiStatus = "wait" | "scaned" | "need_verifycode"
+
 export type ChannelBindingState = "unconfigured" | "draft" | "ready" | "connected" | "error"
 
 export type EmailFilterField = "subject" | "from" | "to" | "cc" | "body" | "has_attachment"
@@ -515,6 +518,7 @@ export type ChannelDebugEntry = {
 export type ChannelConfigRecord = {
   id: string
   title: string
+  description?: string
   platform: ChannelPlatform
   catalogId?: string
   bindingState?: ChannelBindingState
@@ -525,6 +529,8 @@ export type ChannelConfigRecord = {
   webhookSecret: string
   autoReply: boolean
   replyAgentId: string
+  providerId?: string
+  modelId?: string
   createdAt: number
   updatedAt: number
   lastMessageAt?: number
@@ -551,6 +557,7 @@ export type ChannelConfigRecord = {
   wechatPersonalAuthToken?: string
   wechatPersonalQrCodeUrl?: string
   wechatPersonalBindingStatus?: WeChatPersonalBindingStatus
+  wechatPersonalQrStatus?: WeChatPersonalQrUiStatus
   wechatPersonalSessionKey?: string
   wechatPersonalBotToken?: string
   wechatPersonalBaseUrl?: string

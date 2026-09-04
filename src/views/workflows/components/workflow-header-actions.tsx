@@ -1,9 +1,8 @@
-import type { RefObject } from "react"
-import { DownloadIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PanelRightCloseIcon, PanelRightOpenIcon, PlayIcon, SaveIcon, UploadIcon } from "lucide-react"
+import type { ChangeEvent, RefObject } from "react"
+import { EllipsisIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlayIcon, SparklesIcon, UploadIcon } from "lucide-react"
 
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { VersionOption } from "@/data/domain/models"
 import VersionSelect from "@/views/components/version-select"
 
@@ -11,23 +10,20 @@ type WorkflowHeaderActionsProps = {
   versions: VersionOption[]
   selectedVersionId: string
   onVersionChange: (value: string) => void
-  isReleaseVersion: boolean
-  hasUnsavedChanges: boolean
-  issueCount: number
   showLibrary: boolean
-  showInspector: boolean
-  canRunRelease: boolean
-  canSaveDraft: boolean
   canPublish: boolean
+  canRunRelease: boolean
   onToggleLibrary: () => void
-  onToggleInspector: () => void
+  onAutoLayout: () => void
+  onOpenPreference: () => void
+  onOpenTryRun: () => void
   onRunRelease: () => void
-  onSaveDraft: () => void
   onPublish: () => void
   onExport: () => void
   onImport: () => void
+  onDelete: () => void
   importInputRef: RefObject<HTMLInputElement | null>
-  onImportChange: (event: React.ChangeEvent<HTMLInputElement>) => void
+  onImportChange: (event: ChangeEvent<HTMLInputElement>) => void
 }
 
 export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
@@ -35,62 +31,60 @@ export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
     versions,
     selectedVersionId,
     onVersionChange,
-    isReleaseVersion,
-    hasUnsavedChanges,
-    issueCount,
     showLibrary,
-    showInspector,
-    canRunRelease,
-    canSaveDraft,
     canPublish,
+    canRunRelease,
     onToggleLibrary,
-    onToggleInspector,
+    onAutoLayout,
+    onOpenPreference,
+    onOpenTryRun,
     onRunRelease,
-    onSaveDraft,
     onPublish,
     onExport,
     onImport,
+    onDelete,
     importInputRef,
     onImportChange,
   } = props
 
   return (
-    <>
-      <VersionSelect versions={versions} value={selectedVersionId} onChange={onVersionChange} />
-      <Badge variant={isReleaseVersion ? "secondary" : "outline"}>{isReleaseVersion ? "Release revision" : "Draft revision"}</Badge>
-      <Badge variant={hasUnsavedChanges ? "destructive" : "outline"}>{hasUnsavedChanges ? "Unsaved changes" : "Saved"}</Badge>
-      <Badge variant={issueCount ? "destructive" : "outline"}>{issueCount} design issue{issueCount === 1 ? "" : "s"}</Badge>
-      <Button size="sm" variant="outline" onClick={onToggleLibrary}>
-        {showLibrary ? <PanelLeftCloseIcon /> : <PanelLeftOpenIcon />}
-        Library
-      </Button>
-      <Button size="sm" variant="outline" onClick={onToggleInspector}>
-        {showInspector ? <PanelRightCloseIcon /> : <PanelRightOpenIcon />}
-        Panels
-      </Button>
-      <Button size="sm" variant="outline" onClick={onRunRelease} disabled={!canRunRelease}>
-        <PlayIcon />
-        Run
-      </Button>
-      <Button size="sm" onClick={onSaveDraft} disabled={!canSaveDraft}>
-        <SaveIcon />
-        Save draft
-      </Button>
-      <Button size="sm" variant="outline" onClick={onPublish} disabled={!canPublish}>
-        <UploadIcon />
-        Publish
-      </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<Button size="sm" variant="outline" />}>
-          <DownloadIcon />
-          Transfer
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40 min-w-40">
-          <DropdownMenuItem onClick={onExport}>Export JSON</DropdownMenuItem>
-          <DropdownMenuItem onClick={onImport}>Import JSON</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+    <div className="flex w-full items-center justify-between gap-3 rounded-2xl border bg-background/95 px-3 py-2 shadow-sm backdrop-blur">
+      <div className="flex min-w-0 items-center gap-2">
+        <Button size="icon-sm" variant="outline" onClick={onToggleLibrary} aria-label={showLibrary ? "Collapse node library" : "Expand node library"}>
+          {showLibrary ? <PanelLeftCloseIcon /> : <PanelLeftOpenIcon />}
+        </Button>
+        <Button size="icon-sm" variant="outline" onClick={onAutoLayout} aria-label="Auto layout workflow">
+          <SparklesIcon />
+        </Button>
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="min-w-28">
+          <VersionSelect versions={versions} value={selectedVersionId} onChange={onVersionChange} />
+        </div>
+        <Button size="sm" onClick={onPublish} disabled={!canPublish}>
+          <UploadIcon />
+          Publish
+        </Button>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button size="icon-sm" variant="outline" aria-label="Workflow actions" />}>
+            <EllipsisIcon />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 min-w-48">
+            <DropdownMenuItem onClick={onOpenTryRun}>Try run</DropdownMenuItem>
+            <DropdownMenuItem onClick={onRunRelease} disabled={!canRunRelease}>
+              <PlayIcon />
+              Run release
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onExport}>Export</DropdownMenuItem>
+            <DropdownMenuItem onClick={onImport}>Import</DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={onOpenPreference}>Preference</DropdownMenuItem>
+            <DropdownMenuItem onClick={onDelete} variant="destructive">Delete</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void onImportChange(event)} />
-    </>
+    </div>
   )
 }

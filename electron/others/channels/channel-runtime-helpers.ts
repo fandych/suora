@@ -55,7 +55,7 @@ export type WeChatPersonalQrStatusResponse = {
 
 export type WeChatPersonalLoginWaitResult = {
   success: boolean
-  status: "connected" | "already_bound" | "need_verifycode" | "verify_code_blocked" | "expired" | "timeout" | "error"
+  status: "connected" | "already_bound" | "scaned" | "need_verifycode" | "verify_code_blocked" | "expired" | "timeout" | "error"
   message: string
   qrCodeUrl?: string
   sessionKey: string

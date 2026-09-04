@@ -2,6 +2,7 @@ import { appendAssistantChatMessage, appendUserChatMessage, ensureChatDetail, ge
 import { getAgentDetail } from "@/data/repositories/agent-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { getChatSessionSettings, saveChatSessionSettings } from "@/data/repositories/chat-settings-repository"
+import { getModelProvider } from "@/data/repositories/model-config-repository"
 import { sendChannelReply } from "@/data/repositories/channel-repository"
 import { showToast } from "@/lib/app-toast"
 import { hasSuoraBridge } from "@/lib/ipc"
@@ -10,6 +11,12 @@ import { createPersistedAssistantPayload } from "@/views/chats/chat-controller-u
 import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts } from "@/views/chats/assistant-response-parts"
 import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
 import type { ChannelConfigRecord, ChatDetail } from "@/data/domain/models"
+
+type ChatProviderType = "ollama" | "openai" | "anthropic" | "openai-compatible" | "google"
+
+function isChatProviderType(value: string): value is ChatProviderType {
+  return value === "ollama" || value === "openai" || value === "anthropic" || value === "openai-compatible" || value === "google"
+}
 
 type ChannelRuntimeEvent = {
   channel: ChannelConfigRecord
@@ -44,6 +51,7 @@ async function ensureChannelChat(event: ChannelRuntimeEvent) {
 }
 
 async function handleChannelRuntimeEvent(event: ChannelRuntimeEvent) {
+  emitDataChanged("/channels")
   const ensured = await ensureChannelChat(event)
   const chatId = ensured.chat.id
   await appendUserChatMessage(chatId, event.message.content)
@@ -51,14 +59,30 @@ async function handleChannelRuntimeEvent(event: ChannelRuntimeEvent) {
   const settings = await getChatSessionSettings(chatId)
   const selectedAgentId = event.channel.replyAgentId || settings.selectedAgentId
   const agentDetail = selectedAgentId ? await getAgentDetail(selectedAgentId) : null
-  const nextSettings = agentDetail?.config.providerId && agentDetail.config.modelId
+  const channelConfiguredProvider = event.channel.providerId ? await getModelProvider(event.channel.providerId).catch(() => null) : null
+  const agentConfiguredProvider = agentDetail?.config.providerId ? await getModelProvider(agentDetail.config.providerId).catch(() => null) : null
+  const activeProvider = event.channel.providerId && event.channel.modelId && channelConfiguredProvider
+    ? {
+        provider: channelConfiguredProvider,
+        modelId: event.channel.modelId,
+      }
+    : agentDetail?.config.providerId && agentDetail.config.modelId && agentConfiguredProvider
+      ? {
+          provider: agentConfiguredProvider,
+          modelId: agentDetail.config.modelId,
+        }
+      : null
+  const nextSettings = activeProvider
     ? {
         runtime: {
           ...settings.runtime,
           model: {
             ...settings.runtime.model,
-            providerId: agentDetail.config.providerId,
-            modelId: agentDetail.config.modelId,
+            providerId: activeProvider.provider.id,
+            providerType: isChatProviderType(activeProvider.provider.providerType) ? activeProvider.provider.providerType : settings.runtime.model.providerType,
+            baseUrl: activeProvider.provider.baseUrl,
+            apiKey: activeProvider.provider.apiKey,
+            modelId: activeProvider.modelId,
           },
         },
         selectedAgentId,
@@ -93,6 +117,7 @@ async function handleChannelRuntimeEvent(event: ChannelRuntimeEvent) {
 
   if (event.channel.autoReply && event.message.chatId && persistedText.trim()) {
     const result = await sendChannelReply({ channelId: event.channel.id, chatId: event.message.chatId, content: persistedText.trim() })
+    emitDataChanged("/channels")
     if (!result.success) {
       showToast({ title: "Channel reply failed", description: result.error || "Unknown error", type: "error" })
     }

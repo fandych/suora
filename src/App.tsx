@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router'
 import { Toaster } from '@/components/ui/toast'
 import { restoreChannelRuntime } from '@/data/repositories/channel-repository'
 import { applyPreferenceSettingsToDocument, getPreferenceSettings } from '@/data/repositories/preference-repository'
+import { showToast } from '@/lib/app-toast'
 import { hasSuoraBridge, suoraIpc } from '@/lib/ipc'
 import { initChannelRuntimeListener } from '@/services/channel-runtime-listener'
 import RootLayout from './views/layout'
@@ -43,6 +44,49 @@ const App = () => {
 
     return () => {
       cleanupChannelRuntime()
+    }
+  }, [])
+
+  useEffect(() => {
+    let lastSignature = ""
+    let lastTimestamp = 0
+
+    const shouldReport = (signature: string) => {
+      const now = Date.now()
+      if (signature === lastSignature && now - lastTimestamp < 2000) {
+        return false
+      }
+
+      lastSignature = signature
+      lastTimestamp = now
+      return true
+    }
+
+    const reportError = (title: string, message: string) => {
+      const normalized = message.trim() || "Unknown error"
+      if (!shouldReport(`${title}:${normalized}`)) {
+        return
+      }
+
+      console.error(title, normalized)
+      showToast({ title, description: normalized, type: "error", timeout: 5000 })
+    }
+
+    const onWindowError = (event: ErrorEvent) => {
+      reportError("Unexpected error", event.error instanceof Error ? event.error.message : event.message || String(event.error || "Unknown error"))
+    }
+
+    const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+      const reason = event.reason
+      reportError("Unhandled rejection", reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason))
+    }
+
+    window.addEventListener("error", onWindowError)
+    window.addEventListener("unhandledrejection", onUnhandledRejection)
+
+    return () => {
+      window.removeEventListener("error", onWindowError)
+      window.removeEventListener("unhandledrejection", onUnhandledRejection)
     }
   }, [])
 

@@ -1,4 +1,5 @@
 import type { VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeTraceRecord, WorkflowNotificationSettings, WorkflowSummary } from "@/data/domain/models"
+import { emitDataChanged } from "@/data/repositories/data-events"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS, normalizeWorkflowNotifications } from "@/data/repositories/workflow-notifications"
 import { suoraIpc } from "@/lib/ipc"
@@ -57,6 +58,31 @@ async function sendWorkflowNotification(input: {
   })
 }
 
+function getWorkflowTraceInputPreview(node: WorkflowDefinition["nodes"][number]) {
+  switch (node.data.kind) {
+    case "start":
+      return JSON.stringify({ trigger: "workflow-start", outputKey: node.data.outputKey || "request" }, null, 2)
+    case "agent":
+      return JSON.stringify({ agentId: node.data.agentId || null, modelId: node.data.modelId || null, task: node.data.task || "", prompt: node.data.prompt || "" }, null, 2)
+    case "document-retrieval":
+      return JSON.stringify({ documentId: node.data.documentId || null, queryExpression: node.data.queryExpression || "$input.query", resultLimit: node.data.resultLimit ?? 5 }, null, 2)
+    case "http":
+      return JSON.stringify({ integrationId: node.data.integrationId || null, method: node.data.method || "POST", url: node.data.url || "", headersJson: node.data.headersJson || "{}", bodyJson: node.data.bodyJson || "{}" }, null, 2)
+    case "script":
+      return JSON.stringify({ runtime: node.data.runtime || "node", timeoutSeconds: node.data.timeoutSeconds ?? 60, outputKey: node.data.outputKey || "script_result" }, null, 2)
+    case "if-else":
+      return JSON.stringify({ runIf: node.data.runIf || "", branches: node.data.branches ?? [] }, null, 2)
+    case "fork":
+      return JSON.stringify({ branchCount: node.data.branchCount ?? 2, outputKey: node.data.outputKey || "fork_result" }, null, 2)
+    case "join":
+      return JSON.stringify({ joinStrategy: node.data.joinStrategy ?? "wait-all", outputKey: node.data.outputKey || "join_result" }, null, 2)
+    case "end":
+      return JSON.stringify({ inputTemplate: node.data.inputTemplate || "", outputKey: node.data.outputKey || "response" }, null, 2)
+    default:
+      return JSON.stringify({ kind: node.data.kind, task: node.data.task || "", outputKey: node.data.outputKey || "" }, null, 2)
+  }
+}
+
 function buildWorkflowTraces(definition: WorkflowDefinition) {
   const normalizedDefinition = normalizeWorkflowNotifications(definition)
   const start = Date.now()
@@ -100,6 +126,7 @@ function buildWorkflowTraces(definition: WorkflowDefinition) {
       nodeId: node.id,
       label: node.data.label,
       status,
+      input: getWorkflowTraceInputPreview(node),
       output,
       startedAt: start + index * 320,
       finishedAt: start + index * 320 + Math.min(node.data.timeoutMs ?? 30000, 240),
@@ -165,7 +192,9 @@ export async function listWorkflows() {
 
 export async function createWorkflow() {
   await ensureSeeded()
-  return suoraIpc.workflows.create() as Promise<WorkflowDetail>
+  const created = await suoraIpc.workflows.create() as Promise<WorkflowDetail>
+  emitDataChanged("/workflows")
+  return created
 }
 
 export async function getWorkflowDetail(workflowId: string, selectedVersionId?: string) {
@@ -182,13 +211,24 @@ export async function getWorkflowDetail(workflowId: string, selectedVersionId?: 
 
 export async function saveWorkflowDraft(workflowId: string, payload: { title: string; summary: string; definition: WorkflowDefinition; selectedVersionId?: string }) {
   await ensureSeeded()
-  return suoraIpc.workflows.save({ id: workflowId, title: payload.title, summary: payload.summary, definition: normalizeWorkflowNotifications(payload.definition), selectedVersionId: payload.selectedVersionId }) as Promise<WorkflowDetail>
+  const saved = await suoraIpc.workflows.save({ id: workflowId, title: payload.title, summary: payload.summary, definition: normalizeWorkflowNotifications(payload.definition), selectedVersionId: payload.selectedVersionId }) as Promise<WorkflowDetail>
+  emitDataChanged("/workflows")
+  return saved
 }
 
 export async function publishWorkflowVersion(workflowId: string, versionId: string) {
   await ensureSeeded()
   const detail = await getWorkflowDetail(workflowId, versionId)
-  return suoraIpc.workflows.save({ id: workflowId, title: detail.workflow.title, summary: detail.workflow.summary, definition: normalizeWorkflowNotifications(detail.definition), publish: true }) as Promise<WorkflowDetail>
+  const published = await suoraIpc.workflows.save({ id: workflowId, title: detail.workflow.title, summary: detail.workflow.summary, definition: normalizeWorkflowNotifications(detail.definition), publish: true }) as Promise<WorkflowDetail>
+  emitDataChanged("/workflows")
+  return published
+}
+
+export async function deleteWorkflow(workflowId: string) {
+  await ensureSeeded()
+  const deleted = await suoraIpc.workflows.delete(workflowId)
+  emitDataChanged("/workflows")
+  return deleted
 }
 
 export async function dryRunWorkflowSnapshot(input: {

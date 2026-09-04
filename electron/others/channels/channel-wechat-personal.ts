@@ -93,14 +93,15 @@ export async function waitForWeChatPersonalLogin(
       const status = await pollWeChatPersonalQrStatus(session.currentApiBaseUrl, session.qrcode, session.pendingVerifyCode)
       switch (status.status) {
         case "wait":
-        case "scaned":
           await new Promise((resolve) => setTimeout(resolve, 1000))
           break
+        case "scaned":
+          return { success: true, status: "scaned", sessionKey, qrCodeUrl: session.qrcodeUrl, message: "已扫码，请在手机上确认登录。" }
         case "scaned_but_redirect":
           if (status.redirect_host) {
             session.currentApiBaseUrl = `https://${status.redirect_host}`
           }
-          break
+          return { success: true, status: "scaned", sessionKey, qrCodeUrl: session.qrcodeUrl, message: "已扫码，正在等待微信确认登录。" }
         case "need_verifycode":
           return { success: true, status: "need_verifycode", sessionKey, qrCodeUrl: session.qrcodeUrl, message: "请输入手机微信上显示的数字验证码。" }
         case "verify_code_blocked":

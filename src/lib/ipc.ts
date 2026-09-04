@@ -742,6 +742,7 @@ export const suoraIpc = {
         invocations: result.invocations.map((invocation) => ({ ...invocation, traces: parseWorkflowInvocationTraces(invocation.traceJson) })) as WorkflowInvocationRecord[],
       } satisfies WorkflowDetail
     },
+    delete: async (workflowId: string) => getBridge().workflows.delete(workflowId) as Promise<boolean>,
     recordInvocation: async (payload: { workflowId: string; versionId: string; status: string; trigger: string; input: string; output: string; traceJson: string }) => {
       return getBridge().workflows.recordInvocation(payload) as Promise<Array<{ id: string; versionId: string; status: string; trigger: string; input: string; output: string; traceJson: string; createdAt: number }>>
     },
@@ -777,6 +778,7 @@ export const suoraIpc = {
     debugSend: async (payload: { channelId: string; content: string }) => getBridge().channels.debugSend(payload),
     startWeChatPersonalLogin: async (force?: boolean) => getBridge().channels.startWeChatPersonalLogin(force),
     waitForWeChatPersonalLogin: async (sessionKey: string, verifyCode?: string, timeoutMs?: number) => getBridge().channels.waitForWeChatPersonalLogin(sessionKey, verifyCode, timeoutMs),
+    getWeChatPersonalQrPreview: async (url: string, waitMs?: number) => getBridge().channels.getWeChatPersonalQrPreview(url, waitMs) as Promise<{ ok?: boolean; image?: string; format?: string; error?: string }>,
   },
   schedulers: {
     list: async () => getBridge().schedulers.list() as Promise<SchedulerDetail[]>,

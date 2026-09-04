@@ -1,8 +1,10 @@
+import { useEffect } from "react"
 import { useNavigate } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { subscribeToDataChanges } from "@/data/repositories/data-events"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { createChannel, listChannels } from "@/data/repositories/channel-repository"
 import PageHeader from "@/views/components/page-header"
@@ -12,6 +14,14 @@ import { getChannelBindingLabel, getChannelBindingVariant, getChannelPlatformLab
 const ChannelsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => listChannels(), [])
+
+  useEffect(() => {
+    return subscribeToDataChanges((route) => {
+      if (route === "/channels") {
+        reload()
+      }
+    })
+  }, [reload])
 
   const handleCreate = async () => {
     const item = await createChannel()

@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld("suora", {
     get: (workflowId: string) => ipcRenderer.invoke("workflows:get", workflowId),
     create: () => ipcRenderer.invoke("workflows:create"),
     save: (payload: unknown) => ipcRenderer.invoke("workflows:save", payload),
+    delete: (workflowId: string) => ipcRenderer.invoke("workflows:delete", workflowId),
     recordInvocation: (payload: unknown) => ipcRenderer.invoke("workflows:recordInvocation", payload),
   },
   channels: {
@@ -103,6 +104,7 @@ contextBridge.exposeInMainWorld("suora", {
     debugSend: (payload: unknown) => ipcRenderer.invoke("channel:debugSend", payload),
     startWeChatPersonalLogin: (force?: boolean) => ipcRenderer.invoke("channel:wechatPersonalLoginStart", force),
     waitForWeChatPersonalLogin: (sessionKey: string, verifyCode?: string, timeoutMs?: number) => ipcRenderer.invoke("channel:wechatPersonalLoginWait", sessionKey, verifyCode, timeoutMs),
+    getWeChatPersonalQrPreview: (url: string, waitMs?: number) => ipcRenderer.invoke("channel:wechatPersonalQrPreview", url, waitMs),
   },
   schedulers: {
     list: () => ipcRenderer.invoke("schedulers:list"),

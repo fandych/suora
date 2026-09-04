@@ -132,3 +132,79 @@ export function getWorkflowDryRunInputIssue(dryRunInput: string) {
     } satisfies WorkflowDesignIssue
   }
 }
+
+export function getAutoLayoutedWorkflowNodes(input: {
+  nodes: Node<WorkflowNodeData>[]
+  edges: Edge[]
+}) {
+  const { nodes, edges } = input
+  if (nodes.length <= 1) {
+    return nodes
+  }
+
+  const nodeById = new Map(nodes.map((node) => [node.id, node]))
+  const inboundCount = new Map<string, number>()
+  const adjacency = new Map<string, string[]>()
+
+  for (const edge of edges) {
+    if (!nodeById.has(edge.source) || !nodeById.has(edge.target)) {
+      continue
+    }
+
+    inboundCount.set(edge.target, (inboundCount.get(edge.target) ?? 0) + 1)
+    adjacency.set(edge.source, [...(adjacency.get(edge.source) ?? []), edge.target])
+  }
+
+  const rootIds = nodes
+    .filter((node) => node.data.kind === "start" || (inboundCount.get(node.id) ?? 0) === 0)
+    .map((node) => node.id)
+  const queue = rootIds.length > 0 ? [...rootIds] : [nodes[0].id]
+  const depthMap = new Map<string, number>()
+  const order: string[] = []
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()
+    if (!currentId || order.includes(currentId)) {
+      continue
+    }
+
+    order.push(currentId)
+    const currentDepth = depthMap.get(currentId) ?? 0
+    for (const nextId of adjacency.get(currentId) ?? []) {
+      if (!depthMap.has(nextId) || (depthMap.get(nextId) ?? 0) < currentDepth + 1) {
+        depthMap.set(nextId, currentDepth + 1)
+      }
+      if (!order.includes(nextId)) {
+        queue.push(nextId)
+      }
+    }
+  }
+
+  for (const node of nodes) {
+    if (!order.includes(node.id)) {
+      order.push(node.id)
+    }
+  }
+
+  const columns = new Map<number, string[]>()
+  for (const nodeId of order) {
+    const depth = depthMap.get(nodeId) ?? 0
+    columns.set(depth, [...(columns.get(depth) ?? []), nodeId])
+  }
+
+  const horizontalGap = 260
+  const verticalGap = 140
+  return nodes.map((node) => {
+    const depth = depthMap.get(node.id) ?? 0
+    const column = columns.get(depth) ?? [node.id]
+    const rowIndex = Math.max(column.indexOf(node.id), 0)
+
+    return {
+      ...node,
+      position: {
+        x: 80 + depth * horizontalGap,
+        y: 80 + rowIndex * verticalGap,
+      },
+    }
+  })
+}

@@ -15,6 +15,28 @@ export function Field({ label, className, children }: { label: string; className
   )
 }
 
+export function FormGroupSection({
+  title,
+  description,
+  children,
+  className,
+}: {
+  title: string
+  description: string
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn("space-y-3 rounded-xl border p-3", className)}>
+      <div className="space-y-1">
+        <Label>{title}</Label>
+        <Hint>{description}</Hint>
+      </div>
+      {children}
+    </div>
+  )
+}
+
 export function CompactInput(props: React.ComponentProps<typeof Input>) {
   return <Input className="h-8 text-xs" {...props} />
 }

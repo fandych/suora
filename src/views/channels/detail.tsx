@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useParams } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
+import { subscribeToDataChanges } from "@/data/repositories/data-events"
 import { showToast } from "@/lib/app-toast"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import {
@@ -10,8 +10,10 @@ import {
   confirmWeChatPersonalBinding,
   getChannel,
   saveChannel,
+  waitForWeChatPersonalBinding,
 } from "@/data/repositories/channel-repository"
 import { listAvailableAgents } from "@/data/repositories/agent-repository"
+import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { ChannelEditorForm } from "@/views/channels/components/channel-editor-form"
@@ -22,16 +24,39 @@ const ChannelDetailPage = () => {
   const { channelId } = useParams<{ channelId: string }>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => getChannel(channelId ?? ""), [channelId])
   const { data: agentsData } = useAsyncResource(() => listAvailableAgents(), [])
+  const { data: providersData } = useAsyncResource(() => listConfiguredModelProviders(), [])
   const [draft, setDraft] = useState<ChannelDetail | null>(null)
   const [wechatVerificationCode, setWechatVerificationCode] = useState("")
+  const [showWechatVerification, setShowWechatVerification] = useState(false)
   const [isBinding, setIsBinding] = useState(false)
+  const activeWeChatMonitorSessionRef = useRef<string | null>(null)
   const agents = agentsData ?? []
+  const providers = providersData ?? []
 
   useEffect(() => {
     if (data) {
       setDraft(data)
+      setShowWechatVerification(isVerificationPromptRequired(data))
     }
   }, [data])
+
+  useEffect(() => {
+    return subscribeToDataChanges((route) => {
+      if (route === "/channels" && channelId) {
+        void getChannel(channelId)
+          .then((next) => {
+            updateDraft(next)
+          })
+          .catch(() => undefined)
+      }
+    })
+  }, [channelId])
+
+  const updateDraft = (next: ChannelDetail) => {
+    setData(next)
+    setDraft(next)
+    setShowWechatVerification(isVerificationPromptRequired(next))
+  }
 
   const persistDraft = async (nextDraft: ChannelDetail) => {
     const next = await saveChannel(nextDraft)
@@ -48,6 +73,66 @@ const ChannelDetailPage = () => {
     showToast({ title: "Channel saved", description: "Channel settings were persisted.", type: "success", timeout: 2000 })
   }
 
+  const monitorWeChatBinding = async (initialDetail: ChannelDetail, verificationCode?: string) => {
+    const monitorSessionKey = initialDetail.channel.wechatPersonalSessionKey
+    if (!monitorSessionKey) {
+      return
+    }
+
+    activeWeChatMonitorSessionRef.current = monitorSessionKey
+    let current = initialDetail
+    let hasShownScannedMessage = current.channel.wechatPersonalQrStatus === "scaned"
+    let nextVerificationCode = verificationCode
+
+    while (activeWeChatMonitorSessionRef.current === monitorSessionKey) {
+      const waitResult = await waitForWeChatPersonalBinding(current, nextVerificationCode, nextVerificationCode ? 60_000 : 35_000)
+      current = waitResult.detail
+      updateDraft(current)
+      nextVerificationCode = undefined
+
+      if (waitResult.status === "connected") {
+        activeWeChatMonitorSessionRef.current = null
+        setWechatVerificationCode("")
+        showToast({ title: "WeChat connected", description: waitResult.message || "Personal WeChat binding completed.", type: "success", timeout: 3000 })
+        return
+      }
+
+      if (waitResult.status === "already_bound") {
+        activeWeChatMonitorSessionRef.current = null
+        showToast({ title: "Already bound", description: waitResult.message || "This WeChat account is already bound.", type: "info", timeout: 3000 })
+        return
+      }
+
+      if (waitResult.status === "need_verifycode") {
+        activeWeChatMonitorSessionRef.current = null
+        showToast({ title: "Verification required", description: waitResult.message || "Enter the digits shown in WeChat to continue.", type: "info", timeout: 3000 })
+        return
+      }
+
+      if (waitResult.status === "scaned") {
+        if (!hasShownScannedMessage) {
+          hasShownScannedMessage = true
+          showToast({ title: "QR scanned", description: waitResult.message || "Waiting for confirmation in WeChat.", type: "info", timeout: 2500 })
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1200))
+        continue
+      }
+
+      if (waitResult.status === "timeout") {
+        continue
+      }
+
+      if (waitResult.status === "expired") {
+        showToast({ title: "QR refreshed", description: waitResult.message || "The QR code expired and was refreshed.", type: "info", timeout: 3000 })
+        continue
+      }
+
+      activeWeChatMonitorSessionRef.current = null
+      showToast({ title: "WeChat binding failed", description: waitResult.message || "The QR login session could not be completed.", type: "error", timeout: 3000 })
+      return
+    }
+  }
+
   const handleBind = async () => {
     if (!draft) {
       return
@@ -56,15 +141,31 @@ const ChannelDetailPage = () => {
     setIsBinding(true)
     try {
       const next = await bindChannel(draft)
-      setData(next)
-      setDraft(next)
+      updateDraft(next)
+      const latestMessage = next.runtime.debugLog[0]?.text
+
+      if (next.channel.platform === "wechat_personal") {
+        const started = Boolean(next.channel.wechatPersonalSessionKey && next.channel.wechatPersonalQrCodeUrl)
+        showToast({
+          title: started ? "QR binding started" : "QR binding failed",
+          description: latestMessage || (started ? "Scan the QR code and complete verification if prompted." : "The runtime did not return a usable QR code."),
+          type: started ? "success" : "error",
+          timeout: 3000,
+        })
+
+        if (started && next.channel.wechatPersonalSessionKey) {
+          void monitorWeChatBinding(next)
+        }
+
+        return
+      }
+
+      const bound = next.channel.bindingState === "connected"
       showToast({
-        title: draft.channel.platform === "wechat_personal" ? "QR binding started" : "Channel bound",
-        description: draft.channel.platform === "wechat_personal"
-          ? "Scan the QR code and complete verification if prompted."
-          : "Channel credentials were validated and the endpoint is ready.",
-        type: "success",
-        timeout: 2500,
+        title: bound ? "Channel bound" : "Channel binding failed",
+        description: latestMessage || (bound ? "Channel credentials were validated and the endpoint is ready." : "Check the required provider fields and try again."),
+        type: bound ? "success" : "error",
+        timeout: 3000,
       })
     } finally {
       setIsBinding(false)
@@ -79,12 +180,25 @@ const ChannelDetailPage = () => {
     setIsBinding(true)
     try {
       const next = await confirmWeChatPersonalBinding(draft, wechatVerificationCode)
-      setData(next)
-      setDraft(next)
+      updateDraft(next)
+      const latestMessage = next.runtime.debugLog[0]?.text
       if (next.channel.wechatPersonalBindingStatus === "bound") {
         setWechatVerificationCode("")
         showToast({ title: "WeChat connected", description: "Personal WeChat bridge binding completed.", type: "success", timeout: 2500 })
+        return
       }
+
+      if (next.channel.wechatPersonalSessionKey && next.channel.wechatPersonalQrStatus === "scaned") {
+        void monitorWeChatBinding(next)
+        return
+      }
+
+      showToast({
+        title: next.channel.wechatPersonalBindingStatus === "pending" ? "Verification required" : "WeChat binding failed",
+        description: latestMessage || (next.channel.wechatPersonalBindingStatus === "pending" ? "Enter the verification code shown on the device to continue." : "The QR login session could not be completed."),
+        type: next.channel.wechatPersonalBindingStatus === "pending" ? "info" : "error",
+        timeout: 3000,
+      })
     } finally {
       setIsBinding(false)
     }
@@ -98,19 +212,25 @@ const ChannelDetailPage = () => {
           <>
             <Badge variant={getChannelStatusVariant(draft.channel.status)}>{getChannelStatusLabel(draft.channel.status)}</Badge>
             <Badge variant={getChannelBindingVariant(draft.channel.bindingState)}>{getChannelBindingLabel(draft.channel.bindingState)}</Badge>
-            <Button size="sm" onClick={() => void handleSave()}>Save channel</Button>
           </>
         ) : null}
       />
-      <div className="flex-1 p-6">
-        <div className="mx-auto max-w-5xl">
+      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+        <div className="w-full">
           {isLoading ? <LoadingCard title="Loading channel..." /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error && draft ? (
             <ChannelEditorForm
               channel={draft.channel}
               agents={agents}
-              onChange={(channel) => setDraft({ ...draft, channel })}
+              providers={providers}
+              messageRecords={draft.runtime.messages}
+              showWechatVerification={showWechatVerification}
+              onChange={(channel) => {
+                const next = { ...draft, channel }
+                setDraft(next)
+                setShowWechatVerification(isVerificationPromptRequired(next))
+              }}
               onSave={() => void handleSave()}
               onBind={() => void handleBind()}
               onConfirmWeChatBinding={() => void handleConfirmWeChatBinding()}
@@ -123,6 +243,10 @@ const ChannelDetailPage = () => {
       </div>
     </div>
   )
+}
+
+function isVerificationPromptRequired(detail: ChannelDetail) {
+  return detail.channel.platform === "wechat_personal" && detail.channel.wechatPersonalQrStatus === "need_verifycode"
 }
 
 export default ChannelDetailPage

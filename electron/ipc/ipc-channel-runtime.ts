@@ -1,6 +1,7 @@
 import { ipcMain } from "electron"
 
 import type { ChannelConfigRecord } from "@/data/domain/models"
+import { captureBrowserPagePreview } from "@electron/others/browser-window"
 import { getChannelDetail } from "@electron/others/channels/channel-store"
 import { getChannelService } from "@electron/others/channels/channel-service"
 import { ensureWorkspace } from "@electron/others/workspace"
@@ -91,5 +92,15 @@ export function registerChannelRuntimeIpc() {
   ipcMain.handle("channel:wechatPersonalLoginWait", async (_event, sessionKey: string, verifyCode?: string, timeoutMs?: number) => {
     await ensureWorkspace()
     return getChannelService().waitForWeChatPersonalLogin(sessionKey, verifyCode, timeoutMs)
+  })
+
+  ipcMain.handle("channel:wechatPersonalQrPreview", async (_event, url: string, waitMs?: number) => {
+    await ensureWorkspace()
+    return captureBrowserPagePreview({
+      url,
+      width: 920,
+      height: 980,
+      waitMs: Math.max(0, Math.min(waitMs ?? 0, 5000)),
+    })
   })
 }

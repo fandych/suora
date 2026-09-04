@@ -180,13 +180,6 @@ export async function restoreChannelRuntime() {
   }
 }
 
-function createWeChatPersonalQrDataUrl(channel: ChannelConfigRecord) {
-  const label = encodeURIComponent(channel.title)
-  const session = encodeURIComponent(channel.id)
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320"><rect width="320" height="320" rx="28" fill="#fff7ed"/><rect x="28" y="28" width="264" height="264" rx="20" fill="#ffffff" stroke="#fdba74" stroke-width="8"/><path d="M84 84h48v48H84zM188 84h48v48h-48zM84 188h48v48H84z" fill="#111827"/><path d="M148 84h20v20h-20zM172 108h20v20h-20zM148 132h20v20h-20zM196 156h20v20h-20zM220 180h20v20h-20zM148 204h20v20h-20zM172 228h20v20h-20z" fill="#fb923c"/><text x="160" y="274" font-family="Arial, sans-serif" font-size="18" text-anchor="middle" fill="#9a3412">Scan to bind ${label}</text><text x="160" y="296" font-family="Arial, sans-serif" font-size="11" text-anchor="middle" fill="#c2410c">session ${session}</text></svg>`
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
-}
-
 export async function listChannels() {
   await ensureChannelCatalogItems()
   return suoraIpc.channels.list() as Promise<ChannelSummary[]>
@@ -263,14 +256,16 @@ export async function bindChannel(detail: ChannelDetail) {
   const timestamp = Date.now()
   if (detail.channel.platform === "wechat_personal") {
     const result = await suoraIpc.channels.startWeChatPersonalLogin(true) as { success?: boolean; qrCodeUrl?: string; sessionKey?: string; message?: string }
+    const hasExistingBinding = detail.channel.wechatPersonalBindingStatus === "bound" && Boolean(detail.channel.wechatPersonalBotToken)
     return persist({
       channel: {
         ...detail.channel,
         connectionMode: "stream",
-        wechatPersonalBindingStatus: result.success ? "pending" : "error",
-        wechatPersonalSessionKey: result.sessionKey,
-        wechatPersonalQrCodeUrl: result.qrCodeUrl ?? createWeChatPersonalQrDataUrl(detail.channel),
-        bindingState: result.success ? "draft" : "error",
+        wechatPersonalBindingStatus: result.success ? (hasExistingBinding ? "bound" : "pending") : hasExistingBinding ? "bound" : "error",
+        wechatPersonalQrStatus: result.success ? "wait" : undefined,
+        wechatPersonalSessionKey: result.success ? result.sessionKey : undefined,
+        wechatPersonalQrCodeUrl: result.qrCodeUrl || detail.channel.wechatPersonalQrCodeUrl,
+        bindingState: result.success ? (hasExistingBinding ? "connected" : "draft") : hasExistingBinding ? "connected" : "error",
       },
       runtime: {
         ...detail.runtime,
@@ -311,6 +306,61 @@ export async function bindChannel(detail: ChannelDetail) {
   return next
 }
 
+export async function waitForWeChatPersonalBinding(detail: ChannelDetail, verificationCode?: string, timeoutMs = 35_000) {
+  const timestamp = Date.now()
+
+  if (detail.channel.platform !== "wechat_personal") {
+    return {
+      detail,
+      status: "error",
+      message: "Channel is not a Personal WeChat binding.",
+    }
+  }
+
+  const sessionKey = detail.channel.wechatPersonalSessionKey
+  const trimmedCode = verificationCode?.trim()
+  const result = sessionKey
+    ? await suoraIpc.channels.waitForWeChatPersonalLogin(sessionKey, trimmedCode, timeoutMs) as { success?: boolean; status?: string; message?: string; botToken?: string; baseUrl?: string; accountId?: string; userId?: string; qrCodeUrl?: string }
+    : { success: false, status: "error", message: "Missing WeChat login session." }
+  const isAlreadyBoundWithLocalToken = result.status === "already_bound" && Boolean(detail.channel.wechatPersonalBotToken)
+
+  const next = await persist({
+    channel: {
+      ...detail.channel,
+      enabled: result.status === "connected" || isAlreadyBoundWithLocalToken ? true : detail.channel.enabled,
+      connectionMode: "stream",
+      wechatPersonalBindingStatus: result.status === "connected" || isAlreadyBoundWithLocalToken ? "bound" : result.status === "need_verifycode" || result.status === "timeout" || result.status === "expired" || result.status === "already_bound" || result.status === "scaned" ? "pending" : "error",
+      wechatPersonalQrStatus: result.status === "connected" || isAlreadyBoundWithLocalToken
+        ? undefined
+        : result.status === "need_verifycode"
+          ? "need_verifycode"
+          : result.status === "scaned"
+            ? "scaned"
+            : result.status === "timeout" || result.status === "expired"
+              ? "wait"
+              : detail.channel.wechatPersonalQrStatus,
+      wechatPersonalSessionKey: result.status === "connected" || isAlreadyBoundWithLocalToken ? undefined : sessionKey,
+      wechatPersonalBotToken: result.botToken || detail.channel.wechatPersonalBotToken,
+      wechatPersonalBaseUrl: result.baseUrl || detail.channel.wechatPersonalBaseUrl,
+      wechatPersonalAccountId: result.accountId || detail.channel.wechatPersonalAccountId,
+      wechatPersonalUserId: result.userId || detail.channel.wechatPersonalUserId,
+      wechatPersonalQrCodeUrl: result.status === "connected" || isAlreadyBoundWithLocalToken ? undefined : result.qrCodeUrl || detail.channel.wechatPersonalQrCodeUrl,
+      bindingState: result.status === "connected" || isAlreadyBoundWithLocalToken ? "connected" : result.success ? "draft" : "error",
+    },
+    runtime: {
+      ...detail.runtime,
+      debugLog: appendDebug(detail, result.status === "connected" ? "success" : result.success ? "info" : "error", result.message || "Personal WeChat binding updated.", timestamp),
+    },
+  })
+  await syncRuntimeRegistration().catch(() => undefined)
+
+  return {
+    detail: next,
+    status: result.status ?? "error",
+    message: result.message,
+  }
+}
+
 export async function confirmWeChatPersonalBinding(detail: ChannelDetail, verificationCode: string) {
   const code = verificationCode.trim()
   const timestamp = Date.now()
@@ -324,6 +374,7 @@ export async function confirmWeChatPersonalBinding(detail: ChannelDetail, verifi
       channel: {
         ...detail.channel,
         wechatPersonalBindingStatus: "error",
+        wechatPersonalQrStatus: undefined,
         bindingState: "error",
       },
       runtime: {
@@ -333,32 +384,8 @@ export async function confirmWeChatPersonalBinding(detail: ChannelDetail, verifi
     })
   }
 
-  const sessionKey = detail.channel.wechatPersonalSessionKey
-  const result = sessionKey
-    ? await suoraIpc.channels.waitForWeChatPersonalLogin(sessionKey, code, 60_000) as { success?: boolean; status?: string; message?: string; botToken?: string; baseUrl?: string; accountId?: string; userId?: string; qrCodeUrl?: string }
-    : { success: false, status: "error", message: "Missing WeChat login session." }
-
-  const next = await persist({
-    channel: {
-      ...detail.channel,
-      enabled: result.status === "connected" ? true : detail.channel.enabled,
-      connectionMode: "stream",
-      wechatPersonalBindingStatus: result.status === "connected" ? "bound" : result.status === "need_verifycode" ? "pending" : "error",
-      wechatPersonalSessionKey: result.status === "connected" ? undefined : sessionKey,
-      wechatPersonalBotToken: result.botToken || detail.channel.wechatPersonalBotToken,
-      wechatPersonalBaseUrl: result.baseUrl || detail.channel.wechatPersonalBaseUrl,
-      wechatPersonalAccountId: result.accountId || detail.channel.wechatPersonalAccountId,
-      wechatPersonalUserId: result.userId || detail.channel.wechatPersonalUserId,
-      wechatPersonalQrCodeUrl: result.qrCodeUrl || detail.channel.wechatPersonalQrCodeUrl,
-      bindingState: result.status === "connected" ? "connected" : result.success ? "draft" : "error",
-    },
-    runtime: {
-      ...detail.runtime,
-      debugLog: appendDebug(detail, result.status === "connected" ? "success" : result.success ? "info" : "error", result.message || "Personal WeChat binding updated.", timestamp),
-    },
-  })
-  await syncRuntimeRegistration().catch(() => undefined)
-  return next
+  const result = await waitForWeChatPersonalBinding(detail, code)
+  return result.detail
 }
 
 export async function getChannelRuntimeStatus() {

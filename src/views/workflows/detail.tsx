@@ -1,432 +1,236 @@
-import { useEffect, useMemo, useRef, useState } from "react"
-import { Background, Controls, Panel, ReactFlow, addEdge, useEdgesState, useNodesState, type Connection, type Edge, type Node, type NodeMouseHandler } from "@xyflow/react"
+import { Background, MiniMap, Panel, ReactFlow } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { useParams } from "react-router"
-import { listAvailableAgents } from "@/data/repositories/agent-repository"
-import { listDocuments } from "@/data/repositories/document-repository"
-import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
-import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
-import { showToast } from "@/lib/app-toast"
+import { PlayIcon } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
 import PageHeader from "@/views/components/page-header"
+import { ConfirmDeleteDialog } from "@/views/components/confirm-delete-dialog"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
-import { createWorkflowNodeData, defaultWorkflowBindings, defaultWorkflowNotifications, workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
-import { DEFAULT_WORKFLOW_DRY_RUN_INPUT, buildWorkflowFingerprint, getWorkflowDesignIssues, getWorkflowDryRunInputIssue } from "@/views/workflows/components/workflow-editor-state"
-import { WorkflowHeaderActions } from "@/views/workflows/components/workflow-header-actions"
-import { WorkflowInspectorShell } from "@/views/workflows/components/workflow-inspector-shell"
-import { WorkflowStatusPill } from "@/views/workflows/components/workflow-status-pill"
+import { WorkflowIssuesControl, WorkflowNodeSearchControl } from "@/views/workflows/components/workflow-canvas-controls"
 import { workflowNodeTypes } from "@/views/workflows/components/workflow-canvas-node"
+import { workflowEdgeTypes } from "@/views/workflows/components/workflow-edge"
+import { WorkflowHeaderActions } from "@/views/workflows/components/workflow-header-actions"
+import { WorkflowPreferenceDialog } from "@/views/workflows/components/workflow-preference-dialog"
 import { WorkflowPropertiesPanel } from "@/views/workflows/components/workflow-properties-panel"
-import { exportWorkflowJson, parseWorkflowJson } from "@/views/workflows/components/workflow-transfer"
-import { WorkflowDesignIssuesSummary, WorkflowLibraryPanel } from "@/views/workflows/components/workflow-workbench-panels"
-import { useAsyncResource } from "@/hooks/use-async-resource"
-import type { WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/models"
-import { dryRunWorkflowSnapshot, getWorkflowDetail, publishWorkflowVersion, runWorkflow, saveWorkflowDraft } from "@/data/repositories/workflow-repository"
+import { WorkflowNodeActionsProvider } from "@/views/workflows/components/workflow-node-actions-context"
+import { WorkflowTryPanel } from "@/views/workflows/components/workflow-try-panel"
+import { WorkflowLibraryPanel } from "@/views/workflows/components/workflow-workbench-panels"
+import { WorkflowZoomControls } from "@/views/workflows/components/workflow-zoom-controls"
+import { useWorkflowDetailController } from "@/views/workflows/use-workflow-detail-controller"
 
 const WorkflowDetailPage = () => {
-  const { workflowId } = useParams<{ workflowId: string }>()
-  const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
-  const { data, error, isLoading, reload, setData } = useAsyncResource(
-    () => getWorkflowDetail(workflowId ?? "", selectedVersionId),
-    [workflowId, selectedVersionId]
-  )
-  const { data: agentsData } = useAsyncResource(() => listAvailableAgents(), [])
-  const { data: providersData } = useAsyncResource(() => listConfiguredModelProviders(), [])
-  const { data: documentsData } = useAsyncResource(() => listDocuments(), [])
-  const { data: integrationsData } = useAsyncResource(() => listIntegrationSummaries(), [])
-  const [title, setTitle] = useState("")
-  const [summary, setSummary] = useState("")
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>([])
-  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([])
-  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
-  const [resourceBindings, setResourceBindings] = useState(defaultWorkflowBindings)
-  const [notifications, setNotifications] = useState<WorkflowNotificationSettings>(defaultWorkflowNotifications)
-  const [dryRunInput, setDryRunInput] = useState(DEFAULT_WORKFLOW_DRY_RUN_INPUT)
-  const [libraryQuery, setLibraryQuery] = useState("")
-  const [showLibrary, setShowLibrary] = useState(true)
-  const [showInspector, setShowInspector] = useState(true)
-  const importInputRef = useRef<HTMLInputElement | null>(null)
-  const agents = agentsData ?? []
-  const documents = documentsData ?? []
-  const integrations = integrationsData ?? []
-  const modelOptions = (providersData ?? []).flatMap((provider) => provider.models.map((model) => ({ id: model.id, label: `${provider.title} / ${model.name}` })))
-
-  useEffect(() => {
-    if (!data) {
-      return
-    }
-    setTitle(data.workflow.title)
-    setSummary(data.workflow.summary)
-    setNodes(data.definition.nodes)
-    setEdges(data.definition.edges)
-    setResourceBindings(data.definition.resourceBindings ?? defaultWorkflowBindings)
-    setNotifications(data.definition.notifications ?? defaultWorkflowNotifications)
-    setDryRunInput(data.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT)
-    setSelectedVersionId(data.selectedVersion.id)
-    setSelectedNodeId(data.definition.nodes[0]?.id ?? null)
-  }, [data, setEdges, setNodes])
-
-  const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId])
-  const latestInvocation = data?.invocations[0] ?? null
-  const currentDefinition = useMemo(() => ({
-    nodes,
-    edges,
-    viewport: data?.definition.viewport ?? { x: 0, y: 0, zoom: 1 },
-    resourceBindings,
-    dryRunInputJson: dryRunInput,
-    variables: data?.definition.variables ?? [],
-    budget: data?.definition.budget,
-    notifications,
-  }), [data, dryRunInput, edges, nodes, notifications, resourceBindings])
-  const nodeSearchResults = useMemo(() => {
-    const keyword = libraryQuery.trim().toLowerCase()
-    if (!keyword) {
-      return []
-    }
-    return nodes.filter((node) => `${node.data.label} ${node.data.task ?? ""} ${node.data.kind}`.toLowerCase().includes(keyword))
-  }, [libraryQuery, nodes])
-  const designIssues = useMemo(() => getWorkflowDesignIssues({
-    nodes,
-    edges,
-    availableAgentIds: agents.map((agent) => agent.id),
-    availableDocumentIds: documents.map((document) => document.id),
-    availableIntegrationIds: integrations.map((integration) => integration.id),
-    availableModelIds: modelOptions.map((model) => model.id),
-  }), [agents, documents, edges, integrations, modelOptions, nodes])
-  const dryRunInputIssue = useMemo(() => getWorkflowDryRunInputIssue(dryRunInput), [dryRunInput])
-  const visibleIssues = useMemo(() => dryRunInputIssue ? [...designIssues, dryRunInputIssue] : designIssues, [designIssues, dryRunInputIssue])
-  const blockingIssues = useMemo(() => visibleIssues.filter((issue) => issue.severity === "error"), [visibleIssues])
-  const currentFingerprint = useMemo(() => buildWorkflowFingerprint({ title, summary, definition: currentDefinition }), [currentDefinition, summary, title])
-  const savedFingerprint = useMemo(() => {
-    if (!data) {
-      return ""
-    }
-
-    return buildWorkflowFingerprint({
-      title: data.workflow.title,
-      summary: data.workflow.summary,
-      definition: {
-        ...data.definition,
-        resourceBindings: data.definition.resourceBindings ?? defaultWorkflowBindings,
-        dryRunInputJson: data.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT,
-      },
-    })
-  }, [data])
-  const hasUnsavedChanges = Boolean(data) && currentFingerprint !== savedFingerprint
-  const isReleaseVersion = Boolean(data?.selectedVersion.isRelease)
-  const isDraftVersion = Boolean(data && !data.selectedVersion.isRelease)
-  const isReadOnly = isReleaseVersion
-  const tracedNodes = useMemo(() => {
-    const traceMap = new Map(latestInvocation?.traces.map((trace) => [trace.nodeId, trace]) ?? [])
-    return nodes.map((node) => {
-      const trace = traceMap.get(node.id)
-      if (!trace) {
-        return node
-      }
-
-      return {
-        ...node,
-        type: "workflowNode",
-        style: {
-          border: trace.status === "success" ? "1px solid var(--color-primary)" : "1px solid var(--color-destructive)",
-          boxShadow: trace.status === "success" ? "0 0 0 2px color-mix(in oklch,var(--color-primary),transparent 75%)" : "0 0 0 2px color-mix(in oklch,var(--color-destructive),transparent 75%)",
-        },
-      }
-    })
-  }, [latestInvocation, nodes])
-
-  const handleConnect = (connection: Connection) => {
-    if (isReadOnly) {
-      return
-    }
-    setEdges((current) => addEdge(connection, current))
-  }
-
-  const handleSave = async () => {
-    if (!workflowId || !data) {
-      return
-    }
-    if (isReadOnly) {
-      showToast({ title: "Release revisions are read-only", description: "Switch back to a draft revision before editing this workflow.", type: "warning" })
-      return
-    }
-    const next = await saveWorkflowDraft(workflowId, {
-      title,
-      summary,
-      selectedVersionId: data?.selectedVersion.id,
-      definition: currentDefinition,
-    })
-
-    setData(next)
-    setSelectedVersionId(next.selectedVersion.id)
-  }
-
-  const handlePublish = async () => {
-    if (!workflowId || !data) {
-      return
-    }
-    if (!isDraftVersion) {
-      showToast({ title: "Select a draft revision", description: "Published revisions stay read-only. Switch to a draft before publishing a new release.", type: "warning" })
-      return
-    }
-    if (hasUnsavedChanges) {
-      showToast({ title: "Save the draft first", description: "Publishing only works from the latest saved draft snapshot.", type: "warning" })
-      return
-    }
-    if (blockingIssues[0]) {
-      showToast({ title: "Resolve workflow issues", description: blockingIssues[0].message, type: "error" })
-      return
-    }
-    const next = await publishWorkflowVersion(workflowId, data.selectedVersion.id)
-    setData(next)
-    setSelectedVersionId(next.selectedVersion.id)
-  }
-
-  const handleRunRelease = async () => {
-    if (!workflowId || !data) {
-      return
-    }
-    if (!isReleaseVersion) {
-      showToast({ title: "Publish a release first", description: "Use Dry run while iterating on a draft. Header Run is reserved for published revisions.", type: "warning" })
-      return
-    }
-    const next = await runWorkflow(workflowId, data.selectedVersion.id)
-    setData(next)
-  }
-
-  const handleDryRun = async () => {
-    if (!workflowId || !data) {
-      return
-    }
-    if (isReadOnly) {
-      showToast({ title: "Switch to a draft revision", description: "Dry run works from editable draft revisions so you can test the current canvas state.", type: "warning" })
-      return
-    }
-    if (blockingIssues[0]) {
-      showToast({ title: "Resolve workflow issues", description: blockingIssues[0].message, type: "error" })
-      return
-    }
-    const invocation = await dryRunWorkflowSnapshot({
-      workflowId,
-      workflowTitle: title || data.workflow.title,
-      selectedVersion: data.selectedVersion,
-      definition: currentDefinition,
-    })
-
-    setData((current) => current ? { ...current, invocations: [invocation, ...current.invocations] } : current)
-  }
-
-  const handleNodeClick: NodeMouseHandler<Node<WorkflowNodeData>> = (_event, node) => setSelectedNodeId(node.id)
-
-  const handleAddNode = () => {
-    if (isReadOnly) {
-      return
-    }
-    const nextIndex = nodes.length + 1
-    const nextId = `node-${nextIndex}`
-    setNodes((current) => [
-      ...current,
-      {
-        id: nextId,
-        type: "workflowNode",
-        position: { x: 220 + current.length * 120, y: 260 },
-        data: createWorkflowNodeData("agent", nextIndex),
-      },
-    ])
-    setSelectedNodeId(nextId)
-  }
-
-  const handleAddPresetNode = (kind: WorkflowNodeData["kind"]) => {
-    if (isReadOnly) {
-      return
-    }
-    const nextIndex = nodes.length + 1
-    const nextId = `${kind}-${nextIndex}`
-    setNodes((current) => [
-      ...current,
-      {
-        id: nextId,
-        type: "workflowNode",
-        position: { x: 120 + current.length * 120, y: 120 + (current.length % 3) * 90 },
-        data: createWorkflowNodeData(kind, nextIndex),
-      },
-    ])
-    setSelectedNodeId(nextId)
-  }
-
-  const handleSelectedNodeChange = (patch: Partial<WorkflowNodeData>) => {
-    if (!selectedNodeId || isReadOnly) {
-      return
-    }
-    setNodes((current) => current.map((node) => node.id === selectedNodeId ? { ...node, data: { ...node.data, ...patch } } : node))
-  }
-
-  const handleDuplicateNode = () => {
-    if (!selectedNode || isReadOnly) {
-      return
-    }
-    const nextId = `${selectedNode.id}-copy-${nodes.length + 1}`
-    setNodes((current) => [...current, { ...selectedNode, id: nextId, position: { x: selectedNode.position.x + 48, y: selectedNode.position.y + 48 } }])
-    setSelectedNodeId(nextId)
-  }
-
-  const handleDeleteNode = () => {
-    if (!selectedNodeId || isReadOnly) {
-      return
-    }
-
-    setNodes((current) => current.filter((node) => node.id !== selectedNodeId))
-    setEdges((current) => current.filter((edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId))
-    setSelectedNodeId(null)
-  }
-
-  const handleExport = () => {
-    if (!data) {
-      return
-    }
-
-    exportWorkflowJson({ title, summary, definition: currentDefinition, versionLabel: data.selectedVersion.label })
-  }
-
-  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    if (isReadOnly) {
-      event.target.value = ""
-      return
-    }
-
-    const file = event.target.files?.[0]
-    event.target.value = ""
-    if (!file) {
-      return
-    }
-
-    const payload = parseWorkflowJson(await file.text())
-    setTitle(payload.title)
-    setSummary(payload.summary)
-    setNodes(payload.definition.nodes)
-    setEdges(payload.definition.edges)
-    setResourceBindings(payload.definition.resourceBindings ?? defaultWorkflowBindings)
-    setDryRunInput(payload.definition.dryRunInputJson ?? "{}")
-    setSelectedNodeId(payload.definition.nodes[0]?.id ?? null)
-  }
-
-  const filteredPresets = useMemo(() => {
-    const keyword = libraryQuery.trim().toLowerCase()
-    if (!keyword) {
-      return workflowPresetNodes
-    }
-
-    return workflowPresetNodes.filter((item) => `${item.label} ${item.summary} ${item.kind}`.toLowerCase().includes(keyword))
-  }, [libraryQuery])
-
-  const canShowContent = !isLoading && !error && data
+  const controller = useWorkflowDetailController()
+  const stopPanelEvent = (event: React.MouseEvent | React.PointerEvent) => event.stopPropagation()
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader
-        title={data?.workflow.title ?? "Workflow"}
-        actions={data ? (
-          <WorkflowHeaderActions
-            versions={data.versions}
-            selectedVersionId={data.selectedVersion.id}
-            onVersionChange={setSelectedVersionId}
-            isReleaseVersion={isReleaseVersion}
-            hasUnsavedChanges={hasUnsavedChanges}
-            issueCount={visibleIssues.length}
-            showLibrary={showLibrary}
-            showInspector={showInspector}
-            canRunRelease={isReleaseVersion}
-            canSaveDraft={!isReadOnly && hasUnsavedChanges}
-            canPublish={isDraftVersion && !hasUnsavedChanges && blockingIssues.length === 0}
-            onToggleLibrary={() => setShowLibrary((value) => !value)}
-            onToggleInspector={() => setShowInspector((value) => !value)}
-            onRunRelease={handleRunRelease}
-            onSaveDraft={handleSave}
-            onPublish={handlePublish}
-            onExport={handleExport}
-            onImport={() => importInputRef.current?.click()}
-            importInputRef={importInputRef}
-            onImportChange={handleImport}
-          />
-        ) : null}
-      />
+      <PageHeader title={controller.title || controller.data?.workflow.title || "Workflow"} />
 
       <div className="flex min-h-0 flex-1 flex-col p-3">
-        {isLoading ? <LoadingCard title="Loading workflow..." /> : null}
-        {error ? <ErrorCard error={error} onRetry={reload} /> : null}
-        {canShowContent ? (
+        {controller.isLoading ? <LoadingCard title="Loading workflow..." /> : null}
+        {controller.error ? <ErrorCard error={controller.error} onRetry={controller.reload} /> : null}
+        {controller.canShowContent ? (
           <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border bg-card">
+            <WorkflowNodeActionsProvider value={{ canEdit: !controller.isReadOnly, hasOutgoingConnection: controller.hasOutgoingConnection, onAddNodeFromHandle: controller.handleAddNodeFromHandle }}>
             <ReactFlow
-              nodes={tracedNodes}
-              edges={edges}
+              key={controller.data.selectedVersion.id}
+              nodes={controller.tracedNodes}
+              edges={controller.edges}
               nodeTypes={workflowNodeTypes}
-              onNodesChange={isReadOnly ? undefined : onNodesChange}
-              onEdgesChange={isReadOnly ? undefined : onEdgesChange}
-              onConnect={handleConnect}
-              onNodeClick={handleNodeClick}
-              nodesDraggable={!isReadOnly}
-              nodesConnectable={!isReadOnly}
+              edgeTypes={workflowEdgeTypes}
+              onNodesChange={controller.isReadOnly ? undefined : controller.onNodesChange}
+              onEdgesChange={controller.isReadOnly ? undefined : controller.onEdgesChange}
+              onConnect={controller.handleConnect}
+              onNodeClick={controller.handleNodeClick}
+              onPaneClick={() => {
+                controller.setSelectedNodeId(null)
+                if (controller.inspectorMode === "properties") {
+                  controller.setInspectorMode("closed")
+                }
+              }}
+              defaultViewport={controller.viewport}
+              onMoveEnd={(_event, nextViewport) => controller.setViewport(nextViewport)}
+              onInit={(instance) => {
+                controller.flowRef.current = instance
+                void instance.setViewport(controller.viewport, { duration: 0 })
+              }}
+              nodesDraggable={!controller.isReadOnly}
+              nodesConnectable={!controller.isReadOnly}
               elementsSelectable
-              fitView
+              minZoom={0.25}
+              maxZoom={2}
+              snapToGrid
+              fitView={false}
             >
               <Background gap={20} size={1} color="var(--color-border)" />
-              <Controls showInteractive={false} />
 
-              <Panel position="top-left" className="m-3 w-64 max-w-88 pointer-events-auto">
-                <WorkflowLibraryPanel
-                  isOpen={showLibrary}
-                  query={libraryQuery}
-                  matchingNodes={nodeSearchResults}
-                  presets={filteredPresets}
-                  canEdit={!isReadOnly}
-                  onQueryChange={setLibraryQuery}
-                  onSelectNode={setSelectedNodeId}
-                  onAddNode={handleAddNode}
-                  onAddPresetNode={handleAddPresetNode}
-                  onOpenChange={setShowLibrary}
+              <Panel position="top-center" className="m-3 flex w-[min(100%-1.5rem,72rem)] pointer-events-auto justify-center" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <WorkflowHeaderActions
+                  versions={controller.data.versions}
+                  selectedVersionId={controller.data.selectedVersion.id}
+                  onVersionChange={controller.setSelectedVersionId}
+                  showLibrary={controller.showLibrary}
+                  canPublish={controller.isDraftVersion && !controller.hasUnsavedChanges && controller.blockingIssues.length === 0}
+                  canRunRelease={controller.isReleaseVersion}
+                  onToggleLibrary={() => controller.setShowLibrary((current) => !current)}
+                  onAutoLayout={controller.handleAutoLayout}
+                  onOpenPreference={() => controller.setIsPreferenceDialogOpen(true)}
+                  onOpenTryRun={() => controller.setInspectorMode("try-run")}
+                  onRunRelease={controller.handleRunRelease}
+                  onPublish={controller.handlePublish}
+                  onExport={controller.handleExport}
+                  onImport={() => controller.importInputRef.current?.click()}
+                  onDelete={() => controller.setIsDeleteDialogOpen(true)}
+                  importInputRef={controller.importInputRef}
+                  onImportChange={controller.handleImport}
                 />
               </Panel>
 
-              <Panel position="top-right" className="m-3 w-88 max-w-[calc(100vw-2rem)] pointer-events-auto">
-                <WorkflowInspectorShell isOpen={showInspector} onOpen={() => setShowInspector(true)}>
-                  <WorkflowDesignIssuesSummary issues={visibleIssues} onSelectNode={setSelectedNodeId} />
-                  <WorkflowPropertiesPanel
-                    agents={agents}
-                    documents={documents}
-                    integrations={integrations}
-                    modelOptions={modelOptions}
-                    onDeleteNode={handleDeleteNode}
-                    onDuplicateNode={handleDuplicateNode}
-                    onRunDraft={handleDryRun}
-                    onSave={handleSave}
-                    onSelectTraceNode={setSelectedNodeId}
-                    readOnly={isReadOnly}
-                    notifications={notifications}
-                    resourceBindings={resourceBindings}
-                    runDraftDisabled={blockingIssues.length > 0}
-                    saveDisabled={!hasUnsavedChanges}
-                    selectedNode={selectedNode ? { id: selectedNode.id, data: selectedNode.data } : null}
-                    selectedNodeId={selectedNodeId}
-                    setDryRunInput={setDryRunInput}
-                    setNotifications={setNotifications}
-                    setResourceBindings={setResourceBindings}
-                    setSummary={setSummary}
-                    setTitle={setTitle}
-                    summary={summary}
-                    title={title}
-                    traces={data.invocations}
-                    updateNode={handleSelectedNodeChange}
-                    dryRunInput={dryRunInput}
+              <Panel position="top-left" className={`${controller.showLibrary ? "left-62!" : "left-12!"} m-3! pointer-events-auto`} onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <div className="flex items-center gap-2">
+                  <WorkflowNodeSearchControl
+                    nodes={controller.nodes}
+                    onNodeSelect={controller.focusNode}
                   />
-                </WorkflowInspectorShell>
+                  <WorkflowIssuesControl
+                    issues={controller.visibleIssues}
+                    onIssueSelect={controller.focusNode}
+                  />
+                </div>
               </Panel>
 
-              <Panel position="bottom-left" className="m-3 pointer-events-none">
-                <WorkflowStatusPill title={title || data.workflow.title} versionLabel={data.selectedVersion.label} nodeCount={nodes.length} />
+              <Panel position="top-left" className="m-3 w-64 max-w-88 pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <WorkflowLibraryPanel
+                  isOpen={controller.showLibrary}
+                  presets={controller.workflowPresetNodes}
+                  canEdit={!controller.isReadOnly}
+                  hasStartNode={controller.nodes.some((node) => node.data.kind === "start")}
+                  onAddPresetNode={controller.handleAddPresetNode}
+                  onOpenChange={controller.setShowLibrary}
+                />
+              </Panel>
+
+              {controller.inspectorMode !== "properties" ? (
+                <Panel position="top-right" className="m-3! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon-sm"
+                    className="bg-background/95 shadow-lg"
+                    onClick={() => controller.setInspectorMode("try-run")}
+                    disabled={controller.isReadOnly || controller.isDryRunning}
+                    aria-label="Open try panel"
+                    title="Open try panel"
+                  >
+                    <PlayIcon />
+                  </Button>
+                </Panel>
+              ) : null}
+
+              {!controller.isReadOnly && controller.inspectorMode === "properties" && controller.selectedNode ? (
+                <Panel position="top-right" className="top-3! right-3! bottom-3! m-0! p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                  <div className="relative h-full min-h-0 max-w-[calc(100vw-1.5rem)]" style={{ width: controller.propertiesPanelWidth }}>
+                    <button
+                      type="button"
+                      aria-label="Resize node properties panel"
+                      title="Resize node properties panel"
+                      className="absolute top-1/2 -left-2 z-10 h-10 w-1 -translate-y-1/2 touch-none cursor-ew-resize rounded-full bg-border/70 hover:bg-primary"
+                      onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
+                      onPointerMove={(event) => {
+                        if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
+                          return
+                        }
+
+                        controller.setPropertiesPanelWidth((current) => Math.min(520, Math.max(260, current - event.movementX)))
+                      }}
+                    />
+                    <div className="workflow-properties-panel flex h-full min-h-0 flex-col gap-2 rounded-xl border bg-background/95 p-2 shadow-xl">
+                      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
+                        <WorkflowPropertiesPanel
+                          agents={controller.agents}
+                          documents={controller.documents}
+                          integrations={controller.integrations}
+                          modelOptions={controller.modelOptions}
+                          onDeleteNode={controller.handleDeleteNode}
+                          onDuplicateNode={controller.handleDuplicateNode}
+                          onRenameNodeId={controller.handleRenameSelectedNodeId}
+                          readOnly={controller.isReadOnly}
+                          selectedNode={controller.selectedNode ? { id: controller.selectedNode.id, data: controller.selectedNode.data } : null}
+                          updateNode={controller.handleSelectedNodeChange}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Panel>
+              ) : null}
+
+              {controller.inspectorMode === "try-run" ? (
+                <Panel position="top-right" className="top-3! right-3! bottom-3! m-0! p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                  <WorkflowTryPanel
+                    width={controller.tryPanelWidth}
+                    onWidthChange={controller.setTryPanelWidth}
+                    invocation={controller.data.invocations[0] ?? null}
+                    input={controller.dryRunInput}
+                    isRunning={controller.isDryRunning}
+                    error={controller.dryRunError}
+                    onInputChange={(value) => {
+                      controller.setDryRunInput(value)
+                    }}
+                    onClose={() => controller.setInspectorMode("closed")}
+                    onRun={() => void controller.handleDryRun()}
+                  />
+                </Panel>
+              ) : null}
+
+              {!controller.selectedNode && controller.inspectorMode !== "try-run" ? (
+                <Panel position="bottom-right" className="m-3 pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                  <div className="h-32 w-48 overflow-hidden rounded-2xl border bg-background/92 shadow-sm backdrop-blur">
+                    <MiniMap pannable zoomable />
+                  </div>
+                </Panel>
+              ) : null}
+
+              <Panel position="bottom-center" className="m-3 pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <WorkflowZoomControls
+                  zoom={controller.viewport.zoom}
+                  onZoomOut={() => controller.handleZoomStep(-0.1)}
+                  onZoomIn={() => controller.handleZoomStep(0.1)}
+                  onFitView={controller.handleFitView}
+                />
               </Panel>
             </ReactFlow>
+            </WorkflowNodeActionsProvider>
           </div>
         ) : null}
       </div>
+
+      <WorkflowPreferenceDialog
+        open={controller.isPreferenceDialogOpen}
+        title={controller.title}
+        summary={controller.summary}
+        dryRunInput={controller.dryRunInput}
+        readOnly={controller.isReadOnly}
+        notifications={controller.notifications}
+        resourceBindings={controller.resourceBindings}
+        onOpenChange={controller.setIsPreferenceDialogOpen}
+        onDryRunInputChange={controller.setDryRunInput}
+        onNotificationsChange={controller.setNotifications}
+        onResourceBindingsChange={controller.setResourceBindings}
+        onTitleChange={controller.setTitle}
+        onSummaryChange={controller.setSummary}
+      />
+
+      <ConfirmDeleteDialog
+        open={controller.isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!controller.isDeleting) {
+            controller.setIsDeleteDialogOpen(open)
+          }
+        }}
+        title="Delete workflow"
+        description="This permanently deletes the workflow, its versions, and invocation history. This action cannot be undone."
+        onConfirm={() => void controller.handleDeleteWorkflow()}
+      />
     </div>
   )
 }

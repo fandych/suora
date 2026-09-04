@@ -1,36 +1,38 @@
 import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react"
-import type { Node } from "@xyflow/react"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import type { WorkflowNodeData } from "@/data/domain/models"
+import { WORKFLOW_NODE_ICONS } from "@/views/workflows/components/workflow-canvas-node"
 import type { WorkflowDesignIssue } from "@/views/workflows/components/workflow-editor-state"
+
+const libraryGroups: Array<{ title: string; kinds: WorkflowNodeData["kind"][] }> = [
+  { title: "Core", kinds: ["start", "end", "agent"] },
+  { title: "Logic", kinds: ["if-else", "fork", "join"] },
+  { title: "Knowledge", kinds: ["document-retrieval"] },
+  { title: "Execution", kinds: ["http", "script"] },
+]
 
 export function WorkflowLibraryPanel({
   isOpen,
-  query,
-  matchingNodes,
   presets,
   canEdit,
-  onQueryChange,
-  onSelectNode,
-  onAddNode,
+  hasStartNode,
   onAddPresetNode,
   onOpenChange,
 }: {
   isOpen: boolean
-  query: string
-  matchingNodes: Node<WorkflowNodeData>[]
   presets: Array<{ kind: WorkflowNodeData["kind"]; label: string; summary: string }>
   canEdit: boolean
-  onQueryChange: (value: string) => void
-  onSelectNode: (nodeId: string) => void
-  onAddNode: () => void
+  hasStartNode: boolean
   onAddPresetNode: (kind: WorkflowNodeData["kind"]) => void
   onOpenChange: (open: boolean) => void
 }) {
+  const groupedPresets = libraryGroups
+    .map((group) => ({ title: group.title, items: presets.filter((item) => group.kinds.includes(item.kind)) }))
+    .filter((group) => group.items.length > 0)
+
   if (!isOpen) {
     return (
       <div className="rounded-2xl border bg-card p-2 shadow-sm">
@@ -42,49 +44,39 @@ export function WorkflowLibraryPanel({
   }
 
   return (
-    <div className="flex max-h-[calc(100vh-10rem)] min-h-0 flex-col overflow-hidden rounded-2xl border bg-card shadow-sm">
-      <div className="flex items-center justify-between gap-2 border-b px-3 py-2">
-        <div>
-          <div className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Node library</div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">Compact preset blocks for the current workflow.</div>
-        </div>
+    <div className="flex max-h-[calc(100vh-10rem)] min-h-0 w-48 max-w-[calc(100vw-6rem)] flex-col gap-2 overflow-hidden rounded-xl border bg-background/95 p-2 shadow-xl">
+      <div className="flex items-center justify-between gap-2 border-b px-1 pb-2 text-xs font-semibold">
+        <span>Node library</span>
         <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
           <PanelLeftCloseIcon />
         </Button>
       </div>
-      <div className="border-b px-3 py-2">
-        <Input className="h-8 text-xs" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder="Search presets or nodes" />
-      </div>
       <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-2 p-2.5">
-          {matchingNodes.length > 0 ? (
-            <div className="space-y-1 rounded-xl border bg-muted/30 p-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Matching nodes</div>
-              {matchingNodes.slice(0, 5).map((node) => (
-                <button
-                  key={node.id}
-                  type="button"
-                  onClick={() => onSelectNode(node.id)}
-                  className="flex w-full items-center justify-between rounded-lg border bg-background px-2.5 py-2 text-left text-[11px] transition-colors hover:border-primary/40"
-                >
-                  <span className="truncate font-medium text-foreground">{node.data.label}</span>
-                  <span className="shrink-0 text-muted-foreground">{node.data.kind}</span>
-                </button>
-              ))}
+        <div className="flex flex-col gap-3 p-2.5 pb-5">
+          {groupedPresets.map((group) => (
+            <div key={group.title} className="flex flex-col gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">{group.title}</p>
+              <div className="flex flex-col gap-1.5">
+                {group.items.map((item) => {
+                  const NodeIcon = WORKFLOW_NODE_ICONS[item.kind]
+                  const disabled = !canEdit || (item.kind === "start" && hasStartNode)
+                  return (
+                    <button
+                      key={item.kind}
+                      type="button"
+                      onClick={() => onAddPresetNode(item.kind)}
+                      disabled={disabled}
+                      title={item.summary}
+                      aria-label={`${item.label}: ${item.summary}`}
+                      className="flex w-full items-center gap-2 rounded-lg border px-2 py-1.5 text-left text-xs font-medium transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <NodeIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      <span className="truncate">{item.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
             </div>
-          ) : null}
-          <Button size="sm" variant="outline" className="h-8 w-full justify-start text-xs" onClick={onAddNode} disabled={!canEdit}>Add blank node</Button>
-          {presets.map((item) => (
-            <button
-              key={item.kind}
-              type="button"
-              onClick={() => onAddPresetNode(item.kind)}
-              disabled={!canEdit}
-              className="flex w-full flex-col items-start gap-1 rounded-xl border px-3 py-2 text-left transition-colors hover:border-primary/40 hover:bg-muted/30"
-            >
-              <div className="text-xs font-medium text-foreground">{item.label}</div>
-              <div className="text-[11px] leading-4 text-muted-foreground">{item.summary}</div>
-            </button>
           ))}
         </div>
       </ScrollArea>

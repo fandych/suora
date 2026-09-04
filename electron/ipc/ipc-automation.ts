@@ -211,6 +211,23 @@ export function registerAutomationIpc() {
     }
   })
 
+  ipcMain.handle("workflows:delete", async (_event, workflowId: string) => {
+    await ensureWorkspace()
+    const database = openDatabase()
+    applyMigrations(database)
+    database.exec("BEGIN")
+    try {
+      database.prepare(`DELETE FROM workflow_invocations WHERE workflow_id = ?`).run(workflowId)
+      database.prepare(`DELETE FROM workflow_versions WHERE workflow_id = ?`).run(workflowId)
+      const result = database.prepare(`DELETE FROM workflows WHERE id = ?`).run(workflowId)
+      database.exec("COMMIT")
+      return Number(result.changes ?? 0) > 0
+    } catch (error) {
+      database.exec("ROLLBACK")
+      throw error
+    }
+  })
+
   ipcMain.handle("workflows:recordInvocation", async (_event, payload: { workflowId: string; versionId: string; status: string; trigger: string; input: string; output: string; traceJson: string }) => {
     await ensureWorkspace()
     const database = openDatabase()

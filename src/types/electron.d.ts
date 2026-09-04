@@ -77,6 +77,7 @@ declare global {
         get: (workflowId: string) => Promise<unknown>
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
+        delete: (workflowId: string) => Promise<unknown>
         recordInvocation: (payload: unknown) => Promise<unknown>
       }
       channels: {
@@ -98,6 +99,7 @@ declare global {
         debugSend: (payload: unknown) => Promise<unknown>
         startWeChatPersonalLogin: (force?: boolean) => Promise<unknown>
         waitForWeChatPersonalLogin: (sessionKey: string, verifyCode?: string, timeoutMs?: number) => Promise<unknown>
+        getWeChatPersonalQrPreview: (url: string, waitMs?: number) => Promise<unknown>
       }
       schedulers: {
         list: () => Promise<unknown>
