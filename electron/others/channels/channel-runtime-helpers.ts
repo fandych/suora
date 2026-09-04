@@ -185,6 +185,32 @@ export async function postWeChatPersonalJson<T>(
   }
 }
 
+export async function getWeChatPersonalJson<T>(
+  baseUrl: string,
+  endpoint: string,
+  options: { token?: string; timeoutMs?: number } = {},
+) {
+  const url = new URL(endpoint, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`)
+  const timeoutMs = options.timeoutMs ?? WECHAT_PERSONAL_API_TIMEOUT_MS
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch(url, {
+      method: "GET",
+      headers: buildWeChatPersonalHeaders(options.token),
+      signal: controller.signal,
+    })
+    const text = await response.text()
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${text}`)
+    }
+    return JSON.parse(text) as T
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
 export function buildWeChatPersonalClientId() {
   return `suora-wechat-${crypto.randomUUID()}`
 }
@@ -368,13 +394,22 @@ export async function fetchWeChatPersonalQrCode(localTokenList: string[]) {
 }
 
 export async function pollWeChatPersonalQrStatus(baseUrl: string, qrcode: string, verifyCode?: string) {
-  return postWeChatPersonalJson<WeChatPersonalQrStatusResponse>(baseUrl, "ilink/bot/get_qrcode_status", {}, {
-    query: {
-      qrcode,
-      ...(verifyCode ? { verify_code: verifyCode } : {}),
-    },
-    timeoutMs: WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS,
-  })
+  try {
+    let endpoint = `ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`
+    if (verifyCode?.trim()) {
+      endpoint += `&verify_code=${encodeURIComponent(verifyCode.trim())}`
+    }
+
+    return await getWeChatPersonalJson<WeChatPersonalQrStatusResponse>(baseUrl, endpoint, {
+      timeoutMs: WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS,
+    })
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return { status: "wait" } satisfies WeChatPersonalQrStatusResponse
+    }
+
+    return { status: "wait" } satisfies WeChatPersonalQrStatusResponse
+  }
 }
 
 export async function fetchWeChatPersonalUpdates(channel: ChannelConfigRecord, cursor: string, signal?: AbortSignal) {
