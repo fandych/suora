@@ -45,6 +45,13 @@ export function getChannelCredentialIssues(channel: ChannelConfigRecord) {
         !channel.wechatOfficialToken ? "Verification token" : null,
       ].filter(Boolean) as string[]
     }
+    case "wechat_miniprogram": {
+      return [
+        !channel.wechatMiniProgramAppId ? "Mini Program App ID" : null,
+        !channel.wechatMiniProgramAppSecret ? "Mini Program app secret" : null,
+        !channel.wechatMiniProgramToken ? "Verification token" : null,
+      ].filter(Boolean) as string[]
+    }
     case "feishu": {
       return [
         !channel.feishuAppId ? "App ID" : null,
@@ -57,7 +64,6 @@ export function getChannelCredentialIssues(channel: ChannelConfigRecord) {
         return [
           !channel.dingtalkClientId ? "Client ID" : null,
           !channel.dingtalkClientSecret ? "Client secret" : null,
-          !channel.dingtalkRobotCode ? "Robot code" : null,
         ].filter(Boolean) as string[]
       }
 
@@ -113,6 +119,8 @@ export function inferChannelBindingState(channel: ChannelConfigRecord): NonNulla
     channel.appId ||
     channel.appSecret ||
     channel.wechatCorpId ||
+    channel.wechatMiniProgramAppId ||
+    channel.wechatMiniProgramToken ||
     channel.feishuAppId ||
     channel.dingtalkClientId ||
     channel.telegramBotToken ||

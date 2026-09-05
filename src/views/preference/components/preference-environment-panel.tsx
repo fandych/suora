@@ -64,7 +64,7 @@ const PreferenceEnvironmentPanel = ({ diagnostics, isLoading, error, onRefresh }
           <div className="flex flex-col gap-2 rounded-lg border px-4 py-3">
             <Progress value={memoryUsage}>
               <ProgressLabel>Host memory usage</ProgressLabel>
-              <ProgressValue>{memoryUsage}%</ProgressValue>
+              <ProgressValue>{(formattedValue) => formattedValue ?? `${memoryUsage}%`}</ProgressValue>
             </Progress>
             <div className="text-sm text-muted-foreground">{usedMemoryGb.toFixed(2)} GB used of {runtime?.totalMemoryGb.toFixed(2) ?? "0.00"} GB total, {runtime?.freeMemoryGb.toFixed(2) ?? "0.00"} GB free.</div>
             <div className="text-xs text-muted-foreground">PID {runtime?.pid ?? 0} · load average {runtime?.loadAverage.map((value) => value.toFixed(2)).join(" / ")} · refreshed {runtime ? new Date(runtime.timestamp).toLocaleTimeString() : "-"}</div>

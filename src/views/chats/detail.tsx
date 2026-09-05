@@ -29,6 +29,7 @@ const ChatDetailPage = () => {
                   agents={controller.agents}
                   attachments={controller.attachments}
                   autoScroll={controller.autoScroll}
+                  browserState={controller.browserInteractionState}
                   draft={controller.draft}
                   exportDisabled={controller.isResponding || (!controller.selectedChat && !controller.streamingText && controller.toolEvents.length === 0)}
                   groupedProviders={controller.groupedProviders}
@@ -37,6 +38,7 @@ const ChatDetailPage = () => {
                   toolEvents={controller.toolEvents}
                   onAttachmentChange={controller.handleAttachmentChange}
                   onAutoScrollChange={controller.setAutoScroll}
+                  onContinueAfterBrowser={controller.handleContinueAfterBrowser}
                   onDraftChange={controller.setDraft}
                   onExportChat={controller.handleExportChat}
                   onModelChange={controller.onModelChange}
@@ -44,6 +46,7 @@ const ChatDetailPage = () => {
                   onSelectedAgentChange={controller.onSelectedAgentChange}
                   onSend={controller.handleSend}
                   onStop={controller.handleStop}
+                  pendingBrowserContinue={controller.pendingBrowserContinue}
                   selectedAgentId={controller.selectedAgentId}
                   settingsDraft={controller.settingsDraft}
                   supportsAttachments={controller.supportsAttachments}

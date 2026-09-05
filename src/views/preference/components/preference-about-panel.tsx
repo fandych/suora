@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Field, FieldContent, FieldDescription, FieldTitle } from "@/components/ui/field"
+import { Field, FieldContent, FieldTitle } from "@/components/ui/field"
 import { Switch } from "@/components/ui/switch"
 import type { PreferenceSettings } from "@/data/repositories/preference-repository"
 import type { SystemInfoSnapshot, UpdateCheckResult, UpdaterStateSnapshot } from "@/data/repositories/system-status-repository"

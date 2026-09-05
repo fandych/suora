@@ -1,12 +1,12 @@
 import {
+  BookOpenTextIcon,
   BotIcon,
-  BookTypeIcon,
-  CableIcon,
+  BrainCircuitIcon,
   CalendarClockIcon,
-  CpuIcon,
   LayoutDashboardIcon,
   MessageCircleIcon,
-  RssIcon,
+  PlugZapIcon,
+  RadioTowerIcon,
   SparklesIcon,
   WorkflowIcon,
   type LucideIcon,
@@ -17,6 +17,7 @@ export type PrimaryNavItem = {
   title: string
   url: string
   icon: LucideIcon
+  iconClassName: string
   description: string
   secondarySidebar: {
     searchPlaceholder: string
@@ -46,6 +47,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
     title: "Dashboard",
     url: "/dashboard",
     icon: LayoutDashboardIcon,
+    iconClassName: "text-slate-500",
     description: "Track workspace health, workflow status, and recent activity in one place.",
     secondarySidebar: {
       searchPlaceholder: "搜索 dashboard...",
@@ -60,6 +62,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
     title: "Chats",
     url: "/chats",
     icon: MessageCircleIcon,
+    iconClassName: "text-sky-500",
     description: "Review conversations, drafts, and active discussion threads.",
     secondarySidebar: {
       searchPlaceholder: "搜索聊天记录...",
@@ -83,6 +86,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
     title: "Agents",
     url: "/agents",
     icon: BotIcon,
+    iconClassName: "text-indigo-500",
     description: "Manage agent definitions, responsibilities, and execution status.",
     secondarySidebar: {
       searchPlaceholder: "搜索 agents...",
@@ -102,6 +106,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
     title: "Workflows",
     url: "/workflows",
     icon: WorkflowIcon,
+    iconClassName: "text-emerald-600",
     description: "Compose repeatable flows for multi-step operational work.",
     secondarySidebar: {
       searchPlaceholder: "搜索 workflows...",
@@ -116,6 +121,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
     title: "Schedulers",
     url: "/schedulers",
     icon: CalendarClockIcon,
+    iconClassName: "text-amber-500",
     description: "Schedule recurring tasks and inspect upcoming automation windows.",
     secondarySidebar: {
       searchPlaceholder: "搜索 schedulers...",
@@ -129,7 +135,8 @@ export const primaryNavItems: PrimaryNavItem[] = [
   {
     title: "Integrations",
     url: "/integrations",
-    icon: CableIcon,
+    icon: PlugZapIcon,
+    iconClassName: "text-orange-500",
     description: "Configure external services, API links, and delivery endpoints.",
     secondarySidebar: {
       searchPlaceholder: "搜索 integrations...",
@@ -152,7 +159,8 @@ export const primaryNavItems: PrimaryNavItem[] = [
   {
     title: "Documents",
     url: "/documents",
-    icon: BookTypeIcon,
+    icon: BookOpenTextIcon,
+    iconClassName: "text-blue-500",
     description: "Browse product knowledge, uploaded files, and generated references.",
     secondarySidebar: {
       searchPlaceholder: "搜索 documents...",
@@ -167,7 +175,8 @@ export const primaryNavItems: PrimaryNavItem[] = [
   {
     title: "Channels",
     url: "/channels",
-    icon: RssIcon,
+    icon: RadioTowerIcon,
+    iconClassName: "text-teal-500",
     description: "Organize communication surfaces, routing rules, and message sources.",
     secondarySidebar: {
       searchPlaceholder: "搜索 channels...",
@@ -187,6 +196,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
     title: "Skills",
     url: "/skills",
     icon: SparklesIcon,
+    iconClassName: "text-fuchsia-500",
     description: "Register reusable capabilities and inspect versioned skill bundles.",
     secondarySidebar: {
       searchPlaceholder: "搜索 skills...",
@@ -205,7 +215,8 @@ export const primaryNavItems: PrimaryNavItem[] = [
   {
     title: "Models",
     url: "/models",
-    icon: CpuIcon,
+    icon: BrainCircuitIcon,
+    iconClassName: "text-rose-500",
     description: "Compare model configurations, defaults, and environment policies.",
     secondarySidebar: {
       searchPlaceholder: "搜索 providers...",
@@ -232,6 +243,7 @@ export type ResolvedSecondarySidebarGroup = {
 export const preferenceRoute = {
   title: "Preference",
   url: "/preference",
+  iconClassName: "text-amber-500",
   description: "Tune product behavior, defaults, and operator-level settings.",
 }
 

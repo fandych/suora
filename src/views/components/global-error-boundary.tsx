@@ -18,19 +18,22 @@ type GlobalErrorBoundaryProps = {
 
 type GlobalErrorBoundaryState = {
   error: Error | null
+  componentStack?: string
 }
 
 export class GlobalErrorBoundary extends Component<GlobalErrorBoundaryProps, GlobalErrorBoundaryState> {
   state: GlobalErrorBoundaryState = {
     error: null,
+    componentStack: undefined,
   }
 
   static getDerivedStateFromError(error: Error): GlobalErrorBoundaryState {
-    return { error }
+    return { error, componentStack: undefined }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Global render error", error, errorInfo)
+    this.setState({ componentStack: errorInfo.componentStack || undefined })
   }
 
   render() {
@@ -57,6 +60,11 @@ export class GlobalErrorBoundary extends Component<GlobalErrorBoundaryProps, Glo
                 <EmptyDescription>
                   Reload the app, or return to the dashboard and reopen the current item.
                 </EmptyDescription>
+                <div className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-left text-xs text-destructive">
+                  <div className="font-medium">{this.state.error.name || "Error"}</div>
+                  <div className="mt-1 whitespace-pre-wrap wrap-break-word">{this.state.error.message || "Unknown render error"}</div>
+                  {this.state.componentStack ? <div className="mt-2 whitespace-pre-wrap wrap-break-word text-[11px] text-muted-foreground">{this.state.componentStack.trim()}</div> : null}
+                </div>
               </EmptyHeader>
               <EmptyContent className="flex-row justify-center gap-2">
                 <Button variant="outline" onClick={() => window.history.back()}>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { SlidersHorizontalIcon } from "lucide-react"
+import { SlidersHorizontalIcon, Trash2Icon } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -177,7 +177,9 @@ export function WorkflowPropertiesPanel({
 
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <Button size="sm" variant="outline" onClick={onDuplicateNode}>Duplicate</Button>
-                <Button size="sm" variant="outline" onClick={onDeleteNode}>Delete</Button>
+                <Button size="icon-sm" variant="destructive" aria-label="Delete node" title="Delete node" onClick={onDeleteNode}>
+                  <Trash2Icon className="size-4" />
+                </Button>
               </div>
             </WorkflowPanelSection>
           </fieldset>

@@ -3,6 +3,7 @@ import https from "node:https"
 import { spawn } from "node:child_process"
 
 import { getProxyAgent } from "@electron/others/proxy"
+import { executeSandboxedScriptIntegration } from "@electron/others/script-integration-runner"
 import type { IntegrationExecutePayload } from "@electron/types"
 
 function parseJson<T>(value: string | undefined, fallback: T): T {
@@ -204,30 +205,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
 }
 
 async function executeScriptIntegration(payload: IntegrationExecutePayload) {
-  const config = payload.config as {
-    scripts?: Array<{ id: string; handler: string; code: string }>
-    selectedScriptId?: string
-  }
-
-  const selectedScript = config.scripts?.find((item) => item.id === config.selectedScriptId) ?? config.scripts?.[0]
-
-  if (!selectedScript) {
-    return {
-      ok: false,
-      status: 400,
-      body: "No script entry is configured.",
-    }
-  }
-
-  const AsyncFunction = Object.getPrototypeOf(async function () { }).constructor as new (...args: string[]) => (input: unknown) => Promise<unknown>
-  const compiled = new AsyncFunction(`${selectedScript.code || ""}; return typeof ${selectedScript.handler || "main"} === 'function' ? ${selectedScript.handler || "main"}(input) : { ok: false, error: 'Handler not found' };`)
-  const parsedInput = payload.inputJson ? JSON.parse(payload.inputJson) : {}
-  const output = await compiled(parsedInput)
-  return {
-    ok: true,
-    status: 200,
-    body: JSON.stringify(output, null, 2),
-  }
+  return executeSandboxedScriptIntegration(payload)
 }
 
 async function executeMcpIntegration(payload: IntegrationExecutePayload) {

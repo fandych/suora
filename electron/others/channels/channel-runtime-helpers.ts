@@ -13,6 +13,8 @@ export const WECHAT_PERSONAL_QR_BOT_TYPE = "3"
 export const WECHAT_PERSONAL_LOGIN_TTL_MS = 5 * 60 * 1000
 export const WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS = 35_000
 export const WECHAT_PERSONAL_API_TIMEOUT_MS = 15_000
+export const WECHAT_PERSONAL_APP_ID = "bot"
+export const WECHAT_PERSONAL_CLIENT_VERSION = "132104"
 export const SLACK_REQUEST_MAX_AGE_SECONDS = 300
 
 export type TokenCacheEntry = {
@@ -51,6 +53,10 @@ export type WeChatPersonalQrStatusResponse = {
   baseurl?: string
   ilink_user_id?: string
   redirect_host?: string
+  diagnosticEvent?: "response" | "timeout" | "error" | "invalid_response"
+  diagnosticMessage?: string
+  diagnosticBaseUrl?: string
+  diagnosticEndpoint?: string
 }
 
 export type WeChatPersonalLoginWaitResult = {
@@ -63,6 +69,11 @@ export type WeChatPersonalLoginWaitResult = {
   accountId?: string
   baseUrl?: string
   userId?: string
+  upstreamStatus?: string
+  diagnosticEvent?: "response" | "timeout" | "error" | "invalid_response"
+  diagnosticMessage?: string
+  pollBaseUrl?: string
+  pollEndpoint?: string
 }
 
 export type WeChatPersonalMessageItem = {
@@ -142,6 +153,8 @@ function buildWeChatPersonalHeaders(token?: string): Record<string, string> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     AuthorizationType: "ilink_bot_token",
+    "iLink-App-Id": WECHAT_PERSONAL_APP_ID,
+    "iLink-App-ClientVersion": WECHAT_PERSONAL_CLIENT_VERSION,
     "X-WECHAT-UIN": Buffer.from(String(randomUin), "utf-8").toString("base64"),
   }
   if (token?.trim()) {
@@ -334,7 +347,7 @@ export function buildWeChatSignature(token: string, timestamp: string, nonce: st
 }
 
 export function weChatWebhookToChannelMessage(payload: WeChatWebhookPayload, channelId: string, platform: ChannelConfigRecord["platform"]): RuntimeChannelMessage {
-  let content = ""
+  let content: string
   let messageType: RuntimeChannelMessage["messageType"] = "text"
   switch (payload.MsgType) {
     case "image":
@@ -383,6 +396,7 @@ export function weChatWebhookToChannelMessage(payload: WeChatWebhookPayload, cha
 
 export function getWeChatVerificationToken(channel: ChannelConfigRecord) {
   if (channel.platform === "wechat_official") return channel.wechatOfficialToken || channel.verificationToken
+  if (channel.platform === "wechat_miniprogram") return channel.wechatMiniProgramToken || channel.verificationToken
   return channel.wechatToken || channel.verificationToken
 }
 
@@ -394,21 +408,51 @@ export async function fetchWeChatPersonalQrCode(localTokenList: string[]) {
 }
 
 export async function pollWeChatPersonalQrStatus(baseUrl: string, qrcode: string, verifyCode?: string) {
-  try {
-    let endpoint = `ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`
-    if (verifyCode?.trim()) {
-      endpoint += `&verify_code=${encodeURIComponent(verifyCode.trim())}`
-    }
+  let endpoint = `ilink/bot/get_qrcode_status?qrcode=${encodeURIComponent(qrcode)}`
+  if (verifyCode?.trim()) {
+    endpoint += `&verify_code=${encodeURIComponent(verifyCode.trim())}`
+  }
 
-    return await getWeChatPersonalJson<WeChatPersonalQrStatusResponse>(baseUrl, endpoint, {
+  try {
+    const response = await getWeChatPersonalJson<WeChatPersonalQrStatusResponse>(baseUrl, endpoint, {
       timeoutMs: WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS,
     })
-  } catch (error) {
-    if (error instanceof Error && error.name === "AbortError") {
-      return { status: "wait" } satisfies WeChatPersonalQrStatusResponse
+    if (!response.status) {
+      return {
+        ...response,
+        status: "wait",
+        diagnosticEvent: "invalid_response",
+        diagnosticMessage: "QR status response did not include a status field.",
+        diagnosticBaseUrl: baseUrl,
+        diagnosticEndpoint: endpoint,
+      } satisfies WeChatPersonalQrStatusResponse
     }
 
-    return { status: "wait" } satisfies WeChatPersonalQrStatusResponse
+    return {
+      ...response,
+      diagnosticEvent: "response",
+      diagnosticMessage: `Upstream QR status: ${response.status}`,
+      diagnosticBaseUrl: baseUrl,
+      diagnosticEndpoint: endpoint,
+    } satisfies WeChatPersonalQrStatusResponse
+  } catch (error) {
+    if (error instanceof Error && error.name === "AbortError") {
+      return {
+        status: "wait",
+        diagnosticEvent: "timeout",
+        diagnosticMessage: `QR status long poll timed out after ${WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS}ms.`,
+        diagnosticBaseUrl: baseUrl,
+        diagnosticEndpoint: endpoint,
+      } satisfies WeChatPersonalQrStatusResponse
+    }
+
+    return {
+      status: "wait",
+      diagnosticEvent: "error",
+      diagnosticMessage: error instanceof Error ? error.message : String(error),
+      diagnosticBaseUrl: baseUrl,
+      diagnosticEndpoint: endpoint,
+    } satisfies WeChatPersonalQrStatusResponse
   }
 }
 

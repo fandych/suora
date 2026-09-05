@@ -1,5 +1,5 @@
 import type { ChangeEvent, RefObject } from "react"
-import { EllipsisIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlayIcon, SparklesIcon, UploadIcon } from "lucide-react"
+import { DownloadIcon, EllipsisIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlayIcon, Settings2Icon, SparklesIcon, Trash2Icon, UploadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -71,16 +71,31 @@ export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
             <EllipsisIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48 min-w-48">
-            <DropdownMenuItem onClick={onOpenTryRun}>Try run</DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpenTryRun}>
+              <PlayIcon className="size-4" />
+              Try run
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={onRunRelease} disabled={!canRunRelease}>
               <PlayIcon />
               Run release
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={onExport}>Export</DropdownMenuItem>
-            <DropdownMenuItem onClick={onImport}>Import</DropdownMenuItem>
+            <DropdownMenuItem onClick={onExport}>
+              <DownloadIcon className="size-4" />
+              Export
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onImport}>
+              <UploadIcon className="size-4" />
+              Import
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onOpenPreference}>Preference</DropdownMenuItem>
-            <DropdownMenuItem onClick={onDelete} variant="destructive">Delete</DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpenPreference}>
+              <Settings2Icon className="size-4" />
+              Preference
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onDelete} variant="destructive">
+              <Trash2Icon className="size-4" />
+              Delete
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

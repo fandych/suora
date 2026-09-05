@@ -53,36 +53,23 @@ function buildActionContent(parts: AssistantResponsePart[]) {
 
 function buildSections(parts: AssistantResponsePart[]): AssistantRenderSection[] {
   const sections: AssistantRenderSection[] = []
-  let pendingTools: ChatToolActivity[] = []
+  const mergedText = parts
+    .filter((part): part is Extract<AssistantResponsePart, { type: "text" }> => part.type === "text")
+    .map((part) => part.content.trim())
+    .filter(Boolean)
+    .join("\n\n---\n\n")
+  const hasPendingText = parts.some((part) => part.type === "text" && part.isPending)
+  const toolActivities = parts
+    .filter((part): part is Extract<AssistantResponsePart, { type: "tool" }> => part.type === "tool")
+    .map((part) => part.activity)
 
-  const flushTools = () => {
-    if (pendingTools.length === 0) {
-      return
-    }
-
-    sections.push({
-      id: pendingTools.map((activity) => activity.id).join(":"),
-      type: "tool-group",
-      activities: pendingTools,
-    })
-    pendingTools = []
+  if (mergedText) {
+    sections.push({ id: "assistant-text-merged", type: "text", content: mergedText, isPending: hasPendingText })
   }
 
-  for (const part of parts) {
-    if (part.type === "tool") {
-      pendingTools.push(part.activity)
-      continue
-    }
-
-    flushTools()
-    if (!part.content.trim()) {
-      continue
-    }
-
-    sections.push({ id: part.id, type: "text", content: part.content, isPending: part.isPending })
+  if (toolActivities.length > 0) {
+    sections.push({ id: toolActivities.map((activity) => activity.id).join(":"), type: "tool-group", activities: toolActivities })
   }
-
-  flushTools()
 
   return sections
 }
@@ -114,14 +101,10 @@ export function ChatAssistantResponseGroup({ createdAt, messageId = null, onRetr
               ) : (
                 <Bubble variant="outline" align="start" className="max-w-full">
                   <BubbleContent>
-                    {section.isPending ? (
-                      <div className="whitespace-pre-wrap text-sm leading-relaxed text-foreground">
-                        {section.content}
-                        <span aria-hidden="true" className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded bg-current align-middle" />
-                      </div>
-                    ) : (
-                      <ChatRichContent content={section.content} />
-                    )}
+                    <div className="relative">
+                      <ChatRichContent content={section.content} isStreaming={Boolean(section.isPending)} />
+                      {section.isPending ? <span aria-hidden="true" className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded bg-current align-middle" /> : null}
+                    </div>
                   </BubbleContent>
                 </Bubble>
               )}

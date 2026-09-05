@@ -5,7 +5,7 @@ import { listChats } from "@/data/repositories/chat-repository"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
-import { ChatCard } from "@/views/chats/components/chat"
+import { ChatCard } from "@/views/chats/components/chat-card"
 import { useNavigate } from "react-router"
 
 const ChatsPage = () => {

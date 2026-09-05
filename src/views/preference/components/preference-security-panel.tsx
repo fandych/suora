@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge"
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field"
+import { Field, FieldContent, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { PreferenceSettings } from "@/data/repositories/preference-repository"
@@ -47,6 +47,12 @@ const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelPro
             <FieldTitle>{draft.fileAccessPolicy === "allowlist" ? "Allowed directories" : "Blocked directories"}</FieldTitle>
           </FieldContent>
           <Textarea rows={6} className="font-mono text-xs" value={joinLines(draft.fileAccessDirectories)} onChange={(event) => onChange({ fileAccessDirectories: splitLines(event.target.value) })} placeholder={draft.fileAccessPolicy === "allowlist" ? "src\ndocs" : "node_modules\nsecrets"} />
+        </Field>
+        <Field className="md:col-span-2">
+          <FieldContent>
+            <FieldTitle>Command allowlist</FieldTitle>
+          </FieldContent>
+          <Textarea rows={6} className="font-mono text-xs" value={joinLines(draft.commandAllowlist)} onChange={(event) => onChange({ commandAllowlist: splitLines(event.target.value) })} placeholder="git\nnode\nnpm\nrg" />
         </Field>
         <Field className="md:col-span-2">
           <FieldContent>

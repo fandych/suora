@@ -1,148 +1,15 @@
-import type { ProviderConfigRecord, ProviderPreset } from "@/data/domain/models"
+import type { ProviderConfigRecord } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
+import { defaultProviderTypes, providerPresets } from "@/data/repositories/model-provider-presets"
 import { suoraIpc } from "@/lib/ipc"
 
-const defaultProviderTypes = ["openai", "azure", "deepseek", "anthropic", "bailian", "kimi", "openrouter", "vercel", "ollama"] as const
 const visibleProviderTypes = new Set<string>([...defaultProviderTypes, "custom"])
-
-function createModel(
-  id: string,
-  name: string,
-  enabled = false,
-  capabilities: ProviderPreset["models"][number]["capabilities"] = ["toolcalling"],
-  apiModes: ProviderPreset["models"][number]["apiModes"] = ["messages"],
-  contextWindow = 128000,
-  maxOutputTokens = 16384,
-  supportsParallelToolCalls = false,
-  supportsReasoning = false
-) {
-  return {
-    id,
-    name,
-    enabled,
-    capabilities,
-    apiModes,
-    contextWindow,
-    maxOutputTokens,
-    supportsParallelToolCalls,
-    supportsReasoning,
-  }
-}
-
-export const providerPresets: ProviderPreset[] = [
-  {
-    providerType: "openai",
-    title: "OpenAI",
-    description: "OpenAI flagship models.",
-    baseUrl: "https://api.openai.com/v1",
-    models: [
-      createModel("gpt-5.6-sol", "GPT-5.6 Sol", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 1050000, 128000, true, true),
-      createModel("gpt-5.6-terra", "GPT-5.6 Terra", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 1050000, 128000, true, true),
-      createModel("gpt-5.6-luna", "GPT-5.6 Luna", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 1050000, 128000, true, true),
-      createModel("gpt-5", "GPT-5", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 400000, 128000, true, true),
-      createModel("gpt-5-mini", "GPT-5 Mini", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 400000, 128000, true, true),
-    ],
-  },
-  {
-    providerType: "azure",
-    title: "Azure",
-    description: "Azure Foundry OpenAI deployments.",
-    baseUrl: "https://your-resource-name.openai.azure.com/openai/deployments",
-    models: [
-      createModel("gpt-5.6-sol", "GPT-5.6 Sol", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 1050000, 128000, true, true),
-      createModel("gpt-5.6-terra", "GPT-5.6 Terra", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 1050000, 128000, true, true),
-      createModel("gpt-chat-latest", "GPT Chat Latest", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 400000, 128000, true, true),
-      createModel("gpt-4.1", "GPT-4.1", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 1047576, 32768, true, false),
-    ],
-  },
-  {
-    providerType: "deepseek",
-    title: "DeepSeek",
-    description: "DeepSeek official API models.",
-    baseUrl: "https://api.deepseek.com",
-    models: [
-      createModel("deepseek-v4-flash", "DeepSeek V4 Flash", false, ["toolcalling", "structuredOutput"], ["messages", "responses", "completions"], 1000000, 384000, true, true),
-      createModel("deepseek-v4-pro", "DeepSeek V4 Pro", false, ["toolcalling", "structuredOutput"], ["messages", "responses", "completions"], 1000000, 384000, true, true),
-      createModel("deepseek-v4-flash-vision-exp", "DeepSeek V4 Flash Vision Exp", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 1000000, 384000, true, true),
-    ],
-  },
-  {
-    providerType: "anthropic",
-    title: "Anthropic",
-    description: "Current Claude family.",
-    baseUrl: "https://api.anthropic.com/v1",
-    models: [
-      createModel("claude-opus-5", "Claude Opus 5", false, ["toolcalling", "vision", "structuredOutput"], ["messages"], 200000, 64000, true, true),
-      createModel("claude-sonnet-5", "Claude Sonnet 5", false, ["toolcalling", "vision", "structuredOutput"], ["messages"], 200000, 64000, true, true),
-      createModel("claude-opus-4-8", "Claude Opus 4.8", false, ["toolcalling", "vision", "structuredOutput"], ["messages"], 200000, 64000, true, true),
-      createModel("claude-haiku-4-5", "Claude Haiku 4.5", false, ["toolcalling", "vision"], ["messages"], 200000, 8192, true, false),
-    ],
-  },
-  {
-    providerType: "bailian",
-    title: "Bailian",
-    description: "Alibaba Bailian defaults.",
-    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    models: [
-      createModel("qwen3.8-max", "Qwen3.8 Max", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses"], 131072, 8192, true, true),
-      createModel("qwen3.7-plus", "Qwen3.7 Plus", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses"], 131072, 8192, true, false),
-      createModel("qwen3.8-flash", "Qwen3.8 Flash", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses"], 131072, 8192, true, false),
-    ],
-  },
-  {
-    providerType: "kimi",
-    title: "Kimi",
-    description: "Moonshot Kimi models.",
-    baseUrl: "https://api.moonshot.ai/v1",
-    models: [
-      createModel("kimi-k2.6", "Kimi K2.6", false, ["toolcalling", "vision"], ["messages", "responses"], 262144, 262144, true, true),
-      createModel("kimi-k2.7-code", "Kimi K2.7 Code", false, ["toolcalling", "vision"], ["messages", "responses"], 262144, 262144, true, true),
-      createModel("kimi-k3", "Kimi K3", false, ["toolcalling", "vision"], ["messages", "responses"], 262144, 262144, true, true),
-    ],
-  },
-  {
-    providerType: "openrouter",
-    title: "OpenRouter",
-    description: "OpenRouter cross-provider routes.",
-    baseUrl: "https://openrouter.ai/api/v1",
-    models: [
-      createModel("openai/gpt-5.6-terra", "OpenAI / GPT-5.6 Terra", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 1050000, 128000, true, true),
-      createModel("anthropic/claude-sonnet-5", "Anthropic / Claude Sonnet 5", false, ["toolcalling", "vision", "structuredOutput"], ["messages"], 200000, 64000, true, true),
-      createModel("deepseek/deepseek-v4-pro", "DeepSeek / V4 Pro", false, ["toolcalling", "structuredOutput"], ["messages", "responses", "completions"], 1000000, 384000, true, true),
-      createModel("qwen/qwen3.8-flash", "Qwen / Qwen3.8 Flash", false, ["toolcalling", "vision"], ["messages", "responses", "completions"], 1000000, 128000, true, true),
-    ],
-  },
-  {
-    providerType: "vercel",
-    title: "Vercel",
-    description: "Vercel AI Gateway defaults.",
-    baseUrl: "https://ai-gateway.vercel.sh/v1",
-    models: [
-      createModel("openai/gpt-5", "OpenAI / GPT-5", false, ["toolcalling", "vision", "structuredOutput"], ["messages", "responses", "completions"], 400000, 128000, true, true),
-      createModel("anthropic/claude-sonnet-5", "Anthropic / Claude Sonnet 5", false, ["toolcalling", "vision", "structuredOutput"], ["messages"], 200000, 64000, true, true),
-      createModel("deepseek/deepseek-v4-pro", "DeepSeek / V4 Pro", false, ["toolcalling", "structuredOutput"], ["messages", "responses", "completions"], 1000000, 384000, true, true),
-    ],
-  },
-  {
-    providerType: "ollama",
-    title: "Ollama",
-    description: "Popular current Ollama library entries.",
-    baseUrl: "http://localhost:11434/v1",
-    models: [
-      createModel("qwen3.8", "Qwen3.8", false, ["toolcalling", "vision"], ["messages", "responses", "completions"], 128000, 32768, false, true),
-      createModel("gemma4", "Gemma 4", false, ["toolcalling", "vision"], ["messages", "responses", "completions"], 128000, 32768, false, true),
-      createModel("deepseek-v4-pro", "DeepSeek V4 Pro", false, ["toolcalling"], ["messages", "responses", "completions"], 1000000, 384000, false, true),
-      createModel("llama3.3", "Llama 3.3", false, ["toolcalling"], ["messages", "responses", "completions"], 128000, 8192, false, false),
-    ],
-  },
-  {
-    providerType: "custom",
-    title: "Custom",
-    description: "Bring your own endpoint and define arbitrary model metadata.",
-    baseUrl: "",
-    models: [createModel("custom-model", "Custom Model")],
-  },
-]
+const unsupportedDiscoveryReasons = new Map<string, string>([
+  ["azure", "Azure deployments cannot be listed from a stable shared `/models` endpoint here."],
+  ["anthropic", "Anthropic model discovery is not wired through the current workspace adapter."],
+  ["vercel", "Vercel AI Gateway does not expose a stable model catalog endpoint here."],
+  ["google", "Gemini discovery is not wired through the current renderer flow yet."],
+])
 
 function normalizeProviderModel(providerType: string, model: ProviderConfigRecord["models"][number]) {
   const presetModel = getProviderPreset(providerType).models.find((candidate) => candidate.id === model.id)
@@ -171,6 +38,21 @@ function mergePresetModels(providerType: string, models: ProviderConfigRecord["m
     .map((model) => normalizeProviderModel(providerType, model))
 
   return [...merged, ...extras]
+}
+
+function mergeDiscoveredModels(providerType: string, currentModels: ProviderConfigRecord["models"], discoveredModels: ProviderConfigRecord["models"]) {
+  const currentById = new Map(currentModels.map((model) => [model.id, model]))
+  const mergedDiscoveredModels = discoveredModels.map((model) => normalizeProviderModel(providerType, {
+    ...model,
+    ...currentById.get(model.id),
+    enabled: currentById.get(model.id)?.enabled ?? false,
+  }))
+  const discoveredIds = new Set(discoveredModels.map((model) => model.id))
+  const extras = currentModels
+    .filter((model) => !discoveredIds.has(model.id))
+    .map((model) => normalizeProviderModel(providerType, model))
+
+  return [...mergedDiscoveredModels, ...extras]
 }
 
 function normalizeProvider(provider: ProviderConfigRecord) {
@@ -242,6 +124,56 @@ export function getProviderPreset(providerType: string) {
 
 export function getDefaultProviderBaseUrl(providerType: string) {
   return getProviderPreset(providerType).baseUrl
+}
+
+export function getProviderModelDiscoveryState(provider: Pick<ProviderConfigRecord, "providerType" | "baseUrl" | "apiKey">) {
+  if (provider.providerType === "ollama") {
+    return { capable: true, enabled: true, reason: null }
+  }
+
+  if (unsupportedDiscoveryReasons.has(provider.providerType)) {
+    return {
+      capable: false,
+      enabled: false,
+      reason: unsupportedDiscoveryReasons.get(provider.providerType) ?? "Remote model discovery is not supported for this provider.",
+    }
+  }
+
+  if (!provider.baseUrl.trim()) {
+    return {
+      capable: true,
+      enabled: false,
+      reason: "Configure a base URL before refreshing remote models.",
+    }
+  }
+
+  if (!provider.apiKey.trim() && provider.providerType !== "openrouter" && provider.providerType !== "custom") {
+    return {
+      capable: true,
+      enabled: false,
+      reason: "Configure an API key before refreshing remote models.",
+    }
+  }
+
+  return { capable: true, enabled: true, reason: null }
+}
+
+export async function discoverProviderModelCatalog(provider: Pick<ProviderConfigRecord, "id" | "title" | "providerType" | "baseUrl" | "apiKey" | "enabled" | "updatedAt" | "models">) {
+  await ensureSeeded()
+  const discovered = await suoraIpc.models.discover({
+    providerType: provider.providerType,
+    baseUrl: provider.baseUrl,
+    apiKey: provider.apiKey,
+  })
+
+  return {
+    provider: normalizeProvider({
+      ...provider,
+      models: mergeDiscoveredModels(provider.providerType, provider.models, discovered.models),
+    }),
+    source: discovered.source,
+    discoveredCount: discovered.models.length,
+  }
 }
 
 export async function listModelProviders() {

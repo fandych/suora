@@ -1,3 +1,5 @@
+import { PencilIcon } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -42,7 +44,9 @@ export function IntegrationScriptWorkbench({ config, canTryRun = true, onChange,
                   <span className="text-xs text-muted-foreground">{script.handler}</span>
                 </button>
                 <div className="mt-2 flex justify-end gap-2">
-                  <Button size="sm" variant="outline" onClick={() => onChange({ ...config, selectedScriptId: script.id })}>Edit</Button>
+                  <Button size="icon-sm" variant="outline" aria-label={`Edit ${script.name}`} title="Edit script" onClick={() => onChange({ ...config, selectedScriptId: script.id })}>
+                    <PencilIcon className="size-4" />
+                  </Button>
                   <Button size="sm" variant="outline" disabled={!canTryRun} onClick={() => { onChange({ ...config, selectedScriptId: script.id }); onTryRun?.(script.id) }}>Try run</Button>
                 </div>
               </div>

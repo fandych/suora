@@ -1,5 +1,4 @@
 import type {
-  HttpIntegrationConfig,
   IntegrationConfig,
   IntegrationDetail,
   IntegrationSummary,

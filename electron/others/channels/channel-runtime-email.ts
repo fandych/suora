@@ -122,10 +122,10 @@ export async function fetchNewEmails(channel: ChannelConfigRecord, lastSeenUid: 
     function handleLine(line: string) {
       if (state === "connecting" && line.startsWith("* OK")) {
         state = "login"
-        send(`LOGIN \"${escapeImapString(user)}\" \"${escapeImapString(pass)}\"`)
+        send(`LOGIN "${escapeImapString(user)}" "${escapeImapString(pass)}"`)
       } else if (state === "login" && /^A\d+ OK/.test(line)) {
         state = "select"
-        send(`SELECT \"${escapeImapString(mailbox)}\"`)
+        send(`SELECT "${escapeImapString(mailbox)}"`)
       } else if (state === "login" && /^A\d+ (NO|BAD)/.test(line)) {
         socket.destroy()
         reject(new Error("IMAP login failed"))

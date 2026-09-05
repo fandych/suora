@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useParams } from "react-router"
+import { PlayIcon, UploadIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -35,7 +36,7 @@ function getIntegrationIssues(config: IntegrationConfig | null) {
       config.endpoints.length === 0 ? { severity: "error" as const, message: "HTTP toolset needs at least one endpoint." } : null,
       !config.endpoints.every((endpoint) => endpoint.path.trim()) ? { severity: "error" as const, message: "Every HTTP endpoint needs a path." } : null,
       !config.description.trim() ? { severity: "warning" as const, message: "HTTP toolset is missing a description for operators." } : null,
-    ].filter(Boolean)
+    ].filter((issue): issue is { severity: "warning" | "error"; message: string } => Boolean(issue))
   }
 
   if (config.kind === "mcp") {
@@ -49,7 +50,7 @@ function getIntegrationIssues(config: IntegrationConfig | null) {
       config.protocols.length === 0
         ? { severity: "error" as const, message: "MCP toolset needs at least one protocol." }
         : null,
-    ].filter(Boolean)
+    ].filter((issue): issue is { severity: "warning" | "error"; message: string } => Boolean(issue))
   }
 
   const selectedScript = config.scripts.find((script) => script.id === config.selectedScriptId)
@@ -63,7 +64,7 @@ function getIntegrationIssues(config: IntegrationConfig | null) {
     !selectedScript?.code.trim()
       ? { severity: "error" as const, message: "Selected script has no code body." }
       : null,
-  ].filter(Boolean)
+  ].filter((issue): issue is { severity: "warning" | "error"; message: string } => Boolean(issue))
 }
 
 function getResolvedEndpoint(config: IntegrationConfig | null) {
@@ -222,9 +223,15 @@ const IntegrationsDetailPage = () => {
             <Badge variant={isReleaseVersion ? "secondary" : "outline"}>{isReleaseVersion ? "Release revision" : "Draft revision"}</Badge>
             <Badge variant={hasUnsavedChanges ? "destructive" : "outline"}>{hasUnsavedChanges ? "Unsaved changes" : "Saved"}</Badge>
             <Badge variant={issues.length ? "destructive" : "outline"}>{issues.length} config issue{issues.length === 1 ? "" : "s"}</Badge>
-            <Button size="sm" variant="outline" onClick={() => setIsTryRunOpen(true)} disabled={hasUnsavedChanges || hasBlockingIssues}>Try run</Button>
+            <Button size="sm" variant="outline" onClick={() => setIsTryRunOpen(true)} disabled={hasUnsavedChanges || hasBlockingIssues}>
+              <PlayIcon className="size-4" />
+              Try run
+            </Button>
             <Button size="sm" onClick={handleSave} disabled={!hasUnsavedChanges}>Save draft</Button>
-            <Button size="sm" variant="outline" onClick={handlePublish} disabled={hasUnsavedChanges || hasBlockingIssues}>Publish</Button>
+            <Button size="sm" variant="outline" onClick={handlePublish} disabled={hasUnsavedChanges || hasBlockingIssues}>
+              <UploadIcon className="size-4" />
+              Publish
+            </Button>
           </>
         ) : null}
       />

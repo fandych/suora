@@ -1,4 +1,8 @@
 import type { ChannelConfigRecord, ChannelPlatform, ChannelStatus } from "@/data/domain/models"
+import { cn } from "@/lib/utils"
+import { createElement, type ComponentType } from "react"
+import { getChannelLogo } from "@/views/channels/components/channel-branding"
+import { getChannelPlatformBrandClassName } from "@/views/channels/components/channel-branding"
 import {
   buildChannelWebhookUrl as resolveChannelWebhookUrl,
   hasChannelCredentialFootprint as resolveChannelCredentialFootprint,
@@ -10,13 +14,25 @@ export const channelPlatformOptions: Array<{ value: ChannelPlatform; label: stri
   { value: "email", label: "Email" },
   { value: "wechat", label: "Enterprise WeChat" },
   { value: "wechat_personal", label: "WeChat Personal" },
-  { value: "wechat_official", label: "WeChat Official" },
+  { value: "wechat_official", label: "WeChat Official Account" },
+  { value: "wechat_miniprogram", label: "WeChat Mini Program" },
   { value: "feishu", label: "Feishu" },
   { value: "dingtalk", label: "DingTalk" },
   { value: "telegram", label: "Telegram" },
   { value: "teams", label: "Microsoft Teams" },
   { value: "custom", label: "Custom" },
 ]
+
+export function getChannelOptionList() {
+  const seen = new Set<string>()
+  return channelPlatformOptions.filter((item) => {
+    if (seen.has(item.label)) {
+      return false
+    }
+    seen.add(item.label)
+    return true
+  })
+}
 
 export function getChannelCatalogLabel(channel: ChannelConfigRecord) {
   if (channel.platform === "custom" && channel.customPlatformName?.trim()) {
@@ -32,6 +48,23 @@ export function inferChannelBindingState(channel: ChannelConfigRecord): NonNulla
 
 export function getChannelPlatformLabel(platform: ChannelPlatform) {
   return channelPlatformOptions.find((item) => item.value === platform)?.label ?? platform
+}
+
+export function getChannelPlatformLogo(channel: Pick<ChannelConfigRecord, "platform" | "customPlatformName">) {
+  return getChannelLogo(channel.platform, channel)
+}
+
+export function getChannelPlatformSidebarLogo(
+  channel: Pick<ChannelConfigRecord, "platform" | "customPlatformName">
+): ComponentType<{ className?: string }> {
+  const Logo = getChannelPlatformLogo(channel)
+  const brandClassName = getChannelPlatformBrandClassName(channel.platform, channel)
+
+  return function ChannelSidebarLogo({ className }: { className?: string }) {
+    return createElement(Logo, {
+      className: cn(brandClassName, className),
+    })
+  }
 }
 
 export function getChannelStatusLabel(status: ChannelStatus) {

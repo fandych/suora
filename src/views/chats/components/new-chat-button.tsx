@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 
-export function NewChatButton({ className }: { className?: string }) {
+export function NewChatButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
 
@@ -22,9 +22,9 @@ export function NewChatButton({ className }: { className?: string }) {
   }
 
   return (
-    <Button className={cn("h-8 shrink-0 whitespace-nowrap", className)} size="sm" variant="outline" type="button" data-chat-new-button onClick={() => void handleCreate()} disabled={isCreating}>
+    <Button className={cn(iconOnly ? "h-8 shrink-0" : "h-8 shrink-0 whitespace-nowrap", className)} size={iconOnly ? "icon-sm" : "sm"} variant="outline" type="button" data-chat-new-button onClick={() => void handleCreate()} disabled={isCreating} aria-label="New chat" title="New chat">
       {isCreating ? <Spinner /> : <PlusIcon />}
-      {isCreating ? "Creating..." : "New chat"}
+      {iconOnly ? null : isCreating ? "Creating..." : "New chat"}
     </Button>
   )
 }

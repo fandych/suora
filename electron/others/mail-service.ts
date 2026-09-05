@@ -128,7 +128,7 @@ export async function sendMail({ profile, toAddress, subject, content }: SendMai
             if (code === 354) {
               step = "body"
               socket.write([
-                `From: \"${profile.fromName}\" <${profile.fromAddress}>`,
+                `From: "${profile.fromName}" <${profile.fromAddress}>`,
                 `To: <${toAddress}>`,
                 `Subject: ${subject}`,
                 `Date: ${new Date().toUTCString()}`,

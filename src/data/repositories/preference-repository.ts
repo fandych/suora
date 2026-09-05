@@ -21,7 +21,7 @@ export {
 } from "@/data/domain/preference-settings"
 
 import type { PreferenceSettings } from "@/data/domain/preference-settings"
-import { FONT_SCALE_MAP, PREFERENCE_STORAGE_KEY, THEME_ACCENTS, createDefaultPreferenceSettings, resolvePreferenceSettings, sanitizePreferenceSettings } from "@/data/domain/preference-settings"
+import { FONT_SCALE_MAP, PREFERENCE_STORAGE_KEY, THEME_ACCENTS, resolvePreferenceSettings, sanitizePreferenceSettings } from "@/data/domain/preference-settings"
 import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
 
 function readBrowserPreferences() {
@@ -67,18 +67,15 @@ export function applyPreferenceSettingsToDocument(settings: Pick<PreferenceSetti
 }
 
 export async function getPreferenceSettings() {
-  let raw: string | null = null
   if (hasSuoraBridge()) {
     try {
-      raw = await suoraIpc.preferences.get() as string | null
+      return resolvePreferenceSettings(await suoraIpc.preferences.get() as string | null)
     } catch {
-      raw = readBrowserPreferences()
+      return resolvePreferenceSettings(readBrowserPreferences())
     }
-  } else {
-    raw = readBrowserPreferences()
   }
 
-  return resolvePreferenceSettings(raw)
+  return resolvePreferenceSettings(readBrowserPreferences())
 }
 
 export async function savePreferenceSettings(settings: PreferenceSettings) {

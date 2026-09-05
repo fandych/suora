@@ -11,6 +11,10 @@ import { CreateProviderButton } from "@/views/models/components/create-provider-
 import { SkillCreateButton } from "@/views/skills/components/skill-create-button";
 import { DocumentCreateButton } from "@/views/documents/components/document-create-button";
 import { NewChatButton } from "@/views/chats/components/new-chat-button";
+import { NewChannelButton } from "@/views/channels/components/new-channel-button";
+import { NewWorkflowButton } from "@/views/workflows/components/new-workflow-button";
+import { NewIntegrationButton } from "@/views/integrations/components/new-integration-button";
+import { NewSchedulerButton } from "@/views/schedulers/components/new-scheduler-button";
 import { SuoraLogo } from "@/views/components/suora-logo";
 
 const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
@@ -52,9 +56,9 @@ const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
                                             navigate(item.url);
                                         }}
                                         isActive={activeItem?.title === item.title}
-                                        className={cn(activeItem?.title === item.title ? "text-primary" : "")}
+                                        className={cn(activeItem?.title === item.title ? "bg-sidebar-accent text-sidebar-accent-foreground" : "")}
                                     >
-                                        <Icon />
+                                        <Icon className={cn("size-4", item.iconClassName)} />
                                     </SidebarMenuButton>
                                 </SidebarMenuItem>
                                 )
@@ -74,7 +78,7 @@ const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
                             }}
                             isActive={showPreferenceSidebar}
                         >
-                            <SettingsIcon className="size-4 text-amber-500" />
+                            <SettingsIcon className={cn("size-4", preferenceRoute.iconClassName)} />
                         </SidebarMenuButton>
                     </SidebarMenuItem>
                 </SidebarMenu>
@@ -90,15 +94,23 @@ const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
                 groups={groups}
                 isLoading={isLoading}
                                 headerAction={activeItem.url === "/models"
-                                    ? <CreateProviderButton size="sm" variant="outline" />
+                                    ? <CreateProviderButton iconOnly size="sm" variant="outline" />
                                     : activeItem.url === "/chats"
-                                        ? <NewChatButton />
+                                        ? <NewChatButton iconOnly />
                                     : activeItem.url === "/agents"
-                                        ? <NewAgentButton />
+                                        ? <NewAgentButton iconOnly />
+                                    : activeItem.url === "/workflows"
+                                        ? <NewWorkflowButton iconOnly />
+                                    : activeItem.url === "/integrations"
+                                        ? <NewIntegrationButton iconOnly />
+                                    : activeItem.url === "/schedulers"
+                                        ? <NewSchedulerButton iconOnly />
                                     : activeItem.url === "/skills"
-                                        ? <SkillCreateButton />
+                                        ? <SkillCreateButton iconOnly />
                                         : activeItem.url === "/documents"
-                                            ? <DocumentCreateButton />
+                                            ? <DocumentCreateButton iconOnly />
+                                            : activeItem.url === "/channels"
+                                                ? <NewChannelButton iconOnly />
                                             : null}
             />
         )}

@@ -3,11 +3,11 @@ import { useParams } from "react-router"
 import { useNavigate } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import type { ProviderConfigRecord } from "@/data/domain/models"
 import { emitDataChanged } from "@/data/repositories/data-events"
-import { deleteModelProvider, getDefaultProviderBaseUrl, getModelProvider, getProviderPreset, saveModelProvider } from "@/data/repositories/model-config-repository"
+import { deleteModelProvider, discoverProviderModelCatalog, getDefaultProviderBaseUrl, getModelProvider, getProviderModelDiscoveryState, getProviderPreset, saveModelProvider } from "@/data/repositories/model-config-repository"
+import { showToast } from "@/lib/app-toast"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { ModelFormDialog, createModelFormState, type ModelFormState } from "@/views/models/components/model-form-dialog"
@@ -22,6 +22,7 @@ const ModelsDetailPage = () => {
   const [draft, setDraft] = useState<ProviderConfigRecord | null>(null)
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
   const [editingModelIndex, setEditingModelIndex] = useState<number | null>(null)
+  const [isRefreshingModels, setIsRefreshingModels] = useState(false)
   const [modelForm, setModelForm] = useState<ModelFormState>(createModelFormState())
 
   const persistedProvider = data ?? draft
@@ -41,8 +42,8 @@ const ModelsDetailPage = () => {
   }, [data])
 
   const selectedPreset = getProviderPreset(draft?.providerType ?? "openai")
-  const enabledCount = draft?.models.filter((model) => model.enabled).length ?? 0
   const hasApiKey = Boolean(draft?.apiKey.trim())
+  const discoveryState = draft ? getProviderModelDiscoveryState(draft) : { capable: false, enabled: false, reason: null }
 
   const handleSave = async () => {
     if (!draft) return
@@ -144,11 +145,52 @@ const ModelsDetailPage = () => {
     })
   }
 
+  const handleRefreshModels = async () => {
+    if (!draft) {
+      return
+    }
+
+    if (!discoveryState.enabled) {
+      showToast({
+        title: "Model catalog refresh unavailable",
+        description: discoveryState.reason ?? "Remote model discovery is not available for this provider.",
+        type: "warning",
+      })
+      return
+    }
+
+    setIsRefreshingModels(true)
+    try {
+      const result = await discoverProviderModelCatalog(draft)
+      await persistProvider(result.provider)
+      showToast({
+        title: "Model catalog refreshed",
+        description: `Loaded ${result.discoveredCount} models from ${result.source}.`,
+        type: "success",
+      })
+    } catch (error) {
+      showToast({
+        title: "Model catalog refresh failed",
+        description: error instanceof Error ? error.message : String(error),
+        type: "error",
+      })
+    } finally {
+      setIsRefreshingModels(false)
+    }
+  }
+
   return (
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={draft?.title ?? "Provider"}
         description="Manage endpoint configuration, provider defaults, and the model inventory exposed to chats, agents, and workflows."
+        leading={draft ? <ProviderLogoBadge providerType={draft.providerType} className="size-9" iconClassName="size-4.5" /> : null}
+        actions={draft ? (
+          <>
+            <Badge variant="outline">{draft.providerType}</Badge>
+            <Badge variant={draft.enabled ? "secondary" : "outline"}>{draft.enabled ? "Enabled" : "Disabled"}</Badge>
+          </>
+        ) : null}
       />
 
       <div className="flex-1 overflow-x-hidden p-4">
@@ -158,39 +200,17 @@ const ModelsDetailPage = () => {
           {!isLoading && !error && draft ? (
             <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
               <div className="min-w-0 space-y-3">
-                <Card>
-                  <CardHeader>
-                    <div className="flex min-w-0 items-start gap-3">
-                      <ProviderLogoBadge providerType={draft.providerType} className="size-12" iconClassName="size-6" />
-                      <div className="min-w-0 flex-1 space-y-2">
-                        <div className="flex min-w-0 flex-wrap items-center gap-2">
-                          <CardTitle className="truncate">{draft.title}</CardTitle>
-                          <Badge variant="outline">{draft.providerType}</Badge>
-                          <Badge variant={draft.enabled ? "secondary" : "outline"}>{draft.enabled ? "Enabled" : "Disabled"}</Badge>
-                        </div>
-                        <CardDescription>{selectedPreset.description}</CardDescription>
-                      </div>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-1">
-                    <div className="rounded-xl border bg-muted/20 px-3 py-3">
-                      <div className="text-sm text-muted-foreground">Enabled models</div>
-                      <div className="mt-1 text-2xl font-semibold text-foreground">{enabledCount}<span className="ml-1 text-sm font-normal text-muted-foreground">/ {draft.models.length}</span></div>
-                    </div>
-                    <div className="rounded-xl border bg-muted/20 px-3 py-3 md:col-span-2 xl:col-span-1">
-                      <div className="text-sm text-muted-foreground">Resolved endpoint</div>
-                      <div className="mt-1 break-all text-sm text-foreground">{draft.baseUrl || selectedPreset.baseUrl || "No base URL configured."}</div>
-                    </div>
-                  </CardContent>
-                </Card>
-
                 <ProviderSettingsForm
                   draft={draft}
-                  description="Change provider identity, endpoint, and credentials without leaving the model module."
+                  description={selectedPreset.description}
+                  docsUrl={selectedPreset.docsUrl}
                   hasApiKey={hasApiKey}
                   canDelete={draft.providerType === "custom"}
                   onChange={setDraft}
                   onDelete={handleDeleteProvider}
+                  onOpenDocs={(url) => {
+                    void window.suora?.tools.openExternal(url)
+                  }}
                   onProviderTypeChange={handleProviderTypeChange}
                   onSave={handleSave}
                 />
@@ -198,10 +218,14 @@ const ModelsDetailPage = () => {
 
               <ProviderModelList
                 hasApiKey={hasApiKey}
+                showRefreshAction={discoveryState.capable}
+                refreshDisabledReason={discoveryState.enabled ? null : discoveryState.reason}
+                isRefreshingModels={isRefreshingModels}
                 models={draft.models}
                 onAddModel={handleOpenCreateModel}
                 onDeleteModel={handleDeleteModel}
                 onEditModel={handleOpenEditModel}
+                onRefreshModels={() => void handleRefreshModels()}
                 onToggleModel={handleToggleModel}
               />
             </div>

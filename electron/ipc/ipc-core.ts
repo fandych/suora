@@ -43,7 +43,7 @@ export function registerCoreIpc() {
   })
 
   ipcMain.handle("workspace:getProxySettings", () => getProxySettings())
-  ipcMain.handle("ai:fetch:start", async (_event, payload) => startAiFetch(payload))
+  ipcMain.handle("ai:fetch:start", async (event, payload) => startAiFetch(event.sender, payload))
   ipcMain.handle("ai:fetch:abort", (_event, requestId: string) => abortAiFetch(requestId))
   ipcMain.handle("integration:execute", async (_event, payload: IntegrationExecutePayload) => executeIntegration(payload))
   ipcMain.handle("updater:getState", () => getUpdaterState())

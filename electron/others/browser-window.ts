@@ -1,6 +1,11 @@
 import { BrowserWindow } from "electron"
 
 import { appState, setBrowserWindow } from "@electron/others/app-state"
+import type { BrowserWindowState } from "@electron/types"
+
+function publishBrowserWindowState() {
+  appState.mainWindow?.webContents.send("tools:browserStateChanged", getBrowserWindowState())
+}
 
 function wait(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -27,6 +32,7 @@ function createBrowserWindow() {
   browserWindow.on("closed", () => {
     if (appState.browserWindow === browserWindow) {
       setBrowserWindow(null)
+      publishBrowserWindowState()
     }
   })
 
@@ -43,6 +49,16 @@ function getBrowserWindow() {
   return createBrowserWindow()
 }
 
+export function closeBrowserWindow() {
+  const browserWindow = appState.browserWindow
+  if (browserWindow && !browserWindow.isDestroyed()) {
+    browserWindow.destroy()
+  }
+
+  setBrowserWindow(null)
+  publishBrowserWindowState()
+}
+
 export async function navigateBrowserWindow(payload: { url?: string; visible?: boolean }) {
   const browserWindow = getBrowserWindow()
 
@@ -52,15 +68,34 @@ export async function navigateBrowserWindow(payload: { url?: string; visible?: b
 
   if (payload.visible === false) {
     browserWindow.hide()
-  } else {
+  } else if (payload.visible === true) {
     browserWindow.show()
     browserWindow.focus()
   }
+
+  publishBrowserWindowState()
 
   return {
     ok: true,
     url: browserWindow.webContents.getURL(),
     visible: browserWindow.isVisible(),
+  }
+}
+
+export function getBrowserWindowState(): BrowserWindowState {
+  const browserWindow = appState.browserWindow
+  if (!browserWindow || browserWindow.isDestroyed()) {
+    return {
+      open: false,
+      visible: false,
+      url: "",
+    }
+  }
+
+  return {
+    open: true,
+    visible: browserWindow.isVisible(),
+    url: browserWindow.webContents.getURL(),
   }
 }
 

@@ -3,19 +3,8 @@ import crypto from "node:crypto"
 import { ipcMain } from "electron"
 
 import { applyMigrations, openDatabase } from "@electron/database/db-core"
+import { parseAppendAssistantPayload, parseAppendUserPayload, parseChatSettingsSavePayload, parseStoredChatMessageParts, parseStoredChatSettingsStore, parseUpdateMessagePartsPayload, serializeChatMessageParts, serializeChatSettingsStore } from "@electron/others/chat-schemas"
 import type { ChatRuntimeSettingsPayload } from "@electron/types"
-
-function parseChatMessageParts(value?: string | null) {
-  if (!value) {
-    return []
-  }
-
-  try {
-    return JSON.parse(value)
-  } catch {
-    return []
-  }
-}
 import { setProxySettings } from "@electron/others/proxy"
 import { ensureWorkspace } from "@electron/others/workspace"
 
@@ -24,7 +13,7 @@ export function registerContentIpc() {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
-    return database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id) ORDER BY updated_at DESC`).all()
+    return database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE EXISTS (SELECT 1 FROM chat_messages WHERE chat_messages.chat_id = chats.id) ORDER BY updated_at DESC`).all()
   })
 
   ipcMain.handle("chats:get", async (_event, chatId: string) => {
@@ -32,8 +21,8 @@ export function registerContentIpc() {
     const database = openDatabase()
     applyMigrations(database)
     return {
-      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(chatId) ?? null,
-      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseChatMessageParts(message.partsJson) })),
+      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE id = ?`).get(chatId) ?? null,
+      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseStoredChatMessageParts(message.partsJson) })),
     }
   })
 
@@ -43,41 +32,45 @@ export function registerContentIpc() {
     applyMigrations(database)
     const chatId = crypto.randomUUID()
     const now = Date.now()
-    database.prepare(`INSERT INTO chats (id, title, chatbot_id, summary, updated_at) VALUES (?, ?, ?, ?, ?)`).run(chatId, "New chat", "assistant-main", "", now)
+    database.prepare(`INSERT INTO chats (id, title, chatbot_id, summary, source_type, source_ref, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(chatId, "New chat", "assistant-main", "", "manual", null, now)
     return {
-      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(chatId),
+      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE id = ?`).get(chatId),
       messages: [],
     }
   })
 
-  ipcMain.handle("chats:ensure", async (_event, payload: { chatId: string; title: string; chatbotId: string; summary?: string }) => {
+  ipcMain.handle("chats:ensure", async (_event, payload: { chatId: string; title: string; chatbotId: string; summary?: string; sourceType?: "manual" | "channel"; sourceRef?: string | null }) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
     const now = Date.now()
-    const existing = database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId) as { id: string; title: string; chatbotId: string; summary: string; updatedAt: number } | undefined
+    const existing = database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId) as { id: string; title: string; chatbotId: string; summary: string; sourceType?: string; sourceRef?: string | null; updatedAt: number } | undefined
 
     if (existing) {
-      database.prepare(`UPDATE chats SET title = ?, chatbot_id = ?, summary = ?, updated_at = ? WHERE id = ?`).run(
+      database.prepare(`UPDATE chats SET title = ?, chatbot_id = ?, summary = ?, source_type = ?, source_ref = ?, updated_at = ? WHERE id = ?`).run(
         payload.title,
         payload.chatbotId,
         payload.summary ?? existing.summary,
+        payload.sourceType ?? existing.sourceType ?? "manual",
+        payload.sourceRef ?? existing.sourceRef ?? null,
         now,
         payload.chatId,
       )
     } else {
-      database.prepare(`INSERT INTO chats (id, title, chatbot_id, summary, updated_at) VALUES (?, ?, ?, ?, ?)`).run(
+      database.prepare(`INSERT INTO chats (id, title, chatbot_id, summary, source_type, source_ref, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(
         payload.chatId,
         payload.title,
         payload.chatbotId,
         payload.summary ?? "",
+        payload.sourceType ?? "manual",
+        payload.sourceRef ?? null,
         now,
       )
     }
 
     return {
-      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId),
-      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(payload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseChatMessageParts(message.partsJson) })),
+      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId),
+      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(payload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseStoredChatMessageParts(message.partsJson) })),
     }
   })
 
@@ -90,55 +83,62 @@ export function registerContentIpc() {
     return Number(result.changes ?? 0) > 0
   })
 
-  ipcMain.handle("chats:appendUser", async (_event, payload: { chatId: string; content: string }) => {
+  ipcMain.handle("chats:appendUser", async (_event, payload: unknown) => {
     await ensureWorkspace()
+    const parsedPayload = parseAppendUserPayload(payload)
     const database = openDatabase()
     applyMigrations(database)
     const now = Date.now()
-    const chat = database.prepare(`SELECT id, title FROM chats WHERE id = ?`).get(payload.chatId) as { id: string; title: string } | undefined
+    const chat = database.prepare(`SELECT id, title FROM chats WHERE id = ?`).get(parsedPayload.chatId) as { id: string; title: string } | undefined
     if (!chat) {
       return null
     }
-    const trimmed = payload.content.trim()
-    database.prepare(`INSERT INTO chat_messages (id, chat_id, role, content, created_at) VALUES (?, ?, ?, ?, ?)`).run(crypto.randomUUID(), payload.chatId, "user", trimmed, now)
+    const trimmed = parsedPayload.content.trim()
+    database.prepare(`INSERT INTO chat_messages (id, chat_id, role, content, parts_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(crypto.randomUUID(), parsedPayload.chatId, "user", trimmed, serializeChatMessageParts(parsedPayload.parts ?? []), now)
     const nextTitle = chat.title === "New chat" ? (trimmed.slice(0, 18) || "Untitled chat") : chat.title
-    database.prepare(`UPDATE chats SET title = ?, summary = ?, updated_at = ? WHERE id = ?`).run(nextTitle, trimmed, now, payload.chatId)
+    database.prepare(`UPDATE chats SET title = ?, summary = ?, updated_at = ? WHERE id = ?`).run(nextTitle, trimmed, now, parsedPayload.chatId)
     return {
-      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId),
-      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(payload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseChatMessageParts(message.partsJson) })),
+      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE id = ?`).get(parsedPayload.chatId),
+      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(parsedPayload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseStoredChatMessageParts(message.partsJson) })),
     }
   })
 
-  ipcMain.handle("chats:appendAssistant", async (_event, payload: { chatId: string; content: string; parts?: unknown[] }) => {
+  ipcMain.handle("chats:appendAssistant", async (_event, payload: unknown) => {
     await ensureWorkspace()
+    const parsedPayload = parseAppendAssistantPayload(payload)
     const database = openDatabase()
     applyMigrations(database)
     const now = Date.now()
-    const chat = database.prepare(`SELECT id FROM chats WHERE id = ?`).get(payload.chatId)
+    const chat = database.prepare(`SELECT id FROM chats WHERE id = ?`).get(parsedPayload.chatId)
     if (!chat) {
       return null
     }
-    database.prepare(`INSERT INTO chat_messages (id, chat_id, role, content, parts_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(crypto.randomUUID(), payload.chatId, "assistant", payload.content, JSON.stringify(payload.parts ?? []), now)
-    database.prepare(`UPDATE chats SET updated_at = ? WHERE id = ?`).run(now, payload.chatId)
+    database.prepare(`INSERT INTO chat_messages (id, chat_id, role, content, parts_json, created_at) VALUES (?, ?, ?, ?, ?, ?)`).run(crypto.randomUUID(), parsedPayload.chatId, "assistant", parsedPayload.content, serializeChatMessageParts(parsedPayload.parts ?? []), now)
+    database.prepare(`UPDATE chats SET updated_at = ? WHERE id = ?`).run(now, parsedPayload.chatId)
     return {
-      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId),
-      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(payload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseChatMessageParts(message.partsJson) })),
+      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE id = ?`).get(parsedPayload.chatId),
+      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(parsedPayload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseStoredChatMessageParts(message.partsJson) })),
     }
   })
 
-  ipcMain.handle("chats:updateMessageParts", async (_event, payload: { chatId: string; messageId: string; parts: unknown[] }) => {
+  ipcMain.handle("chats:updateMessageParts", async (_event, payload: unknown) => {
     await ensureWorkspace()
+    const parsedPayload = parseUpdateMessagePartsPayload(payload)
     const database = openDatabase()
     applyMigrations(database)
-    const chat = database.prepare(`SELECT id FROM chats WHERE id = ?`).get(payload.chatId)
+    const chat = database.prepare(`SELECT id FROM chats WHERE id = ?`).get(parsedPayload.chatId)
     if (!chat) {
       return null
     }
 
-    database.prepare(`UPDATE chat_messages SET parts_json = ? WHERE id = ? AND chat_id = ?`).run(JSON.stringify(payload.parts ?? []), payload.messageId, payload.chatId)
+    const updateResult = database.prepare(`UPDATE chat_messages SET parts_json = ? WHERE id = ? AND chat_id = ?`).run(serializeChatMessageParts(parsedPayload.parts), parsedPayload.messageId, parsedPayload.chatId)
+    if (Number(updateResult.changes ?? 0) === 0) {
+      throw new Error(`Message ${parsedPayload.messageId} was not found in chat ${parsedPayload.chatId}.`)
+    }
+
     return {
-      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, updated_at as updatedAt FROM chats WHERE id = ?`).get(payload.chatId),
-      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(payload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseChatMessageParts(message.partsJson) })),
+      chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE id = ?`).get(parsedPayload.chatId),
+      messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(parsedPayload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseStoredChatMessageParts(message.partsJson) })),
     }
   })
 
@@ -147,21 +147,24 @@ export function registerContentIpc() {
     const database = openDatabase()
     applyMigrations(database)
     const row = database.prepare(`SELECT value FROM app_meta WHERE key = 'chat_runtime_settings'`).get() as { value?: string } | undefined
-    return row?.value ?? null
+    const parsed = parseStoredChatSettingsStore(row?.value ?? null)
+    return parsed ? serializeChatSettingsStore(parsed.store) : row?.value ?? null
   })
 
   ipcMain.handle("chats:saveSettings", async (_event, payload: ChatRuntimeSettingsPayload | { defaultRuntime?: ChatRuntimeSettingsPayload; chats?: Record<string, { runtime?: ChatRuntimeSettingsPayload; selectedAgentId?: string }> }) => {
     await ensureWorkspace()
+    const parsedPayload = parseChatSettingsSavePayload(payload)
     const database = openDatabase()
     applyMigrations(database)
-    database.prepare(`INSERT INTO app_meta (key, value) VALUES ('chat_runtime_settings', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(JSON.stringify(payload))
-    const proxySettings = "proxy" in payload
-      ? payload.proxy
-      : payload.defaultRuntime?.proxy ?? Object.values(payload.chats ?? {}).find((item) => item.runtime?.proxy)?.runtime?.proxy
+    const storePayload = "version" in parsedPayload ? parsedPayload.store : parsedPayload
+    database.prepare(`INSERT INTO app_meta (key, value) VALUES ('chat_runtime_settings', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(serializeChatSettingsStore(storePayload))
+    const proxySettings = "proxy" in parsedPayload
+      ? parsedPayload.proxy
+      : storePayload.defaultRuntime?.proxy
     if (proxySettings) {
       setProxySettings(proxySettings)
     }
-    return payload
+    return "version" in parsedPayload ? parsedPayload : { version: 1, store: storePayload }
   })
 
   ipcMain.handle("documents:list", async () => {

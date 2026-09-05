@@ -1,4 +1,4 @@
-import type { VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeTraceRecord, WorkflowNotificationSettings, WorkflowSummary } from "@/data/domain/models"
+import type { VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeTraceRecord, WorkflowSummary } from "@/data/domain/models"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS, normalizeWorkflowNotifications } from "@/data/repositories/workflow-notifications"
@@ -192,7 +192,7 @@ export async function listWorkflows() {
 
 export async function createWorkflow() {
   await ensureSeeded()
-  const created = await suoraIpc.workflows.create() as Promise<WorkflowDetail>
+  const created = await suoraIpc.workflows.create() as WorkflowDetail
   emitDataChanged("/workflows")
   return created
 }
@@ -211,7 +211,7 @@ export async function getWorkflowDetail(workflowId: string, selectedVersionId?: 
 
 export async function saveWorkflowDraft(workflowId: string, payload: { title: string; summary: string; definition: WorkflowDefinition; selectedVersionId?: string }) {
   await ensureSeeded()
-  const saved = await suoraIpc.workflows.save({ id: workflowId, title: payload.title, summary: payload.summary, definition: normalizeWorkflowNotifications(payload.definition), selectedVersionId: payload.selectedVersionId }) as Promise<WorkflowDetail>
+  const saved = await suoraIpc.workflows.save({ id: workflowId, title: payload.title, summary: payload.summary, definition: normalizeWorkflowNotifications(payload.definition), selectedVersionId: payload.selectedVersionId }) as WorkflowDetail
   emitDataChanged("/workflows")
   return saved
 }
@@ -219,7 +219,7 @@ export async function saveWorkflowDraft(workflowId: string, payload: { title: st
 export async function publishWorkflowVersion(workflowId: string, versionId: string) {
   await ensureSeeded()
   const detail = await getWorkflowDetail(workflowId, versionId)
-  const published = await suoraIpc.workflows.save({ id: workflowId, title: detail.workflow.title, summary: detail.workflow.summary, definition: normalizeWorkflowNotifications(detail.definition), publish: true }) as Promise<WorkflowDetail>
+  const published = await suoraIpc.workflows.save({ id: workflowId, title: detail.workflow.title, summary: detail.workflow.summary, definition: normalizeWorkflowNotifications(detail.definition), publish: true }) as WorkflowDetail
   emitDataChanged("/workflows")
   return published
 }

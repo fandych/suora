@@ -7,7 +7,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { createAgent } from "@/data/repositories/agent-repository"
 import { cn } from "@/lib/utils"
 
-export function NewAgentButton({ className }: { className?: string }) {
+export function NewAgentButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
 
@@ -22,9 +22,9 @@ export function NewAgentButton({ className }: { className?: string }) {
   }
 
   return (
-    <Button className={cn("h-8 shrink-0 whitespace-nowrap", className)} size="sm" variant="outline" type="button" onClick={() => void handleCreate()} disabled={isCreating}>
+    <Button className={cn(iconOnly ? "h-8 shrink-0" : "h-8 shrink-0 whitespace-nowrap", className)} size={iconOnly ? "icon-sm" : "sm"} variant="outline" type="button" onClick={() => void handleCreate()} disabled={isCreating} aria-label="New agent" title="New agent">
       {isCreating ? <Spinner /> : <PlusIcon />}
-      {isCreating ? "Creating..." : "New agent"}
+      {iconOnly ? null : isCreating ? "Creating..." : "New agent"}
     </Button>
   )
 }

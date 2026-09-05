@@ -20,7 +20,6 @@ export function ChannelPlatformDingTalkForm({ channel, onPatch }: ChannelPlatfor
             <>
               <Field label="Client ID"><CompactInput value={channel.dingtalkClientId ?? channel.appId ?? ""} onChange={(event) => onPatch({ dingtalkClientId: event.target.value, appId: event.target.value })} /></Field>
               <Field label="Client secret"><CompactInput type="password" value={channel.dingtalkClientSecret ?? channel.appSecret ?? ""} onChange={(event) => onPatch({ dingtalkClientSecret: event.target.value, appSecret: event.target.value })} /></Field>
-              <Field label="Robot code" className="md:col-span-2"><CompactInput value={channel.dingtalkRobotCode ?? ""} onChange={(event) => onPatch({ dingtalkRobotCode: event.target.value })} placeholder="dingxxxxxxxx" /></Field>
             </>
           ) : (
             <>
@@ -30,7 +29,7 @@ export function ChannelPlatformDingTalkForm({ channel, onPatch }: ChannelPlatfor
           )}
         </div>
       </FormGroupSection>
-      <Hint>{isStream ? "DingTalk Stream mode requires enterprise app credentials and a robot code." : "DingTalk Webhook mode requires the robot webhook URL and signing secret."}</Hint>
+      <Hint>{isStream ? "DingTalk Stream mode requires enterprise app credentials." : "DingTalk Webhook mode requires the robot webhook URL and signing secret."}</Hint>
     </div>
   )
 }

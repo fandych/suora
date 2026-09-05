@@ -29,7 +29,7 @@ export function CreateProviderButton({ className, iconOnly = false, size = "sm",
   }
 
   return (
-    <Button className={className} size={size} variant={variant} onClick={handleCreateProvider} disabled={isCreating}>
+    <Button className={className} size={iconOnly ? "icon-sm" : size} variant={variant} onClick={handleCreateProvider} disabled={isCreating} aria-label="Add provider" title="Add provider">
       <PlusIcon className="size-4" />
       {iconOnly ? null : <span>{isCreating ? "Creating..." : "Add provider"}</span>}
     </Button>

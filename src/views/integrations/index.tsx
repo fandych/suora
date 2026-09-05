@@ -1,28 +1,21 @@
 import { useNavigate } from "react-router"
 
-import { Button } from "@/components/ui/button"
 import PageHeader from "@/views/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { createIntegration, listIntegrationSummaries } from "@/data/repositories/integration-repository"
+import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
 import { IntegrationCard } from "@/views/integrations/components/integration-card"
 
 const IntegrationsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => listIntegrationSummaries(), [])
 
-  const handleCreate = async () => {
-    const detail = await createIntegration("http")
-    navigate(`/integrations/${detail.integration.id}`)
-  }
-
   return (
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title="Integrations"
         description="Manage versioned HTTP, script, and MCP integrations."
-        actions={<Button onClick={handleCreate}>New integration</Button>}
       />
 
       <div className="flex-1 p-6">

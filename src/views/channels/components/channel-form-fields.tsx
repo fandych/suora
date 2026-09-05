@@ -38,11 +38,11 @@ export function FormGroupSection({
 }
 
 export function CompactInput(props: React.ComponentProps<typeof Input>) {
-  return <Input className="h-8 text-xs" {...props} />
+  return <Input {...props} className={cn("h-8 w-full text-xs", props.className)} />
 }
 
 export function CompactTextarea(props: React.ComponentProps<typeof Textarea>) {
-  return <Textarea className="min-h-20 text-xs" {...props} />
+  return <Textarea {...props} className={cn("min-h-20 w-full text-xs", props.className)} />
 }
 
 export function Hint({ children, className }: { children: React.ReactNode; className?: string }) {

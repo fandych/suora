@@ -1,6 +1,7 @@
 import crypto from "node:crypto"
 
 import { ipcMain } from "electron"
+import { createDefaultChannelConfig, createDefaultChannelRuntime } from "@/data/repositories/channel-defaults"
 
 import { applyMigrations, openDatabase } from "@electron/database/db-core"
 import { ensureWorkspace } from "@electron/others/workspace"
@@ -39,39 +40,6 @@ function createDefaultWorkflowDefinition() {
       maxSteps: 8,
       maxDurationMs: 120000,
     },
-  }
-}
-
-function createDefaultChannelConfig(channelId: string, title: string, platform: string, now: number) {
-  return {
-    id: channelId,
-    title,
-    platform,
-    enabled: false,
-    status: "inactive",
-    connectionMode: "webhook",
-    webhookPath: `/channels/${channelId}`,
-    webhookSecret: "",
-    autoReply: true,
-    replyAgentId: "",
-    createdAt: now,
-    updatedAt: now,
-    messageCount: 0,
-    emailFilters: [],
-    emailActions: [],
-    emailMarkAsRead: true,
-  }
-}
-
-function createDefaultChannelRuntime() {
-  return {
-    messages: [],
-    users: [],
-    health: {
-      isHealthy: null,
-      errorCount: 0,
-    },
-    debugLog: [],
   }
 }
 
@@ -120,7 +88,7 @@ export function registerAutomationIpc() {
       : undefined
     const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
     const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
-    let selectedVersion = targetDraft && !targetDraft.isRelease
+    const selectedVersion = targetDraft && !targetDraft.isRelease
       ? { id: targetDraft.id }
       : database.prepare(`SELECT id FROM integration_versions WHERE integration_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
     const now = Date.now()
@@ -130,7 +98,6 @@ export function registerAutomationIpc() {
     } else {
       const versionId = crypto.randomUUID()
       database.prepare(`INSERT INTO integration_versions (id, integration_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.configJson, now)
-      selectedVersion = { id: versionId }
     }
     return {
       integration: database.prepare(`SELECT id, title, kind, endpoint, updated_at as updatedAt FROM integrations WHERE id = ?`).get(payload.id),
@@ -192,7 +159,7 @@ export function registerAutomationIpc() {
       : undefined
     const nextMajor = !latest ? 1 : latest.isRelease ? latest.major + 1 : latest.major
     const nextMinor = !latest ? 0 : latest.isRelease ? 0 : latest.minor + 1
-    let selectedVersion = targetDraft && !targetDraft.isRelease
+    const selectedVersion = targetDraft && !targetDraft.isRelease
       ? { id: targetDraft.id }
       : database.prepare(`SELECT id FROM workflow_versions WHERE workflow_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
     const now = Date.now()
@@ -202,7 +169,6 @@ export function registerAutomationIpc() {
     } else {
       const versionId = crypto.randomUUID()
       database.prepare(`INSERT INTO workflow_versions (id, workflow_id, major, minor, is_release, definition_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.definitionJson, now)
-      selectedVersion = { id: versionId }
     }
     return {
       workflow: database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM workflows WHERE id = ?`).get(payload.id),
@@ -250,13 +216,13 @@ export function registerAutomationIpc() {
     return database.prepare(`SELECT id, title, platform, enabled, status, connection_mode as connectionMode, webhook_path as webhookPath, webhook_secret as webhookSecret, auto_reply as autoReply, reply_agent_id as replyAgentId, created_at as createdAt, last_message_at as lastMessageAt, message_count as messageCount, config_json as configJson, runtime_json as runtimeJson, updated_at as updatedAt FROM channels WHERE id = ?`).get(channelId) ?? null
   })
 
-  ipcMain.handle("channels:create", async () => {
+  ipcMain.handle("channels:create", async (_event, defaults?: Partial<{ providerId: string; modelId: string }>) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
     const channelId = crypto.randomUUID()
     const now = Date.now()
-    const config = createDefaultChannelConfig(channelId, "New channel", "web", now)
+    const config = createDefaultChannelConfig({ id: channelId, title: "New channel", platform: "web", now, providerId: defaults?.providerId, modelId: defaults?.modelId })
     const runtime = createDefaultChannelRuntime()
     database.prepare(`INSERT INTO channels (id, title, platform, enabled, status, connection_mode, webhook_path, webhook_secret, auto_reply, reply_agent_id, created_at, last_message_at, message_count, config_json, runtime_json, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(
       channelId,

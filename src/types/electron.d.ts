@@ -22,7 +22,7 @@ declare global {
       chats: {
         list: () => Promise<unknown>
         get: (chatId: string) => Promise<unknown>
-        create: () => Promise<unknown>
+        create: (defaults?: unknown) => Promise<unknown>
         ensure: (payload: unknown) => Promise<unknown>
         delete: (chatId: string) => Promise<unknown>
         appendUser: (payload: unknown) => Promise<unknown>
@@ -47,6 +47,7 @@ declare global {
         create: (payload?: unknown) => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (providerId: string) => Promise<unknown>
+        discover: (payload: unknown) => Promise<unknown>
       }
       skills: {
         list: () => Promise<unknown>
@@ -83,7 +84,7 @@ declare global {
       channels: {
         list: () => Promise<unknown>
         get: (channelId: string) => Promise<unknown>
-        create: () => Promise<unknown>
+        create: (defaults?: unknown) => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (channelId: string) => Promise<unknown>
         startRuntime: () => Promise<unknown>
@@ -97,8 +98,8 @@ declare global {
         healthCheck: (channelId: string) => Promise<unknown>
         getStreamStatus: (channelId: string) => Promise<unknown>
         debugSend: (payload: unknown) => Promise<unknown>
-        startWeChatPersonalLogin: (force?: boolean) => Promise<unknown>
-        waitForWeChatPersonalLogin: (sessionKey: string, verifyCode?: string, timeoutMs?: number) => Promise<unknown>
+        startWeChatPersonalLogin: (channelId?: string, force?: boolean) => Promise<unknown>
+        waitForWeChatPersonalLogin: (channelId: string | undefined, sessionKey: string, verifyCode?: string, timeoutMs?: number) => Promise<unknown>
         getWeChatPersonalQrPreview: (url: string, waitMs?: number) => Promise<unknown>
       }
       schedulers: {
@@ -124,6 +125,7 @@ declare global {
         writeFile: (payload: unknown) => Promise<unknown>
         runCommand: (payload: unknown) => Promise<unknown>
         browserNavigate: (payload: unknown) => Promise<unknown>
+        browserState: () => Promise<unknown>
         saveFile: (payload: unknown) => Promise<unknown>
         openExternal: (url: string) => Promise<unknown>
       }

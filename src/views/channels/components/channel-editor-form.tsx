@@ -12,30 +12,18 @@ import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/compon
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import type { AgentSummary, ChannelConfigRecord, ChannelMessageRecord, ProviderConfigRecord } from "@/data/domain/models"
-import { getChannelCredentialIssues } from "@/lib/channel-config"
 import { CompactInput, CompactTextarea, Field, Hint } from "@/views/channels/components/channel-form-fields"
+import { ChannelPlatformSelect } from "@/views/channels/components/channel-platform-select"
 import { ChannelPlatformCustomForm } from "@/views/channels/components/channel-platform-custom-form"
 import { ChannelPlatformDingTalkForm } from "@/views/channels/components/channel-platform-dingtalk-form"
 import { ChannelPlatformEmailForm } from "@/views/channels/components/channel-platform-email-form"
 import { ChannelPlatformFeishuForm } from "@/views/channels/components/channel-platform-feishu-form"
 import { ChannelPlatformTeamsForm } from "@/views/channels/components/channel-platform-teams-form"
 import { ChannelPlatformTelegramForm } from "@/views/channels/components/channel-platform-telegram-form"
+import { ChannelPlatformWeChatMiniProgramForm } from "@/views/channels/components/channel-platform-wechat-miniprogram-form"
 import { ChannelPlatformWeChatOfficialForm } from "@/views/channels/components/channel-platform-wechat-official-form"
 import { ChannelPlatformWeChatPersonalForm } from "@/views/channels/components/channel-platform-wechat-personal-form"
 import { ChannelPlatformWeChatWorkForm } from "@/views/channels/components/channel-platform-wechat-work-form"
-import {
-  channelPlatformOptions,
-  getChannelBindingLabel,
-  getChannelBindingVariant,
-  getChannelCatalogLabel,
-  getChannelPlatformLabel,
-} from "@/views/channels/components/channel-utils"
-
-const groupedChannelPlatformOptions: Array<{ label: string; values: ChannelConfigRecord["platform"][] }> = [
-  { label: "Chinese platforms", values: ["feishu", "dingtalk", "wechat", "wechat_personal", "wechat_official"] },
-  { label: "International platforms", values: ["telegram", "teams", "email"] },
-  { label: "Other", values: ["web", "custom"] },
-]
 
 type ChannelEditorFormProps = {
   channel: ChannelConfigRecord
@@ -44,12 +32,17 @@ type ChannelEditorFormProps = {
   messageRecords: ChannelMessageRecord[]
   showWechatVerification: boolean
   onChange: (channel: ChannelConfigRecord) => void
-  onSave: () => void
+  onSaveGeneral: () => void
+  onSaveConfiguration: () => void
   onBind: () => void
+  onUnbind: () => void
   onConfirmWeChatBinding: () => void
   wechatVerificationCode: string
   onWechatVerificationCodeChange: (value: string) => void
   isBinding?: boolean
+  isSavingGeneral?: boolean
+  isSavingConfiguration?: boolean
+  isUnbinding?: boolean
 }
 
 function ChannelHistoryMessageItem({ message }: { message: ChannelMessageRecord }) {
@@ -80,14 +73,14 @@ function ChannelHistoryMessageItem({ message }: { message: ChannelMessageRecord 
   )
 }
 
-function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+function Section({ title, description, className, contentClassName, children }: { title: string; description?: string; className?: string; contentClassName?: string; children: React.ReactNode }) {
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm">{title}</CardTitle>
         {description ? <CardDescription className="text-xs">{description}</CardDescription> : null}
       </CardHeader>
-      <CardContent className="space-y-3">{children}</CardContent>
+      <CardContent className={cn("space-y-3", contentClassName)}>{children}</CardContent>
     </Card>
   )
 }
@@ -193,6 +186,8 @@ function renderPlatformForm(
       return <ChannelPlatformWeChatWorkForm channel={channel} onPatch={patch} />
     case "wechat_official":
       return <ChannelPlatformWeChatOfficialForm channel={channel} onPatch={patch} />
+    case "wechat_miniprogram":
+      return <ChannelPlatformWeChatMiniProgramForm channel={channel} onPatch={patch} />
     case "feishu":
       return <ChannelPlatformFeishuForm channel={channel} onPatch={patch} />
     case "dingtalk":
@@ -214,22 +209,17 @@ function BasicChannelForm({
   agents,
   providers,
   onChange,
-  onSave,
-  onBind,
-  isBinding,
-  credentialIssues,
+  onSaveGeneral,
+  isSavingGeneral,
 }: {
   channel: ChannelConfigRecord
   agents: AgentSummary[]
   providers: ProviderConfigRecord[]
   onChange: (channel: ChannelConfigRecord) => void
-  onSave: () => void
-  onBind: () => void
-  isBinding: boolean
-  credentialIssues: string[]
+  onSaveGeneral: () => void
+  isSavingGeneral?: boolean
 }) {
   const update = (patch: Partial<ChannelConfigRecord>) => onChange({ ...channel, ...patch })
-  const needsBindingAction = channel.platform !== "web" && channel.platform !== "wechat_personal"
   const modelValue = channel.providerId && channel.modelId ? `${channel.providerId}::${channel.modelId}` : ""
   const selectableProviders = providers.filter((provider) => provider.models.length > 0)
 
@@ -273,14 +263,8 @@ function BasicChannelForm({
             <Switch checked={channel.autoReply} onCheckedChange={(checked) => update({ autoReply: checked })} />
           </label>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Badge variant={getChannelBindingVariant(channel.bindingState)}>{getChannelBindingLabel(channel.bindingState)}</Badge>
-          <div className="text-xs text-muted-foreground">{getChannelCatalogLabel(channel)} · {getChannelPlatformLabel(channel.platform)}</div>
-        </div>
-        {credentialIssues.length ? <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-amber-700">Missing fields: {credentialIssues.join(", ")}.</div> : null}
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={onSave}>Save channel</Button>
-          {needsBindingAction ? <Button size="sm" variant="outline" onClick={onBind} disabled={isBinding}>{isBinding ? "Binding..." : "Bind channel"}</Button> : null}
+          <Button size="sm" onClick={onSaveGeneral} disabled={isSavingGeneral}>{isSavingGeneral ? "Saving..." : "Save general"}</Button>
         </div>
       </div>
     </Section>
@@ -294,50 +278,40 @@ export function ChannelEditorForm({
   messageRecords,
   showWechatVerification,
   onChange,
-  onSave,
+  onSaveGeneral,
+  onSaveConfiguration,
   onBind,
+  onUnbind,
   onConfirmWeChatBinding,
   wechatVerificationCode,
   onWechatVerificationCodeChange,
   isBinding = false,
+  isSavingGeneral = false,
+  isSavingConfiguration = false,
+  isUnbinding = false,
 }: ChannelEditorFormProps) {
   const update = (patch: Partial<ChannelConfigRecord>) => onChange({ ...channel, ...patch })
-  const credentialIssues = getChannelCredentialIssues(channel)
   const showMethodField = supportsMethodSelection(channel)
   const showWebhookPath = showsWebhookPathField(channel)
   const webhookSecretLabel = getWebhookSecretLabel(channel)
+  const showUnbind = channel.bindingState === "connected"
 
   return (
     <div className="space-y-3">
-      <div className="grid gap-3 xl:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.35fr)]">
-        <BasicChannelForm channel={channel} agents={agents} providers={providers} onChange={onChange} onSave={onSave} onBind={onBind} isBinding={isBinding} credentialIssues={credentialIssues} />
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(320px,0.95fr)_minmax(0,1.35fr)]">
+        <BasicChannelForm channel={channel} agents={agents} providers={providers} onChange={onChange} onSaveGeneral={onSaveGeneral} isSavingGeneral={isSavingGeneral} />
 
-        <Section title="Channel Configuration">
+        <Section title="Channel Configuration" className="xl:flex xl:max-h-[calc(100svh-18rem)] xl:min-h-0 xl:flex-col" contentClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1">
           <div className="space-y-3">
-            <div className="grid gap-3 md:grid-cols-2">
-              <Field label="Provider" className={channel.platform === "wechat_personal" ? "md:col-span-2" : undefined}>
-                <NativeSelect className="w-full" size="sm" value={channel.platform} onChange={(event) => {
-                  const nextPlatform = event.target.value as ChannelConfigRecord["platform"]
-                  update({
-                    platform: nextPlatform,
-                    connectionMode: nextPlatform === "wechat_personal" ? "stream" : channel.connectionMode,
-                  })
-                }}>
-                  {groupedChannelPlatformOptions.map((group) => (
-                    <NativeSelectOptGroup key={group.label} label={group.label}>
-                      {group.values.map((value) => {
-                        const item = channelPlatformOptions.find((candidate) => candidate.value === value)
-                        if (!item) {
-                          return null
-                        }
-
-                        return <NativeSelectOption key={item.value} value={item.value}>{item.label}</NativeSelectOption>
-                      })}
-                    </NativeSelectOptGroup>
-                  ))}
-                </NativeSelect>
-              </Field>
-            </div>
+            <Field label="Provider">
+              <ChannelPlatformSelect
+                channel={channel}
+                onChange={(nextPlatform) => update({
+                  platform: nextPlatform,
+                  connectionMode: nextPlatform === "wechat_personal" || nextPlatform === "dingtalk" ? "stream" : channel.connectionMode,
+                })}
+              />
+            </Field>
             {showMethodField || showWebhookPath || webhookSecretLabel ? (
               <div className="grid gap-3 md:grid-cols-2">
                 {showMethodField ? (
@@ -361,11 +335,10 @@ export function ChannelEditorForm({
               </div>
             ) : null}
             {renderPlatformForm(channel, update, wechatVerificationCode, showWechatVerification, onBind, onWechatVerificationCodeChange, onConfirmWeChatBinding, isBinding)}
-            {channel.platform !== "wechat_personal" ? (
-              <div className="flex justify-end">
-                <Button size="sm" onClick={onSave}>Save channel</Button>
-              </div>
-            ) : null}
+            <div className="flex flex-wrap justify-end gap-2">
+              {showUnbind ? <Button size="sm" variant="destructive" onClick={onUnbind} disabled={isUnbinding}>{isUnbinding ? "Unbinding..." : "Unbind channel"}</Button> : null}
+              {channel.platform !== "wechat_personal" ? <Button size="sm" onClick={onSaveConfiguration} disabled={isSavingConfiguration}>{isSavingConfiguration ? "Saving..." : "Save configuration"}</Button> : null}
+            </div>
           </div>
         </Section>
       </div>

@@ -21,6 +21,7 @@ export const systemAgentDetails: AgentDetail[] = [
       instructions: "You are 通用助手. Help across chats, documents, integrations, and workflows. Prefer grounded tool use when workspace data is available.",
       providerId: "",
       modelId: "",
+      maxSteps: 500,
       workflowIds: [],
       skillIds: [],
       toolsetIds: [],

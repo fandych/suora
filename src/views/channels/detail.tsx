@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
@@ -10,10 +10,12 @@ import {
   confirmWeChatPersonalBinding,
   getChannel,
   saveChannel,
+  unbindChannel,
   waitForWeChatPersonalBinding,
 } from "@/data/repositories/channel-repository"
 import { listAvailableAgents } from "@/data/repositories/agent-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
+import { ChannelLogoBadge } from "@/views/channels/components/channel-logo-badge"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { ChannelEditorForm } from "@/views/channels/components/channel-editor-form"
@@ -29,9 +31,18 @@ const ChannelDetailPage = () => {
   const [wechatVerificationCode, setWechatVerificationCode] = useState("")
   const [showWechatVerification, setShowWechatVerification] = useState(false)
   const [isBinding, setIsBinding] = useState(false)
+  const [isSavingGeneral, setIsSavingGeneral] = useState(false)
+  const [isSavingConfiguration, setIsSavingConfiguration] = useState(false)
+  const [isUnbinding, setIsUnbinding] = useState(false)
   const activeWeChatMonitorSessionRef = useRef<string | null>(null)
   const agents = agentsData ?? []
   const providers = providersData ?? []
+
+  const updateDraft = useCallback((next: ChannelDetail) => {
+    setData(next)
+    setDraft(next)
+    setShowWechatVerification(isVerificationPromptRequired(next))
+  }, [setData])
 
   useEffect(() => {
     if (data) {
@@ -50,13 +61,7 @@ const ChannelDetailPage = () => {
           .catch(() => undefined)
       }
     })
-  }, [channelId])
-
-  const updateDraft = (next: ChannelDetail) => {
-    setData(next)
-    setDraft(next)
-    setShowWechatVerification(isVerificationPromptRequired(next))
-  }
+  }, [channelId, updateDraft])
 
   const persistDraft = async (nextDraft: ChannelDetail) => {
     const next = await saveChannel(nextDraft)
@@ -71,6 +76,49 @@ const ChannelDetailPage = () => {
 
     await persistDraft(draft)
     showToast({ title: "Channel saved", description: "Channel settings were persisted.", type: "success", timeout: 2000 })
+  }
+
+  const handleSaveGeneral = async () => {
+    if (!draft) {
+      return
+    }
+
+    setIsSavingGeneral(true)
+    try {
+      await handleSave()
+    } finally {
+      setIsSavingGeneral(false)
+    }
+  }
+
+  const handleSaveConfiguration = async () => {
+    if (!draft) {
+      return
+    }
+
+    setIsSavingConfiguration(true)
+    try {
+      await handleSave()
+    } finally {
+      setIsSavingConfiguration(false)
+    }
+  }
+
+  const handleUnbind = async () => {
+    if (!draft) {
+      return
+    }
+
+    setIsUnbinding(true)
+    try {
+      const next = await unbindChannel(draft)
+      activeWeChatMonitorSessionRef.current = null
+      setWechatVerificationCode("")
+      updateDraft(next)
+      showToast({ title: "Channel unbound", description: "The current channel binding was removed.", type: "success", timeout: 2500 })
+    } finally {
+      setIsUnbinding(false)
+    }
   }
 
   const monitorWeChatBinding = async (initialDetail: ChannelDetail, verificationCode?: string) => {
@@ -208,6 +256,7 @@ const ChannelDetailPage = () => {
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={draft?.channel.title || "Channel"}
+        leading={draft ? <ChannelLogoBadge channel={draft.channel} className="size-9" iconClassName="size-4.5" /> : null}
         actions={draft ? (
           <>
             <Badge variant={getChannelStatusVariant(draft.channel.status)}>{getChannelStatusLabel(draft.channel.status)}</Badge>
@@ -231,12 +280,17 @@ const ChannelDetailPage = () => {
                 setDraft(next)
                 setShowWechatVerification(isVerificationPromptRequired(next))
               }}
-              onSave={() => void handleSave()}
+              onSaveGeneral={() => void handleSaveGeneral()}
+              onSaveConfiguration={() => void handleSaveConfiguration()}
               onBind={() => void handleBind()}
+              onUnbind={() => void handleUnbind()}
               onConfirmWeChatBinding={() => void handleConfirmWeChatBinding()}
               wechatVerificationCode={wechatVerificationCode}
               onWechatVerificationCodeChange={setWechatVerificationCode}
               isBinding={isBinding}
+              isSavingGeneral={isSavingGeneral}
+              isSavingConfiguration={isSavingConfiguration}
+              isUnbinding={isUnbinding}
             />
           ) : null}
         </div>

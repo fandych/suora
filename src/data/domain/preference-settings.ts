@@ -26,6 +26,7 @@ export type PreferenceSettings = {
   fileAccessPolicy: PreferenceFileAccessPolicy
   fileAccessDirectories: string[]
   commandBlacklist: string[]
+  commandAllowlist: string[]
   mailServiceEnabled: boolean
   mailServerHost: string
   mailServerPort: number
@@ -62,6 +63,7 @@ export const DEFAULT_PREFERENCES: PreferenceSettings = {
   fileAccessPolicy: "denylist",
   fileAccessDirectories: [],
   commandBlacklist: [],
+  commandAllowlist: ["git", "node", "npm", "npx", "pnpm", "yarn", "python", "python3", "rg", "tsc", "tsx", "vite", "vitest", "eslint", "bun"],
   mailServiceEnabled: false,
   mailServerHost: "",
   mailServerPort: 587,
@@ -166,6 +168,7 @@ export function createDefaultPreferenceSettings(): PreferenceSettings {
     ...DEFAULT_PREFERENCES,
     fileAccessDirectories: [...DEFAULT_PREFERENCES.fileAccessDirectories],
     commandBlacklist: [...DEFAULT_PREFERENCES.commandBlacklist],
+    commandAllowlist: [...DEFAULT_PREFERENCES.commandAllowlist],
     globalEnvironmentVariables: DEFAULT_PREFERENCES.globalEnvironmentVariables.map((item) => ({ ...item })),
   }
 }
@@ -193,6 +196,7 @@ export function sanitizePreferenceSettings(settings: Partial<PreferenceSettings>
     fileAccessPolicy: next.fileAccessPolicy === "allowlist" ? "allowlist" : "denylist",
     fileAccessDirectories: normalizeStringArray(next.fileAccessDirectories),
     commandBlacklist: normalizeStringArray(next.commandBlacklist),
+    commandAllowlist: normalizeStringArray(next.commandAllowlist),
     mailServiceEnabled: Boolean(next.mailServiceEnabled),
     mailServerHost: next.mailServerHost.trim(),
     mailServerPort: Math.max(1, Number(next.mailServerPort) || DEFAULT_PREFERENCES.mailServerPort),

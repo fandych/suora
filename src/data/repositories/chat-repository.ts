@@ -10,7 +10,7 @@ export async function listChats() {
   }
 
   await ensureSeeded()
-  return suoraIpc.chats.list() as Promise<ChatSummary[]>
+  return (await suoraIpc.chats.list() as ChatSummary[]).filter((chat) => !chat.id.startsWith("chat-channel-"))
 }
 
 export async function getChatDetail(chatId: string) {
@@ -27,7 +27,7 @@ export async function createChat() {
   return suoraIpc.chats.create() as Promise<ChatDetail>
 }
 
-export async function ensureChatDetail(payload: { chatId: string; title: string; chatbotId: string; summary?: string }) {
+export async function ensureChatDetail(payload: { chatId: string; title: string; chatbotId: string; summary?: string; sourceType?: "manual" | "channel"; sourceRef?: string | null }) {
   await ensureSeeded()
   const detail = await suoraIpc.chats.ensure(payload) as ChatDetail | null
   if (!detail) {
@@ -41,9 +41,9 @@ export async function deleteChat(chatId: string) {
   return suoraIpc.chats.delete(chatId) as Promise<boolean>
 }
 
-export async function appendUserChatMessage(chatId: string, content: string) {
+export async function appendUserChatMessage(chatId: string, content: string, parts?: ChatMessagePart[]) {
   await ensureSeeded()
-  const detail = await suoraIpc.chats.appendUser(chatId, content) as ChatDetail | null
+  const detail = await suoraIpc.chats.appendUser(chatId, content, parts) as ChatDetail | null
   if (!detail) {
     throw new Error(`Chat ${chatId} was not found.`)
   }

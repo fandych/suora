@@ -1,9 +1,12 @@
 import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
 import { getPreferenceSettings } from "@/data/repositories/preference-repository"
+import { DEFAULT_CHAT_AGENT_MAX_STEPS, normalizeChatAgentMaxSteps } from "@/services/agent-loop-control"
+
+const CHAT_SETTINGS_STORE_VERSION = 2
 
 export type ChatModelConfig = {
   providerId: string
-  providerType: "ollama" | "openai" | "anthropic" | "openai-compatible" | "google"
+  providerType: string
   modelId: string
   baseUrl: string
   apiKey: string
@@ -25,6 +28,7 @@ export type ChatRuntimeSettings = {
   model: ChatModelConfig
   proxy: ProxyConfig
   requestTimeoutMs: number
+  maxSteps: number
 }
 
 export type ChatSessionSettings = {
@@ -42,6 +46,16 @@ type ChatSettingsStore = {
   defaultSelectedAgentId?: string
   drafts?: Record<string, string>
   chats?: Record<string, StoredChatSessionSettings>
+}
+
+type VersionedChatSettingsStore = {
+  version: number
+  store: ChatSettingsStore
+}
+
+function normalizeSelectedAgentId(value?: string | null) {
+  const normalized = value?.trim()
+  return normalized || "agent-general-assistant"
 }
 
 const DEFAULT_SETTINGS: ChatRuntimeSettings = {
@@ -64,6 +78,7 @@ const DEFAULT_SETTINGS: ChatRuntimeSettings = {
     ignoreSslErrors: false,
   },
   requestTimeoutMs: 0,
+  maxSteps: DEFAULT_CHAT_AGENT_MAX_STEPS,
 }
 
 const CHAT_SETTINGS_STORAGE_KEY = "suora:chat-settings"
@@ -81,7 +96,7 @@ function writeBrowserSettings(store: ChatSettingsStore) {
     return
   }
 
-  window.localStorage.setItem(CHAT_SETTINGS_STORAGE_KEY, JSON.stringify(store))
+  window.localStorage.setItem(CHAT_SETTINGS_STORAGE_KEY, JSON.stringify({ version: CHAT_SETTINGS_STORE_VERSION, store }))
 }
 
 async function readSettingsValue() {
@@ -99,7 +114,7 @@ async function readSettingsValue() {
 async function saveSettingsStore(store: ChatSettingsStore) {
   if (hasSuoraBridge()) {
     try {
-      await suoraIpc.chats.saveSettings(store)
+      await suoraIpc.chats.saveSettings({ version: CHAT_SETTINGS_STORE_VERSION, store })
       return
     } catch {
       writeBrowserSettings(store)
@@ -116,6 +131,7 @@ function parseRuntimeSettings(value?: Partial<ChatRuntimeSettings> | null): Chat
       model: { ...DEFAULT_SETTINGS.model, ...(value?.model ?? {}) },
       proxy: { ...DEFAULT_SETTINGS.proxy, ...(value?.proxy ?? {}) },
       requestTimeoutMs: typeof value?.requestTimeoutMs === "number" && Number.isFinite(value.requestTimeoutMs) ? value.requestTimeoutMs : DEFAULT_SETTINGS.requestTimeoutMs,
+      maxSteps: normalizeChatAgentMaxSteps(value?.maxSteps),
     }
   } catch {
     return DEFAULT_SETTINGS
@@ -128,7 +144,16 @@ function parseStore(value?: string | null): ChatSettingsStore {
   }
 
   try {
-    const parsed = JSON.parse(value) as Partial<ChatRuntimeSettings> & ChatSettingsStore
+    const parsed = JSON.parse(value) as Partial<ChatRuntimeSettings> & ChatSettingsStore & VersionedChatSettingsStore
+
+    if (typeof parsed.version === "number" && parsed.store && typeof parsed.store === "object" && !Array.isArray(parsed.store)) {
+      return {
+        defaultRuntime: parsed.store.defaultRuntime,
+        defaultSelectedAgentId: parsed.store.defaultSelectedAgentId,
+        drafts: parsed.store.drafts ?? {},
+        chats: parsed.store.chats ?? {},
+      }
+    }
 
     if (parsed.model || parsed.proxy) {
       return {
@@ -168,6 +193,7 @@ function sanitizeRuntimeSettings(settings: ChatRuntimeSettings): ChatRuntimeSett
       port: Number.isFinite(settings.proxy.port) ? settings.proxy.port : 0,
     },
     requestTimeoutMs: Number.isFinite(settings.requestTimeoutMs) && settings.requestTimeoutMs > 0 ? settings.requestTimeoutMs : 0,
+    maxSteps: normalizeChatAgentMaxSteps(settings.maxSteps),
   }
 }
 
@@ -180,12 +206,13 @@ export async function getChatSessionSettings(chatId?: string | null): Promise<Ch
   const runtime = parseRuntimeSettings({
     model: { ...defaultRuntime.model, ...(chatSettings?.runtime?.model ?? {}) },
     proxy: { ...defaultRuntime.proxy, ...(chatSettings?.runtime?.proxy ?? {}) },
-    requestTimeoutMs: chatSettings?.runtime?.requestTimeoutMs ?? defaultRuntime.requestTimeoutMs ?? preferences?.chatRequestTimeoutMs ?? DEFAULT_SETTINGS.requestTimeoutMs,
+    requestTimeoutMs: chatSettings?.runtime?.requestTimeoutMs ?? store.defaultRuntime?.requestTimeoutMs ?? preferences?.chatRequestTimeoutMs ?? DEFAULT_SETTINGS.requestTimeoutMs,
+    maxSteps: chatSettings?.runtime?.maxSteps ?? defaultRuntime.maxSteps ?? DEFAULT_SETTINGS.maxSteps,
   })
 
   return {
     runtime,
-    selectedAgentId: chatSettings?.selectedAgentId ?? store.defaultSelectedAgentId ?? "agent-general-assistant",
+    selectedAgentId: normalizeSelectedAgentId(chatSettings?.selectedAgentId ?? store.defaultSelectedAgentId),
   }
 }
 
@@ -204,18 +231,18 @@ export async function saveChatSessionSettings(chatId: string | null, settings: C
   if (chatId) {
     nextStore.chats![chatId] = {
       runtime,
-      selectedAgentId: settings.selectedAgentId.trim(),
+      selectedAgentId: normalizeSelectedAgentId(settings.selectedAgentId),
     }
   } else {
     nextStore.defaultRuntime = runtime
-    nextStore.defaultSelectedAgentId = settings.selectedAgentId.trim()
+    nextStore.defaultSelectedAgentId = normalizeSelectedAgentId(settings.selectedAgentId)
   }
 
   await saveSettingsStore(nextStore)
 
   return {
     runtime,
-    selectedAgentId: settings.selectedAgentId.trim(),
+    selectedAgentId: normalizeSelectedAgentId(settings.selectedAgentId),
   } satisfies ChatSessionSettings
 }
 
@@ -249,9 +276,10 @@ export async function getChatRuntimeSettings(chatId?: string | null) {
 }
 
 export async function saveChatRuntimeSettings(settings: ChatRuntimeSettings, chatId?: string | null) {
+  const currentSession = await getChatSessionSettings(chatId)
   const session = await saveChatSessionSettings(chatId ?? null, {
     runtime: settings,
-    selectedAgentId: "agent-general-assistant",
+    selectedAgentId: currentSession.selectedAgentId,
   })
   return session.runtime
 }

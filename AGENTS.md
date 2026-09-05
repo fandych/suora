@@ -101,7 +101,7 @@ When replacing mock sidebar data with real data, preserve the rendering contract
 - treat the 400-line cap for `ts` and `tsx` files as a hard limit; if a change would exceed it, extract nearby components before finishing
 - always use `@/` imports in repo code; do not introduce new `../` or `./` local imports
 - do not use scripts or bulk automation to rewrite code; make targeted manual edits
-- every code change must leave the app in a runnable state and must be validated with a real check such as `npm run build`
+- every code change must leave the app in a runnable state and must be validated with real checks; before handoff, run `npm run type-check`, `npm run lint`, and `npm run build`
 - preserve shadcn UI source files in [src/components/ui](src/components/ui) instead of restyling them in place
 - when building UI, prefer composing existing shadcn components before writing custom markup, and consult the `shadcn` skill for component APIs and patterns
 - `electron/` source must be grouped by concern: `ipc/`, `database/`, `others/`, and `types/`; do not flatten new helper modules at the `electron/` root
@@ -139,5 +139,5 @@ When implementing changes:
 2. Keep sidebar structure reusable; do not fork separate implementations unless the interaction model is truly different.
 3. Put mock data behind an adapter or loader if the user will later replace it with API data.
 4. Keep naming aligned with `workflow`, never new `pipeline` UI labels.
-5. Validate with `npm run build` after route or layout changes.
+5. Validate with `npm run type-check`, `npm run lint`, and `npm run build` before handoff; after route or layout changes, at minimum ensure the build still passes while resolving any new type-check or lint failures you introduced.
 6. Update this file when route names, module coverage, or UI architecture rules change.

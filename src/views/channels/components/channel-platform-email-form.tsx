@@ -1,3 +1,5 @@
+import { Trash2Icon } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
@@ -144,7 +146,9 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
             </NativeSelect>
             <CompactInput value={filter.value} onChange={(event) => updateFilter(filter.id, { value: event.target.value })} placeholder="Keyword or pattern..." disabled={filter.field === "has_attachment" && filter.operator === "is_true"} />
             <label className="flex items-center justify-center rounded-lg border px-2 text-xs"><Switch checked={filter.enabled} onCheckedChange={(checked) => updateFilter(filter.id, { enabled: checked })} /></label>
-            <Button size="sm" variant="outline" onClick={() => onPatch({ emailFilters: emailFilters.filter((item) => item.id !== filter.id) })}>Remove</Button>
+            <Button size="icon-sm" variant="destructive" aria-label="Remove filter" title="Remove filter" onClick={() => onPatch({ emailFilters: emailFilters.filter((item) => item.id !== filter.id) })}>
+              <Trash2Icon className="size-4" />
+            </Button>
           </div>
         ))}
       </GroupSection>
@@ -165,7 +169,9 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
                 <NativeSelectOption value="webhook">Webhook</NativeSelectOption>
               </NativeSelect>
               <label className="flex items-center justify-center rounded-lg border px-2 text-xs"><Switch checked={action.enabled} onCheckedChange={(checked) => updateAction(action.id, { enabled: checked })} /></label>
-              <Button size="sm" variant="outline" onClick={() => onPatch({ emailActions: emailActions.filter((item) => item.id !== action.id) })}>Remove</Button>
+              <Button size="icon-sm" variant="destructive" aria-label="Remove action" title="Remove action" onClick={() => onPatch({ emailActions: emailActions.filter((item) => item.id !== action.id) })}>
+                <Trash2Icon className="size-4" />
+              </Button>
             </div>
 
             {action.type === "auto_reply" || action.type === "agent_process" ? (

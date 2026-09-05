@@ -1,5 +1,5 @@
 import katex from "katex"
-import { useEffect, useId, useMemo, useRef } from "react"
+import { useEffect, useId, useMemo, useRef, useState } from "react"
 
 import { showToast } from "@/lib/app-toast"
 import { copyTextToClipboard } from "@/lib/clipboard"
@@ -18,12 +18,30 @@ async function renderMermaid(target: HTMLElement, id: string, code: string) {
 
 type ChatRichContentProps = {
   content: string
+  isStreaming?: boolean
 }
 
-export function ChatRichContent({ content }: ChatRichContentProps) {
+export function ChatRichContent({ content, isStreaming = false }: ChatRichContentProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const contentId = useId().replace(/:/g, "_")
-  const html = useMemo(() => markdownToTiptapHtml(content || ""), [content])
+  const [renderContent, setRenderContent] = useState(content)
+
+  useEffect(() => {
+    if (!isStreaming) {
+      setRenderContent(content)
+      return
+    }
+
+    const handle = window.setTimeout(() => {
+      setRenderContent(content)
+    }, 120)
+
+    return () => {
+      window.clearTimeout(handle)
+    }
+  }, [content, isStreaming])
+
+  const html = useMemo(() => markdownToTiptapHtml(renderContent || ""), [renderContent])
 
   useEffect(() => {
     const container = containerRef.current

@@ -5,7 +5,8 @@ import { spawn } from "node:child_process"
 import { app, dialog, ipcMain, shell } from "electron"
 
 import { appState } from "@electron/others/app-state"
-import { navigateBrowserWindow } from "@electron/others/browser-window"
+import { getBrowserWindowState, navigateBrowserWindow } from "@electron/others/browser-window"
+import { ensureFileSizeWithinLimit, MAX_COMMAND_OUTPUT_BYTES, MAX_TOOL_FILE_BYTES, MAX_TOOL_WRITE_BYTES, parseWorkspaceCommand } from "@electron/others/tool-guardrails"
 import { ensureWorkspace } from "@electron/others/workspace"
 import { getWorkspacePath } from "@electron/others/paths"
 import { applyMigrations, openDatabase } from "@electron/database/db-core"
@@ -17,6 +18,7 @@ type ToolPreferenceSettings = {
   commandConfirmationMode?: PreferenceCommandConfirmationMode
   fileAccessPolicy?: PreferenceFileAccessPolicy
   fileAccessDirectories?: string[]
+  commandAllowlist?: string[]
   commandBlacklist?: string[]
   globalEnvironmentVariables?: Array<{ key?: string; value?: string }>
 }
@@ -73,10 +75,15 @@ function enforceRelativePathPolicy(relativePath: string | undefined, target: str
   }
 }
 
-function enforceCommandPolicy(command: string) {
+function enforceCommandPolicy(command: string, executableName: string) {
   const preferences = readToolPreferences()
   const normalizedCommand = command.trim().toLowerCase()
+  const allowlist = normalizeRuleList(preferences.commandAllowlist)
   const blacklist = normalizeRuleList(preferences.commandBlacklist)
+
+  if (allowlist.length > 0 && !allowlist.includes(executableName.toLowerCase())) {
+    throw new Error(`Command blocked by allowlist: ${executableName}`)
+  }
 
   const blocked = blacklist.find((entry) => normalizedCommand.includes(entry))
   if (blocked) {
@@ -126,6 +133,8 @@ export function registerToolsIpc() {
     await ensureWorkspace()
     const target = resolveWorkspaceTarget(relativePath)
     enforceRelativePathPolicy(relativePath, target)
+    const stats = await fs.stat(target)
+    ensureFileSizeWithinLimit(stats.size, `File '${relativePath}'`, MAX_TOOL_FILE_BYTES)
     return {
       path: path.relative(resolveWorkspaceTarget(), target).replace(/\\/g, "/"),
       content: await fs.readFile(target, "utf8"),
@@ -136,6 +145,7 @@ export function registerToolsIpc() {
     await ensureWorkspace()
     const target = resolveWorkspaceTarget(payload.path)
     enforceRelativePathPolicy(payload.path, target)
+    ensureFileSizeWithinLimit(Buffer.byteLength(payload.content, "utf8"), `Write payload for '${payload.path}'`, MAX_TOOL_WRITE_BYTES)
     await fs.mkdir(path.dirname(target), { recursive: true })
     await fs.writeFile(target, payload.content, "utf8")
     return {
@@ -148,7 +158,8 @@ export function registerToolsIpc() {
     await ensureWorkspace()
     const cwd = resolveWorkspaceTarget(payload.cwd)
     enforceRelativePathPolicy(payload.cwd, cwd)
-    enforceCommandPolicy(payload.command)
+    const parsedCommand = parseWorkspaceCommand(payload.command)
+    enforceCommandPolicy(payload.command, parsedCommand.executableName)
     const timeoutMs = Math.max(1000, Math.min(payload.timeoutMs ?? 30_000, 120_000))
     const preferences = readToolPreferences()
     const env = {
@@ -158,12 +169,40 @@ export function registerToolsIpc() {
     }
 
     return await new Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
-      const child = spawn(payload.command, { cwd, shell: true, env })
+      const child = spawn(parsedCommand.executable, parsedCommand.args, { cwd, shell: false, env, windowsHide: true })
       const stdout: Buffer[] = []
       const stderr: Buffer[] = []
+      let combinedOutputBytes = 0
+      let isSettled = false
+
+      const finalize = (result: { ok: boolean; exitCode: number | null; stdout: string; stderr: string }) => {
+        if (isSettled) {
+          return
+        }
+
+        isSettled = true
+        clearTimeout(timer)
+        resolve(result)
+      }
+
+      const handleChunk = (collection: Buffer[], chunk: Buffer | string) => {
+        const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+        combinedOutputBytes += buffer.byteLength
+        collection.push(buffer)
+        if (combinedOutputBytes > MAX_COMMAND_OUTPUT_BYTES) {
+          child.kill()
+          finalize({
+            ok: false,
+            exitCode: null,
+            stdout: Buffer.concat(stdout).toString("utf8"),
+            stderr: `${Buffer.concat(stderr).toString("utf8")}\nCommand output exceeded the 256 KB safety limit.`,
+          })
+        }
+      }
+
       const timer = setTimeout(() => {
         child.kill()
-        resolve({
+        finalize({
           ok: false,
           exitCode: null,
           stdout: Buffer.concat(stdout).toString("utf8"),
@@ -171,11 +210,10 @@ export function registerToolsIpc() {
         })
       }, timeoutMs)
 
-      child.stdout.on("data", (chunk) => stdout.push(Buffer.from(chunk)))
-      child.stderr.on("data", (chunk) => stderr.push(Buffer.from(chunk)))
+      child.stdout.on("data", (chunk) => handleChunk(stdout, chunk))
+      child.stderr.on("data", (chunk) => handleChunk(stderr, chunk))
       child.on("close", (code) => {
-        clearTimeout(timer)
-        resolve({
+        finalize({
           ok: code === 0,
           exitCode: code,
           stdout: Buffer.concat(stdout).toString("utf8"),
@@ -183,8 +221,7 @@ export function registerToolsIpc() {
         })
       })
       child.on("error", (error) => {
-        clearTimeout(timer)
-        resolve({ ok: false, exitCode: 1, stdout: Buffer.concat(stdout).toString("utf8"), stderr: error.message })
+        finalize({ ok: false, exitCode: 1, stdout: Buffer.concat(stdout).toString("utf8"), stderr: error.message })
       })
     })
   })
@@ -197,6 +234,8 @@ export function registerToolsIpc() {
   ipcMain.handle("tools:browserNavigate", async (_event, payload: { url?: string; visible?: boolean }) => {
     return await navigateBrowserWindow(payload)
   })
+
+  ipcMain.handle("tools:browserState", async () => getBrowserWindowState())
 
   ipcMain.handle("tools:saveFile", async (_event, payload: { defaultName: string; filters?: Array<{ name: string; extensions: string[] }>; dataBase64: string }) => {
     const browserWindow = appState.mainWindow ?? undefined

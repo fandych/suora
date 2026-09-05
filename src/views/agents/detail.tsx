@@ -9,6 +9,8 @@ import { listIntegrationSummaries } from "@/data/repositories/integration-reposi
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { listSkills } from "@/data/repositories/skill-repository"
 import { listWorkflows } from "@/data/repositories/workflow-repository"
+import { Badge } from "@/components/ui/badge"
+import { AgentLogoBadge } from "@/views/agents/components/agent-logo-badge"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import VersionSelect from "@/views/components/version-select"
@@ -95,7 +97,14 @@ const AgentsDetailPage = () => {
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={draft?.agent.title ?? "Agent"}
-        actions={draft ? <VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /> : null}
+        leading={draft ? <AgentLogoBadge agent={draft.agent} className="size-9" iconClassName="size-4.5" /> : null}
+        actions={draft ? (
+          <>
+            <Badge variant="outline">{draft.agent.source === "system" ? "System" : draft.agent.kind}</Badge>
+            {draft.agent.isDisabled ? <Badge variant="secondary">Disabled</Badge> : null}
+            <VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} />
+          </>
+        ) : null}
       />
       <div className="flex min-h-0 flex-1 overflow-hidden p-4">
         <div className="grid min-h-0 w-full min-w-0 flex-1 gap-3 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">

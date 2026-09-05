@@ -1,6 +1,26 @@
+import type { ChatMessagePart } from "@/data/domain/chat-message-parts"
+import { getChatErrorToolName } from "@/services/chat-error-state"
 import type { ChatAgentEvent } from "@/services/ai-service"
 import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
 import type { ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
+
+export function toAssistantResponseParts(parts: ChatMessagePart[] | undefined): AssistantResponsePart[] {
+  const normalizedParts: AssistantResponsePart[] = []
+
+  for (const part of parts ?? []) {
+    if (part.type === "text") {
+      normalizedParts.push({ id: part.id, type: "text", content: part.content, isPending: part.isPending } satisfies AssistantResponsePart)
+      continue
+    }
+
+    if (part.type === "tool") {
+      normalizedParts.push({ id: part.id, type: "tool", activity: part.activity } satisfies AssistantResponsePart)
+    }
+
+  }
+
+  return normalizedParts
+}
 
 export function applyEventToAssistantResponseParts(parts: AssistantResponsePart[], event: ChatAgentEvent, errorIndex: number): AssistantResponsePart[] {
   if (event.type === "text-delta") {
@@ -15,10 +35,18 @@ export function applyEventToAssistantResponseParts(parts: AssistantResponsePart[
   }
 
   if (event.type === "tool-call") {
+    if (event.toolName === "browser_navigate") {
+      return parts
+    }
+
     return [...parts, { id: event.toolCallId, type: "tool", activity: { id: event.toolCallId, toolName: event.toolName, input: event.input } }]
   }
 
   if (event.type === "tool-result") {
+    if (event.toolName === "browser_navigate") {
+      return parts
+    }
+
     const hasMatch = parts.some((part) => part.type === "tool" && part.activity.id === event.toolCallId)
     if (!hasMatch) {
       return [...parts, { id: event.toolCallId, type: "tool", activity: { id: event.toolCallId, toolName: event.toolName, output: event.output } }]
@@ -29,7 +57,7 @@ export function applyEventToAssistantResponseParts(parts: AssistantResponsePart[
       : part)
   }
 
-  return [...parts, { id: `tool-error-${errorIndex}`, type: "tool", activity: { id: `tool-error-${errorIndex}`, toolName: "Tool execution", error: event.error } }]
+  return [...parts, { id: `tool-error-${errorIndex}`, type: "tool", activity: { id: `tool-error-${errorIndex}`, toolName: getChatErrorToolName(event.errorKind), error: event.error } }]
 }
 
 export function finalizeAssistantResponseParts(parts: AssistantResponsePart[]): AssistantResponsePart[] {

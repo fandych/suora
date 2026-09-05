@@ -1,3 +1,5 @@
+import { Trash2Icon } from "lucide-react"
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -45,7 +47,9 @@ function SchemaEditor({ label, schemaText, onSchemaChange }: { label: string; sc
               <NativeSelectOption value="object">object</NativeSelectOption>
             </NativeSelect>
             <Input value={field.description} onChange={(event) => updateFields(nextFields.map((item, itemIndex) => itemIndex === index ? { ...item, description: event.target.value } : item))} placeholder="description" />
-            <Button variant="outline" onClick={() => updateFields(nextFields.filter((_, itemIndex) => itemIndex !== index))}>Remove</Button>
+            <Button size="icon-sm" variant="destructive" aria-label={`Delete field ${field.key || index + 1}`} title="Delete field" onClick={() => updateFields(nextFields.filter((_, itemIndex) => itemIndex !== index))}>
+              <Trash2Icon className="size-4" />
+            </Button>
           </div>
         ))}
       </div>

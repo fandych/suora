@@ -55,6 +55,11 @@ export function AgentGeneralPanel({ draft, isReadOnly = false, models, onChange,
           </NativeSelect>
         </div>
 
+        <div className="space-y-1.5">
+          <div className="text-xs font-medium text-muted-foreground">Default max steps</div>
+          <Input disabled={isReadOnly} type="number" min="1" max="500" value={String(draft.config.maxSteps ?? 100)} onChange={(event) => onChange({ ...draft, config: { ...draft.config, maxSteps: Math.max(1, Math.min(500, Number(event.target.value) || 100)) } })} />
+        </div>
+
         <div className="flex min-h-0 flex-1 flex-col space-y-1.5">
           <div className="text-xs font-medium text-muted-foreground">Prompt</div>
           <Textarea disabled={isReadOnly} value={draft.config.instructions} onChange={(event) => onChange({ ...draft, config: { ...draft.config, instructions: event.target.value } })} className="min-h-0 flex-1 font-mono" placeholder="System prompt" />

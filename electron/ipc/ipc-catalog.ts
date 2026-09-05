@@ -3,12 +3,14 @@ import crypto from "node:crypto"
 import { ipcMain } from "electron"
 
 import { applyMigrations, openDatabase } from "@electron/database/db-core"
+import { discoverProviderModels } from "@electron/others/model-discovery"
 import { ensureWorkspace } from "@electron/others/workspace"
 
 const defaultAgentConfigJson = JSON.stringify({
   instructions: "You are a helpful agent.",
   providerId: "provider-openai",
   modelId: "gpt-5",
+  maxSteps: 100,
   workflowIds: [],
   skillIds: [],
   toolsetIds: [],
@@ -60,6 +62,11 @@ export function registerCatalogIpc() {
     applyMigrations(database)
     database.prepare(`DELETE FROM providers WHERE id = ?`).run(providerId)
     return { success: true }
+  })
+
+  ipcMain.handle("models:discover", async (_event, payload: { providerType: string; baseUrl: string; apiKey: string }) => {
+    await ensureWorkspace()
+    return discoverProviderModels(payload)
   })
 
   ipcMain.handle("skills:list", async () => {
@@ -187,7 +194,7 @@ export function registerCatalogIpc() {
     const now = Date.now()
     const agentId = crypto.randomUUID()
     const versionId = crypto.randomUUID()
-    const config = JSON.stringify({ instructions: "You are a helpful agent.", providerId: "provider-openai", modelId: "gpt-5", workflowIds: [], skillIds: ["skill-plan"], toolsetIds: ["integration-webhook"], documentIds: [] })
+    const config = JSON.stringify({ instructions: "You are a helpful agent.", providerId: "provider-openai", modelId: "gpt-5", maxSteps: 100, workflowIds: [], skillIds: ["skill-plan"], toolsetIds: ["integration-webhook"], documentIds: [] })
     database.prepare(`INSERT INTO agents (id, title, kind, summary, updated_at) VALUES (?, ?, ?, ?, ?)`).run(agentId, "New agent", "custom", "", now)
     database.prepare(`INSERT INTO agent_versions (id, agent_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, 1, 0, 0, ?, ?)`).run(versionId, agentId, config, now)
     return {

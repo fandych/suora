@@ -21,6 +21,7 @@ import { useWorkflowDetailController } from "@/views/workflows/use-workflow-deta
 const WorkflowDetailPage = () => {
   const controller = useWorkflowDetailController()
   const stopPanelEvent = (event: React.MouseEvent | React.PointerEvent) => event.stopPropagation()
+  const workflowData = controller.data
 
   return (
     <div className="flex min-h-full flex-col bg-background">
@@ -29,11 +30,11 @@ const WorkflowDetailPage = () => {
       <div className="flex min-h-0 flex-1 flex-col p-3">
         {controller.isLoading ? <LoadingCard title="Loading workflow..." /> : null}
         {controller.error ? <ErrorCard error={controller.error} onRetry={controller.reload} /> : null}
-        {controller.canShowContent ? (
+        {controller.canShowContent && workflowData ? (
           <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border bg-card">
             <WorkflowNodeActionsProvider value={{ canEdit: !controller.isReadOnly, hasOutgoingConnection: controller.hasOutgoingConnection, onAddNodeFromHandle: controller.handleAddNodeFromHandle }}>
             <ReactFlow
-              key={controller.data.selectedVersion.id}
+              key={workflowData.selectedVersion.id}
               nodes={controller.tracedNodes}
               edges={controller.edges}
               nodeTypes={workflowNodeTypes}
@@ -51,7 +52,7 @@ const WorkflowDetailPage = () => {
               defaultViewport={controller.viewport}
               onMoveEnd={(_event, nextViewport) => controller.setViewport(nextViewport)}
               onInit={(instance) => {
-                controller.flowRef.current = instance
+                controller.setFlowInstance(instance)
                 void instance.setViewport(controller.viewport, { duration: 0 })
               }}
               nodesDraggable={!controller.isReadOnly}
@@ -66,8 +67,8 @@ const WorkflowDetailPage = () => {
 
               <Panel position="top-center" className="m-3 flex w-[min(100%-1.5rem,72rem)] pointer-events-auto justify-center" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
                 <WorkflowHeaderActions
-                  versions={controller.data.versions}
-                  selectedVersionId={controller.data.selectedVersion.id}
+                  versions={workflowData.versions}
+                  selectedVersionId={workflowData.selectedVersion.id}
                   onVersionChange={controller.setSelectedVersionId}
                   showLibrary={controller.showLibrary}
                   canPublish={controller.isDraftVersion && !controller.hasUnsavedChanges && controller.blockingIssues.length === 0}
@@ -169,7 +170,7 @@ const WorkflowDetailPage = () => {
                   <WorkflowTryPanel
                     width={controller.tryPanelWidth}
                     onWidthChange={controller.setTryPanelWidth}
-                    invocation={controller.data.invocations[0] ?? null}
+                    invocation={workflowData.invocations[0] ?? null}
                     input={controller.dryRunInput}
                     isRunning={controller.isDryRunning}
                     error={controller.dryRunError}

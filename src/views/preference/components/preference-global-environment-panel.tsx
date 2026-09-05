@@ -1,5 +1,7 @@
+import { Trash2Icon } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldTitle } from "@/components/ui/field"
+import { Field, FieldContent, FieldGroup, FieldTitle } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import type { PreferenceEnvironmentVariable, PreferenceSettings } from "@/data/repositories/preference-repository"
 
@@ -49,7 +51,9 @@ const PreferenceGlobalEnvironmentPanel = ({ draft, onChange }: PreferenceGlobalE
           <div key={`env-${index}`} className="grid gap-3 rounded-lg border p-3 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)_auto]">
             <Input value={item.key} onChange={(event) => updateVariable(index, { key: event.target.value })} placeholder="KEY" className="font-mono text-sm" />
             <Input value={item.value} onChange={(event) => updateVariable(index, { value: event.target.value })} placeholder="value" className="font-mono text-sm" />
-            <Button size="sm" variant="outline" onClick={() => removeVariable(index)}>Remove</Button>
+            <Button size="icon-sm" variant="destructive" aria-label={`Delete variable ${item.key || index + 1}`} title="Delete variable" onClick={() => removeVariable(index)}>
+              <Trash2Icon className="size-4" />
+            </Button>
           </div>
         ))}
       </FieldGroup>

@@ -18,6 +18,7 @@ describe("preference settings serialization", () => {
       language: "en",
       workspaceName: "  Ops Workspace  ",
       fileAccessDirectories: ["src", "", 123],
+      commandAllowlist: ["git", " ", 123],
       commandBlacklist: ["rm -rf", " ", null],
       globalEnvironmentVariables: [{ key: " API_KEY ", value: "secret" }, { key: "", value: "ignored" }],
     }))
@@ -28,6 +29,7 @@ describe("preference settings serialization", () => {
     expect(resolved.fontScale).toBe("lg")
     expect(resolved.language).toBe("en")
     expect(resolved.fileAccessDirectories).toEqual(["src"])
+    expect(resolved.commandAllowlist).toEqual(["git"])
     expect(resolved.commandBlacklist).toEqual(["rm -rf"])
     expect(resolved.globalEnvironmentVariables).toEqual([{ key: "API_KEY", value: "secret" }])
   })

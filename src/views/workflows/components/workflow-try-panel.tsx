@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { CheckIcon, ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, CircleMinusIcon, CopyIcon, DownloadIcon, LoaderCircleIcon, PlayIcon, XIcon } from "lucide-react"
+import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, CircleMinusIcon, DownloadIcon, LoaderCircleIcon, PlayIcon, XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"

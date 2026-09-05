@@ -1,9 +1,14 @@
 import type { AgentConfigRecord, AgentDetail, AgentSummary, ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary, ChatDetail, ChatSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, ProviderConfigRecord, SchedulerDetail, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeData, WorkflowSummary } from "@/data/domain/models"
-import type { SendMailPayload } from "@electron/types"
-import type { ChatMessagePart } from "@/data/domain/chat-message-parts"
+import { normalizeChatMessageParts, type ChatMessagePart } from "@/data/domain/chat-message-parts"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { inferChannelBindingState } from "@/lib/channel-config"
 import { buildDefaultDocumentNodes, normalizeDocumentNodes } from "@/lib/document-tree"
+
+type SendMailPayload = {
+  to: string
+  subject: string
+  content: string
+}
 
 type RawProviderRow = {
   id: string
@@ -44,6 +49,16 @@ type RawChatMessageRow = {
   createdAt: number
 }
 
+type RawChatSummaryRow = {
+  id: string
+  title: string
+  chatbotId: string
+  summary: string
+  updatedAt: number
+  sourceType?: "manual" | "channel"
+  sourceRef?: string | null
+}
+
 type PreferenceCommandConfirmationMode = "daily" | "never" | "always"
 
 type PreferenceEnvironmentVariable = {
@@ -76,6 +91,7 @@ function createDefaultAgentConfig(): AgentConfigRecord {
     instructions: "You are a helpful agent.",
     providerId: "provider-openai",
     modelId: "gpt-5",
+    maxSteps: 100,
     workflowIds: [],
     skillIds: [],
     toolsetIds: [],
@@ -115,8 +131,20 @@ function parseChatMessageRow(row: RawChatMessageRow) {
     id: row.id,
     role: row.role,
     content: row.content,
-    parts: row.parts ?? parseJson<ChatMessagePart[]>(row.partsJson, []),
+    parts: normalizeChatMessageParts(row.parts ?? parseJson<ChatMessagePart[]>(row.partsJson, [])),
     createdAt: row.createdAt,
+  }
+}
+
+function parseChatSummaryRow(row: RawChatSummaryRow): ChatSummary {
+  return {
+    id: row.id,
+    title: row.title,
+    chatbotId: row.chatbotId,
+    summary: row.summary,
+    updatedAt: row.updatedAt,
+    sourceType: row.sourceType === "channel" ? "channel" : "manual",
+    sourceRef: typeof row.sourceRef === "string" ? row.sourceRef : null,
   }
 }
 
@@ -212,6 +240,7 @@ function parseChannelSummaryRow(row: RawChannelRow): ChannelSummary {
     title: detail.channel.title,
     platform: detail.channel.platform,
     catalogId: detail.channel.catalogId,
+    connectionMode: detail.channel.connectionMode,
     bindingState: detail.channel.bindingState,
     enabled: detail.channel.enabled,
     status: detail.channel.status,
@@ -219,6 +248,8 @@ function parseChannelSummaryRow(row: RawChannelRow): ChannelSummary {
     lastMessageAt: detail.channel.lastMessageAt,
     messageCount: detail.channel.messageCount,
     meta: `${detail.channel.platform} · ${detail.channel.connectionMode}`,
+    customPlatformName: detail.channel.customPlatformName,
+    customPlatformIcon: detail.channel.customPlatformIcon,
   }
 }
 
@@ -368,36 +399,39 @@ export const suoraIpc = {
     getProxySettings: async () => getBridge().workspace.getProxySettings(),
   },
   chats: {
-    list: async () => getBridge().chats.list() as Promise<ChatSummary[]>,
+    list: async () => {
+      const rows = await getBridge().chats.list() as RawChatSummaryRow[]
+      return rows.map(parseChatSummaryRow)
+    },
     get: async (chatId: string) => {
-      const payload = await getBridge().chats.get(chatId) as { chat: ChatSummary | null; messages: RawChatMessageRow[] }
+      const payload = await getBridge().chats.get(chatId) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] }
       if (!payload.chat) return null
-      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
+      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
     create: async () => {
-      const payload = await getBridge().chats.create() as { chat: ChatSummary; messages: RawChatMessageRow[] }
-      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
+      const payload = await getBridge().chats.create() as { chat: RawChatSummaryRow; messages: RawChatMessageRow[] }
+      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
-    ensure: async (payload: { chatId: string; title: string; chatbotId: string; summary?: string }) => {
-      const result = await getBridge().chats.ensure(payload) as { chat: ChatSummary | null; messages: RawChatMessageRow[] }
+    ensure: async (payload: { chatId: string; title: string; chatbotId: string; summary?: string; sourceType?: "manual" | "channel"; sourceRef?: string | null }) => {
+      const result = await getBridge().chats.ensure(payload) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] }
       if (!result.chat) return null
-      return { chat: result.chat, messages: result.messages.map(parseChatMessageRow) } satisfies ChatDetail
+      return { chat: parseChatSummaryRow(result.chat), messages: result.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
     delete: async (chatId: string) => getBridge().chats.delete(chatId) as Promise<boolean>,
-    appendUser: async (chatId: string, content: string) => {
-      const payload = await getBridge().chats.appendUser({ chatId, content }) as { chat: ChatSummary | null; messages: RawChatMessageRow[] } | null
+    appendUser: async (chatId: string, content: string, parts?: ChatMessagePart[]) => {
+      const payload = await getBridge().chats.appendUser({ chatId, content, parts }) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] } | null
       if (!payload?.chat) return null
-      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
+      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
     appendAssistant: async (chatId: string, content: string, parts?: ChatMessagePart[]) => {
-      const payload = await getBridge().chats.appendAssistant({ chatId, content, parts }) as { chat: ChatSummary | null; messages: RawChatMessageRow[] } | null
+      const payload = await getBridge().chats.appendAssistant({ chatId, content, parts }) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] } | null
       if (!payload?.chat) return null
-      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
+      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
     updateMessageParts: async (chatId: string, messageId: string, parts: ChatMessagePart[]) => {
-      const payload = await getBridge().chats.updateMessageParts({ chatId, messageId, parts }) as { chat: ChatSummary | null; messages: RawChatMessageRow[] } | null
+      const payload = await getBridge().chats.updateMessageParts({ chatId, messageId, parts }) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] } | null
       if (!payload?.chat) return null
-      return { chat: payload.chat, messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
+      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
     },
     getSettings: async () => getBridge().chats.getSettings(),
     saveSettings: async (payload: unknown) => getBridge().chats.saveSettings(payload),
@@ -496,6 +530,9 @@ export const suoraIpc = {
       return parseProviderRow(row)
     },
     delete: async (providerId: string) => getBridge().models.delete(providerId),
+    discover: async (payload: Pick<ProviderConfigRecord, "providerType" | "baseUrl" | "apiKey">) => {
+      return getBridge().models.discover(payload) as Promise<{ models: ProviderConfigRecord["models"]; source: string }>
+    },
   },
   skills: {
     list: async () => {
@@ -756,8 +793,8 @@ export const suoraIpc = {
       const row = await getBridge().channels.get(channelId) as RawChannelRow | null
       return row ? parseChannelDetailRow(row) : null
     },
-    create: async () => {
-      const row = await getBridge().channels.create() as RawChannelRow
+    create: async (defaults?: { providerId?: string; modelId?: string }) => {
+      const row = await getBridge().channels.create(defaults) as RawChannelRow
       return parseChannelDetailRow(row)
     },
     save: async (payload: ChannelDetail) => {
@@ -776,8 +813,8 @@ export const suoraIpc = {
     healthCheck: async (channelId: string) => getBridge().channels.healthCheck(channelId),
     getStreamStatus: async (channelId: string) => getBridge().channels.getStreamStatus(channelId),
     debugSend: async (payload: { channelId: string; content: string }) => getBridge().channels.debugSend(payload),
-    startWeChatPersonalLogin: async (force?: boolean) => getBridge().channels.startWeChatPersonalLogin(force),
-    waitForWeChatPersonalLogin: async (sessionKey: string, verifyCode?: string, timeoutMs?: number) => getBridge().channels.waitForWeChatPersonalLogin(sessionKey, verifyCode, timeoutMs),
+    startWeChatPersonalLogin: async (channelId?: string, force?: boolean) => getBridge().channels.startWeChatPersonalLogin(channelId, force),
+    waitForWeChatPersonalLogin: async (channelId: string | undefined, sessionKey: string, verifyCode?: string, timeoutMs?: number) => getBridge().channels.waitForWeChatPersonalLogin(channelId, sessionKey, verifyCode, timeoutMs),
     getWeChatPersonalQrPreview: async (url: string, waitMs?: number) => getBridge().channels.getWeChatPersonalQrPreview(url, waitMs) as Promise<{ ok?: boolean; image?: string; format?: string; error?: string }>,
   },
   schedulers: {
@@ -827,6 +864,7 @@ export const suoraIpc = {
       return bridge.tools.runCommand({ ...payload, env }) as Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>
     },
     browserNavigate: async (payload: { url?: string; visible?: boolean }) => getBridge().tools.browserNavigate(payload) as Promise<{ ok: boolean; url: string; visible: boolean }>,
+    browserState: async () => getBridge().tools.browserState() as Promise<{ open: boolean; visible: boolean; url: string }>,
     saveFile: async (payload: { defaultName: string; filters?: Array<{ name: string; extensions: string[] }>; dataBase64: string }) => getBridge().tools.saveFile(payload) as Promise<{ ok: boolean; canceled: boolean; path: string | null }>,
     openExternal: async (url: string) => getBridge().tools.openExternal(url) as Promise<{ ok: boolean; url: string }>,
   },

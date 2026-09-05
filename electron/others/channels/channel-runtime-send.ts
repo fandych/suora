@@ -4,6 +4,8 @@ import {
   getFeishuAccessToken,
   getTeamsAccessToken,
   getWeChatAccessToken,
+  getWeChatMiniProgramAccessToken,
+  getWeChatOfficialAccessToken,
   httpRequest,
   sendCustomMessage,
   sendEmailMessage,
@@ -28,8 +30,11 @@ export async function sendMessageForChannel(
       }
       return sendDingTalk(channel, chatId, content, tokenCache)
     case "wechat":
+      return sendWeChatWork(channel, chatId, content, tokenCache)
     case "wechat_official":
-      return sendWeChat(channel, chatId, content, tokenCache)
+      return sendWeChatOfficial(channel, chatId, content, tokenCache)
+    case "wechat_miniprogram":
+      return sendWeChatMiniProgram(channel, chatId, content, tokenCache)
     case "wechat_personal":
       if (channel.wechatPersonalBotToken) {
         return sendWeChatPersonalNativeMessage(channel, chatId, content, contextToken)
@@ -76,14 +81,16 @@ async function sendFeishu(channel: ChannelConfigRecord, chatId: string, content:
 async function sendDingTalk(channel: ChannelConfigRecord, chatId: string, content: string, tokenCache: Map<string, TokenCacheEntry>) {
   const appKey = channel.dingtalkClientId || channel.appId
   const appSecret = channel.dingtalkClientSecret || channel.appSecret
-  const robotCode = channel.dingtalkRobotCode || channel.wechatAgentId || channel.appId
-  if (!appKey || !appSecret || !robotCode) return { success: false, error: "Missing DingTalk credentials" }
+  const agentId = channel.dingtalkRobotCode
+  if (!appKey || !appSecret || !agentId) {
+    return { success: false, error: "Missing DingTalk client ID, client secret, or agent ID" }
+  }
   try {
     const token = await getDingTalkAccessToken(appKey, appSecret, tokenCache)
     const response = await httpRequest(`https://oapi.dingtalk.com/topapi/message/corpconversation/asyncsend_v2?access_token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8" },
-      body: JSON.stringify({ agent_id: robotCode, to_all_user: false, userid_list: chatId, msg: { msgtype: "text", text: { content } } }),
+      body: JSON.stringify({ agent_id: agentId, to_all_user: false, userid_list: chatId, msg: { msgtype: "text", text: { content } } }),
     })
     const data = response.data as { errcode?: number; errmsg?: string }
     return data.errcode === 0 ? { success: true } : { success: false, error: data.errmsg || "Send failed" }
@@ -106,10 +113,10 @@ async function sendDingTalkWebhook(channel: ChannelConfigRecord, content: string
   }
 }
 
-async function sendWeChat(channel: ChannelConfigRecord, chatId: string, content: string, tokenCache: Map<string, TokenCacheEntry>) {
-  const corpId = channel.wechatCorpId || channel.wechatOfficialAppId || channel.appId
-  const corpSecret = channel.appSecret || channel.wechatOfficialAppSecret
-  const agentId = channel.wechatAgentId || channel.appId || channel.wechatOfficialAppId
+async function sendWeChatWork(channel: ChannelConfigRecord, chatId: string, content: string, tokenCache: Map<string, TokenCacheEntry>) {
+  const corpId = channel.wechatCorpId || channel.appId
+  const corpSecret = channel.appSecret
+  const agentId = channel.wechatAgentId
   if (!corpId || !corpSecret || !agentId) return { success: false, error: "Missing WeChat credentials" }
   try {
     const token = await getWeChatAccessToken(corpId, corpSecret, tokenCache)
@@ -117,6 +124,56 @@ async function sendWeChat(channel: ChannelConfigRecord, chatId: string, content:
       method: "POST",
       headers: { "Content-Type": "application/json; charset=utf-8" },
       body: JSON.stringify({ touser: chatId, msgtype: "text", agentid: agentId, text: { content } }),
+    })
+    const data = response.data as { errcode?: number; errmsg?: string }
+    return data.errcode === 0 ? { success: true } : { success: false, error: data.errmsg || "Send failed" }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+async function sendWeChatOfficial(channel: ChannelConfigRecord, chatId: string, content: string, tokenCache: Map<string, TokenCacheEntry>) {
+  const appId = channel.wechatOfficialAppId || channel.appId
+  const appSecret = channel.wechatOfficialAppSecret || channel.appSecret
+  if (!appId || !appSecret) {
+    return { success: false, error: "Missing WeChat Official Account app ID or app secret" }
+  }
+
+  try {
+    const token = await getWeChatOfficialAccessToken(appId, appSecret, tokenCache)
+    const response = await httpRequest(`https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        touser: chatId,
+        msgtype: "text",
+        text: { content },
+      }),
+    })
+    const data = response.data as { errcode?: number; errmsg?: string }
+    return data.errcode === 0 ? { success: true } : { success: false, error: data.errmsg || "Send failed" }
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+async function sendWeChatMiniProgram(channel: ChannelConfigRecord, chatId: string, content: string, tokenCache: Map<string, TokenCacheEntry>) {
+  const appId = channel.wechatMiniProgramAppId || channel.appId
+  const appSecret = channel.wechatMiniProgramAppSecret || channel.appSecret
+  if (!appId || !appSecret) {
+    return { success: false, error: "Missing WeChat Mini Program app ID or app secret" }
+  }
+
+  try {
+    const token = await getWeChatMiniProgramAccessToken(appId, appSecret, tokenCache)
+    const response = await httpRequest(`https://api.weixin.qq.com/cgi-bin/message/custom/send?access_token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        touser: chatId,
+        msgtype: "text",
+        text: { content },
+      }),
     })
     const data = response.data as { errcode?: number; errmsg?: string }
     return data.errcode === 0 ? { success: true } : { success: false, error: data.errmsg || "Send failed" }

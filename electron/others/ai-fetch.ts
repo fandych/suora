@@ -2,16 +2,19 @@ import { Buffer } from "node:buffer"
 import crypto from "node:crypto"
 import http from "node:http"
 import https from "node:https"
+import type { WebContents } from "electron"
 
 import { appState } from "@electron/others/app-state"
 import { getProxyAgent } from "@electron/others/proxy"
 import type { AiFetchStartPayload } from "@electron/types"
 
-function sendAiEvent(payload: Record<string, unknown>) {
-  appState.mainWindow?.webContents.send("ai:fetch:event", payload)
+function sendAiEvent(target: WebContents, payload: Record<string, unknown>) {
+  if (!target.isDestroyed()) {
+    target.send("ai:fetch:event", payload)
+  }
 }
 
-export function startAiFetch(payload: AiFetchStartPayload) {
+export function startAiFetch(target: WebContents, payload: AiFetchStartPayload) {
   const requestId = crypto.randomUUID()
   const url = new URL(payload.url)
   const transport = url.protocol === "https:" ? https : http
@@ -27,7 +30,7 @@ export function startAiFetch(payload: AiFetchStartPayload) {
     agent: getProxyAgent(url),
     rejectUnauthorized: appState.currentProxySettings.ignoreSslErrors ? false : appState.currentProxySettings.rejectUnauthorized,
   }, (response) => {
-    sendAiEvent({
+    sendAiEvent(target, {
       requestId,
       type: "response",
       status: response.statusCode ?? 500,
@@ -38,7 +41,7 @@ export function startAiFetch(payload: AiFetchStartPayload) {
     })
 
     response.on("data", (chunk: Buffer) => {
-      sendAiEvent({
+      sendAiEvent(target, {
         requestId,
         type: "data",
         chunkBase64: chunk.toString("base64"),
@@ -47,7 +50,7 @@ export function startAiFetch(payload: AiFetchStartPayload) {
 
     response.on("end", () => {
       appState.activeAiRequests.delete(requestId)
-      sendAiEvent({ requestId, type: "end" })
+      sendAiEvent(target, { requestId, type: "end" })
     })
   })
 
@@ -55,7 +58,7 @@ export function startAiFetch(payload: AiFetchStartPayload) {
 
   request.on("error", (error) => {
     appState.activeAiRequests.delete(requestId)
-    sendAiEvent({ requestId, type: "error", error: error instanceof Error ? error.message : String(error) })
+    sendAiEvent(target, { requestId, type: "error", error: error instanceof Error ? error.message : String(error) })
   })
 
   if (payload.timeoutMs && payload.timeoutMs > 0) {
@@ -64,11 +67,13 @@ export function startAiFetch(payload: AiFetchStartPayload) {
     })
   }
 
-  if (body) {
-    request.write(body)
-  }
+  setImmediate(() => {
+    if (body) {
+      request.write(body)
+    }
 
-  request.end()
+    request.end()
+  })
 
   return { requestId }
 }

@@ -54,6 +54,14 @@ export type ChatRuntimeSettingsPayload = {
     systemPrompt: string
   }
   proxy: ProxySettings
+  requestTimeoutMs?: number
+  maxSteps?: number
+}
+
+export type BrowserWindowState = {
+  open: boolean
+  visible: boolean
+  url: string
 }
 
 export type AppState = {

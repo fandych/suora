@@ -316,4 +316,17 @@ export const runtimeMigrations = [
       /duplicate column name: parts_json/i,
     ],
   },
+  {
+    id: 11,
+    statements: [
+      `ALTER TABLE chats ADD COLUMN source_type TEXT NOT NULL DEFAULT 'manual'`,
+      `ALTER TABLE chats ADD COLUMN source_ref TEXT`,
+      `UPDATE chats SET source_type = CASE WHEN id LIKE 'chat-channel-%' THEN 'channel' ELSE 'manual' END WHERE source_type IS NULL OR source_type = '' OR source_type = 'manual'`,
+      `UPDATE chats SET source_ref = CASE WHEN id LIKE 'chat-channel-%' THEN id ELSE source_ref END WHERE source_ref IS NULL OR source_ref = ''`,
+    ],
+    ignoreErrorsMatching: [
+      /duplicate column name: source_type/i,
+      /duplicate column name: source_ref/i,
+    ],
+  },
 ]

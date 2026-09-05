@@ -10,9 +10,10 @@ import { DocumentCreateDialog } from "@/views/documents/components/document-crea
 
 type DocumentCreateButtonProps = {
   className?: string
+  iconOnly?: boolean
 }
 
-export function DocumentCreateButton({ className }: DocumentCreateButtonProps) {
+export function DocumentCreateButton({ className, iconOnly = false }: DocumentCreateButtonProps) {
   const navigate = useNavigate()
   const [archiveFile, setArchiveFile] = useState<File | null>(null)
   const [archivePlan, setArchivePlan] = useState<ArchiveImportPlan | null>(null)
@@ -91,7 +92,7 @@ export function DocumentCreateButton({ className }: DocumentCreateButtonProps) {
   return (
     <>
       <input ref={importInputRef} type="file" accept=".zip" className="hidden" onChange={(event) => void handleImport(event)} />
-      <CreateSplitButton className={className} createLabel="Create" disabled={isWorking} onCreate={() => setIsOpen(true)} onImport={() => importInputRef.current?.click()} />
+      <CreateSplitButton className={className} createLabel="Create document" disabled={isWorking} iconOnly={iconOnly} onCreate={() => setIsOpen(true)} onImport={() => importInputRef.current?.click()} />
       <DocumentCreateDialog description={description} onDescriptionChange={setDescription} onOpenChange={setIsOpen} onSubmit={handleCreate} onTitleChange={setTitle} open={isOpen} title={title} />
       <ArchiveImportDialog description="Review duplicate paths, resolved filenames, and import warnings before creating the document workspace." isSubmitting={isWorking} onConfirm={() => void handleConfirmImport()} onOpenChange={setIsImportDialogOpen} onStrategyChange={(strategy) => void handleStrategyChange(strategy)} open={isImportDialogOpen} plan={archivePlan} strategy={archiveStrategy} title="Import document archive" />
     </>

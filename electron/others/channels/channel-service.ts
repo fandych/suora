@@ -9,6 +9,8 @@ import {
   getFeishuAccessToken,
   getTeamsAccessToken,
   getWeChatAccessToken,
+  getWeChatMiniProgramAccessToken,
+  getWeChatOfficialAccessToken,
   type TokenCacheEntry,
   WECHAT_XML_CONTENT_TYPES,
 } from "@electron/others/channels/channel-runtime-helpers"
@@ -237,8 +239,12 @@ export class ChannelService {
         await getFeishuAccessToken(channel.feishuAppId || channel.appId || "", channel.feishuAppSecret || channel.appSecret || "", tokenCache)
       } else if (channel.platform === "dingtalk") {
         await getDingTalkAccessToken(channel.dingtalkClientId || channel.appId || "", channel.dingtalkClientSecret || channel.appSecret || "", tokenCache)
-      } else if (channel.platform === "wechat" || channel.platform === "wechat_official") {
-        await getWeChatAccessToken(channel.wechatCorpId || channel.wechatOfficialAppId || channel.appId || "", channel.appSecret || channel.wechatOfficialAppSecret || "", tokenCache)
+      } else if (channel.platform === "wechat") {
+        await getWeChatAccessToken(channel.wechatCorpId || channel.appId || "", channel.appSecret || "", tokenCache)
+      } else if (channel.platform === "wechat_official") {
+        await getWeChatOfficialAccessToken(channel.wechatOfficialAppId || channel.appId || "", channel.wechatOfficialAppSecret || channel.appSecret || "", tokenCache)
+      } else if (channel.platform === "wechat_miniprogram") {
+        await getWeChatMiniProgramAccessToken(channel.wechatMiniProgramAppId || channel.appId || "", channel.wechatMiniProgramAppSecret || channel.appSecret || "", tokenCache)
       } else if (channel.platform === "teams") {
         await getTeamsAccessToken(channel.teamsAppId || "", channel.teamsAppPassword || "", tokenCache)
       }
@@ -253,12 +259,12 @@ export class ChannelService {
     }
   }
 
-  async startWeChatPersonalLogin(force = false) {
-    return startWeChatPersonalLogin(this.weChatPersonalLoginSessions, this.channels.values(), force)
+  async startWeChatPersonalLogin(channelId?: string, force = false) {
+    return startWeChatPersonalLogin(this.weChatPersonalLoginSessions, this.channels.values(), channelId, force)
   }
 
-  async waitForWeChatPersonalLogin(sessionKey: string, verifyCode?: string, timeoutMs?: number) {
-    return waitForWeChatPersonalLogin(this.weChatPersonalLoginSessions, this.channels.values(), sessionKey, verifyCode, timeoutMs)
+  async waitForWeChatPersonalLogin(channelId: string | undefined, sessionKey: string, verifyCode?: string, timeoutMs?: number) {
+    return waitForWeChatPersonalLogin(this.weChatPersonalLoginSessions, this.channels.values(), channelId, sessionKey, verifyCode, timeoutMs)
   }
 
   async simulateIncomingMessage(channelId: string, content: string) {

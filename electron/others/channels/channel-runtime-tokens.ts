@@ -26,15 +26,17 @@ export async function getDingTalkAccessToken(appKey: string, appSecret: string, 
   const cached = tokenCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now() + 300_000) return cached.token
 
-  const response = await httpRequest(`https://oapi.dingtalk.com/gettoken?appkey=${encodeURIComponent(appKey)}&appsecret=${encodeURIComponent(appSecret)}`, {
-    method: "GET",
+  const response = await httpRequest("https://api.dingtalk.com/v1.0/oauth2/accessToken", {
+    method: "POST",
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+    body: JSON.stringify({ appKey, appSecret }),
   })
-  const data = response.data as { access_token?: string; expires_in?: number; errcode?: number; errmsg?: string }
-  if (data.errcode !== 0 || !data.access_token) {
-    throw new Error(`DingTalk token error: ${data.errmsg || "unknown"}`)
+  const data = response.data as { accessToken?: string; expireIn?: number; code?: string; message?: string }
+  if (!data.accessToken) {
+    throw new Error(`DingTalk token error: ${data.message || data.code || "unknown"}`)
   }
-  tokenCache.set(cacheKey, { token: data.access_token, expiresAt: Date.now() + (data.expires_in || 7200) * 1000 })
-  return data.access_token
+  tokenCache.set(cacheKey, { token: data.accessToken, expiresAt: Date.now() + (data.expireIn || 7200) * 1000 })
+  return data.accessToken
 }
 
 export async function getWeChatAccessToken(corpId: string, corpSecret: string, tokenCache: Map<string, TokenCacheEntry>) {
@@ -48,6 +50,38 @@ export async function getWeChatAccessToken(corpId: string, corpSecret: string, t
   const data = response.data as { access_token?: string; expires_in?: number; errcode?: number; errmsg?: string }
   if (data.errcode !== 0 || !data.access_token) {
     throw new Error(`WeChat token error: ${data.errmsg || "unknown"}`)
+  }
+  tokenCache.set(cacheKey, { token: data.access_token, expiresAt: Date.now() + (data.expires_in || 7200) * 1000 })
+  return data.access_token
+}
+
+export async function getWeChatOfficialAccessToken(appId: string, appSecret: string, tokenCache: Map<string, TokenCacheEntry>) {
+  const cacheKey = `wechat-official:${appId}`
+  const cached = tokenCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now() + 300_000) return cached.token
+
+  const response = await httpRequest(`https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(appId)}&secret=${encodeURIComponent(appSecret)}`, {
+    method: "GET",
+  })
+  const data = response.data as { access_token?: string; expires_in?: number; errcode?: number; errmsg?: string }
+  if ((data.errcode != null && data.errcode !== 0) || !data.access_token) {
+    throw new Error(`WeChat Official token error: ${data.errmsg || "unknown"}`)
+  }
+  tokenCache.set(cacheKey, { token: data.access_token, expiresAt: Date.now() + (data.expires_in || 7200) * 1000 })
+  return data.access_token
+}
+
+export async function getWeChatMiniProgramAccessToken(appId: string, appSecret: string, tokenCache: Map<string, TokenCacheEntry>) {
+  const cacheKey = `wechat-miniprogram:${appId}`
+  const cached = tokenCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now() + 300_000) return cached.token
+
+  const response = await httpRequest(`https://api.weixin.qq.com/cgi-bin/token?grant_type=client_credential&appid=${encodeURIComponent(appId)}&secret=${encodeURIComponent(appSecret)}`, {
+    method: "GET",
+  })
+  const data = response.data as { access_token?: string; expires_in?: number; errcode?: number; errmsg?: string }
+  if ((data.errcode != null && data.errcode !== 0) || !data.access_token) {
+    throw new Error(`WeChat Mini Program token error: ${data.errmsg || "unknown"}`)
   }
   tokenCache.set(cacheKey, { token: data.access_token, expiresAt: Date.now() + (data.expires_in || 7200) * 1000 })
   return data.access_token

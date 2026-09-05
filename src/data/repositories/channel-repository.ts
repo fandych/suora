@@ -1,131 +1,10 @@
 import type { ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary } from "@/data/domain/models"
-import { channels } from "@/data/db/schema"
-import { executePersistedMutation, getDatabaseContext } from "@/data/db/client"
+import { applyDefaultChannelDescription, buildUnboundChannelDetail, resolveDefaultChannelModel } from "@/data/repositories/channel-defaults"
+import { ensureChannelCatalogItems } from "@/data/repositories/channel-catalog"
 import { emitDataChanged } from "@/data/repositories/data-events"
-import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { buildChannelWebhookUrl, getChannelCredentialIssues, normalizeChannelConfig } from "@/lib/channel-config"
+import { listModelProviders } from "@/data/repositories/model-config-repository"
 import { suoraIpc } from "@/lib/ipc"
-
-type ChannelCatalogTemplate = {
-  id: string
-  title: string
-  platform: ChannelConfigRecord["platform"]
-  connectionMode: ChannelConfigRecord["connectionMode"]
-  customPlatformName?: string
-}
-
-const channelCatalogTemplates: ChannelCatalogTemplate[] = [
-  { id: "channel-wechat-personal", title: "Personal WeChat", platform: "wechat_personal", connectionMode: "stream" },
-  { id: "channel-wecom-enterprise", title: "Enterprise WeChat", platform: "wechat", connectionMode: "webhook" },
-  { id: "channel-feishu", title: "Feishu", platform: "feishu", connectionMode: "webhook" },
-  { id: "channel-dingtalk", title: "DingTalk", platform: "dingtalk", connectionMode: "stream" },
-  { id: "channel-teams", title: "Microsoft Teams", platform: "teams", connectionMode: "webhook" },
-  { id: "channel-telegram", title: "Telegram", platform: "telegram", connectionMode: "webhook" },
-  { id: "channel-email-inbox", title: "Email Inbox", platform: "email", connectionMode: "stream" },
-  { id: "channel-custom-webhook", title: "Custom Webhook", platform: "custom", connectionMode: "webhook", customPlatformName: "Custom Webhook" },
-  { id: "channel-custom-websocket", title: "Custom WebSocket", platform: "custom", connectionMode: "stream", customPlatformName: "Custom WebSocket" },
-]
-
-let ensureChannelCatalogPromise: Promise<void> | undefined
-let hasEnsuredChannelCatalog = false
-
-function createDefaultRuntime(): ChannelRuntimeState {
-  return {
-    messages: [],
-    users: [],
-    health: {
-      isHealthy: null,
-      errorCount: 0,
-    },
-    debugLog: [],
-  }
-}
-
-function createCatalogChannel(template: ChannelCatalogTemplate, now: number): ChannelDetail {
-  const channel = normalizeChannelConfig({
-    id: template.id,
-    title: template.title,
-    platform: template.platform,
-    catalogId: `catalog-${template.id.replace(/^channel-/, "")}`,
-    enabled: false,
-    status: "inactive",
-    bindingState: "unconfigured",
-    connectionMode: template.connectionMode,
-    webhookPath: `/channels/${template.id.replace(/^channel-/, "")}`,
-    webhookSecret: "",
-    autoReply: true,
-    replyAgentId: "agent-crm-sync",
-    createdAt: now,
-    updatedAt: now,
-    messageCount: 0,
-    emailFilters: [],
-    emailActions: [],
-    emailMarkAsRead: true,
-    customPlatformName: template.customPlatformName,
-    wechatPersonalBindingStatus: template.platform === "wechat_personal" ? "unbound" : undefined,
-  })
-
-  return {
-    channel,
-    runtime: createDefaultRuntime(),
-  }
-}
-
-async function ensureChannelCatalogItems() {
-  await ensureSeeded()
-
-  if (hasEnsuredChannelCatalog) {
-    return
-  }
-
-  if (!ensureChannelCatalogPromise) {
-    ensureChannelCatalogPromise = (async () => {
-      const context = await getDatabaseContext()
-      const existingRows = await context.db.select({ id: channels.id }).from(channels).all()
-      const existingIds = new Set(existingRows.map((row) => row.id))
-      const missing = channelCatalogTemplates.filter((item) => !existingIds.has(item.id))
-
-      if (!missing.length) {
-        hasEnsuredChannelCatalog = true
-        return
-      }
-
-      await executePersistedMutation(async ({ db }) => {
-        const now = Date.now()
-        await db.insert(channels)
-          .values(missing.map((template, index) => {
-            const detail = createCatalogChannel(template, now - index)
-            return {
-              id: detail.channel.id,
-              title: detail.channel.title,
-              platform: detail.channel.platform,
-              enabled: detail.channel.enabled,
-              status: detail.channel.status,
-              connectionMode: detail.channel.connectionMode,
-              webhookPath: detail.channel.webhookPath,
-              webhookSecret: detail.channel.webhookSecret,
-              autoReply: detail.channel.autoReply,
-              replyAgentId: detail.channel.replyAgentId,
-              createdAt: new Date(detail.channel.createdAt),
-              lastMessageAt: null,
-              messageCount: 0,
-              configJson: JSON.stringify(detail.channel),
-              runtimeJson: JSON.stringify(detail.runtime),
-              updatedAt: new Date(detail.channel.updatedAt),
-            }
-          }))
-          .onConflictDoNothing({ target: channels.id })
-          .run()
-      })
-
-      hasEnsuredChannelCatalog = true
-    })().finally(() => {
-      ensureChannelCatalogPromise = undefined
-    })
-  }
-
-  await ensureChannelCatalogPromise
-}
 
 function appendDebug(detail: ChannelDetail, tone: "info" | "success" | "error", text: string, timestamp: number) {
   return [
@@ -136,16 +15,51 @@ function appendDebug(detail: ChannelDetail, tone: "info" | "success" | "error", 
       text,
     },
     ...detail.runtime.debugLog,
-  ]
+  ].slice(0, 300)
+}
+
+function mergeDebugLogEntries(current: ChannelRuntimeState["debugLog"], incoming: ChannelRuntimeState["debugLog"]) {
+  const merged = [...incoming, ...current]
+  const seen = new Set<string>()
+  return merged.filter((entry) => {
+    if (seen.has(entry.id)) {
+      return false
+    }
+    seen.add(entry.id)
+    return true
+  }).slice(0, 300)
+}
+
+function formatWeChatPersonalDiagnostic(result: {
+  status?: string
+  upstreamStatus?: string
+  diagnosticEvent?: string
+  diagnosticMessage?: string
+  pollBaseUrl?: string
+  pollEndpoint?: string
+}) {
+  return [
+    `status=${result.status || "unknown"}`,
+    `upstreamStatus=${result.upstreamStatus || "unknown"}`,
+    `event=${result.diagnosticEvent || "unknown"}`,
+    `baseUrl=${result.pollBaseUrl || "unknown"}`,
+    `endpoint=${result.pollEndpoint || "unknown"}`,
+    `message=${result.diagnosticMessage || "none"}`,
+  ].join(" | ")
 }
 
 async function persist(detail: ChannelDetail) {
+  const current = await suoraIpc.channels.get(detail.channel.id) as ChannelDetail | null
   const normalized = {
     ...detail,
     channel: normalizeChannelConfig({
       ...detail.channel,
       updatedAt: Date.now(),
     }),
+    runtime: {
+      ...detail.runtime,
+      debugLog: mergeDebugLogEntries(detail.runtime.debugLog, current?.runtime.debugLog ?? []),
+    },
   }
   const next = await suoraIpc.channels.save(normalized) as ChannelDetail
   emitDataChanged("/channels")
@@ -196,14 +110,35 @@ export async function getChannel(channelId: string) {
 
 export async function createChannel() {
   await ensureChannelCatalogItems()
-  const item = await suoraIpc.channels.create() as Promise<ChannelDetail>
+  const providers = await listModelProviders().catch(() => [])
+  const defaultModel = resolveDefaultChannelModel(providers)
+  const item = await suoraIpc.channels.create({ providerId: defaultModel.providerId, modelId: defaultModel.modelId })
   emitDataChanged("/channels")
   return item
 }
 
 export async function saveChannel(payload: ChannelDetail) {
   await ensureChannelCatalogItems()
-  const next = await persist(payload)
+  const next = await persist({
+    ...payload,
+    channel: {
+      ...payload.channel,
+      description: applyDefaultChannelDescription(payload.channel),
+    },
+  })
+  await syncRuntimeRegistration().catch(() => undefined)
+  return next
+}
+
+export async function unbindChannel(detail: ChannelDetail) {
+  const timestamp = Date.now()
+  const next = await persist({
+    ...buildUnboundChannelDetail(detail),
+    runtime: {
+      ...detail.runtime,
+      debugLog: appendDebug(detail, "info", "Channel binding was removed.", timestamp),
+    },
+  })
   await syncRuntimeRegistration().catch(() => undefined)
   return next
 }
@@ -255,7 +190,7 @@ export async function clearChannelDebugLog(detail: ChannelDetail) {
 export async function bindChannel(detail: ChannelDetail) {
   const timestamp = Date.now()
   if (detail.channel.platform === "wechat_personal") {
-    const result = await suoraIpc.channels.startWeChatPersonalLogin(true) as { success?: boolean; qrCodeUrl?: string; sessionKey?: string; message?: string }
+    const result = await suoraIpc.channels.startWeChatPersonalLogin(detail.channel.id, true) as { success?: boolean; qrCodeUrl?: string; sessionKey?: string; message?: string }
     const hasExistingBinding = detail.channel.wechatPersonalBindingStatus === "bound" && Boolean(detail.channel.wechatPersonalBotToken)
     return persist({
       channel: {
@@ -320,9 +255,13 @@ export async function waitForWeChatPersonalBinding(detail: ChannelDetail, verifi
   const sessionKey = detail.channel.wechatPersonalSessionKey
   const trimmedCode = verificationCode?.trim()
   const result = sessionKey
-    ? await suoraIpc.channels.waitForWeChatPersonalLogin(sessionKey, trimmedCode, timeoutMs) as { success?: boolean; status?: string; message?: string; botToken?: string; baseUrl?: string; accountId?: string; userId?: string; qrCodeUrl?: string }
+    ? await suoraIpc.channels.waitForWeChatPersonalLogin(detail.channel.id, sessionKey, trimmedCode, timeoutMs) as { success?: boolean; status?: string; message?: string; botToken?: string; baseUrl?: string; accountId?: string; userId?: string; qrCodeUrl?: string; upstreamStatus?: string; diagnosticEvent?: string; diagnosticMessage?: string; pollBaseUrl?: string; pollEndpoint?: string }
     : { success: false, status: "error", message: "Missing WeChat login session." }
   const isAlreadyBoundWithLocalToken = result.status === "already_bound" && Boolean(detail.channel.wechatPersonalBotToken)
+  const preservedQrStatus = result.status === "timeout"
+    && (detail.channel.wechatPersonalQrStatus === "scaned" || detail.channel.wechatPersonalQrStatus === "need_verifycode")
+    ? detail.channel.wechatPersonalQrStatus
+    : undefined
 
   const next = await persist({
     channel: {
@@ -336,7 +275,9 @@ export async function waitForWeChatPersonalBinding(detail: ChannelDetail, verifi
           ? "need_verifycode"
           : result.status === "scaned"
             ? "scaned"
-            : result.status === "timeout" || result.status === "expired"
+            : preservedQrStatus
+              ? preservedQrStatus
+              : result.status === "timeout" || result.status === "expired"
               ? "wait"
               : detail.channel.wechatPersonalQrStatus,
       wechatPersonalSessionKey: result.status === "connected" || isAlreadyBoundWithLocalToken ? undefined : sessionKey,
@@ -349,7 +290,18 @@ export async function waitForWeChatPersonalBinding(detail: ChannelDetail, verifi
     },
     runtime: {
       ...detail.runtime,
-      debugLog: appendDebug(detail, result.status === "connected" ? "success" : result.success ? "info" : "error", result.message || "Personal WeChat binding updated.", timestamp),
+      debugLog: appendDebug(
+        {
+          ...detail,
+          runtime: {
+            ...detail.runtime,
+            debugLog: appendDebug(detail, result.status === "connected" ? "success" : result.success ? "info" : "error", result.message || "Personal WeChat binding updated.", timestamp),
+          },
+        },
+        result.success ? "info" : "error",
+        `QR diagnostic: ${formatWeChatPersonalDiagnostic(result)}`,
+        timestamp,
+      ),
     },
   })
   await syncRuntimeRegistration().catch(() => undefined)

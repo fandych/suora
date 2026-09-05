@@ -1,4 +1,5 @@
-import type { ChatDetail, ProviderConfigRecord } from "@/data/domain/models"
+import { buildAttachmentSummary, getTextParts, type ChatAttachmentRecord, type ChatMessagePart } from "@/data/domain/chat-message-parts"
+import type { ChatDetail, ChatMessageRecord, ProviderConfigRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import type { ChatAttachment } from "@/services/ai-service"
 import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
@@ -24,6 +25,34 @@ export async function fileToChatAttachment(file: File): Promise<ChatAttachment> 
     mediaType: file.type || "application/octet-stream",
     kind: file.type.startsWith("image/") ? "image" : "file",
     data,
+  }
+}
+
+function toPersistedAttachmentRecord(attachment: ChatAttachment): ChatAttachmentRecord {
+  return {
+    id: attachment.id,
+    sourceKey: attachment.sourceKey,
+    name: attachment.name,
+    mediaType: attachment.mediaType,
+    data: attachment.data,
+    kind: attachment.kind,
+  }
+}
+
+export function createPersistedUserPayload(draft: string, attachments: ChatAttachment[]) {
+  const trimmedDraft = draft.trim()
+  const parts: ChatMessagePart[] = [
+    ...(trimmedDraft ? [{ id: "user-text", type: "text", content: trimmedDraft } satisfies ChatMessagePart] : []),
+    ...attachments.map((attachment, index) => ({
+      id: `user-attachment-${index + 1}`,
+      type: "attachment",
+      attachment: toPersistedAttachmentRecord(attachment),
+    } satisfies ChatMessagePart)),
+  ]
+
+  return {
+    content: trimmedDraft || attachments.map((attachment) => buildAttachmentSummary(toPersistedAttachmentRecord(attachment))).join("\n"),
+    parts,
   }
 }
 
@@ -56,11 +85,14 @@ export function createPersistedAssistantPayload(finalText: string, parts: Assist
   }
 }
 
-export function buildChatTranscript(selectedChat: ChatDetail | null, assistantResponseParts: AssistantResponsePart[]) {
-  const messageBlocks = (selectedChat?.messages ?? []).map((message) => `${message.role.toUpperCase()}\n${message.content}`).join("\n\n")
-  const assistantBlocks = assistantResponseParts.map((part) => {
+function buildChatMessagePartsPlainText(parts: ChatMessagePart[]) {
+  return parts.map((part) => {
     if (part.type === "text") {
-      return part.content ? `ASSISTANT\n${part.content}` : ""
+      return part.content
+    }
+
+    if (part.type === "attachment") {
+      return buildAttachmentSummary(part.attachment)
     }
 
     if (part.activity.error) {
@@ -77,6 +109,52 @@ export function buildChatTranscript(selectedChat: ChatDetail | null, assistantRe
 
     return `TOOL CALL ${part.activity.toolName}\n${JSON.stringify(part.activity.input ?? {}, null, 2)}`
   }).filter(Boolean).join("\n\n")
+}
+
+export function buildChatMessageDisplayText(message: Pick<ChatMessageRecord, "content" | "parts">) {
+  if (!message.parts?.length) {
+    return message.content
+  }
+
+  const textParts = getTextParts(message.parts)
+  if (textParts.length > 0) {
+    return textParts.map((part) => part.content).join("\n\n")
+  }
+
+  return buildChatMessagePartsPlainText(message.parts)
+}
+
+export function buildChatTranscript(selectedChat: ChatDetail | null, assistantResponseParts: AssistantResponsePart[]) {
+  const messageBlocks = (selectedChat?.messages ?? []).map((message) => `${message.role.toUpperCase()}\n${buildChatMessageDisplayText(message)}`).join("\n\n")
+  const assistantText = assistantResponseParts
+    .filter((part): part is Extract<AssistantResponsePart, { type: "text" }> => part.type === "text")
+    .map((part) => part.content.trim())
+    .filter(Boolean)
+    .join("\n\n---\n\n")
+  const assistantTools = assistantResponseParts
+    .filter((part): part is Extract<AssistantResponsePart, { type: "tool" }> => part.type === "tool")
+    .map((part) => {
+      if (part.activity.error) {
+        return `TOOL ERROR ${part.activity.toolName}\n${part.activity.error}`
+      }
+
+      if (part.activity.stopped) {
+        return `TOOL STOPPED ${part.activity.toolName}\nStopped before a tool result was returned.`
+      }
+
+      if (part.activity.output !== undefined) {
+        return `TOOL RESULT ${part.activity.toolName}\n${part.activity.output}`
+      }
+
+      return `TOOL CALL ${part.activity.toolName}\n${JSON.stringify(part.activity.input ?? {}, null, 2)}`
+    })
+    .filter(Boolean)
+    .join("\n\n")
+
+  const assistantBlocks = [
+    assistantText ? `ASSISTANT\n${assistantText}` : "",
+    assistantTools ? `ASSISTANT TOOLS\n${assistantTools}` : "",
+  ].filter(Boolean).join("\n\n")
 
   return [messageBlocks, assistantBlocks].filter(Boolean).join("\n\n")
 }

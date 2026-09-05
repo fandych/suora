@@ -13,8 +13,8 @@ type ChatToolActivityGroupProps = {
 }
 
 function buildGroupStorageKey(activities: ChatToolActivity[]) {
-  const ids = activities.map((activity) => activity.id).join(":")
-  return `suora:chat-tool-group:${ids}`
+  const signature = activities.map((activity) => activity.toolName).join(":")
+  return `suora:chat-tool-group:${activities.length}:${signature}`
 }
 
 function getGroupState(activities: ChatToolActivity[]) {

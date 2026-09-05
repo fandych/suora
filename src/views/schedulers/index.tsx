@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { createScheduler, listSchedulers } from "@/data/repositories/scheduler-repository"
+import { listSchedulers } from "@/data/repositories/scheduler-repository"
 import PageHeader from "@/views/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
 
@@ -12,14 +12,9 @@ const SchedulersPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => listSchedulers(), [])
 
-  const handleCreate = async () => {
-    const item = await createScheduler()
-    navigate(`/schedulers/${item.id}`)
-  }
-
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title="Schedulers" actions={<Button onClick={handleCreate}>New scheduler</Button>} />
+      <PageHeader title="Schedulers" />
       <div className="flex-1 p-6">
         <div className="mx-auto flex max-w-5xl flex-col gap-4">
           {isLoading ? <LoadingCard title="Loading schedulers..." /> : null}

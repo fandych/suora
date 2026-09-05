@@ -15,6 +15,8 @@ export type ChatSummary = {
   chatbotId: string
   summary: string
   updatedAt: number
+  sourceType?: "manual" | "channel"
+  sourceRef?: string | null
 }
 
 export type ChatMessageRecord = {
@@ -390,6 +392,7 @@ export type ProviderPreset = {
   title: string
   description: string
   baseUrl: string
+  docsUrl?: string
   models: ProviderModelRecord[]
 }
 
@@ -405,6 +408,7 @@ export type AgentConfigRecord = {
   instructions: string
   providerId: string
   modelId: string
+  maxSteps?: number
   workflowIds?: string[]
   skillIds: string[]
   toolsetIds: string[]
@@ -435,6 +439,7 @@ export type ChannelPlatform =
   | "wechat"
   | "wechat_personal"
   | "wechat_official"
+  | "wechat_miniprogram"
   | "feishu"
   | "dingtalk"
   | "telegram"
@@ -553,6 +558,10 @@ export type ChannelConfigRecord = {
   wechatOfficialAppId?: string
   wechatOfficialAppSecret?: string
   wechatOfficialToken?: string
+  wechatMiniProgramAppId?: string
+  wechatMiniProgramAppSecret?: string
+  wechatMiniProgramToken?: string
+  wechatMiniProgramEncodingAesKey?: string
   wechatPersonalWebhookUrl?: string
   wechatPersonalAuthToken?: string
   wechatPersonalQrCodeUrl?: string
@@ -613,6 +622,7 @@ export type ChannelSummary = {
   title: string
   platform: ChannelPlatform
   catalogId?: string
+  connectionMode?: ChannelConnectionMode
   bindingState?: ChannelBindingState
   enabled: boolean
   status: ChannelStatus
@@ -620,6 +630,8 @@ export type ChannelSummary = {
   lastMessageAt?: number
   messageCount: number
   meta?: string
+  customPlatformName?: string
+  customPlatformIcon?: string
 }
 
 export type ChannelDetail = {

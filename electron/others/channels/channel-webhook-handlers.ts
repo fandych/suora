@@ -18,6 +18,7 @@ export async function handleGetWebhookRequest(req: Request, res: Response, chann
   switch (channel.platform) {
     case "wechat":
     case "wechat_official":
+    case "wechat_miniprogram":
       await handleWeChatWebhook(req, res, channel, emitMessage)
       return
     default:
@@ -35,6 +36,7 @@ export async function handlePostWebhookRequest(req: Request, res: Response, chan
       return
     case "wechat":
     case "wechat_official":
+    case "wechat_miniprogram":
       await handleWeChatWebhook(req, res, channel, emitMessage)
       return
     case "wechat_personal":
@@ -77,7 +79,7 @@ async function handleFeishuWebhook(req: Request, res: Response, channel: Channel
   if (body.header && (body.header as Record<string, unknown>).event_type === "im.message.receive_v1") {
     const event = body.event as Record<string, unknown>
     const messageObject = event.message as Record<string, unknown>
-    let content = ""
+    let content: string
     try {
       content = JSON.parse(String(messageObject.content || "{}")).text || ""
     } catch {
@@ -215,7 +217,7 @@ async function handleTelegramWebhook(req: Request, res: Response, channel: Chann
     return
   }
 
-  let content = ""
+  let content: string
   let messageType: RuntimeChannelMessage["messageType"] = "text"
   if (msg.text) {
     content = String(msg.text)

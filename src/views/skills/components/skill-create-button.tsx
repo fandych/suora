@@ -9,9 +9,10 @@ import { CreateSplitButton } from "@/views/components/create-split-button"
 
 type SkillCreateButtonProps = {
   className?: string
+  iconOnly?: boolean
 }
 
-export function SkillCreateButton({ className }: SkillCreateButtonProps) {
+export function SkillCreateButton({ className, iconOnly = false }: SkillCreateButtonProps) {
   const navigate = useNavigate()
   const [archivePlan, setArchivePlan] = useState<ArchiveImportPlan | null>(null)
   const [archiveStrategy, setArchiveStrategy] = useState<ArchiveImportStrategy>("overwrite")
@@ -80,7 +81,7 @@ export function SkillCreateButton({ className }: SkillCreateButtonProps) {
   return (
     <>
       <input ref={importInputRef} type="file" accept=".zip" className="hidden" onChange={(event) => void handleImport(event)} />
-      <CreateSplitButton className={className} createLabel="Create" disabled={isWorking} onCreate={handleCreate} onImport={() => importInputRef.current?.click()} />
+      <CreateSplitButton className={className} createLabel="Create skill" disabled={isWorking} iconOnly={iconOnly} onCreate={handleCreate} onImport={() => importInputRef.current?.click()} />
       <ArchiveImportDialog description="Review the SKILL.md requirement, duplicate paths, and resolved import targets before creating the skill package." isSubmitting={isWorking} onConfirm={() => void handleConfirmImport()} onOpenChange={setIsImportDialogOpen} onStrategyChange={(strategy) => void handleStrategyChange(strategy)} open={isImportDialogOpen} plan={archivePlan} strategy={archiveStrategy} title="Import skill archive" />
     </>
   )

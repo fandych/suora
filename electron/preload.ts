@@ -2,14 +2,40 @@ import { contextBridge, ipcRenderer } from "electron"
 
 import type { SendMailPayload } from "@electron/types"
 
+const allowedInvokeChannels = new Set([
+  "ai:fetch:abort",
+  "ai:fetch:start",
+  "channel:wechatPersonalQrPreview",
+  "db:execute",
+  "integration:execute",
+])
+
+const allowedEventChannels = new Set([
+  "ai:fetch:event",
+  "channel:message",
+  "tools:browserStateChanged",
+])
+
 contextBridge.exposeInMainWorld("electron", {
   invoke: (channel: string, ...args: unknown[]) => {
+    if (!allowedInvokeChannels.has(channel)) {
+      throw new Error(`Direct invoke channel is blocked in preload: ${channel}`)
+    }
+
     return ipcRenderer.invoke(channel, ...args)
   },
   on: (channel: string, listener: (...args: unknown[]) => void) => {
+    if (!allowedEventChannels.has(channel)) {
+      throw new Error(`Direct event subscription is blocked in preload: ${channel}`)
+    }
+
     ipcRenderer.on(channel, listener)
   },
   off: (channel: string, listener: (...args: unknown[]) => void) => {
+    if (!allowedEventChannels.has(channel)) {
+      throw new Error(`Direct event subscription is blocked in preload: ${channel}`)
+    }
+
     ipcRenderer.off(channel, listener)
   },
 })
@@ -52,6 +78,7 @@ contextBridge.exposeInMainWorld("suora", {
     create: (payload?: unknown) => ipcRenderer.invoke("models:create", payload),
     save: (payload: unknown) => ipcRenderer.invoke("models:save", payload),
     delete: (providerId: string) => ipcRenderer.invoke("models:delete", providerId),
+    discover: (payload: unknown) => ipcRenderer.invoke("models:discover", payload),
   },
   skills: {
     list: () => ipcRenderer.invoke("skills:list"),
@@ -88,7 +115,7 @@ contextBridge.exposeInMainWorld("suora", {
   channels: {
     list: () => ipcRenderer.invoke("channels:list"),
     get: (channelId: string) => ipcRenderer.invoke("channels:get", channelId),
-    create: () => ipcRenderer.invoke("channels:create"),
+    create: (defaults?: unknown) => ipcRenderer.invoke("channels:create", defaults),
     save: (payload: unknown) => ipcRenderer.invoke("channels:save", payload),
     delete: (channelId: string) => ipcRenderer.invoke("channels:delete", channelId),
     startRuntime: () => ipcRenderer.invoke("channel:start"),
@@ -102,8 +129,8 @@ contextBridge.exposeInMainWorld("suora", {
     healthCheck: (channelId: string) => ipcRenderer.invoke("channel:healthCheck", channelId),
     getStreamStatus: (channelId: string) => ipcRenderer.invoke("channel:streamStatus", channelId),
     debugSend: (payload: unknown) => ipcRenderer.invoke("channel:debugSend", payload),
-    startWeChatPersonalLogin: (force?: boolean) => ipcRenderer.invoke("channel:wechatPersonalLoginStart", force),
-    waitForWeChatPersonalLogin: (sessionKey: string, verifyCode?: string, timeoutMs?: number) => ipcRenderer.invoke("channel:wechatPersonalLoginWait", sessionKey, verifyCode, timeoutMs),
+    startWeChatPersonalLogin: (channelId?: string, force?: boolean) => ipcRenderer.invoke("channel:wechatPersonalLoginStart", channelId, force),
+    waitForWeChatPersonalLogin: (channelId: string | undefined, sessionKey: string, verifyCode?: string, timeoutMs?: number) => ipcRenderer.invoke("channel:wechatPersonalLoginWait", channelId, sessionKey, verifyCode, timeoutMs),
     getWeChatPersonalQrPreview: (url: string, waitMs?: number) => ipcRenderer.invoke("channel:wechatPersonalQrPreview", url, waitMs),
   },
   schedulers: {
@@ -129,6 +156,7 @@ contextBridge.exposeInMainWorld("suora", {
     writeFile: (payload: unknown) => ipcRenderer.invoke("tools:writeFile", payload),
     runCommand: (payload: unknown) => ipcRenderer.invoke("tools:runCommand", payload),
     browserNavigate: (payload: unknown) => ipcRenderer.invoke("tools:browserNavigate", payload),
+    browserState: () => ipcRenderer.invoke("tools:browserState"),
     saveFile: (payload: unknown) => ipcRenderer.invoke("tools:saveFile", payload),
     openExternal: (url: string) => ipcRenderer.invoke("tools:openExternal", url),
   },

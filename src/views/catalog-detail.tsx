@@ -30,7 +30,7 @@ const CatalogDetailPage = ({ route, title, description, paramKey }: CatalogDetai
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title={data?.title ?? title} />
+      <PageHeader title={data?.title ?? title} description={description} />
       <div className="flex-1 p-6">
         <div className="mx-auto max-w-4xl">
           {isLoading ? <LoadingCard title={`Loading ${title.toLowerCase()}...`} /> : null}

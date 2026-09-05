@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { FileJson2Icon, PlayIcon, PlusIcon, Settings2Icon } from "lucide-react"
+import { FileJson2Icon, PencilIcon, PlayIcon, PlusIcon, Trash2Icon, UploadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -153,9 +153,18 @@ export function IntegrationHttpEndpointsPanel({
                 Add endpoint
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52 min-w-52">
-                <DropdownMenuItem onClick={() => setEditingEndpoint(createDraftFromEndpoint())}>Add endpoint</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setImportError(null); setCurlImport("curl https://api.example.com/items -X POST -H \"Authorization: Bearer token\""); setIsCurlDialogOpen(true) }}>Import from cURL</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setImportError(null); setOpenApiImport('{\n  "openapi": "3.0.0",\n  "servers": [{ "url": "https://api.example.com" }],\n  "paths": {}\n}'); setIsOpenApiDialogOpen(true) }}>Import API doc</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setEditingEndpoint(createDraftFromEndpoint())}>
+                  <PlusIcon className="size-4" />
+                  Add endpoint
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setImportError(null); setCurlImport("curl https://api.example.com/items -X POST -H \"Authorization: Bearer token\""); setIsCurlDialogOpen(true) }}>
+                  <UploadIcon className="size-4" />
+                  Import from cURL
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => { setImportError(null); setOpenApiImport('{\n  "openapi": "3.0.0",\n  "servers": [{ "url": "https://api.example.com" }],\n  "paths": {}\n}'); setIsOpenApiDialogOpen(true) }}>
+                  <FileJson2Icon className="size-4" />
+                  Import API doc
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
@@ -185,9 +194,8 @@ export function IntegrationHttpEndpointsPanel({
                         </div>
                       </button>
                       <div className="flex shrink-0 items-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setEditingEndpoint(createDraftFromEndpoint(endpoint))}>
-                          <Settings2Icon />
-                          Edit
+                        <Button size="icon-sm" variant="outline" aria-label={`Edit ${endpoint.name}`} title="Edit endpoint" onClick={() => setEditingEndpoint(createDraftFromEndpoint(endpoint))}>
+                          <PencilIcon className="size-4" />
                         </Button>
                         <Button size="sm" variant="outline" disabled={!canTryRun} onClick={() => onTryRun(endpoint.id)}>
                           <PlayIcon />
@@ -197,7 +205,9 @@ export function IntegrationHttpEndpointsPanel({
                     </div>
                     {config.endpoints.length > 1 ? (
                       <div className="mt-3 flex justify-end">
-                        <Button size="sm" variant="ghost" onClick={() => removeEndpoint(endpoint.id)}>Remove</Button>
+                        <Button size="icon-sm" variant="destructive" aria-label={`Delete ${endpoint.name}`} title="Delete endpoint" onClick={() => removeEndpoint(endpoint.id)}>
+                          <Trash2Icon className="size-4" />
+                        </Button>
                       </div>
                     ) : null}
                   </div>
@@ -304,7 +314,9 @@ function EndpointEditorDialog({
                 <NativeSelect value={parameter.type} onChange={(event) => updateParameter(parameter.id, { type: event.target.value })}><NativeSelectOption value="string">string</NativeSelectOption><NativeSelectOption value="number">number</NativeSelectOption><NativeSelectOption value="boolean">boolean</NativeSelectOption><NativeSelectOption value="array">array</NativeSelectOption><NativeSelectOption value="object">object</NativeSelectOption></NativeSelect>
                 <label className="flex items-center justify-between rounded-lg border px-2 py-1 text-xs text-muted-foreground"><span>Required</span><Switch checked={parameter.required} onCheckedChange={(checked) => updateParameter(parameter.id, { required: checked })} /></label>
                 <Input value={parameter.description} onChange={(event) => updateParameter(parameter.id, { description: event.target.value })} placeholder="description" />
-                <Button size="sm" variant="ghost" onClick={() => setDraft({ ...draft, parameters: draft.parameters.filter((item) => item.id !== parameter.id) })}>Remove</Button>
+                <Button size="icon-sm" variant="destructive" aria-label={`Delete parameter ${parameter.name || parameter.id}`} title="Delete parameter" onClick={() => setDraft({ ...draft, parameters: draft.parameters.filter((item) => item.id !== parameter.id) })}>
+                  <Trash2Icon className="size-4" />
+                </Button>
               </div>
             ))}
           </div>

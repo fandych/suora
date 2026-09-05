@@ -1,45 +1,53 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react"
 import { useNavigate, useParams } from "react-router"
 
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listAvailableAgents } from "@/data/repositories/agent-repository"
-import { emitDataChanged } from "@/data/repositories/data-events"
-import { appendAssistantChatMessage, appendUserChatMessage, createChat, getChatDetail, updateChatMessageParts } from "@/data/repositories/chat-repository"
+import { getAgentDetail, listAvailableAgents } from "@/data/repositories/agent-repository"
+import { getChatDetail, updateChatMessageParts } from "@/data/repositories/chat-repository"
 import { getChatDraft, getChatSessionSettings, saveChatDraft, saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser-files"
-import { hasSuoraBridge } from "@/lib/ipc"
+import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
 import { showToast } from "@/lib/app-toast"
-import { retryBuiltInToolActivity } from "@/services/ai-tools"
-import { streamChatAgentResponse, type ChatAgentEvent, type ChatAttachment } from "@/services/ai-service"
-import { buildChatTranscript, createPersistedAssistantPayload, fileToChatAttachment, mergeChatAttachments, resolveFallbackRuntime } from "@/views/chats/chat-controller-utils"
-import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts, updateAssistantToolActivity } from "@/views/chats/assistant-response-parts"
+import { retryToolActivity } from "@/services/ai-tools"
+import type { ChatAttachment } from "@/services/ai-service"
+import { deriveChatBrowserInteractionState } from "@/views/chats/chat-browser-status"
+import { getDocumentDetail } from "@/data/repositories/document-repository"
+import { getIntegrationDetail } from "@/data/repositories/integration-repository"
+import { getSkillDetail } from "@/data/repositories/skill-repository"
+import { getWorkflowDetail } from "@/data/repositories/workflow-repository"
+import { buildChatTranscript, fileToChatAttachment, mergeChatAttachments, resolveFallbackRuntime } from "@/views/chats/chat-controller-utils"
+import { toAssistantResponseParts, updateAssistantToolActivity } from "@/views/chats/assistant-response-parts"
 import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
 import type { ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
-
-type ChatProviderType = ChatRuntimeSettings["model"]["providerType"]
-
-function isChatProviderType(value: string): value is ChatProviderType {
-  return ["ollama", "openai", "anthropic", "openai-compatible", "google"].includes(value)
-}
+import { getChatRuntimeSnapshot, patchChatRuntimeParts, setPendingBrowserContinue, startChatRun, stopChatRun, subscribeToChatRuntime } from "@/views/chats/chat-runtime-store"
 
 export function useChatDetailController() {
   const { chatId } = useParams<{ chatId: string }>()
   const navigate = useNavigate()
   const [draft, setDraft] = useState("")
-  const [toolEvents, setToolEvents] = useState<ChatAgentEvent[]>([])
-  const [streamingText, setStreamingText] = useState("")
-  const [isResponding, setIsResponding] = useState(false)
   const [settingsDraft, setSettingsDraft] = useState<ChatRuntimeSettings | null>(null)
   const [activeChatId, setActiveChatId] = useState<string | null>(chatId ?? null)
   const [autoScroll, setAutoScroll] = useState(true)
   const [selectedAgentId, setSelectedAgentId] = useState("")
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
-  const [assistantResponseMessageId, setAssistantResponseMessageId] = useState<string | null>(null)
-  const [assistantResponseParts, setAssistantResponseParts] = useState<AssistantResponsePart[]>([])
+  const [browserState, setBrowserState] = useState<{ open: boolean; visible: boolean; url: string }>({ open: false, visible: false, url: "" })
   const [isDraftHydrated, setIsDraftHydrated] = useState(false)
   const skipRouteResetRef = useRef(false)
-  const abortControllerRef = useRef<AbortController | null>(null)
+
+  const runtimeSnapshot = useSyncExternalStore(
+    subscribeToChatRuntime,
+    () => getChatRuntimeSnapshot(activeChatId),
+    () => getChatRuntimeSnapshot(activeChatId),
+  )
+
+  const toolEvents = runtimeSnapshot.toolEvents
+  const streamingText = runtimeSnapshot.streamingText
+  const isResponding = runtimeSnapshot.isResponding
+  const assistantResponseMessageId = runtimeSnapshot.assistantResponseMessageId
+  const assistantResponseParts = runtimeSnapshot.assistantResponseParts as AssistantResponsePart[]
+  const pendingBrowserContinue = runtimeSnapshot.pendingBrowserContinue
+  const browserInteractionState = useMemo(() => deriveChatBrowserInteractionState({ browserState, toolEvents }), [browserState, toolEvents])
 
   const { data, error, isLoading, reload, setData } = useAsyncResource(
     async () => {
@@ -62,6 +70,7 @@ export function useChatDetailController() {
   const providers = useMemo(() => providerData ?? [], [providerData])
   const selectedChat = data
   const groupedProviders = providers.filter((provider) => provider.models.length > 0)
+  const selectedAgentRecord = agents.find((agent) => agent.id === selectedAgentId) ?? null
   const selectedProviderRecord = providers.find((provider) => provider.id === settingsDraft?.model.providerId) ?? null
   const selectedModelRecord = selectedProviderRecord?.models.find((model) => model.id === settingsDraft?.model.modelId) ?? null
   const activeProviderType = providers.find((provider) => provider.id === settingsDraft?.model.providerId)?.providerType ?? settingsDraft?.model.providerType ?? "openai"
@@ -74,6 +83,7 @@ export function useChatDetailController() {
 
     return `${settingsDraft.model.providerId}::${settingsDraft.model.modelId}`
   }, [settingsDraft])
+  const [activeAgentMaxSteps, setActiveAgentMaxSteps] = useState<number | undefined>(undefined)
 
   useEffect(() => {
     setActiveChatId(chatId ?? null)
@@ -89,50 +99,34 @@ export function useChatDetailController() {
   }, [sessionSettings])
 
   useEffect(() => {
-    if (selectedAgentId && agents.some((agent) => agent.id === selectedAgentId)) {
+    let cancelled = false
+    if (!selectedAgentId) {
+      setActiveAgentMaxSteps(undefined)
       return
     }
 
-    if (!agents.some((agent) => agent.id === "agent-general-assistant")) {
-      return
-    }
+    void getAgentDetail(selectedAgentId).then((detail) => {
+      if (!cancelled) {
+        setActiveAgentMaxSteps(detail?.config.maxSteps)
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setActiveAgentMaxSteps(undefined)
+      }
+    })
 
-    setSelectedAgentId("agent-general-assistant")
-    if (settingsDraft) {
-      persistChatSessionSettings(settingsDraft, "agent-general-assistant")
+    return () => {
+      cancelled = true
     }
-  }, [agents, selectedAgentId, settingsDraft])
+  }, [selectedAgentId, selectedAgentRecord?.updatedAt])
 
   useEffect(() => {
     if (skipRouteResetRef.current) {
       skipRouteResetRef.current = false
       return
     }
-
-    abortControllerRef.current?.abort()
-
-    setAssistantResponseMessageId(null)
-    setToolEvents([])
-    setStreamingText("")
-    setIsResponding(false)
-    setAssistantResponseParts([])
     setIsDraftHydrated(false)
   }, [chatId])
-
-  useEffect(() => {
-    if (!settingsDraft || groupedProviders.length === 0) {
-      return
-    }
-
-    const fallbackRuntime = resolveFallbackRuntime(settingsDraft, groupedProviders)
-    if (!fallbackRuntime) {
-      return
-    }
-
-    setSettingsDraft(fallbackRuntime)
-    persistChatSessionSettings(fallbackRuntime, selectedAgentId)
-    showToast({ title: "Model unavailable", description: `Switched to ${fallbackRuntime.model.modelId}.`, type: "warning" })
-  }, [groupedProviders, selectedAgentId, settingsDraft])
 
   useEffect(() => {
     let cancelled = false
@@ -163,7 +157,37 @@ export function useChatDetailController() {
     return () => window.clearTimeout(handle)
   }, [activeChatId, draft, isDraftHydrated])
 
-  const persistChatSessionSettings = (nextRuntime: ChatRuntimeSettings, nextAgentId: string, toastTitle?: string) => {
+  useEffect(() => {
+    let cancelled = false
+
+    void suoraIpc.tools.browserState().then((nextState) => {
+      if (!cancelled) {
+        setBrowserState(nextState)
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setBrowserState({ open: false, visible: false, url: "" })
+      }
+    })
+
+    const handler = (...args: unknown[]) => {
+      const payload = args[1] as { open?: boolean; visible?: boolean; url?: string } | undefined
+      setBrowserState({
+        open: Boolean(payload?.open),
+        visible: Boolean(payload?.visible),
+        url: typeof payload?.url === "string" ? payload.url : "",
+      })
+    }
+
+    window.electron?.on?.("tools:browserStateChanged", handler)
+
+    return () => {
+      cancelled = true
+      window.electron?.off?.("tools:browserStateChanged", handler)
+    }
+  }, [])
+
+  const persistChatSessionSettings = useCallback((nextRuntime: ChatRuntimeSettings, nextAgentId: string, toastTitle?: string) => {
     void saveChatSessionSettings(activeChatId ?? null, {
       runtime: nextRuntime,
       selectedAgentId: nextAgentId,
@@ -177,7 +201,37 @@ export function useChatDetailController() {
     }).catch((nextError) => {
       showToast({ title: "Settings save failed", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error" })
     })
-  }
+  }, [activeChatId, setSessionSettings])
+
+  useEffect(() => {
+    if (selectedAgentId && agents.some((agent) => agent.id === selectedAgentId)) {
+      return
+    }
+
+    if (!agents.some((agent) => agent.id === "agent-general-assistant")) {
+      return
+    }
+
+    setSelectedAgentId("agent-general-assistant")
+    if (settingsDraft) {
+      persistChatSessionSettings(settingsDraft, "agent-general-assistant")
+    }
+  }, [agents, persistChatSessionSettings, selectedAgentId, settingsDraft])
+
+  useEffect(() => {
+    if (!settingsDraft || groupedProviders.length === 0) {
+      return
+    }
+
+    const fallbackRuntime = resolveFallbackRuntime(settingsDraft, groupedProviders)
+    if (!fallbackRuntime) {
+      return
+    }
+
+    setSettingsDraft(fallbackRuntime)
+    persistChatSessionSettings(fallbackRuntime, selectedAgentId)
+    showToast({ title: "Model unavailable", description: `Switched to ${fallbackRuntime.model.modelId}.`, type: "warning" })
+  }, [groupedProviders, persistChatSessionSettings, selectedAgentId, settingsDraft])
 
   const applyRuntimeSettings = (nextRuntime: ChatRuntimeSettings) => {
     setSettingsDraft(nextRuntime)
@@ -199,92 +253,51 @@ export function useChatDetailController() {
       return
     }
 
-    let workingChatId = activeChatId
-    let baseDetail = selectedChat
-
-    if (!workingChatId || !baseDetail) {
-      const created = await createChat()
-      workingChatId = created.chat.id
-      baseDetail = created
-      setActiveChatId(created.chat.id)
-      setData(created)
-      await saveChatSessionSettings(created.chat.id, {
-        runtime: settingsDraft,
-        selectedAgentId,
-      })
-      emitDataChanged("/chats")
-      setAssistantResponseParts([{ id: "assistant-stream", type: "text", content: "", isPending: true }])
-      skipRouteResetRef.current = true
-      navigate(`/chats/${created.chat.id}`, { replace: true })
-    }
-
-    if (!workingChatId || !baseDetail) {
-      return
-    }
-
-    const outgoingText = draft.trim() || attachments.map((attachment) => `[Attachment] ${attachment.name}`).join("\n")
-    const next = await appendUserChatMessage(workingChatId, outgoingText)
-    setData(next)
-    emitDataChanged("/chats")
-    setDraft("")
-    setToolEvents([])
-    setStreamingText("")
-    setAssistantResponseMessageId(null)
-    setAssistantResponseParts([{ id: "assistant-stream", type: "text", content: "", isPending: true }])
-    setIsResponding(true)
-
-    const abortController = new AbortController()
-    abortControllerRef.current = abortController
+    const pendingAttachments = attachments
+    const outgoingDraft = draft
 
     try {
-      let finalText = ""
-      let errorPartIndex = 0
-      let streamedParts: AssistantResponsePart[] = []
+      const resultingChatId = await startChatRun({
+        activeChatId,
+        selectedChatMessages: selectedChat?.messages ?? null,
+        settingsDraft,
+        selectedAgentId,
+        draft: outgoingDraft,
+        attachments: pendingAttachments,
+        onChatCreated: async (createdChatId) => {
+          const createdDetail = await getChatDetail(createdChatId)
+          setActiveChatId(createdChatId)
+          setData(createdDetail)
+          skipRouteResetRef.current = true
+          navigate(`/chats/${createdChatId}`, { replace: true })
+        },
+        onUserMessageSaved: (workingChatId, detail) => {
+          if (workingChatId === activeChatId || (!activeChatId && detail.chat.id === workingChatId)) {
+            setData(detail)
+          }
+          setPendingBrowserContinue(workingChatId, false)
+          setDraft("")
+        },
+        onAssistantMessageSaved: (workingChatId, detail) => {
+          if (workingChatId === activeChatId) {
+            setData(detail)
+          }
+        },
+        onFailureBeforeSave: () => {
+          setDraft(outgoingDraft)
+        },
+        onAttachmentsConsumed: () => {
+          setAttachments([])
+        },
+      })
 
-      for await (const event of streamChatAgentResponse(next.messages, settingsDraft, {
-        abortSignal: abortController.signal,
-        selectedAgentId: selectedAgentId || undefined,
-        attachments,
-      })) {
-        if (event.type === "error") {
-          errorPartIndex += 1
-        }
-
-        streamedParts = applyEventToAssistantResponseParts(streamedParts, event, errorPartIndex)
-        setAssistantResponseParts(streamedParts)
-
-        if (event.type === "text-delta") {
-          finalText += event.text
-          setStreamingText((value) => value + event.text)
-          continue
-        }
-
-        setToolEvents((value) => [...value, event])
-      }
-
-      const finalizedParts = finalizeAssistantResponseParts(streamedParts)
-      const completedWithAbort = abortController.signal.aborted
-      const { persistedText, persistedParts } = createPersistedAssistantPayload(finalText, finalizedParts, completedWithAbort)
-
-      if (persistedText.trim() || persistedParts.length > 0) {
-        const withAssistant = await appendAssistantChatMessage(workingChatId, persistedText.trim(), persistedParts)
-        setData(withAssistant)
-        setAssistantResponseMessageId(withAssistant.messages[withAssistant.messages.length - 1]?.id ?? null)
-        setAssistantResponseParts(persistedParts)
-        emitDataChanged("/chats")
+      if (resultingChatId && !activeChatId) {
+        setActiveChatId(resultingChatId)
       }
     } catch (nextError) {
       if (nextError instanceof DOMException && nextError.name === "AbortError") {
         return
       }
-
-      setToolEvents((value) => [...value, { type: "error", error: nextError instanceof Error ? nextError.message : String(nextError) }])
-      showToast({ title: "Response failed", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error" })
-    } finally {
-      abortControllerRef.current = null
-      setIsResponding(false)
-      setAssistantResponseParts((current) => finalizeAssistantResponseParts(current))
-      setAttachments([])
     }
   }
 
@@ -306,16 +319,22 @@ export function useChatDetailController() {
 
   const handleRetryTool = async (messageId: string | null, activity: ChatToolActivity) => {
     try {
-      const output = await retryBuiltInToolActivity({ toolName: activity.toolName, input: activity.input })
+      const agentDetail = selectedAgentId ? await getAgentDetail(selectedAgentId).catch(() => null) : null
+      const output = await retryToolActivity({ toolName: activity.toolName, input: activity.input }, {
+        scopedDocuments: agentDetail ? await Promise.all((agentDetail.config.documentIds ?? []).map(async (id) => getDocumentDetail(id).catch(() => null))) : undefined,
+        scopedSkills: agentDetail ? await Promise.all((agentDetail.config.skillIds ?? []).map(async (id) => getSkillDetail(id).catch(() => null))) : undefined,
+        scopedWorkflows: agentDetail ? await Promise.all((agentDetail.config.workflowIds ?? []).map(async (id) => getWorkflowDetail(id).catch(() => null))) : undefined,
+        scopedIntegrations: agentDetail ? await Promise.all((agentDetail.config.toolsetIds ?? []).map(async (id) => getIntegrationDetail(id).catch(() => null))) : undefined,
+      })
       if (messageId && activeChatId && data?.messages.some((message) => message.id === messageId)) {
         const message = data.messages.find((item) => item.id === messageId)
         if (message?.parts?.length) {
-          const nextParts = updateAssistantToolActivity(message.parts, activity.id, { output, error: undefined })
+          const nextParts = updateAssistantToolActivity(toAssistantResponseParts(message.parts), activity.id, { output, error: undefined })
           const updated = await updateChatMessageParts(activeChatId, messageId, nextParts)
           setData(updated)
         }
       } else {
-        setAssistantResponseParts((current) => updateAssistantToolActivity(current, activity.id, { output, error: undefined }))
+        patchChatRuntimeParts(activeChatId, (current) => updateAssistantToolActivity(current, activity.id, { output, error: undefined }))
       }
       showToast({ title: "Tool retried", description: `${activity.toolName} completed successfully.`, type: "success" })
     } catch (nextError) {
@@ -323,12 +342,12 @@ export function useChatDetailController() {
       if (messageId && activeChatId && data?.messages.some((item) => item.id === messageId)) {
         const target = data.messages.find((item) => item.id === messageId)
         if (target?.parts?.length) {
-          const nextParts = updateAssistantToolActivity(target.parts, activity.id, { error: message })
+          const nextParts = updateAssistantToolActivity(toAssistantResponseParts(target.parts), activity.id, { error: message })
           const updated = await updateChatMessageParts(activeChatId, messageId, nextParts)
           setData(updated)
         }
       } else {
-        setAssistantResponseParts((current) => updateAssistantToolActivity(current, activity.id, { error: message }))
+        patchChatRuntimeParts(activeChatId, (current) => updateAssistantToolActivity(current, activity.id, { error: message }))
       }
       showToast({ title: "Tool retry failed", description: message, type: "error" })
     }
@@ -362,11 +381,15 @@ export function useChatDetailController() {
 
   return {
     activeProviderType,
+    activeAgentMaxSteps,
     activeChatId,
     agents,
     assistantResponseMessageId,
     assistantResponseParts,
     attachments,
+    browserState,
+    browserInteractionState,
+    pendingBrowserContinue,
     autoScroll,
     combinedError,
     draft,
@@ -375,8 +398,18 @@ export function useChatDetailController() {
     handleExportChat,
     handleRetryTool,
     handleSend,
+    handleContinueAfterBrowser: async () => {
+      if (!activeChatId || isResponding || !settingsDraft) {
+        return
+      }
+
+      setPendingBrowserContinue(activeChatId, true)
+      setDraft((current) => current || "请基于已打开的浏览器页面继续分析并给出最终答复。")
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+      void handleSend()
+    },
     handleStop: () => {
-      abortControllerRef.current?.abort()
+      stopChatRun(activeChatId)
       showToast({ title: "Response stopped", description: "Assistant generation was cancelled.", type: "warning", timeout: 2500 })
     },
     isLoading,
@@ -394,7 +427,7 @@ export function useChatDetailController() {
         model: {
           ...settingsDraft.model,
           providerId: provider.id,
-          providerType: isChatProviderType(provider.providerType) ? provider.providerType : settingsDraft.model.providerType,
+          providerType: provider.providerType,
           baseUrl: provider.baseUrl,
           apiKey: provider.apiKey,
           modelId,

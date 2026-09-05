@@ -54,12 +54,15 @@ export function useWorkflowDetailController() {
   const flowRef = useRef<ReactFlowInstance<Node<WorkflowNodeData>, Edge> | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
-  const agents = agentsData ?? []
-  const documents = documentsData ?? []
-  const integrations = integrationsData ?? []
+  const agents = useMemo(() => agentsData ?? [], [agentsData])
+  const documents = useMemo(() => documentsData ?? [], [documentsData])
+  const integrations = useMemo(() => integrationsData ?? [], [integrationsData])
   const modelOptions = (providersData ?? []).flatMap((provider) => provider.models.map((model) => ({ id: model.id, label: `${provider.title} / ${model.name}` })))
 
   const applyViewport = (nextViewport: Viewport) => { setViewport(nextViewport); void flowRef.current?.setViewport(nextViewport, { duration: 0 }) }
+  const setFlowInstance = (instance: ReactFlowInstance<Node<WorkflowNodeData>, Edge> | null) => {
+    flowRef.current = instance
+  }
 
   useEffect(() => {
     if (!data) return
@@ -73,7 +76,7 @@ export function useWorkflowDetailController() {
     setSelectedVersionId(data.selectedVersion.id)
     setSelectedNodeId(data.definition.nodes[0]?.id ?? null)
     applyViewport(data.definition.viewport ?? DEFAULT_VIEWPORT)
-  }, [data])
+  }, [data, setEdges, setNodes])
 
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId])
   const latestInvocation = data?.invocations[0] ?? null
@@ -331,7 +334,7 @@ export function useWorkflowDetailController() {
     }
 
     setNodes((current) => [...current, insert.nextNode])
-    setEdges((current) => addEdge(insert.nextEdge, current))
+    setEdges((current) => addEdge({ id: `${insert.nextId}-edge`, ...insert.nextEdge }, current))
     setSelectedNodeId(insert.nextId)
     setInspectorMode("properties")
   }
@@ -427,7 +430,7 @@ export function useWorkflowDetailController() {
     dryRunError, flowRef, handleAddNode, handleAddNodeFromHandle, handleAddPresetNode, handleAutoLayout, handleConnect, handleDeleteNode,
     focusNode, handleDeleteWorkflow, handleDuplicateNode, handleDryRun, handleExport, handleFitView, handleImport, handleNodeClick,
     handlePublish, handleRunRelease, handleSave, handleSelectedNodeChange, handleZoomStep, hasUnsavedChanges, importInputRef,
-    hasOutgoingConnection,
+    hasOutgoingConnection, setFlowInstance,
     inspectorMode, integrations, isDeleteDialogOpen, isDeleting, isDraftVersion, isDryRunning, isLoading, isPreferenceDialogOpen, isReadOnly,
     isReleaseVersion, modelOptions, nodes, notifications, onEdgesChange, onNodesChange, reload,
     propertiesPanelWidth, resourceBindings, selectedNode, selectedNodeId, setData, setDryRunInput, setEdges, setInspectorMode, setIsDeleteDialogOpen,

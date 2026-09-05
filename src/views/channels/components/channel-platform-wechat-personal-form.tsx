@@ -153,10 +153,20 @@ export function ChannelPlatformWeChatPersonalForm({
   const [requestedQrFlow, setRequestedQrFlow] = useState(false)
   const [sourceSnapshotOnOpen, setSourceSnapshotOnOpen] = useState("")
   const bindButtonLabel = channel.wechatPersonalBindingStatus === "bound" ? "Rebind WeChat" : "Start QR binding"
+  const isWeChatConnected = channel.wechatPersonalBindingStatus === "bound" || channel.bindingState === "connected"
   const qrImageSource = qrPreviewFallback?.source === normalizedWeChatQrSource
     ? qrPreviewFallback.dataUrl
     : normalizeWeChatQrImageSource(channel.wechatPersonalQrCodeUrl)
+  const isQrDialogVisible = isQrDialogOpen && !isWeChatConnected
   const shouldWaitForFreshQr = requestedQrFlow && (isBinding || sourceSnapshotOnOpen === normalizedWeChatQrSource)
+  const qrStatusMessage = channel.wechatPersonalQrStatus === "scaned"
+    ? "已扫码，等待用户确认"
+    : channel.wechatPersonalQrStatus === "need_verifycode"
+      ? "需要验证码，请在下方输入设备上显示的数字"
+      : "仅在微信运行时明确要求时再输入验证码"
+  const qrStatusClassName = channel.wechatPersonalQrStatus === "scaned" || channel.wechatPersonalQrStatus === "need_verifycode"
+    ? "text-center text-sm font-medium text-emerald-700"
+    : "text-center text-sm text-muted-foreground"
 
   useEffect(() => {
     setQrPreviewFallback((current) => {
@@ -173,11 +183,11 @@ export function ChannelPlatformWeChatPersonalForm({
     if (requestedQrFlow && !isBinding && normalizedWeChatQrSource && sourceSnapshotOnOpen !== normalizedWeChatQrSource) {
       setRequestedQrFlow(false)
     }
-    if (channel.wechatPersonalQrStatus === "scaned" || channel.wechatPersonalQrStatus === "need_verifycode") {
+    if (isWeChatConnected) {
       setIsQrDialogOpen(false)
       setRequestedQrFlow(false)
     }
-  }, [channel.wechatPersonalBindingStatus, channel.wechatPersonalQrStatus, isBinding, normalizedWeChatQrSource, requestedQrFlow, sourceSnapshotOnOpen])
+  }, [isWeChatConnected, channel.wechatPersonalQrStatus, isBinding, normalizedWeChatQrSource, requestedQrFlow, sourceSnapshotOnOpen])
 
   const handleOpenBindDialog = () => {
     setSourceSnapshotOnOpen(normalizedWeChatQrSource)
@@ -251,7 +261,7 @@ export function ChannelPlatformWeChatPersonalForm({
         </div>
       ) : null}
 
-      <Dialog open={isQrDialogOpen} onOpenChange={setIsQrDialogOpen}>
+      <Dialog open={isQrDialogVisible} onOpenChange={setIsQrDialogOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>Scan to bind</DialogTitle>
@@ -264,7 +274,7 @@ export function ChannelPlatformWeChatPersonalForm({
                 {(!qrImageLoaded || qrPreviewResolvingSource === normalizedWeChatQrSource) ? <div className="absolute inset-3 flex items-center justify-center rounded-lg bg-white/90"><span className="h-8 w-8 animate-spin rounded-full border-2 border-primary/30 border-t-primary" /></div> : null}
                 <img src={qrImageSource} alt="WeChat personal QR code" onLoad={() => setQrImageLoaded(true)} onError={() => { void handleQrPreviewError() }} className="mx-auto aspect-square w-full max-w-md object-contain" />
               </div>
-              <Hint>Only enter a verification code if the WeChat runtime explicitly asks for one.</Hint>
+              <div className={qrStatusClassName}>{qrStatusMessage}</div>
             </div>
           ) : <div className="flex min-h-80 items-center justify-center rounded-xl border bg-muted/10 text-sm text-muted-foreground">Waiting for QR code...</div>}
         </DialogContent>

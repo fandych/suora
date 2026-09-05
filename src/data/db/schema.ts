@@ -5,6 +5,8 @@ export const chats = sqliteTable("chats", {
   title: text("title").notNull(),
   chatbotId: text("chatbot_id").notNull(),
   summary: text("summary").notNull().default(""),
+  sourceType: text("source_type").notNull().default("manual"),
+  sourceRef: text("source_ref"),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 })
 

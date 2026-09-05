@@ -2,6 +2,7 @@ import { app, BrowserWindow } from "electron"
 
 import { applyMigrations, closeDatabase, openDatabase } from "@electron/database/db-core"
 import { setupIpc } from "@electron/ipc"
+import { closeBrowserWindow } from "@electron/others/browser-window"
 import { configureAutoUpdater } from "@electron/others/updater"
 import { createWindow } from "@electron/others/window"
 import { configureAppStoragePaths, ensureWorkspace } from "@electron/others/workspace"
@@ -30,5 +31,6 @@ app.on("window-all-closed", () => {
 })
 
 app.on("before-quit", () => {
+  closeBrowserWindow()
   closeDatabase()
 })

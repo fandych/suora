@@ -4,6 +4,7 @@ import { createOpenAI } from "@ai-sdk/openai"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
 import { z } from "zod"
 
+import type { ChatAttachmentRecord } from "@/data/domain/chat-message-parts"
 import type { ChatMessageRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { buildChatModelMessages } from "@/services/chat-model-messages"
@@ -12,6 +13,8 @@ import { getIntegrationDetail } from "@/data/repositories/integration-repository
 import { executeIntegration } from "@/data/repositories/integration-execution-repository"
 import { listSkills, getSkillDetail } from "@/data/repositories/skill-repository"
 import { listWorkflows, getWorkflowDetail } from "@/data/repositories/workflow-repository"
+import { getResearchAgentMaxSteps, getStepLimitErrorMessage, normalizeChatAgentMaxSteps } from "@/services/agent-loop-control"
+import { detectChatErrorKind, type ChatErrorKind } from "@/services/chat-error-state"
 import { createBuiltInTools, listScopedDocuments, listScopedSkills, listScopedWorkflows, mergeAgentInstructions, resolveAgentContext } from "@/services/ai-tools"
 
 type AiFetchStartResult = {
@@ -28,16 +31,9 @@ export type ChatAgentEvent =
   | { type: "text-delta"; text: string }
   | { type: "tool-call"; toolCallId: string; toolName: string; input: Record<string, unknown> }
   | { type: "tool-result"; toolCallId: string; toolName: string; output: string }
-  | { type: "error"; error: string }
+  | { type: "error"; error: string; errorKind: ChatErrorKind }
 
-export type ChatAttachment = {
-  id: string
-  sourceKey: string
-  name: string
-  mediaType: string
-  data: string
-  kind: "image" | "file"
-}
+export type ChatAttachment = ChatAttachmentRecord
 
 function decodeBase64(base64: string) {
   return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0))
@@ -148,6 +144,12 @@ function createModel(settings: ChatRuntimeSettings): LanguageModel {
         ...(settings.model.baseUrl ? { baseURL: settings.model.baseUrl } : {}),
         ...sharedOptions,
       })(settings.model.modelId)
+    case "azure":
+      return createOpenAI({
+        apiKey: settings.model.apiKey,
+        baseURL: settings.model.baseUrl || "https://your-resource-name.openai.azure.com/openai/v1/",
+        ...sharedOptions,
+      })(settings.model.modelId)
     case "openai":
       return createOpenAI({
         apiKey: settings.model.apiKey,
@@ -189,13 +191,13 @@ function serializeToolOutput(output: unknown) {
   }
 }
 
-async function createResearchSubagent(settings: ChatRuntimeSettings) {
+async function createResearchSubagent(settings: ChatRuntimeSettings, maxSteps: number) {
   const model = createModel(settings)
 
   return new ToolLoopAgent({
     model,
     instructions: "You are a focused research subagent. Summarize only the relevant facts from the provided workspace tools.",
-    stopWhen: stepCountIs(4),
+    stopWhen: stepCountIs(maxSteps),
     tools: {
       listDocuments: tool({
         description: "List available documents in the workspace.",
@@ -221,6 +223,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
   const effectiveSettings = agentContext?.detail
     ? {
         ...settings,
+        maxSteps: typeof agentContext.detail.config.maxSteps === "number" ? agentContext.detail.config.maxSteps : settings.maxSteps,
         model: {
           ...settings.model,
           providerId: agentContext.detail.config.providerId || settings.model.providerId,
@@ -229,7 +232,9 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
       }
     : settings
   const model = createModel(effectiveSettings)
-  const researchSubagent = await createResearchSubagent(effectiveSettings)
+  const chatAgentMaxSteps = normalizeChatAgentMaxSteps(effectiveSettings.maxSteps)
+  const researchAgentMaxSteps = getResearchAgentMaxSteps(chatAgentMaxSteps)
+  let researchSubagentPromise: Promise<Awaited<ReturnType<typeof createResearchSubagent>>> | null = null
   const builtInTools = await createBuiltInTools()
 
   const scopedSearchDocuments = agentContext?.documents?.filter(Boolean) ?? []
@@ -240,7 +245,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
   const agent = new ToolLoopAgent({
     model,
     instructions: mergeAgentInstructions(effectiveSettings, agentContext?.detail ?? null),
-    stopWhen: stepCountIs(6),
+    stopWhen: stepCountIs(chatAgentMaxSteps),
     tools: {
       ...builtInTools,
       searchDocuments: tool({
@@ -303,8 +308,16 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
         description: "Delegate a focused research task to a specialized subagent.",
         inputSchema: z.object({ task: z.string() }),
         execute: async ({ task }, { abortSignal: nextAbortSignal }) => {
+          researchSubagentPromise ??= createResearchSubagent(effectiveSettings, researchAgentMaxSteps)
+          const researchSubagent = await researchSubagentPromise
           const result = await researchSubagent.generate({ prompt: task, abortSignal: nextAbortSignal })
-          return result.text
+          const stepLimitError = getStepLimitErrorMessage({
+            finishReason: result.finishReason,
+            stepCount: result.steps.length,
+            maxSteps: researchAgentMaxSteps,
+            agentLabel: "The research subagent",
+          })
+          return stepLimitError ?? result.text
         },
       }),
       runIntegration: tool({
@@ -312,6 +325,10 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
         inputSchema: z.object({ integrationId: z.string(), inputJson: z.string().default("{}") }),
         execute: async ({ integrationId, inputJson }) => {
           const boundIntegration = scopedIntegrations.find((item) => item?.integration.id === integrationId)
+          if (scopedIntegrations.length > 0 && !boundIntegration) {
+            throw new Error("The selected agent cannot access this integration.")
+          }
+
           const detail = boundIntegration ?? await getIntegrationDetail(integrationId)
           const result = await executeIntegration(detail.config, inputJson)
           return {
@@ -341,7 +358,10 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
         yield { type: "tool-result", toolCallId: part.toolCallId, toolName: part.toolName, output: serializeToolOutput(part.output) }
         break
       case "error":
-        yield { type: "error", error: part.error instanceof Error ? part.error.message : String(part.error) }
+        {
+          const error = part.error instanceof Error ? part.error.message : String(part.error)
+          yield { type: "error", error, errorKind: detectChatErrorKind(error) }
+        }
         break
       case "abort":
         return
@@ -349,6 +369,18 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
       default:
         break
     }
+  }
+
+  const [finishReason, steps] = await Promise.all([result.finishReason, result.steps])
+  const stepLimitError = getStepLimitErrorMessage({
+    finishReason,
+    stepCount: steps.length,
+    maxSteps: chatAgentMaxSteps,
+    agentLabel: "The chat agent",
+  })
+
+  if (stepLimitError) {
+    yield { type: "error", error: stepLimitError, errorKind: "step-limit" }
   }
 }
 

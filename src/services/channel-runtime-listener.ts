@@ -12,12 +12,6 @@ import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts } fr
 import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
 import type { ChannelConfigRecord, ChatDetail } from "@/data/domain/models"
 
-type ChatProviderType = "ollama" | "openai" | "anthropic" | "openai-compatible" | "google"
-
-function isChatProviderType(value: string): value is ChatProviderType {
-  return value === "ollama" || value === "openai" || value === "anthropic" || value === "openai-compatible" || value === "google"
-}
-
 type ChannelRuntimeEvent = {
   channel: ChannelConfigRecord
   message: {
@@ -46,6 +40,8 @@ async function ensureChannelChat(event: ChannelRuntimeEvent) {
     title: `${event.channel.title} · ${event.message.senderName || event.message.senderId}`,
     chatbotId: event.channel.replyAgentId || "assistant-main",
     summary: event.message.content.slice(0, 120),
+    sourceType: "channel",
+    sourceRef: event.channel.id,
   })
   return { chat: ensured.chat, created: ensured.messages.length === 0, detail: ensured }
 }
@@ -79,7 +75,7 @@ async function handleChannelRuntimeEvent(event: ChannelRuntimeEvent) {
           model: {
             ...settings.runtime.model,
             providerId: activeProvider.provider.id,
-            providerType: isChatProviderType(activeProvider.provider.providerType) ? activeProvider.provider.providerType : settings.runtime.model.providerType,
+            providerType: activeProvider.provider.providerType,
             baseUrl: activeProvider.provider.baseUrl,
             apiKey: activeProvider.provider.apiKey,
             modelId: activeProvider.modelId,
@@ -129,7 +125,12 @@ export function initChannelRuntimeListener() {
     return () => undefined
   }
 
-  const handler = (_event: unknown, payload: ChannelRuntimeEvent) => {
+  const handler = (...args: unknown[]) => {
+    const payload = args[1] as ChannelRuntimeEvent | undefined
+    if (!payload) {
+      return
+    }
+
     void handleChannelRuntimeEvent(payload).catch((error) => {
       showToast({ title: "Channel runtime failed", description: error instanceof Error ? error.message : String(error), type: "error" })
     })

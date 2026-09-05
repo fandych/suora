@@ -10,15 +10,43 @@ import { toast } from "@/components/ui/toast"
 import type { AgentSummary, ProviderConfigRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import type { ChatAgentEvent, ChatAttachment } from "@/services/ai-service"
+import type { ChatBrowserInteractionState } from "@/views/chats/chat-browser-status"
+import { ChatBrowserStatusBar } from "@/views/chats/components/chat-browser-status-bar"
 import { ChatExportButtons } from "@/views/chats/components/chat-export-buttons"
 import { ChatStatusLine } from "@/views/chats/components/chat-status-line"
 
+type SpeechRecognitionResultAlternativeLike = {
+  transcript?: string
+}
+
+type SpeechRecognitionResultLike = {
+  0?: SpeechRecognitionResultAlternativeLike
+}
+
+type SpeechRecognitionEventLike = {
+  error?: string
+  results: ArrayLike<SpeechRecognitionResultLike>
+}
+
+type SpeechRecognitionLike = {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onstart: (() => void) | null
+  onend: (() => void) | null
+  onerror: ((event: SpeechRecognitionEventLike) => void) | null
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null
+  start: () => void
+  stop: () => void
+}
+
 type SpeechRecognitionConstructor = {
-  new (): SpeechRecognition
+  new (): SpeechRecognitionLike
 }
 
 declare global {
   interface Window {
+    SpeechRecognition?: SpeechRecognitionConstructor
     webkitSpeechRecognition?: SpeechRecognitionConstructor
   }
 }
@@ -27,6 +55,7 @@ type ChatComposerProps = {
   agents: AgentSummary[]
   attachments: ChatAttachment[]
   autoScroll: boolean
+  browserState?: ChatBrowserInteractionState
   draft: string
   exportDisabled?: boolean
   groupedProviders: ProviderConfigRecord[]
@@ -37,11 +66,13 @@ type ChatComposerProps = {
   onAutoScrollChange: (value: boolean) => void
   onDraftChange: (value: string) => void
   onExportChat: (format: "markdown" | "pdf" | "docx") => Promise<void>
+  onContinueAfterBrowser: () => void
   onModelChange: (value: string) => void
   onRemoveAttachment: (attachmentId: string) => void
   onSelectedAgentChange: (value: string) => void
   onSend: () => Promise<void>
   onStop: () => void
+  pendingBrowserContinue?: boolean
   selectedAgentId: string
   settingsDraft: ChatRuntimeSettings
   supportsAttachments: boolean
@@ -59,6 +90,7 @@ export function ChatComposer({
   agents,
   attachments,
   autoScroll,
+  browserState,
   draft,
   exportDisabled = false,
   groupedProviders,
@@ -67,6 +99,7 @@ export function ChatComposer({
   toolEvents,
   onAttachmentChange,
   onAutoScrollChange,
+  onContinueAfterBrowser,
   onDraftChange,
   onExportChat,
   onModelChange,
@@ -74,12 +107,13 @@ export function ChatComposer({
   onSelectedAgentChange,
   onSend,
   onStop,
+  pendingBrowserContinue = false,
   selectedAgentId,
   settingsDraft,
   supportsAttachments,
 }: ChatComposerProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const draftRef = useRef(draft)
   const dictatedTranscriptRef = useRef("")
@@ -100,7 +134,7 @@ export function ChatComposer({
         baseUrl: settingsDraft.model.baseUrl,
         apiKey: settingsDraft.model.apiKey,
         enabled: true,
-        updatedAt: Date.now(),
+        updatedAt: 0,
         models: [{ id: settingsDraft.model.modelId, name: settingsDraft.model.modelId, enabled: true }],
       },
       ...groupedProviders,
@@ -159,14 +193,14 @@ export function ChatComposer({
       dictatedTranscriptRef.current = ""
       setIsListening(false)
     }
-    recognition.onerror = (event) => {
+    recognition.onerror = (event: SpeechRecognitionEventLike) => {
       recognitionRef.current = null
       dictatedTranscriptRef.current = ""
       setIsListening(false)
       const description = event.error === "not-allowed" ? "Allow microphone permission to use voice input." : `Voice input failed: ${event.error}`
       toast.add({ title: "Voice input error", description, type: "error" })
     }
-    recognition.onresult = (event) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       const transcript = Array.from(event.results)
         .map((result) => result[0]?.transcript ?? "")
         .join("")
@@ -206,6 +240,7 @@ export function ChatComposer({
   return (
     <div className="flex flex-col gap-3">
       <ChatStatusLine isResponding={isResponding} toolEvents={toolEvents} />
+      {browserState ? <ChatBrowserStatusBar browserState={browserState} onContinue={onContinueAfterBrowser} pendingContinue={pendingBrowserContinue} /> : null}
       <div className="flex min-w-0 items-end gap-2">
         <Textarea ref={textareaRef} rows={1} className="min-h-11 max-h-48 min-w-0 flex-1 resize-none overflow-hidden" value={draft} onChange={(event) => onDraftChange(event.target.value)} onKeyDown={handleKeyDown} placeholder={isListening ? "Listening... speak now" : "Ask about documents, workflows, or skills..."} />
       </div>

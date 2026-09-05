@@ -83,15 +83,15 @@ export function registerChannelRuntimeIpc() {
     return { success: true }
   })
 
-  ipcMain.handle("channel:wechatPersonalLoginStart", async (_event, force?: boolean) => {
+  ipcMain.handle("channel:wechatPersonalLoginStart", async (_event, channelId?: string, force?: boolean) => {
     await ensureWorkspace()
     await getChannelService().registerEnabledChannels()
-    return getChannelService().startWeChatPersonalLogin(force)
+    return getChannelService().startWeChatPersonalLogin(channelId, force)
   })
 
-  ipcMain.handle("channel:wechatPersonalLoginWait", async (_event, sessionKey: string, verifyCode?: string, timeoutMs?: number) => {
+  ipcMain.handle("channel:wechatPersonalLoginWait", async (_event, channelId: string | undefined, sessionKey: string, verifyCode?: string, timeoutMs?: number) => {
     await ensureWorkspace()
-    return getChannelService().waitForWeChatPersonalLogin(sessionKey, verifyCode, timeoutMs)
+    return getChannelService().waitForWeChatPersonalLogin(channelId, sessionKey, verifyCode, timeoutMs)
   })
 
   ipcMain.handle("channel:wechatPersonalQrPreview", async (_event, url: string, waitMs?: number) => {
