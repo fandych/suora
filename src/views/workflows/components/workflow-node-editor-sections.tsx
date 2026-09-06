@@ -3,6 +3,8 @@ import { NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { DocumentSummary, IntegrationSummary, WorkflowNodeData } from "@/data/domain/models"
 import { WorkflowField, WorkflowPanelSection } from "@/views/workflows/components/workflow-field"
+import { WorkflowKeyValueEditor } from "@/views/workflows/components/workflow-parameter-editor"
+import { getWorkflowJsonIssue } from "@/views/workflows/components/workflow-editor-state"
 import { WorkflowNodeSelect } from "@/views/workflows/components/workflow-node-select"
 
 export function WorkflowAgentEditorSection({
@@ -67,8 +69,11 @@ export function WorkflowHttpEditorSection({
   integrations: IntegrationSummary[]
   updateNode: (patch: Partial<WorkflowNodeData>) => void
 }) {
+  const headersIssue = getWorkflowJsonIssue(node.headersJson ?? "{}", "Headers")
+  const queryIssue = getWorkflowJsonIssue(node.queryJson ?? "{}", "Query parameters")
+  const bodyIssue = getWorkflowJsonIssue(node.bodyJson ?? "{}", "Body")
   return (
-    <WorkflowPanelSection title="HTTP settings">
+    <WorkflowPanelSection title={node.kind === "webhook" ? "Webhook settings" : node.kind === "toolset" ? "Toolset settings" : "HTTP settings"}>
       <WorkflowNodeSelect label="Bound integration" value={node.integrationId ?? ""} onChange={(event) => { const integration = integrations.find((item) => item.id === event.target.value); updateNode({ integrationId: event.target.value, integrationName: integration?.title ?? "" }) }}>
         <NativeSelectOption value="">Select an integration</NativeSelectOption>
         {integrations.map((integration) => <NativeSelectOption key={integration.id} value={integration.id}>{integration.title}</NativeSelectOption>)}
@@ -83,8 +88,12 @@ export function WorkflowHttpEditorSection({
       <WorkflowField label="URL">
         <Input value={node.url ?? ""} onChange={(event) => updateNode({ url: event.target.value })} placeholder="https://api.example.com" />
       </WorkflowField>
-      <WorkflowField label="Headers JSON"><Textarea className="min-h-16 font-mono text-xs" value={node.headersJson ?? "{}"} onChange={(event) => updateNode({ headersJson: event.target.value })} /></WorkflowField>
-      <WorkflowField label="Body JSON"><Textarea className="min-h-16 font-mono text-xs" value={node.bodyJson ?? "{}"} onChange={(event) => updateNode({ bodyJson: event.target.value })} /></WorkflowField>
+      <WorkflowKeyValueEditor label="Query parameters" value={node.queryJson ?? "{}"} onChange={(queryJson) => updateNode({ queryJson })} />
+      {queryIssue ? <p className="text-[11px] text-destructive">{queryIssue}</p> : null}
+      <WorkflowKeyValueEditor label="Headers" value={node.headersJson ?? "{}"} onChange={(headersJson) => updateNode({ headersJson })} />
+      {headersIssue ? <p className="text-[11px] text-destructive">{headersIssue}</p> : null}
+      <WorkflowField label="Body JSON"><Textarea aria-invalid={Boolean(bodyIssue)} className="min-h-16 font-mono text-xs" value={node.bodyJson ?? "{}"} onChange={(event) => updateNode({ bodyJson: event.target.value })} /></WorkflowField>
+      {bodyIssue ? <p className="text-[11px] text-destructive">{bodyIssue}</p> : null}
     </WorkflowPanelSection>
   )
 }

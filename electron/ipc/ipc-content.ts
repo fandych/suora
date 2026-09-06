@@ -136,6 +136,8 @@ export function registerContentIpc() {
       throw new Error(`Message ${parsedPayload.messageId} was not found in chat ${parsedPayload.chatId}.`)
     }
 
+    database.prepare(`UPDATE chats SET updated_at = ? WHERE id = ?`).run(Date.now(), parsedPayload.chatId)
+
     return {
       chat: database.prepare(`SELECT id, title, chatbot_id as chatbotId, summary, source_type as sourceType, source_ref as sourceRef, updated_at as updatedAt FROM chats WHERE id = ?`).get(parsedPayload.chatId),
       messages: (database.prepare(`SELECT id, role, content, parts_json as partsJson, created_at as createdAt FROM chat_messages WHERE chat_id = ? ORDER BY created_at ASC`).all(parsedPayload.chatId) as Array<{ id: string; role: string; content: string; partsJson: string; createdAt: number }>).map((message) => ({ ...message, parts: parseStoredChatMessageParts(message.partsJson) })),

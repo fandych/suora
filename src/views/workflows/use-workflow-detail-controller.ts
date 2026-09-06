@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
-import { addEdge, useEdgesState, useNodesState, type Connection, type Edge, type Node, type NodeMouseHandler, type ReactFlowInstance, type Viewport } from "@xyflow/react"
+import { addEdge, MarkerType, useEdgesState, useNodesState, type Connection, type Edge, type Node, type NodeMouseHandler, type OnSelectionChangeParams, type ReactFlowInstance, type Viewport } from "@xyflow/react"
 import { useNavigate, useParams } from "react-router"
 
 import type { WorkflowEdgeData, WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/models"
@@ -15,7 +15,7 @@ import { DEFAULT_WORKFLOW_DRY_RUN_INPUT, buildWorkflowFingerprint, getAutoLayout
 import { buildConnectedWorkflowNode, hasOutgoingWorkflowConnection, parseDryRunObject, renameWorkflowNodeId } from "@/views/workflows/components/workflow-panel-helpers"
 import { exportWorkflowJson, parseWorkflowJson } from "@/views/workflows/components/workflow-transfer"
 
-export type InspectorMode = "closed" | "properties" | "try-run"
+export type InspectorMode = "closed" | "properties" | "try-run" | "history"
 
 export const DEFAULT_VIEWPORT: Viewport = { x: 0, y: 0, zoom: 1 }
 
@@ -47,6 +47,7 @@ export function useWorkflowDetailController() {
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDryRunning, setIsDryRunning] = useState(false)
   const [dryRunError, setDryRunError] = useState<string | null>(null)
+  const [selectedInvocationId, setSelectedInvocationId] = useState<string | null>(null)
   const [propertiesPanelWidth, setPropertiesPanelWidth] = useState(288)
   const [tryPanelWidth, setTryPanelWidth] = useState(320)
   const [viewport, setViewport] = useState<Viewport>(DEFAULT_VIEWPORT)
@@ -80,6 +81,7 @@ export function useWorkflowDetailController() {
 
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId])
   const latestInvocation = data?.invocations[0] ?? null
+  const selectedInvocation = data?.invocations.find((invocation) => invocation.id === selectedInvocationId) ?? latestInvocation
   const currentDefinition = useMemo(() => ({ nodes, edges, viewport, resourceBindings, dryRunInputJson: dryRunInput, variables: data?.definition.variables ?? [], budget: data?.definition.budget, notifications }), [data, dryRunInput, edges, nodes, notifications, resourceBindings, viewport])
   const designIssues = useMemo(() => getWorkflowDesignIssues({
     nodes,
@@ -114,17 +116,18 @@ export function useWorkflowDetailController() {
   const isReleaseVersion = Boolean(data?.selectedVersion.isRelease)
   const isDraftVersion = Boolean(data && !data.selectedVersion.isRelease)
   const isReadOnly = isReleaseVersion
-  const tracedNodes = useMemo(() => {
+  const tracedNodes = useMemo<Node<WorkflowNodeData>[]>(() => {
     const traceMap = new Map(latestInvocation?.traces.map((trace) => [trace.nodeId, trace]) ?? [])
     return nodes.map((node) => {
       const trace = traceMap.get(node.id)
       if (!trace) {
-        return node
+        return { ...node, data: { ...node.data, executionStatus: undefined } }
       }
 
       return {
         ...node,
         type: "workflowNode",
+        data: { ...node.data, executionStatus: trace.status },
         style: {
           border: trace.status === "success" ? "1px solid var(--color-primary)" : "1px solid var(--color-destructive)",
           boxShadow: trace.status === "success"
@@ -146,8 +149,10 @@ export function useWorkflowDetailController() {
       : undefined
 
     setEdges((current) => addEdge({
+      id: crypto.randomUUID(),
       ...connection,
       type: "workflow",
+      markerEnd: { type: MarkerType.ArrowClosed },
       label: branch?.label,
       data: {
         condition: branch?.expression ?? "",
@@ -239,6 +244,24 @@ export function useWorkflowDetailController() {
       const parsed = parseDryRunObject(inputValue)
       setDryRunError(null)
       setIsDryRunning(true)
+      const liveInvocationId = crypto.randomUUID()
+      const liveStartNode = nodes.find((node) => node.data.kind === "start") ?? nodes[0]
+      if (liveStartNode) {
+        setSelectedInvocationId(liveInvocationId)
+        setData((current) => current ? {
+          ...current,
+          invocations: [{
+            id: liveInvocationId,
+            versionId: data.selectedVersion.id,
+            status: "running",
+            trigger: "dry-run",
+            input: JSON.stringify(parsed, null, 2),
+            output: "{}",
+            traces: [{ nodeId: liveStartNode.id, label: liveStartNode.data.label, status: "running", input: JSON.stringify(parsed, null, 2), output: "Executing…", startedAt: Date.now(), finishedAt: Date.now() }],
+            createdAt: Date.now(),
+          }, ...current.invocations],
+        } : current)
+      }
       const invocation = await dryRunWorkflowSnapshot({
         workflowId,
         workflowTitle: title || data.workflow.title,
@@ -247,9 +270,23 @@ export function useWorkflowDetailController() {
           ...currentDefinition,
           dryRunInputJson: JSON.stringify(parsed, null, 2),
         },
+        onTrace: (trace) => {
+          setData((current) => current ? {
+            ...current,
+            invocations: current.invocations.map((item) => item.id === liveInvocationId ? {
+              ...item,
+              status: trace.status === "error" ? "error" : "running",
+              traces: [
+                ...item.traces.filter((existing) => existing.traceId !== trace.traceId && !(existing.traceId === undefined && existing.nodeId === trace.nodeId)),
+                trace,
+              ],
+            } : item),
+          } : current)
+        },
       })
       setDryRunInput(JSON.stringify(parsed, null, 2))
-      setData((current) => current ? { ...current, invocations: [invocation, ...current.invocations] } : current)
+      setSelectedInvocationId(invocation.id)
+      setData((current) => current ? { ...current, invocations: [invocation, ...current.invocations.filter((item) => item.id !== liveInvocationId)] } : current)
     } catch (error) {
       setDryRunError(error instanceof Error ? error.message : String(error))
     } finally {
@@ -260,6 +297,22 @@ export function useWorkflowDetailController() {
   const handleNodeClick: NodeMouseHandler<Node<WorkflowNodeData>> = (_event, node) => {
     setSelectedNodeId(node.id)
     setInspectorMode("properties")
+  }
+
+  const handleSelectionChange = ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
+    const selectedNode = selectedNodes[0] as Node<WorkflowNodeData> | undefined
+    if (selectedNode) {
+      setSelectedNodeId(selectedNode.id)
+    }
+  }
+
+  const handleNodesDelete = (deletedNodes: Node[]) => {
+    const deletedNodeIds = new Set(deletedNodes.map((node) => node.id))
+    setEdges((current) => current.filter((edge) => !deletedNodeIds.has(edge.source) && !deletedNodeIds.has(edge.target)))
+    if (selectedNodeId && deletedNodeIds.has(selectedNodeId)) {
+      setSelectedNodeId(null)
+      setInspectorMode("closed")
+    }
   }
 
   const focusNode = (nodeId: string) => {
@@ -390,7 +443,22 @@ export function useWorkflowDetailController() {
       return
     }
 
-    const payload = parseWorkflowJson(await file.text())
+    if (file.size > 5 * 1024 * 1024) {
+      showToast({ title: "Import failed", description: "Workflow JSON must be 5 MiB or smaller.", type: "error" })
+      return
+    }
+
+    if (hasUnsavedChanges && !window.confirm("Importing replaces unsaved canvas changes. Continue?")) {
+      return
+    }
+
+    let payload
+    try {
+      payload = parseWorkflowJson(await file.text())
+    } catch (error) {
+      showToast({ title: "Import failed", description: error instanceof Error ? error.message : String(error), type: "error" })
+      return
+    }
     setTitle(payload.title)
     setSummary(payload.summary)
     setNodes(payload.definition.nodes)
@@ -428,13 +496,13 @@ export function useWorkflowDetailController() {
   return {
     agents, blockingIssues, canShowContent: !isLoading && !error && data, data, documents, dryRunInput, edges, error,
     dryRunError, flowRef, handleAddNode, handleAddNodeFromHandle, handleAddPresetNode, handleAutoLayout, handleConnect, handleDeleteNode,
-    focusNode, handleDeleteWorkflow, handleDuplicateNode, handleDryRun, handleExport, handleFitView, handleImport, handleNodeClick,
+    focusNode, handleDeleteWorkflow, handleDuplicateNode, handleDryRun, handleExport, handleFitView, handleImport, handleNodeClick, handleNodesDelete, handleSelectionChange,
     handlePublish, handleRunRelease, handleSave, handleSelectedNodeChange, handleZoomStep, hasUnsavedChanges, importInputRef,
     hasOutgoingConnection, setFlowInstance,
     inspectorMode, integrations, isDeleteDialogOpen, isDeleting, isDraftVersion, isDryRunning, isLoading, isPreferenceDialogOpen, isReadOnly,
     isReleaseVersion, modelOptions, nodes, notifications, onEdgesChange, onNodesChange, reload,
     propertiesPanelWidth, resourceBindings, selectedNode, selectedNodeId, setData, setDryRunInput, setEdges, setInspectorMode, setIsDeleteDialogOpen,
-    setIsPreferenceDialogOpen, setNotifications, setResourceBindings, setSelectedNodeId, setSelectedVersionId,
+    selectedInvocation, selectedInvocationId, setIsPreferenceDialogOpen, setNotifications, setResourceBindings, setSelectedInvocationId, setSelectedNodeId, setSelectedVersionId,
     setPropertiesPanelWidth, setShowLibrary, setSummary, setTitle, setTryPanelWidth, setViewport, showLibrary, summary, title, tracedNodes, tryPanelWidth, viewport, visibleIssues, workflowPresetNodes,
     handleRenameSelectedNodeId,
   }

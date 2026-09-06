@@ -8,6 +8,7 @@ import { toast } from "@/components/ui/toast"
 import { deleteChat } from "@/data/repositories/chat-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { cn } from "@/lib/utils"
+import { clearChatRuntime, stopChatRun } from "@/views/chats/chat-runtime-store"
 
 type ChatDeleteButtonProps = {
   className?: string
@@ -22,12 +23,14 @@ export function ChatDeleteButton({ className, chatId, isActive }: ChatDeleteButt
   const handleDelete = async () => {
     setIsDeleting(true)
     try {
+      stopChatRun(chatId)
       const deleted = await deleteChat(chatId)
       if (!deleted) {
         toast.add({ title: "Delete failed", description: "The chat could not be deleted.", type: "error" })
         return
       }
 
+      clearChatRuntime(chatId)
       emitDataChanged("/chats")
       if (isActive) {
         navigate("/chats")

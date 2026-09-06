@@ -5,6 +5,7 @@ export const appState: AppState = {
   isDev: !app.isPackaged,
   mainWindow: null,
   browserWindow: null,
+  browserWindows: new Map(),
   sqlite: null,
   activeAiRequests: new Map(),
   currentProxySettings: {

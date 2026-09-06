@@ -1,4 +1,4 @@
-import { buildAttachmentSummary, getTextParts, type ChatAttachmentRecord, type ChatMessagePart } from "@/data/domain/chat-message-parts"
+import { buildAttachmentSummary, getTextParts, MAX_CHAT_ATTACHMENT_BYTES, MAX_CHAT_ATTACHMENTS, MAX_CHAT_ATTACHMENT_TOTAL_BYTES, type ChatAttachmentRecord, type ChatMessagePart } from "@/data/domain/chat-message-parts"
 import type { ChatDetail, ChatMessageRecord, ProviderConfigRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import type { ChatAttachment } from "@/services/ai-service"
@@ -9,6 +9,14 @@ export function buildAttachmentSourceKey(file: File) {
 }
 
 export async function fileToChatAttachment(file: File): Promise<ChatAttachment> {
+  if (file.size > MAX_CHAT_ATTACHMENT_BYTES) {
+    throw new Error(`${file.name} exceeds the 10 MB attachment limit.`)
+  }
+
+  if (file.type && !["image/", "text/", "application/pdf", "application/json"].some((prefix) => file.type.startsWith(prefix))) {
+    throw new Error(`${file.name} has an unsupported attachment type.`)
+  }
+
   const data = await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(reader.error ?? new Error(`Failed to read ${file.name}`))
@@ -19,12 +27,13 @@ export async function fileToChatAttachment(file: File): Promise<ChatAttachment> 
   const sourceKey = buildAttachmentSourceKey(file)
 
   return {
-    id: sourceKey,
+    id: globalThis.crypto.randomUUID(),
     sourceKey,
     name: file.name,
     mediaType: file.type || "application/octet-stream",
     kind: file.type.startsWith("image/") ? "image" : "file",
     data,
+    sizeBytes: file.size,
   }
 }
 
@@ -36,6 +45,7 @@ function toPersistedAttachmentRecord(attachment: ChatAttachment): ChatAttachment
     mediaType: attachment.mediaType,
     data: attachment.data,
     kind: attachment.kind,
+    sizeBytes: attachment.sizeBytes,
   }
 }
 
@@ -59,7 +69,14 @@ export function createPersistedUserPayload(draft: string, attachments: ChatAttac
 export function mergeChatAttachments(current: ChatAttachment[], next: ChatAttachment[]) {
   const attachmentMap = new Map(current.map((attachment) => [attachment.sourceKey, attachment]))
   next.forEach((attachment) => attachmentMap.set(attachment.sourceKey, attachment))
-  return Array.from(attachmentMap.values())
+  const merged = Array.from(attachmentMap.values())
+  if (merged.length > MAX_CHAT_ATTACHMENTS) {
+    throw new Error(`You can attach up to ${MAX_CHAT_ATTACHMENTS} files.`)
+  }
+  if (merged.reduce((total, attachment) => total + (attachment.sizeBytes ?? 0), 0) > MAX_CHAT_ATTACHMENT_TOTAL_BYTES) {
+    throw new Error("The total attachment size cannot exceed 25 MB.")
+  }
+  return merged
 }
 
 export function hasVisibleAssistantContent(finalText: string, parts: AssistantResponsePart[]) {

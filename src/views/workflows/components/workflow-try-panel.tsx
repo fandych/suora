@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, CircleMinusIcon, DownloadIcon, LoaderCircleIcon, PlayIcon, XIcon } from "lucide-react"
+import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, CircleMinusIcon, Clock3Icon, DownloadIcon, LoaderCircleIcon, PlayIcon, XIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
@@ -19,6 +19,12 @@ function TraceStatusIcon({ status }: { status: string }) {
   if (status === "error") {
     return <CircleAlertIcon className="size-5 text-red-600" />
   }
+  if (status === "queued") {
+    return <Clock3Icon className="size-5 text-slate-500" />
+  }
+  if (status === "skipped") {
+    return <CircleMinusIcon className="size-5 text-slate-500" />
+  }
   return <CircleMinusIcon className="size-5 text-slate-500" />
 }
 
@@ -27,7 +33,16 @@ function getTraceStatusLabel(status: string) {
   if (status === "running") return "Running"
   if (status === "error") return "Failed"
   if (status === "queued") return "Waiting"
+  if (status === "skipped") return "Skipped"
   return status
+}
+
+function getInvocationMetadata(invocation: WorkflowInvocationRecord) {
+  try {
+    return JSON.parse(invocation.output) as { durationMs?: number; requestId?: string; executionTarget?: string; errorMessage?: string | null }
+  } catch {
+    return {}
+  }
 }
 
 export function WorkflowTryPanel({ invocation, input, isRunning, error, onInputChange, onRun, onClose, width, onWidthChange }: {
@@ -85,6 +100,7 @@ export function WorkflowTryPanel({ invocation, input, isRunning, error, onInputC
           <PlayIcon />
           {isRunning ? "Running" : "Run"}
         </Button>
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-2.5 py-2 text-[11px] text-muted-foreground">Safe dry runs do not call AI, HTTP, scripts, integrations, or email. Use Run release for real side effects.</p>
         {error ? <p className="text-xs text-destructive">{error}</p> : null}
 
         {invocation ? (
@@ -96,13 +112,19 @@ export function WorkflowTryPanel({ invocation, input, isRunning, error, onInputC
                 <span>{getTraceStatusLabel(invocation.status)}</span>
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+              <div className="rounded-lg border px-2.5 py-2"><span className="block">Trigger</span><span className="font-medium text-foreground">{invocation.trigger}</span></div>
+              {(() => { const metadata = getInvocationMetadata(invocation); return <div className="rounded-lg border px-2.5 py-2"><span className="block">Duration</span><span className="font-medium text-foreground">{metadata.durationMs ?? Math.max(0, ...invocation.traces.map((trace) => trace.finishedAt - trace.startedAt))} ms</span></div> })()}
+            </div>
+            {(() => { const metadata = getInvocationMetadata(invocation); return metadata.requestId ? <p className="truncate text-[10px] text-muted-foreground">Request {metadata.requestId} · {metadata.executionTarget ?? "desktop"}</p> : null })()}
 
             {invocation.traces.map((trace) => (
-              <Collapsible key={trace.nodeId} className="overflow-hidden rounded-xl border">
+              <Collapsible key={trace.traceId ?? `${trace.nodeId}-${trace.startedAt}`} className="overflow-hidden rounded-xl border">
                 <CollapsibleTrigger className="group/trace flex w-full items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/60">
                   <TraceStatusIcon status={trace.status} />
                   <span className="min-w-0 flex-1 truncate text-xs font-semibold">{trace.label}</span>
                   <span className="text-[10px] font-medium text-muted-foreground">{getTraceStatusLabel(trace.status)}</span>
+                  <span className="text-[10px] tabular-nums text-muted-foreground">{Math.max(0, trace.finishedAt - trace.startedAt)} ms</span>
                   <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground transition-transform group-data-panel-open/trace:rotate-90" />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
@@ -111,15 +133,15 @@ export function WorkflowTryPanel({ invocation, input, isRunning, error, onInputC
                       id="input"
                       label="Input"
                       value={trace.input || "No input"}
-                      copied={copiedKey === `${trace.nodeId}-input`}
-                      onCopy={() => void copyPreview(`${trace.nodeId}-input`, trace.input || "")}
+                      copied={copiedKey === `${trace.traceId ?? trace.nodeId}-input`}
+                      onCopy={() => void copyPreview(`${trace.traceId ?? trace.nodeId}-input`, trace.input || "")}
                     />
                     <WorkflowTraceValueSection
                       id="output"
                       label="Output"
                       value={trace.output || "No output"}
-                      copied={copiedKey === `${trace.nodeId}-output`}
-                      onCopy={() => void copyPreview(`${trace.nodeId}-output`, trace.output)}
+                      copied={copiedKey === `${trace.traceId ?? trace.nodeId}-output`}
+                      onCopy={() => void copyPreview(`${trace.traceId ?? trace.nodeId}-output`, trace.output)}
                     />
                   </div>
                 </CollapsibleContent>

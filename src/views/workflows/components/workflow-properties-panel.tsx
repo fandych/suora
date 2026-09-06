@@ -102,11 +102,73 @@ export function WorkflowPropertiesPanel({
 
             {node.kind === "agent" ? <WorkflowAgentEditorSection node={node} agents={agents} modelOptions={modelOptions} updateNode={updateNode} /> : null}
 
+            {node.kind === "start" ? (
+              <WorkflowPanelSection title="Workflow input contract">
+                <WorkflowField label="Input schema JSON" hint="Describe the JSON object accepted when the workflow starts."><Textarea className="min-h-28 font-mono text-xs" value={node.inputSchemaJson ?? "{}"} onChange={(event) => updateNode({ inputSchemaJson: event.target.value })} /></WorkflowField>
+              </WorkflowPanelSection>
+            ) : null}
+
+            {node.kind === "end" ? (
+              <WorkflowPanelSection title="Workflow output contract">
+                <WorkflowField label="Result template" hint="Use variables from prior nodes, for example {{agent_result}}."><Textarea className="min-h-20 font-mono text-xs" value={node.inputTemplate ?? ""} onChange={(event) => updateNode({ inputTemplate: event.target.value })} /></WorkflowField>
+                <WorkflowField label="Output schema JSON"><Textarea className="min-h-24 font-mono text-xs" value={node.outputSchemaJson ?? "{}"} onChange={(event) => updateNode({ outputSchemaJson: event.target.value })} /></WorkflowField>
+              </WorkflowPanelSection>
+            ) : null}
+
+            {node.kind === "ai-response" ? (
+              <WorkflowPanelSection title="AI response settings">
+                <WorkflowNodeSelect label="Chat model" value={node.modelId ?? ""} onChange={(event) => updateNode({ modelId: event.target.value })}>
+                  <NativeSelectOption value="">Use default model</NativeSelectOption>
+                  {modelOptions.map((model) => <NativeSelectOption key={model.id} value={model.id}>{model.label}</NativeSelectOption>)}
+                </WorkflowNodeSelect>
+                <WorkflowField label="System instructions"><Textarea value={node.systemPrompt ?? ""} onChange={(event) => updateNode({ systemPrompt: event.target.value })} placeholder="Optional response rules" /></WorkflowField>
+                <div className="grid gap-3 sm:grid-cols-2"><WorkflowField label="Temperature"><Input type="number" min={0} max={2} step={0.1} value={String(node.temperature ?? 0.7)} onChange={(event) => updateNode({ temperature: Math.max(0, Math.min(2, Number(event.target.value) || 0)) })} /></WorkflowField><WorkflowField label="Maximum tokens"><Input type="number" min={1} max={32768} value={String(node.maxTokens ?? 1024)} onChange={(event) => updateNode({ maxTokens: Math.max(1, Number(event.target.value) || 1) })} /></WorkflowField></div>
+                <WorkflowNodeSelect label="Response format" value={node.responseFormat ?? "text"} onChange={(event) => updateNode({ responseFormat: event.target.value as "text" | "json" })}><NativeSelectOption value="text">Text</NativeSelectOption><NativeSelectOption value="json">JSON</NativeSelectOption></WorkflowNodeSelect>
+                <WorkflowField label="Prompt"><Textarea className="min-h-28" value={node.prompt ?? ""} onChange={(event) => updateNode({ prompt: event.target.value })} placeholder="Prompt template" /></WorkflowField>
+              </WorkflowPanelSection>
+            ) : null}
+
             {node.kind === "document-retrieval" ? <WorkflowDocumentEditorSection node={node} documents={documents} updateNode={updateNode} /> : null}
 
-            {node.kind === "http" ? <WorkflowHttpEditorSection node={node} integrations={integrations} updateNode={updateNode} /> : null}
+            {["http", "toolset", "webhook"].includes(node.kind) ? <WorkflowHttpEditorSection node={node} integrations={integrations} updateNode={updateNode} /> : null}
 
             {node.kind === "script" ? <WorkflowScriptEditorSection node={node} updateNode={updateNode} /> : null}
+
+            {node.kind === "variable-assigner" ? (
+              <WorkflowPanelSection title="Variable assignment">
+                <WorkflowField label="Variable name"><Input value={node.variableName ?? node.outputKey ?? ""} onChange={(event) => updateNode({ variableName: event.target.value, outputKey: event.target.value })} placeholder="customerTier" /></WorkflowField>
+                <WorkflowField label="Value expression"><Input value={node.variableValue ?? ""} onChange={(event) => updateNode({ variableValue: event.target.value })} placeholder="$input.customer.tier" /></WorkflowField>
+              </WorkflowPanelSection>
+            ) : null}
+
+            {node.kind === "template" ? (
+              <WorkflowPanelSection title="Template">
+                <WorkflowNodeSelect label="Output format" value={node.templateOutputFormat ?? "text"} onChange={(event) => updateNode({ templateOutputFormat: event.target.value as "text" | "json" })}>
+                  <NativeSelectOption value="text">Text</NativeSelectOption>
+                  <NativeSelectOption value="json">JSON</NativeSelectOption>
+                </WorkflowNodeSelect>
+                <WorkflowField label="Template body" hint="Use {{input.name}} or $agent_result values."><Textarea className="min-h-28 font-mono text-xs" value={node.template ?? ""} onChange={(event) => updateNode({ template: event.target.value })} /></WorkflowField>
+              </WorkflowPanelSection>
+            ) : null}
+
+            {node.kind === "smtp" ? (
+              <WorkflowPanelSection title="Email delivery">
+                <WorkflowField label="Recipient"><Input type="email" value={node.emailTo ?? ""} onChange={(event) => updateNode({ emailTo: event.target.value })} placeholder="team@example.com" /></WorkflowField>
+                <WorkflowField label="Subject"><Input value={node.emailSubject ?? ""} onChange={(event) => updateNode({ emailSubject: event.target.value })} /></WorkflowField>
+                <WorkflowField label="Message"><Textarea className="min-h-24" value={node.emailBody ?? ""} onChange={(event) => updateNode({ emailBody: event.target.value })} /></WorkflowField>
+              </WorkflowPanelSection>
+            ) : null}
+
+            {["condition", "loop"].includes(node.kind) ? (
+              <WorkflowPanelSection title={node.kind === "loop" ? "Loop controls" : "Condition"}>
+                <WorkflowField label={node.kind === "loop" ? "Collection expression" : "Expression"}><Input value={node.kind === "loop" ? node.loopExpression ?? "" : node.runIf ?? ""} onChange={(event) => updateNode(node.kind === "loop" ? { loopExpression: event.target.value } : { runIf: event.target.value })} placeholder={node.kind === "loop" ? "$input.items" : "$input.approved === true"} /></WorkflowField>
+                {node.kind === "loop" ? <><WorkflowField label="Item variable"><Input value={node.itemAlias ?? "item"} onChange={(event) => updateNode({ itemAlias: event.target.value })} placeholder="item" /></WorkflowField><WorkflowField label="Maximum iterations"><Input type="number" min={1} max={100} value={String(node.maxIterations ?? 25)} onChange={(event) => updateNode({ maxIterations: Math.max(1, Math.min(100, Number(event.target.value) || 25)) })} /></WorkflowField></> : null}
+              </WorkflowPanelSection>
+            ) : null}
+
+            {node.kind === "parallel" ? <WorkflowPanelSection title="Parallel execution"><WorkflowField label="Concurrency"><Input type="number" min={2} max={20} value={String(node.concurrency ?? 2)} onChange={(event) => updateNode({ concurrency: Math.max(2, Math.min(20, Number(event.target.value) || 2)) })} /></WorkflowField><WorkflowNodeSelect label="Merge strategy" value={node.mergeStrategy ?? "all-settled"} onChange={(event) => updateNode({ mergeStrategy: event.target.value as "all-settled" | "fail-fast" })}><NativeSelectOption value="all-settled">All settled</NativeSelectOption><NativeSelectOption value="fail-fast">Fail fast</NativeSelectOption></WorkflowNodeSelect></WorkflowPanelSection> : null}
+
+            {node.kind === "serial" ? <WorkflowPanelSection title="Serial execution"><WorkflowField label="Operator notes"><Textarea value={node.notes ?? ""} onChange={(event) => updateNode({ notes: event.target.value })} placeholder="Optional runbook notes" /></WorkflowField></WorkflowPanelSection> : null}
 
             {node.kind === "fork" ? (
               <WorkflowField label="Number of branches">

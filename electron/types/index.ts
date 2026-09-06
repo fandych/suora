@@ -62,12 +62,21 @@ export type BrowserWindowState = {
   open: boolean
   visible: boolean
   url: string
+  loading?: boolean
+  error?: string
+}
+
+export type BrowserPageSnapshot = BrowserWindowState & {
+  title: string
+  text?: string
+  links?: Array<{ text: string; href: string }>
 }
 
 export type AppState = {
   isDev: boolean
   mainWindow: BrowserWindow | null
   browserWindow: BrowserWindow | null
+  browserWindows: Map<string, BrowserWindow>
   sqlite: SqliteDatabase | null
   activeAiRequests: Map<string, ClientRequest>
   currentProxySettings: ProxySettings

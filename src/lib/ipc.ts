@@ -863,8 +863,11 @@ export const suoraIpc = {
 
       return bridge.tools.runCommand({ ...payload, env }) as Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>
     },
-    browserNavigate: async (payload: { url?: string; visible?: boolean }) => getBridge().tools.browserNavigate(payload) as Promise<{ ok: boolean; url: string; visible: boolean }>,
-    browserState: async () => getBridge().tools.browserState() as Promise<{ open: boolean; visible: boolean; url: string }>,
+    browserNavigate: async (payload: { sessionId?: string; url?: string; visible?: boolean }) => getBridge().tools.browserNavigate(payload) as Promise<{ ok: boolean; url: string; visible: boolean; loading?: boolean; error?: string }>,
+    browserState: async (sessionId?: string) => getBridge().tools.browserState(sessionId) as Promise<{ open: boolean; visible: boolean; url: string; loading?: boolean; error?: string }>,
+    browserPage: async (payload: { sessionId?: string; includeText?: boolean; includeLinks?: boolean }) => getBridge().tools.browserPage(payload),
+    browserClick: async (sessionId: string, selector: string) => getBridge().tools.browserClick({ sessionId, selector }),
+    browserFill: async (payload: { sessionId?: string; selector: string; value: string }) => getBridge().tools.browserFill(payload),
     saveFile: async (payload: { defaultName: string; filters?: Array<{ name: string; extensions: string[] }>; dataBase64: string }) => getBridge().tools.saveFile(payload) as Promise<{ ok: boolean; canceled: boolean; path: string | null }>,
     openExternal: async (url: string) => getBridge().tools.openExternal(url) as Promise<{ ok: boolean; url: string }>,
   },

@@ -3,6 +3,7 @@ import https from "node:https"
 import { spawn } from "node:child_process"
 
 import { getProxyAgent } from "@electron/others/proxy"
+import { assertSafeHttpUrl } from "@electron/others/url-security"
 import { executeSandboxedScriptIntegration } from "@electron/others/script-integration-runner"
 import type { IntegrationExecutePayload } from "@electron/types"
 
@@ -64,15 +65,29 @@ function applyHttpAuth(headers: Record<string, string>, url: URL, config: { auth
   }
 }
 
-function buildMultipartBody(fields: Record<string, unknown>, boundary: string) {
-  const chunks = Object.entries(fields).map(([key, value]) => [
-    `--${boundary}`,
-    `Content-Disposition: form-data; name="${key}"`,
-    "",
-    String(value ?? ""),
-  ].join("\r\n"))
+type UploadedIntegrationFile = {
+  __suoraFile?: boolean
+  name?: string
+  type?: string
+  dataBase64?: string
+}
 
-  return `${chunks.join("\r\n")}\r\n--${boundary}--\r\n`
+function buildMultipartBody(fields: Record<string, unknown>, boundary: string) {
+  const chunks: Buffer[] = []
+  for (const [key, value] of Object.entries(fields)) {
+    const file = value as UploadedIntegrationFile
+    chunks.push(Buffer.from(`--${boundary}\r\n`, "utf8"))
+    if (file?.__suoraFile && file.dataBase64) {
+      const safeFilename = (file.name || "upload").replaceAll(/["\\\r\n]/g, "_")
+      chunks.push(Buffer.from(`Content-Disposition: form-data; name="${key}"; filename="${safeFilename}"\r\n`, "utf8"))
+      chunks.push(Buffer.from(`Content-Type: ${file.type || "application/octet-stream"}\r\n\r\n`, "utf8"))
+      chunks.push(Buffer.from(file.dataBase64, "base64"), Buffer.from("\r\n", "utf8"))
+      continue
+    }
+    chunks.push(Buffer.from(`Content-Disposition: form-data; name="${key}"\r\n\r\n${String(value ?? "")}\r\n`, "utf8"))
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`, "utf8"))
+  return Buffer.concat(chunks)
 }
 
 async function executeHttpIntegration(payload: IntegrationExecutePayload) {
@@ -102,7 +117,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
   const requestUrl = selectedEndpoint
     ? buildEndpointUrl(config.baseUrl, selectedEndpoint.path)
     : (config.url || "")
-  const url = new URL(requestUrl)
+  const url = await assertSafeHttpUrl(requestUrl)
   const input = parseJson<Record<string, unknown>>(payload.inputJson, {})
   const query = parseJson<Record<string, string>>(selectedEndpoint?.queryJson ?? config.queryJson, {})
   const headers = parseJson<Record<string, string>>(selectedEndpoint?.headersJson ?? config.headersJson, {})
@@ -136,7 +151,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
   const bodyMode = selectedEndpoint?.bodyMode ?? "json"
   const bodyConfig = parseJson<Record<string, unknown>>(selectedEndpoint?.bodyJson ?? config.bodyJson, {})
   const transport = url.protocol === "https:" ? https : http
-  let body: string | undefined
+  let body: string | Buffer | undefined
 
   if (bodyMode === "json") {
     const jsonFields = endpointParameters
@@ -185,7 +200,16 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
       agent: getProxyAgent(url),
     }, (response) => {
       const chunks: Buffer[] = []
-      response.on("data", (chunk: Buffer) => chunks.push(chunk))
+      let size = 0
+      const maxResponseBytes = 2 * 1024 * 1024
+      response.on("data", (chunk: Buffer) => {
+        size += chunk.length
+        if (size > maxResponseBytes) {
+          request.destroy(new Error("HTTP response exceeds the 2 MB limit."))
+          return
+        }
+        chunks.push(chunk)
+      })
       response.on("end", () => {
         resolve({
           ok: (response.statusCode ?? 500) < 400,

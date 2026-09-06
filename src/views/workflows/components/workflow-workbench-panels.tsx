@@ -1,4 +1,5 @@
-import { PanelLeftCloseIcon, PanelLeftOpenIcon } from "lucide-react"
+import { PanelLeftCloseIcon, PanelLeftOpenIcon, SearchIcon } from "lucide-react"
+import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
@@ -9,9 +10,10 @@ import type { WorkflowDesignIssue } from "@/views/workflows/components/workflow-
 
 const libraryGroups: Array<{ title: string; kinds: WorkflowNodeData["kind"][] }> = [
   { title: "Core", kinds: ["start", "end", "agent"] },
-  { title: "Logic", kinds: ["if-else", "fork", "join"] },
-  { title: "Knowledge", kinds: ["document-retrieval"] },
-  { title: "Execution", kinds: ["http", "script"] },
+  { title: "Logic", kinds: ["if-else", "condition", "fork", "join", "loop", "parallel", "serial"] },
+  { title: "Knowledge", kinds: ["document-retrieval", "wiki-retrieval"] },
+  { title: "AI & data", kinds: ["agent", "ai-response", "variable-assigner", "template"] },
+  { title: "Execution", kinds: ["http", "toolset", "webhook", "script", "smtp"] },
 ]
 
 export function WorkflowLibraryPanel({
@@ -29,8 +31,10 @@ export function WorkflowLibraryPanel({
   onAddPresetNode: (kind: WorkflowNodeData["kind"]) => void
   onOpenChange: (open: boolean) => void
 }) {
+  const [query, setQuery] = useState("")
+  const normalizedQuery = query.trim().toLowerCase()
   const groupedPresets = libraryGroups
-    .map((group) => ({ title: group.title, items: presets.filter((item) => group.kinds.includes(item.kind)) }))
+    .map((group) => ({ title: group.title, items: presets.filter((item) => group.kinds.includes(item.kind) && (!normalizedQuery || `${item.label} ${item.summary}`.toLowerCase().includes(normalizedQuery))) }))
     .filter((group) => group.items.length > 0)
 
   if (!isOpen) {
@@ -51,6 +55,8 @@ export function WorkflowLibraryPanel({
           <PanelLeftCloseIcon />
         </Button>
       </div>
+      <div className="flex items-center gap-2 rounded-lg border px-2"><SearchIcon className="size-3.5 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search node types" className="h-8 min-w-0 flex-1 bg-transparent text-xs outline-none" /></div>
+      {!canEdit ? <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[10px] text-muted-foreground">Published revisions are read-only.</p> : null}
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-3 p-2.5 pb-5">
           {groupedPresets.map((group) => (
@@ -78,6 +84,7 @@ export function WorkflowLibraryPanel({
               </div>
             </div>
           ))}
+          {groupedPresets.length === 0 ? <p className="rounded-lg border border-dashed px-2 py-5 text-center text-xs text-muted-foreground">No node types match.</p> : null}
         </div>
       </ScrollArea>
     </div>

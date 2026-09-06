@@ -25,6 +25,8 @@ export type ChatMessageRecord = {
   content: string
   createdAt: number
   parts?: ChatMessagePart[]
+  status?: "streaming" | "completed" | "failed" | "stopped"
+  error?: string
 }
 
 export type ChatDetail = {
@@ -44,7 +46,7 @@ export type VersionOption = {
 export type WorkflowNodeData = {
   label: string
   prompt: string
-  kind: "start" | "end" | "document-retrieval" | "agent" | "fork" | "join" | "if-else" | "http" | "script"
+  kind: "start" | "end" | "document-retrieval" | "agent" | "fork" | "join" | "if-else" | "http" | "script" | "variable-assigner" | "template" | "ai-response" | "loop" | "parallel" | "serial" | "toolset" | "webhook" | "wiki-retrieval" | "smtp" | "condition"
   agentId?: string
   task?: string
   description?: string
@@ -81,6 +83,26 @@ export type WorkflowNodeData = {
     label: string
     expression: string
   }>
+  variableName?: string
+  variableValue?: string
+  template?: string
+  templateOutputFormat?: "text" | "json"
+  loopExpression?: string
+  maxIterations?: number
+  emailTo?: string
+  emailSubject?: string
+  emailBody?: string
+  systemPrompt?: string
+  temperature?: number
+  maxTokens?: number
+  responseFormat?: "text" | "json"
+  inputSchemaJson?: string
+  outputSchemaJson?: string
+  itemAlias?: string
+  concurrency?: number
+  mergeStrategy?: "all-settled" | "fail-fast"
+  notes?: string
+  executionStatus?: WorkflowNodeTraceRecord["status"]
 }
 
 export type WorkflowEdgeData = {
@@ -144,9 +166,10 @@ export type WorkflowInvocationRecord = {
 }
 
 export type WorkflowNodeTraceRecord = {
+  traceId?: string
   nodeId: string
   label: string
-  status: "queued" | "running" | "success" | "error"
+  status: "queued" | "running" | "success" | "error" | "skipped"
   input?: string
   output: string
   startedAt: number

@@ -35,18 +35,10 @@ export function applyEventToAssistantResponseParts(parts: AssistantResponsePart[
   }
 
   if (event.type === "tool-call") {
-    if (event.toolName === "browser_navigate") {
-      return parts
-    }
-
     return [...parts, { id: event.toolCallId, type: "tool", activity: { id: event.toolCallId, toolName: event.toolName, input: event.input } }]
   }
 
   if (event.type === "tool-result") {
-    if (event.toolName === "browser_navigate") {
-      return parts
-    }
-
     const hasMatch = parts.some((part) => part.type === "tool" && part.activity.id === event.toolCallId)
     if (!hasMatch) {
       return [...parts, { id: event.toolCallId, type: "tool", activity: { id: event.toolCallId, toolName: event.toolName, output: event.output } }]

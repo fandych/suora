@@ -17,6 +17,10 @@ export type ChatAttachmentRecord = {
   sizeBytes?: number
 }
 
+export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024
+export const MAX_CHAT_ATTACHMENTS = 5
+export const MAX_CHAT_ATTACHMENT_TOTAL_BYTES = 25 * 1024 * 1024
+
 export type ChatMessagePart =
   | { id: string; type: "text"; content: string; isPending?: boolean }
   | { id: string; type: "tool"; activity: ChatToolActivity }

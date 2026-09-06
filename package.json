@@ -16,6 +16,7 @@
     "electron:download": "node scripts/ensure-electron-dist.mjs --strict",
     "lint": "eslint .",
     "preview": "electron-vite preview",
+    "dev:root": "NO_SANDBOX=1 electron-vite dev",
     "type-check": "tsc --noEmit",
     "test": "vitest",
     "test:ui": "vitest --ui",

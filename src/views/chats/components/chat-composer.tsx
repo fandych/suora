@@ -56,10 +56,12 @@ type ChatComposerProps = {
   attachments: ChatAttachment[]
   autoScroll: boolean
   browserState?: ChatBrowserInteractionState
+  browserSessionId?: string | null
   draft: string
   exportDisabled?: boolean
   groupedProviders: ProviderConfigRecord[]
   isResponding: boolean
+  isStopping?: boolean
   modelValue: string
   toolEvents: ChatAgentEvent[]
   onAttachmentChange: (event: React.ChangeEvent<HTMLInputElement>) => Promise<void>
@@ -67,6 +69,7 @@ type ChatComposerProps = {
   onDraftChange: (value: string) => void
   onExportChat: (format: "markdown" | "pdf" | "docx") => Promise<void>
   onContinueAfterBrowser: () => void
+  onRetryBrowser?: () => void
   onModelChange: (value: string) => void
   onRemoveAttachment: (attachmentId: string) => void
   onSelectedAgentChange: (value: string) => void
@@ -91,10 +94,12 @@ export function ChatComposer({
   attachments,
   autoScroll,
   browserState,
+  browserSessionId,
   draft,
   exportDisabled = false,
   groupedProviders,
   isResponding,
+  isStopping = false,
   modelValue,
   toolEvents,
   onAttachmentChange,
@@ -104,6 +109,7 @@ export function ChatComposer({
   onExportChat,
   onModelChange,
   onRemoveAttachment,
+  onRetryBrowser,
   onSelectedAgentChange,
   onSend,
   onStop,
@@ -240,7 +246,7 @@ export function ChatComposer({
   return (
     <div className="flex flex-col gap-3">
       <ChatStatusLine isResponding={isResponding} toolEvents={toolEvents} />
-      {browserState ? <ChatBrowserStatusBar browserState={browserState} onContinue={onContinueAfterBrowser} pendingContinue={pendingBrowserContinue} /> : null}
+      {browserState ? <ChatBrowserStatusBar browserState={browserState} onContinue={onContinueAfterBrowser} onRetry={onRetryBrowser} sessionId={browserSessionId} pendingContinue={pendingBrowserContinue} /> : null}
       <div className="flex min-w-0 items-end gap-2">
         <Textarea ref={textareaRef} rows={1} className="min-h-11 max-h-48 min-w-0 flex-1 resize-none overflow-hidden" value={draft} onChange={(event) => onDraftChange(event.target.value)} onKeyDown={handleKeyDown} placeholder={isListening ? "Listening... speak now" : "Ask about documents, workflows, or skills..."} />
       </div>
@@ -297,9 +303,9 @@ export function ChatComposer({
             {isListening ? <SquareIcon /> : <MicIcon />}
           </Button>
           {isResponding ? (
-            <Button size="sm" variant="outline" type="button" onClick={onStop}>
+            <Button size="sm" variant="outline" type="button" onClick={onStop} disabled={isStopping}>
               <SquareIcon />
-              Stop
+              {isStopping ? "Stopping..." : "Stop"}
             </Button>
           ) : (
             <Button size="sm" type="button" onClick={() => void onSend()} disabled={!canSend}>

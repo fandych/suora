@@ -10,6 +10,7 @@ import type { AssistantResponsePart } from "@/views/chats/components/chat-assist
 
 export type ChatRuntimeSnapshot = {
   isResponding: boolean
+  isStopping: boolean
   toolEvents: ChatAgentEvent[]
   streamingText: string
   assistantResponseMessageId: string | null
@@ -19,6 +20,7 @@ export type ChatRuntimeSnapshot = {
 
 type ChatRuntimeEntry = ChatRuntimeSnapshot & {
   abortController: AbortController | null
+  runId: string | null
 }
 
 type StartChatRunInput = {
@@ -38,9 +40,11 @@ type StartChatRunInput = {
 const runtimeEntries = new Map<string, ChatRuntimeEntry>()
 const listeners = new Set<() => void>()
 let lastRunningChatIdsKey = ""
+const RUNTIME_RETENTION_MS = 5 * 60 * 1000
 
 const EMPTY_RUNTIME: ChatRuntimeSnapshot = {
   isResponding: false,
+  isStopping: false,
   toolEvents: [],
   streamingText: "",
   assistantResponseMessageId: null,
@@ -76,6 +80,7 @@ function getOrCreateEntry(chatId: string) {
   const created: ChatRuntimeEntry = {
     ...EMPTY_RUNTIME,
     abortController: null,
+    runId: null,
   }
   runtimeEntries.set(chatId, created)
   return created
@@ -89,6 +94,17 @@ function setEntryState(chatId: string, patch: Partial<ChatRuntimeEntry>) {
   })
   emitRuntimeChange()
   emitRuntimePresenceChangeIfNeeded()
+}
+
+function scheduleRuntimeCleanup(chatId: string, runId: string) {
+  window.setTimeout(() => {
+    const entry = runtimeEntries.get(chatId)
+    if (entry?.runId === runId && !entry.isResponding) {
+      runtimeEntries.delete(chatId)
+      emitRuntimeChange()
+      emitRuntimePresenceChangeIfNeeded()
+    }
+  }, RUNTIME_RETENTION_MS)
 }
 
 export function subscribeToChatRuntime(listener: () => void) {
@@ -126,6 +142,31 @@ export function clearChatRuntime(chatId: string | null) {
 
   runtimeEntries.delete(chatId)
   emitRuntimeChange()
+  emitRuntimePresenceChangeIfNeeded()
+}
+
+export function beginChatRun(chatId: string) {
+  const entry = getOrCreateEntry(chatId)
+  if (entry.isResponding) {
+    throw new Error("This chat is already generating a response.")
+  }
+
+  const abortController = new AbortController()
+  const runId = crypto.randomUUID()
+  setEntryState(chatId, {
+    abortController,
+    isResponding: true,
+    runId,
+    toolEvents: [],
+    streamingText: "",
+    assistantResponseMessageId: null,
+    assistantResponseParts: [{ id: "assistant-stream", type: "text", content: "", isPending: true }],
+  })
+  return { abortController, runId }
+}
+
+export function isChatRunActive(chatId: string, runId: string) {
+  return runtimeEntries.get(chatId)?.runId === runId
 }
 
 export function stopChatRun(chatId: string | null) {
@@ -134,7 +175,11 @@ export function stopChatRun(chatId: string | null) {
   }
 
   const entry = runtimeEntries.get(chatId)
-  entry?.abortController?.abort()
+  if (!entry?.isResponding || entry.isStopping) {
+    return
+  }
+  setEntryState(chatId, { isStopping: true })
+  entry.abortController?.abort()
 }
 
 export function patchChatRuntimeParts(chatId: string | null, updater: (parts: AssistantResponsePart[]) => AssistantResponsePart[]) {
@@ -183,15 +228,7 @@ export async function startChatRun(input: StartChatRunInput) {
   input.onUserMessageSaved(workingChatId, next)
   emitDataChanged("/chats")
 
-  const abortController = new AbortController()
-  setEntryState(workingChatId, {
-    abortController,
-    isResponding: true,
-    toolEvents: [],
-    streamingText: "",
-    assistantResponseMessageId: null,
-    assistantResponseParts: [{ id: "assistant-stream", type: "text", content: "", isPending: true }],
-  })
+  const { abortController, runId } = beginChatRun(workingChatId)
 
   try {
     let finalText = ""
@@ -202,7 +239,11 @@ export async function startChatRun(input: StartChatRunInput) {
       abortSignal: abortController.signal,
       selectedAgentId: input.selectedAgentId || undefined,
       attachments: input.attachments,
+      browserSessionId: workingChatId,
     })) {
+      if (!isChatRunActive(workingChatId, runId)) {
+        return workingChatId
+      }
       if (event.type === "error") {
         errorPartIndex += 1
       }
@@ -225,6 +266,9 @@ export async function startChatRun(input: StartChatRunInput) {
     const { persistedText, persistedParts } = createPersistedAssistantPayload(finalText, finalizedParts, completedWithAbort)
 
     if (persistedText.trim() || persistedParts.length > 0) {
+      if (!isChatRunActive(workingChatId, runId)) {
+        return workingChatId
+      }
       const withAssistant = await appendAssistantChatMessage(workingChatId, persistedText.trim(), persistedParts)
       input.onAssistantMessageSaved(workingChatId, withAssistant)
       emitDataChanged("/chats")
@@ -249,6 +293,10 @@ export async function startChatRun(input: StartChatRunInput) {
     setEntryState(workingChatId, {
       toolEvents: [...entry.toolEvents, { type: "error", error: message, errorKind }],
     })
+    const failedParts = [...entry.assistantResponseParts, { id: `assistant-error-${runId}`, type: "text", content: `回答失败：${presentation.detail}` } satisfies AssistantResponsePart]
+    const failedMessage = await appendAssistantChatMessage(workingChatId, `回答失败：${presentation.detail}`, failedParts)
+    input.onAssistantMessageSaved(workingChatId, failedMessage)
+    emitDataChanged("/chats")
     showToast({ title: presentation.title, description: presentation.detail, type: errorKind === "step-limit" ? "warning" : "error" })
     throw error
   } finally {
@@ -256,8 +304,11 @@ export async function startChatRun(input: StartChatRunInput) {
     setEntryState(workingChatId, {
       abortController: null,
       isResponding: false,
+      isStopping: false,
+      runId,
       assistantResponseParts: finalizeAssistantResponseParts(entry.assistantResponseParts),
     })
+    scheduleRuntimeCleanup(workingChatId, runId)
   }
 
   return workingChatId

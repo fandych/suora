@@ -15,6 +15,17 @@ export const workflowPresetNodes: Array<{
   { kind: "if-else", label: "If / Else", summary: "Route execution based on expressions." },
   { kind: "http", label: "HTTP", summary: "Call an HTTP endpoint or toolset." },
   { kind: "script", label: "Script", summary: "Run inline code with runtime controls." },
+  { kind: "variable-assigner", label: "Set variable", summary: "Store a derived value for downstream nodes." },
+  { kind: "template", label: "Template", summary: "Render text with workflow variables." },
+  { kind: "ai-response", label: "AI response", summary: "Generate a direct model response." },
+  { kind: "loop", label: "Loop", summary: "Repeat a path for each input item." },
+  { kind: "parallel", label: "Parallel", summary: "Fan out independent work." },
+  { kind: "serial", label: "Serial", summary: "Sequence work explicitly." },
+  { kind: "toolset", label: "Toolset", summary: "Run a bound integration tool." },
+  { kind: "webhook", label: "Webhook", summary: "Send an outbound webhook request." },
+  { kind: "wiki-retrieval", label: "Wiki retrieval", summary: "Search workspace knowledge." },
+  { kind: "smtp", label: "Send email", summary: "Send a notification via configured SMTP." },
+  { kind: "condition", label: "Condition", summary: "Gate the downstream path with an expression." },
 ]
 
 export const defaultWorkflowBindings = {
@@ -65,13 +76,32 @@ export function createWorkflowNodeData(kind: WorkflowNodeData["kind"], index: nu
       { id: `branch-${index}-true`, label: "True", expression: "$input.ok === true" },
       { id: `branch-${index}-false`, label: "False", expression: "" },
     ],
+    variableName: "value",
+    variableValue: "",
+    template: "{{input}}",
+    templateOutputFormat: "text" as const,
+    loopExpression: "$input.items",
+    maxIterations: 25,
+    emailTo: "",
+    emailSubject: "Workflow notification",
+    emailBody: "{{result}}",
+    systemPrompt: "",
+    temperature: 0.7,
+    maxTokens: 1024,
+    responseFormat: "text" as const,
+    inputSchemaJson: "{}",
+    outputSchemaJson: "{}",
+    itemAlias: "item",
+    concurrency: 2,
+    mergeStrategy: "all-settled" as const,
+    notes: "",
   } satisfies WorkflowNodeData
 
   switch (kind) {
     case "start":
-      return { ...base, label: "Start", task: "Normalize the inbound request payload.", outputKey: "request" }
+      return { ...base, label: "Start", task: "Normalize the inbound request payload.", outputKey: "request", inputSchemaJson: "{\n  \"type\": \"object\"\n}" }
     case "end":
-      return { ...base, label: "End", task: "Finalize and return the workflow result.", inputTemplate: "{{result}}", outputKey: "response" }
+      return { ...base, label: "End", task: "Finalize and return the workflow result.", inputTemplate: "{{result}}", outputKey: "response", outputSchemaJson: "{\n  \"type\": \"object\"\n}" }
     case "document-retrieval":
       return { ...base, task: "Search indexed documents for supporting context.", outputKey: "document_results" }
     case "agent":
@@ -86,6 +116,28 @@ export function createWorkflowNodeData(kind: WorkflowNodeData["kind"], index: nu
       return { ...base, task: "Call an HTTP endpoint or bound integration.", outputKey: "http_result" }
     case "script":
       return { ...base, task: "Run inline code with the selected runtime.", outputKey: "script_result" }
+    case "variable-assigner":
+      return { ...base, label: "Set variable", task: "Store a value for downstream nodes.", outputKey: "value" }
+    case "template":
+      return { ...base, label: "Template", task: "Render a text template from workflow context.", outputKey: "rendered" }
+    case "ai-response":
+      return { ...base, label: "AI response", task: "Generate a model response from the current context.", outputKey: "response" }
+    case "loop":
+      return { ...base, label: "Loop", task: "Iterate through an input collection.", outputKey: "loop" }
+    case "parallel":
+      return { ...base, label: "Parallel", task: "Run downstream branches concurrently.", outputKey: "parallel" }
+    case "serial":
+      return { ...base, label: "Serial", task: "Sequence downstream work.", outputKey: "serial" }
+    case "toolset":
+      return { ...base, label: "Toolset", task: "Execute a configured integration.", outputKey: "tool_result" }
+    case "webhook":
+      return { ...base, label: "Webhook", task: "Deliver the current context to an HTTP endpoint.", outputKey: "webhook_result" }
+    case "wiki-retrieval":
+      return { ...base, label: "Wiki retrieval", task: "Search workspace knowledge.", outputKey: "wiki_results" }
+    case "smtp":
+      return { ...base, label: "Send email", task: "Send an email notification.", outputKey: "email_result" }
+    case "condition":
+      return { ...base, label: "Condition", task: "Continue only when the expression matches.", outputKey: "condition" }
     default:
       return base
   }

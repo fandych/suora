@@ -43,6 +43,43 @@ function createDefaultWorkflowDefinition() {
   }
 }
 
+const WORKFLOW_NODE_KINDS = new Set([
+  "start", "end", "document-retrieval", "agent", "fork", "join", "if-else", "http", "script",
+  "variable-assigner", "template", "ai-response", "loop", "parallel", "serial", "toolset", "webhook", "wiki-retrieval", "smtp", "condition",
+])
+
+function validateWorkflowDefinitionJson(value: string) {
+  let definition: {
+    nodes?: Array<{ id?: unknown; data?: { kind?: unknown } }>
+    edges?: Array<{ source?: unknown; target?: unknown }>
+    budget?: { maxSteps?: unknown; maxDurationMs?: unknown }
+  }
+  try {
+    definition = JSON.parse(value) as typeof definition
+  } catch {
+    throw new Error("Workflow definition must be valid JSON.")
+  }
+  const nodes = definition.nodes
+  const edges = definition.edges
+  if (!Array.isArray(nodes) || !Array.isArray(edges)) throw new Error("Workflow definition requires nodes and edges.")
+  if (nodes.length > 200 || edges.length > 400) throw new Error("Workflow limit is 200 nodes and 400 edges.")
+  const ids = new Set<string>()
+  for (const node of nodes) {
+    if (typeof node.id !== "string" || !node.id.trim() || ids.has(node.id) || !WORKFLOW_NODE_KINDS.has(String(node.data?.kind))) {
+      throw new Error("Workflow contains an invalid, duplicate, or unsupported node.")
+    }
+    ids.add(node.id)
+  }
+  if (edges.some((edge) => typeof edge.source !== "string" || typeof edge.target !== "string" || !ids.has(edge.source) || !ids.has(edge.target))) {
+    throw new Error("Workflow contains an edge with an unknown node.")
+  }
+  const maxSteps = Number(definition.budget?.maxSteps ?? 100)
+  const maxDurationMs = Number(definition.budget?.maxDurationMs ?? 120000)
+  if (!Number.isFinite(maxSteps) || maxSteps < 1 || maxSteps > 1000 || !Number.isFinite(maxDurationMs) || maxDurationMs < 1000 || maxDurationMs > 3_600_000) {
+    throw new Error("Workflow execution budget is outside the supported limits.")
+  }
+}
+
 export function registerAutomationIpc() {
   ipcMain.handle("integrations:list", async () => {
     await ensureWorkspace()
@@ -151,6 +188,7 @@ export function registerAutomationIpc() {
 
   ipcMain.handle("workflows:save", async (_event, payload: { id: string; title: string; summary: string; definitionJson: string; selectedVersionId?: string; publish?: boolean }) => {
     await ensureWorkspace()
+    validateWorkflowDefinitionJson(payload.definitionJson)
     const database = openDatabase()
     applyMigrations(database)
     const latest = database.prepare(`SELECT major, minor, is_release as isRelease FROM workflow_versions WHERE workflow_id = ? ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { major: number; minor: number; isRelease: number } | undefined

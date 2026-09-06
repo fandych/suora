@@ -18,7 +18,7 @@ function getSourceLabelPosition(sourceX: number, sourceY: number, sourcePosition
   }
 }
 
-export function WorkflowEdge({ id, label, markerEnd, source, sourceHandleId, sourcePosition, sourceX, sourceY, style, targetPosition, targetX, targetY }: EdgeProps) {
+export function WorkflowEdge({ id, label, markerEnd, source, sourceHandleId, sourcePosition, sourceX, sourceY, style, targetPosition, targetX, targetY, selected }: EdgeProps) {
   const sourceNodeData = useStore((state) => state.nodeLookup.get(source)?.data as WorkflowNodeData | undefined)
   const [edgePath] = getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
   const labelPosition = getSourceLabelPosition(sourceX, sourceY, sourcePosition)
@@ -28,11 +28,11 @@ export function WorkflowEdge({ id, label, markerEnd, source, sourceHandleId, sou
 
   return (
     <>
-      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={style} />
+      <BaseEdge id={id} path={edgePath} markerEnd={markerEnd} style={{ ...style, strokeWidth: selected ? 2.5 : 1.5, stroke: selected ? "var(--color-primary)" : style?.stroke }} />
       {edgeLabel ? (
         <EdgeLabelRenderer>
           <div
-            className="nodrag nopan pointer-events-none absolute max-w-44 rounded-md border border-border/70 bg-background/95 px-1.5 py-1 text-[10px] font-medium text-muted-foreground shadow-sm"
+            className={`nodrag nopan pointer-events-none absolute max-w-44 rounded-md border bg-background/95 px-1.5 py-1 text-[10px] font-medium shadow-sm ${selected ? "border-primary text-primary" : "border-border/70 text-muted-foreground"}`}
             style={{ transform: `translate(-50%, -50%) translate(${labelPosition.x}px,${labelPosition.y}px)` }}
             title={edgeDescription ? `${edgeLabel}: ${edgeDescription}` : edgeLabel}
           >

@@ -30,7 +30,7 @@ function getStatusCopy(toolEvents: ChatAgentEvent[]) {
     return lastEvent.toolName === "browser_navigate"
       ? {
           icon: <Spinner className="size-3.5" />,
-          label: "等待浏览器交互后继续...",
+          label: "浏览器操作已完成，正在继续分析...",
           tone: "neutral",
         }
       : {

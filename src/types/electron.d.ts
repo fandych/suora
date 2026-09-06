@@ -125,7 +125,10 @@ declare global {
         writeFile: (payload: unknown) => Promise<unknown>
         runCommand: (payload: unknown) => Promise<unknown>
         browserNavigate: (payload: unknown) => Promise<unknown>
-        browserState: () => Promise<unknown>
+        browserState: (sessionId?: string) => Promise<unknown>
+        browserPage: (payload: unknown) => Promise<unknown>
+        browserClick: (payload: unknown) => Promise<unknown>
+        browserFill: (payload: unknown) => Promise<unknown>
         saveFile: (payload: unknown) => Promise<unknown>
         openExternal: (url: string) => Promise<unknown>
       }

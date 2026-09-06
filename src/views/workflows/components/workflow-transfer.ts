@@ -1,4 +1,4 @@
-import type { WorkflowDefinition } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowNodeData } from "@/data/domain/models"
 import { downloadJson } from "@/lib/browser-files"
 
 export function exportWorkflowJson(payload: { title: string; summary: string; definition: WorkflowDefinition; versionLabel?: string }) {
@@ -20,6 +20,24 @@ export function parseWorkflowJson(value: string) {
 
   if (!parsed.definition) {
     throw new Error("Workflow JSON must include a definition object.")
+  }
+  if (!Array.isArray(parsed.definition.nodes) || !Array.isArray(parsed.definition.edges)) {
+    throw new Error("Workflow definition must include node and edge arrays.")
+  }
+  if (parsed.definition.nodes.length > 200 || parsed.definition.edges.length > 400) {
+    throw new Error("Workflow imports support up to 200 nodes and 400 edges.")
+  }
+
+  const supportedKinds = new Set<WorkflowNodeData["kind"]>(["start", "end", "document-retrieval", "agent", "fork", "join", "if-else", "http", "script"])
+  const nodeIds = new Set<string>()
+  for (const node of parsed.definition.nodes) {
+    if (!node?.id || !node?.data?.kind || !supportedKinds.has(node.data.kind) || nodeIds.has(node.id)) {
+      throw new Error("Workflow import contains an invalid, unsupported, or duplicate node.")
+    }
+    nodeIds.add(node.id)
+  }
+  if (parsed.definition.edges.some((edge) => !nodeIds.has(edge.source) || !nodeIds.has(edge.target))) {
+    throw new Error("Workflow import contains an edge that references an unknown node.")
   }
 
   return {

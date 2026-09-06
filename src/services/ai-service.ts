@@ -7,6 +7,7 @@ import { z } from "zod"
 import type { ChatAttachmentRecord } from "@/data/domain/chat-message-parts"
 import type { ChatMessageRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
+import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { buildChatModelMessages } from "@/services/chat-model-messages"
 import { listDocuments, getDocumentDetail } from "@/data/repositories/document-repository"
 import { getIntegrationDetail } from "@/data/repositories/integration-repository"
@@ -218,8 +219,10 @@ async function createResearchSubagent(settings: ChatRuntimeSettings, maxSteps: n
   })
 }
 
-export async function* streamChatAgentResponse(history: ChatMessageRecord[], settings: ChatRuntimeSettings, options?: { abortSignal?: AbortSignal; selectedAgentId?: string; attachments?: ChatAttachment[] }): AsyncGenerator<ChatAgentEvent> {
+export async function* streamChatAgentResponse(history: ChatMessageRecord[], settings: ChatRuntimeSettings, options?: { abortSignal?: AbortSignal; selectedAgentId?: string; attachments?: ChatAttachment[]; browserSessionId?: string }): AsyncGenerator<ChatAgentEvent> {
   const agentContext = await resolveAgentContext(options?.selectedAgentId)
+  const configuredProviders = await listConfiguredModelProviders()
+  const agentProvider = agentContext?.detail?.config.providerId ? configuredProviders.find((provider) => provider.id === agentContext.detail.config.providerId) : undefined
   const effectiveSettings = agentContext?.detail
     ? {
         ...settings,
@@ -227,6 +230,9 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
         model: {
           ...settings.model,
           providerId: agentContext.detail.config.providerId || settings.model.providerId,
+          providerType: agentProvider?.providerType ?? settings.model.providerType,
+          baseUrl: agentProvider?.baseUrl ?? settings.model.baseUrl,
+          apiKey: agentProvider?.apiKey ?? settings.model.apiKey,
           modelId: agentContext.detail.config.modelId || settings.model.modelId,
         },
       }
@@ -235,7 +241,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
   const chatAgentMaxSteps = normalizeChatAgentMaxSteps(effectiveSettings.maxSteps)
   const researchAgentMaxSteps = getResearchAgentMaxSteps(chatAgentMaxSteps)
   let researchSubagentPromise: Promise<Awaited<ReturnType<typeof createResearchSubagent>>> | null = null
-  const builtInTools = await createBuiltInTools()
+  const builtInTools = await createBuiltInTools(options?.browserSessionId)
 
   const scopedSearchDocuments = agentContext?.documents?.filter(Boolean) ?? []
   const scopedSearchSkills = agentContext?.skills?.filter(Boolean) ?? []

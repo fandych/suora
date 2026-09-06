@@ -5,7 +5,8 @@ import { spawn } from "node:child_process"
 import { app, dialog, ipcMain, shell } from "electron"
 
 import { appState } from "@electron/others/app-state"
-import { getBrowserWindowState, navigateBrowserWindow } from "@electron/others/browser-window"
+import { clickBrowserElement, fillBrowserElement, getBrowserPageSnapshot, getBrowserWindowState, navigateBrowserWindow } from "@electron/others/browser-window"
+import { assertSafeHttpUrl } from "@electron/others/url-security"
 import { ensureFileSizeWithinLimit, MAX_COMMAND_OUTPUT_BYTES, MAX_TOOL_FILE_BYTES, MAX_TOOL_WRITE_BYTES, parseWorkspaceCommand } from "@electron/others/tool-guardrails"
 import { ensureWorkspace } from "@electron/others/workspace"
 import { getWorkspacePath } from "@electron/others/paths"
@@ -227,15 +228,22 @@ export function registerToolsIpc() {
   })
 
   ipcMain.handle("tools:openExternal", async (_event, url: string) => {
-    await shell.openExternal(url)
-    return { ok: true, url }
+    const safeUrl = await assertSafeHttpUrl(url)
+    await shell.openExternal(safeUrl.toString())
+    return { ok: true, url: safeUrl.toString() }
   })
 
-  ipcMain.handle("tools:browserNavigate", async (_event, payload: { url?: string; visible?: boolean }) => {
+  ipcMain.handle("tools:browserNavigate", async (_event, payload: { sessionId?: string; url?: string; visible?: boolean }) => {
     return await navigateBrowserWindow(payload)
   })
 
-  ipcMain.handle("tools:browserState", async () => getBrowserWindowState())
+  ipcMain.handle("tools:browserState", async (_event, sessionId?: string) => getBrowserWindowState(sessionId || "global"))
+
+  ipcMain.handle("tools:browserPage", async (_event, payload: { sessionId?: string; includeText?: boolean; includeLinks?: boolean }) => getBrowserPageSnapshot(payload))
+
+  ipcMain.handle("tools:browserClick", async (_event, payload: { sessionId?: string; selector: string }) => clickBrowserElement(payload.selector, payload.sessionId || "global"))
+
+  ipcMain.handle("tools:browserFill", async (_event, payload: { sessionId?: string; selector: string; value: string }) => fillBrowserElement(payload.selector, payload.value, payload.sessionId || "global"))
 
   ipcMain.handle("tools:saveFile", async (_event, payload: { defaultName: string; filters?: Array<{ name: string; extensions: string[] }>; dataBase64: string }) => {
     const browserWindow = appState.mainWindow ?? undefined

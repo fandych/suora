@@ -1,5 +1,5 @@
 import type { ChangeEvent, RefObject } from "react"
-import { DownloadIcon, EllipsisIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlayIcon, Settings2Icon, SparklesIcon, Trash2Icon, UploadIcon } from "lucide-react"
+import { DownloadIcon, EllipsisIcon, HistoryIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlayIcon, SaveIcon, Settings2Icon, SparklesIcon, Trash2Icon, UploadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -11,12 +11,15 @@ type WorkflowHeaderActionsProps = {
   selectedVersionId: string
   onVersionChange: (value: string) => void
   showLibrary: boolean
+  canSave: boolean
   canPublish: boolean
   canRunRelease: boolean
   onToggleLibrary: () => void
+  onSave: () => void
   onAutoLayout: () => void
   onOpenPreference: () => void
   onOpenTryRun: () => void
+  onOpenHistory: () => void
   onRunRelease: () => void
   onPublish: () => void
   onExport: () => void
@@ -32,12 +35,15 @@ export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
     selectedVersionId,
     onVersionChange,
     showLibrary,
+    canSave,
     canPublish,
     canRunRelease,
     onToggleLibrary,
+    onSave,
     onAutoLayout,
     onOpenPreference,
     onOpenTryRun,
+    onOpenHistory,
     onRunRelease,
     onPublish,
     onExport,
@@ -62,6 +68,10 @@ export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
         <div className="min-w-28">
           <VersionSelect versions={versions} value={selectedVersionId} onChange={onVersionChange} />
         </div>
+        <Button size="sm" variant="outline" onClick={onSave} disabled={!canSave}>
+          <SaveIcon />
+          Save
+        </Button>
         <Button size="sm" onClick={onPublish} disabled={!canPublish}>
           <UploadIcon />
           Publish
@@ -74,6 +84,10 @@ export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
             <DropdownMenuItem onClick={onOpenTryRun}>
               <PlayIcon className="size-4" />
               Try run
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpenHistory}>
+              <HistoryIcon />
+              Invocation history
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onRunRelease} disabled={!canRunRelease}>
               <PlayIcon />

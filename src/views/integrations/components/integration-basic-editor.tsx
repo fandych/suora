@@ -16,8 +16,8 @@ export function IntegrationBasicEditor({ config, title, onChange, onTitleChange 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>General info</CardTitle>
-        <CardDescription>Operator-facing metadata and connection settings for this toolset.</CardDescription>
+        <CardTitle>Basic information</CardTitle>
+        <CardDescription>Set the toolset identity and shared connection settings.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">

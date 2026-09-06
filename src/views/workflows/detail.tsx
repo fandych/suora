@@ -1,4 +1,4 @@
-import { Background, MiniMap, Panel, ReactFlow } from "@xyflow/react"
+import { Background, ConnectionLineType, MarkerType, MiniMap, Panel, ReactFlow } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import { PlayIcon } from "lucide-react"
 
@@ -15,7 +15,9 @@ import { WorkflowPropertiesPanel } from "@/views/workflows/components/workflow-p
 import { WorkflowNodeActionsProvider } from "@/views/workflows/components/workflow-node-actions-context"
 import { WorkflowTryPanel } from "@/views/workflows/components/workflow-try-panel"
 import { WorkflowLibraryPanel } from "@/views/workflows/components/workflow-workbench-panels"
+import { WorkflowInvocationHistory } from "@/views/workflows/components/workflow-invocation-history"
 import { WorkflowZoomControls } from "@/views/workflows/components/workflow-zoom-controls"
+import { WorkflowStatusPill } from "@/views/workflows/components/workflow-status-pill"
 import { useWorkflowDetailController } from "@/views/workflows/use-workflow-detail-controller"
 
 const WorkflowDetailPage = () => {
@@ -42,6 +44,8 @@ const WorkflowDetailPage = () => {
               onNodesChange={controller.isReadOnly ? undefined : controller.onNodesChange}
               onEdgesChange={controller.isReadOnly ? undefined : controller.onEdgesChange}
               onConnect={controller.handleConnect}
+              onNodesDelete={controller.isReadOnly ? undefined : controller.handleNodesDelete}
+              onSelectionChange={controller.handleSelectionChange}
               onNodeClick={controller.handleNodeClick}
               onPaneClick={() => {
                 controller.setSelectedNodeId(null)
@@ -58,6 +62,10 @@ const WorkflowDetailPage = () => {
               nodesDraggable={!controller.isReadOnly}
               nodesConnectable={!controller.isReadOnly}
               elementsSelectable
+              deleteKeyCode={controller.isReadOnly ? null : ["Backspace", "Delete"]}
+              connectionLineType={ConnectionLineType.SmoothStep}
+              defaultEdgeOptions={{ type: "workflow", markerEnd: { type: MarkerType.ArrowClosed } }}
+              proOptions={{ hideAttribution: true }}
               minZoom={0.25}
               maxZoom={2}
               snapToGrid
@@ -66,17 +74,23 @@ const WorkflowDetailPage = () => {
               <Background gap={20} size={1} color="var(--color-border)" />
 
               <Panel position="top-center" className="m-3 flex w-[min(100%-1.5rem,72rem)] pointer-events-auto justify-center" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <WorkflowStatusPill title={controller.title || workflowData.workflow.title} versionLabel={workflowData.selectedVersion.label} nodeCount={controller.nodes.length} isDraft={controller.isDraftVersion} hasUnsavedChanges={controller.hasUnsavedChanges} issueCount={controller.visibleIssues.length} />
+              </Panel>
+              <Panel position="top-center" className="mt-16! m-3 flex w-[min(100%-1.5rem,72rem)] pointer-events-auto justify-center" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
                 <WorkflowHeaderActions
                   versions={workflowData.versions}
                   selectedVersionId={workflowData.selectedVersion.id}
                   onVersionChange={controller.setSelectedVersionId}
                   showLibrary={controller.showLibrary}
+                  canSave={controller.isDraftVersion && controller.hasUnsavedChanges}
                   canPublish={controller.isDraftVersion && !controller.hasUnsavedChanges && controller.blockingIssues.length === 0}
                   canRunRelease={controller.isReleaseVersion}
                   onToggleLibrary={() => controller.setShowLibrary((current) => !current)}
+                  onSave={() => void controller.handleSave()}
                   onAutoLayout={controller.handleAutoLayout}
                   onOpenPreference={() => controller.setIsPreferenceDialogOpen(true)}
                   onOpenTryRun={() => controller.setInspectorMode("try-run")}
+                  onOpenHistory={() => controller.setInspectorMode("history")}
                   onRunRelease={controller.handleRunRelease}
                   onPublish={controller.handlePublish}
                   onExport={controller.handleExport}
@@ -128,7 +142,7 @@ const WorkflowDetailPage = () => {
                 </Panel>
               ) : null}
 
-              {!controller.isReadOnly && controller.inspectorMode === "properties" && controller.selectedNode ? (
+              {controller.inspectorMode === "properties" && controller.selectedNode ? (
                 <Panel position="top-right" className="top-3! right-3! bottom-3! m-0! p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
                   <div className="relative h-full min-h-0 max-w-[calc(100vw-1.5rem)]" style={{ width: controller.propertiesPanelWidth }}>
                     <button
@@ -170,7 +184,7 @@ const WorkflowDetailPage = () => {
                   <WorkflowTryPanel
                     width={controller.tryPanelWidth}
                     onWidthChange={controller.setTryPanelWidth}
-                    invocation={workflowData.invocations[0] ?? null}
+                    invocation={controller.selectedInvocation}
                     input={controller.dryRunInput}
                     isRunning={controller.isDryRunning}
                     error={controller.dryRunError}
@@ -183,7 +197,13 @@ const WorkflowDetailPage = () => {
                 </Panel>
               ) : null}
 
-              {!controller.selectedNode && controller.inspectorMode !== "try-run" ? (
+              {controller.inspectorMode === "history" ? (
+                <Panel position="top-right" className="top-3! right-3! bottom-3! m-0! w-80 p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                  <WorkflowInvocationHistory invocations={workflowData.invocations} selectedId={controller.selectedInvocationId} onSelect={(id) => { controller.setSelectedInvocationId(id); controller.setInspectorMode("try-run") }} />
+                </Panel>
+              ) : null}
+
+              {!controller.selectedNode && controller.inspectorMode !== "try-run" && controller.inspectorMode !== "history" ? (
                 <Panel position="bottom-right" className="m-3 pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
                   <div className="h-32 w-48 overflow-hidden rounded-2xl border bg-background/92 shadow-sm backdrop-blur">
                     <MiniMap pannable zoomable />

@@ -30,15 +30,18 @@ const ChatDetailPage = () => {
                   attachments={controller.attachments}
                   autoScroll={controller.autoScroll}
                   browserState={controller.browserInteractionState}
+                  browserSessionId={controller.activeChatId}
                   draft={controller.draft}
                   exportDisabled={controller.isResponding || (!controller.selectedChat && !controller.streamingText && controller.toolEvents.length === 0)}
                   groupedProviders={controller.groupedProviders}
                   isResponding={controller.isResponding}
+                  isStopping={controller.isStopping}
                   modelValue={controller.modelValue}
                   toolEvents={controller.toolEvents}
                   onAttachmentChange={controller.handleAttachmentChange}
                   onAutoScrollChange={controller.setAutoScroll}
                   onContinueAfterBrowser={controller.handleContinueAfterBrowser}
+                  onRetryBrowser={controller.handleRetryBrowser}
                   onDraftChange={controller.setDraft}
                   onExportChat={controller.handleExportChat}
                   onModelChange={controller.onModelChange}

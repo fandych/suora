@@ -31,7 +31,7 @@ export function useChatDetailController() {
   const [autoScroll, setAutoScroll] = useState(true)
   const [selectedAgentId, setSelectedAgentId] = useState("")
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
-  const [browserState, setBrowserState] = useState<{ open: boolean; visible: boolean; url: string }>({ open: false, visible: false, url: "" })
+  const [browserState, setBrowserState] = useState<{ open: boolean; visible: boolean; url: string; loading?: boolean; error?: string }>({ open: false, visible: false, url: "" })
   const [isDraftHydrated, setIsDraftHydrated] = useState(false)
   const skipRouteResetRef = useRef(false)
 
@@ -44,10 +44,11 @@ export function useChatDetailController() {
   const toolEvents = runtimeSnapshot.toolEvents
   const streamingText = runtimeSnapshot.streamingText
   const isResponding = runtimeSnapshot.isResponding
+  const isStopping = runtimeSnapshot.isStopping
   const assistantResponseMessageId = runtimeSnapshot.assistantResponseMessageId
   const assistantResponseParts = runtimeSnapshot.assistantResponseParts as AssistantResponsePart[]
   const pendingBrowserContinue = runtimeSnapshot.pendingBrowserContinue
-  const browserInteractionState = useMemo(() => deriveChatBrowserInteractionState({ browserState, toolEvents }), [browserState, toolEvents])
+  const browserInteractionState = useMemo(() => deriveChatBrowserInteractionState({ browserState, toolEvents, isResponding }), [browserState, isResponding, toolEvents])
 
   const { data, error, isLoading, reload, setData } = useAsyncResource(
     async () => {
@@ -151,7 +152,9 @@ export function useChatDetailController() {
     }
 
     const handle = window.setTimeout(() => {
-      void saveChatDraft(activeChatId, draft)
+      void saveChatDraft(activeChatId, draft).catch((nextError) => {
+        showToast({ title: "Draft save failed", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error", timeout: 3000 })
+      })
     }, 150)
 
     return () => window.clearTimeout(handle)
@@ -160,7 +163,7 @@ export function useChatDetailController() {
   useEffect(() => {
     let cancelled = false
 
-    void suoraIpc.tools.browserState().then((nextState) => {
+    void suoraIpc.tools.browserState(activeChatId ?? undefined).then((nextState) => {
       if (!cancelled) {
         setBrowserState(nextState)
       }
@@ -171,11 +174,16 @@ export function useChatDetailController() {
     })
 
     const handler = (...args: unknown[]) => {
-      const payload = args[1] as { open?: boolean; visible?: boolean; url?: string } | undefined
+      const payload = args[1] as { sessionId?: string; open?: boolean; visible?: boolean; url?: string; loading?: boolean; error?: string } | undefined
+      if (payload?.sessionId !== (activeChatId ?? "global")) {
+        return
+      }
       setBrowserState({
         open: Boolean(payload?.open),
         visible: Boolean(payload?.visible),
         url: typeof payload?.url === "string" ? payload.url : "",
+        loading: Boolean(payload?.loading),
+        error: typeof payload?.error === "string" ? payload.error : undefined,
       })
     }
 
@@ -185,7 +193,7 @@ export function useChatDetailController() {
       cancelled = true
       window.electron?.off?.("tools:browserStateChanged", handler)
     }
-  }, [])
+  }, [activeChatId])
 
   const persistChatSessionSettings = useCallback((nextRuntime: ChatRuntimeSettings, nextAgentId: string, toastTitle?: string) => {
     void saveChatSessionSettings(activeChatId ?? null, {
@@ -238,8 +246,9 @@ export function useChatDetailController() {
     persistChatSessionSettings(nextRuntime, selectedAgentId, "Model updated")
   }
 
-  const handleSend = async () => {
-    if ((!draft.trim() && attachments.length === 0) || !settingsDraft || isResponding) {
+  const handleSend = async (draftOverride?: string) => {
+    const nextDraft = draftOverride ?? draft
+    if ((!nextDraft.trim() && attachments.length === 0) || !settingsDraft || isResponding) {
       return
     }
 
@@ -254,7 +263,7 @@ export function useChatDetailController() {
     }
 
     const pendingAttachments = attachments
-    const outgoingDraft = draft
+    const outgoingDraft = nextDraft
 
     try {
       const resultingChatId = await startChatRun({
@@ -295,6 +304,7 @@ export function useChatDetailController() {
         setActiveChatId(resultingChatId)
       }
     } catch (nextError) {
+      setPendingBrowserContinue(activeChatId, false)
       if (nextError instanceof DOMException && nextError.name === "AbortError") {
         return
       }
@@ -307,9 +317,12 @@ export function useChatDetailController() {
       return
     }
 
-    const nextAttachments = await Promise.all(files.map((file) => fileToChatAttachment(file)))
-
-    setAttachments((current) => mergeChatAttachments(current, nextAttachments))
+    try {
+      const nextAttachments = await Promise.all(files.map((file) => fileToChatAttachment(file)))
+      setAttachments((current) => mergeChatAttachments(current, nextAttachments))
+    } catch (nextError) {
+      showToast({ title: "Attachment unavailable", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error" })
+    }
     event.target.value = ""
   }
 
@@ -325,6 +338,7 @@ export function useChatDetailController() {
         scopedSkills: agentDetail ? await Promise.all((agentDetail.config.skillIds ?? []).map(async (id) => getSkillDetail(id).catch(() => null))) : undefined,
         scopedWorkflows: agentDetail ? await Promise.all((agentDetail.config.workflowIds ?? []).map(async (id) => getWorkflowDetail(id).catch(() => null))) : undefined,
         scopedIntegrations: agentDetail ? await Promise.all((agentDetail.config.toolsetIds ?? []).map(async (id) => getIntegrationDetail(id).catch(() => null))) : undefined,
+        browserSessionId: activeChatId ?? undefined,
       })
       if (messageId && activeChatId && data?.messages.some((message) => message.id === messageId)) {
         const message = data.messages.find((item) => item.id === messageId)
@@ -379,6 +393,16 @@ export function useChatDetailController() {
     }
   }
 
+  const handleRetryBrowser = () => {
+    if (!browserState.url) {
+      return
+    }
+
+    void suoraIpc.tools.browserNavigate({ sessionId: activeChatId ?? undefined, url: browserState.url, visible: browserState.visible }).catch((nextError) => {
+      showToast({ title: "浏览器重试失败", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error" })
+    })
+  }
+
   return {
     activeProviderType,
     activeAgentMaxSteps,
@@ -397,6 +421,7 @@ export function useChatDetailController() {
     handleAttachmentChange,
     handleExportChat,
     handleRetryTool,
+    handleRetryBrowser,
     handleSend,
     handleContinueAfterBrowser: async () => {
       if (!activeChatId || isResponding || !settingsDraft) {
@@ -404,9 +429,9 @@ export function useChatDetailController() {
       }
 
       setPendingBrowserContinue(activeChatId, true)
-      setDraft((current) => current || "请基于已打开的浏览器页面继续分析并给出最终答复。")
-      await new Promise((resolve) => window.setTimeout(resolve, 0))
-      void handleSend()
+      const continuationPrompt = "我已完成浏览器中的操作。请读取当前页面并继续完成原任务，不要重复发送或重复执行已经完成的操作。"
+      setDraft("")
+      void handleSend(continuationPrompt)
     },
     handleStop: () => {
       stopChatRun(activeChatId)
@@ -414,6 +439,7 @@ export function useChatDetailController() {
     },
     isLoading,
     isResponding,
+    isStopping,
     modelValue,
     onModelChange: (value: string) => {
       const [providerId, modelId] = value.split("::")

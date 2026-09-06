@@ -1,42 +1,30 @@
-import { useEffect, useMemo, useState } from "react"
+import { useState } from "react"
 import { FileJson2Icon, PencilIcon, PlayIcon, PlusIcon, Trash2Icon, UploadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import type {
   HttpEndpointConfig,
-  HttpEndpointParameter,
   HttpIntegrationConfig,
   IntegrationConfig,
 } from "@/data/domain/models"
 import {
   createHttpEndpoint,
-  createHttpEndpointParameter,
-  getSelectedHttpEndpoint,
   mergeHttpEndpoints,
   parseCurlImport,
   parseOpenApiImport,
   syncHttpIntegrationConfig,
 } from "@/lib/integration-http"
+import { HttpEndpointEditorDialog } from "@/views/integrations/components/http-endpoint-editor-dialog"
 
 type IntegrationHttpEndpointsPanelProps = {
   config: HttpIntegrationConfig
@@ -61,7 +49,6 @@ export function IntegrationHttpEndpointsPanel({
   const [isCurlDialogOpen, setIsCurlDialogOpen] = useState(false)
   const [isOpenApiDialogOpen, setIsOpenApiDialogOpen] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
-  const selectedEndpoint = useMemo(() => getSelectedHttpEndpoint(config), [config])
 
   const updateConfig = (next: HttpIntegrationConfig) => {
     onChange(syncHttpIntegrationConfig(next))
@@ -171,54 +158,33 @@ export function IntegrationHttpEndpointsPanel({
         </CardHeader>
         <CardContent className="min-h-0">
           <ScrollArea className="h-136 pr-2">
-            <div className="space-y-3">
-              {config.endpoints.map((endpoint) => {
-                const isSelected = endpoint.id === selectedEndpoint?.id
-                return (
-                  <div key={endpoint.id} className={`rounded-xl border p-3 ${isSelected ? "border-primary/40 bg-primary/5" : "border-border"}`}>
-                    <div className="flex items-start justify-between gap-3">
-                      <button
-                        type="button"
-                        onClick={() => updateConfig({ ...config, selectedEndpointId: endpoint.id })}
-                        className="min-w-0 flex-1 text-left"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{endpoint.method}</span>
-                          <span className="truncate text-sm font-medium text-foreground">{endpoint.name}</span>
-                        </div>
-                        <div className="mt-1 truncate text-xs text-muted-foreground">{endpoint.path}</div>
-                        <div className="mt-2 line-clamp-2 text-xs text-muted-foreground">{endpoint.description || "No endpoint description yet."}</div>
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{endpoint.parameters.length} params</span>
-                          <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{endpoint.bodyMode}</span>
-                        </div>
-                      </button>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <Button size="icon-sm" variant="outline" aria-label={`Edit ${endpoint.name}`} title="Edit endpoint" onClick={() => setEditingEndpoint(createDraftFromEndpoint(endpoint))}>
-                          <PencilIcon className="size-4" />
-                        </Button>
-                        <Button size="sm" variant="outline" disabled={!canTryRun} onClick={() => onTryRun(endpoint.id)}>
-                          <PlayIcon />
-                          Try run
-                        </Button>
+            <div className="flex flex-col gap-3">
+              {config.endpoints.map((endpoint) => (
+                <div key={endpoint.id} className="rounded-xl border p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase text-muted-foreground">{endpoint.method}</span>
+                        <span className="truncate text-sm font-medium text-foreground">{endpoint.name}</span>
                       </div>
+                      <div className="mt-1 truncate text-xs text-muted-foreground">{endpoint.path}</div>
+                      <div className="mt-2 line-clamp-2 text-xs text-muted-foreground">{endpoint.description || "No endpoint description yet."}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">{endpoint.parameters.length} parameters · {endpoint.bodyMode}</div>
                     </div>
-                    {config.endpoints.length > 1 ? (
-                      <div className="mt-3 flex justify-end">
-                        <Button size="icon-sm" variant="destructive" aria-label={`Delete ${endpoint.name}`} title="Delete endpoint" onClick={() => removeEndpoint(endpoint.id)}>
-                          <Trash2Icon className="size-4" />
-                        </Button>
-                      </div>
-                    ) : null}
+                    <div className="flex shrink-0 gap-2">
+                      <Button size="icon-sm" variant="outline" aria-label={`Edit ${endpoint.name}`} title="Edit endpoint" onClick={() => setEditingEndpoint(createDraftFromEndpoint(endpoint))}><PencilIcon /></Button>
+                      <Button size="sm" variant="outline" disabled={!canTryRun} onClick={() => onTryRun(endpoint.id)}><PlayIcon />Try run</Button>
+                    </div>
                   </div>
-                )
-              })}
+                  {config.endpoints.length > 1 ? <div className="mt-3 flex justify-end"><Button size="icon-sm" variant="destructive" aria-label={`Delete ${endpoint.name}`} title="Delete endpoint" onClick={() => removeEndpoint(endpoint.id)}><Trash2Icon /></Button></div> : null}
+                </div>
+              ))}
             </div>
           </ScrollArea>
         </CardContent>
       </Card>
 
-      <EndpointEditorDialog
+      <HttpEndpointEditorDialog
         endpoint={editingEndpoint}
         onClose={() => setEditingEndpoint(null)}
         onSave={saveEndpoint}
@@ -246,87 +212,6 @@ export function IntegrationHttpEndpointsPanel({
         error={importError}
       />
     </>
-  )
-}
-
-function EndpointEditorDialog({
-  endpoint,
-  onClose,
-  onSave,
-}: {
-  endpoint: HttpEndpointConfig | null
-  onClose: () => void
-  onSave: (endpoint: HttpEndpointConfig) => void
-}) {
-  const [draft, setDraft] = useState<HttpEndpointConfig | null>(null)
-
-  useEffect(() => {
-    setDraft(endpoint ? createDraftFromEndpoint(endpoint) : null)
-  }, [endpoint])
-
-  if (!draft) {
-    return null
-  }
-
-  const updateParameter = (parameterId: string, patch: Partial<HttpEndpointParameter>) => {
-    setDraft({
-      ...draft,
-      parameters: draft.parameters.map((parameter) => parameter.id === parameterId ? { ...parameter, ...patch } : parameter),
-    })
-  }
-
-  return (
-    <Dialog open={Boolean(endpoint)} onOpenChange={(open) => { if (!open) { onClose() } }}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>Edit endpoint</DialogTitle>
-          <DialogDescription>Configure HTTP semantics for this endpoint, including path/query/header/form/json parameters.</DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2"><div className="text-sm text-muted-foreground">Name</div><Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} /></div>
-              <div className="space-y-2"><div className="text-sm text-muted-foreground">Method</div><NativeSelect value={draft.method} onChange={(event) => setDraft({ ...draft, method: event.target.value })}><NativeSelectOption value="GET">GET</NativeSelectOption><NativeSelectOption value="POST">POST</NativeSelectOption><NativeSelectOption value="PUT">PUT</NativeSelectOption><NativeSelectOption value="PATCH">PATCH</NativeSelectOption><NativeSelectOption value="DELETE">DELETE</NativeSelectOption></NativeSelect></div>
-            </div>
-            <div className="space-y-2"><div className="text-sm text-muted-foreground">Path</div><Input value={draft.path} onChange={(event) => setDraft({ ...draft, path: event.target.value })} placeholder="/v1/items/{itemId}" /></div>
-            <div className="space-y-2"><div className="text-sm text-muted-foreground">Description</div><Textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} rows={4} /></div>
-            <div className="space-y-2"><div className="text-sm text-muted-foreground">Body mode</div><NativeSelect value={draft.bodyMode} onChange={(event) => setDraft({ ...draft, bodyMode: event.target.value as HttpEndpointConfig["bodyMode"] })}><NativeSelectOption value="none">None</NativeSelectOption><NativeSelectOption value="json">JSON</NativeSelectOption><NativeSelectOption value="form-data">Form-data</NativeSelectOption><NativeSelectOption value="x-www-form-urlencoded">Form URL encoded</NativeSelectOption></NativeSelect></div>
-          </div>
-          <div className="space-y-4">
-            <div className="space-y-2"><div className="text-sm text-muted-foreground">Headers JSON</div><Textarea className="font-mono" rows={6} value={draft.headersJson} onChange={(event) => setDraft({ ...draft, headersJson: event.target.value })} /></div>
-            <div className="space-y-2"><div className="text-sm text-muted-foreground">Default query JSON</div><Textarea className="font-mono" rows={4} value={draft.queryJson} onChange={(event) => setDraft({ ...draft, queryJson: event.target.value })} /></div>
-            <div className="space-y-2"><div className="text-sm text-muted-foreground">Default body JSON</div><Textarea className="font-mono" rows={6} value={draft.bodyJson} onChange={(event) => setDraft({ ...draft, bodyJson: event.target.value })} /></div>
-          </div>
-        </div>
-        <div className="space-y-3 rounded-xl border p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-medium">Parameters</div>
-              <div className="text-xs text-muted-foreground">Mark each parameter as path, query, header, form-data, or JSON body input.</div>
-            </div>
-            <Button size="sm" variant="outline" onClick={() => setDraft({ ...draft, parameters: [...draft.parameters, createHttpEndpointParameter()] })}>Add parameter</Button>
-          </div>
-          <div className="space-y-2">
-            {draft.parameters.map((parameter) => (
-              <div key={parameter.id} className="grid gap-2 rounded-lg border p-2 md:grid-cols-[1fr_8rem_7rem_6rem_1fr_auto]">
-                <Input value={parameter.name} onChange={(event) => updateParameter(parameter.id, { name: event.target.value })} placeholder="name" />
-                <NativeSelect value={parameter.in} onChange={(event) => updateParameter(parameter.id, { in: event.target.value as HttpEndpointParameter["in"] })}><NativeSelectOption value="path">path</NativeSelectOption><NativeSelectOption value="query">query</NativeSelectOption><NativeSelectOption value="header">header</NativeSelectOption><NativeSelectOption value="form-data">form-data</NativeSelectOption><NativeSelectOption value="json">json</NativeSelectOption></NativeSelect>
-                <NativeSelect value={parameter.type} onChange={(event) => updateParameter(parameter.id, { type: event.target.value })}><NativeSelectOption value="string">string</NativeSelectOption><NativeSelectOption value="number">number</NativeSelectOption><NativeSelectOption value="boolean">boolean</NativeSelectOption><NativeSelectOption value="array">array</NativeSelectOption><NativeSelectOption value="object">object</NativeSelectOption></NativeSelect>
-                <label className="flex items-center justify-between rounded-lg border px-2 py-1 text-xs text-muted-foreground"><span>Required</span><Switch checked={parameter.required} onCheckedChange={(checked) => updateParameter(parameter.id, { required: checked })} /></label>
-                <Input value={parameter.description} onChange={(event) => updateParameter(parameter.id, { description: event.target.value })} placeholder="description" />
-                <Button size="icon-sm" variant="destructive" aria-label={`Delete parameter ${parameter.name || parameter.id}`} title="Delete parameter" onClick={() => setDraft({ ...draft, parameters: draft.parameters.filter((item) => item.id !== parameter.id) })}>
-                  <Trash2Icon className="size-4" />
-                </Button>
-              </div>
-            ))}
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={() => onSave(draft)}>Save endpoint</Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   )
 }
 
