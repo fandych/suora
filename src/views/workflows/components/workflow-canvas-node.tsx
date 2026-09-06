@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import type { WorkflowNodeData } from "@/data/domain/models"
 import { cn } from "@/lib/utils"
 import { useWorkflowNodeActions } from "@/views/workflows/components/workflow-node-actions-context"
-import { WorkflowNodeHandle, WorkflowNodeShell, WorkflowNodeStatusBadge } from "@/views/workflows/components/workflow-node-primitives"
+import { WorkflowNodeHandle, WorkflowNodeShell } from "@/views/workflows/components/workflow-node-primitives"
 import { WorkflowButtonHandle } from "@/views/workflows/components/workflow-button-handle"
 
 const NODE_STYLES: Record<WorkflowNodeData["kind"], { container: string; badge: string; icon: LucideIcon }> = {
@@ -130,9 +130,6 @@ export const WorkflowCanvasNode = memo(function WorkflowCanvasNode({ id, data, s
                 </div>
               </div>
               <div className="flex min-w-0 shrink items-center gap-1.5">
-                {executionStatus ? (
-                  <WorkflowNodeStatusBadge status={executionStatus} />
-                ) : null}
                 <Badge variant="outline" className="max-w-24 truncate">{node.kind}</Badge>
               </div>
             </div>

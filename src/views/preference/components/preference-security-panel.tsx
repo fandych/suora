@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge"
-import { Field, FieldContent, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field"
+import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import type { PreferenceSettings } from "@/data/repositories/preference-repository"
 
@@ -21,12 +22,25 @@ function splitLines(value: string) {
 
 const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelProps) => {
   return (
-    <PreferenceSectionCard id="security" title="Security" description="Execution and file access rules.">
+    <PreferenceSectionCard id="security" title="Security" description="Execution, SSL certificates, and file access rules.">
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Badge variant="outline">Enforced</Badge>
-        <span>Workspace command and file tools now respect these preferences inside the desktop runtime.</span>
+        <span>Workspace commands, file tools, and network connections respect these preferences inside the desktop runtime.</span>
       </div>
       <FieldGroup className="grid gap-4 md:grid-cols-2">
+        <Field className="md:col-span-2 rounded-lg border p-4" orientation="horizontal">
+          <FieldContent>
+            <FieldTitle>Ignore SSL / CA certificate validation</FieldTitle>
+            <FieldDescription>
+              Bypass CA and SSL certificate verification for HTTPS requests, LLM model APIs, and WebHooks. Enable this if your environment uses custom CA certificates, self-signed certs, or enterprise proxy inspection.
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            id="preference-ignore-ssl-errors"
+            checked={draft.ignoreSslErrors}
+            onCheckedChange={(checked) => onChange({ ignoreSslErrors: checked })}
+          />
+        </Field>
         <Field>
           <FieldLabel htmlFor="preference-command-confirm">Command confirmation</FieldLabel>
           <NativeSelect id="preference-command-confirm" className="w-full" value={draft.commandConfirmationMode} onChange={(event) => onChange({ commandConfirmationMode: event.target.value as PreferenceSettings["commandConfirmationMode"] })}>

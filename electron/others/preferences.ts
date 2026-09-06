@@ -11,3 +11,10 @@ export function getPreferenceSettingsValue() {
 export function getPreferenceSettingsSnapshot(): PreferenceSettings {
   return resolvePreferenceSettings(getPreferenceSettingsValue())
 }
+
+export function applySecurityPreferences() {
+  // Do not toggle NODE_TLS_REJECT_UNAUTHORIZED here. It is a process-wide
+  // switch, emits an insecure TLS warning, and does not reliably affect
+  // requests that use explicit agents. Each network request must apply the
+  // preference to its own TLS agent instead.
+}

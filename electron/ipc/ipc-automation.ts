@@ -4,6 +4,7 @@ import { ipcMain } from "electron"
 import { createDefaultChannelConfig, createDefaultChannelRuntime } from "@/data/repositories/channel-defaults"
 
 import { applyMigrations, openDatabase } from "@electron/database/db-core"
+import { applySecurityPreferences } from "@electron/others/preferences"
 import { ensureWorkspace } from "@electron/others/workspace"
 
 function createDefaultWorkflowDefinition() {
@@ -392,6 +393,7 @@ export function registerAutomationIpc() {
     const database = openDatabase()
     applyMigrations(database)
     database.prepare(`INSERT INTO app_meta (key, value) VALUES ('preference_settings', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(value)
+    applySecurityPreferences()
     return value
   })
 }

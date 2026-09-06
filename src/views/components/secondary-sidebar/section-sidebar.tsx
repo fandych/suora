@@ -26,6 +26,7 @@ import { deleteDocument } from "@/data/repositories/document-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { deleteModelProvider, listModelProviders, saveModelProvider } from "@/data/repositories/model-config-repository"
 import { deleteSkill, getSkillDetail, saveSkillDraft } from "@/data/repositories/skill-repository"
+import { deleteWorkflow } from "@/data/repositories/workflow-repository"
 import { ChatDeleteButton } from "@/views/chats/components/chat-delete-button"
 import { cn } from "@/lib/utils"
 
@@ -178,6 +179,15 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
         await deleteDocument(itemId)
         emitDataChanged("/documents")
         if (location.pathname === `/documents/${itemId}`) navigate("/documents")
+      }
+      return
+    }
+
+    if (title === "Workflows") {
+      if (actionId === "delete") {
+        await deleteWorkflow(itemId)
+        emitDataChanged("/workflows")
+        if (location.pathname === `/workflows/${itemId}`) navigate("/workflows")
       }
       return
     }

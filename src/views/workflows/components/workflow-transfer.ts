@@ -28,7 +28,11 @@ export function parseWorkflowJson(value: string) {
     throw new Error("Workflow imports support up to 200 nodes and 400 edges.")
   }
 
-  const supportedKinds = new Set<WorkflowNodeData["kind"]>(["start", "end", "document-retrieval", "agent", "fork", "join", "if-else", "http", "script"])
+  const supportedKinds = new Set<WorkflowNodeData["kind"]>([
+    "start", "end", "document-retrieval", "agent", "if-else", "http", "script",
+    "variable-assigner", "template", "ai-response", "loop", "toolset", "webhook", "smtp",
+    "condition", "fork", "join", "parallel", "serial", "wiki-retrieval",
+  ])
   const nodeIds = new Set<string>()
   for (const node of parsed.definition.nodes) {
     if (!node?.id || !node?.data?.kind || !supportedKinds.has(node.data.kind) || nodeIds.has(node.id)) {

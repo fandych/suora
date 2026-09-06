@@ -76,6 +76,7 @@ const IntegrationsDetailPage = () => {
   const [runInput, setRunInput] = useState("{}")
   const [isRunning, setIsRunning] = useState(false)
   const [isTryRunOpen, setIsTryRunOpen] = useState(false)
+  const [tryRunTargetId, setTryRunTargetId] = useState<string | undefined>()
 
   useEffect(() => {
     if (!data) {
@@ -140,7 +141,7 @@ const IntegrationsDetailPage = () => {
         return
       }
 
-      const { detail } = await runIntegrationAndPersist(integrationId, data?.selectedVersion.id, runInput)
+      const { detail } = await runIntegrationAndPersist(integrationId, data?.selectedVersion.id, runInput, tryRunTargetId)
       setData(detail)
     } finally {
       setIsRunning(false)
@@ -171,10 +172,7 @@ const IntegrationsDetailPage = () => {
       return
     }
 
-    setConfig(syncHttpIntegrationConfig({
-      ...config,
-      selectedEndpointId: endpointId,
-    }))
+    setTryRunTargetId(endpointId)
     setIsTryRunOpen(true)
   }
 
@@ -183,10 +181,7 @@ const IntegrationsDetailPage = () => {
       return
     }
 
-    setConfig({
-      ...config,
-      selectedScriptId: scriptId,
-    })
+    setTryRunTargetId(scriptId)
     setIsTryRunOpen(true)
   }
 
@@ -206,7 +201,7 @@ const IntegrationsDetailPage = () => {
               <div className="min-w-0 space-y-3">
                 <IntegrationBasicEditor config={config} title={title} onChange={handleConfigChange} onTitleChange={setTitle} />
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setIsTryRunOpen(true)} disabled={!canTryRun}><PlayIcon />Try run</Button>
+                  <Button size="sm" variant="outline" onClick={() => { setTryRunTargetId(config.kind === "http" ? config.selectedEndpointId : config.kind === "scripts" ? config.selectedScriptId : undefined); setIsTryRunOpen(true) }} disabled={!canTryRun}><PlayIcon />Try run</Button>
                   <Button size="sm" onClick={handleSave} disabled={!hasUnsavedChanges}>Save draft</Button>
                   <Button size="sm" variant="outline" onClick={handlePublish} disabled={hasUnsavedChanges || hasBlockingIssues}><UploadIcon />Publish</Button>
                 </div>
@@ -220,7 +215,7 @@ const IntegrationsDetailPage = () => {
         </div>
       </div>
 
-      {data ? <IntegrationTryRunSheet executions={data.executions} input={runInput} isOpen={isTryRunOpen} isRunning={isRunning} httpConfig={config?.kind === "http" ? config : undefined} scriptConfig={config?.kind === "scripts" ? config : undefined} onChangeInput={setRunInput} onOpenChange={setIsTryRunOpen} onRun={() => void handleRun()} /> : null}
+      {data ? <IntegrationTryRunSheet executions={data.executions} input={runInput} isOpen={isTryRunOpen} isRunning={isRunning} httpConfig={config?.kind === "http" ? { ...config, selectedEndpointId: tryRunTargetId ?? config.selectedEndpointId } : undefined} scriptConfig={config?.kind === "scripts" ? { ...config, selectedScriptId: tryRunTargetId ?? config.selectedScriptId } : undefined} onChangeInput={setRunInput} onOpenChange={setIsTryRunOpen} onRun={() => void handleRun()} /> : null}
     </div>
   )
 }

@@ -2,6 +2,7 @@ import http from "node:http"
 import https from "node:https"
 import { spawn } from "node:child_process"
 
+import { getPreferenceSettingsSnapshot } from "@electron/others/preferences"
 import { getProxyAgent } from "@electron/others/proxy"
 import { assertSafeHttpUrl } from "@electron/others/url-security"
 import { executeSandboxedScriptIntegration } from "@electron/others/script-integration-runner"
@@ -104,7 +105,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
       queryJson?: string
       bodyJson?: string
       bodyMode?: string
-      parameters?: Array<{ name?: string; in?: string; defaultValue?: string }>
+      parameters?: Array<{ name?: string; in?: string; type?: string; defaultValue?: string }>
     }>
     method?: string
     url?: string
@@ -122,6 +123,17 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
   const query = parseJson<Record<string, string>>(selectedEndpoint?.queryJson ?? config.queryJson, {})
   const headers = parseJson<Record<string, string>>(selectedEndpoint?.headersJson ?? config.headersJson, {})
   const endpointParameters = selectedEndpoint?.parameters ?? []
+  const invalidFileParameter = endpointParameters.find((parameter) => parameter.type === "file" && (parameter.in !== "form-data" || selectedEndpoint?.bodyMode !== "form-data"))
+  if (invalidFileParameter?.name) {
+    return { ok: false, status: 400, body: `File parameter ${invalidFileParameter.name} requires multipart/form-data.` }
+  }
+  const missingRequiredParameter = endpointParameters.find((parameter) => {
+    const value = input[parameter.name ?? ""]
+    return parameter.required && (value === undefined || value === null || value === "")
+  })
+  if (missingRequiredParameter?.name) {
+    return { ok: false, status: 400, body: `Required parameter is missing: ${missingRequiredParameter.name}` }
+  }
 
   for (const parameter of endpointParameters) {
     if (!parameter.name) {
@@ -186,6 +198,10 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
     const formFields: Record<string, unknown> = { ...bodyConfig }
     for (const parameter of endpointParameters.filter((item) => item.in === "form-data")) {
       if (parameter.name) {
+        const file = input[parameter.name] as UploadedIntegrationFile | undefined
+        if (file?.__suoraFile && (!file.dataBase64 || Buffer.byteLength(file.dataBase64, "base64") > 10 * 1024 * 1024)) {
+          return { ok: false, status: 400, body: `Uploaded file is invalid or exceeds the 10 MB limit: ${parameter.name}` }
+        }
         formFields[parameter.name] = input[parameter.name] ?? parameter.defaultValue ?? ""
       }
     }
@@ -193,11 +209,14 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
     headers["content-type"] = `multipart/form-data; boundary=${boundary}`
   }
 
+  const ignoreSsl = getPreferenceSettingsSnapshot().ignoreSslErrors
+
   return new Promise<{ ok: boolean; status: number; body: string }>((resolve, reject) => {
     const request = transport.request(url, {
       method: selectedEndpoint?.method || config.method || "GET",
       headers,
       agent: getProxyAgent(url),
+      rejectUnauthorized: !ignoreSsl,
     }, (response) => {
       const chunks: Buffer[] = []
       let size = 0
@@ -217,6 +236,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
           body: Buffer.concat(chunks).toString("utf8"),
         })
       })
+      response.on("error", reject)
     })
 
     request.on("error", reject)
@@ -281,12 +301,20 @@ async function executeMcpIntegration(payload: IntegrationExecutePayload) {
   return { ok: false, status: 400, body: "MCP integration requires endpoint or launch command." }
 }
 
-export function executeIntegration(payload: IntegrationExecutePayload) {
-  if (payload.kind === "http") {
-    return executeHttpIntegration(payload)
+export async function executeIntegration(payload: IntegrationExecutePayload) {
+  try {
+    if (payload.kind === "http") {
+      return await executeHttpIntegration(payload)
+    }
+    if (payload.kind === "scripts") {
+      return await executeScriptIntegration(payload)
+    }
+    return await executeMcpIntegration(payload)
+  } catch (error) {
+    return {
+      ok: false,
+      status: 500,
+      body: error instanceof Error ? error.message : String(error),
+    }
   }
-  if (payload.kind === "scripts") {
-    return executeScriptIntegration(payload)
-  }
-  return executeMcpIntegration(payload)
 }

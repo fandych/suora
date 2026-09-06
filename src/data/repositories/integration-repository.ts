@@ -158,11 +158,23 @@ export async function publishIntegrationVersion(integrationId: string, versionId
   return suoraIpc.integrations.save({ id: integrationId, title: detail.integration.title, kind: detail.integration.kind, endpoint: getConfigEndpoint(detail.config), config: detail.config, publish: true }) as Promise<IntegrationDetail>
 }
 
-export async function runIntegrationAndPersist(integrationId: string, selectedVersionId?: string, inputJson = "{}") {
+export async function runIntegrationAndPersist(integrationId: string, selectedVersionId?: string, inputJson = "{}", selectedEntryId?: string) {
   await ensureSeeded()
   const snapshot = await getIntegrationDetail(integrationId, selectedVersionId)
-  validateIntegrationConfig(snapshot.config)
-  const result = await executeIntegration(snapshot.config, inputJson)
+  const runtimeConfig = snapshot.config.kind === "http" && selectedEntryId
+    ? { ...snapshot.config, selectedEndpointId: selectedEntryId }
+    : snapshot.config.kind === "scripts" && selectedEntryId
+      ? { ...snapshot.config, selectedScriptId: selectedEntryId }
+      : snapshot.config
+  validateIntegrationConfig(runtimeConfig)
+  const targetExists = runtimeConfig.kind === "http"
+    ? runtimeConfig.endpoints.some((endpoint) => endpoint.id === runtimeConfig.selectedEndpointId)
+    : runtimeConfig.kind === "scripts"
+      ? runtimeConfig.scripts.some((script) => script.id === runtimeConfig.selectedScriptId)
+      : true
+  const result = targetExists
+    ? await executeIntegration(runtimeConfig, inputJson)
+    : { ok: false, status: 400, body: "The selected entry is not available in this saved version. Save the draft and try again." }
   await suoraIpc.integrations.recordExecution({ id: integrationId, versionId: snapshot.selectedVersion.id, status: result.ok ? "success" : "error", input: inputJson, output: result.body })
   const detail = await getIntegrationDetail(integrationId, selectedVersionId)
   return { detail, result }

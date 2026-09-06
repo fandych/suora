@@ -15,7 +15,7 @@ import { executeIntegration } from "@/data/repositories/integration-execution-re
 import { listSkills, getSkillDetail } from "@/data/repositories/skill-repository"
 import { listWorkflows, getWorkflowDetail } from "@/data/repositories/workflow-repository"
 import { getResearchAgentMaxSteps, getStepLimitErrorMessage, normalizeChatAgentMaxSteps } from "@/services/agent-loop-control"
-import { detectChatErrorKind, type ChatErrorKind } from "@/services/chat-error-state"
+import type { ChatErrorKind } from "@/services/chat-error-state"
 import { createBuiltInTools, listScopedDocuments, listScopedSkills, listScopedWorkflows, mergeAgentInstructions, resolveAgentContext } from "@/services/ai-tools"
 
 type AiFetchStartResult = {
@@ -52,6 +52,10 @@ function createProxyFetch(settings: ChatRuntimeSettings): typeof fetch | undefin
 
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const request = new Request(input, init)
+    console.info("[SUORA AI][renderer] fetch", {
+      method: request.method,
+      url: `${new URL(request.url).protocol}//${new URL(request.url).hostname}${new URL(request.url).pathname}`,
+    })
     const headers = Object.fromEntries(request.headers.entries())
     const bodyText = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text()
 
@@ -59,6 +63,7 @@ function createProxyFetch(settings: ChatRuntimeSettings): typeof fetch | undefin
       let requestId: string | undefined
       let controller: ReadableStreamDefaultController<Uint8Array> | undefined
       let responseResolved = false
+      const pendingEvents: unknown[][] = []
 
       const cleanup = () => {
         bridge.off?.("ai:fetch:event", handleEvent)
@@ -84,7 +89,7 @@ function createProxyFetch(settings: ChatRuntimeSettings): typeof fetch | undefin
         },
       })
 
-      const handleEvent = (...args: unknown[]) => {
+      const processEvent = (...args: unknown[]) => {
         const payload = args[1] as AiFetchEventPayload | undefined
         if (!payload || !requestId || payload.requestId !== requestId) {
           return
@@ -105,6 +110,7 @@ function createProxyFetch(settings: ChatRuntimeSettings): typeof fetch | undefin
             controller?.close()
             break
           case "error":
+            console.error("[SUORA AI][renderer] stream error", payload.error)
             cleanup()
             if (!responseResolved) {
               reject(new Error(payload.error))
@@ -113,6 +119,17 @@ function createProxyFetch(settings: ChatRuntimeSettings): typeof fetch | undefin
             }
             break
         }
+      }
+
+      const handleEvent = (...args: unknown[]) => {
+        // The main process starts the request immediately, so the response
+        // event can arrive before invoke() resolves with the request ID.
+        // Buffer those events instead of dropping the entire stream.
+        if (!requestId) {
+          pendingEvents.push(args)
+          return
+        }
+        processEvent(...args)
       }
 
       bridge.on("ai:fetch:event", handleEvent)
@@ -126,7 +143,16 @@ function createProxyFetch(settings: ChatRuntimeSettings): typeof fetch | undefin
         ...(settings.requestTimeoutMs > 0 ? { timeoutMs: settings.requestTimeoutMs } : {}),
       }).then((result) => {
         requestId = (result as AiFetchStartResult).requestId
+        if (!requestId) {
+          cleanup()
+          reject(new Error("AI fetch did not return a request ID"))
+          return
+        }
+        for (const event of pendingEvents.splice(0)) {
+          processEvent(...event)
+        }
       }).catch((error) => {
+        console.error("[SUORA AI][renderer] IPC start error", error)
         cleanup()
         reject(error instanceof Error ? error : new Error(String(error)))
       })
@@ -149,8 +175,11 @@ function createModel(settings: ChatRuntimeSettings): LanguageModel {
       return createOpenAI({
         apiKey: settings.model.apiKey,
         baseURL: settings.model.baseUrl || "https://your-resource-name.openai.azure.com/openai/v1/",
+        headers: {
+          "api-key": settings.model.apiKey,
+        },
         ...sharedOptions,
-      })(settings.model.modelId)
+      }).responses(settings.model.modelId)
     case "openai":
       return createOpenAI({
         apiKey: settings.model.apiKey,
@@ -175,6 +204,9 @@ function createModel(settings: ChatRuntimeSettings): LanguageModel {
         name: settings.model.providerId,
         apiKey: settings.model.apiKey,
         baseURL: settings.model.baseUrl,
+        headers: {
+          "api-key": settings.model.apiKey,
+        },
         ...sharedOptions,
       })(settings.model.modelId)
   }
@@ -223,18 +255,24 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
   const agentContext = await resolveAgentContext(options?.selectedAgentId)
   const configuredProviders = await listConfiguredModelProviders()
   const agentProvider = agentContext?.detail?.config.providerId ? configuredProviders.find((provider) => provider.id === agentContext.detail.config.providerId) : undefined
+  const agentModelValid = Boolean(agentProvider && agentProvider.models.some((m) => m.id === agentContext?.detail?.config.modelId))
+
+  const effectiveModel = (agentProvider && agentModelValid)
+    ? {
+        providerId: agentProvider.id,
+        providerType: agentProvider.providerType,
+        baseUrl: agentProvider.baseUrl,
+        apiKey: agentProvider.apiKey,
+        modelId: agentContext!.detail!.config.modelId!,
+        systemPrompt: settings.model.systemPrompt,
+      }
+    : settings.model
+
   const effectiveSettings = agentContext?.detail
     ? {
         ...settings,
         maxSteps: typeof agentContext.detail.config.maxSteps === "number" ? agentContext.detail.config.maxSteps : settings.maxSteps,
-        model: {
-          ...settings.model,
-          providerId: agentContext.detail.config.providerId || settings.model.providerId,
-          providerType: agentProvider?.providerType ?? settings.model.providerType,
-          baseUrl: agentProvider?.baseUrl ?? settings.model.baseUrl,
-          apiKey: agentProvider?.apiKey ?? settings.model.apiKey,
-          modelId: agentContext.detail.config.modelId || settings.model.modelId,
-        },
+        model: effectiveModel,
       }
     : settings
   const model = createModel(effectiveSettings)
@@ -366,9 +404,13 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
       case "error":
         {
           const error = part.error instanceof Error ? part.error.message : String(part.error)
-          yield { type: "error", error, errorKind: detectChatErrorKind(error) }
+          // An error event is terminal for the model stream. Yielding it as a
+          // normal event lets the AI SDK continue and later replace the real
+          // transport error with the misleading "No output generated" error.
+          // Throw here so the runtime catch block persists and displays the
+          // actionable ECONNRESET/proxy message instead.
+          throw new Error(error)
         }
-        break
       case "abort":
         return
         break

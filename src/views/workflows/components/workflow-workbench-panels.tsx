@@ -1,7 +1,6 @@
-import { PanelLeftCloseIcon, PanelLeftOpenIcon, SearchIcon } from "lucide-react"
+import { SearchIcon } from "lucide-react"
 import { useState } from "react"
 
-import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
 import type { WorkflowNodeData } from "@/data/domain/models"
@@ -9,11 +8,9 @@ import { WORKFLOW_NODE_ICONS } from "@/views/workflows/components/workflow-canva
 import type { WorkflowDesignIssue } from "@/views/workflows/components/workflow-editor-state"
 
 const libraryGroups: Array<{ title: string; kinds: WorkflowNodeData["kind"][] }> = [
-  { title: "Core", kinds: ["start", "end", "agent"] },
-  { title: "Logic", kinds: ["if-else", "condition", "fork", "join", "loop", "parallel", "serial"] },
-  { title: "Knowledge", kinds: ["document-retrieval", "wiki-retrieval"] },
-  { title: "AI & data", kinds: ["agent", "ai-response", "variable-assigner", "template"] },
-  { title: "Execution", kinds: ["http", "toolset", "webhook", "script", "smtp"] },
+  { title: "Core", kinds: ["start", "end", "if-else"] },
+  { title: "AI", kinds: ["agent", "ai-response", "document-retrieval", "variable-assigner", "template"] },
+  { title: "Execution", kinds: ["loop", "http", "toolset", "webhook", "script", "smtp"] },
 ]
 
 export function WorkflowLibraryPanel({
@@ -22,14 +19,12 @@ export function WorkflowLibraryPanel({
   canEdit,
   hasStartNode,
   onAddPresetNode,
-  onOpenChange,
 }: {
   isOpen: boolean
   presets: Array<{ kind: WorkflowNodeData["kind"]; label: string; summary: string }>
   canEdit: boolean
   hasStartNode: boolean
   onAddPresetNode: (kind: WorkflowNodeData["kind"]) => void
-  onOpenChange: (open: boolean) => void
 }) {
   const [query, setQuery] = useState("")
   const normalizedQuery = query.trim().toLowerCase()
@@ -39,11 +34,7 @@ export function WorkflowLibraryPanel({
 
   if (!isOpen) {
     return (
-      <div className="rounded-2xl border bg-card p-2 shadow-sm">
-        <Button size="sm" variant="ghost" onClick={() => onOpenChange(true)}>
-          <PanelLeftOpenIcon />
-        </Button>
-      </div>
+      <div className="hidden" aria-hidden="true" />
     )
   }
 
@@ -51,9 +42,6 @@ export function WorkflowLibraryPanel({
     <div className="flex max-h-[calc(100vh-10rem)] min-h-0 w-48 max-w-[calc(100vw-6rem)] flex-col gap-2 overflow-hidden rounded-xl border bg-background/95 p-2 shadow-xl">
       <div className="flex items-center justify-between gap-2 border-b px-1 pb-2 text-xs font-semibold">
         <span>Node library</span>
-        <Button size="sm" variant="ghost" onClick={() => onOpenChange(false)}>
-          <PanelLeftCloseIcon />
-        </Button>
       </div>
       <div className="flex items-center gap-2 rounded-lg border px-2"><SearchIcon className="size-3.5 text-muted-foreground" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search node types" className="h-8 min-w-0 flex-1 bg-transparent text-xs outline-none" /></div>
       {!canEdit ? <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[10px] text-muted-foreground">Published revisions are read-only.</p> : null}

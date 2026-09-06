@@ -20,6 +20,7 @@ type ChatTranscriptProps = {
 
 export function ChatTranscript({ activeProviderType, assistantResponseMessageId, assistantResponseParts, autoScroll, onRetryTool, selectedChat }: ChatTranscriptProps) {
   const hasMessages = (selectedChat?.messages.length ?? 0) > 0 || assistantResponseParts.length > 0
+  const hasPersistedAssistantResponse = Boolean(assistantResponseMessageId && selectedChat?.messages.some((message) => message.id === assistantResponseMessageId))
   const responseMessageCreatedAt = useMemo(() => {
     if (!assistantResponseMessageId) {
       return undefined
@@ -45,7 +46,7 @@ export function ChatTranscript({ activeProviderType, assistantResponseMessageId,
                   )}
                 </MessageScrollerItem>
               ))}
-              {!assistantResponseMessageId && assistantResponseParts.length > 0 ? (
+              {(!assistantResponseMessageId || !hasPersistedAssistantResponse) && assistantResponseParts.length > 0 ? (
                 <MessageScrollerItem messageId="assistant-streaming-group">
                   <ChatAssistantResponseGroup onRetryTool={onRetryTool} parts={assistantResponseParts} providerType={activeProviderType} />
                 </MessageScrollerItem>

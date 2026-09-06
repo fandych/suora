@@ -26,18 +26,12 @@ function normalizeProviderModel(providerType: string, model: ProviderConfigRecor
 }
 
 function mergePresetModels(providerType: string, models: ProviderConfigRecord["models"]) {
-  const preset = getProviderPreset(providerType)
-  const currentById = new Map(models.map((model) => [model.id, model]))
-  const merged = preset.models.map((model) => normalizeProviderModel(providerType, {
-    ...model,
-    ...currentById.get(model.id),
-    enabled: currentById.get(model.id)?.enabled ?? model.enabled,
-  }))
-  const extras = models
-    .filter((model) => !preset.models.some((presetModel) => presetModel.id === model.id))
-    .map((model) => normalizeProviderModel(providerType, model))
+  if (models.length === 0) {
+    const preset = getProviderPreset(providerType)
+    return preset.models.map((model) => normalizeProviderModel(providerType, model))
+  }
 
-  return [...merged, ...extras]
+  return models.map((model) => normalizeProviderModel(providerType, model))
 }
 
 function mergeDiscoveredModels(providerType: string, currentModels: ProviderConfigRecord["models"], discoveredModels: ProviderConfigRecord["models"]) {
@@ -55,17 +49,21 @@ function mergeDiscoveredModels(providerType: string, currentModels: ProviderConf
   return [...mergedDiscoveredModels, ...extras]
 }
 
+function providerAllowsNoKey(providerType: string) {
+  return providerType === "ollama" || providerType === "custom" || providerType === "openrouter"
+}
+
 function normalizeProvider(provider: ProviderConfigRecord) {
   const preset = getProviderPreset(provider.providerType)
-  const hasApiKey = provider.apiKey.trim().length > 0
+  const isKeyValid = provider.apiKey.trim().length > 0 || providerAllowsNoKey(provider.providerType)
   return {
     ...provider,
     title: provider.title || preset.title,
     baseUrl: provider.baseUrl || preset.baseUrl,
-    enabled: hasApiKey ? provider.enabled : false,
+    enabled: isKeyValid ? provider.enabled : false,
     models: mergePresetModels(provider.providerType, provider.models).map((model) => ({
       ...model,
-      enabled: hasApiKey ? model.enabled : false,
+      enabled: isKeyValid ? model.enabled : false,
     })),
   }
 }
@@ -96,23 +94,21 @@ function collapseProviders(providers: ProviderConfigRecord[]) {
 
 async function ensurePresetProviders() {
   const existing = (await suoraIpc.models.list()).filter((provider) => visibleProviderTypes.has(provider.providerType))
-  const visible = collapseProviders(existing)
-  const existingTypes = new Set(visible.filter((provider) => provider.providerType !== "custom").map((provider) => provider.providerType))
-  const missingPresets = providerPresets.filter((preset) => preset.providerType !== "custom" && !existingTypes.has(preset.providerType))
-
-  if (missingPresets.length === 0) {
-    return visible
+  if (existing.length > 0) {
+    return collapseProviders(existing)
   }
 
-  for (const preset of missingPresets) {
-    await suoraIpc.models.create({
-      title: preset.title,
-      providerType: preset.providerType,
-      baseUrl: preset.baseUrl,
-      apiKey: "",
-      enabled: false,
-      models: preset.models,
-    })
+  for (const preset of providerPresets) {
+    if (preset.providerType !== "custom") {
+      await suoraIpc.models.create({
+        title: preset.title,
+        providerType: preset.providerType,
+        baseUrl: preset.baseUrl,
+        apiKey: "",
+        enabled: false,
+        models: preset.models,
+      })
+    }
   }
 
   return collapseProviders((await suoraIpc.models.list()).filter((provider) => visibleProviderTypes.has(provider.providerType)))

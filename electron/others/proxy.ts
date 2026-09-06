@@ -19,7 +19,7 @@ function getProxyUrl(settings: ProxySettings) {
   return `${settings.type}://${auth}${settings.host}:${settings.port}`
 }
 
-export function getProxyAgent(targetUrl: URL) {
+export function getProxyAgent(targetUrl: URL, ignoreSsl = false) {
   const settings = appState.currentProxySettings
   if (!settings.enabled || !settings.host || !settings.port) {
     return undefined
@@ -31,6 +31,6 @@ export function getProxyAgent(targetUrl: URL) {
 
   const proxyUrl = getProxyUrl(settings)
   return targetUrl.protocol === "https:"
-    ? new HttpsProxyAgent(proxyUrl)
+    ? new HttpsProxyAgent(proxyUrl, { keepAlive: false, rejectUnauthorized: !ignoreSsl })
     : new HttpProxyAgent(proxyUrl)
 }

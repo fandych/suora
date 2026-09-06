@@ -8,6 +8,7 @@ import type { WorkflowInvocationRecord } from "@/data/domain/models"
 import { downloadJson } from "@/lib/browser-files"
 import { WorkflowTraceJsonPreview } from "@/views/workflows/components/workflow-trace-json-preview"
 import { WorkflowTraceCopyButton, WorkflowTraceValueSection } from "@/views/workflows/components/workflow-trace-sections"
+import { WorkflowPanelResizeHandle } from "@/views/workflows/components/workflow-panel-resize-handle"
 
 function TraceStatusIcon({ status }: { status: string }) {
   if (status === "running") {
@@ -66,19 +67,7 @@ export function WorkflowTryPanel({ invocation, input, isRunning, error, onInputC
 
   return (
     <div className="relative flex h-full max-w-[calc(100vw-1.5rem)] min-h-0 flex-col overflow-hidden rounded-xl border bg-background/95 p-2 shadow-xl" style={{ width }}>
-      <button
-        type="button"
-        aria-label="Resize try panel"
-        title="Resize try panel"
-        className="absolute top-1/2 -left-2 z-10 h-10 w-1 -translate-y-1/2 touch-none cursor-ew-resize rounded-full bg-border/70 hover:bg-primary"
-        onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
-        onPointerMove={(event) => {
-          if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
-            return
-          }
-          onWidthChange(Math.min(520, Math.max(260, width - event.movementX)))
-        }}
-      />
+      <WorkflowPanelResizeHandle label="Resize try panel" onResize={(deltaX) => onWidthChange(Math.min(520, Math.max(260, width - deltaX)))} />
       <div className="flex items-center justify-between gap-2 border-b px-1 pb-2 text-xs font-semibold">
         <div className="flex items-center gap-2">
           <PlayIcon className="size-3.5 text-muted-foreground" />

@@ -288,7 +288,7 @@ export function useChatDetailController() {
           setDraft("")
         },
         onAssistantMessageSaved: (workingChatId, detail) => {
-          if (workingChatId === activeChatId) {
+          if (workingChatId === activeChatId || (!activeChatId && detail.chat.id === workingChatId)) {
             setData(detail)
           }
         },

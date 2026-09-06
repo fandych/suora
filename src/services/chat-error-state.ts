@@ -19,7 +19,16 @@ export function detectChatErrorKind(error: string): ChatErrorKind {
     return "tool"
   }
 
-  if (normalized.includes("request") || normalized.includes("response") || normalized.includes("network")) {
+  if (
+    normalized.includes("request") ||
+    normalized.includes("response") ||
+    normalized.includes("network") ||
+    normalized.includes("econnreset") ||
+    normalized.includes("connection reset") ||
+    normalized.includes("socket hang up") ||
+    normalized.includes("econnrefused") ||
+    normalized.includes("fetch failed")
+  ) {
     return "request"
   }
 

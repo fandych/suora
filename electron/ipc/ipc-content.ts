@@ -150,7 +150,12 @@ export function registerContentIpc() {
     applyMigrations(database)
     const row = database.prepare(`SELECT value FROM app_meta WHERE key = 'chat_runtime_settings'`).get() as { value?: string } | undefined
     const parsed = parseStoredChatSettingsStore(row?.value ?? null)
-    return parsed ? serializeChatSettingsStore(parsed.store) : row?.value ?? null
+    const storedSettings = parsed ? serializeChatSettingsStore(parsed.store) : row?.value ?? null
+    const proxySettings = parsed?.store.defaultRuntime?.proxy
+    if (proxySettings) {
+      setProxySettings(proxySettings)
+    }
+    return storedSettings
   })
 
   ipcMain.handle("chats:saveSettings", async (_event, payload: ChatRuntimeSettingsPayload | { defaultRuntime?: ChatRuntimeSettingsPayload; chats?: Record<string, { runtime?: ChatRuntimeSettingsPayload; selectedAgentId?: string }> }) => {

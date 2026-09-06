@@ -255,6 +255,7 @@ function parseChannelSummaryRow(row: RawChannelRow): ChannelSummary {
 
 function normalizeWorkflowNodeData(data: Partial<WorkflowNodeData>, fallback: Pick<WorkflowNodeData, "kind" | "label" | "prompt">): WorkflowNodeData {
   return {
+    ...data,
     label: data.label ?? fallback.label,
     prompt: data.prompt ?? fallback.prompt,
     kind: data.kind ?? fallback.kind,
@@ -293,6 +294,25 @@ function normalizeWorkflowNodeData(data: Partial<WorkflowNodeData>, fallback: Pi
       { id: `${fallback.label}-true`, label: "True", expression: "$input.ok === true" },
       { id: `${fallback.label}-false`, label: "False", expression: "" },
     ],
+    variableName: data.variableName ?? "",
+    variableValue: data.variableValue ?? "",
+    template: data.template ?? "",
+    templateOutputFormat: data.templateOutputFormat ?? "text",
+    loopExpression: data.loopExpression ?? "$input.items",
+    maxIterations: data.maxIterations ?? 25,
+    emailTo: data.emailTo ?? "",
+    emailSubject: data.emailSubject ?? "",
+    emailBody: data.emailBody ?? "",
+    systemPrompt: data.systemPrompt ?? "",
+    temperature: data.temperature ?? 0.7,
+    maxTokens: data.maxTokens ?? 1024,
+    responseFormat: data.responseFormat ?? "text",
+    inputSchemaJson: data.inputSchemaJson ?? "{}",
+    outputSchemaJson: data.outputSchemaJson ?? "{}",
+    itemAlias: data.itemAlias ?? "item",
+    concurrency: data.concurrency ?? 2,
+    mergeStrategy: data.mergeStrategy ?? "all-settled",
+    notes: data.notes ?? "",
   }
 }
 

@@ -51,7 +51,7 @@ const ModelsDetailPage = () => {
   }
 
   const handleDeleteProvider = async () => {
-    if (!draft || draft.providerType !== "custom") {
+    if (!draft) {
       return
     }
 
@@ -205,7 +205,7 @@ const ModelsDetailPage = () => {
                   description={selectedPreset.description}
                   docsUrl={selectedPreset.docsUrl}
                   hasApiKey={hasApiKey}
-                  canDelete={draft.providerType === "custom"}
+                  canDelete={true}
                   onChange={setDraft}
                   onDelete={handleDeleteProvider}
                   onOpenDocs={(url) => {

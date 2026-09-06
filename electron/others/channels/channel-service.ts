@@ -323,7 +323,9 @@ export class ChannelService {
     }
     recordIncomingMessage(channel, message)
     appendDebugLog(channel.id, "info", `Inbound ${channel.platform} message routed to renderer.`)
-    appState.mainWindow?.webContents.send("channel:message", { channel, message, rawEvent })
+    if (appState.mainWindow && !appState.mainWindow.isDestroyed() && !appState.mainWindow.webContents.isDestroyed()) {
+      appState.mainWindow.webContents.send("channel:message", { channel, message, rawEvent })
+    }
     if (this.messageHandler) {
       await this.messageHandler({ channel, message, rawEvent })
     }

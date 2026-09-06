@@ -135,7 +135,7 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
           : [{ id: record.isDisabled ? "enable" : "disable", label: record.isDisabled ? "Enable" : "Disable" }],
       })))
     case "/workflows":
-      return mapItems(item, (await listWorkflows()).map((record) => ({ id: record.id, title: record.title, group: "workflows", meta: record.summary })))
+      return mapItems(item, (await listWorkflows()).map((record) => ({ id: record.id, title: record.title, group: "workflows", meta: record.summary, actions: [{ id: "delete", label: "Delete", variant: "destructive" as const }] })))
     case "/schedulers":
       return mapItems(item, (await listSchedulers()).map((record) => ({ id: record.id, title: record.title, group: "schedulers", meta: record.description || record.schedule })))
     case "/integrations":

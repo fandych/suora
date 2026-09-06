@@ -36,6 +36,7 @@ export type PreferenceSettings = {
   mailServerTls: boolean
   globalEnvironmentVariables: PreferenceEnvironmentVariable[]
   autoCheckUpdates: boolean
+  ignoreSslErrors: boolean
 }
 
 export type FileAccessDecision = {
@@ -73,6 +74,7 @@ export const DEFAULT_PREFERENCES: PreferenceSettings = {
   mailServerTls: true,
   globalEnvironmentVariables: [],
   autoCheckUpdates: true,
+  ignoreSslErrors: false,
 }
 
 export const THEME_ACCENTS: Record<PreferenceThemeAccent, {
@@ -206,6 +208,7 @@ export function sanitizePreferenceSettings(settings: Partial<PreferenceSettings>
     mailServerTls: Boolean(next.mailServerTls),
     globalEnvironmentVariables: normalizeEnvironmentVariables(next.globalEnvironmentVariables),
     autoCheckUpdates: Boolean(next.autoCheckUpdates),
+    ignoreSslErrors: Boolean(next.ignoreSslErrors),
   }
 }
 

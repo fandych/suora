@@ -1,6 +1,6 @@
-import { Background, ConnectionLineType, MarkerType, MiniMap, Panel, ReactFlow } from "@xyflow/react"
+import { Background, BackgroundVariant, ConnectionLineType, MarkerType, MiniMap, Panel, ReactFlow } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { PlayIcon } from "lucide-react"
+import { PanelLeftCloseIcon, PanelLeftOpenIcon, SparklesIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import PageHeader from "@/views/components/page-header"
@@ -9,7 +9,7 @@ import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { WorkflowIssuesControl, WorkflowNodeSearchControl } from "@/views/workflows/components/workflow-canvas-controls"
 import { workflowNodeTypes } from "@/views/workflows/components/workflow-canvas-node"
 import { workflowEdgeTypes } from "@/views/workflows/components/workflow-edge"
-import { WorkflowHeaderActions } from "@/views/workflows/components/workflow-header-actions"
+import { WorkflowRevisionActions } from "@/views/workflows/components/workflow-header-actions"
 import { WorkflowPreferenceDialog } from "@/views/workflows/components/workflow-preference-dialog"
 import { WorkflowPropertiesPanel } from "@/views/workflows/components/workflow-properties-panel"
 import { WorkflowNodeActionsProvider } from "@/views/workflows/components/workflow-node-actions-context"
@@ -17,7 +17,7 @@ import { WorkflowTryPanel } from "@/views/workflows/components/workflow-try-pane
 import { WorkflowLibraryPanel } from "@/views/workflows/components/workflow-workbench-panels"
 import { WorkflowInvocationHistory } from "@/views/workflows/components/workflow-invocation-history"
 import { WorkflowZoomControls } from "@/views/workflows/components/workflow-zoom-controls"
-import { WorkflowStatusPill } from "@/views/workflows/components/workflow-status-pill"
+import { WorkflowPanelResizeHandle } from "@/views/workflows/components/workflow-panel-resize-handle"
 import { useWorkflowDetailController } from "@/views/workflows/use-workflow-detail-controller"
 
 const WorkflowDetailPage = () => {
@@ -71,38 +71,30 @@ const WorkflowDetailPage = () => {
               snapToGrid
               fitView={false}
             >
-              <Background gap={20} size={1} color="var(--color-border)" />
+              <Background variant={BackgroundVariant.Lines} gap={24} size={1} color="var(--color-border)" />
 
-              <Panel position="top-center" className="m-3 flex w-[min(100%-1.5rem,72rem)] pointer-events-auto justify-center" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
-                <WorkflowStatusPill title={controller.title || workflowData.workflow.title} versionLabel={workflowData.selectedVersion.label} nodeCount={controller.nodes.length} isDraft={controller.isDraftVersion} hasUnsavedChanges={controller.hasUnsavedChanges} issueCount={controller.visibleIssues.length} />
-              </Panel>
-              <Panel position="top-center" className="mt-16! m-3 flex w-[min(100%-1.5rem,72rem)] pointer-events-auto justify-center" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
-                <WorkflowHeaderActions
+              <Panel position="top-right" className="top-3! right-3! m-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <WorkflowRevisionActions
                   versions={workflowData.versions}
                   selectedVersionId={workflowData.selectedVersion.id}
                   onVersionChange={controller.setSelectedVersionId}
-                  showLibrary={controller.showLibrary}
                   canSave={controller.isDraftVersion && controller.hasUnsavedChanges}
                   canPublish={controller.isDraftVersion && !controller.hasUnsavedChanges && controller.blockingIssues.length === 0}
-                  canRunRelease={controller.isReleaseVersion}
-                  onToggleLibrary={() => controller.setShowLibrary((current) => !current)}
-                  onSave={() => void controller.handleSave()}
-                  onAutoLayout={controller.handleAutoLayout}
-                  onOpenPreference={() => controller.setIsPreferenceDialogOpen(true)}
+                  canTryRun={controller.isDraftVersion && !controller.isDryRunning && controller.blockingIssues.length === 0}
                   onOpenTryRun={() => controller.setInspectorMode("try-run")}
-                  onOpenHistory={() => controller.setInspectorMode("history")}
-                  onRunRelease={controller.handleRunRelease}
+                  onSave={() => void controller.handleSave()}
                   onPublish={controller.handlePublish}
-                  onExport={controller.handleExport}
-                  onImport={() => controller.importInputRef.current?.click()}
-                  onDelete={() => controller.setIsDeleteDialogOpen(true)}
-                  importInputRef={controller.importInputRef}
-                  onImportChange={controller.handleImport}
                 />
               </Panel>
 
-              <Panel position="top-left" className={`${controller.showLibrary ? "left-62!" : "left-12!"} m-3! pointer-events-auto`} onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+              <Panel position="top-left" className="top-3! left-3! m-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
                 <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="icon-sm" className="bg-background/95 shadow-lg" onClick={() => controller.setShowLibrary((current) => !current)} aria-label={controller.showLibrary ? "Collapse node library" : "Expand node library"} title={controller.showLibrary ? "Collapse node library" : "Expand node library"}>
+                    {controller.showLibrary ? <PanelLeftCloseIcon /> : <PanelLeftOpenIcon />}
+                  </Button>
+                  <Button type="button" variant="outline" size="icon-sm" className="bg-background/95 shadow-lg" onClick={controller.handleAutoLayout} disabled={controller.isReadOnly || controller.nodes.length < 2} aria-label="Auto layout workflow" title="Auto layout workflow">
+                    <SparklesIcon />
+                  </Button>
                   <WorkflowNodeSearchControl
                     nodes={controller.nodes}
                     onNodeSelect={controller.focusNode}
@@ -114,73 +106,32 @@ const WorkflowDetailPage = () => {
                 </div>
               </Panel>
 
-              <Panel position="top-left" className="m-3 w-64 max-w-88 pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
-                <WorkflowLibraryPanel
-                  isOpen={controller.showLibrary}
-                  presets={controller.workflowPresetNodes}
-                  canEdit={!controller.isReadOnly}
-                  hasStartNode={controller.nodes.some((node) => node.data.kind === "start")}
-                  onAddPresetNode={controller.handleAddPresetNode}
-                  onOpenChange={controller.setShowLibrary}
-                />
-              </Panel>
-
-              {controller.inspectorMode !== "properties" ? (
-                <Panel position="top-right" className="m-3! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="icon-sm"
-                    className="bg-background/95 shadow-lg"
-                    onClick={() => controller.setInspectorMode("try-run")}
-                    disabled={controller.isReadOnly || controller.isDryRunning}
-                    aria-label="Open try panel"
-                    title="Open try panel"
-                  >
-                    <PlayIcon />
-                  </Button>
-                </Panel>
-              ) : null}
+              {controller.showLibrary ? <Panel position="top-left" className="top-14! left-3! m-0! w-64 max-w-88 pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <WorkflowLibraryPanel isOpen presets={controller.workflowPresetNodes} canEdit={!controller.isReadOnly} hasStartNode={controller.nodes.some((node) => node.data.kind === "start")} onAddPresetNode={controller.handleAddPresetNode} />
+              </Panel> : null}
 
               {controller.inspectorMode === "properties" && controller.selectedNode ? (
-                <Panel position="top-right" className="top-3! right-3! bottom-3! m-0! p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <Panel position="top-right" className="top-14! right-3! bottom-3! m-0! p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
                   <div className="relative h-full min-h-0 max-w-[calc(100vw-1.5rem)]" style={{ width: controller.propertiesPanelWidth }}>
-                    <button
-                      type="button"
-                      aria-label="Resize node properties panel"
-                      title="Resize node properties panel"
-                      className="absolute top-1/2 -left-2 z-10 h-10 w-1 -translate-y-1/2 touch-none cursor-ew-resize rounded-full bg-border/70 hover:bg-primary"
-                      onPointerDown={(event) => event.currentTarget.setPointerCapture(event.pointerId)}
-                      onPointerMove={(event) => {
-                        if (!event.currentTarget.hasPointerCapture(event.pointerId)) {
-                          return
-                        }
-
-                        controller.setPropertiesPanelWidth((current) => Math.min(520, Math.max(260, current - event.movementX)))
-                      }}
+                    <WorkflowPanelResizeHandle label="Resize node properties panel" onResize={(deltaX) => controller.setPropertiesPanelWidth((current) => Math.min(520, Math.max(260, current - deltaX)))} />
+                    <WorkflowPropertiesPanel
+                      agents={controller.agents}
+                      documents={controller.documents}
+                      integrations={controller.integrations}
+                      modelOptions={controller.modelOptions}
+                      onDeleteNode={controller.handleDeleteNode}
+                      onDuplicateNode={controller.handleDuplicateNode}
+                      onRenameNodeId={controller.handleRenameSelectedNodeId}
+                      readOnly={controller.isReadOnly}
+                      selectedNode={controller.selectedNode ? { id: controller.selectedNode.id, data: controller.selectedNode.data } : null}
+                      updateNode={controller.handleSelectedNodeChange}
                     />
-                    <div className="workflow-properties-panel flex h-full min-h-0 flex-col gap-2 rounded-xl border bg-background/95 p-2 shadow-xl">
-                      <div className="min-h-0 flex-1 overflow-y-auto pb-4">
-                        <WorkflowPropertiesPanel
-                          agents={controller.agents}
-                          documents={controller.documents}
-                          integrations={controller.integrations}
-                          modelOptions={controller.modelOptions}
-                          onDeleteNode={controller.handleDeleteNode}
-                          onDuplicateNode={controller.handleDuplicateNode}
-                          onRenameNodeId={controller.handleRenameSelectedNodeId}
-                          readOnly={controller.isReadOnly}
-                          selectedNode={controller.selectedNode ? { id: controller.selectedNode.id, data: controller.selectedNode.data } : null}
-                          updateNode={controller.handleSelectedNodeChange}
-                        />
-                      </div>
-                    </div>
                   </div>
                 </Panel>
               ) : null}
 
               {controller.inspectorMode === "try-run" ? (
-                <Panel position="top-right" className="top-3! right-3! bottom-3! m-0! p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <Panel position="top-right" className="top-14! right-3! bottom-3! m-0! p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
                   <WorkflowTryPanel
                     width={controller.tryPanelWidth}
                     onWidthChange={controller.setTryPanelWidth}
@@ -198,7 +149,7 @@ const WorkflowDetailPage = () => {
               ) : null}
 
               {controller.inspectorMode === "history" ? (
-                <Panel position="top-right" className="top-3! right-3! bottom-3! m-0! w-80 p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
+                <Panel position="top-right" className="top-14! right-3! bottom-3! m-0! w-80 p-0! pointer-events-auto" onPointerDown={stopPanelEvent} onMouseDown={stopPanelEvent} onClick={stopPanelEvent}>
                   <WorkflowInvocationHistory invocations={workflowData.invocations} selectedId={controller.selectedInvocationId} onSelect={(id) => { controller.setSelectedInvocationId(id); controller.setInspectorMode("try-run") }} />
                 </Panel>
               ) : null}

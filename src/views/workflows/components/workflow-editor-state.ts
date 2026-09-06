@@ -71,6 +71,34 @@ export function getWorkflowDesignIssues(input: {
     }
   }
 
+  // Detect cyclic dependency loops among non-loop nodes
+  const cyclicNodes = new Set<string>()
+  const visitState = new Map<string, "unvisited" | "visiting" | "visited">()
+
+  function dfsCheckCycle(nodeId: string) {
+    visitState.set(nodeId, "visiting")
+    const neighbors = adjacency.get(nodeId) ?? []
+    for (const nextId of neighbors) {
+      const neighborNode = activeNodes.find((n) => n.id === nextId)
+      if (neighborNode?.data.kind === "loop") continue
+
+      const state = visitState.get(nextId) ?? "unvisited"
+      if (state === "visiting") {
+        cyclicNodes.add(nodeId)
+        cyclicNodes.add(nextId)
+      } else if (state === "unvisited") {
+        dfsCheckCycle(nextId)
+      }
+    }
+    visitState.set(nodeId, "visited")
+  }
+
+  for (const node of activeNodes) {
+    if (node.data.kind !== "loop" && (visitState.get(node.id) ?? "unvisited") === "unvisited") {
+      dfsCheckCycle(node.id)
+    }
+  }
+
   return activeNodes.flatMap((node) => {
     const nodeIssues: WorkflowDesignIssue[] = []
     const label = node.data.label.trim() || node.id
@@ -86,6 +114,9 @@ export function getWorkflowDesignIssues(input: {
     }
     if (startNodes.length > 0 && !reachable.has(node.id)) {
       nodeIssues.push({ nodeId: node.id, label, message: "Node cannot be reached from the start node.", severity: "error" })
+    }
+    if (cyclicNodes.has(node.id)) {
+      nodeIssues.push({ nodeId: node.id, label, message: "Node is part of an invalid cyclic loop graph.", severity: "error" })
     }
     if (node.data.kind === "agent" && !node.data.prompt.trim()) {
       nodeIssues.push({ nodeId: node.id, label, message: "Agent node is missing a prompt.", severity: "error" })

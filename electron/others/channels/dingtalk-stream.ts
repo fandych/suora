@@ -1,4 +1,5 @@
 import https from "node:https"
+import { getPreferenceSettingsSnapshot } from "@electron/others/preferences"
 
 import WebSocket from "ws"
 
@@ -135,7 +136,8 @@ export class DingTalkStreamClient {
   private connectWebSocket(connection: StreamConnectionInfo): Promise<void> {
     return new Promise((resolve, reject) => {
       const url = `${connection.endpoint}?ticket=${encodeURIComponent(connection.ticket)}`
-      const agent = new https.Agent({ rejectUnauthorized: true, keepAlive: true })
+      const ignoreSsl = getPreferenceSettingsSnapshot().ignoreSslErrors
+      const agent = new https.Agent({ rejectUnauthorized: !ignoreSsl, keepAlive: true })
       this.ws = new WebSocket(url, {
         agent,
         headers: { "User-Agent": "suora/1.0" },

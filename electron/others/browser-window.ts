@@ -15,7 +15,10 @@ function getPageSnapshot(browserWindow: BrowserWindow, sessionId: string, error?
 }
 
 function publishBrowserWindowState(sessionId = "global", error?: string) {
-  appState.mainWindow?.webContents.send("tools:browserStateChanged", { sessionId, ...getBrowserWindowState(sessionId, error) })
+  if (!appState.mainWindow || appState.mainWindow.isDestroyed() || appState.mainWindow.webContents.isDestroyed()) {
+    return
+  }
+  appState.mainWindow.webContents.send("tools:browserStateChanged", { sessionId, ...getBrowserWindowState(sessionId, error) })
 }
 
 function wait(ms: number) {

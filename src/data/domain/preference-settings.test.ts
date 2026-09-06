@@ -21,6 +21,7 @@ describe("preference settings serialization", () => {
       commandAllowlist: ["git", " ", 123],
       commandBlacklist: ["rm -rf", " ", null],
       globalEnvironmentVariables: [{ key: " API_KEY ", value: "secret" }, { key: "", value: "ignored" }],
+      ignoreSslErrors: true,
     }))
 
     expect(resolved.workspaceName).toBe("Ops Workspace")
@@ -32,6 +33,7 @@ describe("preference settings serialization", () => {
     expect(resolved.commandAllowlist).toEqual(["git"])
     expect(resolved.commandBlacklist).toEqual(["rm -rf"])
     expect(resolved.globalEnvironmentVariables).toEqual([{ key: "API_KEY", value: "secret" }])
+    expect(resolved.ignoreSslErrors).toBe(true)
   })
 
   it("falls back to defaults for malformed JSON", () => {

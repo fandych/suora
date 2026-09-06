@@ -117,3 +117,35 @@ export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
     </div>
   )
 }
+
+export function WorkflowRevisionActions({
+  versions,
+  selectedVersionId,
+  onVersionChange,
+  canSave,
+  canPublish,
+  onSave,
+  onPublish,
+  canTryRun,
+  onOpenTryRun,
+}: Pick<WorkflowHeaderActionsProps, "versions" | "selectedVersionId" | "onVersionChange" | "canSave" | "canPublish" | "onSave" | "onPublish"> & { canTryRun: boolean; onOpenTryRun: () => void }) {
+  return (
+    <div className="flex h-8 items-center gap-2 rounded-2xl border bg-background/95 px-1 shadow-sm backdrop-blur">
+      <div className="min-w-28">
+        <VersionSelect versions={versions} value={selectedVersionId} onChange={onVersionChange} />
+      </div>
+      <Button className="h-8" size="sm" variant="outline" onClick={onSave} disabled={!canSave}>
+        <SaveIcon />
+        Save
+      </Button>
+      <Button className="h-8" size="sm" onClick={onPublish} disabled={!canPublish}>
+        <UploadIcon />
+        Publish
+      </Button>
+      <Button className="h-8" size="sm" variant="outline" onClick={onOpenTryRun} disabled={!canTryRun}>
+        <PlayIcon />
+        Try run
+      </Button>
+    </div>
+  )
+}

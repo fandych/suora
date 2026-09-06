@@ -19,7 +19,7 @@ export async function createWindow() {
       preload: path.join(__dirname, "../preload/preload.cjs"),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
     },
   })
 
@@ -46,6 +46,9 @@ export async function createWindow() {
   })
 
   setMainWindow(mainWindow)
+  mainWindow.on("closed", () => {
+    setMainWindow(null)
+  })
 
   if (appState.isDev) {
     const rendererUrl = process.env.ELECTRON_RENDERER_URL

@@ -10,22 +10,15 @@ export const workflowPresetNodes: Array<{
   { kind: "end", label: "End", summary: "Return or finalize workflow output." },
   { kind: "document-retrieval", label: "Document Retrieval", summary: "Search indexed documents before reasoning." },
   { kind: "agent", label: "Agent", summary: "Prompted execution step." },
-  { kind: "fork", label: "Fork", summary: "Split execution into multiple branches." },
-  { kind: "join", label: "Join", summary: "Merge multiple branches back together." },
   { kind: "if-else", label: "If / Else", summary: "Route execution based on expressions." },
   { kind: "http", label: "HTTP", summary: "Call an HTTP endpoint or toolset." },
   { kind: "script", label: "Script", summary: "Run inline code with runtime controls." },
   { kind: "variable-assigner", label: "Set variable", summary: "Store a derived value for downstream nodes." },
   { kind: "template", label: "Template", summary: "Render text with workflow variables." },
   { kind: "ai-response", label: "AI response", summary: "Generate a direct model response." },
-  { kind: "loop", label: "Loop", summary: "Repeat a path for each input item." },
-  { kind: "parallel", label: "Parallel", summary: "Fan out independent work." },
-  { kind: "serial", label: "Serial", summary: "Sequence work explicitly." },
   { kind: "toolset", label: "Toolset", summary: "Run a bound integration tool." },
   { kind: "webhook", label: "Webhook", summary: "Send an outbound webhook request." },
-  { kind: "wiki-retrieval", label: "Wiki retrieval", summary: "Search workspace knowledge." },
   { kind: "smtp", label: "Send email", summary: "Send a notification via configured SMTP." },
-  { kind: "condition", label: "Condition", summary: "Gate the downstream path with an expression." },
 ]
 
 export const defaultWorkflowBindings = {
