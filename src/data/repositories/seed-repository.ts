@@ -668,7 +668,7 @@ export function ensureSeeded() {
               },
               {
                 id: "channel-wechat-personal",
-                title: "Personal WeChat",
+                title: "WeChat Personal",
                 platform: "wechat_personal",
                 enabled: false,
                 status: "inactive",
@@ -682,7 +682,7 @@ export function ensureSeeded() {
                 messageCount: 0,
                 configJson: JSON.stringify(createChannelConfig(now - oneDay, {
                   id: "channel-wechat-personal",
-                  title: "Personal WeChat",
+                  title: "WeChat Personal",
                   platform: "wechat_personal",
                   catalogId: "catalog-wechat-personal",
                   bindingState: "unconfigured",
@@ -706,7 +706,7 @@ export function ensureSeeded() {
               },
               {
                 id: "channel-wecom-enterprise",
-                title: "Enterprise WeChat",
+                title: "WeChat Enterprise",
                 platform: "wechat",
                 enabled: false,
                 status: "inactive",
@@ -720,7 +720,7 @@ export function ensureSeeded() {
                 messageCount: 0,
                 configJson: JSON.stringify(createChannelConfig(now - oneDay, {
                   id: "channel-wecom-enterprise",
-                  title: "Enterprise WeChat",
+                  title: "WeChat Enterprise",
                   platform: "wechat",
                   catalogId: "catalog-wechat",
                   bindingState: "draft",

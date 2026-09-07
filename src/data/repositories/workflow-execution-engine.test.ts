@@ -6,6 +6,7 @@ import {
   executeWorkflowDefinition,
   interpolate,
   readPath,
+  toWorkflowHttpResult,
   type ExecutionContext,
 } from "@/data/repositories/workflow-execution-engine"
 
@@ -15,10 +16,12 @@ describe("Workflow Execution Engine", () => {
       input: { query: "hello", user: { name: "Alice", id: 123 }, tags: ["ai", "workflow"] },
       vars: { currentRole: "admin", maxLimit: 10 },
       steps: { start_1: { status: "ok" }, node_agent: { text: "Generated result" } },
+      current: { status: "draft" },
     }
     context.$input = context.input
     context.$vars = context.vars
     context.$steps = context.steps
+    context.$current = context.current
 
     it("reads paths correctly using readPath", () => {
       expect(readPath(context, "input.query")).toBe("hello")
@@ -27,6 +30,8 @@ describe("Workflow Execution Engine", () => {
       expect(readPath(context, "currentRole")).toBe("admin")
       expect(readPath(context, "input.tags[1]")).toBe("workflow")
       expect(readPath(context, "steps.node_agent.text")).toBe("Generated result")
+      expect(readPath(context, "current.status")).toBe("draft")
+      expect(readPath(context, "$current.status")).toBe("draft")
     })
 
     it("interpolates templates with {{}}, ${}, and $var syntax", () => {
@@ -55,6 +60,20 @@ describe("Workflow Execution Engine", () => {
   })
 
   describe("Workflow Execution", () => {
+    it("exposes structured HTTP request and response metadata to workflow nodes", () => {
+      expect(toWorkflowHttpResult({
+        ok: true,
+        status: 200,
+        body: '{"ticket":"T-1"}',
+        request: { url: "https://api.example.test/tickets", method: "GET", headers: { authorization: "[REDACTED]" }, body: null },
+        response: { status: 200, headers: { "content-type": "application/json" }, body: '{"ticket":"T-1"}', json: { ticket: "T-1" } },
+      })).toEqual({
+        request: { url: "https://api.example.test/tickets", method: "GET", headers: { authorization: "[REDACTED]" }, body: null },
+        response: { status: 200, headers: { "content-type": "application/json" }, body: '{"ticket":"T-1"}', json: { ticket: "T-1" } },
+      })
+      expect(toWorkflowHttpResult({ ok: true, status: 200, body: "legacy" })).toBe("legacy")
+    })
+
     it("executes start, variable-assigner, template, and end nodes in sequence", async () => {
       const definition: WorkflowDefinition = {
         viewport: { x: 0, y: 0, zoom: 1 },
@@ -76,6 +95,27 @@ describe("Workflow Execution Engine", () => {
       expect(result.traces.every((t) => t.status === "success")).toBe(true)
       expect(result.output.userName).toBe("Bob")
       expect(result.output.greeting).toBe("Welcome Bob!")
+    })
+
+    it("maps every node's current raw result into its stable step output", async () => {
+      const definition: WorkflowDefinition = {
+        viewport: { x: 0, y: 0, zoom: 1 },
+        nodes: [
+          { id: "start", position: { x: 0, y: 0 }, data: { kind: "start", label: "Start", prompt: "" } },
+          { id: "getTickets", position: { x: 100, y: 0 }, data: { kind: "template", label: "Get tickets", prompt: "", template: '{"tickets":["A-1"],"session":"s-1"}', templateOutputFormat: "json", outputKey: "ticketResult", outputSchemaJson: JSON.stringify({ type: "object", properties: { tickets: { type: "array", default: "${current.tickets}" }, session: { type: "string", default: "${current.session}" } } }) } },
+          { id: "end", position: { x: 200, y: 0 }, data: { kind: "end", label: "End", prompt: "", inputTemplate: "${steps.getTickets.tickets[0]} / ${ticketResult.session}" } },
+        ],
+        edges: [
+          { id: "start-getTickets", source: "start", target: "getTickets" },
+          { id: "getTickets-end", source: "getTickets", target: "end" },
+        ],
+      }
+
+      const result = await executeWorkflowDefinition(definition, {}, "manual")
+      const steps = result.output.steps as Record<string, Record<string, unknown>>
+      expect(steps.getTickets).toMatchObject({ tickets: ["A-1"], session: "s-1" })
+      expect(result.output.ticketResult).toMatchObject({ tickets: ["A-1"], session: "s-1" })
+      expect(result.output.current).toBe("A-1 / s-1")
     })
 
     it("supports running multiple workflows concurrently in parallel", async () => {

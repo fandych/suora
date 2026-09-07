@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import type { Edge, Node } from "@xyflow/react"
 import { SlidersHorizontalIcon, Trash2Icon } from "lucide-react"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -13,14 +14,18 @@ import { WorkflowAgentEditorSection, WorkflowDocumentEditorSection, WorkflowHttp
 import { WorkflowNodeSelect } from "@/views/workflows/components/workflow-node-select"
 import { WorkflowParameterEditor } from "@/views/workflows/components/workflow-parameter-editor"
 import { Textarea } from "@/components/ui/textarea"
+import { WorkflowStartInputEditor } from "@/views/workflows/components/workflow-start-input-editor"
+import { getWorkflowExpressionSuggestions } from "@/views/workflows/components/workflow-expression-suggestions"
+import { WorkflowExpressionInput } from "@/views/workflows/components/workflow-expression-input"
 
 type WorkflowPropertiesPanelProps = {
   agents: Array<{ id: string; title: string }>
   documents: DocumentSummary[]
   integrations: IntegrationSummary[]
   modelOptions: Array<{ id: string; label: string }>
+  nodes: Node<WorkflowNodeData>[]
+  edges: Edge[]
   onDeleteNode: () => void
-  onDuplicateNode: () => void
   onRenameNodeId: (value: string) => string | null
   readOnly: boolean
   selectedNode: { id: string; data: WorkflowNodeData } | null
@@ -32,8 +37,9 @@ export function WorkflowPropertiesPanel({
   documents,
   integrations,
   modelOptions,
+  nodes,
+  edges,
   onDeleteNode,
-  onDuplicateNode,
   onRenameNodeId,
   readOnly,
   selectedNode,
@@ -64,19 +70,27 @@ export function WorkflowPropertiesPanel({
     { id: "true", label: node.trueLabel ?? "True", expression: node.runIf ?? "" },
     { id: "false", label: node.falseLabel ?? "False", expression: "" },
   ]
+  const valueSuggestions = getWorkflowExpressionSuggestions(nodes, edges, selectedNode.id)
+  const outputSuggestions = getWorkflowExpressionSuggestions(nodes, edges, selectedNode.id, { includeCurrent: true })
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 rounded-xl border bg-background/95 p-2 shadow-xl">
+    <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col gap-2 overflow-hidden rounded-xl border bg-background/95 p-2 shadow-xl">
       <div className="flex items-center gap-2 border-b px-1 pb-2 text-xs font-semibold">
         <SlidersHorizontalIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
         Properties for {node.kind}
       </div>
 
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-3 px-1 pb-5">
-          <fieldset disabled={readOnly} className="space-y-3">
-            <WorkflowPanelSection title="Identity">
-              <WorkflowField label="Node ID">
+      <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-hidden">
+        <div className="space-y-3 px-1 pb-5 pr-3">
+          <fieldset disabled={readOnly} className="space-y-2">
+            <div className="flex flex-col gap-2 border-b pb-2">
+              <div className="flex items-center justify-between">
+                <div className="text-[10px] font-semibold text-muted-foreground">Basic</div>
+                <Button size="icon-xs" variant="destructive" aria-label="Delete node" title="Delete node" onClick={onDeleteNode}>
+                  <Trash2Icon />
+                </Button>
+              </div>
+              <WorkflowField label="Node Id">
                 <Input
                   value={draftNodeId}
                   onChange={(event) => setDraftNodeId(event.target.value)}
@@ -87,33 +101,32 @@ export function WorkflowPropertiesPanel({
                 {nodeIdError ? <p className="text-xs text-destructive">{nodeIdError}</p> : null}
               </WorkflowField>
 
-              <WorkflowField label="Title">
+              <WorkflowField label="name">
                 <Input value={node.label} onChange={(event) => updateNode({ label: event.target.value })} placeholder={node.kind} />
               </WorkflowField>
 
-              <WorkflowField label="Description">
-                <Textarea value={node.description ?? ""} onChange={(event) => updateNode({ description: event.target.value })} placeholder="Describe what this node is responsible for." />
+              <WorkflowField label="description">
+                <Textarea rows={2} value={node.description ?? ""} onChange={(event) => updateNode({ description: event.target.value })} placeholder="Describe this node." />
               </WorkflowField>
 
-              <WorkflowField label="Task summary" hint="Operator-facing summary of this step.">
-                <Input value={node.task ?? ""} onChange={(event) => updateNode({ task: event.target.value })} placeholder="Task summary" />
-              </WorkflowField>
-            </WorkflowPanelSection>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <WorkflowField label="Retry" hint="Number of retry attempts after a failed execution."><Input type="number" min={0} value={String(node.retryCount ?? 0)} onChange={(event) => updateNode({ retryCount: Number(event.target.value) || 0 })} /></WorkflowField>
+                <WorkflowField label="Timeout" hint="Maximum execution time in milliseconds."><Input type="number" min={100} value={String(node.timeoutMs ?? 30000)} onChange={(event) => updateNode({ timeoutMs: Number(event.target.value) || 30000 })} /></WorkflowField>
+              </div>
+              <div className="flex items-center justify-between gap-2">
+                <WorkflowField label="Continue On Error" hint="Continue with the next node when this node fails."><span /></WorkflowField>
+                <Switch checked={node.continueOnError ?? false} onCheckedChange={(checked) => updateNode({ continueOnError: checked })} />
+              </div>
+            </div>
 
-            {node.kind === "agent" ? <WorkflowAgentEditorSection node={node} agents={agents} modelOptions={modelOptions} updateNode={updateNode} /> : null}
+            {node.kind === "agent" ? <WorkflowAgentEditorSection node={node} agents={agents} modelOptions={modelOptions} updateNode={updateNode} suggestions={valueSuggestions} /> : null}
 
             {node.kind === "start" ? (
-              <WorkflowPanelSection title="Workflow input contract">
-                <WorkflowField label="Input schema JSON" hint="Describe the JSON object accepted when the workflow starts."><Textarea className="min-h-28 font-mono text-xs" value={node.inputSchemaJson ?? "{}"} onChange={(event) => updateNode({ inputSchemaJson: event.target.value })} /></WorkflowField>
-              </WorkflowPanelSection>
+              <WorkflowStartInputEditor title="Input" value={node.inputSchemaJson} onChange={(value) => updateNode({ inputSchemaJson: value })} />
             ) : null}
 
-            {node.kind === "end" ? (
-              <WorkflowPanelSection title="Workflow output contract">
-                <WorkflowField label="Result template" hint="Use variables from prior nodes, for example {{agent_result}}."><Textarea className="min-h-20 font-mono text-xs" value={node.inputTemplate ?? ""} onChange={(event) => updateNode({ inputTemplate: event.target.value })} /></WorkflowField>
-                <WorkflowField label="Output schema JSON"><Textarea className="min-h-24 font-mono text-xs" value={node.outputSchemaJson ?? "{}"} onChange={(event) => updateNode({ outputSchemaJson: event.target.value })} /></WorkflowField>
-              </WorkflowPanelSection>
-            ) : null}
+            <WorkflowStartInputEditor title="Output" variableSupport value={node.outputSchemaJson} onChange={(value) => updateNode({ outputSchemaJson: value })} suggestions={outputSuggestions} />
+            {node.kind === "end" ? <WorkflowField label="Result template" hint="Type ${ to select workflow input, upstream steps, or variables."><WorkflowExpressionInput multiline rows={3} className="font-mono text-xs" value={node.inputTemplate ?? ""} onChange={(inputTemplate) => updateNode({ inputTemplate })} suggestions={valueSuggestions} /></WorkflowField> : null}
 
             {node.kind === "ai-response" ? (
               <WorkflowPanelSection title="AI response settings">
@@ -121,23 +134,23 @@ export function WorkflowPropertiesPanel({
                   <NativeSelectOption value="">Use default model</NativeSelectOption>
                   {modelOptions.map((model) => <NativeSelectOption key={model.id} value={model.id}>{model.label}</NativeSelectOption>)}
                 </WorkflowNodeSelect>
-                <WorkflowField label="System instructions"><Textarea value={node.systemPrompt ?? ""} onChange={(event) => updateNode({ systemPrompt: event.target.value })} placeholder="Optional response rules" /></WorkflowField>
+                <WorkflowField label="System instructions"><WorkflowExpressionInput multiline rows={3} value={node.systemPrompt ?? ""} onChange={(systemPrompt) => updateNode({ systemPrompt })} suggestions={valueSuggestions} placeholder="Optional response rules" /></WorkflowField>
                 <div className="grid gap-3 sm:grid-cols-2"><WorkflowField label="Temperature"><Input type="number" min={0} max={2} step={0.1} value={String(node.temperature ?? 0.7)} onChange={(event) => updateNode({ temperature: Math.max(0, Math.min(2, Number(event.target.value) || 0)) })} /></WorkflowField><WorkflowField label="Maximum tokens"><Input type="number" min={1} max={32768} value={String(node.maxTokens ?? 1024)} onChange={(event) => updateNode({ maxTokens: Math.max(1, Number(event.target.value) || 1) })} /></WorkflowField></div>
                 <WorkflowNodeSelect label="Response format" value={node.responseFormat ?? "text"} onChange={(event) => updateNode({ responseFormat: event.target.value as "text" | "json" })}><NativeSelectOption value="text">Text</NativeSelectOption><NativeSelectOption value="json">JSON</NativeSelectOption></WorkflowNodeSelect>
-                <WorkflowField label="Prompt"><Textarea className="min-h-28" value={node.prompt ?? ""} onChange={(event) => updateNode({ prompt: event.target.value })} placeholder="Prompt template" /></WorkflowField>
+                <WorkflowField label="Prompt"><WorkflowExpressionInput multiline rows={6} className="min-h-28" value={node.prompt ?? ""} onChange={(prompt) => updateNode({ prompt })} suggestions={valueSuggestions} placeholder="Prompt template" /></WorkflowField>
               </WorkflowPanelSection>
             ) : null}
 
-            {node.kind === "document-retrieval" ? <WorkflowDocumentEditorSection node={node} documents={documents} updateNode={updateNode} /> : null}
+            {node.kind === "document-retrieval" ? <WorkflowDocumentEditorSection node={node} documents={documents} updateNode={updateNode} suggestions={valueSuggestions} /> : null}
 
-            {["http", "toolset", "webhook"].includes(node.kind) ? <WorkflowHttpEditorSection node={node} integrations={integrations} updateNode={updateNode} /> : null}
+            {["http", "toolset", "webhook"].includes(node.kind) ? <WorkflowHttpEditorSection node={node} integrations={integrations} updateNode={updateNode} suggestions={valueSuggestions} /> : null}
 
             {node.kind === "script" ? <WorkflowScriptEditorSection node={node} updateNode={updateNode} /> : null}
 
             {node.kind === "variable-assigner" ? (
               <WorkflowPanelSection title="Variable assignment">
                 <WorkflowField label="Variable name"><Input value={node.variableName ?? node.outputKey ?? ""} onChange={(event) => updateNode({ variableName: event.target.value, outputKey: event.target.value })} placeholder="customerTier" /></WorkflowField>
-                <WorkflowField label="Value expression"><Input value={node.variableValue ?? ""} onChange={(event) => updateNode({ variableValue: event.target.value })} placeholder="$input.customer.tier" /></WorkflowField>
+                <WorkflowField label="Value expression"><WorkflowExpressionInput value={node.variableValue ?? ""} onChange={(variableValue) => updateNode({ variableValue })} suggestions={valueSuggestions} placeholder="${input.customer.tier}" /></WorkflowField>
               </WorkflowPanelSection>
             ) : null}
 
@@ -147,21 +160,21 @@ export function WorkflowPropertiesPanel({
                   <NativeSelectOption value="text">Text</NativeSelectOption>
                   <NativeSelectOption value="json">JSON</NativeSelectOption>
                 </WorkflowNodeSelect>
-                <WorkflowField label="Template body" hint="Use {{input.name}} or $agent_result values."><Textarea className="min-h-28 font-mono text-xs" value={node.template ?? ""} onChange={(event) => updateNode({ template: event.target.value })} /></WorkflowField>
+                <WorkflowField label="Template body" hint="Type ${ to select a value."><WorkflowExpressionInput multiline rows={6} className="min-h-28 font-mono text-xs" value={node.template ?? ""} onChange={(template) => updateNode({ template })} suggestions={valueSuggestions} /></WorkflowField>
               </WorkflowPanelSection>
             ) : null}
 
             {node.kind === "smtp" ? (
               <WorkflowPanelSection title="Email delivery">
-                <WorkflowField label="Recipient"><Input type="email" value={node.emailTo ?? ""} onChange={(event) => updateNode({ emailTo: event.target.value })} placeholder="team@example.com" /></WorkflowField>
-                <WorkflowField label="Subject"><Input value={node.emailSubject ?? ""} onChange={(event) => updateNode({ emailSubject: event.target.value })} /></WorkflowField>
-                <WorkflowField label="Message"><Textarea className="min-h-24" value={node.emailBody ?? ""} onChange={(event) => updateNode({ emailBody: event.target.value })} /></WorkflowField>
+                <WorkflowField label="Recipient"><WorkflowExpressionInput value={node.emailTo ?? ""} onChange={(emailTo) => updateNode({ emailTo })} suggestions={valueSuggestions} placeholder="team@example.com" /></WorkflowField>
+                <WorkflowField label="Subject"><WorkflowExpressionInput value={node.emailSubject ?? ""} onChange={(emailSubject) => updateNode({ emailSubject })} suggestions={valueSuggestions} /></WorkflowField>
+                <WorkflowField label="Message"><WorkflowExpressionInput multiline rows={5} className="min-h-24" value={node.emailBody ?? ""} onChange={(emailBody) => updateNode({ emailBody })} suggestions={valueSuggestions} /></WorkflowField>
               </WorkflowPanelSection>
             ) : null}
 
             {["condition", "loop"].includes(node.kind) ? (
               <WorkflowPanelSection title={node.kind === "loop" ? "Loop controls" : "Condition"}>
-                <WorkflowField label={node.kind === "loop" ? "Collection expression" : "Expression"}><Input value={node.kind === "loop" ? node.loopExpression ?? "" : node.runIf ?? ""} onChange={(event) => updateNode(node.kind === "loop" ? { loopExpression: event.target.value } : { runIf: event.target.value })} placeholder={node.kind === "loop" ? "$input.items" : "$input.approved === true"} /></WorkflowField>
+                <WorkflowField label={node.kind === "loop" ? "Collection expression" : "Expression"}><WorkflowExpressionInput value={node.kind === "loop" ? node.loopExpression ?? "" : node.runIf ?? ""} onChange={(expression) => updateNode(node.kind === "loop" ? { loopExpression: expression } : { runIf: expression })} suggestions={valueSuggestions} placeholder={node.kind === "loop" ? "${input.items}" : "${input.approved} === true"} /></WorkflowField>
                 {node.kind === "loop" ? <><WorkflowField label="Item variable"><Input value={node.itemAlias ?? "item"} onChange={(event) => updateNode({ itemAlias: event.target.value })} placeholder="item" /></WorkflowField><WorkflowField label="Maximum iterations"><Input type="number" min={1} max={100} value={String(node.maxIterations ?? 25)} onChange={(event) => updateNode({ maxIterations: Math.max(1, Math.min(100, Number(event.target.value) || 25)) })} /></WorkflowField></> : null}
               </WorkflowPanelSection>
             ) : null}
@@ -209,41 +222,11 @@ export function WorkflowPropertiesPanel({
                     branches: [...branches.slice(0, -1), { id: `branch-${branches.length}`, label: `Else if ${branches.length - 1}`, expression: "" }, branches.at(-1)!],
                   })}
                   addLabel="Add elseif branch"
+                  suggestions={valueSuggestions}
                 />
               </WorkflowPanelSection>
             ) : null}
 
-            <WorkflowPanelSection title="Execution">
-              <WorkflowField label="Output variable">
-                <Input value={node.outputKey ?? ""} onChange={(event) => updateNode({ outputKey: event.target.value })} placeholder="result" />
-              </WorkflowField>
-
-              <div className="grid gap-3 sm:grid-cols-2">
-                <WorkflowField label="Retries">
-                  <Input type="number" min={0} value={String(node.retryCount ?? 0)} onChange={(event) => updateNode({ retryCount: Number(event.target.value) || 0 })} />
-                </WorkflowField>
-                <WorkflowField label="Timeout (ms)">
-                  <Input type="number" min={100} value={String(node.timeoutMs ?? 30000)} onChange={(event) => updateNode({ timeoutMs: Number(event.target.value) || 30000 })} />
-                </WorkflowField>
-              </div>
-
-              <label className="flex items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-sm">
-                Enabled
-                <Switch checked={node.enabled ?? true} onCheckedChange={(checked) => updateNode({ enabled: checked })} />
-              </label>
-
-              <label className="flex items-center justify-between gap-3 rounded-2xl border px-3 py-2 text-sm">
-                Continue on error
-                <Switch checked={node.continueOnError ?? false} onCheckedChange={(checked) => updateNode({ continueOnError: checked })} />
-              </label>
-
-              <div className="grid grid-cols-2 gap-2 pt-1">
-                <Button size="sm" variant="outline" onClick={onDuplicateNode}>Duplicate</Button>
-                <Button size="icon-sm" variant="destructive" aria-label="Delete node" title="Delete node" onClick={onDeleteNode}>
-                  <Trash2Icon className="size-4" />
-                </Button>
-              </div>
-            </WorkflowPanelSection>
           </fieldset>
         </div>
       </ScrollArea>

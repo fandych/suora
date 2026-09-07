@@ -12,7 +12,7 @@ import {
 export const channelPlatformOptions: Array<{ value: ChannelPlatform; label: string }> = [
   { value: "web", label: "Web" },
   { value: "email", label: "Email" },
-  { value: "wechat", label: "Enterprise WeChat" },
+  { value: "wechat", label: "WeChat Enterprise" },
   { value: "wechat_personal", label: "WeChat Personal" },
   { value: "wechat_official", label: "WeChat Official Account" },
   { value: "wechat_miniprogram", label: "WeChat Mini Program" },

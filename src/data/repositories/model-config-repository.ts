@@ -94,12 +94,10 @@ function collapseProviders(providers: ProviderConfigRecord[]) {
 
 async function ensurePresetProviders() {
   const existing = (await suoraIpc.models.list()).filter((provider) => visibleProviderTypes.has(provider.providerType))
-  if (existing.length > 0) {
-    return collapseProviders(existing)
-  }
+  const existingTypes = new Set(existing.map((provider) => provider.providerType))
 
   for (const preset of providerPresets) {
-    if (preset.providerType !== "custom") {
+    if (preset.providerType !== "custom" && !existingTypes.has(preset.providerType)) {
       await suoraIpc.models.create({
         title: preset.title,
         providerType: preset.providerType,

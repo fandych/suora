@@ -3,6 +3,7 @@ import "@xyflow/react/dist/style.css"
 import { PanelLeftCloseIcon, PanelLeftOpenIcon, SparklesIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import PageHeader from "@/views/components/page-header"
 import { ConfirmDeleteDialog } from "@/views/components/confirm-delete-dialog"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
@@ -82,6 +83,9 @@ const WorkflowDetailPage = () => {
                   canPublish={controller.isDraftVersion && !controller.hasUnsavedChanges && controller.blockingIssues.length === 0}
                   canTryRun={controller.isDraftVersion && !controller.isDryRunning && controller.blockingIssues.length === 0}
                   onOpenTryRun={() => controller.setInspectorMode("try-run")}
+                  onOpenEdit={() => controller.setIsPreferenceDialogOpen(true)}
+                  onOpenHistory={() => controller.setIsHistoryDialogOpen(true)}
+                  onDelete={() => controller.setIsDeleteDialogOpen(true)}
                   onSave={() => void controller.handleSave()}
                   onPublish={controller.handlePublish}
                 />
@@ -119,8 +123,9 @@ const WorkflowDetailPage = () => {
                       documents={controller.documents}
                       integrations={controller.integrations}
                       modelOptions={controller.modelOptions}
+                      nodes={controller.nodes}
+                      edges={controller.edges}
                       onDeleteNode={controller.handleDeleteNode}
-                      onDuplicateNode={controller.handleDuplicateNode}
                       onRenameNodeId={controller.handleRenameSelectedNodeId}
                       readOnly={controller.isReadOnly}
                       selectedNode={controller.selectedNode ? { id: controller.selectedNode.id, data: controller.selectedNode.data } : null}
@@ -191,6 +196,16 @@ const WorkflowDetailPage = () => {
         onTitleChange={controller.setTitle}
         onSummaryChange={controller.setSummary}
       />
+
+      <Dialog open={controller.isHistoryDialogOpen} onOpenChange={controller.setIsHistoryDialogOpen}>
+        <DialogContent className="max-h-[80vh] sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Run history</DialogTitle>
+            <DialogDescription>Review recent workflow executions and their results.</DialogDescription>
+          </DialogHeader>
+          {workflowData ? <WorkflowInvocationHistory invocations={workflowData.invocations} selectedId={controller.selectedInvocationId} onSelect={(id) => controller.setSelectedInvocationId(id)} /> : null}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDeleteDialog
         open={controller.isDeleteDialogOpen}

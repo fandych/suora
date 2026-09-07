@@ -105,6 +105,15 @@ export type WorkflowNodeData = {
   executionStatus?: WorkflowNodeTraceRecord["status"]
 }
 
+export type WorkflowInputParameter = {
+  id: string
+  name: string
+  description: string
+  type: "string" | "number" | "boolean" | "object" | "array"
+  defaultValue: string
+  required: boolean
+}
+
 export type WorkflowEdgeData = {
   condition?: string
   successOnly?: boolean
@@ -174,6 +183,18 @@ export type WorkflowNodeTraceRecord = {
   output: string
   startedAt: number
   finishedAt: number
+  contextBefore?: WorkflowTraceSnapshot
+  contextAfter?: WorkflowTraceSnapshot
+}
+
+export type WorkflowTraceSnapshot = {
+  schemaVersion: 1
+  input: unknown
+  current: unknown
+  vars: Record<string, unknown>
+  steps: Record<string, unknown>
+  truncated: boolean
+  redactedPaths: string[]
 }
 
 export type WorkflowDetail = {

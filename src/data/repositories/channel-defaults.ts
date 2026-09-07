@@ -18,6 +18,7 @@ export const DEFAULT_CHANNEL_DESCRIPTIONS: Partial<Record<ChannelPlatform, strin
 }
 
 type ChannelTemplate = {
+  catalogId?: string
   title: string
   platform: ChannelPlatform
   connectionMode: ChannelConnectionMode
@@ -26,10 +27,10 @@ type ChannelTemplate = {
 }
 
 export const CHANNEL_CATALOG_TEMPLATES: ChannelTemplate[] = [
-  { title: "Personal WeChat", platform: "wechat_personal", connectionMode: "stream" },
-  { title: "Enterprise WeChat", platform: "wechat", connectionMode: "webhook" },
-  { title: "WeChat Official Account", platform: "wechat_official", connectionMode: "webhook" },
-  { title: "WeChat Mini Program", platform: "wechat_miniprogram", connectionMode: "webhook" },
+  { catalogId: "catalog-wechat-personal", title: "WeChat Personal", platform: "wechat_personal", connectionMode: "stream" },
+  { catalogId: "catalog-wechat", title: "WeChat Enterprise", platform: "wechat", connectionMode: "webhook" },
+  { catalogId: "catalog-wechat-official", title: "WeChat Official Account", platform: "wechat_official", connectionMode: "webhook" },
+  { catalogId: "catalog-wechat-miniprogram", title: "WeChat Mini Program", platform: "wechat_miniprogram", connectionMode: "webhook" },
   { title: "Feishu", platform: "feishu", connectionMode: "webhook" },
   { title: "DingTalk", platform: "dingtalk", connectionMode: "stream" },
   { title: "QQ", platform: "custom", connectionMode: "webhook", customPlatformName: "QQ", customPlatformIcon: "qq" },
@@ -40,7 +41,11 @@ export const CHANNEL_CATALOG_TEMPLATES: ChannelTemplate[] = [
   { title: "Custom WebSocket", platform: "custom", connectionMode: "stream", customPlatformName: "Custom WebSocket" },
 ]
 
-export function buildChannelCatalogId(template: Pick<ChannelTemplate, "title" | "customPlatformName">) {
+export function buildChannelCatalogId(template: Pick<ChannelTemplate, "catalogId" | "title" | "customPlatformName">) {
+  if (template.catalogId) {
+    return template.catalogId
+  }
+
   const slugSource = template.customPlatformName?.trim() || template.title
   return `catalog-${slugSource.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "")}`
 }

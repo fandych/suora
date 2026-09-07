@@ -9,6 +9,7 @@ import { downloadJson } from "@/lib/browser-files"
 import { WorkflowTraceJsonPreview } from "@/views/workflows/components/workflow-trace-json-preview"
 import { WorkflowTraceCopyButton, WorkflowTraceValueSection } from "@/views/workflows/components/workflow-trace-sections"
 import { WorkflowPanelResizeHandle } from "@/views/workflows/components/workflow-panel-resize-handle"
+import { WorkflowTraceSnapshotViewer } from "@/views/workflows/components/workflow-trace-snapshot-viewer"
 
 function TraceStatusIcon({ status }: { status: string }) {
   if (status === "running") {
@@ -132,6 +133,7 @@ export function WorkflowTryPanel({ invocation, input, isRunning, error, onInputC
                       copied={copiedKey === `${trace.traceId ?? trace.nodeId}-output`}
                       onCopy={() => void copyPreview(`${trace.traceId ?? trace.nodeId}-output`, trace.output)}
                     />
+                    <WorkflowTraceSnapshotViewer before={trace.contextBefore} after={trace.contextAfter} />
                   </div>
                 </CollapsibleContent>
               </Collapsible>

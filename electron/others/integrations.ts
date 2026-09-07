@@ -210,10 +210,14 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
   }
 
   const ignoreSsl = getPreferenceSettingsSnapshot().ignoreSslErrors
+  const method = selectedEndpoint?.method || config.method || "GET"
+  const redactHeaders = (source: Record<string, string>) => Object.fromEntries(Object.entries(source).map(([key, value]) => [key, /authorization|cookie|api[-_]?key|token|secret/i.test(key) ? "[REDACTED]" : value]))
+  const responseHeaders = (source: Record<string, string | string[] | undefined>) => Object.fromEntries(Object.entries(source).filter((entry): entry is [string, string | string[]] => entry[1] !== undefined).map(([key, value]) => [key, /set-cookie/i.test(key) ? "[REDACTED]" : value]))
+  const sentBody = method === "GET" || Buffer.isBuffer(body) ? null : body ?? null
 
-  return new Promise<{ ok: boolean; status: number; body: string }>((resolve, reject) => {
+  return new Promise<{ ok: boolean; status: number; body: string; request: { url: string; method: string; headers: Record<string, string>; body: string | null }; response: { status: number; headers: Record<string, string | string[]>; body: string; json?: unknown } }>((resolve, reject) => {
     const request = transport.request(url, {
-      method: selectedEndpoint?.method || config.method || "GET",
+      method,
       headers,
       agent: getProxyAgent(url),
       rejectUnauthorized: !ignoreSsl,
@@ -230,10 +234,17 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
         chunks.push(chunk)
       })
       response.on("end", () => {
+        const responseBody = Buffer.concat(chunks).toString("utf8")
+        let json: unknown
+        let hasJson = false
+        try { json = JSON.parse(responseBody); hasJson = true } catch { /* Non-JSON responses retain only their raw body. */ }
+        const status = response.statusCode ?? 500
         resolve({
-          ok: (response.statusCode ?? 500) < 400,
-          status: response.statusCode ?? 500,
-          body: Buffer.concat(chunks).toString("utf8"),
+          ok: status < 400,
+          status,
+          body: responseBody,
+          request: { url: url.toString(), method, headers: redactHeaders(headers), body: sentBody },
+          response: { status, headers: responseHeaders(response.headers), body: responseBody, ...(hasJson ? { json } : {}) },
         })
       })
       response.on("error", reject)
@@ -241,7 +252,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
 
     request.on("error", reject)
     request.setTimeout(60_000, () => request.destroy(new Error("HTTP integration timed out")))
-    if (body && (selectedEndpoint?.method || config.method || "GET") !== "GET") {
+    if (body && method !== "GET") {
       request.write(body)
     }
     request.end()

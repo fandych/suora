@@ -5,6 +5,9 @@ import { getChatRuntimeSettings } from "@/data/repositories/chat-settings-reposi
 import { getDocumentDetail } from "@/data/repositories/document-repository"
 import { executeIntegration } from "@/data/repositories/integration-execution-repository"
 import { getIntegrationDetail } from "@/data/repositories/integration-repository"
+import type { IntegrationExecutionResult } from "@/data/repositories/integration-execution-repository"
+import { combineNodeOutput, interpolate, mapNodeOutput, readPath, type WorkflowVariableContext } from "@/data/repositories/workflow-variable-context"
+import { createWorkflowTraceSnapshot } from "@/data/repositories/workflow-trace-sanitizer"
 import { suoraIpc } from "@/lib/ipc"
 import { streamChatAgentResponse } from "@/services/ai-service"
 
@@ -15,100 +18,13 @@ type WorkflowExecutionResult = {
 
 export type WorkflowExecutionMode = "dry-run" | "manual"
 
-export type ExecutionContext = Record<string, unknown> & {
-  input: unknown
-  vars: Record<string, unknown>
-  steps: Record<string, unknown>
-}
+export type ExecutionContext = WorkflowVariableContext
 
-function navigateObject(obj: unknown, parts: string[]): unknown {
-  let curr: unknown = obj
-  for (const part of parts) {
-    if (curr === null || curr === undefined || typeof curr !== "object") return undefined
-    curr = (curr as Record<string, unknown>)[part]
-  }
-  return curr
-}
+export { interpolate, readPath } from "@/data/repositories/workflow-variable-context"
 
-function applyPipeFilters(val: unknown, pipes: string[]): unknown {
-  let curr = val
-  for (const pipe of pipes) {
-    const trimmed = pipe.trim()
-    if (!trimmed) continue
-    if (trimmed === "upper" || trimmed === "uppercase") {
-      curr = String(curr ?? "").toUpperCase()
-    } else if (trimmed === "lower" || trimmed === "lowercase") {
-      curr = String(curr ?? "").toLowerCase()
-    } else if (trimmed === "trim") {
-      curr = String(curr ?? "").trim()
-    } else if (trimmed === "json") {
-      curr = JSON.stringify(curr)
-    } else if (trimmed.startsWith("default(")) {
-      const match = trimmed.match(/^default\(\s*(['"]?)(.*?)\1\s*\)$/)
-      const fallback = match ? match[2] : ""
-      if (curr === undefined || curr === null || curr === "") {
-        curr = fallback
-      }
-    }
-  }
-  return curr
-}
-
-export function readPath(context: ExecutionContext, expression: string): unknown {
-  if (!expression || typeof expression !== "string") return undefined
-  let rawPath = expression.trim()
-  rawPath = rawPath.replace(/^\{\{\s*|\s*\}\}$/g, "").replace(/^\$\{\s*|\s*\}$/g, "")
-  if (!rawPath) return undefined
-
-  const pipeParts = rawPath.split("|").map((p) => p.trim())
-  const basePath = pipeParts[0]
-  const pipes = pipeParts.slice(1)
-
-  const parts = basePath.replace(/\[(\d+)\]/g, ".$1").split(".").filter(Boolean)
-  if (parts.length === 0) return applyPipeFilters(undefined, pipes)
-
-  let val: unknown
-  const first = parts[0]
-  if (first === "input" || first === "$input") {
-    val = navigateObject(context.input, parts.slice(1))
-  } else if (first === "vars" || first === "$vars") {
-    val = navigateObject(context.vars, parts.slice(1))
-  } else if (first === "steps" || first === "$steps") {
-    val = navigateObject(context.steps, parts.slice(1))
-  } else if (first === "context" || first === "$context") {
-    val = navigateObject(context, parts.slice(1))
-  } else {
-    val = navigateObject(context, parts)
-    if (val === undefined && context.vars) {
-      val = navigateObject(context.vars, parts)
-    }
-    if (val === undefined && context.steps) {
-      val = navigateObject(context.steps, parts)
-    }
-    if (val === undefined && context.input) {
-      val = navigateObject(context.input, parts)
-    }
-  }
-
-  return applyPipeFilters(val, pipes)
-}
-
-function formatValue(val: unknown): string {
-  if (val === undefined || val === null) return ""
-  if (typeof val === "string") return val
-  if (typeof val === "number" || typeof val === "boolean") return String(val)
-  return JSON.stringify(val)
-}
-
-export function interpolate(value: string | undefined | null, context: ExecutionContext): string {
-  if (!value) return ""
-  return value
-    .replace(/\{\{\s*([^}]+)\s*\}\}/g, (_match, expr) => formatValue(readPath(context, expr)))
-    .replace(/\$\{([^}]+)\}/g, (_match, expr) => formatValue(readPath(context, expr)))
-    .replace(/(^|[^a-zA-Z0-9_$])\$([a-zA-Z_][\w.]*)/g, (match, prefix, expr) => {
-      const result = readPath(context, expr)
-      return result !== undefined ? `${prefix}${formatValue(result)}` : match
-    })
+export function toWorkflowHttpResult(result: IntegrationExecutionResult) {
+  if (!result.request || !result.response) return result.body
+  return { request: result.request, response: result.response }
 }
 
 export function evaluateExpression(expression: string, context: ExecutionContext): boolean {
@@ -240,9 +156,9 @@ async function executeNode(node: Node<WorkflowNodeData>, context: ExecutionConte
       const queryJson = data.queryJson ? interpolate(data.queryJson, context) : "{}"
       const bodyJson = data.bodyJson ? interpolate(data.bodyJson, context) : "{}"
       const inputJson = JSON.stringify({ ...context, body: bodyJson })
-      if (data.integrationId) return (await executeIntegration((await getIntegrationDetail(data.integrationId)).config, inputJson)).body
+      if (data.integrationId) return toWorkflowHttpResult(await executeIntegration((await getIntegrationDetail(data.integrationId)).config, inputJson))
       if (!interpolatedUrl) throw new Error("A URL or integration is required.")
-      return (await executeIntegration({ kind: "http", baseUrl: interpolatedUrl, selectedEndpointId: "workflow", endpoints: [{ id: "workflow", name: "Workflow request", description: "", method: data.method || "POST", path: "/", bodyMode: "json", headersJson, queryJson, bodyJson, parameterSchemaJson: "{}", parameters: [] }], method: data.method || "POST", url: interpolatedUrl, description: "", headersJson, queryJson, bodyJson, authType: "none", authConfigJson: "{}", parameterSchemaJson: "{}" }, inputJson)).body
+      return toWorkflowHttpResult(await executeIntegration({ kind: "http", baseUrl: interpolatedUrl, selectedEndpointId: "workflow", endpoints: [{ id: "workflow", name: "Workflow request", description: "", method: data.method || "POST", path: "/", bodyMode: "json", headersJson, queryJson, bodyJson, parameterSchemaJson: "{}", parameters: [] }], method: data.method || "POST", url: interpolatedUrl, description: "", headersJson, queryJson, bodyJson, authType: "none", authConfigJson: "{}", parameterSchemaJson: "{}" }, inputJson))
     }
     case "script": return (await executeIntegration({ kind: "scripts", description: "Workflow script", runtime: "node", timeoutMs: Math.min(data.timeoutMs ?? 30000, 60000), inputSchemaJson: "{}", outputSchemaJson: "{}", selectedScriptId: "workflow-script", scripts: [{ id: "workflow-script", name: data.label, handler: "main", code: data.script || "" }] }, JSON.stringify(context))).body
     case "smtp": {
@@ -294,10 +210,12 @@ export async function executeWorkflowDefinition(definition: WorkflowDefinition, 
     input: input && typeof input === "object" ? input : { value: input },
     vars: {},
     steps: {},
+    current: undefined,
   }
   context.$input = context.input
   context.$vars = context.vars
   context.$steps = context.steps
+  context.$current = context.current
   Object.defineProperty(context, "$context", { value: context, enumerable: false, configurable: true, writable: true })
 
   const traces: WorkflowNodeTraceRecord[] = []
@@ -327,14 +245,16 @@ export async function executeWorkflowDefinition(definition: WorkflowDefinition, 
 
         if (node.data.enabled === false) {
           nodeStatus.set(id, "skipped")
-          traces.push({ traceId, nodeId: id, label: node.data.label, status: "skipped", input: JSON.stringify(context), output: "Node disabled.", startedAt, finishedAt: Date.now() })
+          const contextBefore = createWorkflowTraceSnapshot(context)
+          traces.push({ traceId, nodeId: id, label: node.data.label, status: "skipped", input: JSON.stringify(contextBefore), output: "Node disabled.", startedAt, finishedAt: Date.now(), contextBefore, contextAfter: contextBefore })
           onTrace?.(traces.at(-1)!)
           return
         }
 
         try {
-          const traceInput = JSON.stringify(context)
-          onTrace?.({ traceId, nodeId: id, label: node.data.label, status: "running", input: traceInput, output: "Executing…", startedAt, finishedAt: startedAt })
+          const contextBefore = createWorkflowTraceSnapshot(context)
+          const traceInput = JSON.stringify(contextBefore)
+          onTrace?.({ traceId, nodeId: id, label: node.data.label, status: "running", input: traceInput, output: "Executing…", startedAt, finishedAt: startedAt, contextBefore })
           const attempts = Math.max(0, Math.min(node.data.retryCount ?? 0, 5)) + 1
           let output: unknown
           let lastError: unknown
@@ -349,12 +269,17 @@ export async function executeWorkflowDefinition(definition: WorkflowDefinition, 
           }
           if (lastError) throw lastError
 
-          context.steps[node.id] = output
-          context.steps[node.data.label] = output
+          const outputContext: ExecutionContext = { ...context, current: output, $current: output }
+          const nodeOutput = combineNodeOutput(output, mapNodeOutput(node.data.outputSchemaJson, outputContext))
+          context.current = nodeOutput
+          context.$current = nodeOutput
+          context.steps[node.id] = nodeOutput
+          context.steps[node.data.label] = nodeOutput
           if (node.data.outputKey) {
-            context[node.data.outputKey] = output
-            context.vars[node.data.outputKey] = output
+            context[node.data.outputKey] = nodeOutput
+            context.vars[node.data.outputKey] = nodeOutput
           }
+          const contextAfter = createWorkflowTraceSnapshot(context)
 
           nodeStatus.set(id, "completed")
           const activeEdges = getNextEdges(node, output, outgoing, context)
@@ -364,11 +289,12 @@ export async function executeWorkflowDefinition(definition: WorkflowDefinition, 
           }
 
           const skipped = mode === "dry-run" && typeof output === "object" && output !== null && "skipped" in output
-          traces.push({ traceId, nodeId: id, label: node.data.label, status: skipped ? "skipped" : "success", input: traceInput, output: typeof output === "string" ? output : JSON.stringify(output), startedAt, finishedAt: Date.now() })
+          traces.push({ traceId, nodeId: id, label: node.data.label, status: skipped ? "skipped" : "success", input: traceInput, output: typeof output === "string" ? output : JSON.stringify(output), startedAt, finishedAt: Date.now(), contextBefore, contextAfter })
           onTrace?.(traces.at(-1)!)
         } catch (error) {
           nodeStatus.set(id, "failed")
-          traces.push({ traceId, nodeId: id, label: node.data.label, status: "error", input: JSON.stringify(context), output: error instanceof Error ? error.message : String(error), startedAt, finishedAt: Date.now() })
+          const contextAfter = createWorkflowTraceSnapshot(context)
+          traces.push({ traceId, nodeId: id, label: node.data.label, status: "error", input: JSON.stringify(contextAfter), output: error instanceof Error ? error.message : String(error), startedAt, finishedAt: Date.now(), contextAfter })
           onTrace?.(traces.at(-1)!)
           if (!node.data.continueOnError) return
         }

@@ -1,6 +1,7 @@
 import type { Edge, Node } from "@xyflow/react"
 
 import type { WorkflowDefinition, WorkflowNodeData } from "@/data/domain/models"
+import { getExpressionIssues } from "@/views/workflows/components/workflow-expression-suggestions"
 
 export const DEFAULT_WORKFLOW_DRY_RUN_INPUT = "{\n  \"leadId\": \"LD-1001\"\n}"
 
@@ -164,6 +165,22 @@ export function getWorkflowDesignIssues(input: {
       if (value?.trim() && getWorkflowJsonIssue(value, fieldLabel)) {
         nodeIssues.push({ nodeId: node.id, label, message: `${fieldLabel} must be valid JSON.`, severity: "error" })
       }
+    }
+
+    const expressionFields: Array<[string | undefined, string, boolean]> = [
+      [node.data.prompt, "Prompt", false], [node.data.systemPrompt, "System instructions", false], [node.data.url, "URL", false],
+      [node.data.headersJson, "Headers", false], [node.data.queryJson, "Query parameters", false], [node.data.bodyJson, "Body", false],
+      [node.data.queryExpression, "Search question", false], [node.data.variableValue, "Variable value", false], [node.data.template, "Template body", false],
+      [node.data.inputTemplate, "Result template", false], [node.data.runIf, "Condition expression", false], [node.data.loopExpression, "Collection expression", false],
+      [node.data.emailTo, "Email recipient", false], [node.data.emailSubject, "Email subject", false], [node.data.emailBody, "Email message", false],
+    ]
+    for (const branch of node.data.branches ?? []) expressionFields.push([branch.expression, `Branch "${branch.label}" expression`, false])
+    try {
+      const outputSchema = JSON.parse(node.data.outputSchemaJson || "{}") as { properties?: Record<string, { default?: unknown }> }
+      for (const [name, property] of Object.entries(outputSchema.properties ?? {})) expressionFields.push([typeof property.default === "string" ? property.default : undefined, `Output "${name}" value`, true])
+    } catch { /* JSON validation above reports malformed output schemas. */ }
+    for (const [value, fieldLabel, allowCurrent] of expressionFields) {
+      for (const message of getExpressionIssues(activeNodes, validEdges, node.id, value, fieldLabel, allowCurrent)) nodeIssues.push({ nodeId: node.id, label, message, severity: "error" })
     }
 
     return nodeIssues

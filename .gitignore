@@ -25,3 +25,4 @@ out
 *.sw?
 
 ref_projects
+electron.vite.config.*.mjs

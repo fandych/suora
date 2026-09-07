@@ -1,8 +1,8 @@
-import type { ChangeEvent, RefObject } from "react"
-import { DownloadIcon, EllipsisIcon, HistoryIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlayIcon, SaveIcon, Settings2Icon, SparklesIcon, Trash2Icon, UploadIcon } from "lucide-react"
+import { EllipsisIcon, HistoryIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PencilIcon, PlayIcon, SaveIcon, SparklesIcon, Trash2Icon, UploadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import type { VersionOption } from "@/data/domain/models"
 import VersionSelect from "@/views/components/version-select"
 
@@ -13,20 +13,13 @@ type WorkflowHeaderActionsProps = {
   showLibrary: boolean
   canSave: boolean
   canPublish: boolean
-  canRunRelease: boolean
   onToggleLibrary: () => void
   onSave: () => void
   onAutoLayout: () => void
-  onOpenPreference: () => void
-  onOpenTryRun: () => void
+  onOpenEdit: () => void
   onOpenHistory: () => void
-  onRunRelease: () => void
   onPublish: () => void
-  onExport: () => void
-  onImport: () => void
   onDelete: () => void
-  importInputRef: RefObject<HTMLInputElement | null>
-  onImportChange: (event: ChangeEvent<HTMLInputElement>) => void
 }
 
 export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
@@ -37,20 +30,13 @@ export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
     showLibrary,
     canSave,
     canPublish,
-    canRunRelease,
     onToggleLibrary,
     onSave,
     onAutoLayout,
-    onOpenPreference,
-    onOpenTryRun,
+    onOpenEdit,
     onOpenHistory,
-    onRunRelease,
     onPublish,
-    onExport,
-    onImport,
     onDelete,
-    importInputRef,
-    onImportChange,
   } = props
 
   return (
@@ -68,52 +54,27 @@ export function WorkflowHeaderActions(props: WorkflowHeaderActionsProps) {
         <div className="min-w-28">
           <VersionSelect versions={versions} value={selectedVersionId} onChange={onVersionChange} />
         </div>
-        <Button size="sm" variant="outline" onClick={onSave} disabled={!canSave}>
-          <SaveIcon />
-          Save
-        </Button>
-        <Button size="sm" onClick={onPublish} disabled={!canPublish}>
-          <UploadIcon />
-          Publish
-        </Button>
+        <TooltipProvider>
+          <Tooltip><TooltipTrigger render={<Button size="icon-sm" variant="outline" onClick={onSave} disabled={!canSave} aria-label="Save workflow" />}><SaveIcon /></TooltipTrigger><TooltipContent>Save</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger render={<Button size="icon-sm" onClick={onPublish} disabled={!canPublish} aria-label="Publish workflow" />}><UploadIcon /></TooltipTrigger><TooltipContent>Publish</TooltipContent></Tooltip>
+        </TooltipProvider>
         <DropdownMenu>
           <DropdownMenuTrigger render={<Button size="icon-sm" variant="outline" aria-label="Workflow actions" />}>
             <EllipsisIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-48 min-w-48">
-            <DropdownMenuItem onClick={onOpenTryRun}>
-              <PlayIcon className="size-4" />
-              Try run
-            </DropdownMenuItem>
+            <DropdownMenuItem onClick={onOpenEdit}><PencilIcon />Edit</DropdownMenuItem>
             <DropdownMenuItem onClick={onOpenHistory}>
               <HistoryIcon />
-              Invocation history
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onRunRelease} disabled={!canRunRelease}>
-              <PlayIcon />
-              Run release
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onExport}>
-              <DownloadIcon className="size-4" />
-              Export
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={onImport}>
-              <UploadIcon className="size-4" />
-              Import
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={onOpenPreference}>
-              <Settings2Icon className="size-4" />
-              Preference
+              Run history
             </DropdownMenuItem>
             <DropdownMenuItem onClick={onDelete} variant="destructive">
-              <Trash2Icon className="size-4" />
+              <Trash2Icon />
               Delete
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <input ref={importInputRef} type="file" accept="application/json,.json" className="hidden" onChange={(event) => void onImportChange(event)} />
     </div>
   )
 }
@@ -128,24 +89,28 @@ export function WorkflowRevisionActions({
   onPublish,
   canTryRun,
   onOpenTryRun,
-}: Pick<WorkflowHeaderActionsProps, "versions" | "selectedVersionId" | "onVersionChange" | "canSave" | "canPublish" | "onSave" | "onPublish"> & { canTryRun: boolean; onOpenTryRun: () => void }) {
+  onOpenEdit,
+  onOpenHistory,
+  onDelete,
+}: Pick<WorkflowHeaderActionsProps, "versions" | "selectedVersionId" | "onVersionChange" | "canSave" | "canPublish" | "onSave" | "onPublish"> & { canTryRun: boolean; onOpenTryRun: () => void; onOpenEdit: () => void; onOpenHistory: () => void; onDelete: () => void }) {
   return (
     <div className="flex h-8 items-center gap-2 rounded-2xl border bg-background/95 px-1 shadow-sm backdrop-blur">
       <div className="min-w-28">
         <VersionSelect versions={versions} value={selectedVersionId} onChange={onVersionChange} />
       </div>
-      <Button className="h-8" size="sm" variant="outline" onClick={onSave} disabled={!canSave}>
-        <SaveIcon />
-        Save
-      </Button>
-      <Button className="h-8" size="sm" onClick={onPublish} disabled={!canPublish}>
-        <UploadIcon />
-        Publish
-      </Button>
-      <Button className="h-8" size="sm" variant="outline" onClick={onOpenTryRun} disabled={!canTryRun}>
-        <PlayIcon />
-        Try run
-      </Button>
+      <TooltipProvider>
+        <Tooltip><TooltipTrigger render={<Button className="h-8" size="icon-sm" variant="outline" onClick={onSave} disabled={!canSave} aria-label="Save workflow" />}><SaveIcon /></TooltipTrigger><TooltipContent>Save</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger render={<Button className="h-8" size="icon-sm" onClick={onPublish} disabled={!canPublish} aria-label="Publish workflow" />}><UploadIcon /></TooltipTrigger><TooltipContent>Publish</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger render={<Button className="h-8" size="icon-sm" variant="outline" onClick={onOpenTryRun} disabled={!canTryRun} aria-label="Try run workflow" />}><PlayIcon /></TooltipTrigger><TooltipContent>Try run</TooltipContent></Tooltip>
+      </TooltipProvider>
+      <DropdownMenu>
+        <DropdownMenuTrigger render={<Button className="h-8" size="icon-sm" variant="outline" aria-label="More workflow actions" />}><EllipsisIcon /></DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={onOpenEdit}><PencilIcon />Edit</DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenHistory}><HistoryIcon />Run history</DropdownMenuItem>
+          <DropdownMenuItem onClick={onDelete} variant="destructive"><Trash2Icon />Delete</DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }

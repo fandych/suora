@@ -43,6 +43,7 @@ export function useWorkflowDetailController() {
   const [showLibrary, setShowLibrary] = useState(true)
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>("properties")
   const [isPreferenceDialogOpen, setIsPreferenceDialogOpen] = useState(false)
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isDryRunning, setIsDryRunning] = useState(false)
@@ -499,10 +500,10 @@ export function useWorkflowDetailController() {
     focusNode, handleDeleteWorkflow, handleDuplicateNode, handleDryRun, handleExport, handleFitView, handleImport, handleNodeClick, handleNodesDelete, handleSelectionChange,
     handlePublish, handleRunRelease, handleSave, handleSelectedNodeChange, handleZoomStep, hasUnsavedChanges, importInputRef,
     hasOutgoingConnection, setFlowInstance,
-    inspectorMode, integrations, isDeleteDialogOpen, isDeleting, isDraftVersion, isDryRunning, isLoading, isPreferenceDialogOpen, isReadOnly,
+    inspectorMode, integrations, isDeleteDialogOpen, isDeleting, isDraftVersion, isDryRunning, isHistoryDialogOpen, isLoading, isPreferenceDialogOpen, isReadOnly,
     isReleaseVersion, modelOptions, nodes, notifications, onEdgesChange, onNodesChange, reload,
     propertiesPanelWidth, resourceBindings, selectedNode, selectedNodeId, setData, setDryRunInput, setEdges, setInspectorMode, setIsDeleteDialogOpen,
-    selectedInvocation, selectedInvocationId, setIsPreferenceDialogOpen, setNotifications, setResourceBindings, setSelectedInvocationId, setSelectedNodeId, setSelectedVersionId,
+    selectedInvocation, selectedInvocationId, setIsHistoryDialogOpen, setIsPreferenceDialogOpen, setNotifications, setResourceBindings, setSelectedInvocationId, setSelectedNodeId, setSelectedVersionId,
     setPropertiesPanelWidth, setShowLibrary, setSummary, setTitle, setTryPanelWidth, setViewport, showLibrary, summary, title, tracedNodes, tryPanelWidth, viewport, visibleIssues, workflowPresetNodes,
     handleRenameSelectedNodeId,
   }

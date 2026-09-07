@@ -5,6 +5,8 @@ import type { DocumentSummary, IntegrationSummary, WorkflowNodeData } from "@/da
 import { WorkflowField, WorkflowPanelSection } from "@/views/workflows/components/workflow-field"
 import { WorkflowKeyValueEditor } from "@/views/workflows/components/workflow-parameter-editor"
 import { getWorkflowJsonIssue } from "@/views/workflows/components/workflow-editor-state"
+import { WorkflowExpressionInput } from "@/views/workflows/components/workflow-expression-input"
+import type { WorkflowExpressionSuggestion } from "@/views/workflows/components/workflow-expression-suggestions"
 import { WorkflowNodeSelect } from "@/views/workflows/components/workflow-node-select"
 
 export function WorkflowAgentEditorSection({
@@ -12,24 +14,26 @@ export function WorkflowAgentEditorSection({
   agents,
   modelOptions,
   updateNode,
+  suggestions,
 }: {
   node: WorkflowNodeData
   agents: Array<{ id: string; title: string }>
   modelOptions: Array<{ id: string; label: string }>
   updateNode: (patch: Partial<WorkflowNodeData>) => void
+  suggestions: WorkflowExpressionSuggestion[]
 }) {
   return (
     <WorkflowPanelSection title="Agent settings">
-      <WorkflowNodeSelect label="Agent binding" value={node.agentId ?? ""} onChange={(event) => updateNode({ agentId: event.target.value })}>
+      <WorkflowNodeSelect label="Agent Binding" value={node.agentId ?? ""} onChange={(event) => updateNode({ agentId: event.target.value })}>
         <NativeSelectOption value="">Select an agent</NativeSelectOption>
         {agents.map((agent) => <NativeSelectOption key={agent.id} value={agent.id}>{agent.title}</NativeSelectOption>)}
       </WorkflowNodeSelect>
-      <WorkflowNodeSelect label="Chat model" hint="Optional override for this node." value={node.modelId ?? ""} onChange={(event) => updateNode({ modelId: event.target.value })}>
+      <WorkflowNodeSelect label="Chat Model" hint="Optional override for this node." value={node.modelId ?? ""} onChange={(event) => updateNode({ modelId: event.target.value })}>
         <NativeSelectOption value="">Select a model</NativeSelectOption>
         {modelOptions.map((model) => <NativeSelectOption key={model.id} value={model.id}>{model.label}</NativeSelectOption>)}
       </WorkflowNodeSelect>
       <WorkflowField label="Prompt" hint="Use workflow variables from earlier nodes when needed.">
-        <Textarea className="min-h-28" value={node.prompt} onChange={(event) => updateNode({ prompt: event.target.value })} placeholder="Prompt template" />
+        <WorkflowExpressionInput multiline rows={6} className="min-h-28" value={node.prompt} onChange={(prompt) => updateNode({ prompt })} suggestions={suggestions} placeholder="Prompt template" />
       </WorkflowField>
     </WorkflowPanelSection>
   )
@@ -39,21 +43,23 @@ export function WorkflowDocumentEditorSection({
   node,
   documents,
   updateNode,
+  suggestions,
 }: {
   node: WorkflowNodeData
   documents: DocumentSummary[]
   updateNode: (patch: Partial<WorkflowNodeData>) => void
+  suggestions: WorkflowExpressionSuggestion[]
 }) {
   return (
     <WorkflowPanelSection title="Knowledge retrieval">
-      <WorkflowNodeSelect label="Document knowledge base" value={node.documentId ?? ""} onChange={(event) => { const document = documents.find((item) => item.id === event.target.value); updateNode({ documentId: event.target.value, documentName: document?.title ?? "" }) }}>
+      <WorkflowNodeSelect label="Document Knowledge Base" value={node.documentId ?? ""} onChange={(event) => { const document = documents.find((item) => item.id === event.target.value); updateNode({ documentId: event.target.value, documentName: document?.title ?? "" }) }}>
         <NativeSelectOption value="">Select a document</NativeSelectOption>
         {documents.map((document) => <NativeSelectOption key={document.id} value={document.id}>{document.title}</NativeSelectOption>)}
       </WorkflowNodeSelect>
-      <WorkflowField label="Search question">
-        <Input value={node.queryExpression ?? ""} onChange={(event) => updateNode({ queryExpression: event.target.value })} placeholder="$input.query" />
+      <WorkflowField label="Search Question">
+        <WorkflowExpressionInput value={node.queryExpression ?? ""} onChange={(queryExpression) => updateNode({ queryExpression })} suggestions={suggestions} placeholder="${input.query}" />
       </WorkflowField>
-      <WorkflowField label="Result count">
+      <WorkflowField label="Result Count">
         <Input type="number" min={1} max={20} value={String(node.resultLimit ?? 5)} onChange={(event) => updateNode({ resultLimit: Math.max(1, Math.min(20, Number(event.target.value) || 5)) })} />
       </WorkflowField>
     </WorkflowPanelSection>
@@ -64,17 +70,19 @@ export function WorkflowHttpEditorSection({
   node,
   integrations,
   updateNode,
+  suggestions,
 }: {
   node: WorkflowNodeData
   integrations: IntegrationSummary[]
   updateNode: (patch: Partial<WorkflowNodeData>) => void
+  suggestions: WorkflowExpressionSuggestion[]
 }) {
   const headersIssue = getWorkflowJsonIssue(node.headersJson ?? "{}", "Headers")
   const queryIssue = getWorkflowJsonIssue(node.queryJson ?? "{}", "Query parameters")
   const bodyIssue = getWorkflowJsonIssue(node.bodyJson ?? "{}", "Body")
   return (
     <WorkflowPanelSection title={node.kind === "webhook" ? "Webhook settings" : node.kind === "toolset" ? "Toolset settings" : "HTTP settings"}>
-      <WorkflowNodeSelect label="Bound integration" value={node.integrationId ?? ""} onChange={(event) => { const integration = integrations.find((item) => item.id === event.target.value); updateNode({ integrationId: event.target.value, integrationName: integration?.title ?? "" }) }}>
+      <WorkflowNodeSelect label="Bound Integration" value={node.integrationId ?? ""} onChange={(event) => { const integration = integrations.find((item) => item.id === event.target.value); updateNode({ integrationId: event.target.value, integrationName: integration?.title ?? "" }) }}>
         <NativeSelectOption value="">Select an integration</NativeSelectOption>
         {integrations.map((integration) => <NativeSelectOption key={integration.id} value={integration.id}>{integration.title}</NativeSelectOption>)}
       </WorkflowNodeSelect>
@@ -86,13 +94,13 @@ export function WorkflowHttpEditorSection({
         <NativeSelectOption value="DELETE">DELETE</NativeSelectOption>
       </WorkflowNodeSelect>
       <WorkflowField label="URL">
-        <Input value={node.url ?? ""} onChange={(event) => updateNode({ url: event.target.value })} placeholder="https://api.example.com" />
+        <WorkflowExpressionInput value={node.url ?? ""} onChange={(url) => updateNode({ url })} suggestions={suggestions} placeholder="https://api.example.com/${input.id}" />
       </WorkflowField>
-      <WorkflowKeyValueEditor label="Query parameters" value={node.queryJson ?? "{}"} onChange={(queryJson) => updateNode({ queryJson })} />
+      <WorkflowKeyValueEditor label="Query Parameters" value={node.queryJson ?? "{}"} onChange={(queryJson) => updateNode({ queryJson })} suggestions={suggestions} />
       {queryIssue ? <p className="text-[11px] text-destructive">{queryIssue}</p> : null}
-      <WorkflowKeyValueEditor label="Headers" value={node.headersJson ?? "{}"} onChange={(headersJson) => updateNode({ headersJson })} />
+      <WorkflowKeyValueEditor label="Headers" value={node.headersJson ?? "{}"} onChange={(headersJson) => updateNode({ headersJson })} suggestions={suggestions} />
       {headersIssue ? <p className="text-[11px] text-destructive">{headersIssue}</p> : null}
-      <WorkflowField label="Body JSON"><Textarea aria-invalid={Boolean(bodyIssue)} className="min-h-16 font-mono text-xs" value={node.bodyJson ?? "{}"} onChange={(event) => updateNode({ bodyJson: event.target.value })} /></WorkflowField>
+      <WorkflowField label="Body Json"><WorkflowExpressionInput multiline rows={4} ariaInvalid={Boolean(bodyIssue)} className="min-h-16 font-mono text-xs" value={node.bodyJson ?? "{}"} onChange={(bodyJson) => updateNode({ bodyJson })} suggestions={suggestions} /></WorkflowField>
       {bodyIssue ? <p className="text-[11px] text-destructive">{bodyIssue}</p> : null}
     </WorkflowPanelSection>
   )
@@ -112,7 +120,7 @@ export function WorkflowScriptEditorSection({
         <NativeSelectOption value="python">Python</NativeSelectOption>
         <NativeSelectOption value="powershell">PowerShell</NativeSelectOption>
       </WorkflowNodeSelect>
-      <WorkflowField label="Timeout (seconds)">
+      <WorkflowField label="Timeout Seconds">
         <Input type="number" min={1} max={600} value={String(node.timeoutSeconds ?? 60)} onChange={(event) => updateNode({ timeoutSeconds: Math.max(1, Math.min(600, Number(event.target.value) || 60)) })} />
       </WorkflowField>
       <WorkflowField label="Script" hint="The script runs with the workflow input available to the runtime.">
