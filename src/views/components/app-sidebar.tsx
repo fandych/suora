@@ -93,6 +93,7 @@ const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
                 searchPlaceholder={activeItem.secondarySidebar.searchPlaceholder}
                 groups={groups}
                 isLoading={isLoading}
+                collapsibleGroups={activeItem.secondarySidebar.collapsibleGroups}
                                 headerAction={activeItem.url === "/models"
                                     ? <CreateProviderButton iconOnly size="sm" variant="outline" />
                                     : activeItem.url === "/chats"

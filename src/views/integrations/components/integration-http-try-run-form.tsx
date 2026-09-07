@@ -73,11 +73,12 @@ function buildCurlPreview(config: HttpIntegrationConfig, values: InputValues) {
   if (config.authType !== "none") parts.push("-H", curlQuote("Authorization: [configured secret]"))
   for (const parameter of endpoint.parameters.filter((item) => item.in === "header")) parts.push("-H", curlQuote(`${parameter.name}: ${String(values[parameter.name] ?? parameter.defaultValue ?? "")}`))
   const bodyParameters = endpoint.parameters.filter((item) => item.in === "json" || item.in === "form-data")
-  if (endpoint.bodyMode === "json") {
+  const canSendBody = !["GET", "HEAD"].includes(endpoint.method.toUpperCase())
+  if (canSendBody && endpoint.bodyMode === "json") {
     const body = Object.fromEntries(bodyParameters.filter((item) => item.in === "json").map((item) => [item.name, values[item.name] ?? item.defaultValue ?? ""]))
     parts.push("-H", curlQuote("Content-Type: application/json"), "--data", curlQuote(JSON.stringify(body)))
   }
-  if (endpoint.bodyMode === "form-data" || endpoint.bodyMode === "x-www-form-urlencoded") {
+  if (canSendBody && (endpoint.bodyMode === "form-data" || endpoint.bodyMode === "x-www-form-urlencoded")) {
     for (const parameter of bodyParameters.filter((item) => item.in === "form-data")) {
       const value = values[parameter.name]
       const file = value && typeof value === "object" && "__suoraFile" in value ? value as UploadedFile : null

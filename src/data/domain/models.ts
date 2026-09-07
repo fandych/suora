@@ -296,6 +296,8 @@ export type HttpEndpointConfig = {
   queryJson: string
   bodyJson: string
   parameterSchemaJson: string
+  responseSchemaJson: string
+  responseDescription: string
   parameters: HttpEndpointParameter[]
 }
 

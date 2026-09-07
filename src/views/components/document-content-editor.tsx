@@ -13,6 +13,11 @@ import { TaskList } from "@tiptap/extension-task-list"
 import StarterKit from "@tiptap/starter-kit"
 
 import { Button } from "@/components/ui/button"
+import { ButtonGroup } from "@/components/ui/button-group"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { BoldIcon, ChartNoAxesCombinedIcon, Code2Icon, Columns3Icon, ItalicIcon, ListIcon, ListOrderedIcon, Rows3Icon, SigmaIcon, Table2Icon, TypeIcon } from "lucide-react"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { InlineMath, MathBlock, MermaidBlock } from "@/views/components/document-extensions"
 import { markdownToTiptapHtml, tiptapJsonToMarkdown } from "@/views/components/document-markdown"
 
@@ -29,7 +34,7 @@ const DocumentContentEditor = ({ mode, value, onChange, sourceLanguage = "html" 
       StarterKit,
       Placeholder.configure({ placeholder: "Start writing..." }),
       Image.configure({ inline: true }),
-      Table.configure({ resizable: false }),
+      Table.configure({ resizable: true, handleWidth: 6, cellMinWidth: 80, lastColumnResizable: true }),
       TableRow,
       TableHeader,
       TableCell,
@@ -83,32 +88,48 @@ const DocumentContentEditor = ({ mode, value, onChange, sourceLanguage = "html" 
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
-        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleBold().run()}>
-          Bold
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleItalic().run()}>
-          Italic
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleHeading({ level: 2 }).run()}>
-          H2
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleBulletList().run()}>
-          Bullets
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().toggleCodeBlock().run()}>
-          Code
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().insertContent({ type: "mathBlock", attrs: { content: "x^2 + y^2 = z^2" } }).run()}>
-          Math
-        </Button>
-        <Button variant="outline" size="sm" onClick={() => editor?.chain().focus().insertContent({ type: "mermaidBlock", attrs: { code: "graph TD\nA[Start] --> B[Step]" } }).run()}>
-          Mermaid
-        </Button>
-      </div>
+    <div className="flex h-full min-h-0 flex-col gap-1">
+      <TooltipProvider>
+        <div className="flex flex-nowrap items-center gap-2 overflow-x-auto px-1 pt-3">
+        <NativeSelect className="w-24 shrink-0" value={editor?.getAttributes("heading").level ? `h${editor.getAttributes("heading").level}` : "paragraph"} onChange={(event) => {
+          const value = event.target.value
+          if (value === "paragraph") editor?.chain().focus().setParagraph().run()
+          else editor?.chain().focus().toggleHeading({ level: Number(value.slice(1)) as 1 | 2 | 3 | 4 | 5 | 6 }).run()
+        }} size="sm">
+          <NativeSelectOption value="paragraph">Text</NativeSelectOption>
+          {([1, 2, 3, 4, 5, 6] as const).map((level) => <NativeSelectOption key={level} value={`h${level}`}>H{level}</NativeSelectOption>)}
+        </NativeSelect>
+        <ButtonGroup>
+          <ToolbarButton label="Bold" onClick={() => editor?.chain().focus().toggleBold().run()}><BoldIcon /></ToolbarButton>
+          <ToolbarButton label="Thin" onClick={() => editor?.chain().focus().unsetBold().run()}><TypeIcon /></ToolbarButton>
+        </ButtonGroup>
+        <ToolbarButton label="Italic" onClick={() => editor?.chain().focus().toggleItalic().run()}><ItalicIcon /></ToolbarButton>
+        <ToolbarButton label="Bullet list" onClick={() => editor?.chain().focus().toggleBulletList().run()}><ListIcon /></ToolbarButton>
+        <ToolbarButton label="Ordered list" onClick={() => editor?.chain().focus().toggleOrderedList().run()}><ListOrderedIcon /></ToolbarButton>
+        <DropdownMenu>
+          <Tooltip><TooltipTrigger render={<DropdownMenuTrigger render={<Button size="icon-sm" variant="outline" aria-label="Table options" />} />}><Table2Icon /></TooltipTrigger><TooltipContent>Table options</TooltipContent></Tooltip>
+          <DropdownMenuContent align="start">
+            <DropdownMenuItem onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}><Table2Icon className="size-4" />Insert table</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => editor?.chain().focus().addRowAfter().run()}><Rows3Icon className="size-4" />Add row</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => editor?.chain().focus().addColumnAfter().run()}><Columns3Icon className="size-4" />Add column</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <ToolbarButton label="Code block" onClick={() => editor?.chain().focus().toggleCodeBlock().run()}><Code2Icon /></ToolbarButton>
+        <ToolbarButton label="Insert math" onClick={() => editor?.chain().focus().insertContent({ type: "mathBlock", attrs: { content: "x^2 + y^2 = z^2" } }).run()}><SigmaIcon /></ToolbarButton>
+        <ToolbarButton label="Insert Mermaid chart" onClick={() => editor?.chain().focus().insertContent({ type: "mermaidBlock", attrs: { code: "graph TD\nA[Start] --> B[Step]" } }).run()}><ChartNoAxesCombinedIcon /></ToolbarButton>
+        </div>
+      </TooltipProvider>
       <EditorContent editor={editor} className="min-h-0 flex-1 overflow-auto" />
     </div>
+  )
+}
+
+function ToolbarButton({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger render={<Button size="icon-sm" variant="outline" aria-label={label} />} onClick={onClick}>{children}</TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }
 

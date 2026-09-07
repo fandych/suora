@@ -1,13 +1,11 @@
 import { useEffect, useMemo, useState } from "react"
 import { useParams } from "react-router"
-import { PlayIcon, UploadIcon } from "lucide-react"
 
-import { Button } from "@/components/ui/button"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig } from "@/data/domain/models"
-import { getIntegrationDetail, publishIntegrationVersion, runIntegrationAndPersist, saveIntegrationDraft } from "@/data/repositories/integration-repository"
+import { getIntegrationDetail, runIntegrationAndPersist, saveIntegrationDraft } from "@/data/repositories/integration-repository"
 import { IntegrationBasicEditor } from "@/views/integrations/components/integration-basic-editor"
 import { IntegrationHttpEndpointsPanel } from "@/views/integrations/components/integration-http-endpoints-panel"
 import { IntegrationMcpToolsPanel } from "@/views/integrations/components/integration-mcp-tools-panel"
@@ -120,16 +118,6 @@ const IntegrationsDetailPage = () => {
     setSelectedVersionId(next.selectedVersion.id)
   }
 
-  const handlePublish = async () => {
-    if (!integrationId || !data) {
-      return
-    }
-
-    const next = await publishIntegrationVersion(integrationId, data.selectedVersion.id)
-    setData(next)
-    setSelectedVersionId(next.selectedVersion.id)
-  }
-
   const handleRun = async () => {
     if (!config) {
       return
@@ -189,7 +177,7 @@ const IntegrationsDetailPage = () => {
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={data?.integration.title ?? "Integration"}
-        description="Configure shared connection details and the HTTP operations available to this toolset."
+        description={config?.description || "No description configured."}
       />
 
       <div className="flex-1 overflow-x-hidden p-4">
@@ -199,12 +187,7 @@ const IntegrationsDetailPage = () => {
           {!isLoading && !error && data && config ? (
             <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
               <div className="min-w-0 space-y-3">
-                <IntegrationBasicEditor config={config} title={title} onChange={handleConfigChange} onTitleChange={setTitle} />
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => { setTryRunTargetId(config.kind === "http" ? config.selectedEndpointId : config.kind === "scripts" ? config.selectedScriptId : undefined); setIsTryRunOpen(true) }} disabled={!canTryRun}><PlayIcon />Try run</Button>
-                  <Button size="sm" onClick={handleSave} disabled={!hasUnsavedChanges}>Save draft</Button>
-                  <Button size="sm" variant="outline" onClick={handlePublish} disabled={hasUnsavedChanges || hasBlockingIssues}><UploadIcon />Publish</Button>
-                </div>
+                <IntegrationBasicEditor config={config} title={title} onChange={handleConfigChange} onTitleChange={setTitle} onSave={handleSave} saveDisabled={!hasUnsavedChanges} />
                 {issues.length > 0 ? <div className="flex flex-col gap-2">{issues.map((issue) => <p key={issue.message} className="text-sm text-muted-foreground">{issue.message}</p>)}</div> : null}
               </div>
               {config.kind === "http" ? <IntegrationHttpEndpointsPanel config={config as HttpIntegrationConfig} canTryRun={canTryRun} onChange={handleConfigChange} onTryRun={openTryRunForHttpEndpoint} /> : null}

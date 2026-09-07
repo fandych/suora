@@ -1,6 +1,7 @@
 import type { SkillFileRecord } from "@/data/domain/models"
 
 export const SKILL_TOP_LEVEL_FOLDERS = ["scripts", "references", "assets", "other"] as const
+export const SKILL_ROOT_PATH = "__skill_root__"
 
 export type SkillTreeEntry = {
   path: string
@@ -246,7 +247,7 @@ export function ensureSkillFiles(files: SkillFileRecord[], title: string, summar
   return Array.from(normalized.values()).sort((left, right) => left.path.localeCompare(right.path))
 }
 
-export function buildSkillTree(files: SkillFileRecord[]): SkillTreeEntry[] {
+export function buildSkillTree(files: SkillFileRecord[], skillName = "Skill"): SkillTreeEntry[] {
   const entries: SkillTreeEntry[] = []
   const added = new Set<string>()
 
@@ -259,12 +260,15 @@ export function buildSkillTree(files: SkillFileRecord[]): SkillTreeEntry[] {
     entries.push({
       path,
       label: parts[parts.length - 1],
-      depth: parts.length - 1,
+      depth: parts.length,
       kind,
       file,
     })
     added.add(path)
   }
+
+  entries.push({ path: SKILL_ROOT_PATH, label: skillName || "Skill", depth: 0, kind: "directory" })
+  added.add(SKILL_ROOT_PATH)
 
   const skillFile = files.find((file) => normalizeSkillPath(file.path) === "SKILL.md")
   if (skillFile) {

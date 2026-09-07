@@ -61,7 +61,6 @@ export function ChatMessageItem({
             <div className="flex size-full items-center justify-center text-foreground">
               <AssistantLogo className="size-3.5" />
             </div>
-            <AvatarFallback>AI</AvatarFallback>
           </Avatar>
         ) : (
           <Avatar size="sm" className={cn("bg-background", role === "user" ? "text-primary" : "text-muted-foreground")}>

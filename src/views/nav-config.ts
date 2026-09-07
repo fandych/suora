@@ -21,6 +21,7 @@ export type PrimaryNavItem = {
   description: string
   secondarySidebar: {
     searchPlaceholder: string
+    collapsibleGroups?: boolean
     groups: {
       id: string
       title?: string
@@ -140,6 +141,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
     description: "Configure external services, API links, and delivery endpoints.",
     secondarySidebar: {
       searchPlaceholder: "搜索 integrations...",
+      collapsibleGroups: true,
       groups: [
         {
           id: "http",
@@ -200,14 +202,27 @@ export const primaryNavItems: PrimaryNavItem[] = [
     description: "Register reusable capabilities and inspect versioned skill bundles.",
     secondarySidebar: {
       searchPlaceholder: "搜索 skills...",
+      collapsibleGroups: true,
       groups: [
+        {
+          id: "custom",
+          title: "Custom",
+        },
         {
           id: "builtin",
           title: "Built-in",
         },
         {
-          id: "custom",
-          title: "Custom",
+          id: "codex",
+          title: "Codex",
+        },
+        {
+          id: "claude",
+          title: "Claude",
+        },
+        {
+          id: "agents",
+          title: ".agents",
         },
       ],
     },

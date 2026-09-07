@@ -233,7 +233,7 @@ export async function startChatRun(input: StartChatRunInput) {
   try {
     let finalText = ""
     let errorPartIndex = 0
-    let streamedParts: AssistantResponsePart[] = []
+    let streamedParts: AssistantResponsePart[] = [{ id: "assistant-stream", type: "text", content: "", isPending: true }]
 
     for await (const event of streamChatAgentResponse(next.messages, input.settingsDraft, {
       abortSignal: abortController.signal,

@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { useParams } from "react-router"
+import { useNavigate, useParams } from "react-router"
+import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { useAutosaveStatus } from "@/hooks/use-autosave-status"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import type { DocumentDetail } from "@/data/domain/models"
-import { getDocumentDetail, publishDocumentVersion, saveDocumentDraft } from "@/data/repositories/document-repository"
+import { deleteDocument, getDocumentDetail, saveDocumentDraft } from "@/data/repositories/document-repository"
 import { buildDocumentTree, getDocumentDisplayName } from "@/lib/document-tree"
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser-files"
 import PageHeader from "@/views/components/page-header"
 import { ConfirmDeleteDialog } from "@/views/components/confirm-delete-dialog"
 import { ResourceEntryDialog } from "@/views/components/resource-entry-dialog"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
-import VersionSelect from "@/views/components/version-select"
 import { DocumentCreateDialog } from "@/views/documents/components/document-create-dialog"
 import { DocumentEditorPanel } from "@/views/documents/components/document-editor-panel"
 import { DocumentTreePanel } from "@/views/documents/components/document-tree-panel"
@@ -49,6 +50,7 @@ function normalizeDocumentState(detail: DocumentDetail) {
 }
 
 const DocumentsDetailPage = () => {
+  const navigate = useNavigate()
   const { documentId } = useParams<{ documentId: string }>()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => getDocumentDetail(documentId ?? "", selectedVersionId), [documentId, selectedVersionId])
@@ -61,9 +63,10 @@ const DocumentsDetailPage = () => {
   const [entryDialogMode, setEntryDialogMode] = useState<{ kind: "add-file" | "add-directory" | "rename"; parentId?: string | null; targetId?: string } | null>(null)
   const [entryDialogValue, setEntryDialogValue] = useState("")
   const [entryDialogError, setEntryDialogError] = useState("")
-  const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false)
   const [hasLoadedInitialState, setHasLoadedInitialState] = useState(false)
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false)
+  const [isDocumentDeleteDialogOpen, setIsDocumentDeleteDialogOpen] = useState(false)
 
   const persistDraft = async (nextDraft: DocumentDetail) => {
     const saved = await saveDocumentDraft(documentId ?? "", {
@@ -125,7 +128,6 @@ const DocumentsDetailPage = () => {
   }), [collapsedIds, pagesById, treeEntries])
   const selectedPage = pages.find((page) => page.id === selectedNodeId) ?? pages[0]
   const pageContent = selectedPage?.content ?? ""
-  const autosaveLabel = autosave.state === "error" ? "Save failed" : autosave.state === "saving" ? "Saving..." : autosave.state === "pending" ? "Unsaved changes" : "Saved"
 
   const handleSelectNode = (nodeId: string) => {
     setSelectedNodeId(nodeId)
@@ -250,24 +252,30 @@ const DocumentsDetailPage = () => {
     })
   }
 
-  const handleSaveNow = async () => {
-    await autosave.saveNow()
-  }
-
-  const handlePublish = async () => {
-    if (!documentId || !draft) return
-    await autosave.saveNow()
-    const next = await publishDocumentVersion(documentId, draft.selectedVersion.id)
-    setData(next)
-    setDraft(next)
-    setSelectedVersionId(next.selectedVersion.id)
-    autosave.markClean(buildDocumentSnapshot(normalizeDocumentState(next)))
+  const handleDeleteDocument = async () => {
+    if (!documentId) return
+    await deleteDocument(documentId)
     emitDataChanged("/documents")
+    navigate("/documents")
   }
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title={draft?.document.title ?? "Document"} actions={draft ? <><VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} /><Button variant="outline" onClick={() => setIsMetadataDialogOpen(true)}>Edit info</Button></> : null} />
+      <PageHeader
+        title={draft?.document.title ?? "Document"}
+        description={draft?.document.summary}
+        actions={draft ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Document actions" />}>
+              <EllipsisIcon />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setIsMetadataDialogOpen(true)}><PencilIcon className="size-4" />Edit name/description</DropdownMenuItem>
+              <DropdownMenuItem variant="destructive" onClick={() => setIsDocumentDeleteDialogOpen(true)}><Trash2Icon className="size-4" />Delete</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      />
       <input ref={uploadInputRef} type="file" multiple className="hidden" onChange={handleUploadChange} />
       <div className="min-h-0 flex-1 p-3">
         {isLoading ? <LoadingCard title="Loading document..." /> : null}
@@ -279,12 +287,13 @@ const DocumentsDetailPage = () => {
             </ResizablePanel>
             <ResizableHandle withHandle />
             <ResizablePanel defaultSize={72} minSize={30} className="min-w-0">
-              <DocumentEditorPanel autosaveLabel={autosaveLabel} editorMode={editorMode} onChange={handleContentChange} onEditorModeChange={setEditorMode} onPublish={handlePublish} onSaveNow={() => void handleSaveNow()} pageContent={pageContent} selectedPage={selectedPage} versionLabel={draft.selectedVersion.label} />
+              <DocumentEditorPanel editorMode={editorMode} onChange={handleContentChange} onEditorModeChange={setEditorMode} pageContent={pageContent} selectedPage={selectedPage} />
             </ResizablePanel>
           </ResizablePanelGroup>
         ) : null}
       </div>
       <DocumentCreateDialog dialogDescription="Update the document name and summary for this workspace." dialogTitle="Edit document info" onDescriptionChange={(value) => setDraft((current) => current ? { ...current, document: { ...current.document, summary: value } } : current)} onOpenChange={setIsMetadataDialogOpen} onSubmit={() => { setIsMetadataDialogOpen(false) }} onTitleChange={(value) => setDraft((current) => current ? { ...current, document: { ...current.document, title: value } } : current)} open={isMetadataDialogOpen} submitLabel="Done" title={draft?.document.title ?? ""} description={draft?.document.summary ?? ""} />
+      <ConfirmDeleteDialog description="This permanently deletes the document and all of its content. This action cannot be undone." onConfirm={() => void handleDeleteDocument()} onOpenChange={setIsDocumentDeleteDialogOpen} open={isDocumentDeleteDialogOpen} title="Delete document" />
       <ResourceEntryDialog description={entryDialogMode?.kind === "rename" ? "Rename the selected page or folder." : "Create a new document or folder inside the selected parent."} errorMessage={entryDialogError} fieldLabel={entryDialogMode?.kind === "rename" ? "New name" : "Name"} onOpenChange={(open) => { if (!open) { setEntryDialogMode(null); setEntryDialogError("") } }} onSubmit={commitAddOrRename} onValueChange={setEntryDialogValue} open={Boolean(entryDialogMode)} placeholder={entryDialogMode?.kind === "add-file" ? "new-document.md" : "new-folder"} submitLabel={entryDialogMode?.kind === "rename" ? "Rename" : "Create"} title={entryDialogMode?.kind === "rename" ? "Rename item" : entryDialogMode?.kind === "add-directory" ? "Create folder" : "Create document"} value={entryDialogValue} />
       <ConfirmDeleteDialog description={deleteTargetId ? `Delete this item and all nested content under it?` : "Delete this item?"} onConfirm={() => deleteTargetId ? deleteNode(deleteTargetId) : undefined} onOpenChange={(open) => { if (!open) setDeleteTargetId(null) }} open={Boolean(deleteTargetId)} title="Delete item" />
     </div>

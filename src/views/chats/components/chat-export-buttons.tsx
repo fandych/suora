@@ -1,18 +1,25 @@
-import { cn } from "@/lib/utils"
+import { DownloadIcon } from "lucide-react"
+
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 type ChatExportButtonsProps = {
   disabled?: boolean
   onExport: (format: "markdown" | "pdf" | "docx") => Promise<void>
 }
 
-const buttonClassName = "inline-flex h-8 shrink-0 items-center justify-center rounded-lg border border-input bg-background px-2.5 text-xs font-medium text-foreground transition-colors hover:bg-muted disabled:pointer-events-none disabled:opacity-50"
-
 export function ChatExportButtons({ disabled = false, onExport }: ChatExportButtonsProps) {
   return (
-    <div className="flex items-center gap-px overflow-hidden rounded-lg border border-input bg-background">
-      <button type="button" data-chat-export="markdown" className={cn(buttonClassName, "rounded-none border-0")} disabled={disabled} onClick={() => void onExport("markdown")}>MD</button>
-      <button type="button" data-chat-export="pdf" className={cn(buttonClassName, "rounded-none border-0 border-l")} disabled={disabled} onClick={() => void onExport("pdf")}>PDF</button>
-      <button type="button" data-chat-export="docx" className={cn(buttonClassName, "rounded-none border-0 border-l")} disabled={disabled} onClick={() => void onExport("docx")}>DOCX</button>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button size="sm" variant="outline" type="button" disabled={disabled} />}>
+        <DownloadIcon data-icon="inline-start" />
+        Export
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" className="w-36 min-w-36">
+        <DropdownMenuItem data-chat-export="markdown" onClick={() => void onExport("markdown")}>Markdown</DropdownMenuItem>
+        <DropdownMenuItem data-chat-export="pdf" onClick={() => void onExport("pdf")}>PDF</DropdownMenuItem>
+        <DropdownMenuItem data-chat-export="docx" onClick={() => void onExport("docx")}>DOCX</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

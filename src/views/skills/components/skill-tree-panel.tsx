@@ -3,7 +3,7 @@ import { ChevronDownIcon, ChevronRightIcon, DownloadIcon, FileCode2Icon, FileTex
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { SkillTreeEntry } from "@/lib/skill-files"
+import { SKILL_ROOT_PATH, type SkillTreeEntry } from "@/lib/skill-files"
 
 type SkillTreePanelProps = {
   collapsedPaths: Set<string>
@@ -23,7 +23,7 @@ const rowClass = "group flex w-full items-center gap-1 rounded-md px-2 py-1 text
 const actionButtonClassName = "shrink-0 opacity-0 group-hover:opacity-100"
 
 function isProtectedPath(path: string) {
-  return path === "SKILL.md" || ["scripts", "references", "assets", "other"].includes(path)
+  return path === SKILL_ROOT_PATH || path === "SKILL.md" || ["scripts", "references", "assets", "other"].includes(path)
 }
 
 function getIcon(entry: SkillTreeEntry) {

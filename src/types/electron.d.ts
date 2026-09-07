@@ -51,6 +51,7 @@ declare global {
       }
       skills: {
         list: () => Promise<unknown>
+        listExternal: () => Promise<unknown>
         get: (skillId: string) => Promise<unknown>
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>

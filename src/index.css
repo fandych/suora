@@ -140,7 +140,7 @@
 }
 
 @layer components {
-  .document-prose h1, .document-prose h2, .document-prose h3, .document-prose h4 {
+  .document-prose h1, .document-prose h2, .document-prose h3, .document-prose h4, .document-prose h5, .document-prose h6 {
     @apply mt-5 mb-3 font-heading font-semibold text-foreground;
   }
 
@@ -152,12 +152,44 @@
     @apply text-xl;
   }
 
+  .document-prose h3 {
+    @apply text-lg;
+  }
+
+  .document-prose h4 {
+    @apply text-base;
+  }
+
+  .document-prose h5 {
+    @apply text-sm;
+  }
+
+  .document-prose h6 {
+    @apply text-xs uppercase tracking-wide text-muted-foreground;
+  }
+
   .document-prose p, .document-prose li, .document-prose blockquote {
     @apply leading-7 text-foreground;
   }
 
   .document-prose ul, .document-prose ol {
-    @apply ml-5 space-y-2;
+    @apply ml-5 space-y-2 pl-4;
+  }
+
+  .document-prose ul {
+    list-style-type: disc;
+  }
+
+  .document-prose ol {
+    list-style-type: decimal;
+  }
+
+  .document-prose li p {
+    @apply my-0;
+  }
+
+  .document-prose a {
+    @apply text-primary underline underline-offset-2;
   }
 
   .document-prose blockquote {
@@ -168,16 +200,53 @@
     @apply overflow-x-auto rounded-xl border border-border bg-muted/50 p-4;
   }
 
+  .document-prose hr {
+    @apply my-6 border-border;
+  }
+
   .document-prose code {
     @apply rounded bg-muted px-1.5 py-0.5 text-[0.9em];
   }
 
   .document-prose table {
     @apply w-full border-collapse text-sm;
+    table-layout: fixed;
+  }
+
+  .document-prose .column-resize-handle {
+    @apply absolute top-0 bottom-0 right-[-3px] w-1.5 cursor-col-resize bg-primary/40;
+  }
+
+  .document-prose.resize-cursor {
+    cursor: col-resize;
   }
 
   .document-prose th, .document-prose td {
     @apply border border-border px-3 py-2 text-left;
+  }
+
+  .document-prose th {
+    @apply bg-muted/60 font-semibold;
+  }
+
+  .document-prose .selectedCell {
+    @apply bg-primary/10;
+  }
+
+  .document-prose ul[data-type="taskList"] {
+    @apply ml-0 list-none space-y-1 pl-0;
+  }
+
+  .document-prose ul[data-type="taskList"] li {
+    @apply flex items-start gap-2;
+  }
+
+  .document-prose ul[data-type="taskList"] li > label {
+    @apply mt-1 shrink-0;
+  }
+
+  .document-prose:focus-within {
+    @apply ring-2 ring-ring/30;
   }
 
   .document-math-block, .document-mermaid-block {

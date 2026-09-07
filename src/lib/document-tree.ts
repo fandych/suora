@@ -100,16 +100,27 @@ export function normalizeDocumentNodes(pages: DocumentPageRecord[], documentTitl
     return buildDefaultDocumentNodes(documentTitle)
   }
 
-  return pages.map((page) => {
+  const existingRoot = pages.find((page) => (page.type ?? "document") === "folder" && (page.parentId ?? null) === null)
+  const rootId = existingRoot?.id ?? crypto.randomUUID()
+  const normalizedPages = pages.map((page) => {
     const type = page.type ?? "document"
     return {
       ...page,
-      title: type === "document" ? getDocumentDisplayName(page.title) : page.parentId === null ? documentTitle : page.title,
+      title: type === "document" ? getDocumentDisplayName(page.title) : page.id === rootId ? documentTitle : page.title,
       content: page.content ?? "",
       type,
-      parentId: page.parentId ?? null,
+      parentId: page.id === rootId ? null : page.parentId ?? rootId,
     }
   })
+
+  if (existingRoot) {
+    return normalizedPages
+  }
+
+  return [
+    { id: rootId, title: documentTitle, content: "", type: "folder" as const, parentId: null },
+    ...normalizedPages,
+  ]
 }
 
 export function buildDocumentTree(pages: DocumentPageRecord[]) {
@@ -126,7 +137,7 @@ export function buildDocumentTree(pages: DocumentPageRecord[]) {
       const leftType = left.type ?? "document"
       const rightType = right.type ?? "document"
       if (leftType !== rightType) {
-        return leftType === "folder" ? -1 : 1
+        return leftType === "document" ? -1 : 1
       }
       return left.title.localeCompare(right.title)
     })

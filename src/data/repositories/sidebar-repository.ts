@@ -69,12 +69,27 @@ function compareSkillSidebarRecords(
   right: { title: string; group: string }
 ) {
   if (left.group !== right.group) {
-    if (left.group === "custom") return -1
-    if (right.group === "custom") return 1
+    const order = ["custom", "builtin", "codex", "claude", "agents"]
+    const leftIndex = order.indexOf(left.group)
+    const rightIndex = order.indexOf(right.group)
+    if (leftIndex !== -1 || rightIndex !== -1) {
+      return (leftIndex === -1 ? order.length : leftIndex) - (rightIndex === -1 ? order.length : rightIndex)
+    }
     return left.group.localeCompare(right.group, undefined, { sensitivity: "base" })
   }
 
   return left.title.localeCompare(right.title, undefined, { sensitivity: "base" })
+}
+
+async function listExternalSkillSidebarRecords() {
+  try {
+    const listExternal = window.suora?.skills.listExternal
+    if (!listExternal) return []
+    const records = await listExternal()
+    return Array.isArray(records) ? records as Array<{ id: string; title: string; source: string; summary: string }> : []
+  } catch {
+    return []
+  }
 }
 
 function compareChannelSidebarRecords(
@@ -141,7 +156,7 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
     case "/integrations":
       return mapItems(item, (await listIntegrationSummaries()).map((record) => ({ id: record.id, title: record.title, group: record.kind, meta: record.endpoint })))
     case "/documents":
-      return mapItems(item, (await listDocuments()).map((record) => ({ id: record.id, title: record.title, group: "documents", meta: record.summary, actions: [{ id: "delete", label: "Delete", variant: "destructive" }] })))
+      return mapItems(item, (await listDocuments()).map((record) => ({ id: record.id, title: record.title, group: "documents", meta: record.summary })))
     case "/channels": {
       const records = await listChannels()
       const configuredCatalogIds = new Set(
@@ -163,10 +178,14 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
         }))
         .sort(compareChannelSidebarRecords))
     }
-    case "/skills":
-      return mapItems(item, (await listSkills())
-        .map((record) => ({ id: record.id, title: record.title, group: record.source === "custom" ? "custom" : "builtin", meta: record.summary, actions: [{ id: "disable", label: "Disable" }, { id: "delete", label: "Delete", variant: "destructive" as const }] }))
-        .sort(compareSkillSidebarRecords))
+    case "/skills": {
+      const localSkills = await listSkills()
+      const externalSkills = await listExternalSkillSidebarRecords()
+      return mapItems(item, [
+        ...localSkills.map((record) => ({ id: record.id, title: record.title, group: record.source === "custom" ? "custom" : "builtin", meta: record.summary, actions: [{ id: "disable", label: "Disable" }, { id: "delete", label: "Delete", variant: "destructive" as const }] })),
+        ...externalSkills.map((record) => ({ id: record.id, title: record.title, group: record.source, meta: record.summary })),
+      ].sort(compareSkillSidebarRecords))
+    }
     case "/models":
       return mapItems(item, (await listModelProviders())
         .map((record) => ({

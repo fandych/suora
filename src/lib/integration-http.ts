@@ -40,6 +40,8 @@ export function createHttpEndpoint(
     queryJson: partial?.queryJson ?? "{}",
     bodyJson: partial?.bodyJson ?? "{}",
     parameterSchemaJson: partial?.parameterSchemaJson ?? DEFAULT_PARAMETER_SCHEMA_JSON,
+    responseSchemaJson: partial?.responseSchemaJson ?? DEFAULT_PARAMETER_SCHEMA_JSON,
+    responseDescription: partial?.responseDescription ?? "",
     parameters: partial?.parameters?.map((parameter) => createHttpEndpointParameter(parameter)) ?? [],
   }
 }

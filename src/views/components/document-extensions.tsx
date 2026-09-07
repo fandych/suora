@@ -5,7 +5,9 @@ import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tip
 import katex from "katex"
 import { useEffect, useId, useRef, useState } from "react"
 
-function MathBlockView({ node }: NodeViewProps) {
+import { Textarea } from "@/components/ui/textarea"
+
+function MathBlockView({ node, updateAttributes }: NodeViewProps) {
   const content = node.attrs.content as string
   const [html, setHtml] = useState("")
   const [error, setError] = useState("")
@@ -24,6 +26,13 @@ function MathBlockView({ node }: NodeViewProps) {
   return (
     <NodeViewWrapper>
       <div className="document-math-block" contentEditable={false}>
+        <Textarea
+          aria-label="Math formula"
+          className="mb-3 min-h-16 resize-y border-border/70 bg-background font-mono text-sm"
+          value={content}
+          onChange={(event) => updateAttributes({ content: event.target.value })}
+          placeholder="Enter a LaTeX formula"
+        />
         {error ? <code className="text-xs text-destructive">{error}</code> : <span dangerouslySetInnerHTML={{ __html: html }} />}
       </div>
     </NodeViewWrapper>
@@ -105,7 +114,7 @@ async function renderMermaid(id: string, code: string) {
   }
 }
 
-function MermaidBlockView({ node }: NodeViewProps) {
+function MermaidBlockView({ node, updateAttributes }: NodeViewProps) {
   const code = node.attrs.code as string
   const containerRef = useRef<HTMLDivElement>(null)
   const reactId = useId()
@@ -125,7 +134,16 @@ function MermaidBlockView({ node }: NodeViewProps) {
 
   return (
     <NodeViewWrapper>
-      <div ref={containerRef} className="document-mermaid-block" contentEditable={false} />
+      <div className="document-mermaid-block" contentEditable={false}>
+        <Textarea
+          aria-label="Mermaid chart definition"
+          className="mb-3 min-h-24 resize-y border-border/70 bg-background font-mono text-sm"
+          value={code}
+          onChange={(event) => updateAttributes({ code: event.target.value })}
+          placeholder="Enter Mermaid chart syntax"
+        />
+        <div ref={containerRef} />
+      </div>
     </NodeViewWrapper>
   )
 }

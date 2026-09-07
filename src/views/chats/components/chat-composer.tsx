@@ -3,7 +3,8 @@ import { useEffect, useMemo, useRef, useState } from "react"
 
 import { Attachment, AttachmentAction, AttachmentActions, AttachmentContent, AttachmentDescription, AttachmentGroup, AttachmentMedia, AttachmentTitle } from "@/components/ui/attachment"
 import { Button } from "@/components/ui/button"
-import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
@@ -146,6 +147,16 @@ export function ChatComposer({
       ...groupedProviders,
     ]
   }, [groupedProviders, settingsDraft.model.apiKey, settingsDraft.model.baseUrl, settingsDraft.model.modelId, settingsDraft.model.providerId, settingsDraft.model.providerType])
+  const selectedModelLabel = useMemo(() => {
+    for (const provider of selectedModelFallback) {
+      const model = provider.models.find((item) => `${provider.id}::${item.id}` === modelValue)
+      if (model) {
+        return model.name
+      }
+    }
+
+    return "Model"
+  }, [modelValue, selectedModelFallback])
 
   useEffect(() => {
     draftRef.current = draft
@@ -276,14 +287,23 @@ export function ChatComposer({
             <NativeSelectOption value="">Agent</NativeSelectOption>
             {agents.map((agent) => <NativeSelectOption key={agent.id} value={agent.id}>{agent.title}</NativeSelectOption>)}
           </NativeSelect>
-          <NativeSelect className="min-w-0 w-full sm:w-44" size="sm" value={modelValue} onChange={(event) => onModelChange(event.target.value)}>
-            <NativeSelectOption value="">Model</NativeSelectOption>
-            {selectedModelFallback.map((provider) => (
-              <NativeSelectOptGroup key={provider.id} label={provider.title}>
-                {provider.models.map((model) => <NativeSelectOption key={`${provider.id}-${model.id}`} value={`${provider.id}::${model.id}`}>{model.name}</NativeSelectOption>)}
-              </NativeSelectOptGroup>
-            ))}
-          </NativeSelect>
+          <Select value={modelValue} onValueChange={(value) => { if (value !== null) onModelChange(value) }}>
+            <SelectTrigger className="min-w-0 w-full sm:w-44" size="sm">
+              <SelectValue placeholder="Model">{selectedModelLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent side="top" sideOffset={4} align="start">
+              {selectedModelFallback.map((provider) => (
+                <SelectGroup key={provider.id}>
+                  <SelectLabel>{provider.title}</SelectLabel>
+                  {provider.models.map((model) => (
+                    <SelectItem key={`${provider.id}-${model.id}`} value={`${provider.id}::${model.id}`}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              ))}
+            </SelectContent>
+          </Select>
           <label className="flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs text-muted-foreground">
             <span>Auto scroll</span>
             <Switch checked={autoScroll} onCheckedChange={onAutoScrollChange} />
@@ -315,7 +335,6 @@ export function ChatComposer({
           )}
         </div>
       </div>
-      {isListening ? <div className="text-xs text-muted-foreground">Voice input is active. Press the microphone button again to stop.</div> : null}
     </div>
   )
 }

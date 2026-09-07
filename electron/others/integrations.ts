@@ -33,7 +33,18 @@ function buildEndpointUrl(baseUrl: string | undefined, path: string | undefined)
 }
 
 function applyHttpAuth(headers: Record<string, string>, url: URL, config: { authType?: string; authConfigJson?: string }) {
-  const authConfig = parseJson<Record<string, string>>(config.authConfigJson, {})
+  const authConfig = parseJson<Record<string, unknown>>(config.authConfigJson, {})
+  const sharedHeaders = authConfig.headers && typeof authConfig.headers === "object"
+    ? authConfig.headers as Record<string, unknown>
+    : config.authType === "custom"
+      ? authConfig
+      : {}
+
+  for (const [name, value] of Object.entries(sharedHeaders)) {
+    if (typeof value === "string" && name.trim()) {
+      headers[name] = value
+    }
+  }
 
   switch (config.authType) {
     case "bearer":
@@ -61,7 +72,6 @@ function applyHttpAuth(headers: Record<string, string>, url: URL, config: { auth
       break
     }
     case "custom":
-      Object.assign(headers, authConfig)
       break
   }
 }
@@ -165,7 +175,9 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
   const transport = url.protocol === "https:" ? https : http
   let body: string | Buffer | undefined
 
-  if (bodyMode === "json") {
+  const canSendBody = !["GET", "HEAD"].includes(String(selectedEndpoint?.method ?? "").toUpperCase())
+
+  if (canSendBody && bodyMode === "json") {
     const jsonFields = endpointParameters
       .filter((parameter) => parameter.in === "json")
       .reduce<Record<string, unknown>>((accumulator, parameter) => {
@@ -179,7 +191,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
     headers["content-type"] = headers["content-type"] || "application/json"
   }
 
-  if (bodyMode === "x-www-form-urlencoded") {
+  if (canSendBody && bodyMode === "x-www-form-urlencoded") {
     const formPayload = new URLSearchParams()
     for (const [key, value] of Object.entries(bodyConfig)) {
       formPayload.set(key, String(value ?? ""))
@@ -193,7 +205,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
     headers["content-type"] = headers["content-type"] || "application/x-www-form-urlencoded"
   }
 
-  if (bodyMode === "form-data") {
+  if (canSendBody && bodyMode === "form-data") {
     const boundary = `----suora-${Date.now().toString(16)}`
     const formFields: Record<string, unknown> = { ...bodyConfig }
     for (const parameter of endpointParameters.filter((item) => item.in === "form-data")) {

@@ -11,12 +11,13 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Badge } from "@/components/ui/badge"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { CheckIcon, EllipsisIcon, PencilIcon, SlashIcon, Trash2Icon } from "lucide-react"
+import { CheckIcon, ChevronDownIcon, ChevronRightIcon, EllipsisIcon, PencilIcon, SlashIcon, Trash2Icon } from "lucide-react"
 
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router"
@@ -37,6 +38,7 @@ type SectionSidebarProps = {
   searchPlaceholder: string
   groups: ResolvedSecondarySidebarGroup[]
   isLoading?: boolean
+  collapsibleGroups?: boolean
   headerAction?: React.ReactNode
   renderGroupAction?: (group: ResolvedSecondarySidebarGroup) => React.ReactNode
 }
@@ -139,10 +141,11 @@ function AgentSidebarActionButton({ actionId, itemId, isActive }: AgentSidebarAc
   )
 }
 
-const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, headerAction, renderGroupAction }: SectionSidebarProps) => {
+const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, collapsibleGroups = false, headerAction, renderGroupAction }: SectionSidebarProps) => {
   const navigate = useNavigate()
   const location = useLocation()
   const [query, setQuery] = useState("")
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
 
   const handleItemAction = async (itemId: string, actionId: string) => {
     if (title === "Models") {
@@ -223,66 +226,85 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, h
         {filteredGroups.map((group) => {
           const groupKey = group.id
           const groupAction = renderGroupAction?.(group)
+          const isOpen = !collapsedGroups.has(groupKey) || Boolean(query.trim())
+          const groupContent = (
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {isLoading
+                  ? Array.from({ length: 3 }).map((_, index) => (
+                      <SidebarMenuItem key={`${groupKey}-loading-${index}`}>
+                        <SidebarMenuSkeleton />
+                      </SidebarMenuItem>
+                    ))
+                  : group.items.map((item) => (
+                      <SidebarMenuItem key={item.id} className={title === "Chats" || title === "Agents" ? "group/sidebar-item" : undefined} {...(title === "Chats" ? { "data-chat-history-item": item.id } : {})}>
+                        <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
+                          <SidebarMenuButton isActive={location.pathname === item.href} onClick={() => navigate(item.href)} className="min-w-0 justify-between gap-2">
+                            <span className="flex min-w-0 items-center gap-2 overflow-hidden">
+                              {item.icon ? <item.icon className="size-4 shrink-0" /> : null}
+                              <span className="block min-w-0 flex-1 truncate">{item.label}</span>
+                            </span>
+                            {typeof item.count === "number" ? <Badge variant="secondary" className="shrink-0">{item.count}</Badge> : null}
+                          </SidebarMenuButton>
+                          {title === "Chats" && item.actions?.some((action) => action.id === "delete") ? (
+                            <ChatDeleteButton className="opacity-0 transition-opacity group-hover/sidebar-item:opacity-100 group-focus-within/sidebar-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" chatId={item.id} isActive={location.pathname === item.href} />
+                          ) : null}
+                          {title === "Agents" && item.actions?.length ? (
+                            <AgentSidebarActionButton actionId={item.actions[0].id} itemId={item.id} isActive={location.pathname === item.href} />
+                          ) : null}
+                          {title !== "Models" && title !== "Chats" && title !== "Agents" && title !== "Skills" && item.actions?.length ? (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0" />}>
+                                <EllipsisIcon />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40 min-w-40">
+                                {item.actions.map((action) => {
+                                  const ActionIcon = getSidebarActionIcon(action.id)
+                                  return (
+                                    <DropdownMenuItem key={action.id} variant={action.variant ?? "default"} onClick={() => void handleItemAction(item.id, action.id)}>
+                                      {ActionIcon ? <ActionIcon className="size-4" /> : null}
+                                      {action.label}
+                                    </DropdownMenuItem>
+                                  )
+                                })}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          ) : null}
+                        </div>
+                      </SidebarMenuItem>
+                    ))}
+              </SidebarMenu>
+              {!isLoading && group.items.length === 0 && query.trim() ? (
+                <div className="px-2 py-2 text-xs text-muted-foreground">No matching items.</div>
+              ) : null}
+            </SidebarGroupContent>
+          )
 
           return (
-            <SidebarGroup key={groupKey}>
+            <Collapsible key={groupKey} open={collapsibleGroups ? isOpen : true} onOpenChange={(open) => {
+              if (!collapsibleGroups) return
+              setCollapsedGroups((current) => {
+                const next = new Set(current)
+                if (open) next.delete(groupKey)
+                else next.add(groupKey)
+                return next
+              })
+            }} render={<SidebarGroup />}>
               {group.title || groupAction ? (
                 <div className="flex items-center justify-between gap-2 px-2 pb-0.5">
-                  {group.title ? <SidebarGroupLabel className="h-auto px-0 py-0">{group.title}</SidebarGroupLabel> : <span />}
+                  {group.title ? (
+                    collapsibleGroups ? (
+                      <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-1 text-left">
+                        {isOpen ? <ChevronDownIcon className="size-3.5 shrink-0" /> : <ChevronRightIcon className="size-3.5 shrink-0" />}
+                        <SidebarGroupLabel className="h-auto px-0 py-0">{group.title}</SidebarGroupLabel>
+                      </CollapsibleTrigger>
+                    ) : <SidebarGroupLabel className="h-auto px-0 py-0">{group.title}</SidebarGroupLabel>
+                  ) : <span />}
                   {groupAction}
                 </div>
               ) : null}
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {isLoading
-                    ? Array.from({ length: 3 }).map((_, index) => (
-                        <SidebarMenuItem key={`${groupKey}-loading-${index}`}>
-                          <SidebarMenuSkeleton />
-                        </SidebarMenuItem>
-                      ))
-                    : group.items.map((item) => (
-                        <SidebarMenuItem key={item.id} className={title === "Chats" || title === "Agents" ? "group/sidebar-item" : undefined} {...(title === "Chats" ? { "data-chat-history-item": item.id } : {})}>
-                          <div className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1">
-                            <SidebarMenuButton isActive={location.pathname === item.href} onClick={() => navigate(item.href)} className="min-w-0 justify-between gap-2">
-                              <span className="flex min-w-0 items-center gap-2 overflow-hidden">
-                                {item.icon ? <item.icon className="size-4 shrink-0" /> : null}
-                                <span className="block min-w-0 flex-1 truncate">{item.label}</span>
-                              </span>
-                              {typeof item.count === "number" ? <Badge variant="secondary" className="shrink-0">{item.count}</Badge> : null}
-                            </SidebarMenuButton>
-                            {title === "Chats" && item.actions?.some((action) => action.id === "delete") ? (
-                              <ChatDeleteButton className="opacity-0 transition-opacity group-hover/sidebar-item:opacity-100 group-focus-within/sidebar-item:opacity-100 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground" chatId={item.id} isActive={location.pathname === item.href} />
-                            ) : null}
-                            {title === "Agents" && item.actions?.length ? (
-                              <AgentSidebarActionButton actionId={item.actions[0].id} itemId={item.id} isActive={location.pathname === item.href} />
-                            ) : null}
-                            {title !== "Models" && title !== "Chats" && title !== "Agents" && item.actions?.length ? (
-                              <DropdownMenu>
-                                <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="shrink-0" />}>
-                                  <EllipsisIcon />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40 min-w-40">
-                                  {item.actions.map((action) => {
-                                    const ActionIcon = getSidebarActionIcon(action.id)
-                                    return (
-                                      <DropdownMenuItem key={action.id} variant={action.variant ?? "default"} onClick={() => void handleItemAction(item.id, action.id)}>
-                                        {ActionIcon ? <ActionIcon className="size-4" /> : null}
-                                        {action.label}
-                                      </DropdownMenuItem>
-                                    )
-                                  })}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            ) : null}
-                          </div>
-                        </SidebarMenuItem>
-                      ))}
-                </SidebarMenu>
-                {!isLoading && group.items.length === 0 && query.trim() ? (
-                  <div className="px-2 py-2 text-xs text-muted-foreground">No matching items.</div>
-                ) : null}
-              </SidebarGroupContent>
-            </SidebarGroup>
+              {collapsibleGroups ? <CollapsibleContent>{groupContent}</CollapsibleContent> : groupContent}
+            </Collapsible>
           )
         })}
         {!isLoading && filteredGroups.length === 0 ? <div className="px-4 py-3 text-sm text-muted-foreground">No matching items.</div> : null}

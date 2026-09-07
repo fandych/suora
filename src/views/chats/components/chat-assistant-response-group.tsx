@@ -1,6 +1,6 @@
 import { Fragment } from "react"
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar"
+import { Avatar } from "@/components/ui/avatar"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
 import { ChatMessageActions } from "@/views/chats/components/chat-message-actions"
@@ -63,7 +63,7 @@ function buildSections(parts: AssistantResponsePart[]): AssistantRenderSection[]
     .filter((part): part is Extract<AssistantResponsePart, { type: "tool" }> => part.type === "tool")
     .map((part) => part.activity)
 
-  if (mergedText) {
+  if (mergedText || hasPendingText) {
     sections.push({ id: "assistant-text-merged", type: "text", content: mergedText, isPending: hasPendingText })
   }
 
@@ -88,7 +88,6 @@ export function ChatAssistantResponseGroup({ createdAt, messageId = null, onRetr
           <div className="flex size-full items-center justify-center text-foreground">
             <AssistantLogo className="size-3.5" />
           </div>
-          <AvatarFallback>AI</AvatarFallback>
         </Avatar>
       </MessageAvatar>
       <MessageContent>

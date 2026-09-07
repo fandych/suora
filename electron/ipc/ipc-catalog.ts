@@ -1,4 +1,7 @@
 import crypto from "node:crypto"
+import fs from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
 
 import { ipcMain } from "electron"
 
@@ -74,6 +77,37 @@ export function registerCatalogIpc() {
     const database = openDatabase()
     applyMigrations(database)
     return database.prepare(`SELECT id, title, source, summary, updated_at as updatedAt FROM skills ORDER BY updated_at DESC`).all()
+  })
+
+  ipcMain.handle("skills:listExternal", async () => {
+    const home = os.homedir()
+    const sources = [
+      { id: "codex", directory: path.join(home, ".codex", "skills") },
+      { id: "claude", directory: path.join(home, ".claude", "skills") },
+      { id: "agents", directory: path.join(home, ".agents", "skills") },
+    ]
+    const results: Array<{ id: string; title: string; source: string; summary: string }> = []
+
+    for (const source of sources) {
+      let entries
+      try {
+        entries = await fs.readdir(source.directory, { withFileTypes: true })
+      } catch {
+        continue
+      }
+
+      for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name === "." || entry.name === "..") continue
+        results.push({
+          id: `${source.id}:${entry.name}`,
+          title: entry.name,
+          source: source.id,
+          summary: `${source.directory}/${entry.name}`,
+        })
+      }
+    }
+
+    return results
   })
 
   ipcMain.handle("skills:get", async (_event, skillId: string) => {

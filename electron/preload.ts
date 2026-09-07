@@ -82,6 +82,7 @@ contextBridge.exposeInMainWorld("suora", {
   },
   skills: {
     list: () => ipcRenderer.invoke("skills:list"),
+    listExternal: () => ipcRenderer.invoke("skills:listExternal"),
     get: (skillId: string) => ipcRenderer.invoke("skills:get", skillId),
     create: () => ipcRenderer.invoke("skills:create"),
     save: (payload: unknown) => ipcRenderer.invoke("skills:save", payload),

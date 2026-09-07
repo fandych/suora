@@ -33,7 +33,7 @@ export function ChatTranscript({ activeProviderType, assistantResponseMessageId,
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <MessageScrollerProvider autoScroll={autoScroll} defaultScrollPosition="end" scrollPreviousItemPeek={12}>
         <MessageScroller className="flex-1 min-h-0">
-          <MessageScrollerViewport key={selectedChat?.chat.id ?? "new-chat"} aria-label="Chat transcript" className="border-t bg-muted/20">
+          <MessageScrollerViewport aria-label="Chat transcript" className="border-t bg-muted/20">
             <MessageScrollerContent className="min-h-0 gap-3 px-(--card-spacing) py-4">
               {selectedChat?.messages.map((message) => (
                 <MessageScrollerItem key={message.id} messageId={message.id}>

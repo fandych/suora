@@ -152,12 +152,6 @@ export async function saveIntegrationDraft(integrationId: string, payload: { tit
   return suoraIpc.integrations.save({ id: integrationId, title: payload.title, kind: payload.kind, endpoint: getConfigEndpoint(payload.config), config: payload.config, selectedVersionId: payload.selectedVersionId }) as Promise<IntegrationDetail>
 }
 
-export async function publishIntegrationVersion(integrationId: string, versionId: string) {
-  await ensureSeeded()
-  const detail = await getIntegrationDetail(integrationId, versionId)
-  return suoraIpc.integrations.save({ id: integrationId, title: detail.integration.title, kind: detail.integration.kind, endpoint: getConfigEndpoint(detail.config), config: detail.config, publish: true }) as Promise<IntegrationDetail>
-}
-
 export async function runIntegrationAndPersist(integrationId: string, selectedVersionId?: string, inputJson = "{}", selectedEntryId?: string) {
   await ensureSeeded()
   const snapshot = await getIntegrationDetail(integrationId, selectedVersionId)
