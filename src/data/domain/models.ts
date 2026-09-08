@@ -408,6 +408,15 @@ export type SchedulerDetail = {
   updatedAt: number
 }
 
+export type SchedulerRunRecord = {
+  id: string
+  status: "queued" | "running" | "success" | "error" | "skipped"
+  input: string
+  output: string
+  startedAt: number
+  finishedAt: number | null
+}
+
 export type ProviderModelCapability = "toolcalling" | "vision" | "embedding" | "structuredOutput"
 
 export type ProviderApiMode = "messages" | "responses" | "completions"

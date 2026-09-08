@@ -4,7 +4,7 @@ import { getPreferenceSettingsSnapshot } from "@electron/others/preferences"
 import WebSocket from "ws"
 
 import type { ChannelConfigRecord } from "@/data/domain/models"
-import { httpRequest } from "@electron/others/channels/channel-runtime-helpers"
+import { httpRequest } from "@electron/others/channels/channel-runtime-http"
 import type { RuntimeChannelMessage } from "@electron/others/channels/channel-runtime-types"
 
 type StreamConnectionInfo = {

@@ -1,9 +1,10 @@
 import { Background, BackgroundVariant, ConnectionLineType, MarkerType, MiniMap, Panel, ReactFlow } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
-import { PanelLeftCloseIcon, PanelLeftOpenIcon, SparklesIcon } from "lucide-react"
+import { EllipsisIcon, HistoryIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PencilIcon, SparklesIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import PageHeader from "@/views/components/page-header"
 import { ConfirmDeleteDialog } from "@/views/components/confirm-delete-dialog"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
@@ -28,7 +29,32 @@ const WorkflowDetailPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title={controller.title || controller.data?.workflow.title || "Workflow"} />
+      <PageHeader
+        title={controller.title || controller.data?.workflow.title || "Workflow"}
+        actions={
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button type="button" size="icon-sm" variant="ghost" aria-label="Workflow actions" />}>
+              <EllipsisIcon />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem onClick={() => controller.setIsPreferenceDialogOpen(true)} disabled={controller.isReadOnly}>
+                  <PencilIcon />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => controller.setIsHistoryDialogOpen(true)}>
+                  <HistoryIcon />
+                  Run history
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => controller.setIsDeleteDialogOpen(true)} variant="destructive">
+                  <Trash2Icon />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        }
+      />
 
       <div className="flex min-h-0 flex-1 flex-col p-3">
         {controller.isLoading ? <LoadingCard title="Loading workflow..." /> : null}
@@ -83,9 +109,6 @@ const WorkflowDetailPage = () => {
                   canPublish={controller.isDraftVersion && !controller.hasUnsavedChanges && controller.blockingIssues.length === 0}
                   canTryRun={controller.isDraftVersion && !controller.isDryRunning && controller.blockingIssues.length === 0}
                   onOpenTryRun={() => controller.setInspectorMode("try-run")}
-                  onOpenEdit={() => controller.setIsPreferenceDialogOpen(true)}
-                  onOpenHistory={() => controller.setIsHistoryDialogOpen(true)}
-                  onDelete={() => controller.setIsDeleteDialogOpen(true)}
                   onSave={() => void controller.handleSave()}
                   onPublish={controller.handlePublish}
                 />
@@ -185,14 +208,8 @@ const WorkflowDetailPage = () => {
         open={controller.isPreferenceDialogOpen}
         title={controller.title}
         summary={controller.summary}
-        dryRunInput={controller.dryRunInput}
         readOnly={controller.isReadOnly}
-        notifications={controller.notifications}
-        resourceBindings={controller.resourceBindings}
         onOpenChange={controller.setIsPreferenceDialogOpen}
-        onDryRunInputChange={controller.setDryRunInput}
-        onNotificationsChange={controller.setNotifications}
-        onResourceBindingsChange={controller.setResourceBindings}
         onTitleChange={controller.setTitle}
         onSummaryChange={controller.setSummary}
       />

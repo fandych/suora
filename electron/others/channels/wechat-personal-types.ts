@@ -1,0 +1,15 @@
+export const WECHAT_PERSONAL_DEFAULT_BASE_URL = "https://ilinkai.weixin.qq.com"
+export const WECHAT_PERSONAL_QR_BOT_TYPE = "3"
+export const WECHAT_PERSONAL_LOGIN_TTL_MS = 5 * 60 * 1000
+export const WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS = 35_000
+export const WECHAT_PERSONAL_API_TIMEOUT_MS = 15_000
+export const WECHAT_PERSONAL_APP_ID = "bot"
+export const WECHAT_PERSONAL_CLIENT_VERSION = "132104"
+export type WeChatPersonalQrStatus = "wait" | "scaned" | "confirmed" | "expired" | "scaned_but_redirect" | "need_verifycode" | "verify_code_blocked" | "binded_redirect"
+export type WeChatPersonalLoginSession = { sessionKey: string; qrcode: string; qrcodeUrl: string; startedAt: number; currentApiBaseUrl: string; pendingVerifyCode?: string }
+export type WeChatPersonalQrCodeResponse = { qrcode?: string; qrcode_img_content?: string }
+export type WeChatPersonalQrStatusResponse = { status?: WeChatPersonalQrStatus; bot_token?: string; ilink_bot_id?: string; baseurl?: string; ilink_user_id?: string; redirect_host?: string; diagnosticEvent?: "response" | "timeout" | "error" | "invalid_response"; diagnosticMessage?: string; diagnosticBaseUrl?: string; diagnosticEndpoint?: string }
+export type WeChatPersonalLoginWaitResult = { success: boolean; status: "connected" | "already_bound" | "scaned" | "need_verifycode" | "verify_code_blocked" | "expired" | "timeout" | "error"; message: string; qrCodeUrl?: string; sessionKey: string; botToken?: string; accountId?: string; baseUrl?: string; userId?: string; upstreamStatus?: string; diagnosticEvent?: "response" | "timeout" | "error" | "invalid_response"; diagnosticMessage?: string; pollBaseUrl?: string; pollEndpoint?: string }
+export type WeChatPersonalMessageItem = { type?: number; text_item?: { text?: string }; image_item?: unknown; voice_item?: unknown; file_item?: unknown; video_item?: unknown }
+export type WeChatPersonalInboundMessage = { seq?: number; message_id?: number | string; from_user_id?: string; to_user_id?: string; create_time_ms?: number; session_id?: string; context_token?: string; item_list?: WeChatPersonalMessageItem[] }
+export type WeChatPersonalUpdatesResponse = { ret?: number; errcode?: number; errmsg?: string; msgs?: WeChatPersonalInboundMessage[]; get_updates_buf?: string; longpolling_timeout_ms?: number }

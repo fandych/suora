@@ -1,14 +1,12 @@
-import crypto from "node:crypto"
-
 import type { Request, Response } from "express"
 
 import type { ChannelConfigRecord } from "@/data/domain/models"
 import {
-  buildWeChatSignature,
   getWeChatVerificationToken,
   parseWeChatWebhookPayload,
   weChatWebhookToChannelMessage,
 } from "@electron/others/channels/channel-runtime-helpers"
+import { verifyDingTalkSignature, verifyFeishuSignature, verifyWebhookSecret, verifyWeChatSignature } from "@electron/others/channels/channel-webhook-security"
 import { executeEmailActions, formatEmailContent, matchesEmailFilters, type ParsedEmail } from "@electron/others/channels/channel-runtime-email"
 import type { RuntimeChannelMessage } from "@electron/others/channels/channel-runtime-types"
 
@@ -363,39 +361,6 @@ async function handleCustomWebhook(req: Request, res: Response, channel: Channel
   }, body)
 
   res.json({ ok: true })
-}
-
-function verifyWebhookSecret(req: Request, secret?: string) {
-  if (!secret) return true
-  const header = req.headers["x-webhook-secret"]
-  const provided = Array.isArray(header) ? header[0] : header || req.query.secret
-  return String(provided || "") === secret
-}
-
-function verifyFeishuSignature(timestamp: string, nonce: string, encryptKey: string, body: unknown, receivedSignature: string) {
-  const content = `${timestamp}\n${nonce}\n${encryptKey}\n${JSON.stringify(body)}`
-  const hash = crypto.createHash("sha256").update(content).digest("hex")
-  return timingSafeCompare(hash, receivedSignature)
-}
-
-function verifyDingTalkSignature(timestamp: string, appSecret: string, receivedSignature: string) {
-  const timestampMs = Number.parseInt(timestamp, 10)
-  if (!Number.isFinite(timestampMs) || timestampMs <= 0) return false
-  if (Math.abs(Date.now() - timestampMs) > 60 * 60 * 1000) return false
-  const sign = crypto.createHmac("sha256", appSecret).update(`${timestamp}\n${appSecret}`).digest("base64")
-  return timingSafeCompare(sign, receivedSignature)
-}
-
-function verifyWeChatSignature(token: string, timestamp: string, nonce: string, receivedSignature: string, encrypted?: string) {
-  const hash = buildWeChatSignature(token, timestamp, nonce, encrypted)
-  return timingSafeCompare(hash, receivedSignature)
-}
-
-function timingSafeCompare(left: string, right: string) {
-  const leftBuffer = Buffer.from(left)
-  const rightBuffer = Buffer.from(right)
-  if (leftBuffer.length !== rightBuffer.length) return false
-  return crypto.timingSafeEqual(leftBuffer, rightBuffer)
 }
 
 function readNested(record: Record<string, unknown>, path: string[]) {

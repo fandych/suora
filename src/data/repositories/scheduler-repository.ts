@@ -1,4 +1,4 @@
-import type { SchedulerDetail } from "@/data/domain/models"
+import type { SchedulerDetail, SchedulerRunRecord } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { suoraIpc } from "@/lib/ipc"
 
@@ -19,6 +19,23 @@ export async function getScheduler(schedulerId: string) {
 export async function createScheduler() {
   await ensureSeeded()
   return suoraIpc.schedulers.create() as Promise<SchedulerDetail>
+}
+
+export async function listSchedulerRuns(schedulerId: string) {
+  await ensureSeeded()
+  return suoraIpc.schedulers.listRuns(schedulerId) as Promise<SchedulerRunRecord[]>
+}
+
+export async function setSchedulerEnabled(schedulerId: string, enabled: boolean) {
+  await ensureSeeded()
+  const scheduler = await suoraIpc.schedulers.setEnabled({ id: schedulerId, enabled })
+  if (!scheduler) throw new Error(`Scheduler ${schedulerId} was not found.`)
+  return scheduler
+}
+
+export async function deleteScheduler(schedulerId: string) {
+  await ensureSeeded()
+  return suoraIpc.schedulers.delete(schedulerId)
 }
 
 function assertValidJson(value: string) {

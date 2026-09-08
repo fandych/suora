@@ -7,131 +7,19 @@ import { getProxyAgent } from "@electron/others/proxy"
 import { assertSafeHttpUrl } from "@electron/others/url-security"
 import { executeSandboxedScriptIntegration } from "@electron/others/script-integration-runner"
 import type { IntegrationExecutePayload } from "@electron/types"
-
-function parseJson<T>(value: string | undefined, fallback: T): T {
-  if (!value?.trim()) {
-    return fallback
-  }
-
-  try {
-    return JSON.parse(value) as T
-  } catch {
-    return fallback
-  }
-}
-
-function buildEndpointUrl(baseUrl: string | undefined, path: string | undefined) {
-  if (!baseUrl?.trim()) {
-    return path || ""
-  }
-
-  try {
-    return new URL(path || "/", baseUrl).toString()
-  } catch {
-    return `${baseUrl}${path?.startsWith("/") ? path : `/${path || ""}`}`
-  }
-}
-
-function applyHttpAuth(headers: Record<string, string>, url: URL, config: { authType?: string; authConfigJson?: string }) {
-  const authConfig = parseJson<Record<string, unknown>>(config.authConfigJson, {})
-  const sharedHeaders = authConfig.headers && typeof authConfig.headers === "object"
-    ? authConfig.headers as Record<string, unknown>
-    : config.authType === "custom"
-      ? authConfig
-      : {}
-
-  for (const [name, value] of Object.entries(sharedHeaders)) {
-    if (typeof value === "string" && name.trim()) {
-      headers[name] = value
-    }
-  }
-
-  switch (config.authType) {
-    case "bearer":
-      if (authConfig.token) {
-        headers.Authorization = `Bearer ${authConfig.token}`
-      }
-      break
-    case "basic":
-      if (authConfig.username || authConfig.password) {
-        const credentials = Buffer.from(`${authConfig.username || ""}:${authConfig.password || ""}`).toString("base64")
-        headers.Authorization = `Basic ${credentials}`
-      } else if (authConfig.credentials) {
-        headers.Authorization = `Basic ${authConfig.credentials}`
-      }
-      break
-    case "api-key": {
-      const location = authConfig.location || "header"
-      const name = authConfig.name || "x-api-key"
-      const value = authConfig.value || ""
-      if (location === "query") {
-        url.searchParams.set(name, value)
-      } else {
-        headers[name] = value
-      }
-      break
-    }
-    case "custom":
-      break
-  }
-}
-
-type UploadedIntegrationFile = {
-  __suoraFile?: boolean
-  name?: string
-  type?: string
-  dataBase64?: string
-}
-
-function buildMultipartBody(fields: Record<string, unknown>, boundary: string) {
-  const chunks: Buffer[] = []
-  for (const [key, value] of Object.entries(fields)) {
-    const file = value as UploadedIntegrationFile
-    chunks.push(Buffer.from(`--${boundary}\r\n`, "utf8"))
-    if (file?.__suoraFile && file.dataBase64) {
-      const safeFilename = (file.name || "upload").replaceAll(/["\\\r\n]/g, "_")
-      chunks.push(Buffer.from(`Content-Disposition: form-data; name="${key}"; filename="${safeFilename}"\r\n`, "utf8"))
-      chunks.push(Buffer.from(`Content-Type: ${file.type || "application/octet-stream"}\r\n\r\n`, "utf8"))
-      chunks.push(Buffer.from(file.dataBase64, "base64"), Buffer.from("\r\n", "utf8"))
-      continue
-    }
-    chunks.push(Buffer.from(`Content-Disposition: form-data; name="${key}"\r\n\r\n${String(value ?? "")}\r\n`, "utf8"))
-  }
-  chunks.push(Buffer.from(`--${boundary}--\r\n`, "utf8"))
-  return Buffer.concat(chunks)
-}
+import { applyIntegrationAuth, buildIntegrationEndpointUrl, buildMultipartIntegrationBody, parseIntegrationJson, type HttpIntegrationConfig, type UploadedIntegrationFile } from "@electron/others/integration-shared"
 
 async function executeHttpIntegration(payload: IntegrationExecutePayload) {
-  const config = payload.config as {
-    baseUrl?: string
-    authType?: string
-    authConfigJson?: string
-    selectedEndpointId?: string
-    endpoints?: Array<{
-      id?: string
-      method?: string
-      path?: string
-      headersJson?: string
-      queryJson?: string
-      bodyJson?: string
-      bodyMode?: string
-      parameters?: Array<{ name?: string; in?: string; type?: string; defaultValue?: string }>
-    }>
-    method?: string
-    url?: string
-    headersJson?: string
-    queryJson?: string
-    bodyJson?: string
-  }
+  const config = payload.config as HttpIntegrationConfig
 
   const selectedEndpoint = config.endpoints?.find((endpoint) => endpoint.id === config.selectedEndpointId) ?? config.endpoints?.[0]
   const requestUrl = selectedEndpoint
-    ? buildEndpointUrl(config.baseUrl, selectedEndpoint.path)
+    ? buildIntegrationEndpointUrl(config.baseUrl, selectedEndpoint.path)
     : (config.url || "")
   const url = await assertSafeHttpUrl(requestUrl)
-  const input = parseJson<Record<string, unknown>>(payload.inputJson, {})
-  const query = parseJson<Record<string, string>>(selectedEndpoint?.queryJson ?? config.queryJson, {})
-  const headers = parseJson<Record<string, string>>(selectedEndpoint?.headersJson ?? config.headersJson, {})
+  const input = parseIntegrationJson<Record<string, unknown>>(payload.inputJson, {})
+  const query = parseIntegrationJson<Record<string, string>>(selectedEndpoint?.queryJson ?? config.queryJson, {})
+  const headers = parseIntegrationJson<Record<string, string>>(selectedEndpoint?.headersJson ?? config.headersJson, {})
   const endpointParameters = selectedEndpoint?.parameters ?? []
   const invalidFileParameter = endpointParameters.find((parameter) => parameter.type === "file" && (parameter.in !== "form-data" || selectedEndpoint?.bodyMode !== "form-data"))
   if (invalidFileParameter?.name) {
@@ -168,10 +56,10 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
     url.searchParams.set(key, String(value))
   }
 
-  applyHttpAuth(headers, url, config)
+  applyIntegrationAuth(headers, url, config)
 
   const bodyMode = selectedEndpoint?.bodyMode ?? "json"
-  const bodyConfig = parseJson<Record<string, unknown>>(selectedEndpoint?.bodyJson ?? config.bodyJson, {})
+  const bodyConfig = parseIntegrationJson<Record<string, unknown>>(selectedEndpoint?.bodyJson ?? config.bodyJson, {})
   const transport = url.protocol === "https:" ? https : http
   let body: string | Buffer | undefined
 
@@ -217,7 +105,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
         formFields[parameter.name] = input[parameter.name] ?? parameter.defaultValue ?? ""
       }
     }
-    body = buildMultipartBody(formFields, boundary)
+    body = buildMultipartIntegrationBody(formFields, boundary)
     headers["content-type"] = `multipart/form-data; boundary=${boundary}`
   }
 

@@ -347,4 +347,20 @@ export const runtimeMigrations = [
       /duplicate column name: enabled/i,
     ],
   },
+  {
+    id: 14,
+    statements: [
+      `
+      CREATE TABLE IF NOT EXISTS scheduler_runs (
+        id TEXT PRIMARY KEY NOT NULL,
+        scheduler_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        input_json TEXT NOT NULL,
+        output_json TEXT NOT NULL,
+        started_at INTEGER NOT NULL,
+        finished_at INTEGER
+      )
+      `,
+    ],
+  },
 ]

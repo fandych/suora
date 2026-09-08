@@ -1,4 +1,6 @@
 import type { ChannelConfigRecord } from "@/data/domain/models"
+import { httpRequest } from "@electron/others/channels/channel-runtime-http"
+import { sendCustomMessage, sendTelegramMessage } from "@electron/others/channels/channel-runtime-outbound"
 import {
   getDingTalkAccessToken,
   getFeishuAccessToken,
@@ -6,10 +8,7 @@ import {
   getWeChatAccessToken,
   getWeChatMiniProgramAccessToken,
   getWeChatOfficialAccessToken,
-  httpRequest,
-  sendCustomMessage,
   sendEmailMessage,
-  sendTelegramMessage,
   sendWeChatPersonalNativeMessage,
   type TokenCacheEntry,
 } from "@electron/others/channels/channel-runtime-helpers"

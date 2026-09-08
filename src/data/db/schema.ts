@@ -148,6 +148,16 @@ export const schedulers = sqliteTable("schedulers", {
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 })
 
+export const schedulerRuns = sqliteTable("scheduler_runs", {
+  id: text("id").primaryKey(),
+  schedulerId: text("scheduler_id").notNull(),
+  status: text("status").notNull(),
+  inputJson: text("input_json").notNull(),
+  outputJson: text("output_json").notNull(),
+  startedAt: integer("started_at", { mode: "timestamp_ms" }).notNull(),
+  finishedAt: integer("finished_at", { mode: "timestamp_ms" }),
+})
+
 export const channels = sqliteTable("channels", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
@@ -200,6 +210,7 @@ export const schema = {
   integrationVersions,
   integrationExecutions,
   schedulers,
+  schedulerRuns,
   channels,
   documentVersions,
   appMeta,

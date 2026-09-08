@@ -111,6 +111,9 @@ declare global {
         get: (schedulerId: string) => Promise<unknown>
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
+        setEnabled: (payload: unknown) => Promise<unknown>
+        listRuns: (schedulerId: string) => Promise<unknown>
+        delete: (schedulerId: string) => Promise<unknown>
       }
       preferences: {
         get: () => Promise<unknown>

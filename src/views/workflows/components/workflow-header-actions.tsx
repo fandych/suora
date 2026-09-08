@@ -89,10 +89,7 @@ export function WorkflowRevisionActions({
   onPublish,
   canTryRun,
   onOpenTryRun,
-  onOpenEdit,
-  onOpenHistory,
-  onDelete,
-}: Pick<WorkflowHeaderActionsProps, "versions" | "selectedVersionId" | "onVersionChange" | "canSave" | "canPublish" | "onSave" | "onPublish"> & { canTryRun: boolean; onOpenTryRun: () => void; onOpenEdit: () => void; onOpenHistory: () => void; onDelete: () => void }) {
+}: Pick<WorkflowHeaderActionsProps, "versions" | "selectedVersionId" | "onVersionChange" | "canSave" | "canPublish" | "onSave" | "onPublish"> & { canTryRun: boolean; onOpenTryRun: () => void }) {
   return (
     <div className="flex h-8 items-center gap-2 rounded-2xl border bg-background/95 px-1 shadow-sm backdrop-blur">
       <div className="min-w-28">
@@ -103,14 +100,6 @@ export function WorkflowRevisionActions({
         <Tooltip><TooltipTrigger render={<Button className="h-8" size="icon-sm" onClick={onPublish} disabled={!canPublish} aria-label="Publish workflow" />}><UploadIcon /></TooltipTrigger><TooltipContent>Publish</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger render={<Button className="h-8" size="icon-sm" variant="outline" onClick={onOpenTryRun} disabled={!canTryRun} aria-label="Try run workflow" />}><PlayIcon /></TooltipTrigger><TooltipContent>Try run</TooltipContent></Tooltip>
       </TooltipProvider>
-      <DropdownMenu>
-        <DropdownMenuTrigger render={<Button className="h-8" size="icon-sm" variant="outline" aria-label="More workflow actions" />}><EllipsisIcon /></DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onOpenEdit}><PencilIcon />Edit</DropdownMenuItem>
-          <DropdownMenuItem onClick={onOpenHistory}><HistoryIcon />Run history</DropdownMenuItem>
-          <DropdownMenuItem onClick={onDelete} variant="destructive"><Trash2Icon />Delete</DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
   )
 }

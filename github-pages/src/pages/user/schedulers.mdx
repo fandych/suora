@@ -28,6 +28,12 @@ Schedulers 用于保存面向 workflow 或 Agent 的 cron、时区、输入和�
 
 列表按最近更新时间显示名称、启用状态、目标、描述和 cron；详情页的 Runtime preview 只是当前配置摘要。
 
+详情页右上角的 **…** 菜单提供：
+
+- **Run history**：在弹层中查看本地记录的 scheduler 运行；当前未接入的运行时会显示为空。
+- **Enable / Disable**：立即保存调度配置的启用状态。
+- **Delete**：删除调度配置及其本地运行历史，删除前需要确认。
+
 ## 配置字段
 
 ### Cron 与时区
@@ -101,13 +107,13 @@ cron 和时区均为文本字段。保存时只要求非空：当前不会解析
 ## 当前 UI 限制
 
 - Scheduler 可以通过二级侧边栏创建、在详情页编辑并通过 Enabled 开关暂停，但列表页没有页面级新建按钮，也不能删除。
-- 没有历史、日志、版本、复制、导入导出或手动触发入口。
+- 没有版本、复制、导入导出或手动触发入口；Run history 仅显示未来 runtime 写入的本地记录。
 - 保存失败会由调用链抛出；列表和详情加载错误可重试，但没有完整的 Scheduler 专用错误面板。
 - 当前没有 Scheduler 专用测试覆盖，配置字段也没有在主进程进行完整的二次校验。
 
 ## 本地存储与安全
 
-Scheduler 配置保存在本机 SQLite 的 `schedulers` 表中，路径为 `<userData>/workspace/suora.sqlite`。cron、时区、目标信息和 `inputPayloadJson` 均为本地明文字段。
+Scheduler 配置和运行历史分别保存在本机 SQLite 的 `schedulers`、`scheduler_runs` 表中，路径为 `<userData>/workspace/suora.sqlite`。cron、时区、目标信息和 `inputPayloadJson` 均为本地明文字段。
 
 <Callout type="warning">
   不要把 API Key、密码、访问令牌或个人敏感信息直接放在 Scheduler 输入 JSON 中。当前没有 Scheduler 专用加密、秘密引用或字段脱敏机制。

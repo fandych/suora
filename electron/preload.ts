@@ -142,6 +142,9 @@ contextBridge.exposeInMainWorld("suora", {
     get: (schedulerId: string) => ipcRenderer.invoke("schedulers:get", schedulerId),
     create: () => ipcRenderer.invoke("schedulers:create"),
     save: (payload: unknown) => ipcRenderer.invoke("schedulers:save", payload),
+    setEnabled: (payload: unknown) => ipcRenderer.invoke("schedulers:setEnabled", payload),
+    listRuns: (schedulerId: string) => ipcRenderer.invoke("schedulers:listRuns", schedulerId),
+    delete: (schedulerId: string) => ipcRenderer.invoke("schedulers:delete", schedulerId),
   },
   preferences: {
     get: () => ipcRenderer.invoke("preferences:get"),

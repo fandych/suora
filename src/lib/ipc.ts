@@ -1,4 +1,4 @@
-import type { AgentConfigRecord, AgentDetail, AgentSummary, ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary, ChatDetail, ChatSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, ProviderConfigRecord, SchedulerDetail, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeData, WorkflowSummary } from "@/data/domain/models"
+import type { AgentConfigRecord, AgentDetail, AgentSummary, ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary, ChatDetail, ChatSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, ProviderConfigRecord, SchedulerDetail, SchedulerRunRecord, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeData, WorkflowSummary } from "@/data/domain/models"
 import { normalizeChatMessageParts, type ChatMessagePart } from "@/data/domain/chat-message-parts"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { inferChannelBindingState } from "@/lib/channel-config"
@@ -850,6 +850,9 @@ export const suoraIpc = {
     get: async (schedulerId: string) => getBridge().schedulers.get(schedulerId) as Promise<SchedulerDetail | null>,
     create: async () => getBridge().schedulers.create() as Promise<SchedulerDetail>,
     save: async (payload: { id: string; title: string; description: string; enabled: boolean; schedule: string; timeZone: string; targetType: string; targetId: string; targetName: string; missedRunPolicy: string; retryLimit: number; retryBackoffSeconds: number; inputPayloadJson: string }) => getBridge().schedulers.save(payload) as Promise<SchedulerDetail>,
+    setEnabled: async (payload: { id: string; enabled: boolean }) => getBridge().schedulers.setEnabled(payload) as Promise<SchedulerDetail | null>,
+    listRuns: async (schedulerId: string) => getBridge().schedulers.listRuns(schedulerId) as Promise<SchedulerRunRecord[]>,
+    delete: async (schedulerId: string) => getBridge().schedulers.delete(schedulerId) as Promise<{ ok: boolean }>,
   },
   preferences: {
     get: async () => getBridge().preferences.get() as Promise<string | null>,

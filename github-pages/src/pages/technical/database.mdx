@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS __app_migrations (
 | Documents | `documents`、`document_versions` |
 | Integrations | `integrations`、`integration_versions`、`integration_executions` |
 | Channels | `channels` |
-| Schedulers | `schedulers` |
+| Schedulers | `schedulers`、`scheduler_runs` |
 | Metadata | `app_meta`、`__app_migrations` |
 
 许多关系通过 ID 在应用层维护，例如 `workflow_versions.workflow_id` 或 `chat_messages.chat_id`。当前 Schema 没有广泛声明 SQLite foreign key，也没有发现显式 `CREATE INDEX`；大数据量场景应关注排序、版本查询和按 ID 过滤的性能。
