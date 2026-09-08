@@ -1,0 +1,140 @@
+export const meta = { title: "安全护栏", description: "URL、文件、命令、浏览器、脚本、MCP 和 IPC 的安全边界与已知风险。" }
+
+# 安全护栏
+
+SUORA 的安全设计主要由主进程工具校验、preload API 边界、BrowserWindow 隔离、URL 检查和 Agent 指令约束组成。本页描述实际实现，不把提示词规则误认为强制授权机制。
+
+## Electron 与 IPC 边界
+
+主窗口配置：
+
+```text
+contextIsolation: true
+nodeIntegration: false
+sandbox: false
+```
+
+preload 不暴露完整 `ipcRenderer`，低层 `electron.invoke/on/off` 使用通道 allowlist。领域 API 通过 `window.suora` 暴露 Chats、Documents、Models、Tools 等固定方法。
+
+关键参数校验位于主进程 IPC handler。Preload 包装函数不能替代主进程验证；任何来自 Renderer 的 payload 都必须按不可信输入处理。
+
+当前应用没有登录、多用户权限、远程租户隔离或用户身份系统。桌面安全边界最终依赖当前操作系统用户、设备权限和本地数据库保护。
+
+## URL 与 SSRF 防护
+
+`assertSafeHttpUrl()` 只允许 HTTP/HTTPS，并拒绝：
+
+- localhost 和本地域名。
+- IPv4 回环、私网、链路本地和保留地址。
+- IPv6 `::1`、`fc`/`fd`、`fe80:` 等地址。
+- Google metadata host 等云元数据地址。
+
+主机名会 DNS 解析；只要任一解析地址被判定为私有地址就拒绝。Integration HTTP、浏览器导航和重定向都会使用该检查。
+
+这不是完整连接级 SSRF 防护：DNS 检查与后续连接之间仍有 TOCTOU 风险，IPv4-mapped IPv6 等边界表示也应在安全评估中单独测试。
+
+## 文件工具
+
+Workspace 文件工具的主进程护栏包括：
+
+- 路径必须解析到 workspace root 内。
+- 支持 allowlist/denylist 目录策略。
+- 单文件读取最多 1 MiB。
+- 单次写入最多 1 MiB。
+- 写入可以创建目录并覆盖文件。
+
+当前路径检查主要是词法 `path.resolve()` 检查，未对符号链接使用 `realpath()`；workspace 内的符号链接可能将访问导向外部路径，应在高风险工作区中避免使用。
+
+`tools:saveFile` 使用系统保存对话框，可以将 Base64 数据写入用户选择的位置，不受普通 workspace 路径策略和 1 MiB 工具写入限制约束。
+
+## 命令执行
+
+命令工具使用 `spawn(..., { shell: false })`，不会拼接成 shell 命令。只允许固定 executable 集合，例如：
+
+```text
+git node npm npx pnpm python python3 rg tsc tsx vite vitest eslint bun yarn
+```
+
+`bash`、`sh`、`zsh`、`cmd`、PowerShell、`wscript` 和 `cscript` 等交互式 shell 会被拒绝。
+
+其他限制：
+
+- timeout 为 1–120 秒，默认 30 秒。
+- stdout + stderr 合计最多 256 KiB。
+- Preferences 可以配置命令 allowlist/blacklist。
+- blacklist 是命令字符串的大小写不敏感子串匹配，不是完整语义解析。
+- 环境变量会合并进命令进程，调用方提供的 env 可覆盖全局环境变量。
+
+命令确认模式 `daily`、`always`、`never` 是用户交互护栏；它不会允许被禁止的 executable，也不构成沙箱。
+
+## 浏览器工具
+
+内置浏览器窗口使用：
+
+```text
+contextIsolation: true
+nodeIntegration: false
+sandbox: true
+```
+
+导航、重定向和页面预览都会校验安全 URL。页面文本最多 50,000 字符，链接最多 200 条。点击和填表通过序列化 selector/value 执行，降低字符串注入风险。
+
+网页内容在 Agent 指令中被标记为不可信数据；网页不能要求 Agent 泄露秘密、运行命令或写文件。登录、支付、账户变更和不可逆操作要求先确认。
+
+这些确认主要依赖 Agent prompt 和模型遵循，后端没有通用的密码、支付字段或敏感表单强制检测。浏览器仍可访问允许的站点和提交表单，使用者必须审查目标与表单内容。
+
+## Script Integration
+
+Script 使用 Node `vm`，运行时名称 `node`、`sandbox`、`javascript` 最终都不是操作系统级沙箱。提供的对象包括 `fetch`、URL、AbortController、编码器、console、input 和 structuredClone。
+
+静态规则阻止：
+
+```text
+require process child_process fs import() new Function eval()
+```
+
+脚本 timeout 为 1–60 秒，但 `fetch` 没有通用目标 URL、响应大小或请求次数限制。正则关键字拦截可能被语法变形或间接引用绕过；只运行经过审查的脚本，不要把 VM 视为强隔离。
+
+## MCP launchCommand
+
+MCP endpoint 探测受 URL 安全检查约束，但 `launchCommand` 当前通过 `spawn(..., { shell: true })` 启动，并绕过：
+
+- workspace command allowlist
+- 命令确认
+- shell 参数安全解析
+- workspace cwd 限制
+- 常规命令输出限制和 timeout
+
+这是当前最明显的高风险入口。集成配置不能由不可信用户、网页或 Agent 任意写入；使用前必须审查命令、来源和运行账号权限。
+
+## AI 工具与提示词安全
+
+Agent 可调用文件、命令、浏览器、HTTP、Integration、Documents、Skills 和 Workflows 工具。Documents/Skills/Workflows 绑定主要限制搜索范围；文件、命令和浏览器工具依赖全局 Preferences，而不是每个 Agent 独立绑定。
+
+网页内容、邮件正文、Skill 文件、Integration 输出和用户输入都可能包含 prompt injection。工具描述中的“不要泄露秘密”和“执行破坏性操作前确认”是行为指导，不替代主进程权限检查。
+
+安全设计应遵循：
+
+1. 只绑定最小 Documents、Skills、Workflows 和 Integrations。
+2. 默认保持命令 `daily/always` 确认。
+3. 使用小范围文件 allowlist。
+4. 对网页、邮件和外部 API 返回值进行不可信数据处理。
+5. 生产环境不使用 Ignore SSL。
+6. 不把密码、Token、Cookie 写入 Chat、Workflow trace、Integration 输入/输出或日志。
+
+## TLS、代理与凭据
+
+HTTP/HTTPS proxy 支持用户名和密码；SOCKS5 当前未接线。`ignoreSslErrors` 会按请求设置 `rejectUnauthorized: false`，主进程 certificate-error 处理也会接受证书错误。
+
+API Key、SMTP 密码、渠道凭据和 Integration 配置保存于本地 SQLite 普通字段，当前没有系统钥匙串或应用级加密。备份、迁移和共享数据库前应撤销或清除秘密。
+
+## 安全测试清单
+
+- 测试 URL 解析、DNS rebinding、IPv4/IPv6 私网表示和重定向。
+- 测试 workspace 符号链接、路径穿越和保存对话框越界写入。
+- 测试命令引号、blacklist 绕过、超时和输出上限。
+- 测试浏览器登录/支付表单的确认流程。
+- 测试 Script VM 的语法变形、异步 fetch 和 timeout。
+- 禁止不可信配置控制 MCP `launchCommand`。
+- 验证 IPC handler 在 Renderer payload 被篡改时仍拒绝非法操作。
+- 不在测试日志和 trace 中输出真实凭据。

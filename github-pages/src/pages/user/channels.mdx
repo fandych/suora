@@ -1,0 +1,136 @@
+export const meta = { title: "Channels", description: "把外部消息平台接入 SUORA，并由指定 Agent 处理入站消息与自动回复。" }
+
+# Channels
+
+Channels 将外部消息来源接入 SUORA。入站消息会创建或续写独立的渠道会话，可由指定 Agent 生成回复，并将结果发送回原平台。
+
+## 支持的平台
+
+可从渠道目录创建以下模板：
+
+- 企业微信、个人微信、微信公众号、微信小程序
+- 飞书、钉钉、QQ（自定义 webhook 模板）
+- Microsoft Teams、Telegram
+- Email Inbox
+- Custom Webhook、Custom WebSocket
+
+不同平台使用不同凭据和连接方式。创建后进入详情页配置名称、描述、回复 Agent、模型、平台字段与运行状态。
+
+## 基本配置流程
+
+1. 在 **Channels** 的二级侧边栏选择一个渠道模板。
+2. 填写名称、描述、回复 Agent 和模型，保存 General 设置。
+3. 在 Channel Configuration 中选择平台、连接方式并填写必填凭据。
+4. 保存配置，再执行 **Bind channel** 或个人微信 QR 绑定。
+5. 启用渠道并确认 runtime 已启动。
+6. 使用健康检查和模拟入站消息验证路由与自动回复。
+
+渠道默认关闭；启用前必须完成对应平台的凭据要求。已配置渠道会显示草稿、就绪、已连接或错误等绑定状态。
+
+## 回复 Agent 与自动回复
+
+每个 Channel 可指定一个回复 Agent 和模型：
+
+- 入站消息会写入以渠道和发送者为单位的本地 Chat。
+- 应用优先使用 Channel 配置的 Provider/Model；否则使用所选 Agent 的模型；再不满足时使用会话设置。
+- 开启 **Auto reply** 后，生成的助手文本会发送回来源会话。
+- 关闭 Auto reply 时，消息仍会记录并进入本地 Chat，但不会自动外发。
+
+渠道会话与普通 Chats 列表隔离，便于将外部对话和手动对话分开管理。可通过 Channel 的 Messages、Users 和 Debug 面板查看渠道专属运行记录。
+
+<Callout type="warning">
+  自动回复会让 Agent 对真实外部用户采取行动。先使用测试账号、最小权限的 Agent 与模拟消息验证，再启用生产渠道。涉及付款、账号变更、文件操作或敏感数据时，应明确限制 Agent 的工具和 Integration 范围。
+</Callout>
+
+## Webhook 与 Stream
+
+Webhook runtime 默认在本机 `127.0.0.1:3000` 监听：
+
+```text
+GET  /health
+GET  /webhook/:platform/:channelId
+POST /webhook/:platform/:channelId
+```
+
+应用生成的外部回调地址格式为：
+
+```text
+http://localhost:3000/webhook/<platform>/<channelId>
+```
+
+在生产环境可设置：
+
+```bash
+WEBHOOK_HOST=example.com
+WEBHOOK_PORT=443
+NODE_ENV=production
+```
+
+以生成 `https://example.com:443/...` 形式的地址。runtime 仍默认绑定回环地址；第三方平台需要访问时，必须自行通过反向代理、端口映射或其他安全方式转发公网请求。
+
+Stream 连接用于钉钉 Stream、Custom WebSocket、个人微信及 Email 轮询等场景，不需要平台回调访问本机 webhook。
+
+## 平台凭据概览
+
+以下是应用检查的核心字段；实际平台还可能要求在其管理后台配置回调、事件订阅或权限。
+
+| 平台 | 主要配置 |
+| --- | --- |
+| 企业微信 | Corp ID、Agent ID、App secret、验证 token。 |
+| 个人微信 | QR 绑定产生的 Bot token/Base URL，或 Bridge webhook URL。 |
+| 微信公众号 | App ID、App secret、验证 token。 |
+| 微信小程序 | App ID、App secret、验证 token。 |
+| 飞书 | App ID、App secret、Verification token。 |
+| 钉钉 Stream | Client ID、Client secret。 |
+| 钉钉 Webhook | Webhook URL、Signing secret。 |
+| Telegram | Bot token。 |
+| Teams | App ID、App password。 |
+| Email | IMAP host/user，以及 SMTP host/from address，或全局邮件服务。 |
+| Custom | Webhook URL 或 WebSocket URL。 |
+
+保存配置不代表平台已连接。完成必填项后使用 Bind 或健康检查确认连接状态。
+
+## 个人微信 QR 绑定
+
+个人微信使用 stream 模式。点击绑定后，应用会创建 QR 登录会话：
+
+1. 扫描详情页提供的二维码。
+2. 如微信要求验证，输入设备上显示的验证码。
+3. 等待状态变为已连接；二维码超时时应用会刷新会话。
+
+绑定完成后会保存必要的本地连接信息。使用 **Unbind channel** 可移除当前绑定并关闭渠道配置。
+
+## Email Inbox
+
+Email Channel 使用 IMAP 轮询接收邮件，并可以使用全局 SMTP 或渠道自身 SMTP 设置发送回复。可配置过滤规则和动作，例如使用 Agent 回复、转发或调用 webhook。
+
+邮件内容可能包含不可信指令、附件提示或敏感数据。应将邮件 Agent 的 instructions 写得明确：只处理允许的发件人/主题，遇到账号、付款或机密请求时先询问，不要执行邮件正文要求的命令。
+
+## Runtime、健康检查与调试
+
+Channel runtime 面板提供：
+
+- **Overview**：平台、绑定状态、回复 Agent、Webhook、消息数和健康状态。
+- **Messages**：近期入站/出站流量和渠道转录。
+- **Users**：发送者和最近对话摘要。
+- **Health**：连接健康、延迟、错误次数和最近错误。
+- **Debug**：发送模拟入站消息、查看或清除调试日志。
+
+运行时会对相同消息 ID 做去重，并在 5 分钟后清理去重记录。`channel:sendMessageQueued` 使用的进程内队列会按单渠道至少 1 秒间隔发送，失败时最多重试 3 次并使用指数退避。当前 Channel Agent 的自动回复走同步发送路径，不经过该队列，因此不具备这套限速和自动重试保证。
+
+健康检查会根据平台尝试验证必要的 token 或绑定状态。健康通过不代表所有事件订阅、外部网络或回调签名配置都正确，仍应在平台端发送真实测试消息。
+
+## 安全与运行限制
+
+- webhook 只处理已启用的渠道；未启用或不存在的渠道会返回 404。
+- webhook、token、app secret、IMAP/SMTP 密码保存在本地数据库；当前未提供渠道专用加密或密钥环存储。
+- 将 Webhook 暴露到公网前，应由反向代理执行 TLS、访问控制、速率限制和平台签名校验。
+- runtime 只绑定 `127.0.0.1`，`WEBHOOK_HOST` 仅改变生成地址，不会自动公开端口。
+- 全局代理和 TLS 设置会影响连接；不要在生产环境轻易启用忽略 SSL 错误。
+
+## 当前限制
+
+- Channels 当前主要面向单机桌面 runtime，没有多节点部署、队列持久化或高可用机制。
+- 调度器可保存与 Agent/workflow 相关的配置，但不应视为渠道的后台定时发送能力。
+- 平台凭据、事件订阅和签名规则会随第三方平台变化；以平台官方文档为准，并通过健康检查和真实测试消息确认。
+- 删除、版本历史和外部协作等能力应以当前 Channels UI 实际提供的操作为准；不要把目录模板视为已经完成的平台连接。

@@ -1,0 +1,110 @@
+export const meta = { title: "Schedulers", description: "维护 workflow 和 Agent 的本地调度配置，并了解当前运行时边界。" }
+
+# Schedulers
+
+Schedulers 用于保存面向 workflow 或 Agent 的 cron、时区、输入和重试策略配置。它适合先定义和维护自动化计划，但当前版本仍是**本地持久化的调度配置编辑器**，不是已经运行的定时执行引擎。
+
+## 创建调度配置
+
+1. 在 **Schedulers** 模块的二级侧边栏选择 **New scheduler**。
+2. 填写名称、描述、cron 表达式和时区。
+3. 选择目标类型：workflow 或 Agent，再选择目标。
+4. 设置错过执行策略、重试次数、重试退避和 JSON 输入。
+5. 使用 Enabled 开关保存为启用或暂停状态。
+
+新建 Scheduler 默认值：
+
+| 字段 | 默认值 |
+| --- | --- |
+| 名称 | `New scheduler` |
+| Enabled | 开启 |
+| Cron | `0 9 * * *` |
+| 时区 | `Asia/Shanghai` |
+| 目标类型 | `workflow` |
+| 错过执行策略 | `skip` |
+| 重试次数 | `0` |
+| 重试退避 | `300` 秒 |
+| 输入 | `{}` |
+
+列表按最近更新时间显示名称、启用状态、目标、描述和 cron；详情页的 Runtime preview 只是当前配置摘要。
+
+## 配置字段
+
+### Cron 与时区
+
+cron 和时区均为文本字段。保存时只要求非空：当前不会解析 cron 语法、验证 IANA 时区名称，也不会计算下次执行时间。
+
+建议采用标准五段 cron，并在上线前使用独立的 cron 校验工具确认语义。例如：
+
+```text
+0 9 * * *      每天 09:00
+0 */6 * * *    每 6 小时
+30 8 * * 1-5   工作日 08:30
+```
+
+### 目标
+
+可选目标类型：
+
+- **workflow**：保存某个 workflow 的 ID 和名称。
+- **agent**：保存某个 Agent 的 ID 和名称。
+
+切换目标类型时，界面会自动选择该类型的第一个可用目标。保存前要求目标 ID 非空，但不会再次验证目标仍然存在，或名称是否与真实资源一致。
+
+<Callout>
+  当前没有可用 workflow 或 Agent 时，仍可创建 Scheduler 并保存手动填写的目标 ID/名称；该配置不会自动解析或执行目标。
+</Callout>
+
+### 输入 JSON
+
+输入字段为空时会保存为 `{}`；非空内容必须能被 JSON 解析。当前允许任意有效 JSON 类型，不要求对象，也不会根据 workflow/Agent 的 schema 验证。
+
+### 重试与错过执行
+
+界面提供：
+
+- Missed-run policy：`skip` 或 `catch-up`
+- Retry limit
+- Retry backoff（秒）
+
+这些字段会被保存，但当前没有非负整数、上限、策略枚举或运行期重试校验。请使用合理、保守的值，并将其作为未来运行时的设计意图。
+
+## 重要：当前不会自动执行
+
+当前 Schedulers **不会**：
+
+- 解析 cron 或在到点时触发任务。
+- 执行 workflow 或 Agent。
+- 处理 `skip` / `catch-up` 补跑策略。
+- 执行重试、退避或队列。
+- 计算/显示上次运行、下次运行或运行状态。
+- 生成 Scheduler 专用的运行历史、日志、失败原因或通知。
+- 提供“立即运行”“取消运行”或“删除 Scheduler”操作。
+
+<Callout type="warning">
+  Enabled 仅保存为配置状态，不会启动后台定时任务。不要依赖当前 Scheduler 执行生产自动化、告警、备份、消息推送或付款流程。
+</Callout>
+
+## 推荐工作方式
+
+1. 先在 **Workflows** 中手动验证 workflow，或在 **Chats** 中验证 Agent。
+2. 再创建 Scheduler，记录期望的 cron、时区、输入与失败策略。
+3. 将 Scheduler 作为未来自动化运行时的配置来源或团队约定。
+4. 在真正的 cron runtime 上线前，使用外部调度器、CI、系统 cron 或受控工作流平台执行关键任务。
+
+如果需要定时执行 workflow，目前可通过外部系统调用应用的受控入口或运行环境，但应自行处理凭据、网络可达性、重复执行、日志、告警和失败恢复。
+
+## 当前 UI 限制
+
+- Scheduler 可以通过二级侧边栏创建、在详情页编辑并通过 Enabled 开关暂停，但列表页没有页面级新建按钮，也不能删除。
+- 没有历史、日志、版本、复制、导入导出或手动触发入口。
+- 保存失败会由调用链抛出；列表和详情加载错误可重试，但没有完整的 Scheduler 专用错误面板。
+- 当前没有 Scheduler 专用测试覆盖，配置字段也没有在主进程进行完整的二次校验。
+
+## 本地存储与安全
+
+Scheduler 配置保存在本机 SQLite 的 `schedulers` 表中，路径为 `<userData>/workspace/suora.sqlite`。cron、时区、目标信息和 `inputPayloadJson` 均为本地明文字段。
+
+<Callout type="warning">
+  不要把 API Key、密码、访问令牌或个人敏感信息直接放在 Scheduler 输入 JSON 中。当前没有 Scheduler 专用加密、秘密引用或字段脱敏机制。
+</Callout>

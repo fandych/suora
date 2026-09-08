@@ -115,7 +115,10 @@ const App = () => {
             <Route path="schedulers/:schedulerId" element={<SchedulerDetailPage />} />
             <Route path="channels" element={<ChannelsPage />} />
             <Route path="channels/:channelId" element={<ChannelDetailPage />} />
-            <Route path={preferenceRoute.url.slice(1)} element={<PreferencePage />} />
+            <Route path={preferenceRoute.url.slice(1)}>
+              <Route index element={<Navigate to="general" replace />} />
+              <Route path=":section" element={<PreferencePage />} />
+            </Route>
             <Route path="*" element={<ErrorPage />} />
           </Route>
         </Routes>

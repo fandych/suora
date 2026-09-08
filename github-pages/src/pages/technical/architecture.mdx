@@ -1,0 +1,91 @@
+export const meta = { title: "应用架构", description: "React、Electron IPC、本地 SQLite 与桌面服务的边界和生命周期。" }
+
+# 应用架构
+
+SUORA 采用 Electron 主进程和 React 渲染进程分离的桌面架构。渲染器负责页面和交互，preload 负责暴露窄化 API，主进程负责数据库、网络、文件、命令和渠道等特权操作。
+
+```text
+React Renderer → Preload Bridge → Electron IPC → Desktop Services
+  │                                  ├── Local SQLite
+  │                                  └── AI / tools / channels / integrations
+  └── repositories & domain          └── LLM / HTTP / SMTP / external channels
+```
+
+## 分层职责
+
+- `src/`：React 页面、领域模型、repositories、前端服务与渲染器状态。页面通过 `@/` 别名引用本地模块。
+- `electron/main.ts`：应用生命周期入口，准备工作区、迁移数据库、注册 IPC、配置更新器并创建窗口。
+- `electron/preload.ts`：在 context isolation 下暴露 `window.suora` 和少量事件/通用 invoke API。
+- `electron/ipc/`：按领域注册 IPC handlers：core、content、catalog、automation、channel runtime 和 tools。
+- `electron/others/`：AI 请求、集成、渠道、代理、邮件、浏览器、工具权限和更新等桌面服务。
+- `electron/database/`：SQLite 初始化、WAL、外键、迁移和查询执行。
+
+## Electron 启动生命周期
+
+应用启动时依次执行：
+
+1. 配置应用存储路径并确保 workspace 目录存在。
+2. 打开 SQLite，启用 WAL 与 foreign keys，并执行未应用的 migrations。
+3. 注册 IPC handlers。
+4. 配置 `electron-updater`。
+5. 创建 BrowserWindow，加载开发服务器或构建后的 renderer。
+
+退出前关闭内置浏览器窗口和数据库连接。macOS 保留应用进程，其他平台在所有窗口关闭后退出。
+
+## Renderer、Preload 与 IPC
+
+渲染器不能直接访问 Node.js、文件系统或 Electron API。BrowserWindow 使用：
+
+- `contextIsolation: true`
+- `nodeIntegration: false`
+- 受控的 preload bridge
+
+preload 按领域暴露 `suora.chats`、`documents`、`models`、`skills`、`agents`、`integrations`、`workflows`、`channels`、`schedulers`、`preferences`、`updater`、`mail` 和 `tools` 等 API。新增业务调用应优先添加明确命名的 bridge 方法和对应 IPC handler，不要扩大通用通道权限。
+
+通用 `electron.invoke` 与事件订阅还有白名单：只有列入允许集合的 AI fetch、数据库、Integration 执行和渠道预览事件可以直接访问。业务资源通常通过 `window.suora` 的领域 API 调用。
+
+## 数据库与迁移
+
+## 本地数据
+
+数据库位于 Electron `userData/workspace/suora.sqlite`。数据库开启 WAL 和外键，并在运行时执行 migrations。迁移记录保存在 `__app_migrations`，每个 migration 在事务中执行；失败会回滚当前 migration。
+
+主要数据域包括：
+
+- Chats 与 `chat_messages`
+- Documents、页面树和版本
+- Skills、Agents、Integrations 与各自版本
+- Workflows、版本与 invocation history
+- Channels、消息和运行状态
+- Models/Providers、Schedulers 与 `app_meta`
+
+渲染器 repository 负责领域数据映射和降级策略；Electron IPC 负责将请求转发到数据库或桌面服务。Preferences 在桌面运行时存于 `app_meta`，无 bridge 时会回退到浏览器 `localStorage`。
+
+## 服务边界
+
+- **AI**：主进程代理模型请求、代理/TLS、超时和连接重试；renderer 通过流式事件接收增量文本、工具调用和错误。
+- **Tools**：文件读写、命令和浏览器操作受工作区策略、命令 allowlist、大小限制与 URL 安全规则约束。
+- **Integrations**：HTTP、Script VM 与当前有限的 MCP 探测由主进程执行，避免 renderer 直接持有网络和进程权限。
+- **Channels**：Webhook server 和 stream/email clients 运行在主进程；入站消息通过 `channel:message` 事件发送到 renderer，再由 channel listener 路由到 Chat/Agent。
+- **Updater**：仅打包应用检查更新，开发环境跳过。
+
+## 安全模型与已知边界
+
+context isolation 保护了 renderer 与 Node 环境的边界，但本地桌面应用仍然信任当前操作系统用户。当前未提供登录、多用户权限或云端租户隔离。
+
+API Key、SMTP 密码、渠道凭据和部分集成配置保存在本地 SQLite 普通字段中，未接入系统钥匙串或应用级加密。`ignoreSslErrors` 及命令/文件工具策略应仅在受控环境中使用。
+
+Agent instructions、外部网页和 Skill 内容都属于不可信输入；它们不能改变 IPC 白名单或绕过主进程安全检查。新增工具时必须在主进程重新校验参数，不能只依赖 renderer 表单校验。
+
+## 开发约定
+
+- 新 UI 使用 `workflow` 命名，不新增 `pipeline` 术语。
+- 按 `electron/ipc/`、`electron/database/`、`electron/others/` 和 `electron/types/` 分组放置 Electron 代码。
+- 业务数据访问通过 repository/domain 层组织，避免页面直接拼接 IPC 细节。
+- 修改 IPC 合约时同步更新 preload、Electron 类型和 renderer repository。
+- 修改数据库结构时新增 migration，不直接改写已有 migration。
+- 每次改动至少运行 `npm run type-check`、`npm run lint` 和 `npm run build`。
+
+<Callout type="warning">
+  当前架构未提供应用级密钥加密或系统钥匙串集成。设备用户目录、工作区数据库和备份必须由操作系统权限保护。
+</Callout>

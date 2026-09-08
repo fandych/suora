@@ -96,6 +96,7 @@ function createDefaultAgentConfig(): AgentConfigRecord {
     skillIds: [],
     toolsetIds: [],
     documentIds: [],
+    privateToolIds: [],
   }
 }
 

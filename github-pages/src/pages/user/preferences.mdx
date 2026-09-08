@@ -1,0 +1,121 @@
+export const meta = { title: "Preferences", description: "设置外观、工作区、模型默认值、安全策略、SMTP、环境变量与更新行为。" }
+
+# Preferences
+
+Preferences 集中管理本地桌面工作区的外观、默认模型、安全策略、SMTP、运行环境和更新行为。修改后点击 **Save preferences** 保存；部分外观设置会立即应用到当前界面。
+
+## General
+
+General 区域提供：
+
+- Theme mode：跟随系统、浅色、深色。
+- Theme accent：ocean、forest、amber、rose、slate。
+- Font size：小、中、大。
+- Language：中文或英文。
+- Workspace name、Workspace path 和操作备注。
+- Default model provider。
+- Chat request timeout（毫秒）。
+- 自动保存会话与自动启动偏好。
+
+主题会修改当前渲染器的颜色、字体缩放和页面语言。`Default model provider` 当前仅是已持久化的偏好字段，尚未驱动 Chats、Agents 或 Channels 的默认模型选择；实际使用仍要求相应 Provider 与模型已配置且启用。
+
+<Callout type="warning">
+  `Auto-save conversations` 和 `Launch on startup` 目前会保存到 Preferences，但尚未被聊天持久化或系统登录启动运行时消费。`Default model provider` 也尚未驱动 Chats 或 Agents 的默认选择；新建 Channel 会优先寻找与该偏好 ID 相同的已配置 Provider，未找到时再回退到第一个已配置 Provider 或内置 `provider-openai`。
+</Callout>
+
+Chat request timeout 为 `0` 时，不会向 AI 请求桥传递应用层超时值。设置正数前，请考虑模型、工具调用和网络代理的实际响应时间。
+
+<Callout>
+  Workspace path 当前是保存的偏好字段，不应视为应用数据自动迁移、工作区切换或文件系统隔离的保证。实际本地数据仍存放在 Electron 用户数据目录的 workspace 数据库中。
+</Callout>
+
+## Security
+
+Security 设置约束桌面 Agent 工具对工作区文件、命令和 TLS 的行为。
+
+### 命令确认
+
+可选择：
+
+- **Daily**：当天首次执行工作区命令时确认。
+- **Always**：每次执行都确认。
+- **Never**：不显示确认。
+
+确认策略只是在允许的命令执行前增加交互；它不会把任意 shell 变为可执行命令。
+
+### 文件访问规则
+
+选择 allowlist 或 denylist，并维护相对工作区目录列表：
+
+- **Allowlist**：只允许匹配目录及其子路径。
+- **Denylist**：阻止匹配目录及其子路径。
+- 规则为空时，文件访问不受该列表限制。
+
+路径会规范化为相对工作区路径。Agent 文件工具仍不能跳出工作区根目录，单次读取和写入分别最多 1 MiB。
+
+### 命令 allowlist / blacklist
+
+默认允许的可执行文件包括 `git`、`node`、`npm`、`npx`、`pnpm`、`yarn`、`python`、`python3`、`rg`、`tsc`、`tsx`、`vite`、`vitest`、`eslint` 和 `bun`。
+
+交互式 shell（如 `bash`、`sh`、`zsh`、`cmd`、PowerShell）会被阻止；命令不会经 shell 执行。命令输出合计最多 256 KiB。blacklist 会额外按命令文本进行匹配。
+
+<Callout type="warning">
+  Allowlist、blacklist 和确认机制是降低风险的护栏，而不是对不可信 Agent 或脚本的完整隔离。不要启用 Never 后再授予 Agent 宽泛的文件、命令或 Integration 权限。
+</Callout>
+
+### TLS 证书校验
+
+**Ignore SSL / CA certificate validation** 默认关闭。启用后，部分 AI/网络请求会在请求范围内关闭证书校验。
+
+仅在受控测试环境临时使用。它不能保证覆盖全部网络路径：例如某些模型目录刷新或代理链路不会明确继承同一 TLS 设置。
+
+## SMTP Mail Service
+
+全局 SMTP 配置可供需要邮件发送的 Channel 或 workflow 使用。启用后填写：
+
+- SMTP host 与 port
+- 用户名和应用密码
+- From address
+- TLS 开关
+
+页面可向测试收件人发送测试邮件。必须完整填写 host、port、用户名、密码和发件地址后才会被视为可用。
+
+当前 SMTP 实现使用 AUTH LOGIN 并设置 30 秒连接超时。TLS 连接在实现中使用 `rejectUnauthorized: false`，因此即使 Preferences 的 Ignore SSL 关闭，也应只连接可信邮件服务器，并优先使用应用密码而非账户主密码。
+
+<Callout type="warning">
+  SMTP 密码与 API Key 一样保存在本地偏好 JSON/SQLite 中，没有独立密钥库或应用级加密。请保护设备账户、数据库备份和导出文件。
+</Callout>
+
+## Global Environment Variables
+
+可添加全局键值对。它们会注入 Agent 工作区命令的执行环境，适用于受控工具所需的非敏感配置，例如 `NODE_OPTIONS`、项目路径标记或测试环境开关。
+
+避免将密钥、访问令牌、密码写入此处：这些值会在本地偏好中明文保存，并可能被命令进程读取或在其输出中泄露。
+
+## Environment Monitor
+
+Environment Monitor 显示桌面 runtime 和工具状态，并提供刷新操作。它适合排查 Node、命令工具或运行环境可用性；不替代实际模型、集成或渠道的端到端连接测试。
+
+## Updates
+
+About 区显示应用与更新状态，并提供 **Check for updates**。启用 Auto check updates 后，打包桌面应用会使用 `electron-updater` 检查最新发行版；更新会自动下载，并在退出应用时安装。
+
+开发环境不会检查更新，手动检查会返回 `not-packaged`。发布通道固定为 `latest`。
+
+## 保存、回退与本地数据
+
+在 Electron 桌面运行时，Preferences 保存到本地 SQLite 的 app metadata。若桌面 IPC 不可用或保存失败，渲染器会回退到浏览器 `localStorage`。
+
+保存时会规范化常见字段：主题、语言、字体、数组列表、环境变量、端口和超时；但不会验证 workspace path 是否存在、默认 Provider 是否存在、SMTP 主机可达性或环境变量值是否安全。
+
+当前界面没有“恢复默认设置”按钮。若需要重置，请手动恢复字段或在受控情况下清除本地应用数据后重新启动。
+
+## 推荐安全基线
+
+1. 使用系统主题/默认语言以外的设置前，先确认团队约定。
+2. Default model provider 仅选择已启用、已测试的 Provider。
+3. 文件规则从 denylist 空规则或小范围 allowlist 开始。
+4. 命令确认保持 Daily 或 Always，避免 Never。
+5. 保持 TLS 校验开启，除非临时排查受控测试服务。
+6. 使用 SMTP 应用密码，关闭不再使用的邮件服务。
+7. 不在笔记、环境变量、Scheduler 输入或偏好中保存长期秘密。

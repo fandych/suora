@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import type { ProviderConfigRecord } from "@/data/domain/models"
 import { emitDataChanged } from "@/data/repositories/data-events"
-import { deleteModelProvider, discoverProviderModelCatalog, getDefaultProviderBaseUrl, getModelProvider, getProviderModelDiscoveryState, getProviderPreset, saveModelProvider } from "@/data/repositories/model-config-repository"
+import { deleteModelProvider, discoverProviderModelCatalog, getDefaultProviderBaseUrl, getModelProvider, getProviderModelDiscoveryState, getProviderPreset, providerAllowsNoKey, saveModelProvider } from "@/data/repositories/model-config-repository"
 import { showToast } from "@/lib/app-toast"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
@@ -43,6 +43,7 @@ const ModelsDetailPage = () => {
 
   const selectedPreset = getProviderPreset(draft?.providerType ?? "openai")
   const hasApiKey = Boolean(draft?.apiKey.trim())
+  const canConfigureModels = hasApiKey || providerAllowsNoKey(draft?.providerType ?? "")
   const discoveryState = draft ? getProviderModelDiscoveryState(draft) : { capable: false, enabled: false, reason: null }
 
   const handleSave = async () => {
@@ -204,7 +205,7 @@ const ModelsDetailPage = () => {
                   draft={draft}
                   description={selectedPreset.description}
                   docsUrl={selectedPreset.docsUrl}
-                  hasApiKey={hasApiKey}
+                  canConfigureModels={canConfigureModels}
                   canDelete={true}
                   onChange={setDraft}
                   onDelete={handleDeleteProvider}
@@ -217,7 +218,7 @@ const ModelsDetailPage = () => {
               </div>
 
               <ProviderModelList
-                hasApiKey={hasApiKey}
+                canConfigureModels={canConfigureModels}
                 showRefreshAction={discoveryState.capable}
                 refreshDisabledReason={discoveryState.enabled ? null : discoveryState.reason}
                 isRefreshingModels={isRefreshingModels}

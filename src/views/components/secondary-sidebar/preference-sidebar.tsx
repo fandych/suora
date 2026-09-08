@@ -11,30 +11,17 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
 import { useState } from "react"
+import { useLocation, useNavigate } from "react-router"
+import { preferenceSections } from "@/views/nav-config"
 
 const PreferenceSidebar = () => {
+  const location = useLocation()
+  const navigate = useNavigate()
   const [query, setQuery] = useState("")
-  const sections = [
-    { label: "General", targetId: "general" },
-    { label: "Security", targetId: "security" },
-    { label: "Mail Service", targetId: "mail-service" },
-    { label: "Environment Monitor", targetId: "environment-monitor" },
-    { label: "Global Environment", targetId: "global-environment" },
-    { label: "About", targetId: "about" },
-  ]
   const normalizedQuery = query.trim().toLowerCase()
   const visibleSections = normalizedQuery
-    ? sections.filter((section) => section.label.toLowerCase().includes(normalizedQuery))
-    : sections
-
-  const scrollToSection = (targetId: string) => {
-    const element = document.getElementById(targetId)
-    if (!element) {
-      return
-    }
-
-    element.scrollIntoView({ behavior: "smooth", block: "start" })
-  }
+    ? preferenceSections.filter((section) => section.label.toLowerCase().includes(normalizedQuery))
+    : preferenceSections
 
   return (
     <Sidebar collapsible="none" className="hidden flex-1 border-l md:flex">
@@ -50,8 +37,8 @@ const PreferenceSidebar = () => {
           <SidebarGroupContent>
             <SidebarMenu>
               {visibleSections.map((section) => (
-                <SidebarMenuItem key={section.targetId}>
-                  <SidebarMenuButton onClick={() => scrollToSection(section.targetId)}>
+                <SidebarMenuItem key={section.id}>
+                  <SidebarMenuButton isActive={location.pathname === section.href} onClick={() => navigate(section.href)}>
                     <span>{section.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

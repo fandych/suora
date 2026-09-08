@@ -1,0 +1,171 @@
+export const meta = { title: "SQLite 数据层", description: "数据库生命周期、migration、Schema、IPC 查询路径与本地数据安全。" }
+
+# SQLite 数据层
+
+SUORA 使用 Electron 主进程管理本地 SQLite，Renderer 通过 Drizzle proxy 或领域 IPC 访问数据。数据库是本地工作区的主要持久化边界。
+
+## 数据库路径与生命周期
+
+数据库文件为：
+
+```text
+<Electron userData>/workspace/suora.sqlite
+```
+
+应用启动时依次：
+
+1. 配置应用存储路径。
+2. 创建 `workspace` 目录。
+3. 打开数据库单例连接。
+4. 执行未应用的 migrations。
+5. 注册 IPC 并创建窗口。
+
+数据库使用 Node 内置 `node:sqlite` 的 `DatabaseSync`，连接引用保存在 Electron app state 中。应用退出时关闭数据库连接。
+
+打开数据库时设置：
+
+```sql
+PRAGMA journal_mode = WAL;
+PRAGMA foreign_keys = ON;
+```
+
+WAL 模式可能产生 `.sqlite-wal` 和 `.sqlite-shm` 文件。备份时应在应用关闭后复制完整工作区，或使用 SQLite 感知的备份流程；不要只复制主 `.sqlite` 文件。
+
+## Migration 约定
+
+Migration 定义在 `src/data/db/migrations.ts`，运行逻辑在 `electron/database/db-core.ts`。启动时创建：
+
+```sql
+CREATE TABLE IF NOT EXISTS __app_migrations (
+  id INTEGER PRIMARY KEY NOT NULL
+);
+```
+
+应用按 migration 数字 ID 和数组顺序执行未应用项。每个 migration 在独立事务中执行：SQL 和 migration 记录一起提交，遇到未忽略的错误时回滚。
+
+开发约定：
+
+- 已发布 migration 不要修改原内容。
+- 新 schema 变化追加更大的 migration ID。
+- 不要复用已执行的 ID。
+- 尽量设计幂等 SQL，并谨慎使用 `ignoreErrorsMatching`。
+- migration 修改后运行类型检查、测试和构建。
+
+当前部分历史 scheduler migration 使用重复列错误忽略策略。新增 migration 时应避免扩大这种兼容规则，以免隐藏真正的 schema 不一致。
+
+## Schema 领域
+
+主要表按业务域划分：
+
+| 领域 | 表 |
+| --- | --- |
+| Chats | `chats`、`chat_messages` |
+| Workflows | `workflows`、`workflow_versions`、`workflow_invocations` |
+| Agents | `agents`、`agent_versions` |
+| Skills | `skills`、`skill_versions` |
+| Models | `providers` |
+| Documents | `documents`、`document_versions` |
+| Integrations | `integrations`、`integration_versions`、`integration_executions` |
+| Channels | `channels` |
+| Schedulers | `schedulers` |
+| Metadata | `app_meta`、`__app_migrations` |
+
+许多关系通过 ID 在应用层维护，例如 `workflow_versions.workflow_id` 或 `chat_messages.chat_id`。当前 Schema 没有广泛声明 SQLite foreign key，也没有发现显式 `CREATE INDEX`；大数据量场景应关注排序、版本查询和按 ID 过滤的性能。
+
+## Renderer 查询路径
+
+### Drizzle proxy
+
+部分 repository 使用 `src/data/db/client.ts` 创建 Drizzle SQLite proxy：
+
+```text
+Repository
+  → getDatabaseContext()
+  → bridge.invoke("db:execute", payload)
+  → preload whitelist
+  → electron/ipc/ipc-core.ts
+  → executeQuery()
+  → node:sqlite
+```
+
+查询 payload 包括 SQL、参数和 `run`、`get`、`values`、`all` 方法。参数会规范化：`undefined` 转为 `NULL`，基础类型直接传入，复杂对象转为 JSON 文本；查询结果中的 `Uint8Array` 转为 UTF-8 字符串。
+
+### 领域 IPC
+
+新旧模块也会使用 preload 中的领域 API，例如：
+
+- `chats:list`、`chats:get`
+- `documents:get`
+- `models:list`
+- `workflows:save`
+- `channels:save`
+
+领域 handler 通常会集中处理默认值、版本选择、运行时服务和业务校验。新功能应优先通过 repository 和领域 IPC 组织，而不是让页面直接拼接 SQL。
+
+## JSON 字段与版本
+
+SQLite 中的复杂数据主要存储为 `TEXT` JSON，而不是原生 JSON 类型，包括：
+
+- workflow definition、input、output 和 trace
+- Agent config
+- Skill files
+- Provider models
+- Document structure、graph 和 settings
+- Integration config、input 和 output
+- Channel config 和 runtime
+- Scheduler input payload
+- Chat message parts
+
+JSON 解析、默认值和兼容迁移由 repository/domain 层处理。解析失败时，部分 seed/repository 会回退到默认值；新增 JSON 字段必须考虑旧数据库和旧 envelope。
+
+资源版本通常使用：
+
+```text
+major + minor + is_release + created_at
+```
+
+Workflow、Agent、Skill、Integration 和 Document 的草稿可以更新；发布版本通常创建新的版本记录。查询最新版本时按主版本、次版本和创建时间排序。
+
+聊天消息 parts 与聊天设置另有应用层 envelope 版本，目前为版本 2，迁移逻辑位于 `src/services/chat-persistence-migrations.ts`。
+
+## Seed 数据
+
+部分页面首次读取时会调用 `ensureSeeded()`，为工作区写入演示资源或系统默认内容。空数据库不一定保持完全空白，开发环境和文档截图应明确区分 seed 数据与用户创建数据。
+
+Seed 逻辑应保持幂等：重复启动不能重复创建相同系统资源。新增 seed 版本时，应更新对应的 metadata，并验证已有用户数据不会被覆盖。
+
+## 删除与一致性
+
+当前很多资源的版本和调用记录由 IPC handler 手动级联删除，而不是依赖 SQLite foreign key cascade。实现删除功能时必须检查：
+
+- 主记录与所有版本是否同时删除。
+- invocation/execution/history 是否应保留。
+- 其他 Agent、workflow、Channel 或 Scheduler 是否仍引用该 ID。
+- 删除失败时事务是否回滚。
+
+不能假设数据库会自动清理孤儿记录。删除和迁移都应在主进程事务边界内完成。
+
+## 备份、重置与隐私
+
+数据库可能包含：
+
+- Provider API Key
+- SMTP 密码和渠道凭据
+- Chat 文本、附件摘要和工具结果
+- Documents、Skills 和 workflow 内容
+- Integration 输入/输出与执行记录
+
+当前未提供应用级加密、系统钥匙串、远程同步或 Dashboard 级权限隔离。备份前应关闭应用、保护数据库和 WAL 辅助文件；分享或迁移前应删除敏感数据并撤销旧凭据。
+
+若要重置本地工作区，应先退出应用并备份，再移除对应 Electron `userData/workspace` 数据。该操作会删除本地资源、凭据、会话、版本和执行历史，属于破坏性操作。
+
+## 数据层检查清单
+
+1. 新增 schema 只通过新的 migration。
+2. Migration 具有事务性，且不会吞掉未知错误。
+3. 复杂字段定义稳定的 JSON 结构和版本。
+4. Repository 处理旧数据、默认值和解析失败。
+5. 删除操作明确版本、历史和引用的生命周期。
+6. 主进程重新验证来自 Renderer 的 payload。
+7. 不在日志、trace 或错误中泄露凭据。
+8. 针对 migration、JSON 迁移、版本查询和并发访问添加测试。

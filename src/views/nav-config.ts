@@ -262,6 +262,15 @@ export const preferenceRoute = {
   description: "Tune product behavior, defaults, and operator-level settings.",
 }
 
+export const preferenceSections = [
+  { id: "general", label: "General", href: "/preference/general" },
+  { id: "security", label: "Security", href: "/preference/security" },
+  { id: "mail-service", label: "Mail Service", href: "/preference/mail-service" },
+  { id: "environment-monitor", label: "Environment Monitor", href: "/preference/environment-monitor" },
+  { id: "global-environment", label: "Global Environment", href: "/preference/global-environment" },
+  { id: "about", label: "About", href: "/preference/about" },
+] as const
+
 export function getPrimaryNavItem(pathname: string) {
   return primaryNavItems.find(
     (item) => pathname === item.url || pathname.startsWith(`${item.url}/`)

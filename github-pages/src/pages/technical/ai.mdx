@@ -1,0 +1,162 @@
+export const meta = { title: "AI 服务与工具", description: "Provider 工厂、流式事件、ToolLoopAgent、上下文范围和工具安全护栏。" }
+
+# AI 服务与工具
+
+SUORA 使用 Vercel AI SDK 的 `ToolLoopAgent` 处理流式文本、工具调用和多步 Agent 任务。核心实现位于 `src/services/ai-service.ts` 与 `src/services/ai-tools.ts`。
+
+## Provider 工厂
+
+`createModel(settings)` 根据 `providerType` 创建统一的 AI SDK `LanguageModel`：
+
+| Provider type | 运行时适配 |
+| --- | --- |
+| `anthropic` | Anthropic SDK。 |
+| `openai` | OpenAI SDK。 |
+| `azure` | OpenAI SDK 的 Responses 适配，并使用 `api-key` header。 |
+| `google` | Google OpenAI-compatible endpoint。 |
+| `ollama` | 默认 `http://localhost:11434/v1` 的 OpenAI 兼容路径。 |
+| 其他/Custom | OpenAI-compatible SDK。 |
+
+Renderer 将自定义 fetch 注入 Provider，实际 HTTP 请求通过 Electron 主进程桥接。模型运行时主要使用 Provider type、Base URL、API Key 和 Model ID；模型库存中的 capability/API mode 元数据不会自动强制改变 SDK 调用模式。
+
+Agent 可覆盖 Chat 当前的 Provider、Model 和最大步骤数，但只有在 Agent 配置的 Provider 与启用模型有效时才会生效；否则回退到当前 Chat 模型。
+
+## 网络请求桥
+
+Renderer 的自定义 fetch 通过 IPC 发送：
+
+```text
+Renderer fetch
+  → ai:fetch:start
+  → Electron http/https request
+  → ai:fetch:event(response/data/end/error)
+  → ReadableStream
+  → AI SDK Provider
+```
+
+请求和流式数据中的 body 使用 Base64 传输。支持 AbortSignal；取消请求时调用 `ai:fetch:abort`。
+
+主进程请求默认使用 `Connection: close`，不复用 socket，以降低企业网关或 Azure-compatible proxy 提前关闭 SSE 连接的概率。请求日志记录 host/path、代理类型、TLS 设置、请求大小和尝试次数，不记录完整 query 或 body。
+
+## Proxy、TLS 与超时
+
+- 支持 HTTP 和 HTTPS proxy，可配置用户名和密码。
+- SOCKS5 配置存在，但当前 desktop shell 尚未接线。
+- HTTPS 默认验证证书。
+- `ignoreSslErrors` 只在请求范围设置 `rejectUnauthorized: false`，不会修改全局 Node TLS 配置。
+- Chat `requestTimeoutMs = 0` 表示不设置应用层请求超时；正数会传递到 Node request。
+
+网络重试只针对尚未收到 response bytes 的连接重置、socket hang up 或 connection reset，最多 3 次，每次间隔 300 ms。其他错误不会统一自动重试。
+
+## 流式事件模型
+
+AI SDK 的 `fullStream` 会被转换为 SUORA 自己的事件：
+
+```ts
+type ChatAgentEvent =
+  | { type: "text-delta"; text: string }
+  | { type: "tool-call"; toolCallId: string; toolName: string; input: Record<string, unknown> }
+  | { type: "tool-result"; toolCallId: string; toolName: string; output: string }
+  | { type: "error"; error: string; errorKind: ChatErrorKind }
+```
+
+Renderer runtime store 会累加 text delta、维护临时工具活动，并在结束后转换为 `ChatMessagePart`。最终只持久化 SUORA 的文本和结构化 parts，不直接保存完整 AI SDK 原始消息树。
+
+AI SDK 的 abort 会结束 generator；错误会分类、生成失败的 assistant parts，并通过 toast 告知用户。
+
+## ToolLoopAgent 与步骤预算
+
+主 Agent 使用：
+
+```ts
+new ToolLoopAgent({
+  model,
+  instructions,
+  stopWhen: stepCountIs(maxSteps),
+  tools,
+})
+```
+
+Chat Agent 默认最大工具调用步骤为 **200**，合法范围 **1–500**。当模型仍返回 tool calls 且达到预算时，系统产生 step-limit 错误，而不是无条件生成最终答案。
+
+`delegateResearch` 使用独立 research sub-agent，只能访问文档、workflow 和 Skill 检索工具。其预算为主 Agent 的四分之一，并限制在 8–48 步：
+
+$$
+researchSteps = \max(8, \min(48, \lfloor chatSteps / 4 \rfloor))
+$$
+
+研究预算错误会被工具转换为普通文本结果，不会直接中断主 Agent。
+
+## Agent scope 与上下文
+
+Agent 配置会解析以下资源范围：
+
+- `documentIds` → Documents
+- `skillIds` → Skills
+- `workflowIds` → Workflows
+- `toolsetIds` → Integrations
+- `privateToolIds` → 仅系统编辑器 Agent 可用的资源 CRUD 工具
+
+`searchDocuments`、`searchSkills` 和 `searchWorkflows` 在存在绑定范围时只搜索绑定资源；没有绑定时会搜索全部对应本地资源。`runIntegration` 在存在 Integration scope 时只允许绑定 ID；空 scope 当前可能允许按 ID 执行任意现有 Integration。
+
+`delegateResearch` 创建的研究子 Agent 会继承调用 Agent 的 Documents、Workflows 和 Skills 范围；存在绑定时，它只能枚举已绑定资源。空绑定范围仍表示可搜索全部对应本地资源。
+
+文件、命令和浏览器工具不按 Agent 单独绑定，而是依赖全局 Preferences 和主进程工具护栏。因此，给 Agent 绑定 Documents/Skills 不等于限制它访问工作区文件。
+
+最终 instructions 按系统 prompt、固定浏览器安全指引、Agent 标识/摘要和 Agent instructions 合并。网页、Skill 和用户提供内容属于不可信数据，不能覆盖安全规则。
+
+## 工具分类
+
+### Workspace
+
+- `listWorkspaceFiles`
+- `readWorkspaceFile`
+- `writeWorkspaceFile`
+- `runWorkspaceCommand`
+
+路径必须留在 workspace root 内；读取和写入单文件最多 1 MiB。命令使用 `shell: false`，禁止 `bash`、`sh`、`zsh`、PowerShell 等交互式 shell，只允许固定 executable 集合。默认命令超时 30 秒，范围 1–120 秒，标准输出和错误输出合计最多 256 KiB。
+
+### Browser
+
+- `browser_navigate`
+- `browser_page`
+- `browser_click`
+- `browser_fill`
+
+内置浏览器状态按 Chat 管理，但当前未使用独立 Electron partition，因此不同 Chat 的 Cookie、缓存或登录状态不保证完全隔离。URL 只允许 HTTP/HTTPS，并阻止 localhost、私有 IP 和云 metadata 地址。网页内容被视为数据，不是指令；登录、付款、账户变更和不可逆操作前必须确认。
+
+### External / Domain
+
+- `openExternalUrl`
+- `httpRequest`
+- `runIntegration`
+- `searchDocuments`
+- `searchWorkflows`
+- `searchSkills`
+- `delegateResearch`
+
+External HTTP 和 Integration 请求继续受到 URL、认证、代理、TLS、文件和响应大小策略限制。
+
+### Private resource CRUD
+
+`documents:*`、`workflows:*`、`agents:*` 与 `skills:*` 工具只会在选中的 Agent 配置了对应 `privateToolIds` 时注册。内置的四个 Editor Agent 各自只获得其所属资源的 `list`、`get`、`create`、`update` 和 `delete` 工具；通用助手及普通自定义 Agent 不会注册这些工具。系统 Agent 不能通过 `agents:update` 或 `agents:delete` 修改或删除。
+
+## 错误与持久化
+
+常见错误会分类为 Step limit reached、Request timed out、Operation blocked、Tool execution failed、Request failed 和 Response failed。
+
+聊天运行中的 text、tool call、tool result 和 error 在生成结束后保存到本地 Chat message parts。运行态工具活动保存在内存，生成结束后会清理；这不是消息持久化期限。
+
+工具调用输入、输出和错误可能进入 Chat parts、workflow trace 或 Integration execution 记录。不要将 API Key、密码、Cookie 或授权 header 放入工具输入/输出。
+
+## 测试与开发注意事项
+
+当前已有 `agent-loop-control.test.ts` 覆盖步骤预算规范化和 step-limit 诊断，以及 Chat error state 测试。`streamChatAgentResponse()` 尚未发现覆盖所有 Provider 和真实流式响应的完整集成测试。
+
+修改 AI 服务或工具时：
+
+1. 使用项目已安装版本的 AI SDK 文档和类型，不凭记忆猜 API。
+2. 为 Provider fallback、abort、timeout、tool error 和 step limit 添加测试。
+3. 测试 Agent scope 为空和非空两种情况。
+4. 验证工具输入在主进程重新校验。
+5. 运行 `npm run type-check`、`npm run lint`、`npm run test:run` 和 `npm run build`。

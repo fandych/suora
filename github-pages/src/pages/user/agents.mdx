@@ -1,0 +1,125 @@
+export const meta = { title: "Agents", description: "创建任务专用 Agent，配置模型、指令、资源范围与工具边界。" }
+
+# Agents
+
+Agent 将任务目标、instructions、模型、工具调用步骤预算和可访问资源组合为可复用的执行配置。创建完成后，可在 **Chats** 中选择 Agent，让每次对话遵循相同的角色和权限范围。
+
+## 创建与管理 Agent
+
+1. 进入 **Agents**，选择 **New agent**。
+2. 应用会创建名为 `New agent` 的自定义 Agent，并打开详情页。
+3. 填写名称、描述、模型、最大步骤数和 Prompt，点击 **Save**。
+4. 在资源绑定区选择 Documents、Skills、Workflows 和 Integrations；每次勾选或取消都会立即保存。
+5. 打开 **Chats**，在 Agent 菜单中选择它并用真实任务验证。
+
+Agent 列表会优先显示自定义 Agent，再显示系统 Agent。侧边栏和每个资源绑定区均可搜索。删除自定义 Agent 前需要确认；删除会永久移除该 Agent 及其所有版本，且无法撤销。
+
+## 内置编辑器 Agent
+
+系统提供 `Document Editor`、`Workflow Editor`、`Agent Editor` 与 `Skill Editor`。它们分别只拥有其对应资源的私有创建、读取、更新和删除工具：这些工具不会公开给通用助手或普通自定义 Agent。选择编辑器 Agent 后，可通过 Chat 管理相应的工作区资源；删除前会先要求确认目标和影响。
+
+新工作区不再预置示例 Skills、自定义 Agents、Workflows 或 Integrations。已有安装会在升级时移除历史示例内容，但不会删除用户创建的资源。
+
+## 配置说明
+
+| 字段 | 用途 | 建议 |
+| --- | --- | --- |
+| 名称与描述 | 帮助识别任务用途 | 用“发布说明助手”“客户邮件草拟”等具体名称。 |
+| Provider / Model | 指定 Agent 优先使用的模型 | 仅选择已配置且已启用的模型。 |
+| 最大步骤数 | Agent 可进行的工具调用预算 | 从较小预算开始，仅在任务确有需要时提高。 |
+| Prompt / instructions | 定义目标、边界、输出格式与决策原则 | 指明输入、预期结果、禁止项和何时提问。 |
+
+新建 Agent 默认使用 `New agent`、`You are a helpful agent.` 和最大 100 步。编辑界面允许设置 `1–500` 步；运行时会将步骤预算约束到相同范围。
+
+如果 Agent 配置的 Provider 或模型不可用，Chats 会退回使用当前会话选择的模型。因此，Agent 保存后应在 Chats 中实际发送一次测试消息。
+
+## 编写有效 instructions
+
+将 instructions 写成可执行的工作约定，而不是泛泛的角色描述。一个可靠的结构是：
+
+1. **目标**：Agent 要完成什么，例如“根据仓库变更起草中文发布说明”。
+2. **输入**：可使用哪些文档、文件、工作流或集成。
+3. **输出**：格式、语言、必要的小节和验收条件。
+4. **边界**：哪些操作必须询问，哪些内容不能猜测或泄露。
+5. **失败处理**：缺少关键信息时先提出澄清问题，而不是编造结果。
+
+Agent 的 Prompt 会追加到 Chat 系统提示和固定安全规则之后，不能覆盖安全限制。网页内容同样被视为不可信数据，不能作为要求 Agent 泄露秘密、写文件或执行命令的指令。
+
+## 资源范围
+
+资源绑定用于定义 Agent 的任务上下文与可执行集成。应遵循最小权限原则：只选该任务真正需要的资源。
+
+### Documents
+
+Agent 可以按标题检索文档，并获取命中文档的标题、摘要和页面内容摘要。适用于产品规范、项目约定、FAQ 和知识库。
+
+### Skills
+
+Agent 可以检索 Skill 的标题、摘要、选定版本和文件路径列表。Skill 正文不会自动全部注入对话，因此 instructions 应提示 Agent 在需要时先查找相关 Skill。
+
+### Workflows
+
+Agent 可检索 workflow 的标题、摘要、版本和节点标签，用于理解已有自动化方案。当前 Chats 中的 Agent 主要具备 workflow 检索/查看能力；不要假设绑定 workflow 后会自动执行它。
+
+`delegateResearch` 研究子 Agent 会继承 Documents、Skills 和 Workflows 的绑定范围；存在绑定时，它只能枚举已绑定资源。未绑定对应资源时，主 Agent 与研究子 Agent 都可搜索全部本地资源。
+
+### Integrations
+
+Agent 可调用已绑定的 Integration。只要至少绑定了一项集成，Agent 就不能调用未绑定的其他集成。
+
+<Callout type="warning">
+  当前实现中，未绑定任何 Integration 不等于“禁止所有集成”：空绑定时 Agent 可能按 ID 执行现有集成。处理敏感系统时，请显式绑定需要的最小集合，并先在测试环境验证。
+</Callout>
+
+## 在 Chats 中使用
+
+聊天输入区提供 Agent 菜单。系统默认会选择 `通用助手`；如果当前选择失效且通用助手可用，应用会自动切回通用助手。
+
+每个 Chat 保存自己的 Agent、模型、代理、请求超时和最大步骤数设置。也就是说，可在一个会话中使用“研究助手”，在另一个会话中使用“发布助手”，而无需反复修改全局默认值。
+
+系统 Agent 的发布版本为只读，但可以在侧边栏禁用或启用。已禁用的系统 Agent 仍会显示在 Agents 页面，但不会出现在 Chats 的选择列表中。
+
+## 桌面工具与安全边界
+
+Agent 可通过受限工具处理本地工作区、命令和网页，但这些功能并非无限制权限。
+
+### 文件
+
+- 只能访问工作区根目录以内的路径，不能穿越到外部目录。
+- Preferences 可设置文件路径 allowlist 或 denylist。
+- 单次读取或写入的文件内容最多 1 MiB。
+
+### 命令
+
+- 仅允许 `git`、`node`、`npm`、`pnpm`、`python`、`rg`、`tsc`、`vite`、`vitest` 等受控命令。
+- 不允许使用 `bash`、`sh`、`zsh`、PowerShell 等交互式 shell。
+- 命令不通过 shell 执行；默认超时 30 秒，可设范围为 1–120 秒。
+- Preferences 可进一步配置命令 allowlist、blacklist 和确认策略。
+
+### 浏览器
+
+- Agent 可在内置浏览器中读取页面、点击和填写表单；浏览器状态按 Chat 管理，但当前没有独立 Electron partition，不能将不同 Chat 视为 Cookie、缓存或登录状态完全隔离的配置文件。
+- 仅允许 HTTP/HTTPS 地址；本地地址、私有 IP 和云元数据地址会被拦截。
+- 登录、支付、账户变更、破坏性或不可逆操作前，Agent 应先征求确认。
+
+<Callout>
+  不要将“可访问某个资源”理解为“可无条件修改它”。对于生产系统、密钥、付款和账号操作，应让 Agent 先展示计划与影响范围，再明确批准执行。
+</Callout>
+
+## 排障
+
+### Step limit reached
+
+工具调用在生成最终回答前达到预算。缩小任务、减少需要搜索的范围，或谨慎提高 Agent 的最大步骤数。研究子 Agent 的预算约为主预算的四分之一，并限制在 8–48 步。
+
+### Operation blocked
+
+文件路径、命令策略、URL 安全检查或 Integration 授权拒绝了操作。检查资源绑定以及 Preferences 中的文件、命令和网络策略。
+
+### Request timed out / Request failed
+
+确认 Agent 的模型可用，并检查 Provider 的 API Key、Base URL、代理和请求超时。模型不可用时，Chats 会尝试回退到当前会话模型。
+
+### Tool execution failed
+
+展开 Chats 中的工具活动查看输入、输出和错误。确认 Integration 配置、所需凭据、目标服务状态与 Agent 绑定范围均正确。

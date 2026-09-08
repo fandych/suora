@@ -15,7 +15,7 @@ type ProviderSettingsFormProps = {
   draft: ProviderConfigRecord
   description: string
   docsUrl?: string
-  hasApiKey: boolean
+  canConfigureModels: boolean
   canDelete: boolean
   onChange: (nextProvider: ProviderConfigRecord) => void
   onDelete: () => void
@@ -24,7 +24,7 @@ type ProviderSettingsFormProps = {
   onSave: () => void
 }
 
-export function ProviderSettingsForm({ draft, description, docsUrl, hasApiKey, canDelete, onChange, onDelete, onOpenDocs, onProviderTypeChange, onSave }: ProviderSettingsFormProps) {
+export function ProviderSettingsForm({ draft, description, docsUrl, canConfigureModels, canDelete, onChange, onDelete, onOpenDocs, onProviderTypeChange, onSave }: ProviderSettingsFormProps) {
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const enabledModels = draft.models.filter((model) => model.enabled).length
   const supportsReasoning = draft.models.some((model) => model.supportsReasoning)
@@ -68,7 +68,7 @@ export function ProviderSettingsForm({ draft, description, docsUrl, hasApiKey, c
           <Input type="password" value={draft.apiKey} onChange={(event) => onChange({ ...draft, apiKey: event.target.value })} placeholder="API key" />
         </div>
 
-        {!hasApiKey ? <div className="rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-sm text-amber-900">Provider and model toggles remain disabled until an API key is configured.</div> : null}
+        {!canConfigureModels ? <div className="rounded-lg border border-amber-300/50 bg-amber-50 px-3 py-2 text-sm text-amber-900">Provider and model toggles remain disabled until an API key is configured.</div> : null}
 
         <div className="grid gap-2 sm:grid-cols-2">
           <div className="rounded-lg border bg-muted/20 px-3 py-2 text-sm text-muted-foreground">
@@ -89,7 +89,7 @@ export function ProviderSettingsForm({ draft, description, docsUrl, hasApiKey, c
 
         <label className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm">
           <span>Provider enabled</span>
-          <Switch checked={draft.enabled} disabled={!hasApiKey} onCheckedChange={(checked) => onChange({ ...draft, enabled: checked })} />
+          <Switch checked={draft.enabled} disabled={!canConfigureModels} onCheckedChange={(checked) => onChange({ ...draft, enabled: checked })} />
         </label>
 
         {docsUrl ? (

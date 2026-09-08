@@ -1,0 +1,118 @@
+export const meta = { title: "Integrations", description: "连接 HTTP 服务、沙箱脚本和 MCP 端点，并将它们授权给 Agent 或 workflow。" }
+
+# Integrations
+
+Integrations 用于把外部 HTTP 服务、本地脚本或 MCP 端点接入 SUORA。集成可绑定给 Agent，也可被 workflow 的 HTTP、Webhook 或 Toolset 节点引用。
+
+当前支持三种类型：**HTTP**、**Scripts** 和 **MCP**。新建操作默认创建 HTTP 集成；需要脚本或 MCP 时，在详情编辑器中切换类型。
+
+## 创建 HTTP Integration
+
+1. 进入 **Integrations**，新建集成。
+2. 填写共享 Base URL，并配置认证方式。
+3. 新建一个或多个 endpoint，设置方法、路径、参数、默认 body 和 schema。
+4. 保存后使用 **Try run** 发送测试请求。
+5. 将集成绑定到 Agent，或在 workflow 节点中选择它。
+
+HTTP 支持 GET、POST、PUT、PATCH、DELETE、HEAD 和 OPTIONS。一个集成可拥有多个 endpoint；最后一个 endpoint 不能删除。路径中的 `{id}` 或 `:id` 会自动同步为 path 参数。
+
+端点参数可放在 path、query、header、JSON 或 form-data 中，并可标记必填。支持 JSON、`application/x-www-form-urlencoded` 和 `multipart/form-data` 请求体；GET 和 HEAD 不发送 body。
+
+## 认证与请求数据
+
+支持以下认证方式：
+
+- 无认证
+- Bearer token
+- Basic（用户名/密码或已编码凭据）
+- API key（Header 或 Query）
+- 自定义/共享 headers
+
+认证字段保存在集成配置 JSON 中。当前没有独立的凭据库、系统钥匙串集成或加密存储；请避免在不受保护的设备上保存长期密钥。
+
+可从单条 cURL 导入 endpoint，也可导入 OpenAPI **JSON**。OpenAPI 按 `method + path` 合并，导入前请检查生成的路径、认证和参数是否符合预期。
+
+## 试运行与执行记录
+
+HTTP endpoint 或 Script 条目必须先保存且没有阻断性配置问题，才能执行 **Try run**。测试无论成功或失败都会保存输入、输出和状态；详情页显示最近最多 8 条执行记录。
+
+- HTTP 状态码 $\ge 400$ 会标记为失败，但响应正文仍会保留。
+- 运行时异常会转换为失败结果并显示错误信息。
+- Try run 历史仅记录详情页手动测试，不是 Agent 和 workflow 调用的全局审计历史。
+
+<Callout type="warning">
+  执行记录会保存输入和完整输出正文。虽然常见认证 header 和 `set-cookie` 会被脱敏，但 body 中的敏感字段不会自动全面脱敏。测试前请使用非生产凭据或最小化的测试数据。
+</Callout>
+
+## HTTP 限制与网络安全
+
+- 单个 multipart 上传文件最大 **10 MiB**。
+- HTTP 请求最长 **60 秒**。
+- 响应体最大 **2 MiB**；超过限制会中断请求。
+- 仅允许 `http:` 和 `https:` URL。
+- `localhost`、私网/链路本地 IP 和云 metadata 地址会被拦截，并在 DNS 解析后再次检查。
+
+全局 Preferences 的 HTTP/HTTPS 代理会应用于 integration 请求。SOCKS5 当前尚未接通。`ignoreSslErrors` 默认关闭；只应在受控环境临时使用，因为它会降低 TLS 证书验证安全性。
+
+## Scripts Integration
+
+Scripts Integration 可维护多个可运行条目。每个条目包含名称、handler、JavaScript 代码、输入/输出 JSON Schema 和超时设置；至少保留一个脚本条目。
+
+脚本使用 Node `vm` 执行，允许的 runtime 名称为 `node`、`sandbox` 或 `javascript`，但三者当前都使用同一 VM 实现。运行时提供：
+
+- 解析后的 `input`
+- `fetch`、`AbortController`、URL、编码器和 `structuredClone`
+- 捕获的 `console.log`、`console.warn`、`console.error`
+
+脚本会阻止 `require`、`process`、`child_process`、`fs`、动态 `import()`、`new Function` 和 `eval()`。脚本超时范围为 **1–60 秒**，默认 30 秒。
+
+<Callout type="warning">
+  Script 沙箱并非无网络环境：脚本可使用提供的 `fetch` 访问网络。静态关键字拦截也不能替代完整安全审计。仅运行经过审查的代码，并将特权操作改为受控 HTTP Integration。
+</Callout>
+
+## MCP Integration 的当前边界
+
+MCP 配置可填写 endpoint、launch command、protocol、认证模式、认证配置 JSON 和 tool catalog。工具目录主要用于在界面中展示名称、描述和 input schema。
+
+当前 MCP 功能**不是完整 MCP client**：
+
+- 不会协商 transport、调用 `tools/list` 或 `tools/call`。
+- 不会根据 protocols、auth modes 或 tool catalog 实际调用工具。
+- 配置 endpoint 时，底层执行仅发送 HTTP GET 连通性探测。
+- 配置 launch command 时，会用 shell 启动命令并短暂收集 stdout/stderr。
+- MCP 详情页目前没有 Try run 按钮。
+
+<Callout type="warning">
+  MCP 的 `launchCommand` 通过 shell 启动，当前没有命令 allowlist、确认流程或 sandbox 保护。不要把不可信命令粘贴到该字段；仅使用已审查的本地启动命令。
+</Callout>
+
+## 绑定给 Agent 和 workflow
+
+### Agent
+
+在 Agent 的 Integrations 绑定区选择可调用的集成。只要 Agent 绑定了至少一个集成，它就不能调用未绑定的 ID。没有任何绑定时，当前实现可能按 ID 调用全部现有集成；对敏感任务请显式绑定最小集合。
+
+### Workflows
+
+workflow 的 HTTP、Webhook 和 Toolset 节点可绑定 Integration，也可直接填写 URL。绑定集成时使用该集成的当前配置；直接 URL 时会临时构造 HTTP 调用。Try run 会跳过 HTTP、脚本、集成和 AI 节点，不会造成外部副作用。
+
+Agent 和 workflow 直接调用集成时，不会写入 Integrations 页面中的 Try run 历史。对生产操作，请同时检查 Chat/workflow 的运行记录。
+
+## 版本与当前 UI 限制
+
+Integrations 底层会保存草稿/发布版本和执行记录，但当前页面没有：
+
+- 删除整个集成的功能（可删除 HTTP 子 endpoint 和 Script 条目）。
+- 发布、版本切换或可见版本历史入口。
+- MCP 的页面内 Try run。
+- 执行历史搜索、筛选、清理、导出或完整 request/response 检视界面。
+
+此外，保存校验主要检查 Base URL、端点数量/路径、脚本条目及 MCP 基本字段。复杂 JSON、schema、标题唯一性和参数一致性需要在 Try run 前自行审查。
+
+## 推荐工作方式
+
+1. 先用最小 HTTP endpoint 或简单 Script 验证连通性。
+2. 使用测试服务、测试账号和短期凭据执行 Try run。
+3. 检查输出、状态和错误，再将集成绑定给 Agent 或 workflow。
+4. 对 Agent 显式配置最小 Integration 集合。
+5. 将生产写入、付款、账户变更和删除操作放在明确确认之后执行。

@@ -1,0 +1,29 @@
+export const meta = { title: "安装与启动", description: "安装应用并配置第一个模型。" }
+
+# 安装与启动
+
+SUORA 是 Electron 桌面应用。开发环境需使用 Node.js `>= 22.12.0` 和 npm。
+
+## 安装依赖
+
+```bash
+git clone https://github.com/fandych/suora.git
+cd suora
+npm ci
+npm run dev
+```
+
+如果在 root 或必须关闭 Chromium sandbox 的环境中启动，请运行 `npm run dev:root`。Electron 二进制下载失败时，可执行 `npm run electron:download`。
+
+## 配置第一个模型
+
+1. 启动应用后进入 **Models**。
+2. 选择预设提供商，或创建一个 Custom / OpenAI-compatible 提供商。
+3. 填写 Base URL、API Key，并启用至少一个模型。Ollama、Custom 和 OpenRouter 可按端点要求不填写 API Key。
+4. 打开 **Chats**，选择模型或 Agent 后开始对话。
+
+Ollama 默认地址为 `http://localhost:11434/v1`，通常不需要 API Key。部分 OpenAI-compatible 服务可刷新 `{baseUrl}/models` 模型目录。
+
+<Callout>
+  模型 API Key 会保存在本地工作区数据库。不要将数据库备份、日志或包含密钥的截图分享给他人。
+</Callout>

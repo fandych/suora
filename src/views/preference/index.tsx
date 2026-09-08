@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Navigate, useParams } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { useAsyncResource } from "@/hooks/use-async-resource"
@@ -16,6 +17,7 @@ import PreferenceMailPanel from "@/views/preference/components/preference-mail-p
 import PreferenceSecurityPanel from "@/views/preference/components/preference-security-panel"
 
 const PreferencePage = () => {
+  const { section } = useParams()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => getPreferenceSettings(), [])
   const { data: systemInfo } = useAsyncResource(() => getSystemInfo(), [])
   const { data: updaterState, reload: reloadUpdaterState } = useAsyncResource(() => getUpdaterState(), [])
@@ -122,6 +124,25 @@ const PreferencePage = () => {
     }
   }
 
+  const renderActiveSection = () => {
+    switch (section) {
+      case "general":
+        return <PreferenceGeneralPanel draft={draft} onChange={handleChange} />
+      case "security":
+        return <PreferenceSecurityPanel draft={draft} onChange={handleChange} />
+      case "mail-service":
+        return <PreferenceMailPanel draft={draft} onChange={handleChange} testRecipient={testMailRecipient} onTestRecipientChange={setTestMailRecipient} onSendTestMail={() => void handleSendTestMail()} isSendingTestMail={isSendingTestMail} />
+      case "environment-monitor":
+        return <PreferenceEnvironmentPanel diagnostics={diagnostics} isLoading={diagnosticsLoading} error={diagnosticsError} onRefresh={() => setDiagnosticsRefreshToken((value) => value + 1)} />
+      case "global-environment":
+        return <PreferenceGlobalEnvironmentPanel draft={draft} onChange={handleChange} />
+      case "about":
+        return <PreferenceAboutPanel draft={draft} systemInfo={systemInfo} updaterState={updaterState} updateResult={updateResult} isCheckingUpdates={isCheckingUpdates} onChange={handleChange} onCheckUpdates={() => void handleCheckUpdates()} />
+      default:
+        return <Navigate to="/preference/general" replace />
+    }
+  }
+
   return (
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader title="Preference" actions={data ? <Button onClick={handleSave} disabled={isSaving}>{isSaving ? "Saving..." : "Save preferences"}</Button> : null} />
@@ -130,14 +151,7 @@ const PreferencePage = () => {
           {isLoading ? <LoadingCard title="Loading preferences..." /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error ? (
-            <div className="flex flex-col gap-6">
-              <PreferenceGeneralPanel draft={draft} onChange={handleChange} />
-              <PreferenceSecurityPanel draft={draft} onChange={handleChange} />
-              <PreferenceMailPanel draft={draft} onChange={handleChange} testRecipient={testMailRecipient} onTestRecipientChange={setTestMailRecipient} onSendTestMail={() => void handleSendTestMail()} isSendingTestMail={isSendingTestMail} />
-              <PreferenceEnvironmentPanel diagnostics={diagnostics} isLoading={diagnosticsLoading} error={diagnosticsError} onRefresh={() => setDiagnosticsRefreshToken((value) => value + 1)} />
-              <PreferenceGlobalEnvironmentPanel draft={draft} onChange={handleChange} />
-              <PreferenceAboutPanel draft={draft} systemInfo={systemInfo} updaterState={updaterState} updateResult={updateResult} isCheckingUpdates={isCheckingUpdates} onChange={handleChange} onCheckUpdates={() => void handleCheckUpdates()} />
-            </div>
+            <div className="flex flex-col gap-6">{renderActiveSection()}</div>
           ) : null}
         </div>
       </div>

@@ -1,0 +1,43 @@
+name: Deploy documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - github-pages/**
+      - .github/workflows/deploy-docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+          cache-dependency-path: github-pages/package-lock.json
+      - name: Install dependencies
+        working-directory: github-pages
+        run: npm ci
+      - name: Verify documentation site
+        working-directory: github-pages
+        run: npm run lint && npm run type-check && npm run build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: github-pages/dist
+      - id: deployment
+        uses: actions/deploy-pages@v4

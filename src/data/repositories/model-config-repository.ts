@@ -49,7 +49,7 @@ function mergeDiscoveredModels(providerType: string, currentModels: ProviderConf
   return [...mergedDiscoveredModels, ...extras]
 }
 
-function providerAllowsNoKey(providerType: string) {
+export function providerAllowsNoKey(providerType: string) {
   return providerType === "ollama" || providerType === "custom" || providerType === "openrouter"
 }
 

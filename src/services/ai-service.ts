@@ -9,14 +9,15 @@ import type { ChatMessageRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { buildChatModelMessages } from "@/services/chat-model-messages"
-import { listDocuments, getDocumentDetail } from "@/data/repositories/document-repository"
+import { getDocumentDetail } from "@/data/repositories/document-repository"
 import { getIntegrationDetail } from "@/data/repositories/integration-repository"
 import { executeIntegration } from "@/data/repositories/integration-execution-repository"
-import { listSkills, getSkillDetail } from "@/data/repositories/skill-repository"
-import { listWorkflows, getWorkflowDetail } from "@/data/repositories/workflow-repository"
+import { getSkillDetail } from "@/data/repositories/skill-repository"
+import { getWorkflowDetail } from "@/data/repositories/workflow-repository"
 import { getResearchAgentMaxSteps, getStepLimitErrorMessage, normalizeChatAgentMaxSteps } from "@/services/agent-loop-control"
 import type { ChatErrorKind } from "@/services/chat-error-state"
 import { createBuiltInTools, listScopedDocuments, listScopedSkills, listScopedWorkflows, mergeAgentInstructions, resolveAgentContext } from "@/services/ai-tools"
+import { createPrivateResourceTools } from "@/services/private-resource-tools"
 
 type AiFetchStartResult = {
   requestId?: string
@@ -224,8 +225,17 @@ function serializeToolOutput(output: unknown) {
   }
 }
 
-async function createResearchSubagent(settings: ChatRuntimeSettings, maxSteps: number) {
+type ResearchResourceScope = {
+  documents: Array<Awaited<ReturnType<typeof getDocumentDetail>> | null>
+  skills: Array<Awaited<ReturnType<typeof getSkillDetail>> | null>
+  workflows: Array<Awaited<ReturnType<typeof getWorkflowDetail>> | null>
+}
+
+async function createResearchSubagent(settings: ChatRuntimeSettings, maxSteps: number, scope: ResearchResourceScope) {
   const model = createModel(settings)
+  const hasDocumentScope = scope.documents.length > 0
+  const hasSkillScope = scope.skills.length > 0
+  const hasWorkflowScope = scope.workflows.length > 0
 
   return new ToolLoopAgent({
     model,
@@ -235,17 +245,17 @@ async function createResearchSubagent(settings: ChatRuntimeSettings, maxSteps: n
       listDocuments: tool({
         description: "List available documents in the workspace.",
         inputSchema: z.object({}),
-        execute: async () => (await listDocuments()).map((item) => ({ id: item.id, title: item.title, summary: item.summary })),
+        execute: async () => (await listScopedDocuments(hasDocumentScope, scope.documents)).map((item) => ({ id: item.id, title: item.title, summary: item.summary })),
       }),
       listWorkflows: tool({
         description: "List available workflows in the workspace.",
         inputSchema: z.object({}),
-        execute: async () => (await listWorkflows()).map((item) => ({ id: item.id, title: item.title, summary: item.summary })),
+        execute: async () => (await listScopedWorkflows(hasWorkflowScope, scope.workflows)).map((item) => ({ id: item.id, title: item.title, summary: item.summary })),
       }),
       listSkills: tool({
         description: "List available skills in the workspace.",
         inputSchema: z.object({}),
-        execute: async () => (await listSkills()).map((item) => ({ id: item.id, title: item.title, summary: item.summary })),
+        execute: async () => (await listScopedSkills(hasSkillScope, scope.skills)).map((item) => ({ id: item.id, title: item.title, summary: item.summary })),
       }),
     },
   })
@@ -278,13 +288,14 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
   const model = createModel(effectiveSettings)
   const chatAgentMaxSteps = normalizeChatAgentMaxSteps(effectiveSettings.maxSteps)
   const researchAgentMaxSteps = getResearchAgentMaxSteps(chatAgentMaxSteps)
-  let researchSubagentPromise: Promise<Awaited<ReturnType<typeof createResearchSubagent>>> | null = null
   const builtInTools = await createBuiltInTools(options?.browserSessionId)
+  const privateResourceTools = createPrivateResourceTools(agentContext?.detail?.config.privateToolIds ?? [])
 
   const scopedSearchDocuments = agentContext?.documents?.filter(Boolean) ?? []
   const scopedSearchSkills = agentContext?.skills?.filter(Boolean) ?? []
   const scopedSearchWorkflows = agentContext?.workflows?.filter(Boolean) ?? []
   const scopedIntegrations = agentContext?.integrations?.filter(Boolean) ?? []
+  let researchSubagentPromise: Promise<Awaited<ReturnType<typeof createResearchSubagent>>> | null = null
 
   const agent = new ToolLoopAgent({
     model,
@@ -292,6 +303,7 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
     stopWhen: stepCountIs(chatAgentMaxSteps),
     tools: {
       ...builtInTools,
+      ...privateResourceTools,
       searchDocuments: tool({
         description: "Find a document and inspect its content.",
         inputSchema: z.object({ query: z.string() }),
@@ -352,7 +364,11 @@ export async function* streamChatAgentResponse(history: ChatMessageRecord[], set
         description: "Delegate a focused research task to a specialized subagent.",
         inputSchema: z.object({ task: z.string() }),
         execute: async ({ task }, { abortSignal: nextAbortSignal }) => {
-          researchSubagentPromise ??= createResearchSubagent(effectiveSettings, researchAgentMaxSteps)
+          researchSubagentPromise ??= createResearchSubagent(effectiveSettings, researchAgentMaxSteps, {
+            documents: scopedSearchDocuments,
+            skills: scopedSearchSkills,
+            workflows: scopedSearchWorkflows,
+          })
           const researchSubagent = await researchSubagentPromise
           const result = await researchSubagent.generate({ prompt: task, abortSignal: nextAbortSignal })
           const stepLimitError = getStepLimitErrorMessage({

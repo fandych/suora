@@ -1,0 +1,30 @@
+export const meta = {
+  title: "SUORA 文档",
+  description: "本地优先 AI 工作台的用户与技术文档。",
+}
+
+# SUORA 文档
+
+SUORA 将模型、对话、Agent、文档、Skills、工作流、外部集成和消息渠道整合到一个本地优先的桌面工作台中。
+
+## 从这里开始
+
+<div className="mt-8 grid gap-4 sm:grid-cols-2">
+  <DocLink className="rounded-xl border bg-card p-5 transition-colors hover:bg-muted" to="/doc/getting-started/installation">
+    <p className="font-semibold text-foreground">安装与启动</p>
+    <p className="mt-2 text-sm leading-6 text-muted-foreground">准备运行环境，配置首个模型并开始对话。</p>
+  </DocLink>
+  <DocLink className="rounded-xl border bg-card p-5 transition-colors hover:bg-muted" to="/doc/technical/architecture">
+    <p className="font-semibold text-foreground">应用架构</p>
+    <p className="mt-2 text-sm leading-6 text-muted-foreground">了解 React、Electron IPC、SQLite 与桌面服务如何协作。</p>
+  </DocLink>
+</div>
+
+## 文档范围
+
+- **用户文档**面向使用者，聚焦模型、Agent、工作流、集成与渠道的操作路径。
+- **技术文档**面向贡献者，说明应用架构、数据边界、质量检查与发布流程。
+
+<Callout type="warning">
+  API Key、渠道凭据与 SMTP 密码属于敏感数据。请只在可信设备和工作区中启用 Agent 工具、工作流脚本或对外 Webhook。
+</Callout>

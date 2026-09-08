@@ -1,0 +1,145 @@
+export const meta = { title: "Skills", description: "创建、组织和复用本地 Skill 包，为 Agent 提供可检索的任务知识。" }
+
+# Skills
+
+Skills 是可复用的本地任务包。一个 Skill 由 `SKILL.md`、参考资料、资源和脚本文件组成，可用于沉淀提示词约定、操作步骤、项目规范和工具说明，并按需绑定给 Agent。
+
+## 创建 Skill
+
+1. 进入 **Skills**，选择创建本地 Skill。
+2. 应用会创建 Skill、`1.0` 草稿版本和默认文件结构。
+3. 打开 `SKILL.md`，填写名称、描述、适用触发条件和操作说明。
+4. 在 `references/` 放参考资料，在 `assets/` 放资源，在 `scripts/` 放辅助脚本。
+5. 在 **Agents** 中绑定该 Skill，并在 Chats 中测试 Agent 是否能检索到它。
+
+新建 Skill 默认包含：
+
+```text
+SKILL.md
+references/README.md
+assets/.gitkeep
+scripts/main.ts
+other/notes.md
+```
+
+默认脚本提供异步 `main(input)` 示例，但不会自动执行。
+
+## 编写 SKILL.md
+
+`SKILL.md` 是 Skill 的根文件。标题和摘要从顶部 frontmatter 的 `name`、`description` 读取，保存后会覆盖列表中的显示名称和简介。
+
+```md
+---
+name: "release-notes"
+description: "根据变更记录起草中文发布说明"
+---
+
+## Purpose
+
+将变更按功能、修复和注意事项整理为发布说明。
+
+## Triggers
+
+- 用户要求编写发布说明
+- 提供了 Git 提交或变更清单
+
+## Instructions
+
+1. 先确认版本号和目标读者。
+2. 按功能、修复、已知限制分类。
+3. 不确定的信息以问题形式列出，不要编造。
+```
+
+frontmatter 当前使用轻量解析：只稳定识别顶层单行 `name:` 与 `description:`，并只去除首尾引号。避免多行 YAML、嵌套对象、anchors 或复杂转义，以免标题和摘要无法正确显示。
+
+## 文件结构与编辑
+
+Skill 固定使用以下顶层结构：
+
+```text
+SKILL.md
+scripts/
+references/
+assets/
+other/
+```
+
+- `SKILL.md` 和四个标准目录不能重命名或删除。
+- 可在四个标准目录下创建文件或子目录；同名时自动追加 `-2`、`-3` 等后缀。
+- 可重命名其他文件和目录；重命名目录会同步更新所有后代路径。
+- Markdown、文本、JSON、YAML 和常见脚本可编辑；图片和未知二进制文件只能预览。
+- 删除文件夹会删除全部后代；删除整个 Skill 会永久移除所有版本，无法恢复。
+
+Skills 页面会将本地 Skill 按最近更新时间展示。页面本身没有独立搜索框，但二级侧边栏支持通用查询筛选。
+
+## 导入、上传与导出
+
+### 导入完整 Skill
+
+创建菜单支持导入 `.zip` Skill 包。导入前会展示计划，并要求：
+
+- ZIP 根目录必须包含 `SKILL.md`。
+- 条目只能是 `SKILL.md`，或位于 `scripts/`、`references/`、`assets/`、`other/` 下。
+- 拒绝空路径、绝对路径、Windows 驱动器路径和 `.` / `..` 路径。
+- 同路径可选择 `overwrite`、`skip` 或 `rename` 冲突策略。
+
+文本文件会以文本保存，二进制文件会转换为 base64 `data:` URL。导入结束后，应用会补齐缺失的标准目录和默认文件。
+
+### 上传局部文件
+
+在目录上使用 Upload 可一次选择多个本地文件。文件只会加入当前目录，不会递归保留本地目录结构；文件冲突时可选择覆盖或跳过。
+
+### 导出限制
+
+- 导出单文件会下载原始文本或 data URL 内容。
+- 导出根节点或目录会下载 JSON 文件数组，**不是 ZIP**。
+
+因此，当前导出格式不能直接作为完整 Skill ZIP 导入包。需要可移植 ZIP 时，请在本地按标准目录结构整理并压缩。
+
+## 在 Agent 中使用
+
+可在 Agent 的 Skills 绑定区选择本地 Skill。Agent 在 Chats 中会使用 `searchSkills` 查找匹配项：
+
+- 已绑定至少一个有效 Skill 时，只搜索绑定集合。
+- 未绑定任何 Skill 时，当前实现会搜索全部本地 Skills。
+- 搜索按标题做包含匹配，返回标题、摘要、版本标签和文件路径列表。
+
+Skill 内容不会自动完整注入模型上下文，`SKILL.md`、`references/` 和 `scripts/` 也不会因 Agent 搜索而执行。instructions 应告诉 Agent 何时先检索 Skill，并在需要更多细节时向用户询问或使用受控工具读取相关资源。
+
+<Callout type="warning">
+  空 Skills 绑定不是“禁止所有 Skills”的访问控制。对需要严格范围的 Agent，请显式绑定最小 Skill 集合，并用实际 Chats 测试搜索结果。
+</Callout>
+
+## 外部 Skill 发现
+
+侧边栏还会发现当前操作系统用户目录中的一级 Skill 文件夹：
+
+```text
+~/.codex/skills/<skill-directory>
+~/.claude/skills/<skill-directory>
+~/.agents/skills/<skill-directory>
+```
+
+这些外部条目会按 `codex`、`claude`、`agents` 分组显示。当前发现功能只读取目录名称和本机路径：
+
+- 不会解析外部 `SKILL.md`、frontmatter、文件树或内容。
+- 不扫描当前项目目录，也不支持自定义 workspace 扫描路径。
+- 外部条目不能从当前 UI 打开、编辑、导入、删除或绑定到 Agent。
+- Agent 的 `searchSkills` 仅使用本地 SQLite Skills，不会使用这些外部发现条目。
+
+## 版本与发布
+
+每个 Skill 在本地保存版本和完整文件数组。草稿编辑会持续更新未发布版本；在没有草稿时，系统会创建新草稿版本：最新版本为草稿时递增次版本，最新版本为发布版时递增主版本并重置次版本。
+
+数据层具备发布 API，但当前 Skills 页面没有发布按钮、版本选择器或版本历史界面。不要依赖当前 UI 管理发布版本或查看历史文件内容。
+
+## 安全与限制
+
+- 前端导入和编辑会校验路径，降低 ZIP Slip 和路径穿越风险。
+- Skill 脚本的 `executable` 是元数据；导入、编辑或 Agent 搜索不会自动执行脚本。
+- Skills 与版本文件保存在本机 SQLite；避免在 `SKILL.md`、参考资料或脚本中存放 API Key、密码和私钥。
+- “Disable” 当前只是摘要前的 `[disabled]` 标记，不是可靠的访问控制或执行禁用机制。
+
+<Callout type="warning">
+  不要将前端校验视为安全边界。导入来自不可信来源的 Skill 前，请审查 `SKILL.md`、脚本、资源和指令，尤其是任何要求读取文件、执行命令或发送网络请求的内容。
+</Callout>

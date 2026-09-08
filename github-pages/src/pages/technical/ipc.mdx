@@ -1,0 +1,124 @@
+export const meta = { title: "IPC 通信", description: "了解 Renderer、Preload 与 Electron 主进程之间的 IPC 调用边界。" }
+
+# IPC 通信
+
+SUORA 使用 Electron IPC 连接 React Renderer 与主进程服务。Renderer 不直接访问 Node.js、文件系统、网络或 SQLite；业务请求通过 preload 暴露的领域 API 转发到主进程。
+
+## 调用链
+
+```text
+React page
+  → repository / service
+  → window.suora.<domain>.<method>
+  → ipcRenderer.invoke(channel, payload)
+  → ipcMain.handle(channel, handler)
+  → database or desktop service
+  → serialized result
+```
+
+Renderer 页面通常不直接调用 `ipcRenderer`。推荐的调用层次是：
+
+1. 页面组件只处理交互、加载和展示。
+2. Repository 负责调用 `window.suora`、转换领域数据和处理浏览器降级。
+3. Preload 暴露稳定、按领域组织的 API。
+4. Electron IPC handler 执行特权操作并返回可序列化结果。
+
+## Preload API 分组
+
+`electron/preload.ts` 暴露的主要领域包括：
+
+| API | 责任 |
+| --- | --- |
+| `system` / `workspace` | 系统诊断、工作区路径和代理。 |
+| `chats` | 会话、消息和会话设置。 |
+| `documents` | 文档列表、读取、保存和删除。 |
+| `models` | Provider、模型保存和远程模型发现。 |
+| `skills` / `agents` | Skill 包和 Agent 配置。 |
+| `integrations` / `workflows` | 集成、workflow 定义与执行记录。 |
+| `channels` | 渠道配置、runtime、Webhook、健康检查和消息发送。 |
+| `schedulers` | 调度配置 CRUD；当前没有实际调度 runtime。 |
+| `preferences` / `updater` / `mail` | 偏好、更新和邮件服务。 |
+| `tools` | 文件、命令、浏览器和文件保存工具。 |
+
+领域 API 使用 `unknown` payload 的地方，应在主进程 handler 中重新验证，而不是信任 TypeScript 类型或 Renderer 表单。
+
+## IPC 注册
+
+主进程启动时调用 `setupIpc()`，按领域注册 handler：
+
+- `ipc-core.ts`：数据库、系统和偏好核心能力。
+- `ipc-content.ts`：Chats、Documents、Channels 等内容数据。
+- `ipc-catalog.ts`：Models、Skills、Agents、Integrations 目录数据。
+- `ipc-automation.ts`：Workflows、Schedulers 和调用记录。
+- `ipc-channel-runtime.ts`：渠道 runtime、Webhook 和健康检查。
+- `ipc-tools.ts`：文件、命令、浏览器和保存文件工具。
+
+新增 IPC 功能时，应同时修改 handler、preload API、Electron 类型声明和 Renderer repository。不要只新增一个裸 `ipcRenderer.invoke` 调用。
+
+## 通用通道白名单
+
+Preload 还提供 `window.electron.invoke/on/off`，但它不是任意 IPC 代理。调用通道必须出现在白名单中：
+
+- Invoke：AI fetch、数据库查询、Integration 执行和个人微信二维码预览。
+- Event：AI 流式事件、渠道消息和浏览器状态变化。
+
+其他业务功能应使用 `window.suora` 的明确领域方法。白名单可以减少网页或被注入脚本直接访问任意主进程 handler 的风险。
+
+## 数据库 IPC
+
+数据库查询通过 `db:execute` 进入主进程数据库核心。参数会被规范化为 SQLite 可接受的类型；对象和数组会序列化为 JSON，`undefined` 转为 `null`。
+
+数据库启动时：
+
+- 使用 Electron `userData/workspace/suora.sqlite`。
+- 开启 WAL 和 SQLite foreign keys。
+- 先创建 migration 表，再按顺序执行未应用 migration。
+- 每个 migration 使用事务；失败时回滚。
+
+业务模块应优先使用 repository，不应从页面直接拼接 SQL。通用数据库 IPC 需要特别谨慎，因为它拥有比普通领域 API 更宽的查询能力。
+
+## 事件与流式数据
+
+IPC 不只返回一次性 Promise 结果。AI 请求和渠道 runtime 使用事件：
+
+- AI fetch 事件携带文本增量、工具调用、结果、完成和错误状态。
+- `channel:message` 将入站消息从主进程渠道服务发送到 Renderer。
+- 浏览器状态事件同步隐藏浏览器 session 的状态变化。
+
+订阅事件的组件必须在卸载时调用 `off`，避免重复监听、重复写入消息或内存泄漏。流式状态应由 service/store 聚合后再交给页面渲染。
+
+## 安全边界
+
+- BrowserWindow 开启 `contextIsolation`，关闭 `nodeIntegration`。
+- Preload 只暴露明确的方法，不暴露完整 `ipcRenderer`。
+- 主进程负责重新校验路径、命令、URL、凭据和资源权限。
+- 文件读写受工作区边界和大小限制。
+- 命令执行受 allowlist，交互式 shell 会被阻止。
+- 浏览器 URL 会阻止 localhost、私有 IP 和云 metadata 地址。
+- Agent instructions、网页内容和 Skill 文件不能改变 IPC 权限。
+
+IPC 隔离不等于多用户权限系统。SUORA 当前是本地桌面应用，数据库和 API Key 仍受当前操作系统用户权限保护。
+
+## 错误处理约定
+
+IPC handler 应返回可区分的成功/失败结果，或抛出带有用户可理解信息的错误。Renderer repository 负责将错误转换为页面状态、toast 或可重试错误。
+
+调用方应区分：
+
+- 参数校验失败：修正配置后重试。
+- 权限/安全策略拒绝：检查 Agent、Preferences 或 URL 范围。
+- 外部网络失败：检查 Provider、代理、TLS 和服务状态。
+- 持久化失败：检查数据库迁移、磁盘和工作区权限。
+
+不要在错误消息、debug log 或 IPC payload 中输出 API Key、密码、Cookie 或完整授权 header。
+
+## 修改 IPC 的检查清单
+
+1. 定义 payload 和返回值的运行时校验。
+2. 将 handler 放在正确的 `electron/ipc/` 领域文件。
+3. 在 `preload.ts` 暴露最小化的方法。
+4. 同步 `electron/types/` 和 Renderer 类型。
+5. 在 repository 中集中处理调用和降级。
+6. 对拒绝路径、无权限资源、超时和外部错误添加测试。
+7. 验证 context isolation 下的实际桌面运行。
+8. 运行 `npm run type-check`、`npm run lint`、`npm run test:run` 和 `npm run build`。

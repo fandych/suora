@@ -1,0 +1,124 @@
+export const meta = { title: "Models", description: "配置模型提供商、启用可用模型，并将它们用于 Chats、Agents 和 workflows。" }
+
+# Models
+
+Models 页面管理 Provider（模型提供商）及其模型清单。只有已启用的 Provider 与至少一个已启用模型，才会出现在 Chats、Agents 和 workflow 的模型选择中。
+
+## 配置第一个 Provider
+
+1. 进入 **Models**，选择一个预置 Provider，或使用 **Add provider** 创建 Custom Provider。
+2. 填写名称、Provider type、Base URL 和 API Key。
+3. 保存 Provider 一般设置。
+4. 启用 Provider，并启用至少一个模型。
+5. 在 Chats 中选择该模型发送测试消息。
+
+初次加载时，应用会创建缺失的预置 Provider，但它们默认关闭且没有 API Key。Add provider 创建的是 Custom Provider，带一个未启用的 `custom-model`；之后可在详情页改为任意预置类型。
+
+## 预置 Provider
+
+内置预置包括：
+
+- OpenAI、Azure、Google Gemini、Anthropic、Ollama
+- DeepSeek、通义千问、Kimi、硅基流动、火山方舟、智谱、MiniMax、StepFun
+- OpenRouter、Groq、xAI、Mistral、Perplexity、Together、Fireworks
+- DeepInfra、SambaNova、Cerebras、Nebius、Novita、Hyperbolic、NVIDIA NIM、Vercel AI Gateway
+
+切换 Provider type 时，如果名称或 Base URL 仍是旧预置默认值，应用会改为新预置默认值；**模型列表也会替换为新预置的模型列表**。切换前请记录需要保留的自定义模型和启用状态。
+
+可新增、编辑、删除模型。模型的增删改和启用状态会立即保存；Provider 的名称、类型、Base URL 和 API Key 需要点击 **Save provider**。
+
+## 启用条件与默认值
+
+对于一般云 Provider，未填写 API Key 时，Provider 和全部模型会被视为不可用。确保同时完成：
+
+1. 填写必要凭据。
+2. 启用 Provider。
+3. 启用至少一个模型。
+
+全局默认 Provider ID 为 OpenAI，但这只是偏好默认值。实际 Chats/Agent 运行仍取决于所选 Provider 与模型是否可用。
+
+<Callout>
+  Ollama、Custom 和 OpenRouter 可在不填写 API Key 时启用。请确保 Base URL 指向可访问且确实允许匿名请求的端点；其他 Provider 仍需要有效 API Key。
+</Callout>
+
+## Base URL 与 API Key
+
+- Base URL 应使用 Provider 所需的 API 根地址，避免在没有要求时手动添加重复路径。
+- API Key 输入框会隐藏内容，Provider 卡片仅显示掩码；但密钥仍保存在本地 SQLite，并会提供给渲染进程与运行时请求使用。
+- 不要在截图、日志、导出文件、Documents 或 Skill 中记录真实密钥。
+
+Ollama 默认可使用：
+
+```text
+http://localhost:11434/v1
+```
+
+Ollama 通常不需要 API Key；保存 Base URL 后即可启用 Provider 和模型。
+
+## 管理模型元数据
+
+每个模型可维护：
+
+- 显示名与模型 ID
+- 启用状态
+- Tool calling、Vision、Embeddings、Structured output 能力
+- API mode：`messages`、`responses`、`completions`
+- 上下文窗口、最大输出 token、并行工具调用和推理标记
+
+这些字段主要用于库存展示和选择提示。当前运行时主要根据 Provider type 选择 AI SDK 适配器，不会完全按每个模型的 API mode 或能力字段动态改变实际调用方式。因此，应以 Provider 的官方兼容性说明和真实测试结果为准。
+
+## 刷新远程模型
+
+**Refresh models** 会请求远程模型目录，不是独立的“测试连接”功能。
+
+### 支持刷新
+
+- **Ollama**：请求 `GET {baseUrl 去掉 /v1}/api/tags`；不需要认证头。空 Base URL 会使用 `http://localhost:11434/v1`。
+- **OpenAI-compatible**：请求 `GET {baseUrl}/models`；填写 API Key 时使用 `Authorization: Bearer <key>`。
+
+支持 OpenAI-compatible 刷新的类型包括 OpenAI、DeepSeek、通义千问、Kimi、硅基流动、火山方舟、智谱、MiniMax、StepFun、OpenRouter、Groq、xAI、Mistral、Perplexity、Together、Fireworks 与 Custom。
+
+### 不支持或当前未纳入刷新
+
+- 明确不支持：Azure、Anthropic、Google Gemini、Vercel AI Gateway。
+- 预置存在但当前未纳入发现白名单：DeepInfra、SambaNova、Cerebras、Nebius、Novita、Hyperbolic、NVIDIA NIM。
+
+刷新会合并远程模型：已有模型保留本地启用状态；远程不再返回的本地模型不会自动删除；新发现模型默认关闭。远程推断出的能力、上下文窗口和输出 token 为估计值，不应视为官方权威数据。
+
+<Callout>
+  刷新请求当前不一定应用应用内代理、AI 请求超时/重试或忽略 SSL 设置。若刷新失败，请先检查 Base URL、网络连通性与 Provider 凭据；能正常聊天不一定意味着模型目录刷新也能成功。
+</Callout>
+
+## 运行时适配
+
+SUORA 会按 Provider type 选择请求适配器：
+
+- Anthropic 使用 Anthropic SDK。
+- Azure 使用 OpenAI Responses 与 `api-key` 请求头。
+- OpenAI 使用 OpenAI SDK。
+- Google Gemini 和 Ollama 当前走 OpenAI SDK 兼容路径。
+- 其他多数预置和 Custom 走 OpenAI-compatible SDK。
+
+如果 Agent 配置的 Provider/Model 不可用，Chats 会尝试回退到当前会话模型。仍建议为每个 Agent 显式选择并测试一个可用模型。
+
+## 代理、TLS 与安全
+
+模型请求通过 Electron 主进程的 AI fetch bridge，可使用 HTTP/HTTPS 代理，并在连接被重置时尝试重试。SOCKS5 当前未接通。
+
+Preferences 的 **Ignore SSL / CA certificate validation** 默认关闭。仅在受控环境临时使用；它会降低 HTTPS 证书验证安全性。
+
+Provider API Key 以普通文本存于本机 SQLite，当前没有系统钥匙串或应用级加密。保护操作系统账户、数据库备份和设备磁盘；迁移设备时请撤销旧密钥并重新生成新密钥。
+
+## 常见问题
+
+### 模型不出现在 Chats 或 Agents
+
+确认 Provider 已保存、已启用，并且至少一个模型已启用。云 Provider 还需确认已填写 API Key。
+
+### Refresh models 失败
+
+检查 Base URL 是否正确，API Key 是否有效，网络/DNS 是否可用。Ollama 请确认本地服务正在运行，并使用正确的 `http://localhost:11434/v1` 或等效地址。
+
+### Request failed / Request timed out
+
+检查 Provider 凭据、模型 ID、网络、代理和超时。连接被拒绝通常说明本地服务未启动或 Base URL 不可达；连接重置可能与网络、代理或上游服务有关。

@@ -1,0 +1,40 @@
+export const meta = { title: "开发与发布", description: "质量检查、构建、测试与发行。" }
+
+# 开发与发布
+
+修改应用后，先在本地运行以下检查：
+
+```bash
+npm run lint
+npm run type-check
+npm run test:run
+npm run build
+```
+
+## 常用命令
+
+- `npm run dev`：启动 Electron 开发环境。
+- `npm run test`：以 watch 模式运行 Vitest。
+- `npm run test:coverage`：运行测试并产出覆盖率。
+- `npm run build`：构建 `out/main`、`out/preload` 与 `out/renderer`。
+- `npm run package`：使用 electron-builder 打包当前平台。
+- `npm run package:win`：生成 Windows NSIS 与 portable 安装包。
+
+## 文档站开发
+
+文档站位于 `github-pages/`，使用 Vite、React、MDX 与 shadcn/ui。开发与构建命令如下：
+
+```bash
+cd github-pages
+npm ci
+npm run dev
+npm run build
+```
+
+内容按 `src/pages/user/` 与 `src/pages/technical/` 分类；新增页面时同步更新 `@/lib/docs-navigation.ts` 和 `src/App.tsx` 的页面映射。
+
+修改主应用代码时，如涉及用户可见行为、配置、运行限制、安全边界、路由或命令，必须在同一变更中同步更新相关用户文档与技术文档。用户文档位于 `github-pages/src/pages/user/`，技术文档位于 `github-pages/src/pages/technical/`；没有合适页面时，应新增或扩展页面并同步导航和路由。
+
+<Callout>
+  文档站使用 BrowserRouter；GitHub Pages 构建产物包含深链回退页，因此可直接访问或刷新 `/doc/...` 地址。
+</Callout>

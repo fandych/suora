@@ -1,0 +1,131 @@
+export const meta = { title: "Workflows", description: "设计、验证、发布并运行可追踪的 workflow。" }
+
+# Workflows
+
+Workflows 使用可视化画布把 AI、文档检索、条件分支、变量、HTTP、集成、脚本和邮件等操作连接成可运行的自动化流程。每次运行均会保存输入、输出与节点 trace，便于检查和复盘。
+
+## 创建第一个 workflow
+
+1. 进入 **Workflows**，在侧边栏新建 workflow。
+2. 新流程默认为 `New workflow`，包含一个 Start 节点和草稿版本 `v1.0`。
+3. 从节点库添加所需节点，并用连线定义执行路径。
+4. 选择节点，配置其输入、资源、条件、模板或重试策略。
+5. 先使用 **Try run** 验证，再保存并发布；发布后用 **Run release** 执行正式版本。
+
+草稿版本可修改画布、标题、说明、dry-run 输入、资源绑定和通知。发布版本为只读；要继续修改时，保存会创建新的草稿版本。
+
+## 节点类型
+
+当前节点库可直接添加：
+
+- **Start / End**：定义入口和最终输出。
+- **Set variable / Template**：设置变量、组装文本或 JSON。
+- **If / Else**：按表达式选择路径。
+- **Document Retrieval**：检索工作区文档。
+- **Agent / AI response**：调用 Agent 或模型生成内容。
+- **HTTP / Webhook / Toolset**：访问节点 URL 或已绑定的 Integration。
+- **Script / Send email (SMTP)**：执行脚本或发送邮件。
+
+Loop、Fork、Join、Parallel、Serial、Condition 与 Wiki retrieval 虽有底层节点定义，但当前 UI 节点库没有新增入口。导入含这些节点的 workflow 前，应先在受控环境验证运行语义。
+
+可复制单个节点，副本会生成新 ID 并稍微偏移位置。当前没有复制整个 workflow 的功能。
+
+## 设计与连接规则
+
+保存、Try run 和发布前，应用会检查流程结构。一个可运行的 workflow 需要：
+
+- 恰好一个启用的 Start 节点，至少一个启用的 End 节点。
+- 每个非 Start 节点有上游输入；每个非 End 节点有下游路径。
+- 所有启用节点都能从 Start 到达。
+- 除 Loop 外，不存在环形依赖。
+- 节点 label 不为空，边和节点引用有效。
+
+节点配置也会被校验。例如，Agent 必须有 prompt，HTTP 必须有 URL 或绑定 Integration，Document Retrieval 要选择文档，Script 要包含脚本，SMTP 要有收件人，变量/模板/条件/循环都要有相应表达式。Headers、Query、Body、Schema 和 dry-run 输入必须是合法 JSON。
+
+单个 workflow 最多包含 **200 个节点**和 **400 条边**。导入 JSON 会覆盖当前未保存画布，文件上限为 **5 MiB**，同样会检查节点类型、唯一 ID 和边引用。
+
+## 变量、表达式与模板
+
+工作流运行时可使用以下上下文：
+
+| 名称 | 用途 |
+| --- | --- |
+| `$input` / `input` | 启动 workflow 时提交的 JSON 输入。 |
+| `$vars` / `vars` | 设置的变量和节点 `outputKey` 别名。 |
+| `$steps` / `steps` | 按节点 ID 或 label 保存的节点输出。 |
+| `$current` / `current` | 当前节点的原始输出。 |
+
+支持 `{{ expression }}`、`${expression}` 和 `$path` 插值，例如 `${input.user.name}`、`${steps.fetch.items[0]}`。模板可使用 `upper`、`lower`、`trim`、`json`、`default(...)` 等过滤器。
+
+为节点配置 Output schema 可将结果映射为稳定字段；设置 `outputKey` 后，该结果也会写入顶层变量上下文。Template 节点会输出文本，若内容可解析也会作为 JSON 输出；End 节点可使用结果模板生成最终返回值。
+
+<Callout>
+  在画布中定义的 variables 列表目前不一定会自动成为运行时默认值。重要变量请通过 Start 输入、Set variable 节点或明确的上游输出传入。
+</Callout>
+
+## Try run 与正式运行
+
+**Try run** 只可从可编辑草稿启动，输入必须是 JSON 对象。它会保存调用历史和逐节点 trace，适合验证图结构、表达式、变量映射和文档检索。
+
+Try run 会执行 Start、End、变量、模板、条件、文档检索、循环和图控制节点，但会跳过以下副作用节点：
+
+- Agent、AI response
+- HTTP、Webhook、Toolset
+- Script
+- Send email (SMTP)
+
+被跳过节点会在 trace 中标注为 `skipped`，不会发送请求、执行脚本或发信。
+
+**Run release** 只能运行已发布版本，并会真正执行 AI、HTTP/Integration、脚本和 SMTP 节点。当前没有独立的运行时输入表单；它会使用 workflow 已保存的 **Dry-run input** JSON 作为输入。要更改正式运行输入，请先更新并保存该字段，再执行 Run release。涉及外部系统前，请先完成 Try run，并使用测试凭据或测试环境。
+
+<Callout type="warning">
+  Try run 不能证明正式运行一定成功：它会有意跳过所有副作用节点。正式运行可能产生 API 调用、写入、Webhook 请求或邮件，请先确认目标、凭据和影响范围。
+</Callout>
+
+## 版本、发布与调用历史
+
+- 草稿保存会更新当前草稿；发布会创建 release 版本。
+- 发布前必须没有未保存修改，并且通过所有阻断性设计检查。
+- 发布版不能编辑或移动节点。
+- 删除 workflow 会同时永久删除其版本和全部调用记录，无法撤销。
+
+每次运行都会记录版本、触发方式、输入、最终输出、节点 trace 和时间。调用历史按时间倒序显示，可导出为 JSON。运行面板可检查每个节点的输入、输出、前后上下文、执行时长和 request ID，并可导出 Try run 结果。
+
+## 重试、超时与错误处理
+
+节点可设置超时、重试和 **Continue On Error**：
+
+- 重试次数限制为 0–5 次。
+- 节点超时最少 100 ms，且不会超过 workflow 总时长。
+- Script 实际运行时间最多 60 秒。
+- 未启用 Continue On Error 时，节点失败会中断后续路径；启用后，错误会写入 trace 并允许流程继续。
+
+workflow 的最大步骤数可设置为 **1–1000**，总时长为 **1 秒–1 小时**。达到任一预算后，运行将失败并保留错误 trace。
+
+Workflow Script 当前始终以 Node VM Integration 执行。编辑器中的 Python、PowerShell 和 **Timeout Seconds** 字段尚未传递到执行引擎；实际超时由节点 `timeoutMs`、workflow 总时长共同限制，且脚本最多运行 60 秒。
+
+## 文档、Agent、Integration 与 Scheduler
+
+- **Document Retrieval** 从所选工作区文档按标题和内容做包含匹配；单页内容摘要最多 1200 字符，默认最多返回 5 条结果。编辑器将结果数限制为 1–20，但执行引擎当前不会再次钳制已导入或外部保存的 `resultLimit`；此类 workflow 应自行确保数值合理。
+- **Agent** 节点可将 prompt 交给指定 Agent 执行。为 Agent 绑定 workflow 主要用于检索工作流资料，不代表 Agent 会自动触发 workflow。
+- **Integration** 可用于 HTTP、Webhook 和 Toolset 节点。未绑定 Integration 时，HTTP/Webhook 可使用节点自身 URL。
+- **Schedulers** 当前可保存以 workflow 或 Agent 为目标的 cron、时区、重试和 JSON 输入配置；不要将其视为已验证的后台定时执行器。
+
+## 运行语义与注意事项
+
+- 同一批已就绪节点可能并发执行；下游节点会等待全部入边源节点完成、跳过或失败后再判断是否继续。
+- If / Else 会按分支顺序选择第一个为真的表达式，最后一个分支作为默认回退。
+- Loop 目前会从集合读取最多 `maxIterations` 项并设置 `item`、`index` 上下文，但不会针对每一项重复执行整个下游子图。
+- Parallel、Serial、Fork、Join 主要表达控制信息和 trace；不要把它们当作完整的专用并发调度系统。
+
+## 数据与敏感信息
+
+workflows、版本和调用记录保存在本地 SQLite。trace 的上下文快照会对 `authorization`、`token`、`secret`、`password` 等常见字段脱敏，但节点原始 input/output 和调用输入/输出仍可能被保存。
+
+<Callout type="warning">
+  不要在节点输入、输出、模板或日志中传递不应长期保留的密钥、密码或个人敏感信息。导出调用历史前也应检查其中是否包含敏感数据。
+</Callout>
+
+## 命名约定
+
+在 SUORA 的新界面和文档中统一使用 `workflow` / `workflows`。只有解释旧版实现时才使用 `pipeline` 术语。

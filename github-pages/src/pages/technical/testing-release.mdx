@@ -1,0 +1,200 @@
+export const meta = { title: "测试与发布", description: "单元测试、CDP 冒烟、CI、Electron 打包和 GitHub Pages 发布流程。" }
+
+# 测试与发布
+
+本页说明 SUORA 主应用和 `github-pages` 文档站的质量检查、测试、构建与发布边界。提交代码前应先完成静态检查、单元测试和构建；涉及外部服务的冒烟脚本必须在隔离环境中运行。
+
+## 环境要求
+
+- Node.js `>= 22.12.0`
+- npm 和仓库内的 `package-lock.json`
+- Electron 依赖可正常下载
+
+安装依赖：
+
+```bash
+npm ci
+```
+
+`postinstall` 会运行 `scripts/ensure-electron-dist.mjs`。如果 Electron 下载受代理或 TLS 影响，可设置 `HTTP_PROXY`、`HTTPS_PROXY`、`ELECTRON_GET_USE_PROXY=true`，或运行：
+
+```bash
+npm run electron:download
+```
+
+## 主应用质量检查
+
+每次代码修改至少运行：
+
+```bash
+npm run lint
+npm run type-check
+npm run build
+```
+
+- `lint`：执行根目录 ESLint。
+- `type-check`：执行 TypeScript `tsc --noEmit`。
+- `build`：使用 electron-vite 构建 main、preload 和 renderer。
+
+## Vitest 单元测试
+
+```bash
+npm run test
+npm run test:run
+npm run test:coverage
+npm run test:ui
+```
+
+Vitest 使用 jsdom 和 globals。当前配置主要匹配：
+
+```text
+src/**/*.test.ts
+```
+
+因此应检查 `.test.tsx` 是否被当前 include 纳入，不能仅因为文件存在就假设它会在 CI 中执行。当前测试覆盖 workflow engine、trace 脱敏、Chat 错误和持久化迁移、Agent loop、Preferences、文件策略及部分 UI schema。
+
+Coverage 使用 V8，但当前没有覆盖率阈值、上传或门禁；`test:coverage` 生成报告并不会因覆盖率不足自动失败。
+
+## E2E 与 CDP 冒烟
+
+项目包含 `@playwright/test` 命令，但当前没有发现根目录 Playwright 配置和标准 `*.spec.*` 测试套件。因此：
+
+```bash
+npm run test:e2e
+npm run test:e2e:ui
+```
+
+不能单独证明存在可运行的 Electron E2E 流程。
+
+另有基于 Chrome DevTools Protocol 的 `.mjs` 冒烟脚本。运行前需要：
+
+1. 启动带 `127.0.0.1:9222` CDP 的 Electron 实例。
+2. `/json/list` 中存在 Electron page。
+3. 页面已经加载 `window.suora` 或 `window.electron` bridge。
+4. 使用专用测试工作区和测试凭据。
+
+典型脚本包括 workflow、非 AI workflow、完整链路、行业场景和已配置模型测试。它们可能创建大量 Skills、Documents、Integrations、Workflows、Agents 和 Chats，并调用真实模型、HTTP、SMTP 或公共 API。
+
+已注册的组合入口为：
+
+```bash
+npm run test:e2e:workflows
+npm run test:e2e:full-chain
+```
+
+前者依次运行 32 场景 workflow 与行业场景冒烟；后者运行 30 个完整链路场景。两者都需要满足上述 CDP、专用工作区和测试凭据前置条件，不能替代单元测试或作为无条件 CI 步骤。
+
+<Callout type="warning">
+  冒烟脚本有真实副作用，可能写入本地 SQLite、消耗模型额度、发送邮件或调用外部 API。不要将其作为无条件的 CI 步骤，也不要在个人生产工作区运行。
+</Callout>
+
+部分脚本会在页面上下文中手动遍历节点并构造 trace，不等同于完整 workflow engine 的黑盒 E2E。运行结果应结合 engine 单元测试解释。
+
+## CI 流程
+
+主应用测试 workflow 在 push 到 `main`/`develop` 和对应 pull request 时运行：
+
+```text
+npm ci
+  → npm run lint
+  → npm run type-check
+  → npm run test:run
+  → npm run test:coverage
+  → npm run build
+```
+
+当前 CI 使用 `ubuntu-latest` 和 Node `22.x`，没有执行 Playwright、CDP 冒烟、Electron 打包安装启动、多操作系统验证或 release asset 验证。
+
+## Electron 构建与打包
+
+构建应用：
+
+```bash
+npm run build
+```
+
+产物目录：
+
+```text
+out/main
+out/preload
+out/renderer
+```
+
+打包当前平台：
+
+```bash
+npm run package
+```
+
+Windows 打包：
+
+```bash
+npm run package:win
+```
+
+electron-builder 配置支持：
+
+| 平台 | 产物 |
+| --- | --- |
+| Windows | NSIS、portable |
+| macOS | DMG、ZIP |
+| Linux | AppImage、DEB、RPM |
+
+跨平台产物应在对应平台构建环境生成。当前打包配置没有签名、公证、Windows 证书或 Linux GPG 设置。
+
+## Release 工作流
+
+GitHub Release 发布后触发 release workflow。矩阵为：
+
+- Ubuntu：AppImage、DEB、RPM、Linux updater manifest。
+- Windows：EXE 和 Windows updater manifest。
+- macOS：DMG、ZIP 和 macOS updater manifest。
+
+每个平台执行：
+
+```bash
+npm ci
+npm run build
+npx electron-builder --publish never
+```
+
+之后由 `softprops/action-gh-release` 上传 `dist` 文件。Release workflow 当前只执行 build/package，不执行 lint、type-check、unit test、coverage 或安装包启动验证。
+
+发布前建议手动运行完整检查，并确认版本、图标、更新 manifest、安装包和目标平台启动行为。`verify-release-assets.mjs` 存在但当前没有被 package script 或 release workflow 自动调用。
+
+## 文档站构建与部署
+
+文档站位于 `github-pages/`，使用 Vite、React、MDX、Tailwind 和 shadcn/ui：
+
+```bash
+cd github-pages
+npm ci
+npm run lint
+npm run type-check
+npm run build
+```
+
+文档站部署 workflow 在 `main` 分支的 `github-pages/**` 或部署配置变化时触发，也支持手工 `workflow_dispatch`。构建产物上传到 GitHub Pages。
+
+站点使用 BrowserRouter 和统一的 `/doc/...` 浏览器路径；构建会生成 `dist/404.html` 作为 GitHub Pages 深链回退。早期的 `/tech/...` 地址保留为重定向，新增链接应始终使用 `/doc/technical/...`。
+
+## 提交前检查清单
+
+### 主应用
+
+- [ ] `npm run lint`
+- [ ] `npm run type-check`
+- [ ] `npm run test:run`
+- [ ] `npm run test:coverage`
+- [ ] `npm run build`
+- [ ] 如涉及桌面流程，在 Electron 中手动验证 preload/IPC。
+- [ ] 如涉及外部服务，使用专用 workspace 和测试凭据。
+
+### 文档站
+
+- [ ] `.mdx` 页面已加入 `src/App.tsx`。
+- [ ] 页面已加入 `src/lib/docs-navigation.ts`。
+- [ ] 使用正确的 `/doc/...` BrowserRouter 路径。
+- [ ] `npm run lint`、`npm run type-check`、`npm run build` 通过。
+- [ ] 构建生成 `dist/404.html`。

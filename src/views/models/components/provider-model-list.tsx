@@ -13,7 +13,7 @@ import type { ProviderConfigRecord } from "@/data/domain/models"
 type ModelStatusFilter = "all" | "enabled" | "disabled"
 
 type ProviderModelListProps = {
-  hasApiKey: boolean
+  canConfigureModels: boolean
   showRefreshAction?: boolean
   refreshDisabledReason?: string | null
   isRefreshingModels?: boolean
@@ -25,7 +25,7 @@ type ProviderModelListProps = {
   onToggleModel: (index: number, enabled: boolean) => void
 }
 
-export function ProviderModelList({ hasApiKey, showRefreshAction = false, refreshDisabledReason = null, isRefreshingModels = false, models, onAddModel, onDeleteModel, onEditModel, onRefreshModels, onToggleModel }: ProviderModelListProps) {
+export function ProviderModelList({ canConfigureModels, showRefreshAction = false, refreshDisabledReason = null, isRefreshingModels = false, models, onAddModel, onDeleteModel, onEditModel, onRefreshModels, onToggleModel }: ProviderModelListProps) {
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<ModelStatusFilter>("all")
@@ -110,7 +110,7 @@ export function ProviderModelList({ hasApiKey, showRefreshAction = false, refres
                 </div>
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <div className="flex h-7 items-center justify-center rounded-lg border px-2">
-                    <Switch checked={model.enabled} disabled={!hasApiKey} onCheckedChange={(checked) => onToggleModel(index, checked)} />
+                    <Switch checked={model.enabled} disabled={!canConfigureModels} onCheckedChange={(checked) => onToggleModel(index, checked)} />
                   </div>
                   <Button size="icon-sm" variant="outline" aria-label={`Edit ${model.name}`} title="Edit model" onClick={() => onEditModel(index)}>
                     <PencilIcon className="size-4" />

@@ -1,0 +1,171 @@
+export const meta = { title: "Workflow Engine", description: "图调度、节点执行、变量表达式、dry-run 和运行时限制。" }
+
+# Workflow Engine
+
+Workflow Engine 将 JSON workflow definition 编译为节点图并分批执行。核心实现位于 `src/data/repositories/workflow-execution-engine.ts`，编辑器校验位于 `workflow-editor-state.ts`，持久化和调用历史由 workflow repository 管理。
+
+## 图调度模型
+
+执行前会建立节点索引、入边 `incoming` 和出边 `outgoing`。引擎从第一个 `start` 节点开始：
+
+1. 将当前 ready 节点取为 `currentBatch`。
+2. 使用 `Promise.all` 执行这一批节点。
+3. 将节点标记为 `completed`、`failed` 或 `skipped`。
+4. 根据条件和出边状态决定下一批 ready 节点。
+5. 下游节点通常要等待所有入边源节点完成、跳过或失败。
+
+普通分叉图中，同一批 ready 节点会并发执行，但这不是独立的并发调度器；并发粒度只由某一轮 ready queue 的节点数决定。
+
+## 节点执行器
+
+实际有执行逻辑的节点包括：
+
+- `start` / `end`
+- `variable-assigner` / `template`
+- `condition` / `if-else`
+- `document-retrieval` / `wiki-retrieval`
+- `agent` / `ai-response`
+- `http` / `webhook` / `toolset`
+- `script` / `smtp`
+- `loop`
+
+`parallel`、`serial`、`fork`、`join` 当前主要返回描述性控制对象；实际分支并发和汇合依赖通用图调度逻辑，而不是这些节点实现完整的专用调度语义。
+
+当前编辑器节点库只提供 Start、End、Document Retrieval、Agent、If / Else、HTTP、Script、Set variable、Template、AI response、Toolset、Webhook 和 SMTP 的新增入口。`loop`、`fork`、`join`、`parallel`、`serial`、`condition` 与 `wiki-retrieval` 可由底层 definition 识别，但不能从当前 UI 节点库新增。
+
+## 分支与汇合
+
+- `if-else` 按 branches 顺序选择第一个为真的表达式，最后一个分支作为 fallback。
+- `condition` 根据节点结果或出边上的 `edge.data.condition` 判断路径。
+- 普通节点的出边默认 active。
+- join 实际等待所有入边源节点完成；`wait-any` 等配置目前没有完整专用语义。
+
+已知边界：Promise.all 中的并发分支共享可变 context，可能同时写入 `current`、`steps` 和 `vars`。`parallel.concurrency` 不会实际限制并发数，`mergeStrategy`、`joinStrategy` 和 fork branch count 也没有完全实现。
+
+## 变量与模板上下文
+
+运行上下文包括：
+
+```text
+input / $input       workflow 输入
+vars / $vars         显式变量和 outputKey
+steps / $steps       节点 ID、label 对应的输出
+current / $current   当前节点原始输出
+$context             完整上下文
+```
+
+节点完成后，结果写入 `current`、`steps[node.id]` 和 `steps[node.label]`；设置 `outputKey` 时还会写入顶层上下文和 `vars`。
+
+支持路径：
+
+```text
+input.query
+$input.user.name
+steps.fetch.items[0]
+vars.currentRole
+current.status
+```
+
+支持插值：
+
+- `{{ input.query }}`
+- `${input.query}`
+- `$input.query`
+- `${user.name}` 等简短变量
+
+支持 `upper`、`lower`、`trim`、`json`、`default("Fallback")` 过滤器。完整字段表达式会尽量保留数组或对象类型，嵌入普通字符串时会转换为文本。
+
+## 条件表达式
+
+条件求值支持：
+
+```text
+true / false
+=== / !==
+== / !=
+> / < / >= / <=
+contains
+startsWith
+endsWith
+```
+
+它不是 JavaScript 求值器，不支持任意函数、括号、`&&`、`||` 或复杂脚本。无法匹配比较语法时，会将表达式作为路径读取并进行 truthy 判断。
+
+编辑器会基于上游节点 schema 生成补全并检查路径，但运行时读取器更宽松，可能通过上下文 fallback 找到未被编辑器静态检查接受的路径。
+
+## 编辑器与 IPC 校验
+
+编辑器设计校验包括：
+
+- 一个 active Start 和至少一个 End。
+- 节点从 Start 可达，非 Start 有入边，非 End 有出边。
+- 非 Loop 节点不能形成循环。
+- Agent prompt、资源绑定、HTTP URL/Integration、Script、SMTP 收件人有效。
+- 条件、分支、循环、变量、模板字段完整。
+- JSON 输入、headers、query、body 和 schema 合法。
+- 表达式引用有效且指向上游节点。
+
+Electron IPC 保存校验更基础：definition 必须是合法 JSON，有 nodes/edges 数组，节点 ID 唯一，kind 和边引用有效；节点最多 200 个、边最多 400 条，`maxSteps` 为 1–1000，`maxDurationMs` 为 1000–3,600,000。
+
+IPC 不执行编辑器的完整连通性、表达式或资源存在性校验，因此“能保存”不等于“能运行或发布”。
+
+## Dry-run 与副作用
+
+dry-run 会跳过：
+
+```text
+agent
+ai-response
+http
+webhook
+toolset
+script
+smtp
+```
+
+跳过节点会生成 `skipped` trace。文档检索、变量、模板、条件、循环、End 和图控制节点仍会执行，因此 dry-run 不是完全无副作用沙箱。
+
+正式运行会调用 AI、HTTP/Integration、脚本和 SMTP。当前 invocation 流程会从 definition 保存的 `dryRunInputJson` 读取输入，手动运行没有独立的运行时输入参数；修改 workflow 输入时应先保存 definition。
+
+通知在 dry-run 中会被直接跳过，即使配置 `triggerOn: dry-run` 也不会真正发送。
+
+## 重试、超时与错误
+
+节点 retry count 限制为 0–5，实际尝试次数是 `retryCount + 1`。当前没有 retry backoff、按错误类型判断，也不保留每次 attempt 的独立 trace。
+
+节点 timeout 使用 Promise.race：默认 30 秒，最低 100 ms，且不超过 workflow 总时长。Script 额外限制最多 60 秒。总执行预算最大 3,600,000 ms。
+
+Workflow Script 执行时固定使用 `runtime: "node"`，并只读取节点 `timeoutMs`；编辑器保存的 `runtime`（包括 Python、PowerShell）和 `timeoutSeconds` 当前未传递给执行引擎。Script 实际仍经 Node VM Integration 运行。
+
+超时只拒绝等待中的 Promise，不一定能取消底层 HTTP、AI、脚本或邮件操作；底层副作用可能继续进行。
+
+节点失败默认停止后续执行；启用 `continueOnError` 后，错误会记录到 trace，流程可继续推进。达到 maxSteps 或总时长时，workflow 失败并生成错误 invocation/trace。
+
+## 节点语义限制
+
+- Loop 最多读取 `maxIterations` 项并设置 `item`、`index`，不会为每项重复执行整个下游子图。
+- Parallel、Serial、Fork、Join 的配置字段目前主要是描述信息。
+- 编辑器会将 Document Retrieval 的 `resultLimit` 限制为 1–20，但引擎直接使用 definition 中保存的值；导入或其他调用方写入的更大值不会在运行时再次钳制。
+- 引擎没有完整拓扑排序或独立环检测，依赖编辑器校验和步骤预算避免异常循环。
+- 并发分支共享可变上下文，不能假设每条分支拥有隔离的 `current`。
+
+## 运行记录与 trace
+
+Workflow invocation 会保存版本 ID、状态、触发方式、输入、最终输出、节点 trace 和时间。trace 可包含节点 input/output、前后 context、状态、错误、耗时和 request ID。
+
+部分 context 快照会做字段脱敏和大小裁剪，但原始 invocation input/output 与节点 input/output 仍可能保留敏感值。不要把密码、Token、Authorization header 或个人敏感数据放入节点模板和输出。
+
+## 测试与维护
+
+`workflow-execution-engine.test.ts` 覆盖变量插值、条件、顺序执行、输出映射、分支、Loop、dry-run 跳过副作用和部分并发图。
+
+修改引擎时应补充：
+
+1. readiness 和多入边汇合测试。
+2. 条件、表达式 fallback 和 schema 校验测试。
+3. retry、timeout、continue-on-error 测试。
+4. dry-run 与真实副作用隔离测试。
+5. 并发 context 隔离和 merge/join 语义测试。
+6. 版本、invocation 和 trace 持久化测试。
+
+完成后运行 `npm run type-check`、`npm run lint`、`npm run test:run` 和 `npm run build`。

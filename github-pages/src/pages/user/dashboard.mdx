@@ -1,0 +1,88 @@
+export const meta = { title: "Dashboard", description: "查看本地工作区中的资源记录总数和存储状态。" }
+
+# Dashboard
+
+Dashboard 是 SUORA 的本地工作区概览页。当前版本主要读取 SQLite 中的资源记录数量，并显示存储状态；它不是工作流监控、渠道健康或最近活动中心。
+
+## 查看资源统计
+
+Dashboard 显示六张统计卡片：
+
+| 卡片 | 统计内容 |
+| --- | --- |
+| Chats | 本地聊天会话记录数。 |
+| Workflows | 本地 workflow 记录数。 |
+| Skills | 本地 Skill 记录数。 |
+| Documents | 本地文档记录数。 |
+| Agents | 本地 Agent 记录数。 |
+| Providers | 本地模型 Provider 记录数。 |
+
+每张卡片显示“Records currently stored locally”，表示记录保存在当前本地工作区，而不是远程云端项目。
+
+页面顶部显示 `Storage: ready` 存储状态。首次访问空工作区时，卡片仍会显示，数量为 `0`；部分模块可能在首次读取时初始化演示/种子数据。
+
+## 数据来源
+
+Dashboard 会读取以下本地 SQLite 表的记录数：
+
+```text
+chats
+workflows
+skills
+documents
+agents
+providers
+```
+
+数据库默认位于 Electron 用户数据目录：
+
+```text
+<userData>/workspace/suora.sqlite
+```
+
+Dashboard 本身不会写入统计数据，也没有独立的 Dashboard 配置或远程同步状态。
+
+## 刷新行为
+
+Dashboard 在页面首次挂载时读取一次快照：
+
+- 没有定时刷新。
+- 其他页面创建或删除资源后，不会自动更新统计卡片。
+- 重新进入 Dashboard、重新加载应用，或在 Electron 桌面环境加载失败时点击 Retry，才会重新读取。
+
+因此，如果刚在 Chats、Agents 或其他模块创建了记录，请重新打开 Dashboard 查看最新数量。
+
+## 导航与快速操作
+
+左侧主导航提供 Dashboard、Chats、Agents、Workflows、Schedulers、Integrations、Documents、Channels、Skills 和 Models；Preference 位于设置入口。
+
+Dashboard 当前没有页面级的新建、刷新、健康检查或统计卡片跳转按钮。请从对应模块使用各自的 New Chat、New Agent、New Workflow、Create Provider 等操作。
+
+## 加载与错误状态
+
+- 加载期间显示 `Loading workspace snapshot...`。
+- 在 Electron 桌面环境读取失败时显示错误信息和 `Retry` 操作。
+- 浏览器预览没有 Electron IPC bridge，Dashboard 会显示 `Open In Electron`，且不能可靠读取桌面 SQLite 数据；请使用 `npm run dev` 启动 Electron 桌面窗口。
+
+## 当前不会显示的内容
+
+Dashboard 当前不会显示：
+
+- 最近聊天、最近修改或活动时间线。
+- workflow 成功率、失败记录、当前运行或执行趋势。
+- Agent、Provider、Channel 或 Integration 健康汇总。
+- 数据库容量、延迟或诊断信息。
+- Channels、Integrations、Schedulers 的数量卡片。
+- 图表、筛选、时间范围或实时更新。
+
+Channels 的健康检查需要在具体 Channel 详情页执行；workflow 调用历史需要在 Workflows 模块查看。
+
+<Callout>
+  目前更准确的理解是“本地工作区资源概览”。不要将 Dashboard 上的记录数量理解为资源可用性、运行成功率或外部服务健康状态。
+</Callout>
+
+## 数据与安全
+
+Dashboard 依赖本地 Electron 应用和 SQLite 工作区，没有登录、远程权限或多工作区隔离。统计数据不会单独同步到远程服务，但数据库中可能包含会话、Provider、文档和集成配置。
+
+请保护操作系统用户目录、数据库备份和设备账户；API Key、SMTP 密码与渠道凭据不应通过截图或导出数据库分享。

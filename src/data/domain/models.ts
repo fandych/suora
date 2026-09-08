@@ -459,6 +459,7 @@ export type AgentConfigRecord = {
   skillIds: string[]
   toolsetIds: string[]
   documentIds?: string[]
+  privateToolIds?: string[]
 }
 
 export type AgentSummary = {

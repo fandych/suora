@@ -1,0 +1,129 @@
+export const meta = { title: "Browser Tools", description: "内置浏览器会话、导航安全、页面读取、点击填充和权限边界。" }
+
+# Browser Tools
+
+SUORA 为 Agent 提供隐藏的 Electron 浏览器，用于访问允许的外部网页、读取页面、点击元素和填写表单。核心实现位于 `electron/others/browser-window.ts`，工具定义位于 `src/services/ai-tools.ts`。
+
+## 会话生命周期
+
+浏览器窗口按 `sessionId` 保存在主进程内存中。未提供 session ID 时使用 `global`；Chat runtime 通常使用当前 Chat ID 作为浏览器 session。
+
+每个 session 对应一个隐藏的 Electron BrowserWindow：
+
+- 默认尺寸约为 1280×880。
+- 默认 `show: false`，Agent 工具不会自动打扰用户。
+- 显式要求人工网页流程时可以显示并聚焦窗口。
+- 用户关闭窗口后从 session map 移除。
+- Electron 退出时销毁所有浏览器窗口。
+
+浏览器窗口使用 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`。但当前没有为不同 session 设置独立 Electron `partition`，因此不能将不同 session 视为完全隔离的 cookie、缓存或登录配置文件。
+
+## 导航与 URL 安全
+
+`browser_navigate` 只接受 HTTP/HTTPS URL，并调用 URL 安全检查。会阻止：
+
+- localhost、本地域名和云 metadata 地址。
+- IPv4 回环、私网、链路本地和保留地址。
+- IPv6 回环、私有和链路本地地址。
+- DNS 解析到私有地址的公开主机名。
+
+页面重定向会先阻止，再重新校验目标 URL；导航失败通过 browser state 事件发布。
+
+这不是完整的浏览器网络隔离：当前没有下载拦截、统一弹窗/新窗口策略、完整导航白名单或持续 DNS 绑定检查。DNS 检查和后续连接之间仍存在 TOCTOU 风险。
+
+## 页面读取
+
+`browser_page` 在页面上下文读取：
+
+- 页面标题和当前 URL。
+- `document.body.innerText`。
+- 页面中的 `a[href]` 链接。
+
+可选限制：
+
+- 页面文本最多 50,000 字符。
+- 链接最多 200 条。
+- 单条链接文本最多 300 字符。
+
+当前不会返回完整 DOM、截图、iframe 内容、元素属性或可访问性树。页面结果会被 AI 工具标记为不可信网页数据，不能当作系统指令、工具指令或安全策略。
+
+## 点击元素
+
+`browser_click` 接受 CSS selector：
+
+1. 使用 `document.querySelector` 选择第一个匹配元素。
+2. 滚动到元素。
+3. 调用原生 `element.click()`。
+
+找不到元素会返回 `Element was not found.`。当前不会验证元素是否可见、启用、位于视口，或等待点击触发的导航和异步页面更新完成。调用方需要在点击后再次读取页面确认结果。
+
+## 填写表单
+
+`browser_fill` 只允许 `input`、`textarea` 和 `select`：
+
+1. 聚焦元素。
+2. 设置 `.value`。
+3. 派发冒泡的 `input` 和 `change` 事件。
+
+selector 长度最多 500 字符，填充值最多 10,000 字符。对部分受控前端框架，直接设置 value 可能不会同步内部状态；填写后应重新读取或手动确认表单状态。
+
+技术层没有通用的密码、支付、Token 或秘密字段阻止。AI 工具描述要求登录、付款、账户变更及敏感字段填写前先得到用户明确确认，但这属于行为指导，不是后端强制授权。
+
+<Callout type="warning">
+  在点击或填写之前确认目标网站、账户、字段和最终动作。尤其不要在未确认时提交密码、付款信息、API Key 或不可逆账户操作。
+</Callout>
+
+## 权限模型
+
+浏览器窗口没有独立 Electron `partition` 或专属权限处理器，因此会共享默认 Electron session，并继承主窗口注册的权限策略：仅音频媒体权限可能被允许，其他权限请求会被拒绝。通知、地理位置、摄像头、剪贴板等能力没有独立的 Browser 工具授权流程。
+
+浏览器工具也不能直接访问 Node.js、文件系统或主进程 API；这些操作必须通过另外的 Agent 工具，并继续经过文件、命令和 IPC 护栏。
+
+## 状态与错误
+
+浏览器状态通过 `tools:browserStateChanged` 发送给 Renderer，Chat 页面按 session ID 过滤状态。
+
+常见错误包括：
+
+- 非 HTTP/HTTPS 或私有 URL。
+- DNS 解析失败。
+- 页面导航失败。
+- Browser window is not open.
+- Element was not found.
+- 页面 JavaScript 执行失败。
+
+页面未导航时，读取操作返回 `open: false` 和空标题；点击或填写操作会直接失败。
+
+## 与 Agent 的安全关系
+
+网页文本、邮件正文、链接标题、表单内容和外部 API 返回值都属于不可信输入。网页中的文字不能要求 Agent：
+
+- 泄露 API Key、Cookie 或文件内容。
+- 运行命令或修改工作区。
+- 绕过用户确认。
+- 改变系统或工具权限。
+
+最终安全性依赖三层共同作用：
+
+1. BrowserWindow 的 Electron 隔离和 URL 校验。
+2. 主进程 IPC、工具和网络安全检查。
+3. Agent instructions、用户确认和外部内容不可信规则。
+
+第三层不能替代前两层；新增浏览器能力必须在主进程重新校验参数。
+
+## 页面预览
+
+渠道相关功能还提供独立的临时页面预览：加载经过 URL 检查的页面，等待可选时间后截图为 PNG Base64，随后销毁临时窗口。它与按 Chat 持久复用的 browser session 不同，不应混淆为同一生命周期。
+
+## 当前测试与限制
+
+当前未发现 `browser_navigate`、`browser_page`、`browser_click` 和 `browser_fill` 的完整专用单元测试；已有测试主要覆盖 Chat 浏览器状态展示。
+
+维护浏览器工具时应测试：
+
+- 重定向到私网和 DNS rebinding。
+- session 创建、复用、关闭和 Electron 退出清理。
+- 页面读取上限、链接截断和空页面状态。
+- 不可见/disabled/受控表单元素的点击与填写结果。
+- 登录、支付和敏感字段确认路径。
+- 多 session cookie、权限和窗口状态行为。

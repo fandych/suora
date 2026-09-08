@@ -140,4 +140,5 @@ When implementing changes:
 3. Put mock data behind an adapter or loader if the user will later replace it with API data.
 4. Keep naming aligned with `workflow`, never new `pipeline` UI labels.
 5. Validate with `npm run type-check`, `npm run lint`, and `npm run build` before handoff; after route or layout changes, at minimum ensure the build still passes while resolving any new type-check or lint failures you introduced.
-6. Update this file when route names, module coverage, or UI architecture rules change.
+6. When code behavior, user-visible configuration, runtime limits, security boundaries, routes, or commands change, update the related user documentation in `github-pages/src/pages/user/` and technical documentation in `github-pages/src/pages/technical/` in the same change. If no existing page applies, add or extend the appropriate documentation page and keep navigation and routes in sync.
+7. Update this file when route names, module coverage, or UI architecture rules change.

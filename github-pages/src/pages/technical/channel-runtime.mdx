@@ -1,0 +1,153 @@
+export const meta = { title: "Channel Runtime", description: "渠道 runtime 生命周期、Webhook、Stream、消息路由、队列和健康检查。" }
+
+# Channel Runtime
+
+Channel Runtime 运行在 Electron 主进程，负责监听 Webhook、维护 Stream/ WebSocket/IMAP 客户端、归一化入站消息和发送出站回复。核心实现位于 `electron/others/channels/channel-service.ts`。
+
+## 生命周期
+
+`ChannelService` 是单例。构造时创建 Express 应用和路由，但 HTTP server 只有调用 `start()` 后才开始监听。
+
+启动流程：
+
+1. 前端注册 `channel:message` 事件监听器。
+2. `restoreChannelRuntime()` 读取已启用渠道。
+3. `registerEnabledChannels()` 重建内存 `channels` Map。
+4. 同步 DingTalk Stream、Custom WebSocket、Personal WeChat poller 和 Email poller。
+5. 存在启用的 Webhook 渠道时，在 `127.0.0.1:3000` 启动 HTTP server。
+
+停止时会断开 Stream/WebSocket、abort Personal WeChat 轮询、清理 Email poller、会话 webhook、token、去重缓存、定时器并关闭 HTTP server。
+
+`isRunning()` 同时检查 HTTP server、Stream、WebSocket、微信轮询和邮件轮询，因此没有 HTTP server 时仍可能返回运行中。
+
+## Webhook 路由
+
+主进程提供：
+
+```text
+GET  /health
+GET  /webhook/:platform/:channelId
+POST /webhook/:platform/:channelId
+```
+
+Webhook URL 由运行环境生成：
+
+```text
+{protocol}://{host}:{port}/webhook/{platform}/{channelId}
+```
+
+生产环境使用 HTTPS，其余环境使用 HTTP；host 可由 `WEBHOOK_HOST` 覆盖，port 可由 `WEBHOOK_PORT` 覆盖。但 server 仍只绑定 `127.0.0.1`，外部平台需要反向代理、隧道或端口转发。
+
+路由只检查 `channelId` 是否存在且已启用；当前 `:platform` 参数不会额外确认是否与渠道真实 platform 一致。
+
+不同平台的 handler 负责签名、验证和 payload 归一化：企业微信/公众号/小程序支持 URL 验证和 XML/JSON；飞书支持 URL verification 和可选签名；Telegram 支持 secret token；Teams 忽略机器人自身消息；Custom/Email 使用 webhook secret 或通用字段解析。
+
+## Stream、WebSocket 与 Email
+
+### DingTalk Stream
+
+DingTalk Stream 通过 gateway 获取 endpoint/ticket，再建立 WebSocket。客户端发送 ping、确认系统事件、处理机器人消息，并在断线后指数退避重连，最多约 50 次，最大退避约 60 秒。事件 ID 使用 5 分钟内存去重。
+
+若消息带有 session webhook，runtime 会按 `channelId + chatId` 缓存约 2 小时，出站回复优先使用该 webhook。
+
+### Custom WebSocket
+
+Custom WebSocket 支持自定义 URL、protocol 和 payload template。入站优先解析 JSON，失败则按纯文本处理，并兼容 `senderId`、`sender_id`、`user_id`、`content`、`text` 等字段别名。断线后指数退避重连，最大约 60 秒。
+
+### Personal WeChat
+
+启用、平台为 `wechat_personal` 且存在合法 bot token 时启动轮询。轮询使用 AbortController，并在请求失败后记录 debug log、等待后继续；登录通过 QR session 和 IPC start/wait 接口完成。
+
+### Email
+
+Email 支持 Webhook POST 或 IMAP 轮询。IMAP 默认每 60 秒查询一次未读邮件，每批最多处理 20 个 UID。可配置 subject/from/to/cc/body 过滤器，以及 forward、webhook 和静态 auto-reply 动作。
+
+## 入站消息流
+
+所有平台最终进入 `ChannelService.emitMessage()`：
+
+```text
+platform handler/client
+  → normalize RuntimeChannelMessage
+  → in-memory message ID deduplication
+  → persist incoming message/debug log
+  → webContents.send("channel:message")
+  → channel-runtime-listener
+  → channel Chat + Agent response
+  → optional outbound reply
+```
+
+持久化运行态通常包含最近 500 条消息、用户聚合、最近 debug log、最后消息时间和消息计数。Renderer listener 会创建或复用：
+
+```text
+chat-channel-{channelId}-{normalizedSenderId}
+```
+
+之后追加用户消息，选择 Channel Agent/Provider/Model，调用 `streamChatAgentResponse()`，保存助手回复；`autoReply` 开启且存在原始 `chatId` 时再发送回外部平台。
+
+## 出站消息
+
+同步出站路径：
+
+```text
+channel:sendMessage
+  → ChannelService.sendMessage()
+  → sendMessageForChannel()
+```
+
+异步路径：
+
+```text
+channel:sendMessageQueued
+  → MessageQueue.enqueue()
+  → sendMessageForChannel()
+```
+
+平台发送实现覆盖飞书、钉钉、企业微信、公众号、小程序、个人微信、Telegram、Teams、Email 和 Custom webhook。同步发送会记录 `sent` 或 `failed` 状态。
+
+Channel Agent 的自动回复当前调用同步的 `channel:sendMessage` 路径，不经过 `MessageQueue`；因此仅主动使用 `channel:sendMessageQueued` 的调用方才获得以下限速与重试行为。
+
+## 队列、限速与重试
+
+`MessageQueue` 是进程内存 FIFO 队列：
+
+- 同一渠道至少间隔 1 秒发送。
+- 默认最多重试 3 次。
+- 失败后按 $2^{retryCount}$ 秒退避。
+- 达到最大次数后丢弃。
+- 没有数据库持久化、取消、查询状态或失败事件 API。
+- Electron 重启后队列丢失，`queueId` 只有入队时有效。
+
+入站消息 ID 去重缓存 TTL 为 5 分钟，每分钟清理一次；DingTalk Stream 还有独立事件 ID 去重。缓存均为内存状态，重启后丢失。Email `lastSeenUid` 也主要保存在内存中，重启后可能再次处理未读邮件。
+
+## 健康检查与状态
+
+IPC 提供：
+
+```text
+channel:status
+channel:streamStatus
+channel:healthCheck
+```
+
+健康检查会针对 Personal WeChat 验证 token/binding 或 bridge webhook，并针对飞书、钉钉、企业微信、公众号、小程序和 Teams 获取 access token。其他平台没有实际外部连接探测，可能直接返回 healthy。
+
+结果会更新渠道状态、`runtime.health.isHealthy`、检查时间、延迟、错误次数和最近错误。健康检查通过不等于 Webhook 已公网可达、事件订阅正确或自动回复成功。
+
+## 安全边界
+
+- Runtime 只监听 `127.0.0.1`，公网暴露应由受控反向代理完成。
+- Webhook 只接受存在且启用的渠道；平台签名/secret 校验由对应 handler 负责。
+- token、app secret、IMAP/SMTP 凭据和运行记录保存在本地工作区，当前没有渠道专用加密存储。
+- 入站网页、邮件和用户消息属于不可信内容，不能直接作为命令或工具授权。
+- 出站自动回复由 Agent 生成，必须受 Agent scope、Preferences 和 Integration 护栏限制。
+
+## 已知运行时限制
+
+- Queue、去重缓存和部分 cursor 不持久化，进程重启可能丢消息或重复处理。
+- Runtime 不是多节点高可用服务，没有共享队列或分布式锁。
+- Custom WebSocket 的发送路径与客户端内部 `send()` 能力存在实现边界，应使用真实双向测试确认。
+- `:platform` webhook 参数当前只用于路径，不是独立的安全校验。
+- 健康检查对部分平台是配置级检查，不是完整端到端探测。
+
+修改 Channel Runtime 时应测试启动/停止、重复注册、断线重连、消息去重、队列重试、Webhook 签名、Agent 回流和 Electron 重启恢复。
