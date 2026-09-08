@@ -1,4 +1,6 @@
 import crypto from "node:crypto"
+import http from "node:http"
+import https from "node:https"
 
 import { ipcMain } from "electron"
 import { createDefaultChannelConfig, createDefaultChannelRuntime } from "@/data/repositories/channel-defaults"
@@ -6,6 +8,10 @@ import { createDefaultChannelConfig, createDefaultChannelRuntime } from "@/data/
 import { applyMigrations, openDatabase } from "@electron/database/db-core"
 import { applySecurityPreferences } from "@electron/others/preferences"
 import { ensureWorkspace } from "@electron/others/workspace"
+import { assertSafeHttpUrl } from "@electron/others/url-security"
+import { getPreferenceSettingsSnapshot } from "@electron/others/preferences"
+import { appState } from "@electron/others/app-state"
+import { getProxyAgent } from "@electron/others/proxy"
 
 function createDefaultWorkflowDefinition() {
   return {
@@ -82,11 +88,55 @@ function validateWorkflowDefinitionJson(value: string) {
 }
 
 export function registerAutomationIpc() {
+  ipcMain.handle("integrations:fetchApiDoc", async (_event, sourceUrl: string) => {
+    await ensureWorkspace()
+    const url = await assertSafeHttpUrl(sourceUrl, { allowLocalNetwork: true })
+    const preferenceSettings = getPreferenceSettingsSnapshot()
+    const proxySettings = appState.currentProxySettings
+    const ignoreSsl = proxySettings.ignoreSslErrors === true || preferenceSettings.ignoreSslErrors === true
+    const transport = url.protocol === "https:" ? https : http
+    const proxyAgent = getProxyAgent(url, ignoreSsl)
+    const agent = proxyAgent ?? (url.protocol === "https:" ? new https.Agent({ keepAlive: false, rejectUnauthorized: !ignoreSsl }) : new http.Agent({ keepAlive: false }))
+
+    console.info("[SUORA API DOC] fetch", {
+      url: `${url.protocol}//${url.hostname}${url.port ? `:${url.port}` : ""}${url.pathname}`,
+      ignoreSsl,
+      preferenceIgnoreSsl: preferenceSettings.ignoreSslErrors,
+      proxyIgnoreSsl: proxySettings.ignoreSslErrors === true,
+      viaProxy: Boolean(proxyAgent),
+    })
+
+    return new Promise<string>((resolve, reject) => {
+      const request = transport.get(url, {
+        agent,
+        headers: { "User-Agent": "SUORA/1.0 (Desktop API Doc Importer)", Connection: "close" },
+        rejectUnauthorized: url.protocol === "https:" ? !ignoreSsl : undefined,
+      }, (response) => {
+        const chunks: Buffer[] = []
+        response.on("data", (chunk: Buffer) => chunks.push(chunk))
+        response.on("end", () => {
+          const body = Buffer.concat(chunks).toString("utf8")
+          if ((response.statusCode ?? 500) < 200 || (response.statusCode ?? 500) >= 300) {
+            reject(new Error(`API doc request failed with HTTP ${response.statusCode ?? 500}.`))
+            return
+          }
+          resolve(body)
+        })
+        response.on("error", reject)
+      })
+      request.on("error", (error) => {
+        const message = error instanceof Error ? error.message : String(error)
+        reject(new Error(message.toLowerCase().includes("econnreset") ? `API doc connection reset. Check the URL, proxy, or enable "Ignore SSL / CA certificate validation" in Preferences > Security.` : message, { cause: error }))
+      })
+      request.setTimeout(30_000, () => request.destroy(new Error("API doc request timed out.")))
+    })
+  })
+
   ipcMain.handle("integrations:list", async () => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
-    return database.prepare(`SELECT id, title, kind, endpoint, updated_at as updatedAt FROM integrations ORDER BY updated_at DESC`).all()
+    return database.prepare(`SELECT id, title, kind, endpoint, enabled, updated_at as updatedAt FROM integrations ORDER BY updated_at DESC`).all()
   })
 
   ipcMain.handle("integrations:get", async (_event, integrationId: string) => {
@@ -94,7 +144,7 @@ export function registerAutomationIpc() {
     const database = openDatabase()
     applyMigrations(database)
     return {
-      integration: database.prepare(`SELECT id, title, kind, endpoint, updated_at as updatedAt FROM integrations WHERE id = ?`).get(integrationId) ?? null,
+      integration: database.prepare(`SELECT id, title, kind, endpoint, enabled, updated_at as updatedAt FROM integrations WHERE id = ?`).get(integrationId) ?? null,
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, config_json as configJson FROM integration_versions WHERE integration_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(integrationId),
       executions: database.prepare(`SELECT id, version_id as versionId, status, input_json as input, output_json as output, created_at as createdAt FROM integration_executions WHERE integration_id = ? ORDER BY created_at DESC`).all(integrationId),
     }
@@ -107,16 +157,16 @@ export function registerAutomationIpc() {
     const integrationId = crypto.randomUUID()
     const versionId = crypto.randomUUID()
     const now = Date.now()
-    database.prepare(`INSERT INTO integrations (id, title, kind, endpoint, updated_at) VALUES (?, ?, ?, ?, ?)`).run(integrationId, payload?.title || `New ${payload?.kind || "http"} integration`, payload?.kind || "http", payload?.endpoint || "", now)
+    database.prepare(`INSERT INTO integrations (id, title, kind, endpoint, enabled, updated_at) VALUES (?, ?, ?, ?, 1, ?)`).run(integrationId, payload?.title || `New ${payload?.kind || "http"} integration`, payload?.kind || "http", payload?.endpoint || "", now)
     database.prepare(`INSERT INTO integration_versions (id, integration_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, 1, 0, 0, ?, ?)`).run(versionId, integrationId, payload?.configJson || "{}", now)
     return {
-      integration: database.prepare(`SELECT id, title, kind, endpoint, updated_at as updatedAt FROM integrations WHERE id = ?`).get(integrationId),
+      integration: database.prepare(`SELECT id, title, kind, endpoint, enabled, updated_at as updatedAt FROM integrations WHERE id = ?`).get(integrationId),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, config_json as configJson FROM integration_versions WHERE integration_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(integrationId),
       executions: [],
     }
   })
 
-  ipcMain.handle("integrations:save", async (_event, payload: { id: string; title: string; kind: string; endpoint: string; configJson: string; selectedVersionId?: string; publish?: boolean }) => {
+  ipcMain.handle("integrations:save", async (_event, payload: { id: string; title: string; kind: string; endpoint: string; configJson: string; enabled?: boolean; selectedVersionId?: string; publish?: boolean }) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
@@ -130,7 +180,7 @@ export function registerAutomationIpc() {
       ? { id: targetDraft.id }
       : database.prepare(`SELECT id FROM integration_versions WHERE integration_id = ? AND is_release = 0 ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { id: string } | undefined
     const now = Date.now()
-    database.prepare(`UPDATE integrations SET title = ?, kind = ?, endpoint = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.kind, payload.endpoint, now, payload.id)
+    database.prepare(`UPDATE integrations SET title = ?, kind = ?, endpoint = ?, enabled = COALESCE(?, enabled), updated_at = ? WHERE id = ?`).run(payload.title, payload.kind, payload.endpoint, payload.enabled == null ? null : (payload.enabled ? 1 : 0), now, payload.id)
     if (!payload.publish && selectedVersion) {
       database.prepare(`UPDATE integration_versions SET config_json = ?, created_at = ? WHERE id = ?`).run(payload.configJson, now, selectedVersion.id)
     } else {
@@ -138,10 +188,28 @@ export function registerAutomationIpc() {
       database.prepare(`INSERT INTO integration_versions (id, integration_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`).run(versionId, payload.id, nextMajor, nextMinor, payload.publish ? 1 : 0, payload.configJson, now)
     }
     return {
-      integration: database.prepare(`SELECT id, title, kind, endpoint, updated_at as updatedAt FROM integrations WHERE id = ?`).get(payload.id),
+      integration: database.prepare(`SELECT id, title, kind, endpoint, enabled, updated_at as updatedAt FROM integrations WHERE id = ?`).get(payload.id),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, config_json as configJson FROM integration_versions WHERE integration_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(payload.id),
       executions: database.prepare(`SELECT id, version_id as versionId, status, input_json as input, output_json as output, created_at as createdAt FROM integration_executions WHERE integration_id = ? ORDER BY created_at DESC`).all(payload.id),
     }
+  })
+
+  ipcMain.handle("integrations:setEnabled", async (_event, payload: { id: string; enabled: boolean }) => {
+    await ensureWorkspace()
+    const database = openDatabase()
+    applyMigrations(database)
+    database.prepare("UPDATE integrations SET enabled = ?, updated_at = ? WHERE id = ?").run(payload.enabled ? 1 : 0, Date.now(), payload.id)
+    return database.prepare(`SELECT id, title, kind, endpoint, enabled, updated_at as updatedAt FROM integrations WHERE id = ?`).get(payload.id) ?? null
+  })
+
+  ipcMain.handle("integrations:delete", async (_event, integrationId: string) => {
+    await ensureWorkspace()
+    const database = openDatabase()
+    applyMigrations(database)
+    database.prepare("DELETE FROM integration_executions WHERE integration_id = ?").run(integrationId)
+    database.prepare("DELETE FROM integration_versions WHERE integration_id = ?").run(integrationId)
+    const result = database.prepare("DELETE FROM integrations WHERE id = ?").run(integrationId)
+    return { ok: Number(result.changes) > 0 }
   })
 
   ipcMain.handle("integrations:recordExecution", async (_event, payload: { id: string; versionId: string; status: string; input: string; output: string }) => {

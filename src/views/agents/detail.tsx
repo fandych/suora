@@ -1,24 +1,29 @@
 import { useEffect, useState } from "react"
-import { useParams } from "react-router"
+import { useNavigate, useParams } from "react-router"
+import { EllipsisIcon, SlashIcon, Trash2Icon } from "lucide-react"
 
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import type { AgentDetail } from "@/data/domain/models"
-import { getAgentDetail, saveAgentDraft } from "@/data/repositories/agent-repository"
+import { deleteAgent, getAgentDetail, saveAgentDraft, setSystemAgentDisabled } from "@/data/repositories/agent-repository"
 import { listDocuments } from "@/data/repositories/document-repository"
 import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { listSkills } from "@/data/repositories/skill-repository"
 import { listWorkflows } from "@/data/repositories/workflow-repository"
-import { Badge } from "@/components/ui/badge"
+import { emitDataChanged } from "@/data/repositories/data-events"
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { toast } from "@/components/ui/toast"
 import { AgentLogoBadge } from "@/views/agents/components/agent-logo-badge"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
-import VersionSelect from "@/views/components/version-select"
 import { AgentBindingsForm } from "@/views/agents/components/agent-bindings-form"
 import { AgentGeneralPanel } from "@/views/agents/components/agent-general-panel"
 
 const AgentsDetailPage = () => {
   const { agentId } = useParams<{ agentId: string }>()
+  const navigate = useNavigate()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => getAgentDetail(agentId ?? "", selectedVersionId), [agentId, selectedVersionId])
   const { data: providersData } = useAsyncResource(() => listConfiguredModelProviders(), [])
@@ -27,6 +32,8 @@ const AgentsDetailPage = () => {
   const { data: documentsData } = useAsyncResource(() => listDocuments(), [])
   const { data: workflowsData } = useAsyncResource(() => listWorkflows(), [])
   const [draft, setDraft] = useState<AgentDetail | null>(null)
+  const [isUpdatingAvailability, setIsUpdatingAvailability] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const providers = providersData ?? []
   const skills = skillsData ?? []
   const integrations = integrationsData ?? []
@@ -67,8 +74,14 @@ const AgentsDetailPage = () => {
       return
     }
 
-    const next = await saveAgentDraft(draft, false)
-    syncDraft(next)
+    try {
+      const next = await saveAgentDraft(draft, false)
+      syncDraft(next)
+      emitDataChanged("/agents")
+      toast.add({ title: "Agent saved", type: "success" })
+    } catch (error) {
+      toast.add({ title: "Save failed", description: error instanceof Error ? error.message : String(error), type: "error" })
+    }
   }
 
   const handleToggleBinding = async (section: "workflows" | "integrations" | "skills" | "documents", itemId: string, checked: boolean) => {
@@ -89,21 +102,104 @@ const AgentsDetailPage = () => {
     }
 
     setDraft(nextDraft)
-    const saved = await saveAgentDraft(nextDraft, false)
-    syncDraft(saved)
+    try {
+      const saved = await saveAgentDraft(nextDraft, false)
+      syncDraft(saved)
+      emitDataChanged("/agents")
+    } catch (error) {
+      toast.add({ title: "Save failed", description: error instanceof Error ? error.message : String(error), type: "error" })
+    }
+  }
+
+  const handleToggleAvailability = async () => {
+    if (!draft || draft.agent.source !== "system") {
+      return
+    }
+
+    setIsUpdatingAvailability(true)
+    try {
+      await setSystemAgentDisabled(draft.agent.id, !draft.agent.isDisabled)
+      syncDraft({
+        ...draft,
+        agent: { ...draft.agent, isDisabled: !draft.agent.isDisabled },
+      })
+      emitDataChanged("/agents")
+      toast.add({ title: draft.agent.isDisabled ? "Agent enabled" : "Agent disabled", type: "success" })
+    } catch (error) {
+      toast.add({ title: "Update failed", description: error instanceof Error ? error.message : String(error), type: "error" })
+    } finally {
+      setIsUpdatingAvailability(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!draft || draft.agent.source !== "custom") {
+      return
+    }
+
+    setIsDeleting(true)
+    try {
+      await deleteAgent(draft.agent.id)
+      emitDataChanged("/agents")
+      navigate("/agents")
+      toast.add({ title: "Agent deleted", type: "success" })
+    } catch (error) {
+      toast.add({ title: "Delete failed", description: error instanceof Error ? error.message : String(error), type: "error" })
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   return (
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
         title={draft?.agent.title ?? "Agent"}
+        description={draft?.agent.summary || "No description"}
         leading={draft ? <AgentLogoBadge agent={draft.agent} className="size-9" iconClassName="size-4.5" /> : null}
         actions={draft ? (
-          <>
-            <Badge variant="outline">{draft.agent.source === "system" ? "System" : draft.agent.kind}</Badge>
-            {draft.agent.isDisabled ? <Badge variant="secondary">Disabled</Badge> : null}
-            <VersionSelect versions={draft.versions} value={selectedVersionId ?? draft.selectedVersion.id} onChange={setSelectedVersionId} />
-          </>
+          <DropdownMenu>
+            <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Agent actions" title="Agent actions" />}>
+              <EllipsisIcon />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44 min-w-44">
+              {draft.agent.source === "system" ? (
+                <DropdownMenuGroup>
+                  <DropdownMenuItem disabled={isUpdatingAvailability} onClick={() => void handleToggleAvailability()}>
+                    <SlashIcon />
+                    {draft.agent.isDisabled ? "Enable" : "Disable"}
+                  </DropdownMenuItem>
+                </DropdownMenuGroup>
+              ) : null}
+              {draft.agent.source === "custom" ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <AlertDialog>
+                    <AlertDialogTrigger render={<DropdownMenuItem variant="destructive" />}>
+                      <Trash2Icon />
+                      Delete
+                    </AlertDialogTrigger>
+                    <AlertDialogContent size="sm">
+                      <AlertDialogHeader>
+                        <AlertDialogMedia>
+                          <Trash2Icon />
+                        </AlertDialogMedia>
+                        <AlertDialogTitle>Delete agent</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This permanently deletes the custom agent and all of its versions. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction variant="destructive" disabled={isDeleting} onClick={() => void handleDelete()}>
+                          {isDeleting ? "Deleting..." : "Delete"}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              ) : null}
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : null}
       />
       <div className="flex min-h-0 flex-1 overflow-hidden p-4">

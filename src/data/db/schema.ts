@@ -99,6 +99,7 @@ export const documents = sqliteTable("documents", {
   id: text("id").primaryKey(),
   title: text("title").notNull(),
   summary: text("summary").notNull().default(""),
+  enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
 })
 

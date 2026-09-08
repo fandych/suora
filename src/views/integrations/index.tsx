@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { useNavigate } from "react-router"
 
 import PageHeader from "@/views/components/page-header"
@@ -5,11 +6,18 @@ import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-s
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
+import { subscribeToDataChanges } from "@/data/repositories/data-events"
 import { IntegrationCard } from "@/views/integrations/components/integration-card"
 
 const IntegrationsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => listIntegrationSummaries(), [])
+
+  useEffect(() => subscribeToDataChanges((route) => {
+    if (route === "/integrations") {
+      reload()
+    }
+  }), [reload])
 
   return (
     <div className="flex min-h-full flex-col bg-background">

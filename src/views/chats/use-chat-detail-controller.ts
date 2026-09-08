@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react"
-import { useNavigate, useParams } from "react-router"
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ChangeEvent } from "react"
+import { useLocation, useNavigate, useParams } from "react-router"
 
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { getAgentDetail, listAvailableAgents } from "@/data/repositories/agent-repository"
 import { getChatDetail, updateChatMessageParts } from "@/data/repositories/chat-repository"
-import { getChatDraft, getChatSessionSettings, saveChatDraft, saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
+import { getChatSessionSettings, saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser-files"
 import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
@@ -24,6 +24,7 @@ import { getChatRuntimeSnapshot, patchChatRuntimeParts, setPendingBrowserContinu
 
 export function useChatDetailController() {
   const { chatId } = useParams<{ chatId: string }>()
+  const location = useLocation()
   const navigate = useNavigate()
   const [draft, setDraft] = useState("")
   const [settingsDraft, setSettingsDraft] = useState<ChatRuntimeSettings | null>(null)
@@ -32,8 +33,6 @@ export function useChatDetailController() {
   const [selectedAgentId, setSelectedAgentId] = useState("")
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
   const [browserState, setBrowserState] = useState<{ open: boolean; visible: boolean; url: string; loading?: boolean; error?: string }>({ open: false, visible: false, url: "" })
-  const [isDraftHydrated, setIsDraftHydrated] = useState(false)
-  const skipRouteResetRef = useRef(false)
 
   const runtimeSnapshot = useSyncExternalStore(
     subscribeToChatRuntime,
@@ -88,7 +87,8 @@ export function useChatDetailController() {
 
   useEffect(() => {
     setActiveChatId(chatId ?? null)
-  }, [chatId])
+    setDraft("")
+  }, [chatId, location.key])
 
   useEffect(() => {
     if (!sessionSettings) {
@@ -120,45 +120,6 @@ export function useChatDetailController() {
       cancelled = true
     }
   }, [selectedAgentId, selectedAgentRecord?.updatedAt])
-
-  useEffect(() => {
-    if (skipRouteResetRef.current) {
-      skipRouteResetRef.current = false
-      return
-    }
-    setIsDraftHydrated(false)
-  }, [chatId])
-
-  useEffect(() => {
-    let cancelled = false
-
-    void getChatDraft(activeChatId).then((savedDraft) => {
-      if (cancelled) {
-        return
-      }
-
-      setDraft(savedDraft)
-      setIsDraftHydrated(true)
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [activeChatId])
-
-  useEffect(() => {
-    if (!isDraftHydrated) {
-      return
-    }
-
-    const handle = window.setTimeout(() => {
-      void saveChatDraft(activeChatId, draft).catch((nextError) => {
-        showToast({ title: "Draft save failed", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error", timeout: 3000 })
-      })
-    }, 150)
-
-    return () => window.clearTimeout(handle)
-  }, [activeChatId, draft, isDraftHydrated])
 
   useEffect(() => {
     let cancelled = false
@@ -277,7 +238,6 @@ export function useChatDetailController() {
           const createdDetail = await getChatDetail(createdChatId)
           setActiveChatId(createdChatId)
           setData(createdDetail)
-          skipRouteResetRef.current = true
           navigate(`/chats/${createdChatId}`, { replace: true })
         },
         onUserMessageSaved: (workingChatId, detail) => {

@@ -33,7 +33,7 @@ const ErrorPage = () => {
 							</EmptyMedia>
 							<EmptyTitle>Something interrupted this view</EmptyTitle>
 							<EmptyDescription>
-								Retry from the previous route, or return to the dashboard to reopen a valid module item.
+								Retry from the previous route, or return to chats to reopen a valid module item.
 							</EmptyDescription>
 						</EmptyHeader>
 						<EmptyContent className="flex-row justify-center gap-2">
@@ -41,9 +41,9 @@ const ErrorPage = () => {
 								<RotateCcwIcon />
 								Back
 							</Button>
-							<Button render={<Link to="/dashboard" />}>
+							<Button render={<Link to="/chats" />}>
 								<HomeIcon />
-								Dashboard
+								Chats
 							</Button>
 							<Button variant="outline" onClick={() => window.location.reload()}>
 								<RotateCcwIcon />

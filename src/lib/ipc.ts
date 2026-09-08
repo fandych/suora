@@ -496,11 +496,12 @@ export const suoraIpc = {
         settings: parseDocumentSettings(selectedPayload.settingsJson),
       } satisfies DocumentDetail
     },
-    save: async (payload: { id: string; title: string; summary: string; pages: DocumentPageRecord[]; graphEdges: DocumentGraphEdge[]; settings: { isPublic: boolean; includeInLlmsTxt: boolean }; selectedVersionId?: string; publish?: boolean }) => {
+    save: async (payload: { id: string; title: string; summary: string; enabled: boolean; pages: DocumentPageRecord[]; graphEdges: DocumentGraphEdge[]; settings: { isPublic: boolean; includeInLlmsTxt: boolean }; selectedVersionId?: string; publish?: boolean }) => {
       const result = await getBridge().documents.save({
         id: payload.id,
         title: payload.title,
         summary: payload.summary,
+        enabled: payload.enabled,
         structureJson: JSON.stringify({ pages: payload.pages }),
         graphJson: JSON.stringify({ edges: payload.graphEdges }),
         settingsJson: JSON.stringify(payload.settings),
@@ -682,7 +683,7 @@ export const suoraIpc = {
   integrations: {
     list: async () => {
       const rows = await getBridge().integrations.list() as IntegrationSummary[]
-      return rows
+      return rows.map((row) => ({ ...row, enabled: Boolean(row.enabled) }))
     },
     get: async (integrationId: string, selectedVersionId?: string) => {
       const payload = await getBridge().integrations.get(integrationId) as {
@@ -697,7 +698,7 @@ export const suoraIpc = {
       const selectedPayload = payload.versions.find((version) => version.id === selectedVersionId) ?? payload.versions[0]
       const selectedVersion = versions.find((version) => version.id === selectedPayload?.id) ?? versions[0]
       return {
-        integration: payload.integration,
+        integration: { ...payload.integration, enabled: Boolean(payload.integration.enabled) },
         versions,
         latestVersion: versions[0],
         selectedVersion,
@@ -713,7 +714,7 @@ export const suoraIpc = {
       }
       const versions = result.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
       return {
-        integration: result.integration,
+        integration: { ...result.integration, enabled: Boolean(result.integration.enabled) },
         versions,
         latestVersion: versions[0],
         selectedVersion: versions[0],
@@ -721,7 +722,8 @@ export const suoraIpc = {
         executions: result.executions,
       } satisfies IntegrationDetail
     },
-    save: async (payload: { id: string; title: string; kind: string; endpoint: string; config: IntegrationConfig; selectedVersionId?: string; publish?: boolean }) => {
+    fetchApiDoc: async (sourceUrl: string) => getBridge().integrations.fetchApiDoc(sourceUrl) as Promise<string>,
+    save: async (payload: { id: string; title: string; kind: string; endpoint: string; config: IntegrationConfig; enabled?: boolean; selectedVersionId?: string; publish?: boolean }) => {
       const result = await getBridge().integrations.save({ ...payload, configJson: JSON.stringify(payload.config) }) as {
         integration: IntegrationSummary
         versions: Array<{ id: string; major: number; minor: number; isRelease: boolean; createdAt: number; configJson: string }>
@@ -729,7 +731,7 @@ export const suoraIpc = {
       }
       const versions = result.versions.map((version) => ({ ...version, label: getVersionLabel(version) })) as VersionOption[]
       return {
-        integration: result.integration,
+        integration: { ...result.integration, enabled: Boolean(result.integration.enabled) },
         versions,
         latestVersion: versions[0],
         selectedVersion: versions[0],
@@ -737,6 +739,11 @@ export const suoraIpc = {
         executions: result.executions,
       } satisfies IntegrationDetail
     },
+    setEnabled: async (payload: { id: string; enabled: boolean }) => {
+      const result = await getBridge().integrations.setEnabled(payload) as IntegrationSummary
+      return { ...result, enabled: Boolean(result.enabled) }
+    },
+    delete: async (integrationId: string) => getBridge().integrations.delete(integrationId),
     recordExecution: async (payload: { id: string; versionId: string; status: string; input: string; output: string }) => {
       return getBridge().integrations.recordExecution(payload) as Promise<IntegrationExecutionRecord[]>
     },

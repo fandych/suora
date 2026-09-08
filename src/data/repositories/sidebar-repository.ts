@@ -112,14 +112,6 @@ function compareChannelSidebarRecords(
 
 export async function loadSidebarGroups(item: PrimaryNavItem) {
   switch (item.url) {
-    case "/dashboard":
-      return [
-        {
-          id: "overview",
-          title: undefined,
-          items: [{ id: "overview", label: "Workspace Overview", href: "/dashboard", meta: "Local SQLite" }],
-        },
-      ]
     case "/chats": {
       const records = await listChats()
       const runningChatIds = getRunningChatIds()
@@ -133,7 +125,7 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
           id: record.id,
           title: record.title,
           meta: runningChatIds.has(record.id) ? `${record.summary || "In progress"} · Running` : record.summary,
-          group: now - record.updatedAt < oneDay ? "today" : now - record.updatedAt < sevenDays ? "recent" : "older",
+          group: now - record.updatedAt < oneDay ? "today" : now - record.updatedAt < sevenDays ? "week" : "older",
           count: runningChatIds.has(record.id) ? 1 : undefined,
           actions: [{ id: "delete", label: "Delete", variant: "destructive" as const }],
         }))
@@ -145,9 +137,6 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
         title: record.title,
         group: record.source === "custom" ? "custom" : "builtin",
         meta: record.isDisabled ? `${record.summary} · Disabled` : record.summary,
-        actions: record.source === "custom"
-          ? [{ id: "delete", label: "Delete", variant: "destructive" as const }]
-          : [{ id: record.isDisabled ? "enable" : "disable", label: record.isDisabled ? "Enable" : "Disable" }],
       })))
     case "/workflows":
       return mapItems(item, (await listWorkflows()).map((record) => ({ id: record.id, title: record.title, group: "workflows", meta: record.summary, actions: [{ id: "delete", label: "Delete", variant: "destructive" as const }] })))

@@ -44,7 +44,6 @@ type StoredChatSessionSettings = {
 type ChatSettingsStore = {
   defaultRuntime?: Partial<ChatRuntimeSettings>
   defaultSelectedAgentId?: string
-  drafts?: Record<string, string>
   chats?: Record<string, StoredChatSessionSettings>
 }
 
@@ -150,7 +149,6 @@ function parseStore(value?: string | null): ChatSettingsStore {
       return {
         defaultRuntime: parsed.store.defaultRuntime,
         defaultSelectedAgentId: parsed.store.defaultSelectedAgentId,
-        drafts: parsed.store.drafts ?? {},
         chats: parsed.store.chats ?? {},
       }
     }
@@ -159,7 +157,6 @@ function parseStore(value?: string | null): ChatSettingsStore {
       return {
         defaultRuntime: parsed,
         defaultSelectedAgentId: "agent-general-assistant",
-        drafts: {},
         chats: {},
       }
     }
@@ -167,7 +164,6 @@ function parseStore(value?: string | null): ChatSettingsStore {
     return {
       defaultRuntime: parsed.defaultRuntime,
       defaultSelectedAgentId: parsed.defaultSelectedAgentId,
-      drafts: parsed.drafts ?? {},
       chats: parsed.chats ?? {},
     }
   } catch {
@@ -224,7 +220,6 @@ export async function saveChatSessionSettings(chatId: string | null, settings: C
   const nextStore: ChatSettingsStore = {
     defaultRuntime: store.defaultRuntime,
     defaultSelectedAgentId: store.defaultSelectedAgentId,
-    drafts: store.drafts ?? {},
     chats: { ...(store.chats ?? {}) },
   }
 
@@ -244,30 +239,6 @@ export async function saveChatSessionSettings(chatId: string | null, settings: C
     runtime,
     selectedAgentId: normalizeSelectedAgentId(settings.selectedAgentId),
   } satisfies ChatSessionSettings
-}
-
-export async function getChatDraft(chatId?: string | null) {
-  const value = await readSettingsValue()
-  const store = parseStore(value)
-  const draftKey = chatId ?? "__draft__"
-  return store.drafts?.[draftKey] ?? ""
-}
-
-export async function saveChatDraft(chatId: string | null, draft: string) {
-  const value = await readSettingsValue()
-  const store = parseStore(value)
-  const draftKey = chatId ?? "__draft__"
-
-  const nextStore: ChatSettingsStore = {
-    defaultRuntime: store.defaultRuntime,
-    defaultSelectedAgentId: store.defaultSelectedAgentId,
-    drafts: { ...(store.drafts ?? {}) },
-    chats: { ...(store.chats ?? {}) },
-  }
-
-  nextStore.drafts![draftKey] = draft
-  await saveSettingsStore(nextStore)
-  return draft
 }
 
 export async function getChatRuntimeSettings(chatId?: string | null) {

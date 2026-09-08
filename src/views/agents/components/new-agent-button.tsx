@@ -5,6 +5,7 @@ import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { createAgent } from "@/data/repositories/agent-repository"
+import { emitDataChanged } from "@/data/repositories/data-events"
 import { cn } from "@/lib/utils"
 
 export function NewAgentButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -15,6 +16,7 @@ export function NewAgentButton({ className, iconOnly = false }: { className?: st
     setIsCreating(true)
     try {
       const detail = await createAgent()
+      emitDataChanged("/agents")
       navigate(`/agents/${detail.agent.id}`)
     } finally {
       setIsCreating(false)

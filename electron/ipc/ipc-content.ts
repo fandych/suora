@@ -178,7 +178,7 @@ export function registerContentIpc() {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
-    return database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM documents ORDER BY updated_at DESC`).all()
+    return database.prepare(`SELECT id, title, summary, enabled, updated_at as updatedAt FROM documents ORDER BY updated_at DESC`).all()
   })
 
   ipcMain.handle("documents:get", async (_event, documentId: string, versionId?: string) => {
@@ -188,7 +188,7 @@ export function registerContentIpc() {
     const versions = database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, structure_json as structureJson, graph_json as graphJson, settings_json as settingsJson FROM document_versions WHERE document_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(documentId) as Array<{ id: string; major: number; minor: number; isRelease: number; createdAt: number; structureJson: string; graphJson: string; settingsJson: string }>
     const selected = versions.find((item) => item.id === versionId) ?? versions[0] ?? null
     return {
-      document: database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM documents WHERE id = ?`).get(documentId) ?? null,
+      document: database.prepare(`SELECT id, title, summary, enabled, updated_at as updatedAt FROM documents WHERE id = ?`).get(documentId) ?? null,
       versions,
       selectedVersionId: selected?.id ?? null,
     }
@@ -206,22 +206,22 @@ export function registerContentIpc() {
       { id: folderId, title: "guides", content: "", type: "folder", parentId: null },
       { id: crypto.randomUUID(), title: "overview.md", content: "# New document\n\n## Overview\n\nStart writing here.\n", type: "document", parentId: folderId },
     ]
-    database.prepare(`INSERT INTO documents (id, title, summary, updated_at) VALUES (?, ?, ?, ?)`).run(documentId, "New document", "", now)
+    database.prepare(`INSERT INTO documents (id, title, summary, enabled, updated_at) VALUES (?, ?, ?, ?, ?)`).run(documentId, "New document", "", 1, now)
     database.prepare(`INSERT INTO document_versions (id, document_id, major, minor, is_release, structure_json, graph_json, settings_json, created_at) VALUES (?, ?, 1, 0, 0, ?, ?, ?, ?)`).run(versionId, documentId, JSON.stringify({ pages }), JSON.stringify({ edges: [] }), JSON.stringify({ isPublic: false, includeInLlmsTxt: true }), now)
     return {
-      document: database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM documents WHERE id = ?`).get(documentId),
+      document: database.prepare(`SELECT id, title, summary, enabled, updated_at as updatedAt FROM documents WHERE id = ?`).get(documentId),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, structure_json as structureJson, graph_json as graphJson, settings_json as settingsJson FROM document_versions WHERE document_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(documentId),
       selectedVersionId: versionId,
     }
   })
 
-  ipcMain.handle("documents:save", async (_event, payload: { id: string; title: string; summary: string; structureJson: string; graphJson: string; settingsJson: string; selectedVersionId?: string; publish?: boolean }) => {
+  ipcMain.handle("documents:save", async (_event, payload: { id: string; title: string; summary: string; enabled: boolean; structureJson: string; graphJson: string; settingsJson: string; selectedVersionId?: string; publish?: boolean }) => {
     await ensureWorkspace()
     const database = openDatabase()
     applyMigrations(database)
     const latest = database.prepare(`SELECT major, minor, is_release as isRelease FROM document_versions WHERE document_id = ? ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { major: number; minor: number; isRelease: number } | undefined
     const now = Date.now()
-    database.prepare(`UPDATE documents SET title = ?, summary = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.summary, now, payload.id)
+    database.prepare(`UPDATE documents SET title = ?, summary = ?, enabled = ?, updated_at = ? WHERE id = ?`).run(payload.title, payload.summary, payload.enabled ? 1 : 0, now, payload.id)
 
     const targetDraft = payload.selectedVersionId
       ? database.prepare(`SELECT id, is_release as isRelease FROM document_versions WHERE document_id = ? AND id = ? LIMIT 1`).get(payload.id, payload.selectedVersionId) as { id: string; isRelease: number } | undefined
@@ -241,7 +241,7 @@ export function registerContentIpc() {
     }
 
     return {
-      document: database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM documents WHERE id = ?`).get(payload.id),
+      document: database.prepare(`SELECT id, title, summary, enabled, updated_at as updatedAt FROM documents WHERE id = ?`).get(payload.id),
       versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, structure_json as structureJson, graph_json as graphJson, settings_json as settingsJson FROM document_versions WHERE document_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(payload.id),
       selectedVersionId: selectedVersionId?.id ?? null,
     }

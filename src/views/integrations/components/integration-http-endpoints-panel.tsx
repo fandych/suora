@@ -1,9 +1,10 @@
 import { useState } from "react"
-import { FileJson2Icon, PencilIcon, PlayIcon, PlusIcon, Trash2Icon, UploadIcon } from "lucide-react"
+import { FileJson2Icon, LinkIcon, PencilIcon, PlayIcon, PlusIcon, Trash2Icon, UploadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -46,6 +47,8 @@ export function IntegrationHttpEndpointsPanel({
   const [editingEndpoint, setEditingEndpoint] = useState<HttpEndpointConfig | null>(null)
   const [curlImport, setCurlImport] = useState("")
   const [openApiImport, setOpenApiImport] = useState("")
+  const [openApiUrl, setOpenApiUrl] = useState("")
+  const [isFetchingApiDoc, setIsFetchingApiDoc] = useState(false)
   const [isCurlDialogOpen, setIsCurlDialogOpen] = useState(false)
   const [isOpenApiDialogOpen, setIsOpenApiDialogOpen] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
@@ -68,14 +71,10 @@ export function IntegrationHttpEndpointsPanel({
 
   const removeEndpoint = (endpointId: string) => {
     const remaining = config.endpoints.filter((endpoint) => endpoint.id !== endpointId)
-    if (remaining.length === 0) {
-      return
-    }
-
     updateConfig({
       ...config,
       endpoints: remaining,
-      selectedEndpointId: config.selectedEndpointId === endpointId ? remaining[0].id : config.selectedEndpointId,
+      selectedEndpointId: config.selectedEndpointId === endpointId ? remaining[0]?.id ?? "" : config.selectedEndpointId,
     })
   }
 
@@ -125,6 +124,28 @@ export function IntegrationHttpEndpointsPanel({
     }
   }
 
+  const fetchOpenApiImport = async () => {
+    if (!openApiUrl.trim()) {
+      setImportError("Enter an API doc URL first.")
+      return
+    }
+
+    setIsFetchingApiDoc(true)
+    try {
+      const source = await window.suora?.integrations.fetchApiDoc(openApiUrl.trim())
+      if (typeof source !== "string" || !source.trim()) {
+        throw new Error("The API doc URL returned an empty response.")
+      }
+
+      setOpenApiImport(source)
+      setImportError(null)
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : String(error))
+    } finally {
+      setIsFetchingApiDoc(false)
+    }
+  }
+
   return (
     <>
       <Card className="min-h-0">
@@ -148,7 +169,7 @@ export function IntegrationHttpEndpointsPanel({
                   <UploadIcon className="size-4" />
                   Import from cURL
                 </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { setImportError(null); setOpenApiImport('{\n  "openapi": "3.0.0",\n  "servers": [{ "url": "https://api.example.com" }],\n  "paths": {}\n}'); setIsOpenApiDialogOpen(true) }}>
+                <DropdownMenuItem onClick={() => { setImportError(null); setOpenApiUrl(""); setOpenApiImport(""); setIsOpenApiDialogOpen(true) }}>
                   <FileJson2Icon className="size-4" />
                   Import API doc
                 </DropdownMenuItem>
@@ -159,6 +180,7 @@ export function IntegrationHttpEndpointsPanel({
         <CardContent className="min-h-0">
           <ScrollArea className="h-136 pr-2">
             <div className="flex flex-col gap-3">
+              {config.endpoints.length === 0 ? <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">No endpoints configured. Add an endpoint to get started.</div> : null}
               {config.endpoints.map((endpoint) => (
                 <div key={endpoint.id} className="rounded-xl border p-3">
                   <div className="flex items-start justify-between gap-3">
@@ -173,10 +195,10 @@ export function IntegrationHttpEndpointsPanel({
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Button size="icon-sm" variant="outline" aria-label={`Edit ${endpoint.name}`} title="Edit endpoint" onClick={() => setEditingEndpoint(createDraftFromEndpoint(endpoint))}><PencilIcon /></Button>
+                      <Button size="icon-sm" variant="destructive" aria-label={`Delete ${endpoint.name}`} title="Delete endpoint" onClick={() => removeEndpoint(endpoint.id)}><Trash2Icon /></Button>
                       <Button size="sm" variant="outline" disabled={!canTryRun} onClick={() => onTryRun(endpoint.id)}><PlayIcon />Try run</Button>
                     </div>
                   </div>
-                  {config.endpoints.length > 1 ? <div className="mt-3 flex justify-end"><Button size="icon-sm" variant="destructive" aria-label={`Delete ${endpoint.name}`} title="Delete endpoint" onClick={() => removeEndpoint(endpoint.id)}><Trash2Icon /></Button></div> : null}
                 </div>
               ))}
             </div>
@@ -204,9 +226,13 @@ export function IntegrationHttpEndpointsPanel({
       <ImportDialog
         open={isOpenApiDialogOpen}
         title="Import API doc"
-        description="Paste OpenAPI JSON. Endpoints are merged by method + path."
+        description="Enter an API doc URL or paste OpenAPI JSON. Endpoints are merged by method + path."
         value={openApiImport}
         onChange={setOpenApiImport}
+        url={openApiUrl}
+        onChangeUrl={setOpenApiUrl}
+        isFetching={isFetchingApiDoc}
+        onFetch={fetchOpenApiImport}
         onClose={() => { setOpenApiImport(""); setImportError(null); setIsOpenApiDialogOpen(false) }}
         onApply={applyOpenApiImport}
         error={importError}
@@ -221,6 +247,10 @@ function ImportDialog({
   description,
   value,
   onChange,
+  url,
+  onChangeUrl,
+  isFetching,
+  onFetch,
   onClose,
   onApply,
   error,
@@ -230,6 +260,10 @@ function ImportDialog({
   description: string
   value: string
   onChange: (value: string) => void
+  url?: string
+  onChangeUrl?: (value: string) => void
+  isFetching?: boolean
+  onFetch?: () => void
   onClose: () => void
   onApply: () => void
   error: string | null
@@ -241,6 +275,12 @@ function ImportDialog({
           <DialogTitle>{title}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {url !== undefined && onChangeUrl && onFetch ? (
+          <div className="flex gap-2">
+            <Input placeholder="https://example.com/openapi.json" value={url} onChange={(event) => onChangeUrl(event.target.value)} />
+            <Button variant="outline" onClick={onFetch} disabled={isFetching}><LinkIcon />{isFetching ? "Loading..." : "Load URL"}</Button>
+          </div>
+        ) : null}
         <Textarea className="min-h-72 font-mono" value={value} onChange={(event) => onChange(event.target.value)} />
         {error ? <div className="rounded-lg border border-destructive/35 bg-destructive/5 px-3 py-2 text-sm text-destructive">{error}</div> : null}
         <DialogFooter>

@@ -58,7 +58,7 @@ export class GlobalErrorBoundary extends Component<GlobalErrorBoundaryProps, Glo
                 </EmptyMedia>
                 <EmptyTitle>Something went wrong</EmptyTitle>
                 <EmptyDescription>
-                  Reload the app, or return to the dashboard and reopen the current item.
+                  Reload the app, or return to chats and reopen the current item.
                 </EmptyDescription>
                 <div className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-left text-xs text-destructive">
                   <div className="font-medium">{this.state.error.name || "Error"}</div>
@@ -71,9 +71,9 @@ export class GlobalErrorBoundary extends Component<GlobalErrorBoundaryProps, Glo
                   <RotateCcwIcon />
                   Back
                 </Button>
-                <Button onClick={() => { window.location.hash = "#/dashboard" }}>
+                <Button onClick={() => { window.location.hash = "#/chats" }}>
                   <HomeIcon />
-                  Dashboard
+                  Chats
                 </Button>
                 <Button variant="outline" onClick={() => window.location.reload()}>
                   <RotateCcwIcon />

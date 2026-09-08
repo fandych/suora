@@ -7,9 +7,9 @@ Schedulers 用于保存面向 workflow 或 Agent 的 cron、时区、输入和�
 ## 创建调度配置
 
 1. 在 **Schedulers** 模块的二级侧边栏选择 **New scheduler**。
-2. 填写名称、描述、cron 表达式和时区。
-3. 选择目标类型：workflow 或 Agent，再选择目标。
-4. 设置错过执行策略、重试次数、重试退避和 JSON 输入。
+2. 在左侧 **General** 面板填写名称、描述、cron 表达式、时区及重试策略。
+3. 在右侧 **Binding** 面板选择目标类型：workflow 或 Agent，再选择目标。
+4. 若绑定 workflow，按 workflow 起始节点声明的输入字段填写参数；若绑定 Agent，填写每次触发时发送给 Agent 的任务提示词与上下文。
 5. 使用 Enabled 开关保存为启用或暂停状态。
 
 新建 Scheduler 默认值：
@@ -55,9 +55,13 @@ cron 和时区均为文本字段。保存时只要求非空：当前不会解析
   当前没有可用 workflow 或 Agent 时，仍可创建 Scheduler 并保存手动填写的目标 ID/名称；该配置不会自动解析或执行目标。
 </Callout>
 
-### 输入 JSON
+### Workflow 输入与 Agent 提示词
 
-输入字段为空时会保存为 `{}`；非空内容必须能被 JSON 解析。当前允许任意有效 JSON 类型，不要求对象，也不会根据 workflow/Agent 的 schema 验证。
+选择 workflow 后，Binding 面板会读取 workflow 起始节点的 input schema，并将声明的字符串、数字、布尔值、对象和数组显示为对应表单字段。表单值会保存为 `inputPayloadJson` 对象；切换 workflow 或目标类型会重置当前输入，避免将不匹配的参数传给新目标。
+
+选择 Agent 后，Binding 面板会显示 **Invocation prompt**。它不是 Agent 的系统提示词：系统提示词仍由 Agent 本身维护；此处用于保存 scheduler 在每次触发时提供的任务、上下文或指令，并以 `{ "prompt": "..." }` 的 JSON payload 形式持久化。
+
+输入字段为空时会保存为 `{}`；非空内容必须能被 JSON 解析。当前不会执行 Scheduler，也不会在运行期验证 schema 或 Agent payload。
 
 ### 重试与错过执行
 

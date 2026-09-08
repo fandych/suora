@@ -3,6 +3,10 @@ import net from "node:net"
 
 const BLOCKED_HOSTNAMES = new Set(["localhost", "localhost.localdomain", "metadata.google.internal"])
 
+function isLocalDevelopmentHost(hostname: string) {
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname === "0.0.0.0"
+}
+
 function isPrivateAddress(address: string) {
   const version = net.isIP(address)
   if (version === 4) {
@@ -16,7 +20,7 @@ function isPrivateAddress(address: string) {
   return true
 }
 
-export async function assertSafeHttpUrl(value: string) {
+export async function assertSafeHttpUrl(value: string, options?: { allowLocalNetwork?: boolean }) {
   let url: URL
   try {
     url = new URL(value)
@@ -29,6 +33,10 @@ export async function assertSafeHttpUrl(value: string) {
   }
 
   const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  if (options?.allowLocalNetwork) {
+    return url
+  }
+
   if (BLOCKED_HOSTNAMES.has(hostname) || isPrivateAddress(hostname)) {
     throw new Error("Private and local network URLs are not allowed.")
   }

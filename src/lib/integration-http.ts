@@ -47,22 +47,20 @@ export function createHttpEndpoint(
 }
 
 export function createDefaultHttpIntegrationConfig(): HttpIntegrationConfig {
-  const endpoint = createHttpEndpoint({ name: "Default endpoint", method: "POST", path: "/" })
-
   return {
     kind: "http",
     baseUrl: "",
-    selectedEndpointId: endpoint.id,
-    endpoints: [endpoint],
-    method: endpoint.method,
+    selectedEndpointId: "",
+    endpoints: [],
+    method: "POST",
     url: "",
     description: "",
-    headersJson: endpoint.headersJson,
-    queryJson: endpoint.queryJson,
-    bodyJson: endpoint.bodyJson,
+    headersJson: "{}",
+    queryJson: "{}",
+    bodyJson: "{}",
     authType: "none",
     authConfigJson: "{}",
-    parameterSchemaJson: endpoint.parameterSchemaJson,
+    parameterSchemaJson: DEFAULT_PARAMETER_SCHEMA_JSON,
   }
 }
 
@@ -93,21 +91,19 @@ export function getSelectedHttpEndpoint(config: HttpIntegrationConfig) {
 }
 
 export function syncHttpIntegrationConfig(config: HttpIntegrationConfig): HttpIntegrationConfig {
-  const endpoints = config.endpoints.length > 0
-    ? config.endpoints.map((endpoint) => createHttpEndpoint(endpoint))
-    : [createHttpEndpoint({ name: "Default endpoint", method: config.method || "POST" })]
+  const endpoints = config.endpoints.map((endpoint) => createHttpEndpoint(endpoint))
   const selectedEndpoint = endpoints.find((endpoint) => endpoint.id === config.selectedEndpointId) ?? endpoints[0]
 
   return {
     ...config,
-    selectedEndpointId: selectedEndpoint.id,
+    selectedEndpointId: selectedEndpoint?.id ?? "",
     endpoints,
-    method: selectedEndpoint.method,
-    url: buildHttpEndpointUrl(config.baseUrl, selectedEndpoint.path),
-    headersJson: selectedEndpoint.headersJson,
-    queryJson: selectedEndpoint.queryJson,
-    bodyJson: selectedEndpoint.bodyJson,
-    parameterSchemaJson: selectedEndpoint.parameterSchemaJson,
+    method: selectedEndpoint?.method ?? config.method,
+    url: selectedEndpoint ? buildHttpEndpointUrl(config.baseUrl, selectedEndpoint.path) : "",
+    headersJson: selectedEndpoint?.headersJson ?? config.headersJson,
+    queryJson: selectedEndpoint?.queryJson ?? config.queryJson,
+    bodyJson: selectedEndpoint?.bodyJson ?? config.bodyJson,
+    parameterSchemaJson: selectedEndpoint?.parameterSchemaJson ?? config.parameterSchemaJson,
   }
 }
 
@@ -128,7 +124,9 @@ export function normalizeHttpIntegrationConfig(
 ): HttpIntegrationConfig {
   const fallback = createDefaultHttpIntegrationConfig()
   const existingEndpoints = config.endpoints?.length
+    ? config.endpoints.length > 0
     ? config.endpoints
+    : []
     : [(() => {
       const legacyUrl = config.url?.trim() ?? ""
       let baseUrl = config.baseUrl ?? ""
@@ -149,7 +147,7 @@ export function normalizeHttpIntegrationConfig(
       }
 
       const endpoint = createHttpEndpoint({
-        name: "Default endpoint",
+        name: "Imported endpoint",
         description: config.description ?? "",
         method: config.method ?? fallback.method,
         path,

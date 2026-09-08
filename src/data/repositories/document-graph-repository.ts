@@ -44,6 +44,7 @@ export async function rebuildDocumentKnowledgeGraph(documentId: string, selected
   const graphEdges = inferKnowledgeGraphEdges(detail.pages)
 
   return saveDocumentDraft(documentId, {
+    enabled: detail.document.enabled,
     title: detail.document.title,
     summary: detail.document.summary,
     pages: detail.pages,
@@ -56,6 +57,7 @@ export async function reviewDocumentKnowledgeGraphEdge(documentId: string, edgeI
   const detail = await getDocumentDetail(documentId, selectedVersionId)
 
   return saveDocumentDraft(documentId, {
+    enabled: detail.document.enabled,
     title: detail.document.title,
     summary: detail.document.summary,
     pages: detail.pages,

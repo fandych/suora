@@ -95,9 +95,6 @@ function validateIntegrationConfig(config: IntegrationConfig) {
     if (!config.baseUrl.trim()) {
       throw new Error("HTTP integration base URL is required.")
     }
-    if (config.endpoints.length === 0) {
-      throw new Error("At least one HTTP endpoint is required.")
-    }
     if (!config.endpoints.every((endpoint) => endpoint.path.trim())) {
       throw new Error("Every HTTP endpoint requires a path.")
     }
@@ -128,7 +125,8 @@ function validateIntegrationConfig(config: IntegrationConfig) {
 
 export async function listIntegrationSummaries() {
   await ensureSeeded()
-  return suoraIpc.integrations.list() as Promise<IntegrationSummary[]>
+  const summaries = await suoraIpc.integrations.list() as IntegrationSummary[]
+  return summaries.map((summary) => ({ ...summary, enabled: Boolean(summary.enabled) }))
 }
 
 export async function getIntegrationDetail(integrationId: string, selectedVersionId?: string) {
@@ -137,7 +135,7 @@ export async function getIntegrationDetail(integrationId: string, selectedVersio
   if (!detail) {
     throw new Error(`Integration ${integrationId} was not found.`)
   }
-  return { ...detail, config: normalizeIntegrationConfig(detail.config) }
+  return { ...detail, integration: { ...detail.integration, enabled: Boolean(detail.integration.enabled) }, config: normalizeIntegrationConfig(detail.config) }
 }
 
 export async function createIntegration(kind: IntegrationConfig["kind"] = "http") {
@@ -146,10 +144,27 @@ export async function createIntegration(kind: IntegrationConfig["kind"] = "http"
   return suoraIpc.integrations.create({ kind, title: `New ${kind} integration`, endpoint: getConfigEndpoint(config), configJson: JSON.stringify(config) }) as Promise<IntegrationDetail>
 }
 
-export async function saveIntegrationDraft(integrationId: string, payload: { title: string; kind: IntegrationConfig["kind"]; config: IntegrationConfig; selectedVersionId?: string }) {
+export async function saveIntegrationDraft(integrationId: string, payload: { title: string; kind: IntegrationConfig["kind"]; config: IntegrationConfig; enabled?: boolean; selectedVersionId?: string }) {
   await ensureSeeded()
   validateIntegrationConfig(payload.config)
-  return suoraIpc.integrations.save({ id: integrationId, title: payload.title, kind: payload.kind, endpoint: getConfigEndpoint(payload.config), config: payload.config, selectedVersionId: payload.selectedVersionId }) as Promise<IntegrationDetail>
+  return suoraIpc.integrations.save({ id: integrationId, title: payload.title, kind: payload.kind, endpoint: getConfigEndpoint(payload.config), config: payload.config, enabled: payload.enabled, selectedVersionId: payload.selectedVersionId }) as Promise<IntegrationDetail>
+}
+
+export async function deleteIntegration(integrationId: string) {
+  await ensureSeeded()
+  const result = await suoraIpc.integrations.delete(integrationId) as { ok: boolean }
+  if (!result.ok) {
+    throw new Error(`Integration ${integrationId} was not found.`)
+  }
+}
+
+export async function setIntegrationEnabled(integrationId: string, enabled: boolean) {
+  await ensureSeeded()
+  const summary = await suoraIpc.integrations.setEnabled({ id: integrationId, enabled })
+  if (!summary) {
+    throw new Error(`Integration ${integrationId} was not found.`)
+  }
+  return { ...summary, enabled: Boolean(summary.enabled) }
 }
 
 export async function runIntegrationAndPersist(integrationId: string, selectedVersionId?: string, inputJson = "{}", selectedEntryId?: string) {

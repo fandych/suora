@@ -8,7 +8,6 @@ import { SidebarLayout } from "@/components/sidebar-layout"
 const Architecture = lazy(() => import("./pages/technical/architecture.mdx"))
 const Ai = lazy(() => import("./pages/technical/ai.mdx"))
 const ChannelRuntime = lazy(() => import("./pages/technical/channel-runtime.mdx"))
-const Dashboard = lazy(() => import("./pages/user/dashboard.mdx"))
 const Development = lazy(() => import("./pages/technical/development.mdx"))
 const Database = lazy(() => import("./pages/technical/database.mdx"))
 const Ipc = lazy(() => import("./pages/technical/ipc.mdx"))
@@ -31,7 +30,6 @@ const Welcome = lazy(() => import("./pages/welcome.mdx"))
 
 const pageComponents: Record<string, ComponentType> = {
   "/doc": Welcome,
-  "/doc/dashboard/overview": Dashboard,
   "/doc/chat/overview": Chats,
   "/doc/channels/overview": Channels,
   "/doc/documents/overview": Documents,

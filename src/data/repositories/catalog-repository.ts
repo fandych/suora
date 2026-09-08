@@ -1,8 +1,8 @@
 import { desc } from "drizzle-orm"
 
-import type { DashboardSnapshot, SimpleCatalogItem } from "@/data/domain/models"
-import { getDatabaseContext, pingDatabase } from "@/data/db/client"
-import { agents, channels, chats, documents, integrations, providers, schedulers, skills, workflows } from "@/data/db/schema"
+import type { SimpleCatalogItem } from "@/data/domain/models"
+import { getDatabaseContext } from "@/data/db/client"
+import { agents, channels, integrations, providers, schedulers } from "@/data/db/schema"
 import { toTimestamp } from "@/data/domain/versioning"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 
@@ -44,23 +44,4 @@ export async function listChannels() {
   await ensureSeeded()
   const context = await getDatabaseContext()
   return (await context.db.select().from(channels).orderBy(desc(channels.updatedAt)).all()).map(mapItem)
-}
-
-export async function getDashboardSnapshot(): Promise<DashboardSnapshot> {
-  await ensureSeeded()
-  const context = await getDatabaseContext()
-
-  await pingDatabase()
-
-  return {
-    storage: "ready",
-    counts: {
-      chats: (await context.db.select().from(chats).all()).length,
-      workflows: (await context.db.select().from(workflows).all()).length,
-      skills: (await context.db.select().from(skills).all()).length,
-      documents: (await context.db.select().from(documents).all()).length,
-      agents: (await context.db.select().from(agents).all()).length,
-      providers: (await context.db.select().from(providers).all()).length,
-    },
-  }
 }

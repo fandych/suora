@@ -329,4 +329,22 @@ export const runtimeMigrations = [
       /duplicate column name: source_ref/i,
     ],
   },
+  {
+    id: 12,
+    statements: [
+      `ALTER TABLE integrations ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`,
+    ],
+    ignoreErrorsMatching: [
+      /duplicate column name: enabled/i,
+    ],
+  },
+  {
+    id: 13,
+    statements: [
+      `ALTER TABLE documents ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1`,
+    ],
+    ignoreErrorsMatching: [
+      /duplicate column name: enabled/i,
+    ],
+  },
 ]

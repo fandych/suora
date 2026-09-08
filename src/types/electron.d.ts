@@ -70,7 +70,10 @@ declare global {
         list: () => Promise<unknown>
         get: (integrationId: string) => Promise<unknown>
         create: (payload?: unknown) => Promise<unknown>
+        fetchApiDoc: (sourceUrl: string) => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
+        setEnabled: (payload: unknown) => Promise<unknown>
+        delete: (integrationId: string) => Promise<unknown>
         recordExecution: (payload: unknown) => Promise<unknown>
         execute: (payload: unknown) => Promise<unknown>
       }

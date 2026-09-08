@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router"
-import { EllipsisIcon, PencilIcon, Trash2Icon } from "lucide-react"
+import { EllipsisIcon, PencilIcon, PowerIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -72,6 +72,7 @@ const DocumentsDetailPage = () => {
     const saved = await saveDocumentDraft(documentId ?? "", {
       title: nextDraft.document.title,
       summary: nextDraft.document.summary,
+      enabled: nextDraft.document.enabled,
       pages: nextDraft.pages,
       graphEdges: nextDraft.graphEdges,
       settings: nextDraft.settings,
@@ -259,6 +260,10 @@ const DocumentsDetailPage = () => {
     navigate("/documents")
   }
 
+  const toggleDocumentEnabled = () => {
+    setDraft((current) => current ? { ...current, document: { ...current.document, enabled: !current.document.enabled } } : current)
+  }
+
   return (
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
@@ -270,7 +275,11 @@ const DocumentsDetailPage = () => {
               <EllipsisIcon />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => setIsMetadataDialogOpen(true)}><PencilIcon className="size-4" />Edit name/description</DropdownMenuItem>
+              <DropdownMenuItem onClick={toggleDocumentEnabled}>
+                <PowerIcon />
+                {draft.document.enabled ? "Disable" : "Enable"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setIsMetadataDialogOpen(true)}><PencilIcon className="size-4" />Edit Info</DropdownMenuItem>
               <DropdownMenuItem variant="destructive" onClick={() => setIsDocumentDeleteDialogOpen(true)}><Trash2Icon className="size-4" />Delete</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -292,7 +301,7 @@ const DocumentsDetailPage = () => {
           </ResizablePanelGroup>
         ) : null}
       </div>
-      <DocumentCreateDialog dialogDescription="Update the document name and summary for this workspace." dialogTitle="Edit document info" onDescriptionChange={(value) => setDraft((current) => current ? { ...current, document: { ...current.document, summary: value } } : current)} onOpenChange={setIsMetadataDialogOpen} onSubmit={() => { setIsMetadataDialogOpen(false) }} onTitleChange={(value) => setDraft((current) => current ? { ...current, document: { ...current.document, title: value } } : current)} open={isMetadataDialogOpen} submitLabel="Done" title={draft?.document.title ?? ""} description={draft?.document.summary ?? ""} />
+      <DocumentCreateDialog dialogDescription="Update the document name and description for this workspace." dialogTitle="Edit document details" onDescriptionChange={(value) => setDraft((current) => current ? { ...current, document: { ...current.document, summary: value } } : current)} onOpenChange={setIsMetadataDialogOpen} onSubmit={() => setIsMetadataDialogOpen(false)} onTitleChange={(value) => setDraft((current) => current ? { ...current, document: { ...current.document, title: value } } : current)} open={isMetadataDialogOpen} submitLabel="Save changes" title={draft?.document.title ?? ""} description={draft?.document.summary ?? ""} />
       <ConfirmDeleteDialog description="This permanently deletes the document and all of its content. This action cannot be undone." onConfirm={() => void handleDeleteDocument()} onOpenChange={setIsDocumentDeleteDialogOpen} open={isDocumentDeleteDialogOpen} title="Delete document" />
       <ResourceEntryDialog description={entryDialogMode?.kind === "rename" ? "Rename the selected page or folder." : "Create a new document or folder inside the selected parent."} errorMessage={entryDialogError} fieldLabel={entryDialogMode?.kind === "rename" ? "New name" : "Name"} onOpenChange={(open) => { if (!open) { setEntryDialogMode(null); setEntryDialogError("") } }} onSubmit={commitAddOrRename} onValueChange={setEntryDialogValue} open={Boolean(entryDialogMode)} placeholder={entryDialogMode?.kind === "add-file" ? "new-document.md" : "new-folder"} submitLabel={entryDialogMode?.kind === "rename" ? "Rename" : "Create"} title={entryDialogMode?.kind === "rename" ? "Rename item" : entryDialogMode?.kind === "add-directory" ? "Create folder" : "Create document"} value={entryDialogValue} />
       <ConfirmDeleteDialog description={deleteTargetId ? `Delete this item and all nested content under it?` : "Delete this item?"} onConfirm={() => deleteTargetId ? deleteNode(deleteTargetId) : undefined} onOpenChange={(open) => { if (!open) setDeleteTargetId(null) }} open={Boolean(deleteTargetId)} title="Delete item" />

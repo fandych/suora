@@ -3,7 +3,6 @@ import {
   BotIcon,
   BrainCircuitIcon,
   CalendarClockIcon,
-  LayoutDashboardIcon,
   MessageCircleIcon,
   PlugZapIcon,
   RadioTowerIcon,
@@ -45,21 +44,6 @@ export type ResolvedSecondarySidebarItem = {
 
 export const primaryNavItems: PrimaryNavItem[] = [
   {
-    title: "Dashboard",
-    url: "/dashboard",
-    icon: LayoutDashboardIcon,
-    iconClassName: "text-slate-500",
-    description: "Track workspace health, workflow status, and recent activity in one place.",
-    secondarySidebar: {
-      searchPlaceholder: "搜索 dashboard...",
-      groups: [
-        {
-          id: "overview",
-        },
-      ],
-    },
-  },
-  {
     title: "Chats",
     url: "/chats",
     icon: MessageCircleIcon,
@@ -73,12 +57,12 @@ export const primaryNavItems: PrimaryNavItem[] = [
           title: "今天",
         },
         {
-          id: "recent",
-          title: "7天内",
+          id: "week",
+          title: "本周",
         },
         {
           id: "older",
-          title: "更早以前",
+          title: "更早",
         },
       ],
     },
@@ -91,6 +75,7 @@ export const primaryNavItems: PrimaryNavItem[] = [
     description: "Manage agent definitions, responsibilities, and execution status.",
     secondarySidebar: {
       searchPlaceholder: "搜索 agents...",
+      collapsibleGroups: true,
       groups: [
         {
           id: "custom",

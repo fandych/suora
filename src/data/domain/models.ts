@@ -256,6 +256,7 @@ export type DocumentSummary = {
   id: string
   title: string
   summary: string
+  enabled: boolean
   updatedAt: number
 }
 
@@ -364,6 +365,7 @@ export type IntegrationSummary = {
   title: string
   kind: string
   endpoint: string
+  enabled: boolean
   updatedAt: number
 }
 
@@ -692,16 +694,4 @@ export type SimpleCatalogItem = {
   kind: string
   meta?: string
   updatedAt: number
-}
-
-export type DashboardSnapshot = {
-  storage: "ready" | "error"
-  counts: {
-    chats: number
-    workflows: number
-    skills: number
-    documents: number
-    agents: number
-    providers: number
-  }
 }

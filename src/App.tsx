@@ -7,7 +7,6 @@ import { showToast } from '@/lib/app-toast'
 import { hasSuoraBridge, suoraIpc } from '@/lib/ipc'
 import { initChannelRuntimeListener } from '@/services/channel-runtime-listener'
 import RootLayout from './views/layout'
-import DashboardPage from './views/dashboard'
 import WorkflowsPage from './views/workflows'
 import SkillsPage from './views/skills'
 import DocumentsPage from './views/documents'
@@ -95,8 +94,7 @@ const App = () => {
       <HashRouter>
         <Routes>
           <Route path="/" element={<RootLayout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
+            <Route index element={<Navigate to="/chats" replace />} />
             <Route path="chats" element={<ChatDetailPage />} />
             <Route path="chats/:chatId" element={<ChatDetailPage />} />
             <Route path="workflows" element={<WorkflowsPage />} />

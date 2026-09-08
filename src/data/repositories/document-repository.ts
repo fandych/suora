@@ -35,6 +35,7 @@ export async function createDocumentWithMetadata(payload: { title: string; summa
     selectedVersionId: created.selectedVersion.id,
     title: payload.title,
     summary: payload.summary,
+    enabled: created.document.enabled,
     pages: normalizeDocumentNodes(created.pages, payload.title),
     graphEdges: created.graphEdges,
     settings: created.settings,
@@ -50,7 +51,7 @@ export async function getDocumentDetail(documentId: string, selectedVersionId?: 
   return normalizeDocument(detail)
 }
 
-export async function saveDocumentDraft(documentId: string, payload: { title: string; summary: string; pages: DocumentPageRecord[]; graphEdges: DocumentGraphEdge[]; settings: { isPublic: boolean; includeInLlmsTxt: boolean }; selectedVersionId?: string }) {
+export async function saveDocumentDraft(documentId: string, payload: { title: string; summary: string; enabled: boolean; pages: DocumentPageRecord[]; graphEdges: DocumentGraphEdge[]; settings: { isPublic: boolean; includeInLlmsTxt: boolean }; selectedVersionId?: string }) {
   await ensureSeeded()
   return suoraIpc.documents.save({
     id: documentId,
@@ -62,7 +63,7 @@ export async function saveDocumentDraft(documentId: string, payload: { title: st
 export async function publishDocumentVersion(documentId: string, versionId: string) {
   await ensureSeeded()
   const detail = await getDocumentDetail(documentId, versionId)
-  return suoraIpc.documents.save({ id: documentId, title: detail.document.title, summary: detail.document.summary, pages: detail.pages, graphEdges: detail.graphEdges, settings: detail.settings, selectedVersionId: detail.selectedVersion.id, publish: true }) as Promise<DocumentDetail>
+  return suoraIpc.documents.save({ id: documentId, title: detail.document.title, summary: detail.document.summary, enabled: detail.document.enabled, pages: detail.pages, graphEdges: detail.graphEdges, settings: detail.settings, selectedVersionId: detail.selectedVersion.id, publish: true }) as Promise<DocumentDetail>
 }
 
 export async function deleteDocument(documentId: string) {
@@ -156,6 +157,7 @@ export async function importDocumentArchive(file: File, strategy: ArchiveImportS
   return saveDocumentDraft(created.document.id, {
     title: created.document.title,
     summary: created.document.summary,
+    enabled: created.document.enabled,
     pages: [
       ...buildDefaultDocumentNodes(created.document.title).filter(() => false),
       ...created.pages.filter((page) => page.id === rootFolderId),

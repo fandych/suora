@@ -19,7 +19,6 @@ export const documentationSections: DocSection[] = [
     icon: RocketIcon,
     items: [
       { title: "概览", path: "/doc", description: "认识 SUORA 文档站" },
-      { title: "Dashboard", path: "/doc/dashboard/overview", description: "查看本地工作区资源概览" },
       { title: "安装与启动", path: "/doc/getting-started/installation", description: "安装桌面应用并配置首个模型" },
     ],
   },

@@ -55,6 +55,7 @@ export function createPrivateResourceTools(enabledIds: readonly string[]) {
         return saveDocumentDraft(documentId, {
           title: nextTitle,
           summary: summary ?? current.document.summary,
+          enabled: current.document.enabled,
           pages: parseJson<DocumentPageRecord[]>(pagesJson, current.pages, "pagesJson"),
           graphEdges: parseJson<DocumentGraphEdge[]>(graphEdgesJson, current.graphEdges, "graphEdgesJson"),
           settings: parseJson<DocumentSettings>(settingsJson, current.settings, "settingsJson"),
