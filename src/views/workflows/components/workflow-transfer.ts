@@ -1,5 +1,5 @@
 import type { WorkflowDefinition, WorkflowNodeData } from "@/data/domain/models"
-import { downloadJson } from "@/lib/browser-files"
+import { downloadJson } from "@/lib/browser/file-exports"
 
 export function exportWorkflowJson(payload: { title: string; summary: string; definition: WorkflowDefinition; versionLabel?: string }) {
   const fileName = `${payload.title || "workflow"}`.replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase() || "workflow"

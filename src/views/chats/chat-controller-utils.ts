@@ -1,8 +1,8 @@
 import { buildAttachmentSummary, getTextParts, MAX_CHAT_ATTACHMENT_BYTES, MAX_CHAT_ATTACHMENTS, MAX_CHAT_ATTACHMENT_TOTAL_BYTES, type ChatAttachmentRecord, type ChatMessagePart } from "@/data/domain/chat-message-parts"
 import type { ChatDetail, ChatMessageRecord, ProviderConfigRecord } from "@/data/domain/models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
-import type { ChatAttachment } from "@/services/ai-service"
-import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
+import type { ChatAttachment } from "@/services/chat/types"
+import type { AssistantResponsePart } from "@/services/chat/response-parts"
 
 export function buildAttachmentSourceKey(file: File) {
   return [file.name, file.size, file.lastModified, file.type || "application/octet-stream"].join(":")
@@ -77,29 +77,6 @@ export function mergeChatAttachments(current: ChatAttachment[], next: ChatAttach
     throw new Error("The total attachment size cannot exceed 25 MB.")
   }
   return merged
-}
-
-export function hasVisibleAssistantContent(finalText: string, parts: AssistantResponsePart[]) {
-  return finalText.trim().length > 0 || parts.some((part) => {
-    if (part.type === "text") {
-      return part.content.trim().length > 0
-    }
-
-    return part.activity.output !== undefined || Boolean(part.activity.error) || Boolean(part.activity.input)
-  })
-}
-
-export function createPersistedAssistantPayload(finalText: string, parts: AssistantResponsePart[], completedWithAbort: boolean) {
-  const hasVisibleContent = hasVisibleAssistantContent(finalText, parts)
-  const persistedText = hasVisibleContent ? finalText.trim() : completedWithAbort ? "" : "No visible response was returned."
-  const persistedParts = hasVisibleContent || completedWithAbort
-    ? parts
-    : [{ id: "assistant-empty", type: "text", content: persistedText }] satisfies AssistantResponsePart[]
-
-  return {
-    persistedText,
-    persistedParts,
-  }
 }
 
 function buildChatMessagePartsPlainText(parts: ChatMessagePart[]) {

@@ -7,7 +7,7 @@ import { useAsyncResource } from "@/hooks/use-async-resource"
 import type { ProviderConfigRecord } from "@/data/domain/models"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { deleteModelProvider, discoverProviderModelCatalog, getDefaultProviderBaseUrl, getModelProvider, getProviderModelDiscoveryState, getProviderPreset, providerAllowsNoKey, saveModelProvider } from "@/data/repositories/model-config-repository"
-import { showToast } from "@/lib/app-toast"
+import { showToast } from "@/lib/ui-toast"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { ModelFormDialog, createModelFormState, type ModelFormState } from "@/views/models/components/model-form-dialog"
@@ -210,7 +210,7 @@ const ModelsDetailPage = () => {
                   onChange={setDraft}
                   onDelete={handleDeleteProvider}
                   onOpenDocs={(url) => {
-                    void window.suora?.tools.openExternal(url)
+                    void window.project?.tools.openExternal(url)
                   }}
                   onProviderTypeChange={handleProviderTypeChange}
                   onSave={handleSave}

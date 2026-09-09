@@ -1,6 +1,6 @@
 import { FileImageIcon, FileVideoIcon, FileWarningIcon, Music4Icon } from "lucide-react"
 
-import { getResourcePreviewKind, isDataUrl } from "@/lib/resource-files"
+import { getResourcePreviewKind, isDataUrl } from "@/lib/resources/archive-import"
 
 type ResourceFilePreviewProps = {
   content: string

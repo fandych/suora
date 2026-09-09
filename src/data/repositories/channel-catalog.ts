@@ -4,7 +4,7 @@ import { channels } from "@/data/db/schema"
 import { executePersistedMutation, getDatabaseContext } from "@/data/db/client"
 import { CHANNEL_CATALOG_TEMPLATES, buildChannelCatalogId, createDefaultChannelConfig, createDefaultChannelRuntime } from "@/data/repositories/channel-defaults"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { normalizeChannelConfig } from "@/lib/channel-config"
+import { normalizeChannelConfig } from "@/data/domain/channel-config"
 
 let ensureChannelCatalogPromise: Promise<void> | undefined
 let hasEnsuredChannelCatalog = false

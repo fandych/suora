@@ -16,7 +16,7 @@ import { IntegrationHttpEndpointsPanel } from "@/views/integrations/components/i
 import { IntegrationMcpToolsPanel } from "@/views/integrations/components/integration-mcp-tools-panel"
 import { IntegrationScriptWorkbench } from "@/views/integrations/components/integration-script-workbench"
 import { IntegrationTryRunSheet } from "@/views/integrations/components/integration-try-run-sheet"
-import { createDefaultHttpIntegrationConfig, readMcpTools, syncHttpIntegrationConfig } from "@/lib/integration-http"
+import { createDefaultHttpIntegrationConfig, readMcpTools, syncHttpIntegrationConfig } from "@/data/domain/integrations"
 
 const FALLBACK_HTTP_CONFIG: IntegrationConfig = createDefaultHttpIntegrationConfig()
 

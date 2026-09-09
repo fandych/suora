@@ -1,6 +1,6 @@
-import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
+import { hasProjectBridge, projectIpc } from "@/lib/ipc"
 import { getPreferenceSettings } from "@/data/repositories/preference-repository"
-import { DEFAULT_CHAT_AGENT_MAX_STEPS, normalizeChatAgentMaxSteps } from "@/services/agent-loop-control"
+import { DEFAULT_CHAT_AGENT_MAX_STEPS, normalizeChatAgentMaxSteps } from "@/data/domain/chat/agent-loop-control"
 
 const CHAT_SETTINGS_STORE_VERSION = 2
 
@@ -99,9 +99,9 @@ function writeBrowserSettings(store: ChatSettingsStore) {
 }
 
 async function readSettingsValue() {
-  if (hasSuoraBridge()) {
+  if (hasProjectBridge()) {
     try {
-      return await suoraIpc.chats.getSettings() as string | null
+      return await projectIpc.chats.getSettings() as string | null
     } catch {
       return readBrowserSettings()
     }
@@ -111,9 +111,9 @@ async function readSettingsValue() {
 }
 
 async function saveSettingsStore(store: ChatSettingsStore) {
-  if (hasSuoraBridge()) {
+  if (hasProjectBridge()) {
     try {
-      await suoraIpc.chats.saveSettings({ version: CHAT_SETTINGS_STORE_VERSION, store })
+      await projectIpc.chats.saveSettings({ version: CHAT_SETTINGS_STORE_VERSION, store })
       return
     } catch {
       writeBrowserSettings(store)

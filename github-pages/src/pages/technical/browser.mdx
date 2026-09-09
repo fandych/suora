@@ -2,7 +2,7 @@ export const meta = { title: "Browser Tools", description: "内置浏览器会�
 
 # Browser Tools
 
-SUORA 为 Agent 提供隐藏的 Electron 浏览器，用于访问允许的外部网页、读取页面、点击元素和填写表单。核心实现位于 `electron/others/browser-window.ts`，工具定义位于 `src/services/ai-tools.ts`。
+SUORA 为 Agent 提供隐藏的 Electron 浏览器，用于访问允许的外部网页、读取页面、点击元素和填写表单。核心实现位于 `electron/others/browser-window.ts`，工具定义位于 `src/services/ai/tools/browser-tools.ts`，重试逻辑位于 `src/services/ai/tools/tool-retry.ts`。
 
 ## 会话生命周期
 

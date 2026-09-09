@@ -1,7 +1,7 @@
 import type { ProviderConfigRecord } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { defaultProviderTypes, providerPresets } from "@/data/repositories/model-provider-presets"
-import { suoraIpc } from "@/lib/ipc"
+import { projectIpc } from "@/lib/ipc"
 
 const visibleProviderTypes = new Set<string>([...defaultProviderTypes, "custom"])
 const unsupportedDiscoveryReasons = new Map<string, string>([
@@ -93,12 +93,12 @@ function collapseProviders(providers: ProviderConfigRecord[]) {
 }
 
 async function ensurePresetProviders() {
-  const existing = (await suoraIpc.models.list()).filter((provider) => visibleProviderTypes.has(provider.providerType))
+  const existing = (await projectIpc.models.list()).filter((provider) => visibleProviderTypes.has(provider.providerType))
   const existingTypes = new Set(existing.map((provider) => provider.providerType))
 
   for (const preset of providerPresets) {
     if (preset.providerType !== "custom" && !existingTypes.has(preset.providerType)) {
-      await suoraIpc.models.create({
+      await projectIpc.models.create({
         title: preset.title,
         providerType: preset.providerType,
         baseUrl: preset.baseUrl,
@@ -109,7 +109,7 @@ async function ensurePresetProviders() {
     }
   }
 
-  return collapseProviders((await suoraIpc.models.list()).filter((provider) => visibleProviderTypes.has(provider.providerType)))
+  return collapseProviders((await projectIpc.models.list()).filter((provider) => visibleProviderTypes.has(provider.providerType)))
 }
 
 export function getProviderPreset(providerType: string) {
@@ -154,7 +154,7 @@ export function getProviderModelDiscoveryState(provider: Pick<ProviderConfigReco
 
 export async function discoverProviderModelCatalog(provider: Pick<ProviderConfigRecord, "id" | "title" | "providerType" | "baseUrl" | "apiKey" | "enabled" | "updatedAt" | "models">) {
   await ensureSeeded()
-  const discovered = await suoraIpc.models.discover({
+  const discovered = await projectIpc.models.discover({
     providerType: provider.providerType,
     baseUrl: provider.baseUrl,
     apiKey: provider.apiKey,
@@ -190,14 +190,14 @@ export async function listConfiguredModelProviders() {
 
 export async function getModelProvider(providerId: string) {
   await ensureSeeded()
-  const provider = await suoraIpc.models.get(providerId)
+  const provider = await projectIpc.models.get(providerId)
   return provider && visibleProviderTypes.has(provider.providerType) ? normalizeProvider(provider) : null
 }
 
 export async function createModelProvider(providerType = "custom") {
   await ensureSeeded()
   const preset = getProviderPreset(providerType)
-  return normalizeProvider(await suoraIpc.models.create({
+  return normalizeProvider(await projectIpc.models.create({
     title: preset.title,
     providerType: preset.providerType,
     baseUrl: preset.baseUrl,
@@ -209,10 +209,10 @@ export async function createModelProvider(providerType = "custom") {
 
 export async function saveModelProvider(provider: ProviderConfigRecord) {
   await ensureSeeded()
-  return normalizeProvider(await suoraIpc.models.save(provider))
+  return normalizeProvider(await projectIpc.models.save(provider))
 }
 
 export async function deleteModelProvider(providerId: string) {
   await ensureSeeded()
-  return suoraIpc.models.delete(providerId)
+  return projectIpc.models.delete(providerId)
 }

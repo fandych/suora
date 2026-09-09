@@ -1,5 +1,5 @@
 import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig, ScriptIntegrationConfig } from "@/data/domain/models"
-import { createDefaultHttpIntegrationConfig, DEFAULT_PARAMETER_SCHEMA_JSON } from "@/lib/integration-http"
+import { createDefaultHttpIntegrationConfig, DEFAULT_PARAMETER_SCHEMA_JSON } from "@/data/domain/integrations"
 
 export function createChangedKindConfig(kind: IntegrationConfig["kind"], current: IntegrationConfig): IntegrationConfig {
   if (current.kind === kind) {

@@ -1,15 +1,15 @@
 import type { SchedulerDetail, SchedulerRunRecord } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { suoraIpc } from "@/lib/ipc"
+import { projectIpc } from "@/lib/ipc"
 
 export async function listSchedulers() {
   await ensureSeeded()
-  return suoraIpc.schedulers.list() as Promise<SchedulerDetail[]>
+  return projectIpc.schedulers.list() as Promise<SchedulerDetail[]>
 }
 
 export async function getScheduler(schedulerId: string) {
   await ensureSeeded()
-  const item = await suoraIpc.schedulers.get(schedulerId) as SchedulerDetail | null
+  const item = await projectIpc.schedulers.get(schedulerId) as SchedulerDetail | null
   if (!item) {
     throw new Error(`Scheduler ${schedulerId} was not found.`)
   }
@@ -18,24 +18,24 @@ export async function getScheduler(schedulerId: string) {
 
 export async function createScheduler() {
   await ensureSeeded()
-  return suoraIpc.schedulers.create() as Promise<SchedulerDetail>
+  return projectIpc.schedulers.create() as Promise<SchedulerDetail>
 }
 
 export async function listSchedulerRuns(schedulerId: string) {
   await ensureSeeded()
-  return suoraIpc.schedulers.listRuns(schedulerId) as Promise<SchedulerRunRecord[]>
+  return projectIpc.schedulers.listRuns(schedulerId) as Promise<SchedulerRunRecord[]>
 }
 
 export async function setSchedulerEnabled(schedulerId: string, enabled: boolean) {
   await ensureSeeded()
-  const scheduler = await suoraIpc.schedulers.setEnabled({ id: schedulerId, enabled })
+  const scheduler = await projectIpc.schedulers.setEnabled({ id: schedulerId, enabled })
   if (!scheduler) throw new Error(`Scheduler ${schedulerId} was not found.`)
   return scheduler
 }
 
 export async function deleteScheduler(schedulerId: string) {
   await ensureSeeded()
-  return suoraIpc.schedulers.delete(schedulerId)
+  return projectIpc.schedulers.delete(schedulerId)
 }
 
 function assertValidJson(value: string) {
@@ -66,7 +66,7 @@ export async function saveScheduler(payload: SchedulerDetail) {
 
   const inputPayloadJson = assertValidJson(payload.inputPayloadJson)
 
-  return suoraIpc.schedulers.save({
+  return projectIpc.schedulers.save({
     ...payload,
     description: payload.description.trim(),
     schedule: payload.schedule.trim(),

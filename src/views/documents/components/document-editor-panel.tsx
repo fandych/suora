@@ -2,8 +2,8 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ResourceFilePreview } from "@/views/components/resource-file-preview"
 import DocumentContentEditor from "@/views/components/document-content-editor"
 import type { DocumentPageRecord } from "@/data/domain/models"
-import { getDocumentSourceLanguage, isMarkdownDocumentTitle } from "@/lib/document-tree"
-import { getResourcePreviewKind } from "@/lib/resource-files"
+import { getDocumentSourceLanguage, isMarkdownDocumentTitle } from "@/data/domain/document-tree"
+import { getResourcePreviewKind } from "@/lib/resources/archive-import"
 
 type DocumentEditorPanelProps = {
   editorMode: "rich" | "source"

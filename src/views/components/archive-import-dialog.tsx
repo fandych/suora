@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import type { ArchiveImportPlan, ArchiveImportStrategy } from "@/lib/resource-files"
+import type { ArchiveImportPlan, ArchiveImportStrategy } from "@/lib/resources/archive-import"
 
 type ArchiveImportDialogProps = {
   description: string

@@ -1,8 +1,8 @@
 import { ResourceFilePreview } from "@/views/components/resource-file-preview"
 import DocumentContentEditor from "@/views/components/document-content-editor"
 import type { SkillFileRecord } from "@/data/domain/models"
-import { getResourcePreviewKind } from "@/lib/resource-files"
-import { getSkillSourceLanguage, isEditableSkillFile } from "@/lib/skill-files"
+import { getResourcePreviewKind } from "@/lib/resources/archive-import"
+import { getSkillSourceLanguage, isEditableSkillFile } from "@/lib/resources/skill-files"
 
 type SkillEditorPanelProps = {
   fileContent: string

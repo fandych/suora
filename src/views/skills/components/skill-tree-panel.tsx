@@ -3,7 +3,7 @@ import { ChevronDownIcon, ChevronRightIcon, DownloadIcon, FileCode2Icon, FileTex
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { SKILL_ROOT_PATH, type SkillTreeEntry } from "@/lib/skill-files"
+import { SKILL_ROOT_PATH, type SkillTreeEntry } from "@/lib/resources/skill-files"
 
 type SkillTreePanelProps = {
   collapsedPaths: Set<string>

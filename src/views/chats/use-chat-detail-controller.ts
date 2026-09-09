@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type ChangeEvent } from "react"
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react"
 import { useLocation, useNavigate, useParams } from "react-router"
 
 import { useAsyncResource } from "@/hooks/use-async-resource"
@@ -6,19 +6,19 @@ import { getAgentDetail, listAvailableAgents } from "@/data/repositories/agent-r
 import { getChatDetail, updateChatMessageParts } from "@/data/repositories/chat-repository"
 import { getChatSessionSettings, saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
-import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser-files"
-import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
-import { showToast } from "@/lib/app-toast"
-import { retryToolActivity } from "@/services/ai-tools"
-import type { ChatAttachment } from "@/services/ai-service"
+import { hasProjectBridge, projectIpc } from "@/lib/ipc"
+import { showToast } from "@/lib/ui-toast"
+import { retryToolActivity } from "@/services/ai/tools/tool-retry"
+import type { ChatAttachment } from "@/services/chat/types"
 import { deriveChatBrowserInteractionState } from "@/views/chats/chat-browser-status"
 import { getDocumentDetail } from "@/data/repositories/document-repository"
 import { getIntegrationDetail } from "@/data/repositories/integration-repository"
 import { getSkillDetail } from "@/data/repositories/skill-repository"
 import { getWorkflowDetail } from "@/data/repositories/workflow-repository"
-import { buildChatTranscript, fileToChatAttachment, mergeChatAttachments, resolveFallbackRuntime } from "@/views/chats/chat-controller-utils"
-import { toAssistantResponseParts, updateAssistantToolActivity } from "@/views/chats/assistant-response-parts"
-import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
+import { resolveFallbackRuntime } from "@/views/chats/chat-controller-utils"
+import { useChatExportActions } from "@/views/chats/use-chat-export-actions"
+import { useChatAttachmentActions } from "@/views/chats/use-chat-attachment-actions"
+import { toAssistantResponseParts, updateAssistantToolActivity, type AssistantResponsePart } from "@/services/chat/response-parts"
 import type { ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
 import { getChatRuntimeSnapshot, patchChatRuntimeParts, setPendingBrowserContinue, startChatRun, stopChatRun, subscribeToChatRuntime } from "@/views/chats/chat-runtime-store"
 
@@ -32,6 +32,7 @@ export function useChatDetailController() {
   const [autoScroll, setAutoScroll] = useState(true)
   const [selectedAgentId, setSelectedAgentId] = useState("")
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
+  const attachmentActions = useChatAttachmentActions(setAttachments)
   const [browserState, setBrowserState] = useState<{ open: boolean; visible: boolean; url: string; loading?: boolean; error?: string }>({ open: false, visible: false, url: "" })
 
   const runtimeSnapshot = useSyncExternalStore(
@@ -69,6 +70,7 @@ export function useChatDetailController() {
   const agents = useMemo(() => agentsData ?? [], [agentsData])
   const providers = useMemo(() => providerData ?? [], [providerData])
   const selectedChat = data
+  const handleExportChat = useChatExportActions(selectedChat, assistantResponseParts)
   const groupedProviders = providers.filter((provider) => provider.models.length > 0)
   const selectedAgentRecord = agents.find((agent) => agent.id === selectedAgentId) ?? null
   const selectedProviderRecord = providers.find((provider) => provider.id === settingsDraft?.model.providerId) ?? null
@@ -124,7 +126,7 @@ export function useChatDetailController() {
   useEffect(() => {
     let cancelled = false
 
-    void suoraIpc.tools.browserState(activeChatId ?? undefined).then((nextState) => {
+    void projectIpc.tools.browserState(activeChatId ?? undefined).then((nextState) => {
       if (!cancelled) {
         setBrowserState(nextState)
       }
@@ -213,7 +215,7 @@ export function useChatDetailController() {
       return
     }
 
-    if (!hasSuoraBridge()) {
+    if (!hasProjectBridge()) {
       showToast({ title: "Desktop runtime required", description: "Sending messages requires the Electron runtime and IPC bridge.", type: "warning" })
       return
     }
@@ -271,25 +273,6 @@ export function useChatDetailController() {
     }
   }
 
-  const handleAttachmentChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? [])
-    if (files.length === 0) {
-      return
-    }
-
-    try {
-      const nextAttachments = await Promise.all(files.map((file) => fileToChatAttachment(file)))
-      setAttachments((current) => mergeChatAttachments(current, nextAttachments))
-    } catch (nextError) {
-      showToast({ title: "Attachment unavailable", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error" })
-    }
-    event.target.value = ""
-  }
-
-  const removeAttachment = (attachmentId: string) => {
-    setAttachments((current) => current.filter((attachment) => attachment.id !== attachmentId))
-  }
-
   const handleRetryTool = async (messageId: string | null, activity: ChatToolActivity) => {
     try {
       const agentDetail = selectedAgentId ? await getAgentDetail(selectedAgentId).catch(() => null) : null
@@ -327,38 +310,12 @@ export function useChatDetailController() {
     }
   }
 
-  const handleExportChat = async (format: "markdown" | "pdf" | "docx") => {
-    const baseName = `${selectedChat?.chat.title || "chat"}`.replace(/[^a-zA-Z0-9-_]+/g, "-").toLowerCase() || "chat"
-    const transcript = buildChatTranscript(selectedChat, assistantResponseParts)
-
-    if (format === "markdown") {
-      const result = await saveTextFile(`${baseName}.md`, transcript, "text/markdown;charset=utf-8")
-      if (!result.canceled) {
-        showToast({ title: "Export complete", description: result.path ?? `${baseName}.md saved.`, type: "success" })
-      }
-      return
-    }
-
-    if (format === "pdf") {
-      const result = await savePdfFile(`${baseName}.pdf`, transcript)
-      if (!result.canceled) {
-        showToast({ title: "Export complete", description: result.path ?? `${baseName}.pdf saved.`, type: "success" })
-      }
-      return
-    }
-
-    const result = await saveDocxFile(`${baseName}.docx`, transcript)
-    if (!result.canceled) {
-      showToast({ title: "Export complete", description: result.path ?? `${baseName}.docx saved.`, type: "success" })
-    }
-  }
-
   const handleRetryBrowser = () => {
     if (!browserState.url) {
       return
     }
 
-    void suoraIpc.tools.browserNavigate({ sessionId: activeChatId ?? undefined, url: browserState.url, visible: browserState.visible }).catch((nextError) => {
+    void projectIpc.tools.browserNavigate({ sessionId: activeChatId ?? undefined, url: browserState.url, visible: browserState.visible }).catch((nextError) => {
       showToast({ title: "浏览器重试失败", description: nextError instanceof Error ? nextError.message : String(nextError), type: "error" })
     })
   }
@@ -378,7 +335,7 @@ export function useChatDetailController() {
     combinedError,
     draft,
     groupedProviders,
-    handleAttachmentChange,
+    ...attachmentActions,
     handleExportChat,
     handleRetryTool,
     handleRetryBrowser,
@@ -426,7 +383,6 @@ export function useChatDetailController() {
         persistChatSessionSettings(settingsDraft, value)
       }
     },
-    removeAttachment,
     reload,
     reloadSettings,
     selectedAgentId,

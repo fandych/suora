@@ -30,8 +30,8 @@ const SchedulerDetailPage = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
   const { data: runs, isLoading: isLoadingRuns, reload: reloadRuns } = useAsyncResource(() => listSchedulerRuns(schedulerId ?? ""), [schedulerId])
-  const workflows = workflowsData ?? []
-  const agents = agentsData ?? []
+  const workflows = useMemo(() => workflowsData ?? [], [workflowsData])
+  const agents = useMemo(() => agentsData ?? [], [agentsData])
 
   useEffect(() => {
     if (data) {

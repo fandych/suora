@@ -22,7 +22,7 @@ export {
 
 import type { PreferenceSettings } from "@/data/domain/preference-settings"
 import { FONT_SCALE_MAP, PREFERENCE_STORAGE_KEY, THEME_ACCENTS, resolvePreferenceSettings, sanitizePreferenceSettings } from "@/data/domain/preference-settings"
-import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
+import { hasProjectBridge, projectIpc } from "@/lib/ipc"
 
 function readBrowserPreferences() {
   if (typeof window === "undefined") {
@@ -67,9 +67,9 @@ export function applyPreferenceSettingsToDocument(settings: Pick<PreferenceSetti
 }
 
 export async function getPreferenceSettings() {
-  if (hasSuoraBridge()) {
+  if (hasProjectBridge()) {
     try {
-      return resolvePreferenceSettings(await suoraIpc.preferences.get() as string | null)
+      return resolvePreferenceSettings(await projectIpc.preferences.get() as string | null)
     } catch {
       return resolvePreferenceSettings(readBrowserPreferences())
     }
@@ -81,9 +81,9 @@ export async function getPreferenceSettings() {
 export async function savePreferenceSettings(settings: PreferenceSettings) {
   const normalized = sanitizePreferenceSettings(settings)
   const serialized = JSON.stringify(normalized)
-  if (hasSuoraBridge()) {
+  if (hasProjectBridge()) {
     try {
-      await suoraIpc.preferences.save(serialized)
+      await projectIpc.preferences.save(serialized)
     } catch {
       writeBrowserPreferences(serialized)
     }

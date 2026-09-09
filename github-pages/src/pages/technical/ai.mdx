@@ -2,7 +2,21 @@ export const meta = { title: "AI 服务与工具", description: "Provider 工厂
 
 # AI 服务与工具
 
-SUORA 使用 Vercel AI SDK 的 `ToolLoopAgent` 处理流式文本、工具调用和多步 Agent 任务。核心实现位于 `src/services/ai-service.ts` 与 `src/services/ai-tools.ts`。
+SUORA 使用 Vercel AI SDK 的 `ToolLoopAgent` 处理流式文本、工具调用和多步 Agent 任务。主编排位于 `src/services/ai-service.ts`，Provider、网络、research agent 和工具实现位于 `src/services/ai/`。
+
+AI service 目录约定：
+
+- `src/services/ai/model-provider-factory.ts`：按 Provider 类型创建 LanguageModel。
+- `src/services/ai/network-client.ts`：通过 Electron bridge 代理 AI 网络请求。
+- `src/services/ai/research-agent.ts`：在受限资源 scope 中创建 research subagent。
+- `src/services/ai/tools/workspace-tools.ts`：工作区文件、命令和外部 URL 工具。
+- `src/services/ai/tools/browser-tools.ts`：浏览器导航、读取、点击和表单填充工具。
+- `src/services/ai/tools/http-tools.ts`：HTTP integration 工具及 retry 执行。
+- `src/services/ai/tools/resource-search-tools.ts`：Document、Skill、Workflow 搜索和 scope 列表。
+- `src/services/ai/tools/tool-retry.ts`：工具重试分发和输入校验。
+- `src/services/ai/tools/private-resource-tools.ts`：私有资源 CRUD 工具。
+
+`src/services/ai-service.ts` 是对外的 Chat Agent 流式入口；Chat 共享类型位于 `src/services/chat/types.ts`，不从 `ai-service.ts` 反向导入；Chat response parts 和 assistant persistence 工具位于 `src/services/chat/`。
 
 ## Provider 工厂
 

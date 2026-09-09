@@ -1,4 +1,4 @@
-import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
+import { hasProjectBridge, projectIpc } from "@/lib/ipc"
 
 export type SystemInfoSnapshot = {
   isDev: boolean
@@ -127,11 +127,11 @@ function sanitizeDiagnostics(value: unknown): SystemDiagnosticsSnapshot {
 }
 
 export async function getSystemInfo(): Promise<SystemInfoSnapshot> {
-  if (!hasSuoraBridge()) {
+  if (!hasProjectBridge()) {
     return BROWSER_FALLBACK_INFO
   }
 
-  const value = await suoraIpc.system.info()
+  const value = await projectIpc.system.info()
   if (!isObject(value)) {
     return BROWSER_FALLBACK_INFO
   }
@@ -148,19 +148,19 @@ export async function getSystemInfo(): Promise<SystemInfoSnapshot> {
 }
 
 export async function getSystemDiagnostics(): Promise<SystemDiagnosticsSnapshot> {
-  if (!hasSuoraBridge()) {
+  if (!hasProjectBridge()) {
     return BROWSER_FALLBACK_DIAGNOSTICS
   }
 
-  return sanitizeDiagnostics(await suoraIpc.system.diagnostics())
+  return sanitizeDiagnostics(await projectIpc.system.diagnostics())
 }
 
 export async function getUpdaterState(): Promise<UpdaterStateSnapshot> {
-  if (!hasSuoraBridge()) {
+  if (!hasProjectBridge()) {
     return { enabled: false, channel: "latest" }
   }
 
-  const value = await suoraIpc.updater.getState()
+  const value = await projectIpc.updater.getState()
   if (!isObject(value)) {
     return { enabled: false, channel: "latest" }
   }
@@ -172,9 +172,9 @@ export async function getUpdaterState(): Promise<UpdaterStateSnapshot> {
 }
 
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
-  if (!hasSuoraBridge()) {
+  if (!hasProjectBridge()) {
     return { skipped: true, reason: "bridge-unavailable" }
   }
 
-  return suoraIpc.updater.check()
+  return projectIpc.updater.check()
 }

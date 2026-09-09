@@ -2,9 +2,9 @@ import { AlertCircleIcon, CheckIcon, ClipboardIcon, ExternalLinkIcon, EyeIcon, E
 import { useState } from "react"
 
 import { Button } from "@/components/ui/button"
-import { copyTextToClipboard } from "@/lib/clipboard"
-import { showToast } from "@/lib/app-toast"
-import { suoraIpc } from "@/lib/ipc"
+import { copyTextToClipboard } from "@/lib/browser/clipboard"
+import { showToast } from "@/lib/ui-toast"
+import { projectIpc } from "@/lib/ipc"
 import type { ChatBrowserInteractionState } from "@/views/chats/chat-browser-status"
 
 type ChatBrowserStatusBarProps = {
@@ -27,7 +27,7 @@ export function ChatBrowserStatusBar({ browserState, onContinue, onRetry, sessio
   const handleReadPage = async () => {
     setIsReadingPage(true)
     try {
-      const result = await suoraIpc.tools.browserPage({ sessionId: sessionId ?? undefined, includeText: true, includeLinks: false }) as { text?: string }
+      const result = await projectIpc.tools.browserPage({ sessionId: sessionId ?? undefined, includeText: true, includeLinks: false }) as { text?: string }
       setPageText(result.text?.trim() || "当前页面没有可读取的文本。")
       setShowPageText(true)
     } catch (error) {
@@ -62,7 +62,7 @@ export function ChatBrowserStatusBar({ browserState, onContinue, onRetry, sessio
         {isReadingPage ? <Loader2Icon className="animate-spin" /> : <ExternalLinkIcon />}
         {isReadingPage ? "读取中..." : "查看页面内容"}
       </Button> : null}
-      <Button size="sm" variant="ghost" type="button" className="h-7 px-2 text-[11px]" onClick={() => { void suoraIpc.tools.browserNavigate({ sessionId: sessionId ?? undefined, visible: !browserState.visible }) }} disabled={browserState.status === "navigating" || browserState.status === "working"} aria-label={browserState.visible ? "隐藏浏览器窗口" : "打开浏览器窗口"}>
+      <Button size="sm" variant="ghost" type="button" className="h-7 px-2 text-[11px]" onClick={() => { void projectIpc.tools.browserNavigate({ sessionId: sessionId ?? undefined, visible: !browserState.visible }) }} disabled={browserState.status === "navigating" || browserState.status === "working"} aria-label={browserState.visible ? "隐藏浏览器窗口" : "打开浏览器窗口"}>
         {browserState.visible ? <EyeOffIcon className="size-3.5" /> : <EyeIcon className="size-3.5" />}
         {browserState.visible ? "隐藏浏览器" : "打开浏览器"}
       </Button>

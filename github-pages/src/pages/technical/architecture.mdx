@@ -13,12 +13,30 @@ React Renderer → Preload Bridge → Electron IPC → Desktop Services
 
 ## 分层职责
 
-- `src/`：React 页面、领域模型、repositories、前端服务与渲染器状态。页面通过 `@/` 别名引用本地模块。
+- `src/`：React 页面、领域模型、repositories、前端服务与渲染器状态。页面和源码模块通过 `@/` 别名引用本地模块。
+- `src/views/`：路由页面和页面级 UI contract；不向 service 层提供共享领域类型。
+- `src/data/repositories/`：数据库和 IPC 数据访问、缓存/降级及领域数据持久化边界。
+- `src/data/domain/`：领域规则和纯数据转换，例如渠道配置、文档树、Chat 错误状态、Agent 步数控制和 workflow 定义规范化。
+- `src/lib/security/`：与运行环境相关的安全策略，例如命令执行确认和环境变量构造。
+- `src/lib/browser/`：浏览器剪贴板和文件导出能力；Electron 保存文件通过 IPC facade 访问主进程。
+- `src/lib/resources/`：Archive 导入计划、资源预览和 Skill 文件规则。
+- `src/lib/ui-toast.ts`：Renderer UI toast 适配器。
+- `src/data/domain/integrations/`：HTTP Integration 配置、cURL/OpenAPI 导入、MCP 工具解析及统一领域入口。
+- `src/data/domain/chat/persistence.ts`：Chat message parts 和 settings 的版本化 envelope 序列化/解析。
+- `src/data/mappers/`：数据库/IPC 原始行到领域模型的映射，例如 `channel-mappers.ts`。
+- `src/lib/ipc/bridge.ts`：Renderer 对 `window.project` bridge 的最小访问封装。
+- `src/lib/serialization/json.ts`：JSON 兼容解析和默认值回退。
+- `src/services/ai/`：AI Provider 构造和 Electron 代理网络客户端。
+- `src/services/ai-service.ts`：Chat Agent/ToolLoop 跨模块运行编排；`src/services/chat/`：Chat 消息转换等 Chat 运行时辅助服务。
+- `src/services/chat/types.ts`、`response-parts.ts`、`assistant-persistence.ts`：Chat 运行时共享类型、流式响应转换和 assistant 持久化 payload。
+- `src/services/ai/tools/`：AI 内置工具、私有资源工具、资源搜索、scope 解析和工具重试；其中 `workspace-tools.ts`、`browser-tools.ts`、`http-tools.ts`、`resource-search-tools.ts` 按能力分类，`ai-service.ts` 只负责 Agent/ToolLoop 编排。
+- `src/services/ai/research-agent.ts`：受限资源 scope 下的 research subagent 构造和执行能力。
 - `electron/main.ts`：应用生命周期入口，准备工作区、迁移数据库、注册 IPC、配置更新器并创建窗口。
-- `electron/preload.ts`：在 context isolation 下暴露 `window.suora` 和少量事件/通用 invoke API。
-- `electron/ipc/`：按领域注册 IPC handlers：core、content、catalog、automation、channel runtime 和 tools。
+- `electron/preload.ts`：在 context isolation 下暴露 `window.project` 和少量事件/通用 invoke API。
+- `electron/ipc/`：按领域注册 IPC handlers，实际子目录包括 `system/`、`workspace/`、`database/`、`ai/`、`chat/`、`document/`、`agent/`、`skill/`、`model/`、`channel/`、`workflow/`、`integration/`、`scheduler/`、`preference/`、`tools/`、`updater/` 和 `mail/`。
 - `electron/others/`：AI 请求、集成、渠道、代理、邮件、浏览器、工具权限和更新等桌面服务。
 - `electron/database/`：SQLite 初始化、WAL、外键、迁移和查询执行。
+- `tests/unit/`：集中存放单元测试，并按 `data/`、`services/`、`views/` 保留被测模块的功能结构。
 
 ## Electron 启动生命周期
 
@@ -40,9 +58,9 @@ React Renderer → Preload Bridge → Electron IPC → Desktop Services
 - `nodeIntegration: false`
 - 受控的 preload bridge
 
-preload 按领域暴露 `suora.chats`、`documents`、`models`、`skills`、`agents`、`integrations`、`workflows`、`channels`、`schedulers`、`preferences`、`updater`、`mail` 和 `tools` 等 API。新增业务调用应优先添加明确命名的 bridge 方法和对应 IPC handler，不要扩大通用通道权限。
+preload 按领域暴露 `project.chats`、`documents`、`models`、`skills`、`agents`、`integrations`、`workflows`、`channels`、`schedulers`、`preferences`、`updater`、`mail` 和 `tools` 等 API。Renderer 侧通过 `projectIpc`、`getProjectBridge` 和 `hasProjectBridge` 使用这些能力。新增业务调用应优先添加明确命名的 bridge 方法和对应 IPC handler，不要扩大通用通道权限。
 
-通用 `electron.invoke` 与事件订阅还有白名单：只有列入允许集合的 AI fetch、数据库、Integration 执行和渠道预览事件可以直接访问。业务资源通常通过 `window.suora` 的领域 API 调用。
+通用 `electron.invoke` 与事件订阅还有白名单：只有列入允许集合的 AI fetch、数据库、Integration 执行和渠道预览事件可以直接访问。业务资源通常通过 `window.project` 的领域 API 调用。
 
 ## 数据库与迁移
 
@@ -63,11 +81,24 @@ preload 按领域暴露 `suora.chats`、`documents`、`models`、`skills`、`age
 
 ## 服务边界
 
+Service 层不得反向依赖 `src/views/`。Views 可以调用 service 和 repository；需要被 service 与 view 共同使用的 Chat 类型、事件转换和持久化工具，应放在 `src/services/chat/` 或 `src/data/domain/chat/`。
+
 - **AI**：主进程代理模型请求、代理/TLS、超时和连接重试；renderer 通过流式事件接收增量文本、工具调用和错误。
 - **Tools**：文件读写、命令和浏览器操作受工作区策略、命令 allowlist、大小限制与 URL 安全规则约束。
 - **Integrations**：HTTP、Script VM 与当前有限的 MCP 探测由主进程执行，避免 renderer 直接持有网络和进程权限。
 - **Channels**：Webhook server 和 stream/email clients 运行在主进程；入站消息通过 `channel:message` 事件发送到 renderer，再由 channel listener 路由到 Chat/Agent。
 - **Updater**：仅打包应用检查更新，开发环境跳过。
+
+依赖方向约定为：`views → services/repositories → data/domain/lib`；service 不得反向依赖 `views`，IPC domain client 不得通过 `projectIpc` facade 反向调用自身。
+
+## 命名与目录规则
+
+- 纯领域规则放在 `src/data/domain/`，使用 `*-config`、`*-normalizer`、`*-persistence` 等反映行为的名称。
+- 数据库或 IPC 原始结果转换放在 `src/data/mappers/`，使用 `*-mappers.ts` 命名。
+- Renderer 基础能力按 `browser/`、`ipc/`、`resources/`、`security/`、`serialization/` 分组，不再把无关功能新增到根级 `src/lib/`。
+- AI 能力按 `src/services/ai/` 和 `src/services/ai/tools/` 分组；Chat 运行时共享能力放在 `src/services/chat/`；渠道 runtime 放在 `src/services/channels/`。
+- 新代码中的 IPC bridge 使用 `projectIpc`、`getProjectBridge`、`hasProjectBridge` 和 `window.project`，不使用产品名作为变量或函数名。
+- `src/lib/utils.ts` 是 shadcn/UI 高复用基础工具，保持原位置，避免为目录整洁而破坏大量 UI import。
 
 ## 安全模型与已知边界
 

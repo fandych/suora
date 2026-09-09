@@ -3,8 +3,8 @@ import { ChevronDownIcon, ChevronRightIcon, DownloadIcon, FilePlus2Icon, FileTex
 import { Button } from "@/components/ui/button"
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { DocumentTreeEntry } from "@/lib/document-tree"
-import { getDocumentDisplayName } from "@/lib/document-tree"
+import type { DocumentTreeEntry } from "@/data/domain/document-tree"
+import { getDocumentDisplayName } from "@/data/domain/document-tree"
 
 type DocumentTreePanelProps = {
   collapsedIds: Set<string>

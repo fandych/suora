@@ -2,9 +2,9 @@ import type { ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSu
 import { applyDefaultChannelDescription, buildUnboundChannelDetail, resolveDefaultChannelModel } from "@/data/repositories/channel-defaults"
 import { ensureChannelCatalogItems } from "@/data/repositories/channel-catalog"
 import { emitDataChanged } from "@/data/repositories/data-events"
-import { buildChannelWebhookUrl, getChannelCredentialIssues, normalizeChannelConfig } from "@/lib/channel-config"
+import { buildChannelWebhookUrl, getChannelCredentialIssues, normalizeChannelConfig } from "@/data/domain/channel-config"
 import { listModelProviders } from "@/data/repositories/model-config-repository"
-import { suoraIpc } from "@/lib/ipc"
+import { projectIpc } from "@/lib/ipc"
 
 function appendDebug(detail: ChannelDetail, tone: "info" | "success" | "error", text: string, timestamp: number) {
   return [
@@ -49,7 +49,7 @@ function formatWeChatPersonalDiagnostic(result: {
 }
 
 async function persist(detail: ChannelDetail) {
-  const current = await suoraIpc.channels.get(detail.channel.id) as ChannelDetail | null
+  const current = await projectIpc.channels.get(detail.channel.id) as ChannelDetail | null
   const normalized = {
     ...detail,
     channel: normalizeChannelConfig({
@@ -61,26 +61,26 @@ async function persist(detail: ChannelDetail) {
       debugLog: mergeDebugLogEntries(detail.runtime.debugLog, current?.runtime.debugLog ?? []),
     },
   }
-  const next = await suoraIpc.channels.save(normalized) as ChannelDetail
+  const next = await projectIpc.channels.save(normalized) as ChannelDetail
   emitDataChanged("/channels")
   return next
 }
 
 async function syncRuntimeRegistration() {
-  await suoraIpc.channels.registerRuntime()
+  await projectIpc.channels.registerRuntime()
   const channels = await listChannels()
   const hasEnabledChannels = channels.some((item) => item.enabled)
   const hasEnabledWebhookTransport = channels.some((item) => item.enabled && item.connectionMode === "webhook")
 
   if (hasEnabledWebhookTransport) {
-    await suoraIpc.channels.startRuntime()
+    await projectIpc.channels.startRuntime()
     return
   }
 
   if (!hasEnabledChannels) {
-    const status = await suoraIpc.channels.getRuntimeStatus() as { running: boolean }
+    const status = await projectIpc.channels.getRuntimeStatus() as { running: boolean }
     if (status.running) {
-      await suoraIpc.channels.stopRuntime()
+      await projectIpc.channels.stopRuntime()
     }
   }
 }
@@ -88,20 +88,20 @@ async function syncRuntimeRegistration() {
 export async function restoreChannelRuntime() {
   await ensureChannelCatalogItems()
   const channels = await listChannels()
-  await suoraIpc.channels.registerRuntime()
+  await projectIpc.channels.registerRuntime()
   if (channels.some((item) => item.enabled && item.connectionMode === "webhook")) {
-    await suoraIpc.channels.startRuntime()
+    await projectIpc.channels.startRuntime()
   }
 }
 
 export async function listChannels() {
   await ensureChannelCatalogItems()
-  return suoraIpc.channels.list() as Promise<ChannelSummary[]>
+  return projectIpc.channels.list() as Promise<ChannelSummary[]>
 }
 
 export async function getChannel(channelId: string) {
   await ensureChannelCatalogItems()
-  const item = await suoraIpc.channels.get(channelId) as ChannelDetail | null
+  const item = await projectIpc.channels.get(channelId) as ChannelDetail | null
   if (!item) {
     throw new Error(`Channel ${channelId} was not found.`)
   }
@@ -112,7 +112,7 @@ export async function createChannel() {
   await ensureChannelCatalogItems()
   const providers = await listModelProviders().catch(() => [])
   const defaultModel = resolveDefaultChannelModel(providers)
-  const item = await suoraIpc.channels.create({ providerId: defaultModel.providerId, modelId: defaultModel.modelId })
+  const item = await projectIpc.channels.create({ providerId: defaultModel.providerId, modelId: defaultModel.modelId })
   emitDataChanged("/channels")
   return item
 }
@@ -145,7 +145,7 @@ export async function unbindChannel(detail: ChannelDetail) {
 
 export async function runChannelHealthCheck(detail: ChannelDetail) {
   await syncRuntimeRegistration().catch(() => undefined)
-  const result = await suoraIpc.channels.healthCheck(detail.channel.id) as { isHealthy: boolean; latencyMs: number; error?: string }
+  const result = await projectIpc.channels.healthCheck(detail.channel.id) as { isHealthy: boolean; latencyMs: number; error?: string }
   const refreshed = await getChannel(detail.channel.id)
   if (refreshed.runtime.health.lastCheckAt) {
     return refreshed
@@ -173,7 +173,7 @@ export async function sendMockChannelMessage(detail: ChannelDetail, message: str
     return detail
   }
   await syncRuntimeRegistration().catch(() => undefined)
-  await suoraIpc.channels.debugSend({ channelId: detail.channel.id, content: trimmed })
+  await projectIpc.channels.debugSend({ channelId: detail.channel.id, content: trimmed })
   return getChannel(detail.channel.id)
 }
 
@@ -190,7 +190,7 @@ export async function clearChannelDebugLog(detail: ChannelDetail) {
 export async function bindChannel(detail: ChannelDetail) {
   const timestamp = Date.now()
   if (detail.channel.platform === "wechat_personal") {
-    const result = await suoraIpc.channels.startWeChatPersonalLogin(detail.channel.id, true) as { success?: boolean; qrCodeUrl?: string; sessionKey?: string; message?: string }
+    const result = await projectIpc.channels.startWeChatPersonalLogin(detail.channel.id, true) as { success?: boolean; qrCodeUrl?: string; sessionKey?: string; message?: string }
     const hasExistingBinding = detail.channel.wechatPersonalBindingStatus === "bound" && Boolean(detail.channel.wechatPersonalBotToken)
     return persist({
       channel: {
@@ -255,7 +255,7 @@ export async function waitForWeChatPersonalBinding(detail: ChannelDetail, verifi
   const sessionKey = detail.channel.wechatPersonalSessionKey
   const trimmedCode = verificationCode?.trim()
   const result = sessionKey
-    ? await suoraIpc.channels.waitForWeChatPersonalLogin(detail.channel.id, sessionKey, trimmedCode, timeoutMs) as { success?: boolean; status?: string; message?: string; botToken?: string; baseUrl?: string; accountId?: string; userId?: string; qrCodeUrl?: string; upstreamStatus?: string; diagnosticEvent?: string; diagnosticMessage?: string; pollBaseUrl?: string; pollEndpoint?: string }
+    ? await projectIpc.channels.waitForWeChatPersonalLogin(detail.channel.id, sessionKey, trimmedCode, timeoutMs) as { success?: boolean; status?: string; message?: string; botToken?: string; baseUrl?: string; accountId?: string; userId?: string; qrCodeUrl?: string; upstreamStatus?: string; diagnosticEvent?: string; diagnosticMessage?: string; pollBaseUrl?: string; pollEndpoint?: string }
     : { success: false, status: "error", message: "Missing WeChat login session." }
   const isAlreadyBoundWithLocalToken = result.status === "already_bound" && Boolean(detail.channel.wechatPersonalBotToken)
   const preservedQrStatus = result.status === "timeout"
@@ -341,22 +341,22 @@ export async function confirmWeChatPersonalBinding(detail: ChannelDetail, verifi
 }
 
 export async function getChannelRuntimeStatus() {
-  return suoraIpc.channels.getRuntimeStatus() as Promise<{ running: boolean }>
+  return projectIpc.channels.getRuntimeStatus() as Promise<{ running: boolean }>
 }
 
 export async function startChannelRuntime() {
-  return suoraIpc.channels.startRuntime()
+  return projectIpc.channels.startRuntime()
 }
 
 export async function stopChannelRuntime() {
-  return suoraIpc.channels.stopRuntime()
+  return projectIpc.channels.stopRuntime()
 }
 
 export async function getChannelWebhookRuntimeUrl(channel: ChannelConfigRecord) {
-  const result = await suoraIpc.channels.getWebhookUrl(channel) as { success?: boolean; url?: string }
+  const result = await projectIpc.channels.getWebhookUrl(channel) as { success?: boolean; url?: string }
   return result.url ?? buildChannelWebhookUrl(channel)
 }
 
 export async function sendChannelReply(payload: { channelId: string; chatId: string; content: string }) {
-  return suoraIpc.channels.sendMessage(payload) as Promise<{ success: boolean; error?: string }>
+  return projectIpc.channels.sendMessage(payload) as Promise<{ success: boolean; error?: string }>
 }

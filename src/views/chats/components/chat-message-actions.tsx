@@ -3,9 +3,9 @@ import { useEffect, useRef, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser-files"
-import { copyTextToClipboard } from "@/lib/clipboard"
-import { showToast } from "@/lib/app-toast"
+import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser/file-exports"
+import { copyTextToClipboard } from "@/lib/browser/clipboard"
+import { showToast } from "@/lib/ui-toast"
 
 type ChatMessageActionsProps = {
   baseName: string

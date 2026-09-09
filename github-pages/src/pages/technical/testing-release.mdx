@@ -45,13 +45,13 @@ npm run test:coverage
 npm run test:ui
 ```
 
-Vitest 使用 jsdom 和 globals。当前配置主要匹配：
+Vitest 使用 jsdom 和 globals。单元测试集中在 `tests/unit/`，当前配置匹配：
 
 ```text
-src/**/*.test.ts
+tests/**/*.test.{ts,tsx}
 ```
 
-因此应检查 `.test.tsx` 是否被当前 include 纳入，不能仅因为文件存在就假设它会在 CI 中执行。当前测试覆盖 workflow engine、trace 脱敏、Chat 错误和持久化迁移、Agent loop、Preferences、文件策略及部分 UI schema。
+测试目录按 `data/`、`services/`、`views/` 保留被测模块的功能结构。当前测试覆盖 workflow engine、trace 脱敏、Chat 错误和持久化迁移、Agent loop、Preferences、文件策略及部分 UI schema。
 
 Coverage 使用 V8，但当前没有覆盖率阈值、上传或门禁；`test:coverage` 生成报告并不会因覆盖率不足自动失败。
 
@@ -70,7 +70,7 @@ npm run test:e2e:ui
 
 1. 启动带 `127.0.0.1:9222` CDP 的 Electron 实例。
 2. `/json/list` 中存在 Electron page。
-3. 页面已经加载 `window.suora` 或 `window.electron` bridge。
+3. 页面已经加载 `window.project` 或 `window.electron` bridge。
 4. 使用专用测试工作区和测试凭据。
 
 典型脚本包括 workflow、非 AI workflow、完整链路、行业场景和已配置模型测试。它们可能创建大量 Skills、Documents、Integrations、Workflows、Agents 和 Chats，并调用真实模型、HTTP、SMTP 或公共 API。

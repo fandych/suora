@@ -9,7 +9,7 @@ declare global {
       on: (channel: string, listener: (...args: unknown[]) => void) => void
       off: (channel: string, listener: (...args: unknown[]) => void) => void
     }
-    suora?: {
+    project?: {
       system: {
         info: () => Promise<unknown>
         diagnostics: () => Promise<unknown>

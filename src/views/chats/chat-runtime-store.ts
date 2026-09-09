@@ -1,12 +1,13 @@
 import { appendAssistantChatMessage, appendUserChatMessage, createChat, getChatDetail } from "@/data/repositories/chat-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
-import { showToast } from "@/lib/app-toast"
-import { detectChatErrorKind, getChatErrorPresentation } from "@/services/chat-error-state"
-import { streamChatAgentResponse, type ChatAgentEvent, type ChatAttachment } from "@/services/ai-service"
-import { createPersistedAssistantPayload, createPersistedUserPayload } from "@/views/chats/chat-controller-utils"
-import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts } from "@/views/chats/assistant-response-parts"
-import type { AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
+import { showToast } from "@/lib/ui-toast"
+import { detectChatErrorKind, getChatErrorPresentation } from "@/data/domain/chat/chat-error-state"
+import { streamChatAgentResponse } from "@/services/ai-service"
+import type { ChatAgentEvent, ChatAttachment } from "@/services/chat/types"
+import { createPersistedAssistantPayload } from "@/services/chat/assistant-persistence"
+import { createPersistedUserPayload } from "@/views/chats/chat-controller-utils"
+import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts, type AssistantResponsePart } from "@/services/chat/response-parts"
 
 export type ChatRuntimeSnapshot = {
   isResponding: boolean

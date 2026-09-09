@@ -40,7 +40,7 @@ contextBridge.exposeInMainWorld("electron", {
   },
 })
 
-contextBridge.exposeInMainWorld("suora", {
+contextBridge.exposeInMainWorld("project", {
   system: {
     info: () => ipcRenderer.invoke("system:info"),
     diagnostics: () => ipcRenderer.invoke("system:diagnostics"),

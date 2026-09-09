@@ -3,7 +3,7 @@ import { useParams } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
 import { subscribeToDataChanges } from "@/data/repositories/data-events"
-import { showToast } from "@/lib/app-toast"
+import { showToast } from "@/lib/ui-toast"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import {
   bindChannel,

@@ -14,7 +14,7 @@ nodeIntegration: false
 sandbox: false
 ```
 
-preload 不暴露完整 `ipcRenderer`，低层 `electron.invoke/on/off` 使用通道 allowlist。领域 API 通过 `window.suora` 暴露 Chats、Documents、Models、Tools 等固定方法。
+preload 不暴露完整 `ipcRenderer`，低层 `electron.invoke/on/off` 使用通道 allowlist。领域 API 通过 `window.project` 暴露 Chats、Documents、Models、Tools 等固定方法，Renderer 代码通过 `projectIpc`、`getProjectBridge` 和 `hasProjectBridge` 访问这些 API。
 
 关键参数校验位于主进程 IPC handler。Preload 包装函数不能替代主进程验证；任何来自 Renderer 的 payload 都必须按不可信输入处理。
 

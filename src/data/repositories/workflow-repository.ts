@@ -3,7 +3,7 @@ import { emitDataChanged } from "@/data/repositories/data-events"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { executeWorkflowDefinition } from "@/data/repositories/workflow-execution-engine"
 import { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS, normalizeWorkflowNotifications } from "@/data/repositories/workflow-notifications"
-import { suoraIpc } from "@/lib/ipc"
+import { projectIpc } from "@/lib/ipc"
 
 async function sendWorkflowNotification(input: {
   workflowTitle: string
@@ -56,7 +56,7 @@ async function sendWorkflowNotification(input: {
     }
   }
 
-  await suoraIpc.mail.send({
+  await projectIpc.mail.send({
     to: notifications.to.trim(),
     subject,
     content: lines.join("\n"),
@@ -118,7 +118,7 @@ async function recordWorkflowInvocation(input: {
     createdAt: Date.now(),
   }
 
-  await suoraIpc.workflows.recordInvocation({
+  await projectIpc.workflows.recordInvocation({
     workflowId: input.workflowId,
     versionId: invocation.versionId,
     status: invocation.status,
@@ -140,19 +140,19 @@ async function recordWorkflowInvocation(input: {
 
 export async function listWorkflows() {
   await ensureSeeded()
-  return suoraIpc.workflows.list() as Promise<WorkflowSummary[]>
+  return projectIpc.workflows.list() as Promise<WorkflowSummary[]>
 }
 
 export async function createWorkflow() {
   await ensureSeeded()
-  const created = await suoraIpc.workflows.create() as WorkflowDetail
+  const created = await projectIpc.workflows.create() as WorkflowDetail
   emitDataChanged("/workflows")
   return created
 }
 
 export async function getWorkflowDetail(workflowId: string, selectedVersionId?: string) {
   await ensureSeeded()
-  const detail = await suoraIpc.workflows.get(workflowId, selectedVersionId) as WorkflowDetail | null
+  const detail = await projectIpc.workflows.get(workflowId, selectedVersionId) as WorkflowDetail | null
   if (!detail) {
     throw new Error(`Workflow ${workflowId} was not found.`)
   }
@@ -164,7 +164,7 @@ export async function getWorkflowDetail(workflowId: string, selectedVersionId?: 
 
 export async function saveWorkflowDraft(workflowId: string, payload: { title: string; summary: string; definition: WorkflowDefinition; selectedVersionId?: string }) {
   await ensureSeeded()
-  const saved = await suoraIpc.workflows.save({ id: workflowId, title: payload.title, summary: payload.summary, definition: normalizeWorkflowNotifications(payload.definition), selectedVersionId: payload.selectedVersionId }) as WorkflowDetail
+  const saved = await projectIpc.workflows.save({ id: workflowId, title: payload.title, summary: payload.summary, definition: normalizeWorkflowNotifications(payload.definition), selectedVersionId: payload.selectedVersionId }) as WorkflowDetail
   emitDataChanged("/workflows")
   return saved
 }
@@ -172,14 +172,14 @@ export async function saveWorkflowDraft(workflowId: string, payload: { title: st
 export async function publishWorkflowVersion(workflowId: string, versionId: string) {
   await ensureSeeded()
   const detail = await getWorkflowDetail(workflowId, versionId)
-  const published = await suoraIpc.workflows.save({ id: workflowId, title: detail.workflow.title, summary: detail.workflow.summary, definition: normalizeWorkflowNotifications(detail.definition), publish: true }) as WorkflowDetail
+  const published = await projectIpc.workflows.save({ id: workflowId, title: detail.workflow.title, summary: detail.workflow.summary, definition: normalizeWorkflowNotifications(detail.definition), publish: true }) as WorkflowDetail
   emitDataChanged("/workflows")
   return published
 }
 
 export async function deleteWorkflow(workflowId: string) {
   await ensureSeeded()
-  const deleted = await suoraIpc.workflows.delete(workflowId)
+  const deleted = await projectIpc.workflows.delete(workflowId)
   emitDataChanged("/workflows")
   return deleted
 }

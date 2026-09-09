@@ -9,7 +9,7 @@ SUORA 使用 Electron IPC 连接 React Renderer 与主进程服务。Renderer �
 ```text
 React page
   → repository / service
-  → window.suora.<domain>.<method>
+  → window.project.<domain>.<method>
   → ipcRenderer.invoke(channel, payload)
   → ipcMain.handle(channel, handler)
   → database or desktop service
@@ -19,9 +19,11 @@ React page
 Renderer 页面通常不直接调用 `ipcRenderer`。推荐的调用层次是：
 
 1. 页面组件只处理交互、加载和展示。
-2. Repository 负责调用 `window.suora`、转换领域数据和处理浏览器降级。
+2. Repository 负责调用 `projectIpc` 或 `window.project`、转换领域数据和处理浏览器降级。
 3. Preload 暴露稳定、按领域组织的 API。
 4. Electron IPC handler 执行特权操作并返回可序列化结果。
+
+Renderer IPC 客户端位于 `src/lib/ipc/`：`src/lib/ipc.ts` 负责组合各领域客户端，`ipc/domains/` 存放按业务域划分的 IPC client，`ipc/bridge.ts` 只负责 bridge 访问，JSON 兼容解析统一位于 `src/lib/serialization/json.ts`。页面和 repository 不应直接引用 `domains/` 内部实现，统一从 `@/lib/ipc` 使用 `projectIpc`。
 
 ## Preload API 分组
 
@@ -46,12 +48,11 @@ Renderer 页面通常不直接调用 `ipcRenderer`。推荐的调用层次是：
 
 主进程启动时调用 `setupIpc()`，按领域注册 handler：
 
-- `ipc-core.ts`：数据库、系统和偏好核心能力。
-- `ipc-content.ts`：Chats、Documents、Channels 等内容数据。
-- `ipc-catalog.ts`：Models、Skills、Agents、Integrations 目录数据。
-- `ipc-automation.ts`：Workflows、Schedulers 和调用记录。
-- `ipc-channel-runtime.ts`：渠道 runtime、Webhook 和健康检查。
-- `ipc-tools.ts`：文件、命令、浏览器和保存文件工具。
+- `electron/ipc/system/`、`workspace/`、`database/`：系统、工作区和数据库能力。
+- `electron/ipc/chat/`、`document/`、`channel/`：Chats、Documents、Channels 等内容数据。
+- `electron/ipc/model/`、`skill/`、`agent/`、`integration/`：目录和配置数据。
+- `electron/ipc/workflow/`、`scheduler/`：Workflows、Schedulers 和调用记录。
+- `electron/ipc/tools/`：文件、命令、浏览器和保存文件工具。
 
 新增 IPC 功能时，应同时修改 handler、preload API、Electron 类型声明和 Renderer repository。不要只新增一个裸 `ipcRenderer.invoke` 调用。
 
@@ -62,7 +63,7 @@ Preload 还提供 `window.electron.invoke/on/off`，但它不是任意 IPC 代�
 - Invoke：AI fetch、数据库查询、Integration 执行和个人微信二维码预览。
 - Event：AI 流式事件、渠道消息和浏览器状态变化。
 
-其他业务功能应使用 `window.suora` 的明确领域方法。白名单可以减少网页或被注入脚本直接访问任意主进程 handler 的风险。
+其他业务功能应使用 `window.project` 的明确领域方法。Renderer 内部优先通过 `projectIpc` 访问 bridge。白名单可以减少网页或被注入脚本直接访问任意主进程 handler 的风险。
 
 ## 数据库 IPC
 

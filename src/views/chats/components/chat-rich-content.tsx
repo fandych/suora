@@ -1,8 +1,8 @@
 import katex from "katex"
 import { useEffect, useId, useMemo, useRef, useState } from "react"
 
-import { showToast } from "@/lib/app-toast"
-import { copyTextToClipboard } from "@/lib/clipboard"
+import { showToast } from "@/lib/ui-toast"
+import { copyTextToClipboard } from "@/lib/browser/clipboard"
 import { markdownToTiptapHtml } from "@/views/components/document-markdown"
 
 async function renderMermaid(target: HTMLElement, id: string, code: string) {

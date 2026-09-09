@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import type { HttpEndpointParameter, HttpIntegrationConfig } from "@/data/domain/models"
-import { buildHttpEndpointUrl, getSelectedHttpEndpoint } from "@/lib/integration-http"
+import { buildHttpEndpointUrl, getSelectedHttpEndpoint } from "@/data/domain/integrations"
 
 type HttpTryRunFormProps = {
   config: HttpIntegrationConfig

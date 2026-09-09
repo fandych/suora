@@ -4,18 +4,12 @@ import { useEffect, useMemo, useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { copyTextToClipboard } from "@/lib/clipboard"
-import { showToast } from "@/lib/app-toast"
+import { copyTextToClipboard } from "@/lib/browser/clipboard"
+import { showToast } from "@/lib/ui-toast"
 import { cn } from "@/lib/utils"
+import type { ChatToolActivity } from "@/data/domain/chat-message-parts"
 
-export type ChatToolActivity = {
-  id: string
-  toolName: string
-  input?: Record<string, unknown>
-  output?: string
-  error?: string
-  stopped?: boolean
-}
+export type { ChatToolActivity }
 
 type ChatToolEventItemProps = {
   activity: ChatToolActivity

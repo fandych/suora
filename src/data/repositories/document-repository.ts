@@ -6,10 +6,10 @@ import type {
 } from "@/data/domain/models"
 
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { buildDefaultDocumentNodes, getDocumentDisplayName, normalizeDocumentNodes } from "@/lib/document-tree"
-import { suoraIpc } from "@/lib/ipc"
-import { getDocumentArchivePathError, normalizeDocumentArchivePath } from "@/lib/document-tree"
-import { createArchiveImportPlan, getImportableArchiveEntries, readArchiveEntries, type ArchiveImportPlan, type ArchiveImportStrategy } from "@/lib/resource-files"
+import { buildDefaultDocumentNodes, getDocumentDisplayName, normalizeDocumentNodes } from "@/data/domain/document-tree"
+import { projectIpc } from "@/lib/ipc"
+import { getDocumentArchivePathError, normalizeDocumentArchivePath } from "@/data/domain/document-tree"
+import { createArchiveImportPlan, getImportableArchiveEntries, readArchiveEntries, type ArchiveImportPlan, type ArchiveImportStrategy } from "@/lib/resources/archive-import"
 
 function normalizeDocument(detail: DocumentDetail) {
   return {
@@ -20,12 +20,12 @@ function normalizeDocument(detail: DocumentDetail) {
 
 export async function listDocuments() {
   await ensureSeeded()
-  return suoraIpc.documents.list() as Promise<DocumentSummary[]>
+  return projectIpc.documents.list() as Promise<DocumentSummary[]>
 }
 
 export async function createDocument() {
   await ensureSeeded()
-  return suoraIpc.documents.create() as Promise<DocumentDetail>
+  return projectIpc.documents.create() as Promise<DocumentDetail>
 }
 
 export async function createDocumentWithMetadata(payload: { title: string; summary: string }) {
@@ -44,7 +44,7 @@ export async function createDocumentWithMetadata(payload: { title: string; summa
 
 export async function getDocumentDetail(documentId: string, selectedVersionId?: string) {
   await ensureSeeded()
-  const detail = await suoraIpc.documents.get(documentId, selectedVersionId) as DocumentDetail | null
+  const detail = await projectIpc.documents.get(documentId, selectedVersionId) as DocumentDetail | null
   if (!detail) {
     throw new Error(`Document ${documentId} was not found.`)
   }
@@ -53,7 +53,7 @@ export async function getDocumentDetail(documentId: string, selectedVersionId?: 
 
 export async function saveDocumentDraft(documentId: string, payload: { title: string; summary: string; enabled: boolean; pages: DocumentPageRecord[]; graphEdges: DocumentGraphEdge[]; settings: { isPublic: boolean; includeInLlmsTxt: boolean }; selectedVersionId?: string }) {
   await ensureSeeded()
-  return suoraIpc.documents.save({
+  return projectIpc.documents.save({
     id: documentId,
     ...payload,
     pages: normalizeDocumentNodes(payload.pages, payload.title),
@@ -63,12 +63,12 @@ export async function saveDocumentDraft(documentId: string, payload: { title: st
 export async function publishDocumentVersion(documentId: string, versionId: string) {
   await ensureSeeded()
   const detail = await getDocumentDetail(documentId, versionId)
-  return suoraIpc.documents.save({ id: documentId, title: detail.document.title, summary: detail.document.summary, enabled: detail.document.enabled, pages: detail.pages, graphEdges: detail.graphEdges, settings: detail.settings, selectedVersionId: detail.selectedVersion.id, publish: true }) as Promise<DocumentDetail>
+  return projectIpc.documents.save({ id: documentId, title: detail.document.title, summary: detail.document.summary, enabled: detail.document.enabled, pages: detail.pages, graphEdges: detail.graphEdges, settings: detail.settings, selectedVersionId: detail.selectedVersion.id, publish: true }) as Promise<DocumentDetail>
 }
 
 export async function deleteDocument(documentId: string) {
   await ensureSeeded()
-  return suoraIpc.documents.delete(documentId)
+  return projectIpc.documents.delete(documentId)
 }
 
 export async function previewDocumentArchiveImport(file: File, strategy: ArchiveImportStrategy): Promise<ArchiveImportPlan> {

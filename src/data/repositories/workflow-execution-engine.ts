@@ -8,7 +8,7 @@ import { getIntegrationDetail } from "@/data/repositories/integration-repository
 import type { IntegrationExecutionResult } from "@/data/repositories/integration-execution-repository"
 import { combineNodeOutput, interpolate, mapNodeOutput, readPath, type WorkflowVariableContext } from "@/data/repositories/workflow-variable-context"
 import { createWorkflowTraceSnapshot } from "@/data/repositories/workflow-trace-sanitizer"
-import { suoraIpc } from "@/lib/ipc"
+import { projectIpc } from "@/lib/ipc"
 import { streamChatAgentResponse } from "@/services/ai-service"
 
 type WorkflowExecutionResult = {
@@ -162,7 +162,7 @@ async function executeNode(node: Node<WorkflowNodeData>, context: ExecutionConte
     }
     case "script": return (await executeIntegration({ kind: "scripts", description: "Workflow script", runtime: "node", timeoutMs: Math.min(data.timeoutMs ?? 30000, 60000), inputSchemaJson: "{}", outputSchemaJson: "{}", selectedScriptId: "workflow-script", scripts: [{ id: "workflow-script", name: data.label, handler: "main", code: data.script || "" }] }, JSON.stringify(context))).body
     case "smtp": {
-      const result = await suoraIpc.mail.send({ to: interpolate(data.emailTo || "", context), subject: interpolate(data.emailSubject || "Workflow notification", context), content: interpolate(data.emailBody || "", context) })
+      const result = await projectIpc.mail.send({ to: interpolate(data.emailTo || "", context), subject: interpolate(data.emailSubject || "Workflow notification", context), content: interpolate(data.emailBody || "", context) })
       if (!result.success) throw new Error(result.error || "Email could not be sent.")
       return { sent: true }
     }

@@ -4,10 +4,10 @@ import { BotIcon } from "lucide-react"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { MessageScroller, MessageScrollerButton, MessageScrollerContent, MessageScrollerItem, MessageScrollerProvider, MessageScrollerViewport } from "@/components/ui/message-scroller"
 import type { ChatDetail } from "@/data/domain/models"
-import { finalizeAssistantResponseParts, toAssistantResponseParts } from "@/views/chats/assistant-response-parts"
+import { finalizeAssistantResponseParts, toAssistantResponseParts, type AssistantResponsePart } from "@/services/chat/response-parts"
 import { ChatMessageItem } from "@/views/chats/components/chat-message-item"
 import type { ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
-import { ChatAssistantResponseGroup, type AssistantResponsePart } from "@/views/chats/components/chat-assistant-response-group"
+import { ChatAssistantResponseGroup } from "@/views/chats/components/chat-assistant-response-group"
 
 type ChatTranscriptProps = {
   activeProviderType: string

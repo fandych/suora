@@ -83,7 +83,7 @@ function compareSkillSidebarRecords(
 
 async function listExternalSkillSidebarRecords() {
   try {
-    const listExternal = window.suora?.skills.listExternal
+    const listExternal = window.project?.skills.listExternal
     if (!listExternal) return []
     const records = await listExternal()
     return Array.isArray(records) ? records as Array<{ id: string; title: string; source: string; summary: string }> : []

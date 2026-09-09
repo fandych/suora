@@ -7,8 +7,8 @@ import type {
 } from "@/data/domain/models"
 import { executeIntegration } from "@/data/repositories/integration-execution-repository"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { suoraIpc } from "@/lib/ipc"
-import { buildHttpEndpointUrl, createDefaultHttpIntegrationConfig, getSelectedHttpEndpoint, normalizeHttpIntegrationConfig, readMcpTools, DEFAULT_PARAMETER_SCHEMA_JSON } from "@/lib/integration-http"
+import { projectIpc } from "@/lib/ipc"
+import { buildHttpEndpointUrl, createDefaultHttpIntegrationConfig, getSelectedHttpEndpoint, normalizeHttpIntegrationConfig, readMcpTools, DEFAULT_PARAMETER_SCHEMA_JSON } from "@/data/domain/integrations"
 
 function getDefaultConfig(kind: string): IntegrationConfig {
   if (kind === "mcp") {
@@ -125,13 +125,13 @@ function validateIntegrationConfig(config: IntegrationConfig) {
 
 export async function listIntegrationSummaries() {
   await ensureSeeded()
-  const summaries = await suoraIpc.integrations.list() as IntegrationSummary[]
+  const summaries = await projectIpc.integrations.list() as IntegrationSummary[]
   return summaries.map((summary) => ({ ...summary, enabled: Boolean(summary.enabled) }))
 }
 
 export async function getIntegrationDetail(integrationId: string, selectedVersionId?: string) {
   await ensureSeeded()
-  const detail = await suoraIpc.integrations.get(integrationId, selectedVersionId) as IntegrationDetail | null
+  const detail = await projectIpc.integrations.get(integrationId, selectedVersionId) as IntegrationDetail | null
   if (!detail) {
     throw new Error(`Integration ${integrationId} was not found.`)
   }
@@ -141,18 +141,18 @@ export async function getIntegrationDetail(integrationId: string, selectedVersio
 export async function createIntegration(kind: IntegrationConfig["kind"] = "http") {
   await ensureSeeded()
   const config = getDefaultConfig(kind)
-  return suoraIpc.integrations.create({ kind, title: `New ${kind} integration`, endpoint: getConfigEndpoint(config), configJson: JSON.stringify(config) }) as Promise<IntegrationDetail>
+  return projectIpc.integrations.create({ kind, title: `New ${kind} integration`, endpoint: getConfigEndpoint(config), configJson: JSON.stringify(config) }) as Promise<IntegrationDetail>
 }
 
 export async function saveIntegrationDraft(integrationId: string, payload: { title: string; kind: IntegrationConfig["kind"]; config: IntegrationConfig; enabled?: boolean; selectedVersionId?: string }) {
   await ensureSeeded()
   validateIntegrationConfig(payload.config)
-  return suoraIpc.integrations.save({ id: integrationId, title: payload.title, kind: payload.kind, endpoint: getConfigEndpoint(payload.config), config: payload.config, enabled: payload.enabled, selectedVersionId: payload.selectedVersionId }) as Promise<IntegrationDetail>
+  return projectIpc.integrations.save({ id: integrationId, title: payload.title, kind: payload.kind, endpoint: getConfigEndpoint(payload.config), config: payload.config, enabled: payload.enabled, selectedVersionId: payload.selectedVersionId }) as Promise<IntegrationDetail>
 }
 
 export async function deleteIntegration(integrationId: string) {
   await ensureSeeded()
-  const result = await suoraIpc.integrations.delete(integrationId) as { ok: boolean }
+  const result = await projectIpc.integrations.delete(integrationId) as { ok: boolean }
   if (!result.ok) {
     throw new Error(`Integration ${integrationId} was not found.`)
   }
@@ -160,7 +160,7 @@ export async function deleteIntegration(integrationId: string) {
 
 export async function setIntegrationEnabled(integrationId: string, enabled: boolean) {
   await ensureSeeded()
-  const summary = await suoraIpc.integrations.setEnabled({ id: integrationId, enabled })
+  const summary = await projectIpc.integrations.setEnabled({ id: integrationId, enabled })
   if (!summary) {
     throw new Error(`Integration ${integrationId} was not found.`)
   }
@@ -184,7 +184,7 @@ export async function runIntegrationAndPersist(integrationId: string, selectedVe
   const result = targetExists
     ? await executeIntegration(runtimeConfig, inputJson)
     : { ok: false, status: 400, body: "The selected entry is not available in this saved version. Save the draft and try again." }
-  await suoraIpc.integrations.recordExecution({ id: integrationId, versionId: snapshot.selectedVersion.id, status: result.ok ? "success" : "error", input: inputJson, output: result.body })
+  await projectIpc.integrations.recordExecution({ id: integrationId, versionId: snapshot.selectedVersion.id, status: result.ok ? "success" : "error", input: inputJson, output: result.body })
   const detail = await getIntegrationDetail(integrationId, selectedVersionId)
   return { detail, result }
 }

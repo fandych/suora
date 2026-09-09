@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react"
-import { addEdge, MarkerType, useEdgesState, useNodesState, type Connection, type Edge, type Node, type NodeMouseHandler, type OnSelectionChangeParams, type ReactFlowInstance, type Viewport } from "@xyflow/react"
+import { useEffect, useMemo, useRef, useState } from "react"
+import { useEdgesState, useNodesState, type Edge, type Node, type ReactFlowInstance, type Viewport } from "@xyflow/react"
 import { useNavigate, useParams } from "react-router"
 
 import type { WorkflowEdgeData, WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/models"
@@ -9,11 +9,12 @@ import { listIntegrationSummaries } from "@/data/repositories/integration-reposi
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { deleteWorkflow, dryRunWorkflowSnapshot, getWorkflowDetail, publishWorkflowVersion, runWorkflow, saveWorkflowDraft } from "@/data/repositories/workflow-repository"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { showToast } from "@/lib/app-toast"
-import { createWorkflowNodeData, defaultWorkflowBindings, defaultWorkflowNotifications, workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
+import { showToast } from "@/lib/ui-toast"
+import { defaultWorkflowBindings, defaultWorkflowNotifications, workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
 import { DEFAULT_WORKFLOW_DRY_RUN_INPUT, buildWorkflowFingerprint, getAutoLayoutedWorkflowNodes, getWorkflowDesignIssues, getWorkflowDryRunInputIssue } from "@/views/workflows/components/workflow-editor-state"
-import { buildConnectedWorkflowNode, hasOutgoingWorkflowConnection, parseDryRunObject, renameWorkflowNodeId } from "@/views/workflows/components/workflow-panel-helpers"
-import { exportWorkflowJson, parseWorkflowJson } from "@/views/workflows/components/workflow-transfer"
+import { parseDryRunObject } from "@/views/workflows/components/workflow-panel-helpers"
+import { useWorkflowTransferActions } from "@/views/workflows/use-workflow-transfer-actions"
+import { useWorkflowNodeActions } from "@/views/workflows/use-workflow-node-actions"
 
 export type InspectorMode = "closed" | "properties" | "try-run" | "history"
 
@@ -117,6 +118,8 @@ export function useWorkflowDetailController() {
   const isReleaseVersion = Boolean(data?.selectedVersion.isRelease)
   const isDraftVersion = Boolean(data && !data.selectedVersion.isRelease)
   const isReadOnly = isReleaseVersion
+  const { handleExport, handleImport } = useWorkflowTransferActions({ title, summary, definition: currentDefinition, versionLabel: data?.selectedVersion.label, isReadOnly, hasUnsavedChanges, importInputRef, setTitle, setSummary, setNodes, setEdges, setResourceBindings, setNotifications, setDryRunInput, setSelectedNodeId, applyViewport })
+  const nodeActions = useWorkflowNodeActions({ nodes, edges, selectedNodeId, isReadOnly, setNodes, setEdges, setSelectedNodeId, setInspectorMode })
   const tracedNodes = useMemo<Node<WorkflowNodeData>[]>(() => {
     const traceMap = new Map(latestInvocation?.traces.map((trace) => [trace.nodeId, trace]) ?? [])
     return nodes.map((node) => {
@@ -138,29 +141,6 @@ export function useWorkflowDetailController() {
       }
     })
   }, [latestInvocation, nodes])
-
-  const handleConnect = (connection: Connection) => {
-    if (isReadOnly) {
-      return
-    }
-
-    const sourceNode = nodes.find((node) => node.id === connection.source)
-    const branch = sourceNode?.data.kind === "if-else"
-      ? sourceNode.data.branches?.find((item) => item.id === connection.sourceHandle)
-      : undefined
-
-    setEdges((current) => addEdge({
-      id: crypto.randomUUID(),
-      ...connection,
-      type: "workflow",
-      markerEnd: { type: MarkerType.ArrowClosed },
-      label: branch?.label,
-      data: {
-        condition: branch?.expression ?? "",
-        successOnly: false,
-      },
-    }, current))
-  }
 
   const handleSave = async () => {
     if (!workflowId || !data) {
@@ -295,27 +275,6 @@ export function useWorkflowDetailController() {
     }
   }
 
-  const handleNodeClick: NodeMouseHandler<Node<WorkflowNodeData>> = (_event, node) => {
-    setSelectedNodeId(node.id)
-    setInspectorMode("properties")
-  }
-
-  const handleSelectionChange = ({ nodes: selectedNodes }: OnSelectionChangeParams) => {
-    const selectedNode = selectedNodes[0] as Node<WorkflowNodeData> | undefined
-    if (selectedNode) {
-      setSelectedNodeId(selectedNode.id)
-    }
-  }
-
-  const handleNodesDelete = (deletedNodes: Node[]) => {
-    const deletedNodeIds = new Set(deletedNodes.map((node) => node.id))
-    setEdges((current) => current.filter((edge) => !deletedNodeIds.has(edge.source) && !deletedNodeIds.has(edge.target)))
-    if (selectedNodeId && deletedNodeIds.has(selectedNodeId)) {
-      setSelectedNodeId(null)
-      setInspectorMode("closed")
-    }
-  }
-
   const focusNode = (nodeId: string) => {
     setSelectedNodeId(nodeId)
     setInspectorMode("properties")
@@ -338,137 +297,6 @@ export function useWorkflowDetailController() {
 
   const handleFitView = () => {
     void flowRef.current?.fitView({ padding: 0.2, duration: 200 })
-  }
-
-  const handleAddNode = () => {
-    if (isReadOnly) {
-      return
-    }
-    const nextIndex = nodes.length + 1
-    const nextId = `node-${nextIndex}`
-    setNodes((current) => [
-      ...current,
-      {
-        id: nextId,
-        type: "workflowNode",
-        position: { x: 220 + current.length * 120, y: 260 },
-        data: createWorkflowNodeData("agent", nextIndex),
-      },
-    ])
-    setSelectedNodeId(nextId)
-    setInspectorMode("properties")
-  }
-
-  const handleAddPresetNode = (kind: WorkflowNodeData["kind"]) => {
-    if (isReadOnly) {
-      return
-    }
-    const nextIndex = nodes.length + 1
-    const nextId = `${kind}-${nextIndex}`
-    setNodes((current) => [
-      ...current,
-      {
-        id: nextId,
-        type: "workflowNode",
-        position: { x: 120 + current.length * 120, y: 120 + (current.length % 3) * 90 },
-        data: createWorkflowNodeData(kind, nextIndex),
-      },
-    ])
-    setSelectedNodeId(nextId)
-    setInspectorMode("properties")
-  }
-
-  const handleAddNodeFromHandle = (sourceNodeId: string, sourceHandle: string | null, kind: string) => {
-    if (isReadOnly) {
-      return
-    }
-    const insert = buildConnectedWorkflowNode({ nodes, sourceNodeId, sourceHandle, kind: kind as WorkflowNodeData["kind"], createNodeData: createWorkflowNodeData })
-    if (!insert) {
-      return
-    }
-
-    setNodes((current) => [...current, insert.nextNode])
-    setEdges((current) => addEdge({ id: `${insert.nextId}-edge`, ...insert.nextEdge }, current))
-    setSelectedNodeId(insert.nextId)
-    setInspectorMode("properties")
-  }
-
-  const handleSelectedNodeChange = (patch: Partial<WorkflowNodeData>) => {
-    if (!selectedNodeId || isReadOnly) {
-      return
-    }
-    setNodes((current) => current.map((node) => node.id === selectedNodeId ? { ...node, data: { ...node.data, ...patch } } : node))
-  }
-
-  const handleRenameSelectedNodeId = (nextNodeId: string) => {
-    return renameWorkflowNodeId({ selectedNodeId, nextNodeId, nodes, setNodes, setEdges, setSelectedNodeId })
-  }
-
-  const hasOutgoingConnection = (nodeId: string, sourceHandle: string | null) => hasOutgoingWorkflowConnection(edges, nodeId, sourceHandle)
-
-  const handleDuplicateNode = () => {
-    if (!selectedNode || isReadOnly) {
-      return
-    }
-    const nextId = `${selectedNode.id}-copy-${nodes.length + 1}`
-    setNodes((current) => [...current, { ...selectedNode, id: nextId, position: { x: selectedNode.position.x + 48, y: selectedNode.position.y + 48 } }])
-    setSelectedNodeId(nextId)
-    setInspectorMode("properties")
-  }
-
-  const handleDeleteNode = () => {
-    if (!selectedNodeId || isReadOnly) {
-      return
-    }
-
-    setNodes((current) => current.filter((node) => node.id !== selectedNodeId))
-    setEdges((current) => current.filter((edge) => edge.source !== selectedNodeId && edge.target !== selectedNodeId))
-    setSelectedNodeId(null)
-  }
-
-  const handleExport = () => {
-    if (data) {
-      exportWorkflowJson({ title, summary, definition: currentDefinition, versionLabel: data.selectedVersion.label })
-    }
-  }
-
-  const handleImport = async (event: ChangeEvent<HTMLInputElement>) => {
-    if (isReadOnly) {
-      event.target.value = ""
-      return
-    }
-
-    const file = event.target.files?.[0]
-    event.target.value = ""
-    if (!file) {
-      return
-    }
-
-    if (file.size > 5 * 1024 * 1024) {
-      showToast({ title: "Import failed", description: "Workflow JSON must be 5 MiB or smaller.", type: "error" })
-      return
-    }
-
-    if (hasUnsavedChanges && !window.confirm("Importing replaces unsaved canvas changes. Continue?")) {
-      return
-    }
-
-    let payload
-    try {
-      payload = parseWorkflowJson(await file.text())
-    } catch (error) {
-      showToast({ title: "Import failed", description: error instanceof Error ? error.message : String(error), type: "error" })
-      return
-    }
-    setTitle(payload.title)
-    setSummary(payload.summary)
-    setNodes(payload.definition.nodes)
-    setEdges(payload.definition.edges)
-    setResourceBindings(payload.definition.resourceBindings ?? defaultWorkflowBindings)
-    setNotifications(payload.definition.notifications ?? defaultWorkflowNotifications)
-    setDryRunInput(payload.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT)
-    setSelectedNodeId(payload.definition.nodes[0]?.id ?? null)
-    applyViewport(payload.definition.viewport ?? DEFAULT_VIEWPORT)
   }
 
   const handleDeleteWorkflow = async () => {
@@ -496,15 +324,15 @@ export function useWorkflowDetailController() {
 
   return {
     agents, blockingIssues, canShowContent: !isLoading && !error && data, data, documents, dryRunInput, edges, error,
-    dryRunError, flowRef, handleAddNode, handleAddNodeFromHandle, handleAddPresetNode, handleAutoLayout, handleConnect, handleDeleteNode,
-    focusNode, handleDeleteWorkflow, handleDuplicateNode, handleDryRun, handleExport, handleFitView, handleImport, handleNodeClick, handleNodesDelete, handleSelectionChange,
-    handlePublish, handleRunRelease, handleSave, handleSelectedNodeChange, handleZoomStep, hasUnsavedChanges, importInputRef,
-    hasOutgoingConnection, setFlowInstance,
+    dryRunError, flowRef, ...nodeActions,
+    handleAutoLayout,
+    focusNode, handleDeleteWorkflow, handleDryRun, handleExport, handleFitView, handleImport,
+    handlePublish, handleRunRelease, handleSave, handleZoomStep, hasUnsavedChanges, importInputRef,
+    setFlowInstance,
     inspectorMode, integrations, isDeleteDialogOpen, isDeleting, isDraftVersion, isDryRunning, isHistoryDialogOpen, isLoading, isPreferenceDialogOpen, isReadOnly,
     isReleaseVersion, modelOptions, nodes, notifications, onEdgesChange, onNodesChange, reload,
     propertiesPanelWidth, resourceBindings, selectedNode, selectedNodeId, setData, setDryRunInput, setEdges, setInspectorMode, setIsDeleteDialogOpen,
     selectedInvocation, selectedInvocationId, setIsHistoryDialogOpen, setIsPreferenceDialogOpen, setNotifications, setResourceBindings, setSelectedInvocationId, setSelectedNodeId, setSelectedVersionId,
     setPropertiesPanelWidth, setShowLibrary, setSummary, setTitle, setTryPanelWidth, setViewport, showLibrary, summary, title, tracedNodes, tryPanelWidth, viewport, visibleIssues, workflowPresetNodes,
-    handleRenameSelectedNodeId,
   }
 }

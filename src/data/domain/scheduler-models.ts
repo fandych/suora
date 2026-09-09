@@ -1,0 +1,4 @@
+export type SchedulerTargetType = "workflow" | "agent"
+export type SchedulerMissedRunPolicy = "skip" | "catch-up"
+export type SchedulerDetail = { id: string; title: string; description: string; enabled: boolean; schedule: string; timeZone: string; targetType: SchedulerTargetType; targetId: string; targetName: string; missedRunPolicy: SchedulerMissedRunPolicy; retryLimit: number; retryBackoffSeconds: number; inputPayloadJson: string; updatedAt: number }
+export type SchedulerRunRecord = { id: string; status: "queued" | "running" | "success" | "error" | "skipped"; input: string; output: string; startedAt: number; finishedAt: number | null }

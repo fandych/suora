@@ -1,8 +1,8 @@
 import type { SkillConfigRecord, SkillDetail, SkillFileRecord, SkillSummary } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { createArchiveImportPlan, getImportableArchiveEntries, readArchiveEntries, type ArchiveImportPlan, type ArchiveImportStrategy } from "@/lib/resource-files"
-import { buildSkillMarkdown, ensureSkillFiles, getSkillArchivePathError, getSkillSourceLanguage, normalizeSkillPath, parseSkillFrontmatter } from "@/lib/skill-files"
-import { suoraIpc } from "@/lib/ipc"
+import { createArchiveImportPlan, getImportableArchiveEntries, readArchiveEntries, type ArchiveImportPlan, type ArchiveImportStrategy } from "@/lib/resources/archive-import"
+import { buildSkillMarkdown, ensureSkillFiles, getSkillArchivePathError, getSkillSourceLanguage, normalizeSkillPath, parseSkillFrontmatter } from "@/lib/resources/skill-files"
+import { projectIpc } from "@/lib/ipc"
 
 function getSkillMetadata(files: SkillFileRecord[], fallbackTitle: string, fallbackSummary: string) {
   const skillMarkdown = files.find((file) => file.path === "SKILL.md")?.content ?? ""
@@ -22,9 +22,9 @@ function normalizeSkill(detail: SkillConfigRecord | SkillDetail) {
 
 export async function listSkills() {
   await ensureSeeded()
-  const rows = await suoraIpc.skills.list() as SkillSummary[]
+  const rows = await projectIpc.skills.list() as SkillSummary[]
   const summaries = await Promise.all(rows.map(async (row) => {
-    const detail = await suoraIpc.skills.get(row.id) as SkillConfigRecord | null
+    const detail = await projectIpc.skills.get(row.id) as SkillConfigRecord | null
     if (!detail) {
       return row
     }
@@ -43,7 +43,7 @@ export async function listSkills() {
 
 export async function createSkill() {
   await ensureSeeded()
-  return suoraIpc.skills.create() as Promise<SkillConfigRecord>
+  return projectIpc.skills.create() as Promise<SkillConfigRecord>
 }
 
 export async function previewSkillArchiveImport(file: File, strategy: ArchiveImportStrategy): Promise<ArchiveImportPlan> {
@@ -103,7 +103,7 @@ export async function importSkillArchive(file: File, strategy: ArchiveImportStra
 
 export async function getSkillDetail(skillId: string, selectedVersionId?: string) {
   await ensureSeeded()
-  const detail = await suoraIpc.skills.get(skillId) as SkillConfigRecord | null
+  const detail = await projectIpc.skills.get(skillId) as SkillConfigRecord | null
   if (!detail) {
     throw new Error(`Skill ${skillId} was not found.`)
   }
@@ -119,7 +119,7 @@ export async function getSkillDetail(skillId: string, selectedVersionId?: string
 
 export async function saveSkillDraft(skillId: string, payload: { title: string; source: string; summary: string; files: SkillFileRecord[]; selectedVersionId?: string }) {
   await ensureSeeded()
-  return suoraIpc.skills.save({
+  return projectIpc.skills.save({
     id: skillId,
     ...payload,
     files: ensureSkillFiles(payload.files, payload.title, payload.summary),
@@ -129,7 +129,7 @@ export async function saveSkillDraft(skillId: string, payload: { title: string; 
 export async function publishSkillVersion(skillId: string, versionId: string) {
   await ensureSeeded()
   const detail = await getSkillDetail(skillId, versionId)
-  return suoraIpc.skills.save({
+  return projectIpc.skills.save({
     id: skillId,
     title: detail.skill.title,
     source: detail.skill.source,
@@ -142,5 +142,5 @@ export async function publishSkillVersion(skillId: string, versionId: string) {
 
 export async function deleteSkill(skillId: string) {
   await ensureSeeded()
-  return suoraIpc.skills.delete(skillId)
+  return projectIpc.skills.delete(skillId)
 }

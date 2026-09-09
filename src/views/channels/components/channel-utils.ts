@@ -7,7 +7,7 @@ import {
   buildChannelWebhookUrl as resolveChannelWebhookUrl,
   hasChannelCredentialFootprint as resolveChannelCredentialFootprint,
   inferChannelBindingState as resolveChannelBindingState,
-} from "@/lib/channel-config"
+} from "@/data/domain/channel-config"
 
 export const channelPlatformOptions: Array<{ value: ChannelPlatform; label: string }> = [
   { value: "web", label: "Web" },

@@ -3,10 +3,10 @@ import { Navigate, useParams } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { showToast } from "@/lib/app-toast"
+import { showToast } from "@/lib/ui-toast"
 import { applyPreferenceSettingsToDocument, createDefaultPreferenceSettings, getPreferenceSettings, savePreferenceSettings, type PreferenceSettings } from "@/data/repositories/preference-repository"
 import { checkForUpdates, getSystemDiagnostics, getSystemInfo, getUpdaterState } from "@/data/repositories/system-status-repository"
-import { hasSuoraBridge, suoraIpc } from "@/lib/ipc"
+import { hasProjectBridge, projectIpc } from "@/lib/ipc"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import PreferenceAboutPanel from "@/views/preference/components/preference-about-panel"
@@ -41,7 +41,7 @@ const PreferencePage = () => {
   }, [draft])
 
   useEffect(() => {
-    if (!hasSuoraBridge()) {
+    if (!hasProjectBridge()) {
       return
     }
 
@@ -102,7 +102,7 @@ const PreferencePage = () => {
       const persisted = await savePreferenceSettings(draft)
       setData(persisted)
       setDraft(persisted)
-      const result = await suoraIpc.mail.send({
+      const result = await projectIpc.mail.send({
         to: recipient,
         subject: "SUORA mail service test",
         content: [

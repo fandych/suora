@@ -1,7 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import type { McpIntegrationConfig } from "@/data/domain/models"
-import { readMcpTools } from "@/lib/integration-http"
+import { readMcpTools } from "@/data/domain/integrations"
 
 type IntegrationMcpToolsPanelProps = {
   config: McpIntegrationConfig

@@ -1,7 +1,7 @@
 import type { AgentDetail, AgentSummary } from "@/data/domain/models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { systemAgentMap, systemAgentSummaries } from "@/data/repositories/system-agents"
-import { suoraIpc } from "@/lib/ipc"
+import { projectIpc } from "@/lib/ipc"
 
 type AgentSettingsStore = {
   disabledSystemAgentIds?: string[]
@@ -43,9 +43,9 @@ function parseSettings(value?: string | null): AgentSettingsStore {
 }
 
 async function readSettingsValue() {
-  if (suoraIpc.agents.getSettings) {
+  if (projectIpc.agents.getSettings) {
     try {
-      return await suoraIpc.agents.getSettings() as string | null
+      return await projectIpc.agents.getSettings() as string | null
     } catch {
       return readBrowserSettings()
     }
@@ -55,9 +55,9 @@ async function readSettingsValue() {
 }
 
 async function saveSettingsStore(store: AgentSettingsStore) {
-  if (suoraIpc.agents.saveSettings) {
+  if (projectIpc.agents.saveSettings) {
     try {
-      await suoraIpc.agents.saveSettings(store)
+      await projectIpc.agents.saveSettings(store)
       return
     } catch {
       writeBrowserSettings(store)
@@ -85,7 +85,7 @@ function hydrateAgent(agent: AgentSummary, disabledSystemAgentIds: Set<string>):
 export async function listAgents() {
   await ensureSeeded()
   const disabledSystemAgentIds = await getDisabledSystemAgentIds()
-  const dbAgents = await suoraIpc.agents.list() as AgentSummary[]
+  const dbAgents = await projectIpc.agents.list() as AgentSummary[]
   const byId = new Map(dbAgents.map((agent) => [agent.id, hydrateAgent(agent, disabledSystemAgentIds)]))
   for (const systemAgent of systemAgentSummaries) {
     if (!byId.has(systemAgent.id)) {
@@ -98,7 +98,7 @@ export async function listAgents() {
 export async function getAgentDetail(agentId: string, selectedVersionId?: string) {
   await ensureSeeded()
   const disabledSystemAgentIds = await getDisabledSystemAgentIds()
-  const detail = await suoraIpc.agents.get(agentId, selectedVersionId) as AgentDetail | null
+  const detail = await projectIpc.agents.get(agentId, selectedVersionId) as AgentDetail | null
   if (detail) {
     return {
       ...detail,
@@ -116,12 +116,12 @@ export async function getAgentDetail(agentId: string, selectedVersionId?: string
 
 export async function createAgent() {
   await ensureSeeded()
-  return suoraIpc.agents.create() as Promise<AgentDetail>
+  return projectIpc.agents.create() as Promise<AgentDetail>
 }
 
 export async function saveAgentDraft(agent: AgentDetail, publish = false) {
   await ensureSeeded()
-  return suoraIpc.agents.save({
+  return projectIpc.agents.save({
     id: agent.agent.id,
     title: agent.agent.title,
     kind: agent.agent.kind,
@@ -134,7 +134,7 @@ export async function saveAgentDraft(agent: AgentDetail, publish = false) {
 
 export async function deleteAgent(agentId: string) {
   await ensureSeeded()
-  return suoraIpc.agents.delete(agentId)
+  return projectIpc.agents.delete(agentId)
 }
 
 export async function setSystemAgentDisabled(agentId: string, disabled: boolean) {

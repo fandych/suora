@@ -24,7 +24,7 @@ import {
   parseCurlImport,
   parseOpenApiImport,
   syncHttpIntegrationConfig,
-} from "@/lib/integration-http"
+} from "@/data/domain/integrations"
 import { HttpEndpointEditorDialog } from "@/views/integrations/components/http-endpoint-editor-dialog"
 
 type IntegrationHttpEndpointsPanelProps = {
@@ -132,7 +132,7 @@ export function IntegrationHttpEndpointsPanel({
 
     setIsFetchingApiDoc(true)
     try {
-      const source = await window.suora?.integrations.fetchApiDoc(openApiUrl.trim())
+      const source = await window.project?.integrations.fetchApiDoc(openApiUrl.trim())
       if (typeof source !== "string" || !source.trim()) {
         throw new Error("The API doc URL returned an empty response.")
       }

@@ -1,8 +1,8 @@
 import { AlertTriangleIcon, Clock3Icon, Loader2Icon, ShieldAlertIcon, WrenchIcon } from "lucide-react"
 
 import { Spinner } from "@/components/ui/spinner"
-import { getChatErrorPresentation } from "@/services/chat-error-state"
-import type { ChatAgentEvent } from "@/services/ai-service"
+import { getChatErrorPresentation } from "@/data/domain/chat/chat-error-state"
+import type { ChatAgentEvent } from "@/services/chat/types"
 
 type ChatStatusLineProps = {
   isResponding: boolean
