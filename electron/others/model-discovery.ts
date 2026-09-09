@@ -1,4 +1,5 @@
 import type { ProviderConfigRecord, ProviderModelCapability, ProviderModelRecord } from "@/data/domain/models"
+import { httpRequest } from "@electron/others/channels/channel-runtime-http"
 
 type DiscoverProviderModelsPayload = Pick<ProviderConfigRecord, "providerType" | "baseUrl" | "apiKey">
 
@@ -129,27 +130,18 @@ function normalizeOllamaModels(data: unknown) {
     .sort((left, right) => left.name.localeCompare(right.name))
 }
 
-async function requestJson(url: string, init: RequestInit) {
-  const response = await fetch(url, init)
-  const text = await response.text()
-  let data: unknown
-
-  try {
-    data = text ? JSON.parse(text) : null
-  } catch {
-    data = text
-  }
-
-  if (!response.ok) {
+async function requestJson(url: string, options: { method?: string; headers?: Record<string, string> } = {}) {
+  const response = await httpRequest(url, options)
+  if (response.status < 200 || response.status >= 300) {
+    const data = response.data
     const message = typeof data === "object" && data && "error" in data
       ? String((data as { error?: unknown }).error)
       : typeof data === "object" && data && "message" in data
         ? String((data as { message?: unknown }).message)
-        : `${response.status} ${response.statusText}`
+        : `${response.status} ${response.text}`
     throw new Error(message)
   }
-
-  return data
+  return response.data
 }
 
 export async function discoverProviderModels(payload: DiscoverProviderModelsPayload): Promise<DiscoverProviderModelsResult> {

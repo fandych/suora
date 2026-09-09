@@ -42,6 +42,17 @@ export type SendMailPayload = {
   to: string
   subject: string
   content: string
+  html?: string
+  attachments?: Array<{
+    filename?: string
+    content?: string
+    dataBase64?: string
+    path?: string
+    href?: string
+    contentType?: string
+    cid?: string
+    encoding?: "base64" | "hex" | "binary" | "quoted-printable"
+  }>
 }
 
 export type ChatRuntimeSettingsPayload = {

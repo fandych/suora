@@ -4,6 +4,8 @@ import type { ChannelConfigRecord } from "@/data/domain/models"
 export * from "@electron/others/channels/wechat-personal-types"
 export * from "@electron/others/channels/wechat-personal-client"
 import type { RuntimeChannelMessage } from "@electron/others/channels/channel-runtime-types"
+import { httpRequest } from "@electron/others/channels/channel-runtime-http"
+import { WECHAT_PERSONAL_APP_ID, WECHAT_PERSONAL_CLIENT_VERSION } from "@electron/others/channels/wechat-personal-types"
 export { buildWeChatSignature, parseWeChatWebhookPayload, weChatWebhookToChannelMessage } from "@electron/others/channels/channel-runtime-messages"
 export type { WeChatWebhookPayload } from "@electron/others/channels/channel-runtime-messages"
 
@@ -19,6 +21,18 @@ export const SLACK_REQUEST_MAX_AGE_SECONDS = 300
 export type TokenCacheEntry = {
   token: string
   expiresAt: number
+}
+
+function buildWeChatPersonalHeaders(token?: string) {
+  const randomUin = crypto.randomBytes(4).readUInt32BE(0)
+  return {
+    "Content-Type": "application/json",
+    AuthorizationType: "ilink_bot_token",
+    "iLink-App-Id": WECHAT_PERSONAL_APP_ID,
+    "iLink-App-ClientVersion": WECHAT_PERSONAL_CLIENT_VERSION,
+    "X-WECHAT-UIN": Buffer.from(String(randomUin)).toString("base64"),
+    ...(token?.trim() ? { Authorization: `Bearer ${token.trim()}` } : {}),
+  }
 }
 
 
@@ -45,27 +59,15 @@ export async function postWeChatPersonalJson<T>(
   }
 
   const timeoutMs = options.timeoutMs ?? WECHAT_PERSONAL_API_TIMEOUT_MS
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-  const abortListener = () => controller.abort()
-  options.signal?.addEventListener("abort", abortListener, { once: true })
-
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: buildWeChatPersonalHeaders(options.token),
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    })
-    const text = await response.text()
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${text}`)
-    }
-    return JSON.parse(text) as T
-  } finally {
-    clearTimeout(timeout)
-    options.signal?.removeEventListener("abort", abortListener)
-  }
+  const response = await httpRequest(url.toString(), {
+    method: "POST",
+    headers: buildWeChatPersonalHeaders(options.token),
+    body: JSON.stringify(body),
+    timeoutMs,
+    signal: options.signal,
+  })
+  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}: ${response.text}`)
+  return response.data as T
 }
 
 export async function getWeChatPersonalJson<T>(
@@ -75,23 +77,13 @@ export async function getWeChatPersonalJson<T>(
 ) {
   const url = new URL(endpoint, baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`)
   const timeoutMs = options.timeoutMs ?? WECHAT_PERSONAL_API_TIMEOUT_MS
-  const controller = new AbortController()
-  const timeout = setTimeout(() => controller.abort(), timeoutMs)
-
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: buildWeChatPersonalHeaders(options.token),
-      signal: controller.signal,
-    })
-    const text = await response.text()
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${text}`)
-    }
-    return JSON.parse(text) as T
-  } finally {
-    clearTimeout(timeout)
-  }
+  const response = await httpRequest(url.toString(), {
+    method: "GET",
+    headers: buildWeChatPersonalHeaders(options.token),
+    timeoutMs,
+  })
+  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}: ${response.text}`)
+  return response.data as T
 }
 
 export function buildWeChatPersonalClientId() {

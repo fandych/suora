@@ -1,25 +1,10 @@
-import type { AgentConfigRecord, AgentDetail, AgentSummary, ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary, ChatDetail, ChatSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, ProviderConfigRecord, SchedulerDetail, SchedulerRunRecord, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeData, WorkflowSummary } from "@/data/domain/models"
-import { normalizeChatMessageParts, type ChatMessagePart } from "@/data/domain/chat-message-parts"
+import type { AgentConfigRecord, AgentDetail, AgentSummary, ChannelConfigRecord, ChannelDetail, ChannelRuntimeState, ChannelSummary, DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, SchedulerDetail, SchedulerRunRecord, SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowNodeData, WorkflowSummary } from "@/data/domain/models"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { inferChannelBindingState } from "@/lib/channel-config"
 import { buildDefaultDocumentNodes, normalizeDocumentNodes } from "@/lib/document-tree"
+import { getSuoraBridge as getBridge, parseArrayJson, parseJson, parseObjectJson } from "@/lib/ipc-utils"
 
-type SendMailPayload = {
-  to: string
-  subject: string
-  content: string
-}
-
-type RawProviderRow = {
-  id: string
-  title: string
-  providerType: string
-  baseUrl: string
-  apiKey: string
-  modelsJson: string
-  enabled: number | boolean
-  updatedAt: number
-}
+export { hasSuoraBridge } from "@/lib/ipc-utils"
 
 type RawChannelRow = {
   id: string
@@ -40,51 +25,10 @@ type RawChannelRow = {
   updatedAt: number
 }
 
-type RawChatMessageRow = {
-  id: string
-  role: "user" | "assistant" | "system"
-  content: string
-  partsJson?: string
-  parts?: ChatMessagePart[]
-  createdAt: number
-}
-
-type RawChatSummaryRow = {
-  id: string
-  title: string
-  chatbotId: string
-  summary: string
-  updatedAt: number
-  sourceType?: "manual" | "channel"
-  sourceRef?: string | null
-}
-
-type PreferenceCommandConfirmationMode = "daily" | "never" | "always"
-
-type PreferenceEnvironmentVariable = {
-  key: string
-  value: string
-}
-
-type ToolPreferenceSettings = {
-  commandConfirmationMode?: PreferenceCommandConfirmationMode
-  globalEnvironmentVariables?: PreferenceEnvironmentVariable[]
-}
-
-const COMMAND_CONFIRMATION_STORAGE_KEY = "suora:command-confirmation-last-date"
-
-function parseProviderRow(row: RawProviderRow): ProviderConfigRecord {
-  return {
-    id: row.id,
-    title: row.title,
-    providerType: row.providerType,
-    baseUrl: row.baseUrl,
-    apiKey: row.apiKey,
-    enabled: Boolean(row.enabled),
-    models: parseArrayJson<ProviderConfigRecord["models"][number]>(row.modelsJson, []),
-    updatedAt: row.updatedAt,
-  }
-}
+import { buildCommandEnvironment, markWorkspaceCommandConfirmed, shouldConfirmWorkspaceCommand, type ToolPreferenceSettings } from "@/lib/tool-command-guardrail"
+import { mailIpc, preferencesIpc, systemIpc, updaterIpc, workspaceIpc } from "@/lib/ipc-domains/core-ipc"
+import { chatIpc } from "@/lib/ipc-domains/chat-ipc"
+import { modelIpc } from "@/lib/ipc-domains/model-ipc"
 
 function createDefaultAgentConfig(): AgentConfigRecord {
   return {
@@ -97,55 +41,6 @@ function createDefaultAgentConfig(): AgentConfigRecord {
     toolsetIds: [],
     documentIds: [],
     privateToolIds: [],
-  }
-}
-
-function parseJson<T>(value: string | null | undefined, fallback: T): T {
-  if (!value) {
-    return fallback
-  }
-
-  const normalized = value.trim()
-  if (!normalized || normalized === "undefined" || normalized === "null") {
-    return fallback
-  }
-
-  try {
-    return JSON.parse(normalized) as T
-  } catch {
-    return fallback
-  }
-}
-
-function parseObjectJson<T extends Record<string, unknown>>(value: string | null | undefined, fallback: T): T {
-  const parsed = parseJson<unknown>(value, fallback)
-  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as T : fallback
-}
-
-function parseArrayJson<T>(value: string | null | undefined, fallback: T[]): T[] {
-  const parsed = parseJson<unknown>(value, fallback)
-  return Array.isArray(parsed) ? parsed as T[] : fallback
-}
-
-function parseChatMessageRow(row: RawChatMessageRow) {
-  return {
-    id: row.id,
-    role: row.role,
-    content: row.content,
-    parts: normalizeChatMessageParts(row.parts ?? parseJson<ChatMessagePart[]>(row.partsJson, [])),
-    createdAt: row.createdAt,
-  }
-}
-
-function parseChatSummaryRow(row: RawChatSummaryRow): ChatSummary {
-  return {
-    id: row.id,
-    title: row.title,
-    chatbotId: row.chatbotId,
-    summary: row.summary,
-    updatedAt: row.updatedAt,
-    sourceType: row.sourceType === "channel" ? "channel" : "manual",
-    sourceRef: typeof row.sourceRef === "string" ? row.sourceRef : null,
   }
 }
 
@@ -349,18 +244,6 @@ function normalizeWorkflowDefinition(definition: WorkflowDefinition): WorkflowDe
   }
 }
 
-function getBridge() {
-  const bridge = window.suora
-  if (!bridge) {
-    throw new Error("SUORA IPC bridge is not available.")
-  }
-  return bridge
-}
-
-export function hasSuoraBridge() {
-  return typeof window !== "undefined" && Boolean(window.suora)
-}
-
 function parseDocumentStructure(structureJson: string | undefined, documentTitle: string) {
   if (!structureJson) {
     return buildDefaultDocumentNodes(documentTitle)
@@ -411,51 +294,13 @@ function parseWorkflowInvocationTraces(traceJson: string | undefined) {
 
 export const suoraIpc = {
   system: {
-    info: async () => getBridge().system.info(),
-    diagnostics: async () => getBridge().system.diagnostics(),
+    ...systemIpc,
   },
   workspace: {
-    getPaths: async () => getBridge().workspace.getPaths(),
-    setProxySettings: async (settings: unknown) => getBridge().workspace.setProxySettings(settings),
-    getProxySettings: async () => getBridge().workspace.getProxySettings(),
+    ...workspaceIpc,
   },
   chats: {
-    list: async () => {
-      const rows = await getBridge().chats.list() as RawChatSummaryRow[]
-      return rows.map(parseChatSummaryRow)
-    },
-    get: async (chatId: string) => {
-      const payload = await getBridge().chats.get(chatId) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] }
-      if (!payload.chat) return null
-      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
-    },
-    create: async () => {
-      const payload = await getBridge().chats.create() as { chat: RawChatSummaryRow; messages: RawChatMessageRow[] }
-      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
-    },
-    ensure: async (payload: { chatId: string; title: string; chatbotId: string; summary?: string; sourceType?: "manual" | "channel"; sourceRef?: string | null }) => {
-      const result = await getBridge().chats.ensure(payload) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] }
-      if (!result.chat) return null
-      return { chat: parseChatSummaryRow(result.chat), messages: result.messages.map(parseChatMessageRow) } satisfies ChatDetail
-    },
-    delete: async (chatId: string) => getBridge().chats.delete(chatId) as Promise<boolean>,
-    appendUser: async (chatId: string, content: string, parts?: ChatMessagePart[]) => {
-      const payload = await getBridge().chats.appendUser({ chatId, content, parts }) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] } | null
-      if (!payload?.chat) return null
-      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
-    },
-    appendAssistant: async (chatId: string, content: string, parts?: ChatMessagePart[]) => {
-      const payload = await getBridge().chats.appendAssistant({ chatId, content, parts }) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] } | null
-      if (!payload?.chat) return null
-      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
-    },
-    updateMessageParts: async (chatId: string, messageId: string, parts: ChatMessagePart[]) => {
-      const payload = await getBridge().chats.updateMessageParts({ chatId, messageId, parts }) as { chat: RawChatSummaryRow | null; messages: RawChatMessageRow[] } | null
-      if (!payload?.chat) return null
-      return { chat: parseChatSummaryRow(payload.chat), messages: payload.messages.map(parseChatMessageRow) } satisfies ChatDetail
-    },
-    getSettings: async () => getBridge().chats.getSettings(),
-    saveSettings: async (payload: unknown) => getBridge().chats.saveSettings(payload),
+    ...chatIpc,
   },
   documents: {
     list: async () => getBridge().documents.list() as Promise<DocumentSummary[]>,
@@ -527,34 +372,7 @@ export const suoraIpc = {
     delete: async (documentId: string) => getBridge().documents.delete(documentId),
   },
   models: {
-    list: async () => {
-      const rows = await getBridge().models.list() as RawProviderRow[]
-      return rows.map(parseProviderRow)
-    },
-    get: async (providerId: string) => {
-      const row = await getBridge().models.get(providerId) as RawProviderRow | null
-      return row ? parseProviderRow(row) : null
-    },
-    create: async (payload?: Partial<ProviderConfigRecord>) => {
-      const row = await getBridge().models.create(payload) as RawProviderRow
-      return parseProviderRow(row)
-    },
-    save: async (provider: ProviderConfigRecord) => {
-      const row = await getBridge().models.save({
-        id: provider.id,
-        title: provider.title,
-        providerType: provider.providerType,
-        baseUrl: provider.baseUrl,
-        apiKey: provider.apiKey,
-        modelsJson: JSON.stringify(provider.models),
-        enabled: provider.enabled,
-      }) as RawProviderRow
-      return parseProviderRow(row)
-    },
-    delete: async (providerId: string) => getBridge().models.delete(providerId),
-    discover: async (payload: Pick<ProviderConfigRecord, "providerType" | "baseUrl" | "apiKey">) => {
-      return getBridge().models.discover(payload) as Promise<{ models: ProviderConfigRecord["models"]; source: string }>
-    },
+    ...modelIpc,
   },
   skills: {
     list: async () => {
@@ -855,15 +673,13 @@ export const suoraIpc = {
     delete: async (schedulerId: string) => getBridge().schedulers.delete(schedulerId) as Promise<{ ok: boolean }>,
   },
   preferences: {
-    get: async () => getBridge().preferences.get() as Promise<string | null>,
-    save: async (value: string) => getBridge().preferences.save(value) as Promise<string>,
+    ...preferencesIpc,
   },
   updater: {
-    getState: async () => getBridge().updater.getState(),
-    check: async () => getBridge().updater.check(),
+    ...updaterIpc,
   },
   mail: {
-    send: async (payload: SendMailPayload) => getBridge().mail.send(payload) as Promise<{ success: boolean; error?: string }>,
+    ...mailIpc,
   },
   tools: {
     listFiles: async (relativePath?: string) => getBridge().tools.listFiles(relativePath) as Promise<Array<{ name: string; path: string; type: "file" | "directory" }>>,
@@ -890,7 +706,7 @@ export const suoraIpc = {
         markWorkspaceCommandConfirmed(mode)
       }
 
-      const env = Object.fromEntries((preferences.globalEnvironmentVariables ?? []).filter((item) => item && typeof item.key === "string" && item.key.trim()).map((item) => [item.key.trim(), typeof item.value === "string" ? item.value : ""]))
+      const env = buildCommandEnvironment(preferences)
 
       return bridge.tools.runCommand({ ...payload, env }) as Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>
     },
@@ -924,29 +740,4 @@ async function readToolPreferenceSettings(bridge: ReturnType<typeof getBridge>):
       return {}
     }
   }
-}
-
-function shouldConfirmWorkspaceCommand(mode: PreferenceCommandConfirmationMode) {
-  if (mode === "never") {
-    return false
-  }
-
-  if (mode === "always") {
-    return true
-  }
-
-  if (typeof window === "undefined") {
-    return false
-  }
-
-  const today = new Date().toISOString().slice(0, 10)
-  return window.localStorage.getItem(COMMAND_CONFIRMATION_STORAGE_KEY) !== today
-}
-
-function markWorkspaceCommandConfirmed(mode: PreferenceCommandConfirmationMode) {
-  if (mode !== "daily" || typeof window === "undefined") {
-    return
-  }
-
-  window.localStorage.setItem(COMMAND_CONFIRMATION_STORAGE_KEY, new Date().toISOString().slice(0, 10))
 }

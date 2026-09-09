@@ -1,6 +1,6 @@
 import type { ChannelConfigRecord, EmailAction, EmailFilterRule } from "@/data/domain/models"
 import { httpRequest } from "@electron/others/channels/channel-runtime-http"
-import { getSystemMailProfile, sendMail, type MailProfile } from "@electron/others/mail-service"
+import { getSystemMailProfile, sendMail, type MailAttachment, type MailProfile } from "@electron/others/mail-service"
 
 export type ParsedEmail = {
   uid: number
@@ -13,6 +13,7 @@ export type ParsedEmail = {
   date?: string
   hasAttachment: boolean
   messageId?: string
+  attachments?: MailAttachment[]
 }
 
 function getChannelMailProfile(channel: ChannelConfigRecord): MailProfile | null {
@@ -188,6 +189,7 @@ function parseImapEmailData(raw: string, uid: number): ParsedEmail | null {
     const fromEmail = fromMatch ? fromMatch[1] : from
     const fromNameMatch = from.match(/^"?([^"<]+)"?\s*</)
     const fromName = fromNameMatch ? fromNameMatch[1].trim() : undefined
+    const attachments = parseEmailAttachments(raw)
     return {
       uid,
       from: fromEmail,
@@ -199,10 +201,16 @@ function parseImapEmailData(raw: string, uid: number): ParsedEmail | null {
       date: getHeader("Date"),
       hasAttachment: /Content-Disposition:\s*attachment/i.test(raw),
       messageId: getHeader("Message-ID"),
+      attachments,
     }
   } catch {
     return null
   }
+}
+
+function parseEmailAttachments(raw: string): MailAttachment[] {
+  const attachmentMatches = [...raw.matchAll(/Content-Disposition:\s*attachment;[^\r\n]*filename="?([^";\r\n]+)"?/gi)]
+  return attachmentMatches.map((match) => ({ filename: match[1].trim() }))
 }
 
 function decodeEmailSubject(subject: string) {
@@ -259,7 +267,7 @@ export async function executeEmailActions(channel: ChannelConfigRecord, email: P
     try {
       switch (action.type) {
         case "forward":
-          if (action.value) await sendEmailMessage(channel, action.value, `Fwd: ${email.subject}`, formatEmailContent(email))
+          if (action.value) await sendEmailMessageWithAttachments(channel, action.value, `Fwd: ${email.subject}`, formatEmailContent(email), email.attachments || [])
           break
         case "webhook":
           if (action.value) {
@@ -283,4 +291,10 @@ export async function executeEmailActions(channel: ChannelConfigRecord, email: P
       continue
     }
   }
+}
+
+async function sendEmailMessageWithAttachments(channel: ChannelConfigRecord, toAddress: string, subject: string, content: string, attachments: MailAttachment[]) {
+  const profile = channel.emailUseGlobalMailService ? getSystemMailProfile() : getChannelMailProfile(channel)
+  if (!profile) return { success: false, error: "Missing mail configuration" }
+  return sendMail({ profile, toAddress, subject, content, attachments })
 }

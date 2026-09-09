@@ -1,5 +1,5 @@
-import { requestHttp } from "@electron/ipc/common/http-client"
+import { requestHttp, type HttpRequestOptions } from "@electron/ipc/common/http-client"
 
-export async function httpRequest(url: string, options: { method?: string; headers?: Record<string, string>; body?: string }) {
+export async function httpRequest(url: string, options: HttpRequestOptions = {}) {
   return requestHttp(url, options)
 }

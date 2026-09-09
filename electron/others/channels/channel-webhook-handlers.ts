@@ -9,6 +9,8 @@ import {
 import { verifyDingTalkSignature, verifyFeishuSignature, verifyWebhookSecret, verifyWeChatSignature } from "@electron/others/channels/channel-webhook-security"
 import { executeEmailActions, formatEmailContent, matchesEmailFilters, type ParsedEmail } from "@electron/others/channels/channel-runtime-email"
 import type { RuntimeChannelMessage } from "@electron/others/channels/channel-runtime-types"
+import { hasGenericMessageContent, readGenericWebhookMessage, requireWebhookSecret } from "@electron/others/channels/channel-webhook-common"
+import { readNested, resolveTimestamp } from "@electron/others/channels/channel-webhook-normalizers"
 
 type EmitMessage = (channel: ChannelConfigRecord, message: RuntimeChannelMessage, rawEvent: unknown) => Promise<void>
 
@@ -168,17 +170,14 @@ async function handleWeChatWebhook(req: Request, res: Response, channel: Channel
 }
 
 async function handleWeChatPersonalWebhook(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {
-  if (!verifyWebhookSecret(req, channel.webhookSecret)) {
+  if (!requireWebhookSecret(req, channel.webhookSecret)) {
     res.status(401).json({ error: "Invalid webhook secret" })
     return
   }
 
   const body = req.body as Record<string, unknown>
-  const senderId = String(body.senderId || body.sender_id || body.user_id || readNested(body, ["from", "id"]) || "unknown")
-  const senderName = String(body.senderName || body.sender_name || body.user_name || readNested(body, ["from", "name"]) || senderId)
-  const content = String(body.content || body.text || body.message || body.msg || "")
-  const chatId = String(body.chatId || body.chat_id || body.conversation_id || body.channel_id || senderId)
-  if (!content) {
+  const message = readGenericWebhookMessage(body)
+  if (!hasGenericMessageContent(message.content)) {
     res.status(200).json({ ok: true, skipped: "empty content" })
     return
   }
@@ -187,13 +186,13 @@ async function handleWeChatPersonalWebhook(req: Request, res: Response, channel:
     id: String(body.id || body.message_id || `wechat-personal-${Date.now()}`),
     channelId: channel.id,
     platform: "wechat_personal",
-    senderId,
-    senderName,
-    content,
+    senderId: message.senderId,
+    senderName: message.senderName,
+    content: message.content,
     timestamp: resolveTimestamp(body.timestamp),
     messageType: "text",
-    chatId,
-    chatType: normalizeChatType(body.chatType || body.chat_type),
+    chatId: message.chatId,
+    chatType: message.chatType,
   }, body)
 
   res.json({ ok: true })
@@ -282,7 +281,7 @@ async function handleTeamsWebhook(req: Request, res: Response, channel: ChannelC
 }
 
 async function handleEmailWebhook(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {
-  if (!verifyWebhookSecret(req, channel.webhookSecret)) {
+  if (!requireWebhookSecret(req, channel.webhookSecret)) {
     res.status(401).json({ error: "Invalid webhook secret" })
     return
   }
@@ -338,11 +337,8 @@ async function handleCustomWebhook(req: Request, res: Response, channel: Channel
   }
 
   const body = req.body as Record<string, unknown>
-  const senderId = String(body.senderId || body.sender_id || body.user_id || readNested(body, ["from", "id"]) || "unknown")
-  const senderName = String(body.senderName || body.sender_name || body.user_name || readNested(body, ["from", "name"]) || senderId)
-  const content = String(body.content || body.text || body.message || body.msg || "")
-  const chatId = String(body.chatId || body.chat_id || body.conversation_id || body.channel_id || senderId)
-  if (!content) {
+  const message = readGenericWebhookMessage(body)
+  if (!hasGenericMessageContent(message.content)) {
     res.status(200).json({ ok: true, skipped: "empty content" })
     return
   }
@@ -351,36 +347,15 @@ async function handleCustomWebhook(req: Request, res: Response, channel: Channel
     id: String(body.id || body.message_id || `custom-${Date.now()}`),
     channelId: channel.id,
     platform: "custom",
-    senderId,
-    senderName,
-    content,
+    senderId: message.senderId,
+    senderName: message.senderName,
+    content: message.content,
     timestamp: resolveTimestamp(body.timestamp),
     messageType: "text",
-    chatId,
-    chatType: normalizeChatType(body.chatType || body.chat_type),
+    chatId: message.chatId,
+    chatType: message.chatType,
   }, body)
 
   res.json({ ok: true })
 }
 
-function readNested(record: Record<string, unknown>, path: string[]) {
-  let current: unknown = record
-  for (const segment of path) {
-    if (!current || typeof current !== "object") return undefined
-    current = (current as Record<string, unknown>)[segment]
-  }
-  return current
-}
-
-function resolveTimestamp(input: unknown) {
-  if (typeof input === "number" && Number.isFinite(input)) return input
-  if (typeof input === "string") {
-    const date = new Date(input).getTime()
-    return Number.isNaN(date) ? Date.now() : date
-  }
-  return Date.now()
-}
-
-function normalizeChatType(value: unknown): "private" | "group" {
-  return String(value || "private") === "group" ? "group" : "private"
-}

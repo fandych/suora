@@ -20,6 +20,7 @@ import type { ChannelHealthStatus, RuntimeChannelEvent, RuntimeMessageHandler } 
 import { getChannelDetail, listEnabledChannelDetails } from "@electron/others/channels/channel-store"
 import { CustomWebSocketClient } from "@electron/others/channels/custom-websocket-client"
 import { DingTalkStreamClient } from "@electron/others/channels/dingtalk-stream"
+import { ChannelMessageQueue } from "@electron/others/channels/channel-message-queue"
 import { stopAllRuntimeClients, syncCustomSocketClients, syncEmailPollers, syncStreamClients, syncWeChatPersonalPollers } from "@electron/others/channels/channel-service-sync"
 import {
   startWeChatPersonalLogin,
@@ -29,56 +30,6 @@ import {
 import { handleGetWebhookRequest, handlePostWebhookRequest } from "@electron/others/channels/channel-webhook-handlers"
 
 const tokenCache = new Map<string, TokenCacheEntry>()
-
-class MessageQueue {
-  private readonly queue: Array<{ id: string; channel: ChannelConfigRecord; chatId: string; content: string; retryCount: number; maxRetries: number; nextRetryAt: number }> = []
-  private readonly lastSentPerChannel = new Map<string, number>()
-  private processing = false
-  private readonly rateLimitWindow = 1000
-
-  enqueue(channel: ChannelConfigRecord, chatId: string, content: string, maxRetries = 3) {
-    const id = `mq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-    this.queue.push({ id, channel, chatId, content, retryCount: 0, maxRetries, nextRetryAt: 0 })
-    void this.processQueue()
-    return id
-  }
-
-  private async processQueue() {
-    if (this.processing) return
-    this.processing = true
-
-    while (this.queue.length > 0) {
-      const item = this.queue[0]
-      if (!item) break
-
-      const lastSent = this.lastSentPerChannel.get(item.channel.id) || 0
-      const timeSinceLastSent = Date.now() - lastSent
-      if (timeSinceLastSent < this.rateLimitWindow) {
-        await new Promise((resolve) => setTimeout(resolve, this.rateLimitWindow - timeSinceLastSent))
-      }
-      if (item.nextRetryAt > Date.now()) {
-        await new Promise((resolve) => setTimeout(resolve, item.nextRetryAt - Date.now()))
-      }
-
-      const result = await sendMessageForChannel(item.channel, item.chatId, item.content, tokenCache)
-      this.lastSentPerChannel.set(item.channel.id, Date.now())
-      if (result.success) {
-        this.queue.shift()
-      } else {
-        item.retryCount += 1
-        if (item.retryCount >= item.maxRetries) {
-          this.queue.shift()
-        } else {
-          item.nextRetryAt = Date.now() + Math.pow(2, item.retryCount) * 1000
-          this.queue.shift()
-          this.queue.push(item)
-        }
-      }
-    }
-
-    this.processing = false
-  }
-}
 
 export class ChannelService {
   private readonly app = express()
@@ -94,7 +45,7 @@ export class ChannelService {
   private readonly emailLastSeenUid = new Map<string, number>()
   private readonly sessionWebhooks = new Map<string, { url: string; expiresAt: number }>()
   private readonly processedMessageIds = new Map<string, number>()
-  private readonly messageQueue = new MessageQueue()
+  private readonly messageQueue = new ChannelMessageQueue(tokenCache)
   private dedupCleanupInterval: ReturnType<typeof setInterval> | null = null
   private messageHandler: RuntimeMessageHandler | null = null
 

@@ -119,7 +119,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
     const request = transport.request(url, {
       method,
       headers,
-      agent: getProxyAgent(url),
+      agent: getProxyAgent(url, ignoreSsl),
       rejectUnauthorized: !ignoreSsl,
     }, (response) => {
       const chunks: Buffer[] = []

@@ -4,8 +4,7 @@ import { ipcMain } from "electron"
 import { appState } from "@electron/others/app-state"
 import { ensureFileSizeWithinLimit, MAX_TOOL_FILE_BYTES, MAX_TOOL_WRITE_BYTES } from "@electron/others/tool-guardrails"
 import { ensureWorkspace } from "@electron/others/workspace"
-import { getWorkspacePath } from "@electron/others/paths"
-import { readToolPreferences, resolveWorkspaceTarget, enforceRelativePathPolicy } from "@electron/ipc/tools/tools-policy"
+import { resolveWorkspaceTarget, enforceRelativePathPolicy } from "@electron/ipc/tools/tools-policy"
 export function registerToolFilesystemIpc() {
   ipcMain.handle("tools:listFiles", async (_event, relativePath?: string) => { await ensureWorkspace(); const target = resolveWorkspaceTarget(relativePath); enforceRelativePathPolicy(relativePath, target); return (await fs.readdir(target, { withFileTypes: true })).map((entry) => ({ name: entry.name, path: path.relative(resolveWorkspaceTarget(), path.join(target, entry.name)).replace(/\\/g, "/"), type: entry.isDirectory() ? "directory" : "file" })) })
   ipcMain.handle("tools:readFile", async (_event, relativePath: string) => { await ensureWorkspace(); const target = resolveWorkspaceTarget(relativePath); enforceRelativePathPolicy(relativePath, target); const stats = await fs.stat(target); ensureFileSizeWithinLimit(stats.size, `File '${relativePath}'`, MAX_TOOL_FILE_BYTES); return { path: path.relative(resolveWorkspaceTarget(), target).replace(/\\/g, "/"), content: await fs.readFile(target, "utf8") } })

@@ -21,10 +21,6 @@ function publishBrowserWindowState(sessionId = "global", error?: string) {
   appState.mainWindow.webContents.send("tools:browserStateChanged", { sessionId, ...getBrowserWindowState(sessionId, error) })
 }
 
-function wait(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 function createBrowserWindow(sessionId: string) {
   const browserWindow = new BrowserWindow({
     width: 1280,
