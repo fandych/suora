@@ -1,5 +1,5 @@
 import { ipcMain } from "electron"
-import { clickBrowserElement, fillBrowserElement, getBrowserPageSnapshot, getBrowserWindowState, navigateBrowserWindow } from "@electron/others/browser-window"
+import { clickBrowserElement, fillBrowserElement, getBrowserPageSnapshot, getBrowserWindowState, navigateBrowserWindow } from "@electron/infrastructure/browser-window"
 export function registerToolBrowserIpc() {
   ipcMain.handle("tools:browserNavigate", async (_event, payload: { sessionId?: string; url?: string; visible?: boolean }) => navigateBrowserWindow(payload))
   ipcMain.handle("tools:browserState", async (_event, sessionId?: string) => getBrowserWindowState(sessionId || "global"))

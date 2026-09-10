@@ -1,19 +1,18 @@
 import { app, BrowserWindow } from "electron"
 
-import { applyMigrations, closeDatabase, openDatabase } from "@electron/database/db-core"
+import { applyMigrations, closeDatabase, openDatabase } from "@electron/infrastructure/db-core"
 import { setupIpc } from "@electron/ipc"
-import { closeBrowserWindow } from "@electron/others/browser-window"
-import { applySecurityPreferences, getPreferenceSettingsSnapshot } from "@electron/others/preferences"
-import { configureAutoUpdater } from "@electron/others/updater"
-import { createWindow } from "@electron/others/window"
-import { configureAppStoragePaths, ensureWorkspace } from "@electron/others/workspace"
+import { closeBrowserWindow } from "@electron/infrastructure/browser-window"
+import { getPreferenceSettingsSnapshot } from "@electron/infrastructure/preference-service"
+import { configureAutoUpdater } from "@electron/infrastructure/updater-service"
+import { createWindow } from "@electron/infrastructure/main-window"
+import { configureAppStoragePaths, ensureWorkspace } from "@electron/infrastructure/workspace-service"
 
 configureAppStoragePaths()
 
 app.whenReady().then(async () => {
   await ensureWorkspace()
   applyMigrations(openDatabase())
-  applySecurityPreferences()
   setupIpc()
   configureAutoUpdater()
 

@@ -1,7 +1,7 @@
 import path from "node:path"
-import { applyMigrations, openDatabase } from "@electron/database/db-core"
-import { ensureWorkspace } from "@electron/others/workspace"
-import { getWorkspacePath } from "@electron/others/paths"
+import { applyMigrations, openDatabase } from "@electron/infrastructure/db-core"
+import { ensureWorkspace } from "@electron/infrastructure/workspace-service"
+import { getWorkspacePath } from "@electron/infrastructure/workspace-paths"
 
 type ToolPreferenceSettings = { fileAccessPolicy?: "allowlist" | "denylist"; fileAccessDirectories?: string[]; commandAllowlist?: string[]; commandBlacklist?: string[]; globalEnvironmentVariables?: Array<{ key?: string; value?: string }> }
 export function readToolPreferences(): ToolPreferenceSettings { const database = openDatabase(); applyMigrations(database); const row = database.prepare("SELECT value FROM app_meta WHERE key = 'preference_settings'").get() as { value?: string } | undefined; try { return row?.value ? JSON.parse(row.value) as ToolPreferenceSettings : {} } catch { return {} } }
