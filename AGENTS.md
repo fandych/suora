@@ -103,6 +103,7 @@ When replacing mock sidebar data with real data, preserve the rendering contract
 - do not use scripts or bulk automation to rewrite code; make targeted manual edits
 - every code change must leave the app in a runnable state and must be validated with real checks; before handoff, run `npm run type-check`, `npm run lint`, and `npm run build`
 - preserve shadcn UI source files in [src/components/ui](src/components/ui) instead of restyling them in place
+- treat [src/components/ui](src/components/ui) as upstream shadcn source: do not modify, split, or reformat these files during business refactors
 - when building UI, prefer composing existing shadcn components before writing custom markup, and consult the `shadcn` skill for component APIs and patterns
 - `electron/` source must be grouped by concern: `ipc/`, `database/`, `others/`, and `types/`; do not flatten new helper modules at the `electron/` root
 - when `npm run dev` is used for Electron validation during agent work, stop the spawned dev process before finishing the task

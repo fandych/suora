@@ -33,6 +33,7 @@ export type AiFetchStartPayload = {
 }
 
 export type IntegrationExecutePayload = {
+  integrationId?: string
   kind: "http" | "scripts" | "mcp"
   config: Record<string, unknown>
   inputJson?: string

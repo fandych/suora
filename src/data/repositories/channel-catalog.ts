@@ -1,22 +1,11 @@
 import type { ChannelDetail } from "@/data/domain/models"
-import { eq } from "drizzle-orm"
-import { channels } from "@/data/db/schema"
-import { executePersistedMutation, getDatabaseContext } from "@/data/db/client"
 import { CHANNEL_CATALOG_TEMPLATES, buildChannelCatalogId, createDefaultChannelConfig, createDefaultChannelRuntime } from "@/data/repositories/channel-defaults"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { normalizeChannelConfig } from "@/data/domain/channel-config"
+import { getProjectBridge } from "@/lib/ipc"
 
 let ensureChannelCatalogPromise: Promise<void> | undefined
 let hasEnsuredChannelCatalog = false
-
-function getCatalogId(configJson: string) {
-  try {
-    const config = JSON.parse(configJson) as { catalogId?: unknown }
-    return typeof config.catalogId === "string" ? config.catalogId : undefined
-  } catch {
-    return undefined
-  }
-}
 
 function createCatalogChannel(template: typeof CHANNEL_CATALOG_TEMPLATES[number], now: number): ChannelDetail {
   const channel = normalizeChannelConfig({
@@ -50,28 +39,22 @@ export async function ensureChannelCatalogItems() {
 
   if (!ensureChannelCatalogPromise) {
     ensureChannelCatalogPromise = (async () => {
-      const context = await getDatabaseContext()
-      const existingRows = await context.db.select({ id: channels.id, title: channels.title, configJson: channels.configJson }).from(channels).all()
+      const existingRows = await getProjectBridge().catalog.list("/channels") as Array<{ id: string; title: string; catalogId?: string }>
       const existingIds = new Set(existingRows.map((row) => row.id))
-      const existingCatalogIds = new Set(existingRows.map((row) => getCatalogId(row.configJson)).filter((catalogId): catalogId is string => Boolean(catalogId)))
+      const existingCatalogIds = new Set(existingRows.map((row) => row.catalogId).filter((catalogId): catalogId is string => Boolean(catalogId)))
       const missing = CHANNEL_CATALOG_TEMPLATES.filter((item) => {
         const catalogId = buildChannelCatalogId(item)
         return !existingCatalogIds.has(catalogId) && !existingIds.has(`channel-${catalogId.replace(/^catalog-/, "")}`)
       })
 
       const renamedCatalogEntries = existingRows.flatMap((row) => {
-        const catalogId = getCatalogId(row.configJson)
+        const catalogId = row.catalogId
         const template = CHANNEL_CATALOG_TEMPLATES.find((item) => buildChannelCatalogId(item) === catalogId)
         if (!template || row.title === template.title) {
           return []
         }
 
-        try {
-          const config = JSON.parse(row.configJson) as Record<string, unknown>
-          return [{ id: row.id, title: template.title, configJson: JSON.stringify({ ...config, title: template.title }) }]
-        } catch {
-          return []
-        }
+        return [{ id: row.id, title: template.title }]
       })
 
       if (!missing.length && !renamedCatalogEntries.length) {
@@ -79,20 +62,10 @@ export async function ensureChannelCatalogItems() {
         return
       }
 
-      await executePersistedMutation(async ({ db }) => {
-        for (const entry of renamedCatalogEntries) {
-          await db.update(channels)
-            .set({ title: entry.title, configJson: entry.configJson, updatedAt: new Date() })
-            .where(eq(channels.id, entry.id))
-        }
-
-        if (!missing.length) {
-          return
-        }
-
-        const now = Date.now()
-        await db.insert(channels)
-          .values(missing.map((template, index) => {
+      const now = Date.now()
+      await getProjectBridge().database.syncChannelCatalog({
+        renamed: renamedCatalogEntries,
+        channels: missing.map((template, index) => {
             const detail = createCatalogChannel(template, now - index)
             return {
               id: detail.channel.id,
@@ -112,9 +85,7 @@ export async function ensureChannelCatalogItems() {
               runtimeJson: JSON.stringify(detail.runtime),
               updatedAt: new Date(detail.channel.updatedAt),
             }
-          }))
-          .onConflictDoNothing({ target: channels.id })
-          .run()
+          }),
       })
 
       hasEnsuredChannelCatalog = true

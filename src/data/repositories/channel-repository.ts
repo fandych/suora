@@ -353,7 +353,7 @@ export async function stopChannelRuntime() {
 }
 
 export async function getChannelWebhookRuntimeUrl(channel: ChannelConfigRecord) {
-  const result = await projectIpc.channels.getWebhookUrl(channel) as { success?: boolean; url?: string }
+  const result = await projectIpc.channels.getWebhookUrl({ id: channel.id }) as { success?: boolean; url?: string }
   return result.url ?? buildChannelWebhookUrl(channel)
 }
 

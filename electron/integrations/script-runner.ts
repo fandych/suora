@@ -1,4 +1,5 @@
-import { Script, createContext } from "node:vm"
+import { spawn } from "node:child_process"
+import { fileURLToPath } from "node:url"
 
 import type { IntegrationExecutePayload } from "@electron/types"
 
@@ -12,18 +13,9 @@ const BLOCKED_SCRIPT_PATTERNS = [
   /\bnew\s+Function\b/,
   /\beval\s*\(/,
 ]
-
-function parseJson<T>(value: string | undefined, fallback: T): T {
-  if (!value?.trim()) {
-    return fallback
-  }
-
-  try {
-    return JSON.parse(value) as T
-  } catch {
-    return fallback
-  }
-}
+const MAX_SCRIPT_SOURCE_BYTES = 256 * 1024
+const MAX_SCRIPT_INPUT_BYTES = 512 * 1024
+const MAX_SCRIPT_OUTPUT_BYTES = 1024 * 1024
 
 function normalizeScriptSource(code: string) {
   return code.replace(/^\s*export\s+/gm, "")
@@ -34,19 +26,6 @@ function assertScriptIsSafe(code: string) {
   if (blockedPattern) {
     throw new Error("Script contains blocked runtime APIs. Use HTTP or MCP integrations for privileged operations.")
   }
-}
-
-function runPromiseWithTimeout<T>(promise: Promise<T>, timeoutMs: number) {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`Script integration timed out after ${timeoutMs}ms.`)), timeoutMs)
-    promise.then((value) => {
-      clearTimeout(timer)
-      resolve(value)
-    }).catch((error) => {
-      clearTimeout(timer)
-      reject(error)
-    })
-  })
 }
 
 export async function executeSandboxedScriptIntegration(payload: IntegrationExecutePayload) {
@@ -77,44 +56,61 @@ export async function executeSandboxedScriptIntegration(payload: IntegrationExec
 
   const timeoutMs = Math.max(1000, Math.min(config.timeoutMs ?? 30_000, 60_000))
   const source = normalizeScriptSource(selectedScript.code || "")
+  if (Buffer.byteLength(source, "utf8") > MAX_SCRIPT_SOURCE_BYTES) {
+    throw new Error("Script source exceeds the 256 KB safety limit.")
+  }
+  if (Buffer.byteLength(payload.inputJson || "{}", "utf8") > MAX_SCRIPT_INPUT_BYTES) {
+    throw new Error("Script input exceeds the 512 KB safety limit.")
+  }
   assertScriptIsSafe(source)
 
-  const logs: string[] = []
-  const sandbox = {
-    AbortController,
-    URL,
-    URLSearchParams,
-    TextDecoder,
-    TextEncoder,
-    console: {
-      log: (...args: unknown[]) => logs.push(args.map((value) => String(value)).join(" ")),
-      warn: (...args: unknown[]) => logs.push(args.map((value) => String(value)).join(" ")),
-      error: (...args: unknown[]) => logs.push(args.map((value) => String(value)).join(" ")),
-    },
-    fetch,
-    input: parseJson(payload.inputJson, {} as Record<string, unknown>),
-    structuredClone,
-  }
-
-  const context = createContext(sandbox)
-  const handlerName = JSON.stringify(selectedScript.handler || "main")
-  const script = new Script(`
-    "use strict";
-    ${source}
-    (async () => {
-      const handlerFn = globalThis[${handlerName}];
-      if (typeof handlerFn !== "function") {
-        return { ok: false, error: "Handler not found" };
-      }
-      return await handlerFn(input);
-    })();
-  `)
-
-  const output = await runPromiseWithTimeout(Promise.resolve(script.runInContext(context, { timeout: timeoutMs })), timeoutMs)
-  const body = JSON.stringify({ output, logs }, null, 2)
+  const body = await executeInWorker({ source, handler: selectedScript.handler || "main", inputJson: payload.inputJson, timeoutMs })
   return {
     ok: true,
     status: 200,
     body,
   }
+}
+
+function executeInWorker(request: { source: string; handler: string; inputJson?: string; timeoutMs: number }) {
+  return new Promise<string>((resolve, reject) => {
+    const workerPath = fileURLToPath(new URL("./script-worker.mjs", import.meta.url))
+    const child = spawn(process.execPath, [workerPath], {
+      env: { ELECTRON_RUN_AS_NODE: "1", PATH: process.env.PATH || "", NODE_ENV: "production" },
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+      detached: false,
+    })
+    let output = ""
+    let settled = false
+    const finish = (error?: Error) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      child.kill()
+      if (error) reject(error)
+    }
+    const timer = setTimeout(() => finish(new Error(`Script integration timed out after ${request.timeoutMs}ms.`)), request.timeoutMs)
+    child.stdout.setEncoding("utf8")
+    child.stdout.on("data", (chunk: string) => {
+      output += chunk
+      if (Buffer.byteLength(output, "utf8") > MAX_SCRIPT_OUTPUT_BYTES * 2) finish(new Error("Script worker output exceeded the safety limit."))
+    })
+    child.stderr.on("data", () => undefined)
+    child.on("error", (error) => finish(error))
+    child.on("close", (code) => {
+      if (settled) return
+      const line = output.trim().split("\n").filter(Boolean).at(-1)
+      if (!line) return finish(new Error(`Script worker exited with code ${code ?? "unknown"}.`))
+      try {
+        const result = JSON.parse(line) as { ok?: boolean; body?: string; error?: string }
+        if (!result.ok || typeof result.body !== "string") return finish(new Error(result.error || "Script worker failed."))
+        finish()
+        resolve(result.body)
+      } catch (error) {
+        finish(error instanceof Error ? error : new Error(String(error)))
+      }
+    })
+    child.stdin.end(`${JSON.stringify(request)}\n`)
+  })
 }

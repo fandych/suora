@@ -6,6 +6,7 @@ import { getPreferenceSettingsSnapshot } from "@electron/infrastructure/preferen
 import { getProxyAgent } from "@electron/infrastructure/proxy-service"
 import { assertSafeHttpUrl } from "@electron/infrastructure/url-security"
 import { executeSandboxedScriptIntegration } from "@electron/integrations/script-runner"
+import { parseWorkspaceCommand } from "@electron/infrastructure/tool-guardrails"
 import type { IntegrationExecutePayload } from "@electron/types"
 import { applyIntegrationAuth, buildIntegrationEndpointUrl, buildMultipartIntegrationBody, parseIntegrationJson, type HttpIntegrationConfig, type UploadedIntegrationFile } from "@electron/integrations/integration-types"
 
@@ -187,13 +188,14 @@ async function executeMcpIntegration(payload: IntegrationExecutePayload) {
   }
 
   if (config.launchCommand) {
+    const parsedCommand = parseWorkspaceCommand(config.launchCommand)
     return new Promise<{ ok: boolean; status: number; body: string }>((resolve) => {
-      const child = spawn(config.launchCommand || "", { shell: true })
+      const child = spawn(parsedCommand.executable, parsedCommand.args, { shell: false, windowsHide: true })
       const chunks: Buffer[] = []
       const errors: Buffer[] = []
       const timer = setTimeout(() => {
         child.kill()
-        resolve({ ok: true, status: 200, body: `Spawned command: ${config.launchCommand}\n${Buffer.concat(chunks).toString("utf8")}\n${Buffer.concat(errors).toString("utf8")}` })
+        resolve({ ok: true, status: 200, body: `Spawned command: ${parsedCommand.executable} ${parsedCommand.args.join(" ")}\n${Buffer.concat(chunks).toString("utf8")}\n${Buffer.concat(errors).toString("utf8")}` })
       }, 2000)
 
       child.stdout.on("data", (chunk) => chunks.push(Buffer.from(chunk)))

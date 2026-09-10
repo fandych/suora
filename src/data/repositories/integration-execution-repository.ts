@@ -18,13 +18,14 @@ export type IntegrationExecutionResult = {
   }
 }
 
-export async function executeIntegration(config: IntegrationConfig, inputJson = "{}") {
+export async function executeIntegration(config: IntegrationConfig, inputJson = "{}", integrationId?: string) {
   const bridge = window.electron
   if (!bridge?.invoke) {
     throw new Error("Electron IPC bridge is not available.")
   }
 
   return bridge.invoke("integration:execute", {
+    ...(integrationId ? { integrationId } : {}),
     kind: config.kind,
     config,
     inputJson,

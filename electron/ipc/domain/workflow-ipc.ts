@@ -4,18 +4,20 @@ import { ipcMain } from "electron"
 import { applyMigrations, openDatabase } from "@electron/infrastructure/db-core"
 import { ensureWorkspace } from "@electron/infrastructure/workspace-service"
 import { createDefaultWorkflowDefinition, validateWorkflowDefinitionJson } from "@electron/services/workflow-definition"
+import { assertWorkflowVersion } from "@electron/ipc/domain/workflow-ipc-policy"
+import { entityIdSchema, parseIpcInput, workflowInvocationSchema, workflowSaveSchema } from "@electron/ipc/system/ipc-input-schemas"
 
 export function registerWorkflowIpc() {
   ipcMain.handle("workflows:list", async () => {
     await ensureWorkspace(); const database = openDatabase(); applyMigrations(database)
     return database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM workflows ORDER BY updated_at DESC`).all()
   })
-  ipcMain.handle("workflows:get", async (_event, workflowId: string) => {
-    await ensureWorkspace(); const database = openDatabase(); applyMigrations(database)
+  ipcMain.handle("workflows:get", async (_event, workflowId: unknown) => {
+    const id = parseIpcInput(entityIdSchema, workflowId); await ensureWorkspace(); const database = openDatabase(); applyMigrations(database)
     return {
-      workflow: database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM workflows WHERE id = ?`).get(workflowId) ?? null,
-      versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, definition_json as definitionJson FROM workflow_versions WHERE workflow_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(workflowId),
-      invocations: database.prepare(`SELECT id, version_id as versionId, status, trigger, input_json as input, output_json as output, trace_json as traceJson, created_at as createdAt FROM workflow_invocations WHERE workflow_id = ? ORDER BY created_at DESC`).all(workflowId),
+      workflow: database.prepare(`SELECT id, title, summary, updated_at as updatedAt FROM workflows WHERE id = ?`).get(id) ?? null,
+      versions: database.prepare(`SELECT id, major, minor, is_release as isRelease, created_at as createdAt, definition_json as definitionJson FROM workflow_versions WHERE workflow_id = ? ORDER BY major DESC, minor DESC, created_at DESC`).all(id),
+      invocations: database.prepare(`SELECT id, version_id as versionId, status, trigger, input_json as input, output_json as output, trace_json as traceJson, created_at as createdAt FROM workflow_invocations WHERE workflow_id = ? ORDER BY created_at DESC`).all(id),
     }
   })
   ipcMain.handle("workflows:create", async () => {
@@ -29,7 +31,8 @@ export function registerWorkflowIpc() {
       invocations: [],
     }
   })
-  ipcMain.handle("workflows:save", async (_event, payload: { id: string; title: string; summary: string; definitionJson: string; selectedVersionId?: string; publish?: boolean }) => {
+  ipcMain.handle("workflows:save", async (_event, value: unknown) => {
+    const payload = parseIpcInput(workflowSaveSchema, value)
     await ensureWorkspace(); validateWorkflowDefinitionJson(payload.definitionJson)
     const database = openDatabase(); applyMigrations(database); const now = Date.now()
     const latest = database.prepare(`SELECT major, minor, is_release as isRelease FROM workflow_versions WHERE workflow_id = ? ORDER BY major DESC, minor DESC, created_at DESC LIMIT 1`).get(payload.id) as { major: number; minor: number; isRelease: number } | undefined
@@ -46,8 +49,10 @@ export function registerWorkflowIpc() {
     await ensureWorkspace(); const database = openDatabase(); applyMigrations(database); database.exec("BEGIN")
     try { database.prepare(`DELETE FROM workflow_invocations WHERE workflow_id = ?`).run(workflowId); database.prepare(`DELETE FROM workflow_versions WHERE workflow_id = ?`).run(workflowId); const result = database.prepare(`DELETE FROM workflows WHERE id = ?`).run(workflowId); database.exec("COMMIT"); return Number(result.changes ?? 0) > 0 } catch (error) { database.exec("ROLLBACK"); throw error }
   })
-  ipcMain.handle("workflows:recordInvocation", async (_event, payload: { workflowId: string; versionId: string; status: string; trigger: string; input: string; output: string; traceJson: string }) => {
+  ipcMain.handle("workflows:recordInvocation", async (_event, value: unknown) => {
+    const payload = parseIpcInput(workflowInvocationSchema, value)
     await ensureWorkspace(); const database = openDatabase(); applyMigrations(database)
+    assertWorkflowVersion(database, payload.workflowId, payload.versionId)
     database.prepare(`INSERT INTO workflow_invocations (id, workflow_id, version_id, status, trigger, input_json, output_json, trace_json, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(crypto.randomUUID(), payload.workflowId, payload.versionId, payload.status, payload.trigger, payload.input, payload.output, payload.traceJson, Date.now())
     return database.prepare(`SELECT id, version_id as versionId, status, trigger, input_json as input, output_json as output, trace_json as traceJson, created_at as createdAt FROM workflow_invocations WHERE workflow_id = ? ORDER BY created_at DESC`).all(payload.workflowId)
   })

@@ -4,7 +4,10 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite"
 import { runtimeMigrations } from "@/data/db/migrations"
 import { appState } from "@electron/infrastructure/app-state"
 import { getDatabasePath } from "@electron/infrastructure/workspace-paths"
+import { validateQueryPayload } from "@electron/infrastructure/db-query-policy"
 import type { QueryPayload, SqliteDatabase } from "@electron/types"
+
+export { validateQueryPayload } from "@electron/infrastructure/db-query-policy"
 
 export function openDatabase() {
   if (appState.sqlite) {
@@ -108,6 +111,7 @@ function normalizeSqlParams(params: unknown[]): SQLInputValue[] {
 }
 
 export function executeQuery(payload: QueryPayload) {
+  validateQueryPayload(payload)
   const database = openDatabase()
   applyMigrations(database)
 

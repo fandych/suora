@@ -7,8 +7,8 @@ import { buildWeChatSignature } from "@electron/channels/channel-runtime-message
 export function verifyWebhookSecret(req: Request, secret?: string) {
   if (!secret) return true
   const header = req.headers["x-webhook-secret"]
-  const provided = Array.isArray(header) ? header[0] : header || req.query.secret
-  return String(provided || "") === secret
+  const provided = Array.isArray(header) ? header[0] : header
+  return timingSafeCompare(String(secret), String(provided || ""))
 }
 
 export function verifyFeishuSignature(timestamp: string, nonce: string, encryptKey: string, body: unknown, receivedSignature: string) {
@@ -27,7 +27,7 @@ export function verifyWeChatSignature(token: string, timestamp: string, nonce: s
   return timingSafeCompare(buildWeChatSignature(token, timestamp, nonce, encrypted), receivedSignature)
 }
 
-function timingSafeCompare(left: string, right: string) {
+export function timingSafeCompare(left: string, right: string) {
   const leftBuffer = Buffer.from(left); const rightBuffer = Buffer.from(right)
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer)
 }

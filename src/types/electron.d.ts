@@ -10,6 +10,10 @@ declare global {
       off: (channel: string, listener: (...args: unknown[]) => void) => void
     }
     project?: {
+      catalog: {
+        list: (route: string) => Promise<unknown>
+        get: (route: string, itemId: string) => Promise<unknown>
+      }
       system: {
         info: () => Promise<unknown>
         diagnostics: () => Promise<unknown>
@@ -38,8 +42,10 @@ declare global {
         save: (payload: unknown) => Promise<unknown>
         delete: (documentId: string) => Promise<unknown>
       }
-      db: {
-        execute: (payload: unknown) => Promise<unknown>
+      database: {
+        ping: () => Promise<unknown>
+        ensureSeeded: (payload: unknown) => Promise<unknown>
+        syncChannelCatalog: (payload: unknown) => Promise<unknown>
       }
       models: {
         list: () => Promise<unknown>
@@ -95,7 +101,7 @@ declare global {
         stopRuntime: () => Promise<unknown>
         getRuntimeStatus: () => Promise<unknown>
         registerRuntime: () => Promise<unknown>
-        getWebhookUrl: (channel: unknown) => Promise<unknown>
+        getWebhookUrl: (payload: { id: string }) => Promise<unknown>
         sendMessage: (payload: unknown) => Promise<unknown>
         sendMessageQueued: (payload: unknown) => Promise<unknown>
         getAccessToken: (channelId: string) => Promise<unknown>

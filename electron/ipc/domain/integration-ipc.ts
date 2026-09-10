@@ -5,13 +5,30 @@ import { ensureWorkspace } from "@electron/infrastructure/workspace-service"
 import { executeIntegration } from "@electron/integrations/integration-executor"
 import { fetchApiDocumentation } from "@electron/ipc/http/http-request"
 import type { IntegrationExecutePayload } from "@electron/types"
+import { z } from "zod"
+import { assertIntegrationEnabled } from "@electron/ipc/domain/integration-ipc-policy"
 
 const selectIntegration = `SELECT id, title, kind, endpoint, enabled, updated_at as updatedAt FROM integrations`
 const selectVersions = `SELECT id, major, minor, is_release as isRelease, created_at as createdAt, config_json as configJson FROM integration_versions`
 
+const integrationExecuteSchema = z.object({
+  integrationId: z.string().trim().min(1).max(256).optional(),
+  kind: z.enum(["http", "scripts", "mcp"]),
+  config: z.record(z.string(), z.unknown()),
+  inputJson: z.string().max(2 * 1024 * 1024).optional(),
+})
+
 export function registerIntegrationIpc() {
   ipcMain.handle("integrations:fetchApiDoc", async (_event, url: string) => { await ensureWorkspace(); return fetchApiDocumentation(url) })
-  ipcMain.handle("integration:execute", async (_event, payload: IntegrationExecutePayload) => executeIntegration(payload))
+  ipcMain.handle("integration:execute", async (_event, payload: IntegrationExecutePayload) => {
+    const parsed = integrationExecuteSchema.safeParse(payload)
+    if (!parsed.success) throw new Error("Invalid integration execution payload.")
+    const database = await getDatabase()
+    if (parsed.data.integrationId) {
+      assertIntegrationEnabled(database, parsed.data.integrationId)
+    }
+    return executeIntegration(parsed.data)
+  })
   ipcMain.handle("integrations:list", async () => { const database = await getDatabase(); return database.prepare(`${selectIntegration} ORDER BY updated_at DESC`).all() })
   ipcMain.handle("integrations:get", async (_event, id: string) => getIntegration(id))
   ipcMain.handle("integrations:create", async (_event, payload?: Partial<{ kind: string; title: string; endpoint: string; configJson: string }>) => { const database = await getDatabase(); const id = crypto.randomUUID(); const now = Date.now(); database.prepare(`INSERT INTO integrations (id, title, kind, endpoint, enabled, updated_at) VALUES (?, ?, ?, ?, 1, ?)`).run(id, payload?.title || `New ${payload?.kind || "http"} integration`, payload?.kind || "http", payload?.endpoint || "", now); database.prepare(`INSERT INTO integration_versions (id, integration_id, major, minor, is_release, config_json, created_at) VALUES (?, ?, 1, 0, 0, ?, ?)`).run(crypto.randomUUID(), id, payload?.configJson || "{}", now); return getIntegration(id) })

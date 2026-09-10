@@ -182,7 +182,7 @@ export async function runIntegrationAndPersist(integrationId: string, selectedVe
       ? runtimeConfig.scripts.some((script) => script.id === runtimeConfig.selectedScriptId)
       : true
   const result = targetExists
-    ? await executeIntegration(runtimeConfig, inputJson)
+    ? await executeIntegration(runtimeConfig, inputJson, integrationId)
     : { ok: false, status: 400, body: "The selected entry is not available in this saved version. Save the draft and try again." }
   await projectIpc.integrations.recordExecution({ id: integrationId, versionId: snapshot.selectedVersion.id, status: result.ok ? "success" : "error", input: inputJson, output: result.body })
   const detail = await getIntegrationDetail(integrationId, selectedVersionId)

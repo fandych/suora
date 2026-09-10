@@ -101,7 +101,7 @@ export default defineConfig([
   集成能力包括：
 
   - **HTTP**：支持常用方法、查询/头/body 参数、Bearer/Basic/API Key/自定义认证，以及 JSON、URL encoded 和 multipart 表单。
-  - **MCP**：支持 HTTP endpoint 探测或启动 `launchCommand`；目前不是完整的 MCP transport 与工具发现客户端。
+  - **MCP**：支持 HTTP endpoint 探测或启动 `launchCommand`；启动命令会复用工作区命令白名单并以 `shell: false` 执行，目前不是完整的 MCP transport 与工具发现客户端。
   - **Scripts**：在 Node `vm` 沙箱运行。`require`、`process`、文件系统、动态 `import`、`eval` 与 `new Function` 均不可用，最长执行 60 秒。
 
   HTTP 请求响应大小、上传文件和超时均受应用限制。请只连接可信服务，并避免将敏感信息写入脚本或日志。
@@ -141,12 +141,13 @@ export default defineConfig([
   ```
 
   - `src/`：React 渲染进程、页面、领域模型、仓储和服务层。
+  - `src/components/ui/`：上游 shadcn UI 源文件，业务优化不直接修改这些文件。
   - `electron/preload.ts`：在 context isolation 下暴露受控的 `window.suora` API。
   - `electron/ipc/`：按业务域注册 Electron IPC handlers。
   - `electron/database/`：SQLite 初始化、迁移与数据库核心。
   - `electron/others/`：AI 请求、渠道、集成、代理、更新与系统工具等桌面服务。
 
-  本地数据库默认位于 Electron `userData/workspace/suora.sqlite`。当前未提供应用级密钥加密或系统钥匙串集成，因此请保护设备用户目录和数据库备份。
+  本地数据库默认位于 Electron `userData/workspace/suora.sqlite`。渲染进程通过领域化 `project.catalog`、`project.database.ping`、`project.database.ensureSeeded` 和 `project.database.syncChannelCatalog` 接口访问数据库；通用 SQL database bridge 已移除。模型 API Key、全局 SMTP 密码、邮件渠道密码、平台 App Secret/Token、Bot Token、签名密钥和 Webhook Secret 使用 Electron `safeStorage` 保护；渠道通过 Preload 返回给渲染进程时只提供空值和 `*Configured` 状态，保存时空白敏感字段会保留主进程已有凭据。旧版本明文值可兼容读取，但会在下一次保存时转为加密值。若操作系统安全存储不可用，请保护设备用户目录和数据库备份。
 
   ## 开发命令
 
@@ -167,6 +168,9 @@ export default defineConfig([
   | `npm run test:e2e:workflows` | 执行工作流冒烟场景。 |
   | `npm run test:e2e:full-chain` | 执行完整链路冒烟场景。 |
 
+  CI 会自动执行 lint、类型检查、单元测试、覆盖率测试、构建和 `git diff --check`。业务优化不修改 `src/components/ui/` 中的上游 shadcn 源文件。
+  测试还包含 IPC 注册回归、领域 handler 校验和数据库 migration 合同测试；这些测试不依赖图形显示环境，真实 Electron GUI E2E 可在具备 Electron/桌面环境的发布流水线中继续扩展。
+
   工作流冒烟脚本要求已启动一个开放 `127.0.0.1:9222` Chrome DevTools Protocol 的 Electron 实例，并可能写入本地数据或调用外部 API；请勿将其作为无条件的 CI 测试步骤。
 
   ## 构建与发布
@@ -184,6 +188,18 @@ export default defineConfig([
   ## 安全说明
 
   - 将 API Key、渠道凭据和 SMTP 密码视为敏感数据；不要提交数据库、日志或包含密钥的配置到版本库。
+  - 渲染进程不会通过渠道访问接口返回原始 Bot Token；接口仅返回是否已配置凭据。
+  - 渠道消息发送、调试消息和 Personal WeChat 登录 IPC 会在主进程使用 Zod 校验标识符、消息大小、会话键、验证码和超时范围。
+  - 渠道健康检查、流状态、凭据状态和二维码预览会校验渠道 ID；二维码预览只允许 HTTP/HTTPS URL，并限制等待时间。
+  - Webhook URL 查询 IPC 只接受渠道 ID，主进程从本地配置读取完整渠道信息，不接收渲染层提交的完整渠道对象。
+  - 渠道发送、排队和调试操作要求渠道存在且已启用；健康检查和流状态查询要求渠道存在。
+  - 已保存集成执行时可携带 `integrationId`，主进程会要求集成存在且已启用；工作流使用的临时 HTTP 配置不绑定持久化集成 ID，继续按工作流权限执行。
+  - Integrations 页面运行已保存版本时会传递对应集成 ID；临时 HTTP、脚本和工具配置不会伪造持久化集成身份。
+  - 工作流调用记录会校验工作流和版本的归属关系；文件工具拒绝符号链接并校验输入；脚本集成限制源码、输入、日志和输出大小；浏览器工具 IPC 使用运行时 schema 校验。
+  - 脚本集成在独立 Node worker 进程中执行，worker 仅通过一次性 JSON 请求/响应通信；工作流表达式和结果转换已从执行引擎拆分为独立业务模块。
+  - DingTalk Stream 的消息解析已拆分为独立模块，并由单元测试覆盖文本、群聊、session webhook 和 malformed payload。
+  - 通用 Webhook Secret 只接受请求头，不再从 query string 读取，并使用 timing-safe 比较。
+  - Chat、Mail、Models 和 Documents 的主进程 IPC 会使用运行时 schema 校验 ID、邮箱、JSON 和 payload 大小。
   - 为 Agent 最小化授予文档、工作流、集成、命令与文件系统访问权限。
   - 仅信任已审查的工作流、脚本和 HTTP/MCP 服务。
   - 启用 Webhook 前，请验证来源签名、网络边界和反向代理策略。

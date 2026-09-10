@@ -1,18 +1,15 @@
 import type { Request, Response } from "express"
 
 import type { ChannelConfigRecord } from "@/data/domain/models"
-import {
-  getWeChatVerificationToken,
-  parseWeChatWebhookPayload,
-  weChatWebhookToChannelMessage,
-} from "@electron/channels/channel-runtime-helpers"
-import { verifyDingTalkSignature, verifyFeishuSignature, verifyWebhookSecret, verifyWeChatSignature } from "@electron/channels/channel-webhook-security"
+import { verifyWebhookSecret } from "@electron/channels/channel-webhook-security"
 import { executeEmailActions, formatEmailContent, matchesEmailFilters, type ParsedEmail } from "@electron/channels/channel-runtime-email"
-import type { RuntimeChannelMessage } from "@electron/channels/channel-runtime-types"
 import { hasGenericMessageContent, readGenericWebhookMessage, requireWebhookSecret } from "@electron/channels/channel-webhook-common"
-import { readNested, resolveTimestamp } from "@electron/channels/channel-webhook-normalizers"
+import { resolveTimestamp } from "@electron/channels/channel-webhook-normalizers"
+import { dispatchGetWebhook, respondUnsupportedMethod, respondUnsupportedPlatform, type EmitChannelMessage } from "@electron/channels/channel-webhook-dispatch"
+import { handleDingTalkWebhook, handleFeishuWebhook, handleWeChatWebhook } from "@electron/channels/channel-webhook-platforms"
+import { handleTelegramWebhook, handleTeamsWebhook } from "@electron/channels/channel-webhook-messaging-platforms"
 
-type EmitMessage = (channel: ChannelConfigRecord, message: RuntimeChannelMessage, rawEvent: unknown) => Promise<void>
+type EmitMessage = EmitChannelMessage
 
 export async function handleGetWebhookRequest(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {
   switch (channel.platform) {
@@ -22,7 +19,8 @@ export async function handleGetWebhookRequest(req: Request, res: Response, chann
       await handleWeChatWebhook(req, res, channel, emitMessage)
       return
     default:
-      res.status(405).json({ error: "GET not supported for this platform" })
+      if (dispatchGetWebhook(channel.platform)) return
+      respondUnsupportedMethod(res, channel.platform)
   }
 }
 
@@ -55,11 +53,11 @@ export async function handlePostWebhookRequest(req: Request, res: Response, chan
       await handleCustomWebhook(req, res, channel, emitMessage)
       return
     default:
-      res.status(400).json({ error: `Unsupported platform: ${channel.platform}` })
+      respondUnsupportedPlatform(res, channel.platform)
   }
 }
 
-async function handleFeishuWebhook(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {
+/* async function handleFeishuWebhook(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {
   const body = req.body as Record<string, unknown>
   if (body.type === "url_verification") {
     res.json({ challenge: body.challenge })
@@ -167,7 +165,7 @@ async function handleWeChatWebhook(req: Request, res: Response, channel: Channel
 
   await emitMessage(channel, weChatWebhookToChannelMessage(parsedBody, channel.id, channel.platform), parsedBody)
   res.type("text/plain").send("success")
-}
+} */
 
 async function handleWeChatPersonalWebhook(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {
   if (!requireWebhookSecret(req, channel.webhookSecret)) {
@@ -198,7 +196,7 @@ async function handleWeChatPersonalWebhook(req: Request, res: Response, channel:
   res.json({ ok: true })
 }
 
-async function handleTelegramWebhook(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {
+/* legacy platform handlers moved to channel-webhook-messaging-platforms.ts
   if (channel.webhookSecret) {
     const secretToken = typeof req.headers["x-telegram-bot-api-secret-token"] === "string" ? req.headers["x-telegram-bot-api-secret-token"] : ""
     if (!secretToken || !timingSafeCompare(secretToken, channel.webhookSecret)) {
@@ -278,7 +276,7 @@ async function handleTeamsWebhook(req: Request, res: Response, channel: ChannelC
   }, body)
 
   res.status(200).json({ ok: true })
-}
+*/
 
 async function handleEmailWebhook(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {
   if (!requireWebhookSecret(req, channel.webhookSecret)) {

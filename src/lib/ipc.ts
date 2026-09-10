@@ -10,6 +10,7 @@ import { schedulerIpc } from "@/lib/ipc/domains/scheduler-ipc"
 import { skillIpc } from "@/lib/ipc/domains/skill-ipc"
 import { toolIpc } from "@/lib/ipc/domains/tool-ipc"
 import { workflowIpc } from "@/lib/ipc/domains/workflow-ipc"
+import { catalogIpc } from "@/lib/ipc/domains/catalog-ipc"
 
 export { hasProjectBridge } from "@/lib/ipc/bridge"
 
@@ -29,6 +30,7 @@ export const projectIpc = {
   updater: updaterIpc,
   mail: mailIpc,
   tools: toolIpc,
+  catalog: catalogIpc,
 }
 
 export type ProjectIpc = typeof projectIpc

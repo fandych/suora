@@ -7,7 +7,7 @@ import WebSocket from "ws"
 
 import type { ChannelConfigRecord } from "@/data/domain/models"
 import { httpRequest } from "@electron/channels/channel-runtime-http"
-import type { RuntimeChannelMessage } from "@electron/channels/channel-runtime-types"
+import { parseDingTalkStreamMessage } from "@electron/channels/dingtalk-stream-message"
 
 type StreamConnectionInfo = {
   endpoint: string
@@ -30,20 +30,6 @@ type StreamEvent = {
   type: string
   headers: StreamEventHeader
   data: string
-}
-
-type DingTalkBotMessage = {
-  msgId?: string
-  msgtype?: string
-  text?: { content?: string }
-  senderStaffId?: string
-  senderId?: string
-  senderNick?: string
-  conversationId?: string
-  conversationType?: string
-  createAt?: number
-  sessionWebhook?: string
-  sessionWebhookExpiredTime?: number
 }
 
 export type StreamMessageHandler = (channel: ChannelConfigRecord, message: RuntimeChannelMessage, sessionWebhook?: string) => Promise<void>
@@ -235,26 +221,12 @@ export class DingTalkStreamClient {
   }
 
   private async handleBotMessage(event: StreamEvent) {
-    let body: DingTalkBotMessage
-    try {
-      body = typeof event.data === "string" ? JSON.parse(event.data) as DingTalkBotMessage : event.data as unknown as DingTalkBotMessage
-    } catch {
+    const parsed = parseDingTalkStreamMessage(event, this.channel)
+    if (!parsed) {
       this.sendAck(event.headers?.eventId || "", { message: "ok" })
       return
     }
-
-    const message: RuntimeChannelMessage = {
-      id: body.msgId || event.headers?.eventId || `stream-${Date.now()}`,
-      channelId: this.channel.id,
-      platform: "dingtalk",
-      senderId: body.senderStaffId || body.senderId || "",
-      senderName: body.senderNick || body.senderStaffId || body.senderId || "",
-      content: body.text?.content?.trim() || "",
-      timestamp: body.createAt || Date.now(),
-      messageType: "text",
-      chatId: body.conversationId,
-      chatType: body.conversationType === "2" ? "group" : "private",
-    }
+    const { message, sessionWebhook } = parsed
 
     const eventId = event.headers?.eventId || ""
     if (eventId) {
@@ -262,7 +234,7 @@ export class DingTalkStreamClient {
     }
 
     if (message.content && this.messageHandler) {
-      await this.messageHandler(this.channel, message, body.sessionWebhook)
+      await this.messageHandler(this.channel, message, sessionWebhook)
     }
 
     this.sendAck(eventId, { message: "ok" })

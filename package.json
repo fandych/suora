@@ -22,6 +22,7 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
+    "ci": "npm run type-check && npm run lint && npm run test:run && npm run test:coverage && npm run build",
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:workflows": "node scripts/smoke-test-32-scenarios.mjs && node scripts/smoke-test-industry-scenarios.mjs",

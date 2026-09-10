@@ -3,10 +3,22 @@ import { resolve } from "path"
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig, externalizeDepsPlugin } from "electron-vite"
+import { cpSync, existsSync } from "node:fs"
 
 const alias = {
   "@": resolve(__dirname, "./src"),
   "@electron": resolve(__dirname, "./electron"),
+}
+
+function copyScriptWorker() {
+  return {
+    name: "copy-script-worker",
+    closeBundle() {
+      const source = resolve(__dirname, "electron/integrations/script-worker.mjs")
+      const target = resolve(__dirname, "out/main/script-worker.mjs")
+      if (existsSync(source)) cpSync(source, target)
+    },
+  }
 }
 
 function handleRollupWarning(
@@ -22,7 +34,7 @@ function handleRollupWarning(
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin()],
+    plugins: [externalizeDepsPlugin(), copyScriptWorker()],
     resolve: {
       alias,
     },

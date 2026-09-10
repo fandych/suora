@@ -1,5 +1,6 @@
 import type { ChannelConfigRecord, ChannelDetail, ChannelRuntimeState } from "@/data/domain/models"
 import { applyMigrations, openDatabase } from "@electron/infrastructure/db-core"
+import { preserveConfiguredChannelCredentials, protectChannelCredentials, revealChannelCredentials } from "@electron/channels/channel-credential-serialization"
 
 type RawChannelRow = {
   id: string
@@ -54,7 +55,7 @@ function createDefaultConfig(row: RawChannelRow): ChannelConfigRecord {
     bindingState: "unconfigured",
     connectionMode: (row.connectionMode || "webhook") as ChannelConfigRecord["connectionMode"],
     webhookPath: row.webhookPath || `/channels/${row.id}`,
-    webhookSecret: row.webhookSecret || "",
+    webhookSecret: row.webhookSecret ? revealChannelCredentials({ webhookSecret: row.webhookSecret }).webhookSecret as string : "",
     autoReply: row.autoReply == null ? true : Boolean(row.autoReply),
     replyAgentId: row.replyAgentId || "",
     createdAt: row.createdAt ?? row.updatedAt,
@@ -70,7 +71,7 @@ function createDefaultConfig(row: RawChannelRow): ChannelConfigRecord {
 
 export function parseChannelDetailRow(row: RawChannelRow): ChannelDetail {
   const baseConfig = createDefaultConfig(row)
-  const parsedConfig = parseJson<Partial<ChannelConfigRecord>>(row.configJson, {})
+  const parsedConfig = revealChannelCredentials(parseJson<Partial<ChannelConfigRecord>>(row.configJson, {})) as Partial<ChannelConfigRecord>
   const parsedRuntime = parseJson<Partial<ChannelRuntimeState>>(row.runtimeJson, {})
   const baseRuntime = createDefaultRuntime()
 
@@ -85,7 +86,7 @@ export function parseChannelDetailRow(row: RawChannelRow): ChannelDetail {
       status: (row.status || parsedConfig.status || "inactive") as ChannelConfigRecord["status"],
       connectionMode: (row.connectionMode || parsedConfig.connectionMode || "webhook") as ChannelConfigRecord["connectionMode"],
       webhookPath: row.webhookPath || parsedConfig.webhookPath || `/channels/${row.id}`,
-      webhookSecret: row.webhookSecret || parsedConfig.webhookSecret || "",
+      webhookSecret: row.webhookSecret ? revealChannelCredentials({ webhookSecret: row.webhookSecret }).webhookSecret as string : parsedConfig.webhookSecret || "",
       autoReply: row.autoReply == null ? (parsedConfig.autoReply ?? true) : Boolean(row.autoReply),
       replyAgentId: row.replyAgentId || parsedConfig.replyAgentId || "",
       createdAt: row.createdAt ?? parsedConfig.createdAt ?? row.updatedAt,
@@ -136,23 +137,27 @@ export function saveChannelDetail(detail: ChannelDetail) {
   const database = openDatabase()
   applyMigrations(database)
   const now = Date.now()
+  const current = getChannelDetail(detail.channel.id)
+  const channel = current
+    ? preserveConfiguredChannelCredentials(detail.channel as unknown as Record<string, unknown>, current.channel as unknown as Record<string, unknown>) as unknown as ChannelConfigRecord
+    : detail.channel
   database.prepare(`UPDATE channels SET title = ?, platform = ?, enabled = ?, status = ?, connection_mode = ?, webhook_path = ?, webhook_secret = ?, auto_reply = ?, reply_agent_id = ?, created_at = ?, last_message_at = ?, message_count = ?, config_json = ?, runtime_json = ?, updated_at = ? WHERE id = ?`).run(
-    detail.channel.title,
-    detail.channel.platform,
-    detail.channel.enabled ? 1 : 0,
-    detail.channel.status,
-    detail.channel.connectionMode,
-    detail.channel.webhookPath,
-    detail.channel.webhookSecret,
-    detail.channel.autoReply ? 1 : 0,
-    detail.channel.replyAgentId,
-    detail.channel.createdAt,
-    detail.channel.lastMessageAt ?? null,
-    detail.channel.messageCount,
-    JSON.stringify({ ...detail.channel, updatedAt: now }),
+    channel.title,
+    channel.platform,
+    channel.enabled ? 1 : 0,
+    channel.status,
+    channel.connectionMode,
+    channel.webhookPath,
+    protectChannelCredentials({ webhookSecret: channel.webhookSecret }).webhookSecret,
+    channel.autoReply ? 1 : 0,
+    channel.replyAgentId,
+    channel.createdAt,
+    channel.lastMessageAt ?? null,
+    channel.messageCount,
+    JSON.stringify({ ...protectChannelCredentials(channel as unknown as Record<string, unknown>), updatedAt: now }),
     JSON.stringify(detail.runtime),
     now,
-    detail.channel.id,
+    channel.id,
   )
 
   return getChannelDetail(detail.channel.id)

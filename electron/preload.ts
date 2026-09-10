@@ -1,12 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron"
 
 import type { SendMailPayload } from "@electron/types"
+import { redactChannelCredentials, redactChannelDetail } from "@electron/channels/channel-credential-serialization"
 
 const allowedInvokeChannels = new Set([
   "ai:fetch:abort",
   "ai:fetch:start",
   "channel:wechatPersonalQrPreview",
-  "db:execute",
   "integration:execute",
 ])
 
@@ -41,6 +41,10 @@ contextBridge.exposeInMainWorld("electron", {
 })
 
 contextBridge.exposeInMainWorld("project", {
+  catalog: {
+    list: (route: string) => ipcRenderer.invoke("catalog:list", route),
+    get: (route: string, itemId: string) => ipcRenderer.invoke("catalog:get", { route, itemId }),
+  },
   system: {
     info: () => ipcRenderer.invoke("system:info"),
     diagnostics: () => ipcRenderer.invoke("system:diagnostics"),
@@ -69,8 +73,10 @@ contextBridge.exposeInMainWorld("project", {
     save: (payload: unknown) => ipcRenderer.invoke("documents:save", payload),
     delete: (documentId: string) => ipcRenderer.invoke("documents:delete", documentId),
   },
-  db: {
-    execute: (payload: unknown) => ipcRenderer.invoke("db:execute", payload),
+  database: {
+    ping: () => ipcRenderer.invoke("database:ping"),
+    ensureSeeded: (payload: unknown) => ipcRenderer.invoke("database:ensureSeeded", payload),
+    syncChannelCatalog: (payload: unknown) => ipcRenderer.invoke("database:syncChannelCatalog", payload),
   },
   models: {
     list: () => ipcRenderer.invoke("models:list"),
@@ -117,8 +123,14 @@ contextBridge.exposeInMainWorld("project", {
     recordInvocation: (payload: unknown) => ipcRenderer.invoke("workflows:recordInvocation", payload),
   },
   channels: {
-    list: () => ipcRenderer.invoke("channels:list"),
-    get: (channelId: string) => ipcRenderer.invoke("channels:get", channelId),
+    list: async () => {
+      const result = await ipcRenderer.invoke("channels:list")
+      return Array.isArray(result) ? result.map((item) => redactChannelCredentials(item as Record<string, unknown>)) : result
+    },
+    get: async (channelId: string) => {
+      const result = await ipcRenderer.invoke("channels:get", channelId)
+      return result && typeof result === "object" ? redactChannelDetail(result as Record<string, unknown>) : result
+    },
     create: (defaults?: unknown) => ipcRenderer.invoke("channels:create", defaults),
     save: (payload: unknown) => ipcRenderer.invoke("channels:save", payload),
     delete: (channelId: string) => ipcRenderer.invoke("channels:delete", channelId),

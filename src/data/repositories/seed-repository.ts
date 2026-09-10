@@ -1,19 +1,4 @@
-import { eq, inArray } from "drizzle-orm"
-
-import { executePersistedMutation, getDatabaseContext } from "@/data/db/client"
-import {
-  agents,
-  agentVersions,
-  appMeta,
-  integrationExecutions,
-  integrations,
-  integrationVersions,
-  skills,
-  skillVersions,
-  workflowInvocations,
-  workflows,
-  workflowVersions,
-} from "@/data/db/schema"
+import { getProjectBridge } from "@/lib/ipc"
 
 const SEED_VERSION = "2026-09-08-private-editor-agents-v1"
 const LEGACY_AGENT_IDS = ["agent-crm-sync"]
@@ -24,32 +9,8 @@ const LEGACY_INTEGRATION_IDS = ["integration-webhook", "integration-github-mcp",
 let seedPromise: Promise<void> | undefined
 
 async function isSeeded() {
-  const context = await getDatabaseContext()
-  const result = (await context.db.select().from(appMeta).where(eq(appMeta.key, "seed_version")).all())[0]
-  return result?.value === SEED_VERSION
-}
-
-async function deleteLegacyCatalog() {
-  await executePersistedMutation(async ({ db }) => {
-    await db.delete(integrationExecutions).where(inArray(integrationExecutions.integrationId, LEGACY_INTEGRATION_IDS))
-    await db.delete(integrationVersions).where(inArray(integrationVersions.integrationId, LEGACY_INTEGRATION_IDS))
-    await db.delete(integrations).where(inArray(integrations.id, LEGACY_INTEGRATION_IDS))
-
-    await db.delete(workflowInvocations).where(inArray(workflowInvocations.workflowId, LEGACY_WORKFLOW_IDS))
-    await db.delete(workflowVersions).where(inArray(workflowVersions.workflowId, LEGACY_WORKFLOW_IDS))
-    await db.delete(workflows).where(inArray(workflows.id, LEGACY_WORKFLOW_IDS))
-
-    await db.delete(skillVersions).where(inArray(skillVersions.skillId, LEGACY_SKILL_IDS))
-    await db.delete(skills).where(inArray(skills.id, LEGACY_SKILL_IDS))
-
-    await db.delete(agentVersions).where(inArray(agentVersions.agentId, LEGACY_AGENT_IDS))
-    await db.delete(agents).where(inArray(agents.id, LEGACY_AGENT_IDS))
-
-    await db.insert(appMeta)
-      .values({ key: "seed_version", value: SEED_VERSION })
-      .onConflictDoUpdate({ target: appMeta.key, set: { value: SEED_VERSION } })
-      .run()
-  })
+  const result = await getProjectBridge().database.ensureSeeded({ version: SEED_VERSION, legacyAgentIds: LEGACY_AGENT_IDS, legacySkillIds: LEGACY_SKILL_IDS, legacyWorkflowIds: LEGACY_WORKFLOW_IDS, legacyIntegrationIds: LEGACY_INTEGRATION_IDS }) as { seeded: boolean }
+  return result.seeded
 }
 
 /**
@@ -60,9 +21,7 @@ async function deleteLegacyCatalog() {
 export function ensureSeeded() {
   if (!seedPromise) {
     seedPromise = (async () => {
-      if (!await isSeeded()) {
-        await deleteLegacyCatalog()
-      }
+      await isSeeded()
     })()
   }
 
