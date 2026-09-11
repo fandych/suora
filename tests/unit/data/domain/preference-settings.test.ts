@@ -7,7 +7,7 @@ import {
   resolvePreferenceSettings,
   shouldConfirmWorkspaceCommand,
   validateSystemMailSettings,
-} from "@/data/domain/preference-settings"
+} from "@shared/domain/preference-settings"
 
 describe("preference settings serialization", () => {
   it("sanitizes persisted JSON into a valid settings payload", () => {

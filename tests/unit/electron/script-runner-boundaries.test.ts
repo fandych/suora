@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { executeSandboxedScriptIntegration } from "@electron/others/integrations/script-runner"
+import { executeSandboxedScriptIntegration } from "@electron/integrations/script-runner"
 
 describe("script integration boundaries", () => {
   it("rejects unsupported runtimes and missing scripts before spawning", async () => {

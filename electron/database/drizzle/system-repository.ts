@@ -1,7 +1,7 @@
 import { and, desc, eq } from "drizzle-orm"
 import { getDrizzleDatabase } from "@electron/database/drizzle/client"
 import { appMeta, agents, integrations, providers, schedulers, workflows, workflowVersions } from "@electron/database/drizzle/schema"
-import { protectCredential, revealCredential } from "@electron/others/infrastructure/credential-vault"
+import { protectCredential, revealCredential } from "@electron/infrastructure/credential-vault"
 
 export async function getAppMetaValue(key: string) {
   const [row] = await getDrizzleDatabase().select({ value: appMeta.value }).from(appMeta).where(eq(appMeta.key, key)).limit(1)

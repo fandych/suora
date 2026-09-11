@@ -1,8 +1,8 @@
 import { desc, eq } from "drizzle-orm"
 import { getDrizzleDatabase } from "@electron/database/drizzle/client"
 import { channels } from "@electron/database/drizzle/schema"
-import { parseChannelDetailRow } from "@electron/others/channels/channel-store"
-import type { ChannelDetail } from "@/data/domain/channel-models"
+import { parseChannelDetailRow } from "@electron/channels/channel-store"
+import type { ChannelDetail } from "@shared/domain/channel-models"
 
 export async function listChannelsWithDrizzle() {
   const rows = await getDrizzleDatabase().select().from(channels).orderBy(desc(channels.updatedAt))

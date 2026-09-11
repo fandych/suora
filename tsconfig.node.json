@@ -8,14 +8,18 @@
     "strict": true,
     "forceConsistentCasingInFileNames": true,
 
+    "noEmit": true,
     "paths": {
       "@electron/*": [
         "./electron/*"
+      ],
+      "@shared/*": [
+        "./shared/*"
       ],
       "@/*": [
         "./src/*"
       ]
     },
   },
-  "include": ["electron.vite.config.ts", "electron/**/*.ts"]
+  "include": ["electron.vite.config.ts", "electron/**/*.ts", "shared/**/*.ts"]
 }

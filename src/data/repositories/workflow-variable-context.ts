@@ -1,3 +1,6 @@
+/* @deprecated Workflow runtime code belongs in domain/workflows. */
+export * from "@/domain/workflows/workflow-variable-context"
+/*
 export type WorkflowVariableContext = Record<string, unknown> & {
   input: unknown
   vars: Record<string, unknown>
@@ -112,3 +115,4 @@ export function combineNodeOutput(rawOutput: unknown, mappedOutput: Record<strin
   if (rawOutput !== null && typeof rawOutput === "object" && !Array.isArray(rawOutput)) return { ...rawOutput as Record<string, unknown>, ...mappedOutput }
   return { value: rawOutput, ...mappedOutput }
 }
+*/

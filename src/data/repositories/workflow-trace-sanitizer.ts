@@ -1,3 +1,5 @@
+export * from "@/domain/workflows/workflow-trace-sanitizer"
+/*
 import type { ExecutionContext } from "@/data/repositories/workflow-execution-engine"
 import type { WorkflowTraceSnapshot } from "@/data/domain/workflow-models"
 
@@ -43,3 +45,4 @@ export function createWorkflowTraceSnapshot(context: ExecutionContext): Workflow
     redactedPaths,
   }
 }
+*/

@@ -4,8 +4,8 @@ const handlers = new Map<string, (...args: unknown[]) => Promise<unknown>>()
 const prepared = vi.fn(() => ({ all: vi.fn(() => [{ id: "provider-1", title: "OpenAI", providerType: "openai", updatedAt: 1 }]), get: vi.fn(() => ({ id: "provider-1", title: "OpenAI", providerType: "openai", updatedAt: 1 })) }))
 
 vi.mock("electron", () => ({ ipcMain: { handle: vi.fn((name: string, handler: (...args: unknown[]) => Promise<unknown>) => handlers.set(name, handler)) } }))
-vi.mock("@electron/others/infrastructure/db-core", () => ({ applyMigrations: vi.fn(), openDatabase: vi.fn(() => ({ prepare: prepared })) }))
-vi.mock("@electron/others/infrastructure/workspace-service", () => ({ ensureWorkspace: vi.fn() }))
+vi.mock("@electron/infrastructure/db-core", () => ({ applyMigrations: vi.fn(), openDatabase: vi.fn(() => ({ prepare: prepared })) }))
+vi.mock("@electron/infrastructure/workspace-service", () => ({ ensureWorkspace: vi.fn() }))
 
 describe("catalog IPC handlers", () => {
   beforeEach(async () => {

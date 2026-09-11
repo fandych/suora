@@ -128,8 +128,16 @@ src/
 electron/
     ipc/                  IPC registration grouped by domain
     database/             database core and db helpers
-    others/               Electron-only helpers grouped by application/channels/infrastructure/integrations/services
+    application/          Electron application use cases
+    channels/              Electron channel runtimes
+    infrastructure/       Electron platform and security infrastructure
+    integrations/          Electron integration execution
+    services/              Electron main-process services
     types/                Electron process types and payload contracts
+
+shared/
+    domain/               Pure renderer/main shared domain contracts
+    database/             Shared migration definitions only
 ```
 
 ## Working Rules
@@ -143,3 +151,11 @@ When implementing changes:
 5. Validate with `npm run type-check`, `npm run lint`, and `npm run build` before handoff; after route or layout changes, at minimum ensure the build still passes while resolving any new type-check or lint failures you introduced.
 6. When code behavior, user-visible configuration, runtime limits, security boundaries, routes, or commands change, update the related user documentation in `github-pages/src/pages/user/` and technical documentation in `github-pages/src/pages/technical/` in the same change. If no existing page applies, add or extend the appropriate documentation page and keep navigation and routes in sync.
 7. Update this file when route names, module coverage, or UI architecture rules change.
+
+## Runtime boundaries
+
+- Electron main/preload must not import `@/application`, `@/data`, `@/services`, `@/views`, `@/components`, `@/hooks`, `@/stores`, or `@/view-models`.
+- Use `@shared/` for code shared by Renderer and Electron. `shared/` must not import `src/` or `electron/`.
+- Renderer persistence and Electron capabilities must go through `src/lib/ipc` and the application layer.
+- `src/data/repositories` is restricted to persistence and IPC adapters. Workflow execution, policies, tracing, and expression evaluation belong in domain/runtime modules.
+- `src/stores` is reserved for cross-page state. Page/resource state belongs in `src/view-models`; page-only React controllers remain under the owning view.

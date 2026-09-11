@@ -1,4 +1,4 @@
-import type { ChannelDetail } from "@/data/domain/channel-models"
+import type { ChannelDetail } from "@shared/domain/channel-models"
 
 export function assertChannelExists(detail: ChannelDetail | null, requireEnabled = false) {
   if (!detail) {

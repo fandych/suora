@@ -1,5 +1,6 @@
-import type { SkillFileRecord, SkillSummary } from "@/data/domain/skill-document-models"
-import type { VersionOption } from "@/data/domain/version-models"
+export type * from "@shared/domain/provider-agent-models"
+import type { SkillFileRecord, SkillSummary } from "@shared/domain/skill-document-models"
+import type { VersionOption } from "@shared/domain/version-models"
 
 export type ProviderModelCapability = "toolcalling" | "vision" | "embedding" | "structuredOutput"
 export type ProviderApiMode = "messages" | "responses" | "completions"

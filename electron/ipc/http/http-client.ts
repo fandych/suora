@@ -1,9 +1,9 @@
 import http from "node:http"
 import https from "node:https"
 
-import { appState } from "@electron/others/infrastructure/app-state"
-import { getProxyAgent } from "@electron/others/infrastructure/proxy-service"
-import { getPreferenceSettingsSnapshot } from "@electron/others/infrastructure/preference-service"
+import { appState } from "@electron/infrastructure/app-state"
+import { getProxyAgent } from "@electron/infrastructure/proxy-service"
+import { getPreferenceSettingsSnapshot } from "@electron/infrastructure/preference-service"
 
 export type HttpRequestOptions = {
   method?: string

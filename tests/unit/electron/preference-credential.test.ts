@@ -8,7 +8,7 @@ vi.mock("electron", () => ({
   },
 }))
 
-import { protectCredential, revealCredential } from "@electron/others/infrastructure/credential-vault"
+import { protectCredential, revealCredential } from "@electron/infrastructure/credential-vault"
 
 describe("preference credential compatibility", () => {
   beforeEach(() => vi.clearAllMocks())

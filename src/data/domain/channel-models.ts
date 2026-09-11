@@ -1,3 +1,4 @@
+export type * from "@shared/domain/channel-models"
 export type ChannelPlatform = "web" | "email" | "wechat" | "wechat_personal" | "wechat_official" | "wechat_miniprogram" | "feishu" | "dingtalk" | "telegram" | "teams" | "custom"
 export type ChannelStatus = "inactive" | "active" | "error"
 export type ChannelConnectionMode = "webhook" | "stream"

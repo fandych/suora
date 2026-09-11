@@ -1,3 +1,4 @@
+export * from "@shared/domain/preference-settings"
 export type PreferenceThemeMode = "system" | "light" | "dark"
 export type PreferenceThemeAccent = "ocean" | "forest" | "amber" | "rose" | "slate"
 export type PreferenceFontScale = "sm" | "md" | "lg"

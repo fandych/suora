@@ -1,6 +1,8 @@
+export * from "@/domain/workflows/workflow-trace-recorder"
+/*
 import type { WorkflowNodeData, WorkflowNodeTraceRecord, WorkflowTraceSnapshot } from "@/data/domain/workflow-models"
-import { createWorkflowTraceSnapshot } from "@/data/repositories/workflow-trace-sanitizer"
-import type { WorkflowExecutionContext } from "@/data/repositories/workflow-execution-context"
+import { createWorkflowTraceSnapshot } from "@/domain/workflows/workflow-trace-sanitizer"
+import type { WorkflowExecutionContext } from "@/domain/workflows/workflow-execution-context"
 
 export function createWorkflowTraceId(nodeId: string, startedAt: number, traceCount: number) {
   return `${nodeId}-${startedAt}-${traceCount}`
@@ -25,3 +27,4 @@ export function createFailedWorkflowTrace(node: { id: string; data: WorkflowNode
   const contextAfter = createWorkflowTraceSnapshot(context)
   return { traceId, nodeId: node.id, label: node.data.label, status: "error", input: traceInput, output: error instanceof Error ? error.message : String(error), startedAt, finishedAt: Date.now(), contextAfter }
 }
+*/

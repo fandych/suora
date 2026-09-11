@@ -1,4 +1,6 @@
-import { interpolate, readPath, type WorkflowVariableContext } from "@/data/repositories/workflow-variable-context"
+export * from "@/domain/workflows/workflow-expression"
+/*
+import { interpolate, readPath, type WorkflowVariableContext } from "@/domain/workflows/workflow-variable-context"
 import type { IntegrationExecutionResult } from "@/data/repositories/integration-execution-repository"
 
 export type ExecutionContext = WorkflowVariableContext
@@ -45,3 +47,4 @@ export function evaluateExpression(expression: string, context: ExecutionContext
 }
 
 export { interpolate, readPath }
+*/

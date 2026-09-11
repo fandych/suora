@@ -1,12 +1,12 @@
 import type { Edge } from "@xyflow/react"
 
 import type { WorkflowDefinition, WorkflowEdgeData, WorkflowNodeTraceRecord } from "@/data/domain/workflow-models"
-import { combineNodeOutput, mapNodeOutput } from "@/data/repositories/workflow-variable-context"
-import { evaluateExpression, toWorkflowHttpResult } from "@/data/repositories/workflow-expression"
-import { getNextWorkflowEdges, withWorkflowTimeout } from "@/data/repositories/workflow-execution-policy"
-import { applyWorkflowNodeOutput, createWorkflowExecutionContext, getWorkflowExecutionBudget, type WorkflowExecutionContext } from "@/data/repositories/workflow-execution-context"
-import { createCompletedWorkflowTrace, createFailedWorkflowTrace, createRunningWorkflowTrace, createSkippedWorkflowTrace, createWorkflowTraceId } from "@/data/repositories/workflow-trace-recorder"
-import { executeWorkflowNode, type WorkflowExecutionMode } from "@/data/repositories/workflow-node-executor"
+import { combineNodeOutput, mapNodeOutput } from "@/domain/workflows/workflow-variable-context"
+import { evaluateExpression, toWorkflowHttpResult } from "@/domain/workflows/workflow-expression"
+import { getNextWorkflowEdges, withWorkflowTimeout } from "@/domain/workflows/workflow-execution-policy"
+import { applyWorkflowNodeOutput, createWorkflowExecutionContext, getWorkflowExecutionBudget, type WorkflowExecutionContext } from "@/domain/workflows/workflow-execution-context"
+import { createCompletedWorkflowTrace, createFailedWorkflowTrace, createRunningWorkflowTrace, createSkippedWorkflowTrace, createWorkflowTraceId } from "@/domain/workflows/workflow-trace-recorder"
+import { executeWorkflowNode, type WorkflowExecutionMode } from "@/domain/workflows/workflow-node-executor"
 import type { WorkflowRuntimePorts } from "@/data/domain/workflow-runtime-ports"
 
 type WorkflowExecutionResult = {
@@ -16,7 +16,7 @@ type WorkflowExecutionResult = {
 
 export type ExecutionContext = WorkflowExecutionContext
 export { evaluateExpression, toWorkflowHttpResult }
-export { interpolate, readPath } from "@/data/repositories/workflow-variable-context"
+export { interpolate, readPath } from "@/domain/workflows/workflow-variable-context"
 
 const defaultWorkflowRuntimePorts: WorkflowRuntimePorts = {
   getChatRuntimeSettings: async () => { throw new Error("Chat runtime settings are not configured.") },

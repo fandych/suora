@@ -1,7 +1,7 @@
 import type { WorkflowDefinition, WorkflowDetail, WorkflowSummary } from "@/data/domain/workflow-models"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
-import { normalizeWorkflowNotifications } from "@/data/repositories/workflow-notifications"
+import { normalizeWorkflowNotifications } from "@/domain/workflows/workflow-notifications"
 import { projectIpc } from "@/lib/ipc"
 
 export async function listWorkflows() {

@@ -1,5 +1,5 @@
 import { DatabaseSync } from "node:sqlite"
-import { applyMigrations } from "@electron/others/infrastructure/db-core"
+import { applyMigrations } from "@electron/infrastructure/db-core"
 import { createDrizzleDatabase } from "@electron/database/drizzle/client"
 
 export function createSqliteTestDatabase() {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { runtimeMigrations } from "@/data/db/migrations"
+import { runtimeMigrations } from "@shared/database/migrations"
 
 describe("database migrations", () => {
   it("has ordered unique migration IDs", () => {

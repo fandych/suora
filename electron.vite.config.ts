@@ -7,6 +7,7 @@ import { cpSync, existsSync } from "node:fs"
 
 const alias = {
   "@": resolve(__dirname, "./src"),
+  "@shared": resolve(__dirname, "./shared"),
   "@electron": resolve(__dirname, "./electron"),
 }
 

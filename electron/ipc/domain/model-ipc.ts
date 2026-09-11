@@ -1,7 +1,7 @@
 import { ipcMain } from "electron"
 import { createModelWithDrizzle, deleteModelWithDrizzle, getModelWithDrizzle, listModelsWithDrizzle, saveModelWithDrizzle } from "@electron/database/drizzle/document-model-repository"
-import { discoverProviderModels } from "@electron/others/services/model-discovery"
-import { ensureWorkspace } from "@electron/others/infrastructure/workspace-service"
+import { discoverProviderModels } from "@electron/services/model-discovery"
+import { ensureWorkspace } from "@electron/infrastructure/workspace-service"
 import { entityIdSchema, parseIpcInput, providerCreateSchema, providerDiscoverySchema, providerSaveSchema } from "@electron/ipc/system/ipc-input-schemas"
 
 export function registerModelIpc() {

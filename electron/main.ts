@@ -1,12 +1,12 @@
 import { app, BrowserWindow } from "electron"
 
-import { applyMigrations, closeDatabase, openDatabase } from "@electron/others/infrastructure/db-core"
+import { applyMigrations, closeDatabase, openDatabase } from "@electron/infrastructure/db-core"
 import { setupIpc } from "@electron/ipc"
-import { closeBrowserWindow } from "@electron/others/infrastructure/browser-window"
-import { getPreferenceSettingsSnapshot } from "@electron/others/infrastructure/preference-service"
-import { configureAutoUpdater } from "@electron/others/infrastructure/updater-service"
-import { createWindow } from "@electron/others/infrastructure/main-window"
-import { configureAppStoragePaths, ensureWorkspace } from "@electron/others/infrastructure/workspace-service"
+import { closeBrowserWindow } from "@electron/infrastructure/browser-window"
+import { getPreferenceSettingsSnapshot } from "@electron/infrastructure/preference-service"
+import { configureAutoUpdater } from "@electron/infrastructure/updater-service"
+import { createWindow } from "@electron/infrastructure/main-window"
+import { configureAppStoragePaths, ensureWorkspace } from "@electron/infrastructure/workspace-service"
 
 configureAppStoragePaths()
 

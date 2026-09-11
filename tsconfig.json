@@ -12,7 +12,8 @@
     "module": "ES2022",
     "useDefineForClassFields": true,
     "types": [
-      "vite/client"
+      "vite/client",
+      "node"
     ],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
@@ -37,6 +38,9 @@
       "@electron/*": [
         "./electron/*"
       ],
+      "@shared/*": [
+        "./shared/*"
+      ],
       "@/*": [
         "./src/*"
       ]
@@ -45,11 +49,7 @@
   },
   "include": [
     "src",
-    "src/types"
-  ],
-  "references": [
-    {
-      "path": "./tsconfig.node.json"
-    }
+    "src/types",
+    "shared"
   ]
 }

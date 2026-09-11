@@ -16,12 +16,14 @@ const collect = async (directory) => {
 const dataFiles = await collect(path.join(root, "src", "data"))
 const serviceFiles = await collect(path.join(root, "src", "services"))
 const ipcFiles = await collect(path.join(root, "electron", "ipc"))
+const sharedFiles = await collect(path.join(root, "shared"))
 const forbiddenViewImport = /from\s+["']@\/views\//
 const forbiddenRepositoryServiceImport = /from\s+["']@\/services\//
 const forbiddenRelativeImport = /from\s+["']\.\.?\//
 const forbiddenViewRepositoryImport = /from\s+["']@\/(?:data\/repositories|services)\//
 const forbiddenDomainRepositoryImport = /from\s+["']@\/data\/repositories\//
 const forbiddenElectronRootImport = /from\s+["']@\/electron\/(?:application|channels|infrastructure|integrations|services)\//
+const forbiddenElectronRendererImport = /from\s+["']@\/(?:application|data|services|views|components|hooks|stores|view-models)\//
 const rawSql = /(?:database|db)\.(?:prepare|exec)\s*\(/
 const violations = []
 for (const file of [...dataFiles, ...serviceFiles]) {
@@ -35,9 +37,12 @@ const viewFiles = await collect(path.join(root, "src", "views"))
 for (const file of viewFiles) if (forbiddenViewRepositoryImport.test(await readFile(file, "utf8"))) violations.push(`View -> data/service dependency: ${path.relative(root, file)}`)
 for (const file of [...dataFiles, ...serviceFiles]) if (forbiddenRelativeImport.test(await readFile(file, "utf8"))) violations.push(`Relative local import: ${path.relative(root, file)}`)
 for (const file of ipcFiles) if (rawSql.test(await readFile(file, "utf8"))) violations.push(`Raw SQL in IPC: ${path.relative(root, file)}`)
-for (const file of await collect(path.join(root, "electron"))) if (forbiddenElectronRootImport.test(await readFile(file, "utf8"))) violations.push(`Electron old-root dependency: ${path.relative(root, file)}`)
-for (const directory of ["application", "channels", "infrastructure", "integrations", "services"]) {
-  try { await readdir(path.join(root, "electron", directory)); violations.push(`Electron old directory remains: electron/${directory}`) } catch { /* expected */ }
+for (const file of await collect(path.join(root, "electron"))) {
+  const source = await readFile(file, "utf8")
+  if (forbiddenElectronRootImport.test(source)) violations.push(`Electron old-root dependency: ${path.relative(root, file)}`)
+  if (forbiddenElectronRendererImport.test(source)) violations.push(`Electron -> renderer dependency: ${path.relative(root, file)}`)
 }
+for (const file of sharedFiles) if (forbiddenElectronRendererImport.test(await readFile(file, "utf8"))) violations.push(`Shared -> renderer dependency: ${path.relative(root, file)}`)
+try { await readdir(path.join(root, "electron", "others")); violations.push("Electron old directory remains: electron/others") } catch { /* expected */ }
 if (violations.length) { console.error(violations.join("\n")); process.exitCode = 1 }
 else console.log("Architecture verification passed: no data/service -> view imports and no raw SQL in IPC.")

@@ -1,9 +1,9 @@
 import fs from "node:fs/promises"
 import path from "node:path"
 import { ipcMain } from "electron"
-import { appState } from "@electron/others/infrastructure/app-state"
-import { ensureFileSizeWithinLimit, MAX_TOOL_FILE_BYTES, MAX_TOOL_WRITE_BYTES } from "@electron/others/infrastructure/tool-guardrails"
-import { ensureWorkspace } from "@electron/others/infrastructure/workspace-service"
+import { appState } from "@electron/infrastructure/app-state"
+import { ensureFileSizeWithinLimit, MAX_TOOL_FILE_BYTES, MAX_TOOL_WRITE_BYTES } from "@electron/infrastructure/tool-guardrails"
+import { ensureWorkspace } from "@electron/infrastructure/workspace-service"
 import { resolveWorkspaceTarget, enforceRelativePathPolicy } from "@electron/ipc/tools/tools-policy"
 import { parseFilesystemInput, readPathSchema, relativePathSchema, saveFileSchema, writeFileSchema } from "@electron/ipc/tools/tools-filesystem-schemas"
 

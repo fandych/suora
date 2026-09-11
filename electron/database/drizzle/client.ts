@@ -1,5 +1,5 @@
 import { drizzle, type AsyncRemoteCallback } from "drizzle-orm/sqlite-proxy"
-import { applyMigrations, openDatabase } from "@electron/others/infrastructure/db-core"
+import { applyMigrations, openDatabase } from "@electron/infrastructure/db-core"
 import type { QueryMethod, SqliteDatabase } from "@electron/types"
 import { schema } from "@electron/database/drizzle/schema"
 

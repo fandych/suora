@@ -2,9 +2,9 @@ import crypto from "node:crypto"
 import { and, desc, eq, exists, sql } from "drizzle-orm"
 import { getDrizzleDatabase } from "@electron/database/drizzle/client"
 import { appMeta, chatMessages, chats } from "@electron/database/drizzle/schema"
-import { parseStoredChatMessageParts, parseStoredChatSettingsStore, parseChatSettingsSavePayload, serializeChatMessageParts, serializeChatSettingsStore } from "@electron/others/services/chat-schemas"
+import { parseStoredChatMessageParts, parseStoredChatSettingsStore, parseChatSettingsSavePayload, serializeChatMessageParts, serializeChatSettingsStore } from "@electron/services/chat-schemas"
 import type { ChatRuntimeSettingsPayload } from "@electron/types"
-import { setProxySettings } from "@electron/others/infrastructure/proxy-service"
+import { setProxySettings } from "@electron/infrastructure/proxy-service"
 
 async function getChat(chatId: string) {
   const database = getDrizzleDatabase()

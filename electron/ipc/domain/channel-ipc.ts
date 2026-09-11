@@ -1,9 +1,9 @@
 import { ipcMain } from "electron"
 
-import { captureBrowserPagePreview } from "@electron/others/infrastructure/browser-preview"
-import { getChannelDetail } from "@electron/others/channels/channel-store"
-import { getChannelService } from "@electron/others/channels/channel-service"
-import { ensureWorkspace } from "@electron/others/infrastructure/workspace-service"
+import { captureBrowserPagePreview } from "@electron/infrastructure/browser-preview"
+import { getChannelDetail } from "@electron/channels/channel-store"
+import { getChannelService } from "@electron/channels/channel-service"
+import { ensureWorkspace } from "@electron/infrastructure/workspace-service"
 import { assertChannelExists } from "@electron/ipc/domain/channel-ipc-policy"
 import { channelDebugMessageSchema, channelIdSchema, channelMessageSchema, channelPreviewOptionsSchema, parseChannelIpcInput, wechatLoginStartSchema, wechatLoginWaitSchema } from "@electron/ipc/domain/channel-ipc-schemas"
 

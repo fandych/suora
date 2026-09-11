@@ -39,7 +39,7 @@ React Renderer → Preload Bridge → Electron IPC → Desktop Services
 - `electron/main.ts`：应用生命周期入口，准备工作区、迁移数据库、注册 IPC、配置更新器并创建窗口。
 - `electron/preload.ts`：在 context isolation 下暴露 `window.project` 和少量事件/通用 invoke API。
 - `electron/ipc/`：按领域注册 IPC handlers，实际子目录包括 `system/`、`workspace/`、`database/`、`ai/`、`chat/`、`document/`、`agent/`、`skill/`、`model/`、`channel/`、`workflow/`、`integration/`、`scheduler/`、`preference/`、`tools/`、`updater/` 和 `mail/`。
-- `electron/others/`：AI 请求、集成、渠道、代理、邮件、浏览器、工具权限和更新等桌面服务；具体按 `application/`、`channels/`、`infrastructure/`、`integrations/`、`services/` 分组。
+- `electron/application/`、`electron/channels/`、`electron/infrastructure/`、`electron/integrations/`、`electron/services/`：分别存放 Electron 用例、渠道运行时、平台基础设施、集成执行和主进程服务；不再使用语义宽泛的 `electron/others/`。
 - `electron/database/`：SQLite 初始化、WAL、外键、迁移和查询执行。
 - `tests/unit/`：集中存放单元测试，并按 `data/`、`services/`、`views/` 保留被测模块的功能结构。
 
@@ -116,7 +116,7 @@ Agent instructions、外部网页和 Skill 内容都属于不可信输入；它�
 ## 开发约定
 
 - 新 UI 使用 `workflow` 命名，不新增 `pipeline` 术语。
-- 按 `electron/ipc/`、`electron/database/`、`electron/others/` 和 `electron/types/` 分组放置 Electron 代码。
+- 按 `electron/ipc/`、`electron/database/`、`electron/application/`、`electron/channels/`、`electron/infrastructure/`、`electron/integrations/`、`electron/services/` 和 `electron/types/` 分组放置 Electron 代码。
 - 业务数据访问通过 repository/domain 层组织，避免页面直接拼接 IPC 细节。
 - 修改 IPC 合约时同步更新 preload、Electron 类型和 renderer repository。
 - 修改数据库结构时新增 migration，不直接改写已有 migration。

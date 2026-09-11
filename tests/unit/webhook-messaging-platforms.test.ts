@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest"
 
-import { handleTeamsWebhook, handleTelegramWebhook } from "@electron/others/channels/channel-webhook-messaging-platforms"
+import { handleTeamsWebhook, handleTelegramWebhook } from "@electron/channels/channel-webhook-messaging-platforms"
 
 function response() {
   return { status: vi.fn().mockReturnThis(), json: vi.fn().mockReturnThis(), send: vi.fn().mockReturnThis() } as never

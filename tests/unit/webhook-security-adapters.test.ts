@@ -1,9 +1,9 @@
 import crypto from "node:crypto"
 import { describe, expect, it } from "vitest"
 
-import { buildWeChatSignature } from "@electron/others/channels/channel-runtime-messages"
-import { hasGenericMessageContent, readGenericWebhookMessage, requireWebhookSecret } from "@electron/others/channels/channel-webhook-common"
-import { verifyDingTalkSignature, verifyFeishuSignature, verifyWeChatSignature } from "@electron/others/channels/channel-webhook-security"
+import { buildWeChatSignature } from "@electron/channels/channel-runtime-messages"
+import { hasGenericMessageContent, readGenericWebhookMessage, requireWebhookSecret } from "@electron/channels/channel-webhook-common"
+import { verifyDingTalkSignature, verifyFeishuSignature, verifyWeChatSignature } from "@electron/channels/channel-webhook-security"
 
 describe("webhook security adapters", () => {
   it("verifies platform signatures", () => {
