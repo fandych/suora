@@ -2,7 +2,7 @@ import { MessageCircleIcon, PlusIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import type { ChatSummary } from "@/data/domain/models"
+import type { ChatSummary } from "@/data/domain/chat-models"
 
 function formatRelativeTime(timestamp: number) {
   const deltaMs = timestamp - Date.now()

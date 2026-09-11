@@ -1,4 +1,5 @@
-import type { ChannelConfigRecord, ChannelConnectionMode, ChannelDetail, ChannelPlatform, ChannelRuntimeState, ProviderConfigRecord } from "@/data/domain/models"
+import type { ChannelConfigRecord, ChannelConnectionMode, ChannelDetail, ChannelPlatform, ChannelRuntimeState } from "@/data/domain/channel-models"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
 import { DEFAULT_PREFERENCES } from "@/data/domain/preference-settings"
 
 export const DEFAULT_CHANNEL_AGENT_ID = "agent-general-assistant"

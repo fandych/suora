@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Node } from "@xyflow/react"
-import type { WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
 import { createWorkflowExecutionContext } from "@/data/repositories/workflow-execution-context"
 import { executeWorkflowNode } from "@/data/repositories/workflow-node-executor"
 import type { WorkflowRuntimePorts } from "@/services/workflows/workflow-runtime-ports"

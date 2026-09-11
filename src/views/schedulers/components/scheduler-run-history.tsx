@@ -2,7 +2,7 @@ import { Clock3Icon, HistoryIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import type { SchedulerRunRecord } from "@/data/domain/models"
+import type { SchedulerRunRecord } from "@/data/domain/scheduler-models"
 
 const statusVariants = {
   queued: "secondary",

@@ -1,6 +1,6 @@
 import { useMemo } from "react"
 import type { Edge, Node } from "@xyflow/react"
-import type { WorkflowDefinition, WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/workflow-models"
 import { buildWorkflowFingerprint, getWorkflowDesignIssues, getWorkflowDryRunInputIssue } from "@/views/workflows/components/workflow-editor-state"
 import { DEFAULT_WORKFLOW_DRY_RUN_INPUT } from "@/views/workflows/components/workflow-editor-state"
 import { defaultWorkflowBindings, defaultWorkflowNotifications } from "@/views/workflows/components/workflow-editor-config"

@@ -3,7 +3,8 @@ import type {
   HttpEndpointParameter,
   HttpIntegrationAuthType,
   HttpIntegrationConfig,
-} from "@/data/domain/models"
+} from "@/data/domain/integration-models"
+import { getLegacyHttpUrl } from "@/data/compatibility/http-config-legacy"
 
 export const DEFAULT_PARAMETER_SCHEMA_JSON = "{\n  \"type\": \"object\",\n  \"properties\": {}\n}"
 
@@ -103,7 +104,7 @@ export function syncHttpIntegrationConfig(config: HttpIntegrationConfig): HttpIn
 export function normalizeHttpIntegrationConfig(config: Partial<HttpIntegrationConfig>): HttpIntegrationConfig {
   const fallback = createDefaultHttpIntegrationConfig()
   const existingEndpoints = config.endpoints?.length ? config.endpoints : [(() => {
-    const legacyUrl = config.url?.trim() ?? ""
+    const legacyUrl = getLegacyHttpUrl(config)
     let baseUrl = config.baseUrl ?? ""
     let path = "/"
     let queryJson = config.queryJson ?? "{}"

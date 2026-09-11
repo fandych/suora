@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { verifyWebhookSecret } from "@electron/channels/channel-webhook-security"
+import { verifyWebhookSecret } from "@electron/others/channels/channel-webhook-security"
 
 describe("webhook security", () => {
   it("requires the secret header and uses no query fallback", () => {

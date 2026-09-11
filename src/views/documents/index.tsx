@@ -4,12 +4,12 @@ import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-s
 import PageHeader from "@/views/components/page-header"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listDocuments } from "@/data/repositories/document-repository"
+import { documentQueryService } from "@/application/documents/document-query-service"
 import { DocumentCard } from "@/views/documents/components/document-card"
 
 const DocumentsPage = () => {
   const navigate = useNavigate()
-  const { data, error, isLoading, reload } = useAsyncResource(() => listDocuments(), [])
+  const { data, error, isLoading, reload } = useAsyncResource(() => documentQueryService.list(), [])
 
   return (
     <div className="flex min-h-full flex-col bg-background">

@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from "react"
 import type { Edge, Node } from "@xyflow/react"
 
-import type { WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/workflow-models"
 
 export function parseDryRunObject(inputValue: string) {
   const parsed = JSON.parse(inputValue) as unknown

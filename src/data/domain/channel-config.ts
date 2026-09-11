@@ -1,4 +1,4 @@
-import type { ChannelConfigRecord, ChannelStatus } from "@/data/domain/models"
+import type { ChannelConfigRecord, ChannelStatus } from "@/data/domain/channel-models"
 
 export function buildChannelWebhookUrl(channel: ChannelConfigRecord) {
   if (channel.connectionMode === "stream") {

@@ -4,7 +4,7 @@ import { CopyIcon, FileUpIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import type { HttpEndpointParameter, HttpIntegrationConfig } from "@/data/domain/models"
+import type { HttpEndpointParameter, HttpIntegrationConfig } from "@/data/domain/integration-models"
 import { buildHttpEndpointUrl, getSelectedHttpEndpoint } from "@/data/domain/integrations"
 
 type HttpTryRunFormProps = {

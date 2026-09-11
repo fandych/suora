@@ -8,9 +8,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig } from "@/data/domain/models"
-import { deleteIntegration, getIntegrationDetail, runIntegrationAndPersist, saveIntegrationDraft, setIntegrationEnabled } from "@/data/repositories/integration-repository"
-import { emitDataChanged } from "@/data/repositories/data-events"
+import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig } from "@/data/domain/integration-models"
+import { integrationApplicationService } from "@/application/integrations/integration-application-service"
+import { emitDataChanged } from "@/application/shared/data-events"
 import { IntegrationBasicEditor } from "@/views/integrations/components/integration-basic-editor"
 import { IntegrationHttpEndpointsPanel } from "@/views/integrations/components/integration-http-endpoints-panel"
 import { IntegrationMcpToolsPanel } from "@/views/integrations/components/integration-mcp-tools-panel"
@@ -70,7 +70,7 @@ const IntegrationsDetailPage = () => {
   const navigate = useNavigate()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(
-    () => getIntegrationDetail(integrationId ?? "", selectedVersionId),
+    () => integrationApplicationService.getDetail(integrationId ?? "", selectedVersionId),
     [integrationId, selectedVersionId]
   )
 
@@ -120,7 +120,7 @@ const IntegrationsDetailPage = () => {
       return
     }
 
-    const next = await saveIntegrationDraft(integrationId, {
+    const next = await integrationApplicationService.saveDraft(integrationId, {
       title,
       kind: config.kind,
       config,
@@ -135,7 +135,7 @@ const IntegrationsDetailPage = () => {
       return
     }
 
-    const summary = await setIntegrationEnabled(integrationId, !data.integration.enabled)
+    const summary = await integrationApplicationService.setEnabled(integrationId, !data.integration.enabled)
     setData({ ...data, integration: summary })
   }
 
@@ -144,7 +144,7 @@ const IntegrationsDetailPage = () => {
       return
     }
 
-    await deleteIntegration(integrationId)
+    await integrationApplicationService.delete(integrationId)
     navigate("/integrations")
     window.setTimeout(() => emitDataChanged("/integrations"), 0)
   }
@@ -160,7 +160,7 @@ const IntegrationsDetailPage = () => {
         return
       }
 
-      const { detail } = await runIntegrationAndPersist(integrationId, data?.selectedVersion.id, runInput, tryRunTargetId)
+      const { detail } = await integrationApplicationService.runAndPersist(integrationId, data?.selectedVersion.id, runInput, tryRunTargetId)
       setData(detail)
     } finally {
       setIsRunning(false)

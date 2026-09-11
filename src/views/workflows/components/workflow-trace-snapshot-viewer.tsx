@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import type { WorkflowTraceSnapshot } from "@/data/domain/models"
+import type { WorkflowTraceSnapshot } from "@/data/domain/workflow-models"
 import { WorkflowTraceJsonPreview } from "@/views/workflows/components/workflow-trace-json-preview"
 
 type WorkflowTraceSnapshotViewerProps = {

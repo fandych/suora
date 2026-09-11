@@ -1,4 +1,4 @@
-import type { SidebarGroupData, SidebarItemData } from "@/data/domain/models"
+import type { SidebarGroupData, SidebarItemData } from "@/data/domain/navigation-models"
 import { listAgents } from "@/data/repositories/agent-repository"
 import { listChannels } from "@/data/repositories/channel-repository"
 import { listChats } from "@/data/repositories/chat-repository"

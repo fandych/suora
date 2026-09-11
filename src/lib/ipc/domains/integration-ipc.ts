@@ -1,4 +1,5 @@
-import type { IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary, VersionOption } from "@/data/domain/models"
+import type { IntegrationConfig, IntegrationDetail, IntegrationExecutionRecord, IntegrationSummary } from "@/data/domain/integration-models"
+import type { VersionOption } from "@/data/domain/version-models"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { getProjectBridge } from "@/lib/ipc/bridge"
 import { parseObjectJson } from "@/lib/serialization/json"

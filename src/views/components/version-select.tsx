@@ -2,7 +2,7 @@ import {
   NativeSelect,
   NativeSelectOption,
 } from "@/components/ui/native-select"
-import type { VersionOption } from "@/data/domain/models"
+import type { VersionOption } from "@/data/domain/version-models"
 
 type VersionSelectProps = {
   versions: VersionOption[]

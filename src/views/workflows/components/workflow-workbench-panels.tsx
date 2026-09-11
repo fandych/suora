@@ -3,7 +3,7 @@ import { useState } from "react"
 
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { cn } from "@/lib/utils"
-import type { WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
 import { WORKFLOW_NODE_ICONS } from "@/views/workflows/components/workflow-canvas-node"
 import type { WorkflowDesignIssue } from "@/views/workflows/components/workflow-editor-state"
 

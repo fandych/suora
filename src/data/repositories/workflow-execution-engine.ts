@@ -1,12 +1,13 @@
 import type { Edge } from "@xyflow/react"
 
-import type { WorkflowDefinition, WorkflowEdgeData, WorkflowNodeTraceRecord } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowEdgeData, WorkflowNodeTraceRecord } from "@/data/domain/workflow-models"
 import { combineNodeOutput, mapNodeOutput } from "@/data/repositories/workflow-variable-context"
 import { evaluateExpression, toWorkflowHttpResult } from "@/data/repositories/workflow-expression"
 import { getNextWorkflowEdges, withWorkflowTimeout } from "@/data/repositories/workflow-execution-policy"
 import { applyWorkflowNodeOutput, createWorkflowExecutionContext, getWorkflowExecutionBudget, type WorkflowExecutionContext } from "@/data/repositories/workflow-execution-context"
 import { createCompletedWorkflowTrace, createFailedWorkflowTrace, createRunningWorkflowTrace, createSkippedWorkflowTrace, createWorkflowTraceId } from "@/data/repositories/workflow-trace-recorder"
 import { executeWorkflowNode, type WorkflowExecutionMode } from "@/data/repositories/workflow-node-executor"
+import type { WorkflowRuntimePorts } from "@/data/domain/workflow-runtime-ports"
 
 type WorkflowExecutionResult = {
   traces: WorkflowNodeTraceRecord[]
@@ -17,7 +18,18 @@ export type ExecutionContext = WorkflowExecutionContext
 export { evaluateExpression, toWorkflowHttpResult }
 export { interpolate, readPath } from "@/data/repositories/workflow-variable-context"
 
-export async function executeWorkflowDefinition(definition: WorkflowDefinition, input: unknown, mode: WorkflowExecutionMode = "manual", onTrace?: (trace: WorkflowNodeTraceRecord) => void): Promise<WorkflowExecutionResult> {
+const defaultWorkflowRuntimePorts: WorkflowRuntimePorts = {
+  getChatRuntimeSettings: async () => { throw new Error("Chat runtime settings are not configured.") },
+  streamChatAgentResponse: () => { throw new Error("Chat runtime is not configured.") },
+  getDocumentDetail: async () => { throw new Error("Document runtime is not configured.") },
+  getIntegrationDetail: async () => { throw new Error("Integration runtime is not configured.") },
+  executeIntegration: async () => { throw new Error("Integration runtime is not configured.") },
+  sendMail: async () => ({ success: false, error: "Mail runtime is not configured." }),
+  serializeContext: (context) => JSON.stringify(context),
+}
+
+export async function executeWorkflowDefinition(definition: WorkflowDefinition, input: unknown, mode: WorkflowExecutionMode = "manual", onTrace?: (trace: WorkflowNodeTraceRecord) => void, ports?: WorkflowRuntimePorts): Promise<WorkflowExecutionResult> {
+  const runtimePorts = ports ?? defaultWorkflowRuntimePorts
   const nodes = new Map(definition.nodes.map((node) => [node.id, node]))
   const outgoing = new Map<string, Edge<WorkflowEdgeData>[]>()
   const incoming = new Map<string, Edge<WorkflowEdgeData>[]>()
@@ -72,7 +84,7 @@ export async function executeWorkflowDefinition(definition: WorkflowDefinition, 
           let lastError: unknown
           for (let attempt = 0; attempt < attempts; attempt += 1) {
             try {
-              output = await withWorkflowTimeout(executeWorkflowNode(node, context, mode), Math.max(100, Math.min(node.data.timeoutMs ?? 30000, maxDurationMs)), node.data.label)
+              output = await withWorkflowTimeout(executeWorkflowNode(node, context, mode, runtimePorts), Math.max(100, Math.min(node.data.timeoutMs ?? 30000, maxDurationMs)), node.data.label)
               lastError = undefined
               break
             } catch (error) {

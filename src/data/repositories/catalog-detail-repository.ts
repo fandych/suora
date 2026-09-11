@@ -1,4 +1,4 @@
-import type { SimpleCatalogItem } from "@/data/domain/models"
+import type { SimpleCatalogItem } from "@/data/domain/navigation-models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { projectIpc } from "@/lib/ipc"
 

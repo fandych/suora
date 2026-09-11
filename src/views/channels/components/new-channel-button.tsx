@@ -3,7 +3,7 @@ import { useState } from "react"
 import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
-import { createChannel } from "@/services/channels/channel-service"
+import { channelApplicationService } from "@/application/channels/channel-application-service"
 import { cn } from "@/lib/utils"
 
 export function NewChannelButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -13,7 +13,7 @@ export function NewChannelButton({ className, iconOnly = false }: { className?: 
   const handleCreate = async () => {
     setIsCreating(true)
     try {
-      const detail = await createChannel()
+      const detail = await channelApplicationService.create()
       navigate(`/channels/${detail.channel.id}`)
     } finally {
       setIsCreating(false)

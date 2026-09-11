@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useParams } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
-import { subscribeToDataChanges } from "@/data/repositories/data-events"
+import { subscribeToDataChanges } from "@/application/shared/data-events"
 import { showToast } from "@/lib/ui-toast"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import {
@@ -12,21 +12,20 @@ import {
   saveChannel,
   unbindChannel,
   waitForWeChatPersonalBinding,
-} from "@/services/channels/channel-service"
-import { listAvailableAgents } from "@/data/repositories/agent-repository"
-import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
+} from "@/application/channels/channel-application-service"
+import { agentQueryService } from "@/application/agents/agent-query-service"
 import { ChannelLogoBadge } from "@/views/channels/components/channel-logo-badge"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { ChannelEditorForm } from "@/views/channels/components/channel-editor-form"
 import { getChannelBindingLabel, getChannelBindingVariant, getChannelStatusLabel, getChannelStatusVariant } from "@/views/channels/components/channel-utils"
-import type { ChannelDetail } from "@/data/domain/models"
+import type { ChannelDetail } from "@/data/domain/channel-models"
 
 const ChannelDetailPage = () => {
   const { channelId } = useParams<{ channelId: string }>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => getChannel(channelId ?? ""), [channelId])
-  const { data: agentsData } = useAsyncResource(() => listAvailableAgents(), [])
-  const { data: providersData } = useAsyncResource(() => listConfiguredModelProviders(), [])
+  const { data: agentsData } = useAsyncResource(() => agentQueryService.listAvailable(), [])
+  const { data: providersData } = useAsyncResource(() => agentQueryService.listProviders(), [])
   const [draft, setDraft] = useState<ChannelDetail | null>(null)
   const [wechatVerificationCode, setWechatVerificationCode] = useState("")
   const [showWechatVerification, setShowWechatVerification] = useState(false)

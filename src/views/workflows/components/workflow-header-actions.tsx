@@ -3,7 +3,7 @@ import { EllipsisIcon, HistoryIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, Penci
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
-import type { VersionOption } from "@/data/domain/models"
+import type { VersionOption } from "@/data/domain/version-models"
 import VersionSelect from "@/views/components/version-select"
 
 type WorkflowHeaderActionsProps = {

@@ -7,10 +7,9 @@ import { ResourceEntryDialog } from "@/views/components/resource-entry-dialog"
 import { getSkillSourceLanguage } from "@/lib/resources/skill-files"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useAutosaveStatus } from "@/hooks/use-autosave-status"
-import { emitDataChanged } from "@/data/repositories/data-events"
-import type { SkillDetail, SkillFileRecord } from "@/data/domain/models"
-import { saveSkillDraft } from "@/data/repositories/skill-repository"
-import { deleteSkill } from "@/data/repositories/skill-repository"
+import { emitDataChanged } from "@/application/shared/data-events"
+import type { SkillDetail, SkillFileRecord } from "@/data/domain/skill-document-models"
+import { skillApplicationService } from "@/application/skills/skill-application-service"
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser/file-exports"
 import { buildSkillTree, getDefaultSkillFileName, isSafeSkillResourcePath, normalizeSkillPath, parseSkillFrontmatter, SKILL_ROOT_PATH } from "@/lib/resources/skill-files"
 import PageHeader from "@/views/components/page-header"
@@ -82,7 +81,7 @@ const SkillsDetailPage = () => {
   const persistDraft = async (nextDraft: SkillDetail) => {
     const skillMarkdown = nextDraft.files.find((file) => normalizeSkillPath(file.path) === "SKILL.md")?.content ?? ""
     const frontmatter = parseSkillFrontmatter(skillMarkdown)
-    const saved = await saveSkillDraft(skillId ?? "", {
+    const saved = await skillApplicationService.saveDraft(skillId ?? "", {
       title: frontmatter.name || nextDraft.skill.title,
       source: nextDraft.skill.source,
       summary: frontmatter.description || nextDraft.skill.summary,
@@ -294,14 +293,14 @@ const SkillsDetailPage = () => {
 
     try {
       if (actionId === "delete") {
-        await deleteSkill(skillId)
+        await skillApplicationService.delete(skillId)
         emitDataChanged("/skills")
         if (location.pathname === `/skills/${skillId}`) navigate("/skills")
         toast.add({ title: "Skill deleted", description: "The skill was removed.", type: "success" })
         return
       }
 
-      await saveSkillDraft(skillId, {
+      await skillApplicationService.saveDraft(skillId, {
         title: draft.skill.title,
         source: draft.skill.source,
         summary: `[disabled] ${draft.skill.summary}`.trim(),

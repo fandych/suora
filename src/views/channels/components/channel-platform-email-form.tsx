@@ -3,7 +3,7 @@ import { Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
-import type { ChannelConfigRecord, EmailAction, EmailFilterRule } from "@/data/domain/models"
+import type { ChannelConfigRecord, EmailAction, EmailFilterRule } from "@/data/domain/channel-models"
 import { CompactInput, Field, Hint, Label } from "@/views/channels/components/channel-form-fields"
 
 type ChannelPlatformEmailFormProps = {

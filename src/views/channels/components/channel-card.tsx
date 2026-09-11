@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge"
-import type { ChannelSummary } from "@/data/domain/models"
+import type { ChannelSummary } from "@/data/domain/channel-models"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { ChannelLogoBadge } from "@/views/channels/components/channel-logo-badge"
 import {

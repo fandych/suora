@@ -1,7 +1,7 @@
 import type { ModelMessage, UserModelMessage } from "ai"
 
 import { getAttachmentParts, getTextParts } from "@/data/domain/chat-message-parts"
-import type { ChatMessageRecord } from "@/data/domain/models"
+import type { ChatMessageRecord } from "@/data/domain/chat-models"
 import type { ChatAttachmentRecord } from "@/data/domain/chat-message-parts"
 
 const MAX_RECENT_MESSAGES = 16

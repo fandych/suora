@@ -2,8 +2,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Field, FieldContent, FieldTitle } from "@/components/ui/field"
 import { Switch } from "@/components/ui/switch"
-import type { PreferenceSettings } from "@/data/repositories/preference-repository"
-import type { SystemInfoSnapshot, UpdateCheckResult, UpdaterStateSnapshot } from "@/data/repositories/system-status-repository"
+import type { PreferenceSettings, SystemInfoSnapshot, UpdateCheckResult, UpdaterStateSnapshot } from "@/application/preferences/preference-application-service"
 
 import PreferenceSectionCard from "@/views/preference/components/preference-section-card"
 

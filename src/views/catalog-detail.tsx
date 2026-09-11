@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { getCatalogDetail } from "@/data/repositories/catalog-detail-repository"
+import { catalogQueryService } from "@/application/catalog/catalog-query-service"
 
 type CatalogDetailPageProps = {
   route: string
@@ -19,7 +19,7 @@ const CatalogDetailPage = ({ route, title, description, paramKey }: CatalogDetai
   const itemId = params[paramKey]
   const { data, error, isLoading, reload } = useAsyncResource(
     async () => {
-      const detail = await getCatalogDetail(route, itemId ?? "")
+      const detail = await catalogQueryService.getDetail(route, itemId ?? "")
       if (!detail) {
         throw new Error(`${title} item was not found.`)
       }

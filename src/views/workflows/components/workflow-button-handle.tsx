@@ -3,7 +3,7 @@ import { Position } from "@xyflow/react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import type { WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
 import type { LucideIcon } from "lucide-react"
 import { workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
 import { WorkflowNodeHandle } from "@/views/workflows/components/workflow-node-primitives"

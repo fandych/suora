@@ -1,7 +1,7 @@
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ResourceFilePreview } from "@/views/components/resource-file-preview"
 import DocumentContentEditor from "@/views/components/document-content-editor"
-import type { DocumentPageRecord } from "@/data/domain/models"
+import type { DocumentPageRecord } from "@/data/domain/skill-document-models"
 import { getDocumentSourceLanguage, isMarkdownDocumentTitle } from "@/data/domain/document-tree"
 import { getResourcePreviewKind } from "@/lib/resources/archive-import"
 

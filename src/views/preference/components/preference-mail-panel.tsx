@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldContent, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
-import { validateSystemMailSettings, type PreferenceSettings } from "@/data/repositories/preference-repository"
+import { preferenceApplicationService, type PreferenceSettings } from "@/application/preferences/preference-application-service"
 
 import PreferenceSectionCard from "@/views/preference/components/preference-section-card"
 
@@ -16,7 +16,7 @@ type PreferenceMailPanelProps = {
 }
 
 const PreferenceMailPanel = ({ draft, onChange, testRecipient, onTestRecipientChange, onSendTestMail, isSendingTestMail }: PreferenceMailPanelProps) => {
-  const mailIssues = validateSystemMailSettings(draft)
+  const mailIssues = preferenceApplicationService.validateMail(draft)
 
   return (
     <PreferenceSectionCard id="mail-service" title="Mail Service" description="Global SMTP settings." actions={<Button size="sm" variant="outline" onClick={onSendTestMail} disabled={isSendingTestMail || !draft.mailServiceEnabled}>{isSendingTestMail ? "Sending..." : "Send test mail"}</Button>}>

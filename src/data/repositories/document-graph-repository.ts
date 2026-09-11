@@ -1,4 +1,4 @@
-import type { DocumentGraphEdge, DocumentPageRecord } from "@/data/domain/models"
+import type { DocumentGraphEdge, DocumentPageRecord } from "@/data/domain/skill-document-models"
 import { getDocumentDetail, saveDocumentDraft } from "@/data/repositories/document-repository"
 
 function tokenize(value: string) {

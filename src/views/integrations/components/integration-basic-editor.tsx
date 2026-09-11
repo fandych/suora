@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
-import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig, ScriptIntegrationConfig } from "@/data/domain/models"
+import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig, ScriptIntegrationConfig } from "@/data/domain/integration-models"
 import { createChangedKindConfig } from "@/views/integrations/components/integration-editor-utils"
 import { PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
 

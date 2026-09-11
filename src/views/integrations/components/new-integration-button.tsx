@@ -4,7 +4,7 @@ import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { createIntegration } from "@/data/repositories/integration-repository"
+import { integrationApplicationService } from "@/application/integrations/integration-application-service"
 import { cn } from "@/lib/utils"
 
 export function NewIntegrationButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -14,7 +14,7 @@ export function NewIntegrationButton({ className, iconOnly = false }: { classNam
   const handleCreate = async () => {
     setIsCreating(true)
     try {
-      const detail = await createIntegration("http")
+      const detail = await integrationApplicationService.create("http")
       navigate(`/integrations/${detail.integration.id}`)
     } finally {
       setIsCreating(false)

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { createScheduler } from "@/data/repositories/scheduler-repository"
+import { schedulerQueryService } from "@/application/schedulers/scheduler-query-service"
 import { cn } from "@/lib/utils"
 
 export function NewSchedulerButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -14,7 +14,7 @@ export function NewSchedulerButton({ className, iconOnly = false }: { className?
   const handleCreate = async () => {
     setIsCreating(true)
     try {
-      const item = await createScheduler()
+      const item = await schedulerQueryService.create()
       navigate(`/schedulers/${item.id}`)
     } finally {
       setIsCreating(false)

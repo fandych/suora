@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron"
 
 import type { SendMailPayload } from "@electron/types"
-import { redactChannelCredentials, redactChannelDetail } from "@electron/channels/channel-credential-serialization"
+import { redactChannelCredentials, redactChannelDetail } from "@electron/others/channels/channel-credential-serialization"
 
 const allowedInvokeChannels = new Set([
   "ai:fetch:abort",

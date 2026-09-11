@@ -1,4 +1,4 @@
-import type { WorkflowDefinition, WorkflowDetail } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowDetail } from "@/data/domain/workflow-models"
 import { deleteWorkflow as deleteWorkflowRepository, publishWorkflowVersion as publishWorkflowVersionRepository, saveWorkflowDraft as saveWorkflowDraftRepository } from "@/data/repositories/workflow-repository"
 
 export function saveWorkflowDraft(input: {

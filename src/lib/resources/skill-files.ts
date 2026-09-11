@@ -1,4 +1,4 @@
-import type { SkillFileRecord } from "@/data/domain/models"
+import type { SkillFileRecord } from "@/data/domain/skill-document-models"
 
 export const SKILL_TOP_LEVEL_FOLDERS = ["scripts", "references", "assets", "other"] as const
 export const SKILL_ROOT_PATH = "__skill_root__"

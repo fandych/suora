@@ -1,4 +1,5 @@
-import type { VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowSummary } from "@/data/domain/models"
+import type { VersionOption } from "@/data/domain/version-models"
+import type { WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowSummary } from "@/data/domain/workflow-models"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { getProjectBridge } from "@/lib/ipc/bridge"
 import { parseArrayJson, parseJson } from "@/lib/serialization/json"

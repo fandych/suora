@@ -5,7 +5,9 @@ import { createAgent, deleteAgent, getAgentDetail, listAgents, saveAgentDraft } 
 import { createDocumentWithMetadata, deleteDocument, getDocumentDetail, listDocuments, saveDocumentDraft } from "@/data/repositories/document-repository"
 import { createSkill, deleteSkill, getSkillDetail, listSkills, saveSkillDraft } from "@/data/repositories/skill-repository"
 import { createWorkflow, deleteWorkflow, getWorkflowDetail, listWorkflows, saveWorkflowDraft } from "@/data/repositories/workflow-repository"
-import type { AgentConfigRecord, DocumentGraphEdge, DocumentPageRecord, DocumentSettings, SkillFileRecord, WorkflowDefinition } from "@/data/domain/models"
+import type { AgentConfigRecord } from "@/data/domain/provider-agent-models"
+import type { DocumentGraphEdge, DocumentPageRecord, DocumentSettings, SkillFileRecord } from "@/data/domain/skill-document-models"
+import type { WorkflowDefinition } from "@/data/domain/workflow-models"
 
 export const PRIVATE_RESOURCE_TOOL_IDS = [
   "documents:list", "documents:get", "documents:create", "documents:update", "documents:delete",

@@ -1,15 +1,15 @@
 import { create } from "zustand"
-import type { SchedulerDetail, SchedulerRunRecord } from "@/data/domain/models"
-import { listAvailableAgents } from "@/data/repositories/agent-repository"
-import { listWorkflows } from "@/services/workflows/workflow-service"
+import type { SchedulerDetail, SchedulerRunRecord } from "@/data/domain/scheduler-models"
 import { schedulerApplicationService } from "@/application/schedulers/scheduler-application-service"
+import { agentQueryService } from "@/application/agents/agent-query-service"
+import { workflowApplicationService } from "@/application/workflows/workflow-application-service"
 
 type SchedulerDetailState = {
   schedulerId: string | null
   draft: SchedulerDetail | null
   runs: SchedulerRunRecord[]
-  workflows: Awaited<ReturnType<typeof listWorkflows>>
-  agents: Awaited<ReturnType<typeof listAvailableAgents>>
+  workflows: Awaited<ReturnType<typeof workflowApplicationService.list>>
+  agents: Awaited<ReturnType<typeof agentQueryService.listAvailable>>
   isLoading: boolean
   isSaving: boolean
   isDeleting: boolean
@@ -27,7 +27,7 @@ export const useSchedulerDetailStore = create<SchedulerDetailState>((set, get) =
   load: async (schedulerId) => {
     set({ schedulerId, isLoading: true, error: null })
     try {
-      const [draft, runs, workflows, agents] = await Promise.all([schedulerApplicationService.getDetail(schedulerId), schedulerApplicationService.listRuns(schedulerId), listWorkflows(), listAvailableAgents()])
+      const [draft, runs, workflows, agents] = await Promise.all([schedulerApplicationService.getDetail(schedulerId), schedulerApplicationService.listRuns(schedulerId), workflowApplicationService.list(), agentQueryService.listAvailable()])
       set({ draft, runs, workflows, agents, isLoading: false })
     } catch (error) { set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) }) }
   },

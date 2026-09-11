@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react"
 
-import type { AgentDetail, DocumentSummary, IntegrationSummary, SkillSummary, WorkflowSummary } from "@/data/domain/models"
+import type { AgentDetail } from "@/data/domain/provider-agent-models"
+import type { SkillSummary } from "@/data/domain/skill-document-models"
+import type { IntegrationSummary } from "@/data/domain/integration-models"
+import type { DocumentSummary } from "@/data/domain/skill-document-models"
+import type { WorkflowSummary } from "@/data/domain/workflow-models"
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"

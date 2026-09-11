@@ -1,5 +1,5 @@
 import type { ExecutionContext } from "@/data/repositories/workflow-execution-engine"
-import type { WorkflowTraceSnapshot } from "@/data/domain/models"
+import type { WorkflowTraceSnapshot } from "@/data/domain/workflow-models"
 
 const sensitiveKey = /authorization|proxy-authorization|cookie|api[-_]?key|token|secret|password|passwd|credential|private_key/i
 const maxStringLength = 16_384

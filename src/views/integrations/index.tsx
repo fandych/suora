@@ -5,13 +5,13 @@ import PageHeader from "@/views/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
-import { subscribeToDataChanges } from "@/data/repositories/data-events"
+import { integrationApplicationService } from "@/application/integrations/integration-application-service"
+import { subscribeToDataChanges } from "@/application/shared/data-events"
 import { IntegrationCard } from "@/views/integrations/components/integration-card"
 
 const IntegrationsPage = () => {
   const navigate = useNavigate()
-  const { data, error, isLoading, reload } = useAsyncResource(() => listIntegrationSummaries(), [])
+  const { data, error, isLoading, reload } = useAsyncResource(() => integrationApplicationService.list(), [])
 
   useEffect(() => subscribeToDataChanges((route) => {
     if (route === "/integrations") {

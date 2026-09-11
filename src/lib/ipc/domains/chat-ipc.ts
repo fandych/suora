@@ -1,4 +1,4 @@
-import type { ChatDetail, ChatSummary } from "@/data/domain/models"
+import type { ChatDetail, ChatSummary } from "@/data/domain/chat-models"
 import { normalizeChatMessageParts, type ChatMessagePart } from "@/data/domain/chat-message-parts"
 import { getProjectBridge } from "@/lib/ipc/bridge"
 import { parseJson } from "@/lib/serialization/json"

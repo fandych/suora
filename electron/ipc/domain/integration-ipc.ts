@@ -1,10 +1,10 @@
 import { ipcMain } from "electron"
 import { z } from "zod"
 import { assertIntegrationEnabledWithDrizzle, createIntegrationWithDrizzle, deleteIntegrationWithDrizzle, getIntegrationWithDrizzle, listIntegrationsWithDrizzle, recordIntegrationExecutionWithDrizzle, saveIntegrationWithDrizzle, setIntegrationEnabledWithDrizzle } from "@electron/database/drizzle/integration-repository"
-import { executeIntegration } from "@electron/integrations/integration-executor"
+import { executeIntegration } from "@electron/others/integrations/integration-executor"
 import { fetchApiDocumentation } from "@electron/ipc/http/http-request"
 import type { IntegrationExecutePayload } from "@electron/types"
-import { ensureWorkspace } from "@electron/infrastructure/workspace-service"
+import { ensureWorkspace } from "@electron/others/infrastructure/workspace-service"
 
 const integrationExecuteSchema = z.object({ integrationId: z.string().trim().min(1).max(256).optional(), kind: z.enum(["http", "scripts", "mcp"]), config: z.record(z.string(), z.unknown()), inputJson: z.string().max(2 * 1024 * 1024).optional() })
 export function registerIntegrationIpc() {

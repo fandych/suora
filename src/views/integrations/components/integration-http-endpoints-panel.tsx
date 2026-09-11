@@ -17,7 +17,7 @@ import type {
   HttpEndpointConfig,
   HttpIntegrationConfig,
   IntegrationConfig,
-} from "@/data/domain/models"
+} from "@/data/domain/integration-models"
 import {
   createHttpEndpoint,
   mergeHttpEndpoints,

@@ -1,4 +1,4 @@
-import type { AgentDetail, AgentSummary } from "@/data/domain/models"
+import type { AgentDetail, AgentSummary } from "@/data/domain/provider-agent-models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { systemAgentMap, systemAgentSummaries } from "@/data/repositories/system-agents"
 import { projectIpc } from "@/lib/ipc"

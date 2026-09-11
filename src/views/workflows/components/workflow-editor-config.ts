@@ -1,5 +1,5 @@
-import type { WorkflowNodeData } from "@/data/domain/models"
-import { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS } from "@/data/repositories/workflow-notifications"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
+import { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS } from "@/application/workflows/workflow-editor-service"
 
 export const workflowPresetNodes: Array<{
   kind: WorkflowNodeData["kind"]

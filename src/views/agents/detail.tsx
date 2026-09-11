@@ -2,7 +2,7 @@ import { useEffect } from "react"
 import { useNavigate, useParams } from "react-router"
 import { EllipsisIcon, SlashIcon, Trash2Icon } from "lucide-react"
 
-import { emitDataChanged } from "@/data/repositories/data-events"
+import { emitDataChanged } from "@/application/shared/data-events"
 import { useAgentDetailStore } from "@/view-models/agents/agent-detail-store"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogMedia, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"

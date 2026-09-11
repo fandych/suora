@@ -4,8 +4,8 @@ import { Navigate, useParams } from "react-router"
 import { Button } from "@/components/ui/button"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { showToast } from "@/lib/ui-toast"
-import { applyPreferenceSettingsToDocument, createDefaultPreferenceSettings, getPreferenceSettings, savePreferenceSettings, type PreferenceSettings } from "@/data/repositories/preference-repository"
-import { checkForUpdates, getSystemDiagnostics, getSystemInfo, getUpdaterState } from "@/data/repositories/system-status-repository"
+import { preferenceApplicationService } from "@/application/preferences/preference-application-service"
+import type { PreferenceSettings } from "@/application/preferences/preference-application-service"
 import { hasProjectBridge, projectIpc } from "@/lib/ipc"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
@@ -18,12 +18,12 @@ import PreferenceSecurityPanel from "@/views/preference/components/preference-se
 
 const PreferencePage = () => {
   const { section } = useParams()
-  const { data, error, isLoading, reload, setData } = useAsyncResource(() => getPreferenceSettings(), [])
-  const { data: systemInfo } = useAsyncResource(() => getSystemInfo(), [])
-  const { data: updaterState, reload: reloadUpdaterState } = useAsyncResource(() => getUpdaterState(), [])
+  const { data, error, isLoading, reload, setData } = useAsyncResource(() => preferenceApplicationService.get(), [])
+  const { data: systemInfo } = useAsyncResource(() => preferenceApplicationService.getSystemInfo(), [])
+  const { data: updaterState, reload: reloadUpdaterState } = useAsyncResource(() => preferenceApplicationService.getUpdaterState(), [])
   const [diagnosticsRefreshToken, setDiagnosticsRefreshToken] = useState(0)
-  const { data: diagnostics, error: diagnosticsError, isLoading: diagnosticsLoading } = useAsyncResource(() => getSystemDiagnostics(), [diagnosticsRefreshToken])
-  const [draft, setDraft] = useState<PreferenceSettings>(createDefaultPreferenceSettings())
+  const { data: diagnostics, error: diagnosticsError, isLoading: diagnosticsLoading } = useAsyncResource(() => preferenceApplicationService.getDiagnostics(), [diagnosticsRefreshToken])
+  const [draft, setDraft] = useState<PreferenceSettings>(preferenceApplicationService.createDefault())
   const [isSaving, setIsSaving] = useState(false)
   const [isCheckingUpdates, setIsCheckingUpdates] = useState(false)
   const [isSendingTestMail, setIsSendingTestMail] = useState(false)
@@ -37,7 +37,7 @@ const PreferencePage = () => {
   }, [data])
 
   useEffect(() => {
-    applyPreferenceSettingsToDocument(draft)
+    preferenceApplicationService.applyToDocument(draft)
   }, [draft])
 
   useEffect(() => {
@@ -64,7 +64,7 @@ const PreferencePage = () => {
   const handleSave = async () => {
     try {
       setIsSaving(true)
-      const next = await savePreferenceSettings(draft)
+      const next = await preferenceApplicationService.save(draft)
       setData(next)
       setDraft(next)
       showToast({ title: "Preferences saved", description: "The desktop preference profile was updated.", type: "success", timeout: 2000 })
@@ -78,7 +78,7 @@ const PreferencePage = () => {
   const handleCheckUpdates = async () => {
     try {
       setIsCheckingUpdates(true)
-      const result = await checkForUpdates()
+      const result = await preferenceApplicationService.checkForUpdates()
       setUpdateResult(result)
       void reloadUpdaterState()
       showToast({ title: "Update check complete", description: "Desktop updater finished the latest check cycle.", type: "success", timeout: 2000 })
@@ -99,7 +99,7 @@ const PreferencePage = () => {
 
     try {
       setIsSendingTestMail(true)
-      const persisted = await savePreferenceSettings(draft)
+      const persisted = await preferenceApplicationService.save(draft)
       setData(persisted)
       setDraft(persisted)
       const result = await projectIpc.mail.send({

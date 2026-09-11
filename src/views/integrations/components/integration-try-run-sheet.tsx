@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet"
 import { Textarea } from "@/components/ui/textarea"
-import type { HttpIntegrationConfig, IntegrationExecutionRecord, ScriptIntegrationConfig } from "@/data/domain/models"
+import type { HttpIntegrationConfig, IntegrationExecutionRecord, ScriptIntegrationConfig } from "@/data/domain/integration-models"
 import { IntegrationHttpTryRunForm } from "@/views/integrations/components/integration-http-try-run-form"
 
 type IntegrationTryRunSheetProps = {

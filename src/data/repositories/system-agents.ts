@@ -1,4 +1,4 @@
-import type { AgentDetail, AgentSummary } from "@/data/domain/models"
+import type { AgentDetail, AgentSummary } from "@/data/domain/provider-agent-models"
 
 const now = Date.now()
 

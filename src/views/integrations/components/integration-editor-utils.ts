@@ -1,4 +1,4 @@
-import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig, ScriptIntegrationConfig } from "@/data/domain/models"
+import type { HttpIntegrationConfig, IntegrationConfig, McpIntegrationConfig, ScriptIntegrationConfig } from "@/data/domain/integration-models"
 import { createDefaultHttpIntegrationConfig, DEFAULT_PARAMETER_SCHEMA_JSON } from "@/data/domain/integrations"
 
 export function createChangedKindConfig(kind: IntegrationConfig["kind"], current: IntegrationConfig): IntegrationConfig {

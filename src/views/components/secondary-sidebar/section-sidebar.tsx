@@ -22,12 +22,8 @@ import { CheckIcon, ChevronDownIcon, ChevronRightIcon, EllipsisIcon, PencilIcon,
 import { useMemo, useState } from "react"
 import { useNavigate } from "react-router"
 import { useLocation } from "react-router"
-import { deleteAgent, setSystemAgentDisabled } from "@/data/repositories/agent-repository"
-import { deleteDocument } from "@/data/repositories/document-repository"
-import { emitDataChanged } from "@/data/repositories/data-events"
-import { deleteModelProvider, listModelProviders, saveModelProvider } from "@/data/repositories/model-config-repository"
-import { deleteSkill, getSkillDetail, saveSkillDraft } from "@/data/repositories/skill-repository"
-import { deleteWorkflow } from "@/services/workflows/workflow-publish-service"
+import { sidebarApplicationService } from "@/application/sidebar/sidebar-application-service"
+import { emitDataChanged } from "@/application/shared/data-events"
 import { ChatDeleteButton } from "@/views/chats/components/chat-delete-button"
 import { cn } from "@/lib/utils"
 
@@ -71,7 +67,7 @@ function AgentSidebarActionButton({ actionId, itemId, isActive }: AgentSidebarAc
   const handleDisableToggle = async () => {
     setIsPending(true)
     try {
-      await setSystemAgentDisabled(itemId, actionId === "disable")
+      await sidebarApplicationService.disableAgent(itemId, actionId === "disable")
       emitDataChanged("/agents")
       toast.add({ title: actionId === "disable" ? "Agent disabled" : "Agent enabled", description: "The system agent availability was updated.", type: "success" })
     } catch (error) {
@@ -84,7 +80,7 @@ function AgentSidebarActionButton({ actionId, itemId, isActive }: AgentSidebarAc
   const handleDelete = async () => {
     setIsPending(true)
     try {
-      await deleteAgent(itemId)
+      await sidebarApplicationService.deleteAgent(itemId)
       emitDataChanged("/agents")
       if (isActive) {
         navigate("/agents")
@@ -150,13 +146,13 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, c
   const handleItemAction = async (itemId: string, actionId: string) => {
     if (title === "Models") {
       if (actionId === "delete") {
-        await deleteModelProvider(itemId)
+        await sidebarApplicationService.deleteModelProvider(itemId)
       } else {
-        const providers = await listModelProviders()
+        const providers = await sidebarApplicationService.listModelProviders()
         const provider = providers.find((record) => record.id === itemId)
         if (!provider) return
         if (actionId === "enable" || actionId === "disable") {
-          await saveModelProvider({ ...provider, enabled: actionId === "enable" })
+          await sidebarApplicationService.saveModelProvider({ ...provider, enabled: actionId === "enable" })
         }
       }
       emitDataChanged("/models")
@@ -165,12 +161,12 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, c
     }
 
     if (title === "Skills") {
-      const detail = actionId !== "delete" ? await getSkillDetail(itemId) : null
+      const detail = actionId !== "delete" ? await sidebarApplicationService.getSkillDetail(itemId) : null
       if (actionId === "delete") {
-        await deleteSkill(itemId)
+        await sidebarApplicationService.deleteSkill(itemId)
       } else if (detail && actionId === "disable") {
         const nextFiles = detail.files.map((file) => file.path === "SKILL.md" ? { ...file, content: detail.files.find((candidate) => candidate.path === "SKILL.md")?.content ?? file.content } : file)
-        await saveSkillDraft(itemId, { title: detail.skill.title, source: detail.skill.source, summary: `[disabled] ${detail.skill.summary}`.trim(), files: nextFiles })
+        await sidebarApplicationService.saveSkillDraft(itemId, { title: detail.skill.title, source: detail.skill.source, summary: `[disabled] ${detail.skill.summary}`.trim(), files: nextFiles })
       }
       emitDataChanged("/skills")
       if (location.pathname === `/skills/${itemId}`) navigate("/skills")
@@ -179,7 +175,7 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, c
 
     if (title === "Documents") {
       if (actionId === "delete") {
-        await deleteDocument(itemId)
+        await sidebarApplicationService.deleteDocument(itemId)
         emitDataChanged("/documents")
         if (location.pathname === `/documents/${itemId}`) navigate("/documents")
       }
@@ -188,7 +184,7 @@ const SectionSidebar = ({ title, searchPlaceholder, groups, isLoading = false, c
 
     if (title === "Workflows") {
       if (actionId === "delete") {
-        await deleteWorkflow(itemId)
+        await sidebarApplicationService.deleteWorkflow(itemId)
         emitDataChanged("/workflows")
         if (location.pathname === `/workflows/${itemId}`) navigate("/workflows")
       }

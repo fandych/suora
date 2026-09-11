@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import type { IntegrationDetail } from "@/data/domain/models"
+import type { IntegrationDetail } from "@/data/domain/integration-models"
 
 type IntegrationVersionHistoryPanelProps = {
   detail: IntegrationDetail

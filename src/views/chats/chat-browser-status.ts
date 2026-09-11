@@ -1,4 +1,4 @@
-import type { ChatAgentEvent } from "@/services/chat/types"
+import type { ChatAgentEvent } from "@/application/chats/chat-runtime-service"
 
 export type ChatBrowserInteractionState = {
   status: "idle" | "working" | "navigating" | "awaiting-user" | "error"

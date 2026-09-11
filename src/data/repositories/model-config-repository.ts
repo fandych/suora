@@ -1,4 +1,4 @@
-import type { ProviderConfigRecord } from "@/data/domain/models"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { defaultProviderTypes, providerPresets } from "@/data/repositories/model-provider-presets"
 import { projectIpc } from "@/lib/ipc"

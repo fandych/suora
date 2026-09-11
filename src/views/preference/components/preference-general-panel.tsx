@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import type { PreferenceSettings } from "@/data/repositories/preference-repository"
+import type { PreferenceSettings } from "@/application/preferences/preference-application-service"
 
 import PreferenceSectionCard from "@/views/preference/components/preference-section-card"
 

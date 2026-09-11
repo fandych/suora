@@ -1,14 +1,15 @@
 import type { Node } from "@xyflow/react"
-import type { ChatMessageRecord, IntegrationConfig, WorkflowNodeData } from "@/data/domain/models"
+import type { ChatMessageRecord } from "@/data/domain/chat-models"
+import type { IntegrationConfig } from "@/data/domain/integration-models"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
 import { interpolate, readPath, type WorkflowVariableContext } from "@/data/repositories/workflow-variable-context"
 import { evaluateExpression, toWorkflowHttpResult } from "@/data/repositories/workflow-expression"
-import { rendererWorkflowRuntimeAdapter } from "@/services/workflows/workflow-runtime-adapter"
-import type { WorkflowRuntimePorts } from "@/services/workflows/workflow-runtime-ports"
+import type { WorkflowRuntimePorts } from "@/data/domain/workflow-runtime-ports"
 
 export type WorkflowExecutionMode = "dry-run" | "manual"
 export type WorkflowExecutionContext = WorkflowVariableContext
 
-export async function executeWorkflowNode(node: Node<WorkflowNodeData>, context: WorkflowExecutionContext, mode: WorkflowExecutionMode, ports: WorkflowRuntimePorts = rendererWorkflowRuntimeAdapter) {
+export async function executeWorkflowNode(node: Node<WorkflowNodeData>, context: WorkflowExecutionContext, mode: WorkflowExecutionMode, ports: WorkflowRuntimePorts) {
   const data = node.data
   const effectfulKinds = new Set<WorkflowNodeData["kind"]>(["agent", "ai-response", "http", "webhook", "toolset", "script", "smtp"])
   if (mode === "dry-run" && effectfulKinds.has(data.kind)) {

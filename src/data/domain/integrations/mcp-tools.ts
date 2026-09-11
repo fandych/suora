@@ -1,4 +1,4 @@
-import type { McpToolRecord } from "@/data/domain/models"
+import type { McpToolRecord } from "@/data/domain/integration-models"
 
 function createId(prefix: string) {
   return `${prefix}-${globalThis.crypto.randomUUID()}`

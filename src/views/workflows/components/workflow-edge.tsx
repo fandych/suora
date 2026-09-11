@@ -1,6 +1,6 @@
 import { BaseEdge, EdgeLabelRenderer, Position, getSmoothStepPath, useStore, type EdgeProps } from "@xyflow/react"
 
-import type { WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
 
 const LABEL_OFFSET = 18
 

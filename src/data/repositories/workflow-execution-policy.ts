@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react"
-import type { WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/workflow-models"
 import type { WorkflowVariableContext } from "@/data/repositories/workflow-variable-context"
 import { evaluateExpression } from "@/data/repositories/workflow-expression"
 

@@ -1,40 +1,11 @@
 import { hasProjectBridge, projectIpc } from "@/lib/ipc"
 import { getPreferenceSettings } from "@/data/repositories/preference-repository"
 import { DEFAULT_CHAT_AGENT_MAX_STEPS, normalizeChatAgentMaxSteps } from "@/data/domain/chat/agent-loop-control"
+import type { ChatRuntimeSettings, ChatSessionSettings } from "@/data/domain/chat-runtime-models"
 
 const CHAT_SETTINGS_STORE_VERSION = 2
 
-export type ChatModelConfig = {
-  providerId: string
-  providerType: string
-  modelId: string
-  baseUrl: string
-  apiKey: string
-  systemPrompt: string
-}
-
-export type ProxyConfig = {
-  enabled: boolean
-  type: "http" | "https" | "socks5"
-  host: string
-  port: number
-  username: string
-  password: string
-  rejectUnauthorized: boolean
-  ignoreSslErrors: boolean
-}
-
-export type ChatRuntimeSettings = {
-  model: ChatModelConfig
-  proxy: ProxyConfig
-  requestTimeoutMs: number
-  maxSteps: number
-}
-
-export type ChatSessionSettings = {
-  runtime: ChatRuntimeSettings
-  selectedAgentId: string
-}
+export type { ChatRuntimeSettings, ChatSessionSettings } from "@/data/domain/chat-runtime-models"
 
 type StoredChatSessionSettings = {
   runtime?: Partial<ChatRuntimeSettings>

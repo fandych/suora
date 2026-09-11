@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
-import type { SchedulerDetail } from "@/data/domain/models"
+import type { SchedulerDetail } from "@/data/domain/scheduler-models"
 
 type SchedulerGeneralPanelProps = {
   draft: SchedulerDetail

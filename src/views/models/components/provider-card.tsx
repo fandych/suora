@@ -1,5 +1,5 @@
 import { Badge } from "@/components/ui/badge"
-import type { ProviderConfigRecord } from "@/data/domain/models"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
 
 import { BrandedResourceCard } from "@/views/components/branded-resource-card"
 import { ProviderLogoBadge } from "@/views/models/components/provider-logo-badge"

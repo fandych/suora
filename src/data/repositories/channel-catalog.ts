@@ -1,4 +1,4 @@
-import type { ChannelDetail } from "@/data/domain/models"
+import type { ChannelDetail } from "@/data/domain/channel-models"
 import { CHANNEL_CATALOG_TEMPLATES, buildChannelCatalogId, createDefaultChannelConfig, createDefaultChannelRuntime } from "@/data/repositories/channel-defaults"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { normalizeChannelConfig } from "@/data/domain/channel-config"

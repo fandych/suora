@@ -4,7 +4,7 @@ import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { createWorkflow } from "@/services/workflows/workflow-service"
+import { workflowApplicationService } from "@/application/workflows/workflow-application-service"
 import { cn } from "@/lib/utils"
 
 export function NewWorkflowButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -14,7 +14,7 @@ export function NewWorkflowButton({ className, iconOnly = false }: { className?:
   const handleCreate = async () => {
     setIsCreating(true)
     try {
-      const detail = await createWorkflow()
+      const detail = await workflowApplicationService.create()
       navigate(`/workflows/${detail.workflow.id}`)
     } finally {
       setIsCreating(false)

@@ -2,7 +2,7 @@ import crypto from "node:crypto"
 import { and, desc, eq } from "drizzle-orm"
 import { getDrizzleDatabase } from "@electron/database/drizzle/client"
 import { documentVersions, documents, providers } from "@electron/database/drizzle/schema"
-import { protectCredential, revealCredential } from "@electron/infrastructure/credential-vault"
+import { protectCredential, revealCredential } from "@electron/others/infrastructure/credential-vault"
 
 export async function listDocumentsWithDrizzle() {
   return getDrizzleDatabase().select().from(documents).orderBy(desc(documents.updatedAt))

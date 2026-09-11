@@ -26,10 +26,10 @@ React Renderer → Preload Bridge → Electron IPC → Desktop Services
 - `src/data/mappers/`：数据库/IPC 原始行到领域模型的映射，例如 `channel-mappers.ts`。
 - `src/lib/ipc/bridge.ts`：Renderer 对 `window.project` bridge 的最小访问封装。
 - `src/lib/serialization/json.ts`：JSON 兼容解析和默认值回退。
-- **MVC 映射**：`src/data/domain/` 和 `src/data/mappers/` 是 Model；`src/data/repositories/` 负责持久化适配；`src/services/` 负责 Service/Use Case 和跨模块编排；`src/views/*/use-*.ts` 是页面 Controller；`src/views/*/components/` 是 View；`src/App.tsx` 和 layouts 负责路由与页面组合。Controller 不直接拼接 IPC，View 不实现领域规则。
+- **MVVM 映射**：`src/data/domain/` 和 `src/data/mappers/` 是 Model；`src/data/repositories/` 负责持久化适配；`src/application/` 负责用例和跨模块编排；`src/services/` 负责无 UI 状态的运行时能力；`src/view-models/` 负责页面状态、加载和命令；`src/views/` 和 `src/views/*/components/` 负责 View 与页面组合。View 不直接依赖 Repository 或 Service。
 - **Workflow 分层**：`workflow-node-executor.ts` 负责单节点能力，`workflow-execution-context.ts` 管理运行上下文，`workflow-trace-recorder.ts` 生成脱敏 trace，`workflow-execution-engine.ts` 只负责图调度。Workflow 当前在 Renderer 执行，因为节点依赖 Renderer 侧的 AI、文档和 Integration service；若迁移到 Main process，必须先建立等价的 Main process ports/adapters。
 - **Channel 分层**：`channel-repository.ts` 负责持久化 facade，`src/services/channels/` 按 runtime、diagnostics、binding、messaging 拆分用例；Channel mapper 只负责 Raw row 到 Model 的转换。
-- **Ports/Adapters**：Workflow 节点执行器只依赖 `src/services/workflows/workflow-runtime-ports.ts` 定义的 AI、Document、Integration、Mail 和序列化能力；`workflow-runtime-adapter.ts` 提供 Renderer 实现。未来 Main process 执行器应提供独立 adapter，不应让节点 Model 直接依赖 Electron 或具体 repository。
+- **Ports/Adapters**：Workflow 节点执行器只依赖 `src/data/domain/workflow-runtime-ports.ts` 定义的 AI、Document、Integration、Mail 和序列化能力；runtime settings、integration execution result 和 workflow context 等契约位于 `src/data/domain/*-runtime-models.ts`，不依赖 Repository。`workflow-runtime-adapter.ts` 提供 Renderer 实现。未来 Main process 执行器应提供独立 adapter，不应让节点 Model 直接依赖 Electron 或具体 repository。
 - **Main process 数据分层**：`electron/database/workflow-database-context.ts` 负责数据库生命周期，`workflow-definition-database.ts` 负责 definition CRUD，`workflow-version-database.ts` 负责版本存在性校验，`workflow-invocation-database.ts` 负责运行记录；IPC handler 通过 `workflow-database-repository.ts` facade 调用，不直接承担 SQL 业务。
 - `src/services/ai/`：AI Provider 构造和 Electron 代理网络客户端。
 - `src/services/ai-service.ts`：Chat Agent/ToolLoop 跨模块运行编排；`src/services/chat/`：Chat 消息转换等 Chat 运行时辅助服务。
@@ -39,7 +39,7 @@ React Renderer → Preload Bridge → Electron IPC → Desktop Services
 - `electron/main.ts`：应用生命周期入口，准备工作区、迁移数据库、注册 IPC、配置更新器并创建窗口。
 - `electron/preload.ts`：在 context isolation 下暴露 `window.project` 和少量事件/通用 invoke API。
 - `electron/ipc/`：按领域注册 IPC handlers，实际子目录包括 `system/`、`workspace/`、`database/`、`ai/`、`chat/`、`document/`、`agent/`、`skill/`、`model/`、`channel/`、`workflow/`、`integration/`、`scheduler/`、`preference/`、`tools/`、`updater/` 和 `mail/`。
-- `electron/others/`：AI 请求、集成、渠道、代理、邮件、浏览器、工具权限和更新等桌面服务。
+- `electron/others/`：AI 请求、集成、渠道、代理、邮件、浏览器、工具权限和更新等桌面服务；具体按 `application/`、`channels/`、`infrastructure/`、`integrations/`、`services/` 分组。
 - `electron/database/`：SQLite 初始化、WAL、外键、迁移和查询执行。
 - `tests/unit/`：集中存放单元测试，并按 `data/`、`services/`、`views/` 保留被测模块的功能结构。
 
@@ -86,7 +86,7 @@ preload 按领域暴露 `project.chats`、`documents`、`models`、`skills`、`a
 
 ## 服务边界
 
-Service 层不得反向依赖 `src/views/`。Views 可以调用 service 和 repository；需要被 service 与 view 共同使用的 Chat 类型、事件转换和持久化工具，应放在 `src/services/chat/` 或 `src/data/domain/chat/`。
+Domain 和 Repository 层不得反向依赖 Service 或 `src/views/`。Views 通过 `src/application/` 和 `src/view-models/` 访问数据；需要被 runtime、application 和 view 共同使用的 Chat 类型、事件转换和持久化工具，应通过 Application adapter 暴露。
 
 - **AI**：主进程代理模型请求、代理/TLS、超时和连接重试；renderer 通过流式事件接收增量文本、工具调用和错误。
 - **Tools**：文件读写、命令和浏览器操作受工作区策略、命令 allowlist、大小限制与 URL 安全规则约束。
@@ -94,7 +94,7 @@ Service 层不得反向依赖 `src/views/`。Views 可以调用 service 和 repo
 - **Channels**：Webhook server 和 stream/email clients 运行在主进程；入站消息通过 `channel:message` 事件发送到 renderer，再由 channel listener 路由到 Chat/Agent。
 - **Updater**：仅打包应用检查更新，开发环境跳过。
 
-依赖方向约定为：`views → services/repositories → data/domain/lib`；service 不得反向依赖 `views`，IPC domain client 不得通过 `projectIpc` facade 反向调用自身。
+依赖方向约定为：`views → view-models/application → services/repositories → data/domain/lib`；Domain 不得依赖 Repository、Service 或 View，Repository 和 Service 不得反向依赖 View，IPC domain client 不得通过 `projectIpc` facade 反向调用自身。
 
 ## 命名与目录规则
 

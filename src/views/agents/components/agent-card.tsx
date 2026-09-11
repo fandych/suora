@@ -1,4 +1,4 @@
-import type { AgentSummary } from "@/data/domain/models"
+import type { AgentSummary } from "@/data/domain/provider-agent-models"
 import { Badge } from "@/components/ui/badge"
 import { AgentLogoBadge } from "@/views/agents/components/agent-logo-badge"
 import { BrandedResourceCard } from "@/views/components/branded-resource-card"

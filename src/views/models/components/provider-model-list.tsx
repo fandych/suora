@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
-import type { ProviderConfigRecord } from "@/data/domain/models"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
 
 type ModelStatusFilter = "all" | "enabled" | "disabled"
 

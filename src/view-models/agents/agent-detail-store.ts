@@ -1,11 +1,11 @@
 import { create } from "zustand"
-import type { AgentDetail } from "@/data/domain/models"
-import { deleteAgent, getAgentDetail, saveAgentDraft, setSystemAgentDisabled } from "@/data/repositories/agent-repository"
-import { listDocuments } from "@/data/repositories/document-repository"
-import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
-import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
-import { listSkills } from "@/data/repositories/skill-repository"
-import { listWorkflows } from "@/services/workflows/workflow-service"
+import type { AgentDetail } from "@/data/domain/provider-agent-models"
+import { agentApplicationService } from "@/application/agents/agent-application-service"
+import { documentQueryService } from "@/application/documents/document-query-service"
+import { integrationApplicationService } from "@/application/integrations/integration-application-service"
+import { modelQueryService } from "@/application/models/model-query-service"
+import { skillApplicationService } from "@/application/skills/skill-application-service"
+import { workflowApplicationService } from "@/application/workflows/workflow-application-service"
 
 function normalizeDraft(detail: AgentDetail): AgentDetail {
   return {
@@ -22,11 +22,11 @@ type AgentDetailState = {
   agentId: string | null
   selectedVersionId?: string
   draft: AgentDetail | null
-  providers: Awaited<ReturnType<typeof listConfiguredModelProviders>>
-  skills: Awaited<ReturnType<typeof listSkills>>
-  integrations: Awaited<ReturnType<typeof listIntegrationSummaries>>
-  documents: Awaited<ReturnType<typeof listDocuments>>
-  workflows: Awaited<ReturnType<typeof listWorkflows>>
+  providers: Awaited<ReturnType<typeof modelQueryService.list>>
+  skills: Awaited<ReturnType<typeof skillApplicationService.list>>
+  integrations: Awaited<ReturnType<typeof integrationApplicationService.list>>
+  documents: Awaited<ReturnType<typeof documentQueryService.list>>
+  workflows: Awaited<ReturnType<typeof workflowApplicationService.list>>
   isLoading: boolean
   isSaving: boolean
   isUpdatingAvailability: boolean
@@ -58,12 +58,12 @@ export const useAgentDetailStore = create<AgentDetailState>((set, get) => ({
     set({ agentId, selectedVersionId, isLoading: true, error: null })
     try {
       const [detail, providers, skills, integrations, documents, workflows] = await Promise.all([
-        getAgentDetail(agentId, selectedVersionId),
-        listConfiguredModelProviders(),
-        listSkills(),
-        listIntegrationSummaries(),
-        listDocuments(),
-        listWorkflows(),
+        agentApplicationService.getDetail(agentId, selectedVersionId),
+        modelQueryService.list(),
+        skillApplicationService.list(),
+        integrationApplicationService.list(),
+        documentQueryService.list(),
+        workflowApplicationService.list(),
       ])
       if (!detail) throw new Error("Agent not found.")
       set({ draft: normalizeDraft(detail), providers, skills, integrations, documents, workflows, isLoading: false })
@@ -77,7 +77,7 @@ export const useAgentDetailStore = create<AgentDetailState>((set, get) => ({
     if (!draft || draft.selectedVersion.isRelease) return null
     set({ isSaving: true, error: null })
     try {
-      const saved = await saveAgentDraft(draft, false)
+      const saved = await agentApplicationService.saveDraft(draft, false)
       set({ draft: normalizeDraft(saved), selectedVersionId: saved.selectedVersion.id, isSaving: false })
       return saved
     } catch (error) {
@@ -104,7 +104,7 @@ export const useAgentDetailStore = create<AgentDetailState>((set, get) => ({
     if (!draft || draft.agent.source !== "system") return null
     set({ isUpdatingAvailability: true, error: null })
     try {
-      await setSystemAgentDisabled(draft.agent.id, !draft.agent.isDisabled)
+      await agentApplicationService.setDisabled(draft.agent.id, !draft.agent.isDisabled)
       const next = { ...draft, agent: { ...draft.agent, isDisabled: !draft.agent.isDisabled } }
       set({ draft: next, isUpdatingAvailability: false })
       return next
@@ -118,7 +118,7 @@ export const useAgentDetailStore = create<AgentDetailState>((set, get) => ({
     if (!draft || draft.agent.source !== "custom") return
     set({ isDeleting: true, error: null })
     try {
-      await deleteAgent(draft.agent.id)
+      await agentApplicationService.remove(draft.agent.id)
       set({ draft: null, isDeleting: false })
     } catch (error) {
       set({ isDeleting: false, error: error instanceof Error ? error : new Error(String(error)) })

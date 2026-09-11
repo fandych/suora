@@ -1,4 +1,4 @@
-import type { WorkflowNodeData, WorkflowNodeTraceRecord, WorkflowTraceSnapshot } from "@/data/domain/models"
+import type { WorkflowNodeData, WorkflowNodeTraceRecord, WorkflowTraceSnapshot } from "@/data/domain/workflow-models"
 import { createWorkflowTraceSnapshot } from "@/data/repositories/workflow-trace-sanitizer"
 import type { WorkflowExecutionContext } from "@/data/repositories/workflow-execution-context"
 

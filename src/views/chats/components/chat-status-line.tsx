@@ -2,7 +2,7 @@ import { AlertTriangleIcon, Clock3Icon, Loader2Icon, ShieldAlertIcon, WrenchIcon
 
 import { Spinner } from "@/components/ui/spinner"
 import { getChatErrorPresentation } from "@/data/domain/chat/chat-error-state"
-import type { ChatAgentEvent } from "@/services/chat/types"
+import type { ChatAgentEvent } from "@/application/chats/chat-runtime-service"
 
 type ChatStatusLineProps = {
   isResponding: boolean

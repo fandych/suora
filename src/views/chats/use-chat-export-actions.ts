@@ -1,8 +1,8 @@
 import { saveDocxFile, savePdfFile, saveTextFile } from "@/lib/browser/file-exports"
 import { showToast } from "@/lib/ui-toast"
 import { buildChatTranscript } from "@/views/chats/chat-controller-utils"
-import type { AssistantResponsePart } from "@/services/chat/response-parts"
-import type { ChatDetail } from "@/data/domain/models"
+import type { AssistantResponsePart } from "@/application/chats/chat-runtime-service"
+import type { ChatDetail } from "@/data/domain/chat-models"
 
 export function useChatExportActions(selectedChat: ChatDetail | null | undefined, assistantResponseParts: AssistantResponsePart[]) {
   return async (format: "markdown" | "pdf" | "docx") => {

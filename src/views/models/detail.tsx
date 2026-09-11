@@ -3,9 +3,9 @@ import { useParams } from "react-router"
 import { useNavigate } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
-import type { ProviderConfigRecord } from "@/data/domain/models"
-import { emitDataChanged } from "@/data/repositories/data-events"
-import { discoverProviderModelCatalog, getDefaultProviderBaseUrl, getProviderModelDiscoveryState, getProviderPreset, providerAllowsNoKey } from "@/data/repositories/model-config-repository"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
+import { emitDataChanged } from "@/application/shared/data-events"
+import { modelQueryService } from "@/application/models/model-query-service"
 import { showToast } from "@/lib/ui-toast"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
@@ -36,10 +36,10 @@ const ModelsDetailPage = () => {
 
   useEffect(() => { if (modelId) void load(modelId) }, [load, modelId])
 
-  const selectedPreset = getProviderPreset(draft?.providerType ?? "openai")
+  const selectedPreset = modelQueryService.getPreset(draft?.providerType ?? "openai")
   const hasApiKey = Boolean(draft?.apiKey.trim())
-  const canConfigureModels = hasApiKey || providerAllowsNoKey(draft?.providerType ?? "")
-  const discoveryState = draft ? getProviderModelDiscoveryState(draft) : { capable: false, enabled: false, reason: null }
+  const canConfigureModels = hasApiKey || modelQueryService.allowsNoKey(draft?.providerType ?? "")
+  const discoveryState = draft ? modelQueryService.getDiscoveryState(draft) : { capable: false, enabled: false, reason: null }
 
   const handleSave = async () => {
     if (!draft) return
@@ -127,10 +127,10 @@ const ModelsDetailPage = () => {
 
   const handleProviderTypeChange = (providerType: string) => {
     if (!draft) return
-    const currentPreset = getProviderPreset(draft.providerType)
-    const nextPreset = getProviderPreset(providerType)
-    const previousDefault = getDefaultProviderBaseUrl(draft.providerType)
-    const nextDefault = getDefaultProviderBaseUrl(providerType)
+    const currentPreset = modelQueryService.getPreset(draft.providerType)
+    const nextPreset = modelQueryService.getPreset(providerType)
+    const previousDefault = modelQueryService.getDefaultBaseUrl(draft.providerType)
+    const nextDefault = modelQueryService.getDefaultBaseUrl(providerType)
     const shouldReplaceBaseUrl = !draft.baseUrl || draft.baseUrl === previousDefault
     updateDraft({
       ...draft,
@@ -157,7 +157,7 @@ const ModelsDetailPage = () => {
 
     setIsRefreshingModels(true)
     try {
-      const result = await discoverProviderModelCatalog(draft)
+      const result = await modelQueryService.discover(draft)
       await persistProvider(result.provider)
       showToast({
         title: "Model catalog refreshed",

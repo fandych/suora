@@ -3,7 +3,7 @@ import type {
   DocumentGraphEdge,
   DocumentPageRecord,
   DocumentSummary,
-} from "@/data/domain/models"
+} from "@/data/domain/skill-document-models"
 
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { buildDefaultDocumentNodes, getDocumentDisplayName, normalizeDocumentNodes } from "@/data/domain/document-tree"

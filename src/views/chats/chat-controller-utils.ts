@@ -1,8 +1,8 @@
 import { buildAttachmentSummary, getTextParts, MAX_CHAT_ATTACHMENT_BYTES, MAX_CHAT_ATTACHMENTS, MAX_CHAT_ATTACHMENT_TOTAL_BYTES, type ChatAttachmentRecord, type ChatMessagePart } from "@/data/domain/chat-message-parts"
-import type { ChatDetail, ChatMessageRecord, ProviderConfigRecord } from "@/data/domain/models"
-import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
-import type { ChatAttachment } from "@/services/chat/types"
-import type { AssistantResponsePart } from "@/services/chat/response-parts"
+import type { ChatDetail, ChatMessageRecord } from "@/data/domain/chat-models"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
+import type { ChatRuntimeSettings } from "@/application/chats/chat-runtime-service"
+import type { ChatAttachment, AssistantResponsePart } from "@/application/chats/chat-runtime-service"
 
 export function buildAttachmentSourceKey(file: File) {
   return [file.name, file.size, file.lastModified, file.type || "application/octet-stream"].join(":")

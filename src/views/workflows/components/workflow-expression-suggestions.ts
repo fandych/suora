@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react"
 
-import type { WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/workflow-models"
 
 export type WorkflowExpressionSuggestion = {
   expression: string

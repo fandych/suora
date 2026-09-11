@@ -1,8 +1,11 @@
-import type { VersionOption, WorkflowDefinition, WorkflowInvocationRecord } from "@/data/domain/models"
+import type { VersionOption } from "@/data/domain/version-models"
+import type { WorkflowDefinition, WorkflowInvocationRecord } from "@/data/domain/workflow-models"
+import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { executeWorkflowDefinition } from "@/data/repositories/workflow-execution-engine"
 import { normalizeWorkflowNotifications } from "@/data/repositories/workflow-notifications"
 import { projectIpc } from "@/lib/ipc"
 import { sendWorkflowNotification } from "@/services/workflows/workflow-notification-service"
+import { rendererWorkflowRuntimeAdapter } from "@/services/workflows/workflow-runtime-adapter"
 
 export async function recordWorkflowInvocation(input: {
   workflowId: string
@@ -12,6 +15,7 @@ export async function recordWorkflowInvocation(input: {
   trigger: string
   onTrace?: (trace: WorkflowInvocationRecord["traces"][number]) => void
 }): Promise<WorkflowInvocationRecord> {
+  await ensureSeeded()
   const normalizedDefinition = normalizeWorkflowNotifications(input.definition)
   const dryRunInput = JSON.parse(normalizedDefinition.dryRunInputJson ?? "{}") as unknown
   const executionStartedAt = Date.now()
@@ -20,6 +24,7 @@ export async function recordWorkflowInvocation(input: {
     dryRunInput,
     input.trigger === "dry-run" ? "dry-run" : "manual",
     input.onTrace,
+    rendererWorkflowRuntimeAdapter,
   ).catch((error) => ({
     traces: [{
       nodeId: normalizedDefinition.nodes.find((node) => node.data.kind === "start")?.id ?? "workflow",

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
-import type { AgentDetail, ProviderConfigRecord } from "@/data/domain/models"
+import type { AgentDetail, ProviderConfigRecord } from "@/data/domain/provider-agent-models"
 
 type AgentGeneralPanelProps = {
   draft: AgentDetail

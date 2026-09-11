@@ -7,8 +7,8 @@ import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Popover, PopoverContent, PopoverDescription, PopoverHeader, PopoverTitle, PopoverTrigger } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
-import type { ProviderConfigRecord } from "@/data/domain/models"
-import { providerPresets } from "@/data/repositories/model-provider-presets"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
+import { modelQueryService } from "@/application/models/model-query-service"
 import { ProviderLogoBadge } from "@/views/models/components/provider-logo-badge"
 
 type ProviderSettingsFormProps = {
@@ -51,7 +51,7 @@ export function ProviderSettingsForm({ draft, description, docsUrl, canConfigure
           <div className="space-y-2">
             <div className="text-sm text-muted-foreground">Provider type</div>
             <NativeSelect value={draft.providerType} onChange={(event) => onProviderTypeChange(event.target.value)}>
-              {providerPresets.map((preset) => (
+              {modelQueryService.presets.map((preset) => (
                 <NativeSelectOption key={preset.providerType} value={preset.providerType}>{preset.title}</NativeSelectOption>
               ))}
             </NativeSelect>

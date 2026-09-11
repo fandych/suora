@@ -1,7 +1,7 @@
 import { CalendarClockIcon } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
-import type { SchedulerDetail } from "@/data/domain/models"
+import type { SchedulerDetail } from "@/data/domain/scheduler-models"
 import { BrandedResourceCard } from "@/views/components/branded-resource-card"
 
 type SchedulerCardProps = {

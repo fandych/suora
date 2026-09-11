@@ -1,5 +1,5 @@
-import { parseWorkspaceCommand } from "@electron/infrastructure/tool-guardrails"
-import { validateQueryPayload } from "@electron/infrastructure/db-query-policy"
+import { parseWorkspaceCommand } from "@electron/others/infrastructure/tool-guardrails"
+import { validateQueryPayload } from "@electron/others/infrastructure/db-query-policy"
 
 describe("Electron security boundaries", () => {
   it("parses allowed commands without invoking a shell", () => {

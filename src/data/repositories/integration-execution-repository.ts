@@ -1,22 +1,7 @@
-import type { IntegrationConfig } from "@/data/domain/models"
+import type { IntegrationConfig } from "@/data/domain/integration-models"
+import type { IntegrationExecutionResult } from "@/data/domain/integration-runtime-models"
 
-export type IntegrationExecutionResult = {
-  ok: boolean
-  status: number
-  body: string
-  request?: {
-    url: string
-    method: string
-    headers: Record<string, string>
-    body: string | null
-  }
-  response?: {
-    status: number
-    headers: Record<string, string | string[]>
-    body: string
-    json?: unknown
-  }
-}
+export type { IntegrationExecutionResult } from "@/data/domain/integration-runtime-models"
 
 export async function executeIntegration(config: IntegrationConfig, inputJson = "{}", integrationId?: string) {
   const bridge = window.electron

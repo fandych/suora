@@ -9,6 +9,7 @@ npm run lint
 npm run type-check
 npm run test:run
 npm run build
+npm run verify:architecture
 ```
 
 ## 常用命令
@@ -17,6 +18,7 @@ npm run build
 - `npm run test`：以 watch 模式运行 Vitest。
 - `npm run test:coverage`：运行测试并产出覆盖率。
 - `npm run build`：构建 `out/main`、`out/preload` 与 `out/renderer`。
+- `npm run verify:architecture`：检查 View、ViewModel、Application、Repository、Domain 的依赖方向及 IPC SQL 边界。
 - `npm run package`：使用 electron-builder 打包当前平台。
 - `npm run package:win`：生成 Windows NSIS 与 portable 安装包。
 

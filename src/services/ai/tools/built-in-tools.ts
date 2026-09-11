@@ -1,5 +1,5 @@
 import { getAgentDetail } from "@/data/repositories/agent-repository"
-import type { AgentDetail } from "@/data/domain/models"
+import type { AgentDetail } from "@/data/domain/provider-agent-models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { getDocumentDetail } from "@/data/repositories/document-repository"
 import { getIntegrationDetail } from "@/data/repositories/integration-repository"

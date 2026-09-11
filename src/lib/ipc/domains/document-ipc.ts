@@ -1,4 +1,5 @@
-import type { DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary, VersionOption } from "@/data/domain/models"
+import type { DocumentDetail, DocumentGraphEdge, DocumentPageRecord, DocumentSummary } from "@/data/domain/skill-document-models"
+import type { VersionOption } from "@/data/domain/version-models"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { buildDefaultDocumentNodes, normalizeDocumentNodes } from "@/data/domain/document-tree"
 import { getProjectBridge } from "@/lib/ipc/bridge"

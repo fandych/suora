@@ -8,7 +8,7 @@ import { ChatRichContent } from "@/views/chats/components/chat-rich-content"
 import { ChatToolActivityGroup } from "@/views/chats/components/chat-tool-activity-group"
 import type { ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
 import { getProviderLogo } from "@/views/components/provider-logo"
-import type { AssistantResponsePart } from "@/services/chat/response-parts"
+import type { AssistantResponsePart } from "@/application/chats/chat-runtime-service"
 
 export type { AssistantResponsePart }
 

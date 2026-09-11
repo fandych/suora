@@ -3,12 +3,12 @@ import { useNavigate } from "react-router"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import PageHeader from "@/views/components/page-header"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listModelProviders } from "@/data/repositories/model-config-repository"
+import { modelQueryService } from "@/application/models/model-query-service"
 import { ProviderCard } from "@/views/models/components/provider-card"
 
 const ModelsPage = () => {
   const navigate = useNavigate()
-  const { data, error, isLoading, reload } = useAsyncResource(() => listModelProviders(), [])
+  const { data, error, isLoading, reload } = useAsyncResource(() => modelQueryService.list(), [])
   const providers = data ?? []
 
   return (

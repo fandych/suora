@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest"
-import type { ChannelDetail } from "@/data/domain/models"
+import type { ChannelDetail } from "@/data/domain/channel-models"
 import { bindChannel } from "@/services/channels/channel-binding-service"
 
 const baseDetail = {

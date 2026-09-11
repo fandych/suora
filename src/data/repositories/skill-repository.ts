@@ -1,4 +1,5 @@
-import type { SkillConfigRecord, SkillDetail, SkillFileRecord, SkillSummary } from "@/data/domain/models"
+import type { SkillDetail, SkillFileRecord, SkillSummary } from "@/data/domain/skill-document-models"
+import type { SkillConfigRecord } from "@/data/domain/provider-agent-models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { createArchiveImportPlan, getImportableArchiveEntries, readArchiveEntries, type ArchiveImportPlan, type ArchiveImportStrategy } from "@/lib/resources/archive-import"
 import { buildSkillMarkdown, ensureSkillFiles, getSkillArchivePathError, getSkillSourceLanguage, normalizeSkillPath, parseSkillFrontmatter } from "@/lib/resources/skill-files"

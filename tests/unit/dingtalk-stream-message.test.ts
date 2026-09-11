@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { parseDingTalkStreamMessage } from "@electron/channels/dingtalk-stream-message"
+import { parseDingTalkStreamMessage } from "@electron/others/channels/dingtalk-stream-message"
 
 describe("DingTalk stream message mapping", () => {
   const channel = { id: "dingtalk-1", platform: "dingtalk" } as never

@@ -1,4 +1,4 @@
-import type { SchedulerDetail, SchedulerRunRecord } from "@/data/domain/models"
+import type { SchedulerDetail, SchedulerRunRecord } from "@/data/domain/scheduler-models"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { projectIpc } from "@/lib/ipc"
 

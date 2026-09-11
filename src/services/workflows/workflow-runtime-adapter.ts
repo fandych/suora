@@ -4,7 +4,7 @@ import { executeIntegration } from "@/data/repositories/integration-execution-re
 import { getIntegrationDetail } from "@/data/repositories/integration-repository"
 import { projectIpc } from "@/lib/ipc"
 import { streamChatAgentResponse } from "@/services/ai-service"
-import type { WorkflowRuntimePorts } from "@/services/workflows/workflow-runtime-ports"
+import type { WorkflowRuntimePorts } from "@/data/domain/workflow-runtime-ports"
 
 export const rendererWorkflowRuntimeAdapter: WorkflowRuntimePorts = {
   getChatRuntimeSettings,

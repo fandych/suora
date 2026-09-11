@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react"
 
 import { Button } from "@/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import type { ChannelConfigRecord } from "@/data/domain/models"
+import type { ChannelConfigRecord } from "@/data/domain/channel-models"
 import { CompactInput, Field, Hint } from "@/views/channels/components/channel-form-fields"
 
 const WECHAT_QR_SCREENSHOT_RETRY_DELAYS_MS = [0, 1800, 3500]

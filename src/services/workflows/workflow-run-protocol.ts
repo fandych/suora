@@ -1,4 +1,4 @@
-import type { WorkflowDefinition, WorkflowInvocationRecord } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowInvocationRecord } from "@/data/domain/workflow-models"
 
 export type WorkflowRunCommand = {
   requestId: string

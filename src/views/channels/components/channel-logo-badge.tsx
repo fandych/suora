@@ -1,4 +1,4 @@
-import type { ChannelConfigRecord } from "@/data/domain/models"
+import type { ChannelConfigRecord } from "@/data/domain/channel-models"
 import { cn } from "@/lib/utils"
 import { getChannelPlatformBrandClassName } from "@/views/channels/components/channel-branding"
 import { getChannelPlatformLogo } from "@/views/channels/components/channel-utils"

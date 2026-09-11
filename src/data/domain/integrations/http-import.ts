@@ -1,4 +1,4 @@
-import type { HttpEndpointConfig, HttpEndpointParameter, HttpIntegrationAuthType } from "@/data/domain/models"
+import type { HttpEndpointConfig, HttpEndpointParameter, HttpIntegrationAuthType } from "@/data/domain/integration-models"
 import { createHttpEndpoint, createHttpEndpointParameter, DEFAULT_PARAMETER_SCHEMA_JSON } from "@/data/domain/integrations/http-config"
 
 function toPrettyJson(value: unknown, fallback = "{}") {

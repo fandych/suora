@@ -2,7 +2,7 @@ import crypto from "node:crypto"
 import { desc, eq, and } from "drizzle-orm"
 import { getDrizzleDatabase } from "@electron/database/drizzle/client"
 import { workflowInvocations, workflowVersions, workflows } from "@electron/database/drizzle/schema"
-import { createDefaultWorkflowDefinition, validateWorkflowDefinitionJson } from "@electron/services/workflow-definition"
+import { createDefaultWorkflowDefinition, validateWorkflowDefinitionJson } from "@electron/others/services/workflow-definition"
 
 export async function listWorkflowDefinitionsWithDrizzle() {
   return getDrizzleDatabase().select().from(workflows).orderBy(desc(workflows.updatedAt))

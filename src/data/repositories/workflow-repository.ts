@@ -1,9 +1,8 @@
-import type { VersionOption, WorkflowDefinition, WorkflowDetail, WorkflowInvocationRecord, WorkflowSummary } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowDetail, WorkflowSummary } from "@/data/domain/workflow-models"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { normalizeWorkflowNotifications } from "@/data/repositories/workflow-notifications"
 import { projectIpc } from "@/lib/ipc"
-import { recordWorkflowInvocation } from "@/services/workflows/workflow-invocation-service"
 
 export async function listWorkflows() {
   await ensureSeeded()
@@ -49,28 +48,4 @@ export async function deleteWorkflow(workflowId: string) {
   const deleted = await projectIpc.workflows.delete(workflowId)
   emitDataChanged("/workflows")
   return deleted
-}
-
-export async function dryRunWorkflowSnapshot(input: {
-  workflowId: string
-  workflowTitle: string
-  selectedVersion: VersionOption
-  definition: WorkflowDefinition
-  onTrace?: (trace: WorkflowInvocationRecord["traces"][number]) => void
-}) {
-  await ensureSeeded()
-  return recordWorkflowInvocation({ ...input, trigger: "dry-run" })
-}
-
-export async function runWorkflow(workflowId: string, selectedVersionId?: string) {
-  await ensureSeeded()
-  const snapshot = await getWorkflowDetail(workflowId, selectedVersionId)
-  await recordWorkflowInvocation({
-    workflowId,
-    workflowTitle: snapshot.workflow.title,
-    selectedVersion: snapshot.selectedVersion,
-    definition: snapshot.definition,
-    trigger: "manual",
-  })
-  return getWorkflowDetail(workflowId, selectedVersionId)
 }

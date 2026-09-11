@@ -1,10 +1,7 @@
 import { getProjectBridge } from "@/lib/ipc"
 
 const SEED_VERSION = "2026-09-08-private-editor-agents-v1"
-const LEGACY_AGENT_IDS = ["agent-crm-sync"]
-const LEGACY_SKILL_IDS = ["skill-plan", "skill-agent-customization", "skill-brand-tone"]
-const LEGACY_WORKFLOW_IDS = ["workflow-lead-intake", "workflow-weekly-report"]
-const LEGACY_INTEGRATION_IDS = ["integration-webhook", "integration-github-mcp", "integration-cleanup-script"]
+import { LEGACY_AGENT_IDS, LEGACY_INTEGRATION_IDS, LEGACY_SKILL_IDS, LEGACY_WORKFLOW_IDS } from "@/data/compatibility/seed-legacy"
 
 let seedPromise: Promise<void> | undefined
 

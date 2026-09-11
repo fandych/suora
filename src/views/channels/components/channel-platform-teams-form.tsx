@@ -1,4 +1,4 @@
-import type { ChannelConfigRecord } from "@/data/domain/models"
+import type { ChannelConfigRecord } from "@/data/domain/channel-models"
 import { CompactInput, Field, FormGroupSection } from "@/views/channels/components/channel-form-fields"
 
 type ChannelPlatformTeamsFormProps = {

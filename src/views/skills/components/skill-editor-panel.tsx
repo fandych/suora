@@ -1,6 +1,6 @@
 import { ResourceFilePreview } from "@/views/components/resource-file-preview"
 import DocumentContentEditor from "@/views/components/document-content-editor"
-import type { SkillFileRecord } from "@/data/domain/models"
+import type { SkillFileRecord } from "@/data/domain/skill-document-models"
 import { getResourcePreviewKind } from "@/lib/resources/archive-import"
 import { getSkillSourceLanguage, isEditableSkillFile } from "@/lib/resources/skill-files"
 

@@ -23,13 +23,13 @@ const registrationModules = [
   "@electron/ipc/system/mail-ipc",
 ]
 
-vi.mock("@electron/infrastructure/db-core", () => ({ applyMigrations: vi.fn(), openDatabase: vi.fn() }))
-vi.mock("@electron/infrastructure/workspace-service", () => ({ ensureWorkspace: vi.fn() }))
-vi.mock("@electron/infrastructure/preference-service", () => ({ getPreferenceSettingsSnapshot: vi.fn() }))
-vi.mock("@electron/infrastructure/credential-vault", () => ({ protectCredential: (value: string) => value, revealCredential: (value: unknown) => value }))
-vi.mock("@electron/integrations/integration-executor", () => ({ executeIntegration: vi.fn() }))
-vi.mock("@electron/services/model-discovery", () => ({ discoverProviderModels: vi.fn() }))
-vi.mock("@electron/services/workflow-definition", () => ({ createDefaultWorkflowDefinition: vi.fn(() => ({ nodes: [], edges: [] })), validateWorkflowDefinitionJson: vi.fn() }))
+vi.mock("@electron/others/infrastructure/db-core", () => ({ applyMigrations: vi.fn(), openDatabase: vi.fn() }))
+vi.mock("@electron/others/infrastructure/workspace-service", () => ({ ensureWorkspace: vi.fn() }))
+vi.mock("@electron/others/infrastructure/preference-service", () => ({ getPreferenceSettingsSnapshot: vi.fn() }))
+vi.mock("@electron/others/infrastructure/credential-vault", () => ({ protectCredential: (value: string) => value, revealCredential: (value: unknown) => value }))
+vi.mock("@electron/others/integrations/integration-executor", () => ({ executeIntegration: vi.fn() }))
+vi.mock("@electron/others/services/model-discovery", () => ({ discoverProviderModels: vi.fn() }))
+vi.mock("@electron/others/services/workflow-definition", () => ({ createDefaultWorkflowDefinition: vi.fn(() => ({ nodes: [], edges: [] })), validateWorkflowDefinitionJson: vi.fn() }))
 
 const namesByModule = [
   ["workflows:list", "workflows:get", "workflows:recordInvocation"],

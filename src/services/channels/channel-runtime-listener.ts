@@ -3,14 +3,15 @@ import { getAgentDetail } from "@/data/repositories/agent-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { getChatSessionSettings, saveChatSessionSettings } from "@/data/repositories/chat-settings-repository"
 import { getModelProvider } from "@/data/repositories/model-config-repository"
-import { sendChannelReply } from "@/data/repositories/channel-repository"
+import { sendChannelReply } from "@/application/channels/channel-application-service"
 import { showToast } from "@/lib/ui-toast"
 import { hasProjectBridge } from "@/lib/ipc"
 import { streamChatAgentResponse } from "@/services/ai-service"
 import type { ChatAgentEvent } from "@/services/chat/types"
 import { createPersistedAssistantPayload } from "@/services/chat/assistant-persistence"
 import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts, type AssistantResponsePart } from "@/services/chat/response-parts"
-import type { ChannelConfigRecord, ChatDetail } from "@/data/domain/models"
+import type { ChannelConfigRecord } from "@/data/domain/channel-models"
+import type { ChatDetail } from "@/data/domain/chat-models"
 
 type ChannelRuntimeEvent = {
   channel: ChannelConfigRecord

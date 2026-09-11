@@ -1,5 +1,5 @@
 import type { ChangeEvent, Dispatch, SetStateAction } from "react"
-import type { ChatAttachment } from "@/services/chat/types"
+import type { ChatAttachment } from "@/application/chats/chat-runtime-service"
 import { showToast } from "@/lib/ui-toast"
 import { fileToChatAttachment, mergeChatAttachments } from "@/views/chats/chat-controller-utils"
 

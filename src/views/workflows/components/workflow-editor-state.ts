@@ -1,6 +1,6 @@
 import type { Edge, Node } from "@xyflow/react"
 
-import type { WorkflowDefinition, WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowNodeData } from "@/data/domain/workflow-models"
 import { getExpressionIssues } from "@/views/workflows/components/workflow-expression-suggestions"
 
 export const DEFAULT_WORKFLOW_DRY_RUN_INPUT = "{\n  \"leadId\": \"LD-1001\"\n}"

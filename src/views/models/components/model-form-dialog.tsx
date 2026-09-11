@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import type { ProviderApiMode, ProviderModelCapability, ProviderModelRecord } from "@/data/domain/models"
+import type { ProviderApiMode, ProviderModelCapability, ProviderModelRecord } from "@/data/domain/provider-agent-models"
 
 export type ModelFormState = {
   id: string

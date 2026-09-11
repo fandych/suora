@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
-import type { HttpIntegrationConfig, IntegrationConfig, ScriptIntegrationConfig } from "@/data/domain/models"
+import type { HttpIntegrationConfig, IntegrationConfig, ScriptIntegrationConfig } from "@/data/domain/integration-models"
 
 type IntegrationParameterEditorProps = {
   config: IntegrationConfig

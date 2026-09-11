@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listChats } from "@/data/repositories/chat-repository"
+import { chatApplicationService } from "@/application/chats/chat-application-service"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
@@ -10,7 +10,7 @@ import { useNavigate } from "react-router"
 
 const ChatsPage = () => {
 	const navigate = useNavigate()
-	const { data, error, isLoading, reload } = useAsyncResource(() => listChats(), [])
+	const { data, error, isLoading, reload } = useAsyncResource(() => chatApplicationService.list(), [])
 
 	const handleCreate = () => {
 		navigate("/chats")

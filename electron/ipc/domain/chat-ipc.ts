@@ -1,6 +1,6 @@
 import { ipcMain } from "electron"
 import { appendChatMessageWithDrizzle, createChatWithDrizzle, deleteChatWithDrizzle, ensureChatWithDrizzle, getChatSettingsWithDrizzle, getChatWithDrizzle, listChatsWithDrizzle, saveChatSettingsWithDrizzle, updateChatMessagePartsWithDrizzle } from "@electron/database/drizzle/chat-repository"
-import { parseAppendAssistantPayload, parseAppendUserPayload, parseUpdateMessagePartsPayload } from "@electron/services/chat-schemas"
+import { parseAppendAssistantPayload, parseAppendUserPayload, parseUpdateMessagePartsPayload } from "@electron/others/services/chat-schemas"
 import type { ChatRuntimeSettingsPayload } from "@electron/types"
 import { chatEnsureSchema, entityIdSchema, parseIpcInput } from "@electron/ipc/system/ipc-input-schemas"
 

@@ -8,8 +8,10 @@ import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
-import type { AgentSummary, SchedulerDetail, WorkflowDetail, WorkflowSummary } from "@/data/domain/models"
-import { getWorkflowDetail } from "@/services/workflows/workflow-service"
+import type { AgentSummary } from "@/data/domain/provider-agent-models"
+import type { SchedulerDetail } from "@/data/domain/scheduler-models"
+import type { WorkflowDetail, WorkflowSummary } from "@/data/domain/workflow-models"
+import { schedulerQueryService } from "@/application/schedulers/scheduler-query-service"
 import { readWorkflowSchemaParameters, type WorkflowSchemaParameter } from "@/views/workflows/components/workflow-schema-contract"
 
 type SchedulerBindingPanelProps = {
@@ -114,7 +116,7 @@ export function SchedulerBindingPanel({ agents, draft, onChange, onTargetIdChang
 
     let isActive = true
     setIsLoadingWorkflow(true)
-    void getWorkflowDetail(draft.targetId)
+    void schedulerQueryService.getWorkflowDetail(draft.targetId)
       .then((detail) => {
         if (isActive) setWorkflowDetail(detail)
       })

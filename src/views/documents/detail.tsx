@@ -6,9 +6,9 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
 import { useAutosaveStatus } from "@/hooks/use-autosave-status"
-import { emitDataChanged } from "@/data/repositories/data-events"
-import type { DocumentDetail } from "@/data/domain/models"
-import { deleteDocument, saveDocumentDraft } from "@/data/repositories/document-repository"
+import { emitDataChanged } from "@/application/shared/data-events"
+import type { DocumentDetail } from "@/data/domain/skill-document-models"
+import { documentApplicationService } from "@/application/documents/document-application-service"
 import { buildDocumentTree, getDocumentDisplayName } from "@/data/domain/document-tree"
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser/file-exports"
 import PageHeader from "@/views/components/page-header"
@@ -72,7 +72,7 @@ const DocumentsDetailPage = () => {
   const [isDocumentDeleteDialogOpen, setIsDocumentDeleteDialogOpen] = useState(false)
 
   const persistDraft = async (nextDraft: DocumentDetail) => {
-    const saved = await saveDocumentDraft(documentId ?? "", {
+    const saved = await documentApplicationService.saveDraft(documentId ?? "", {
       title: nextDraft.document.title,
       summary: nextDraft.document.summary,
       enabled: nextDraft.document.enabled,
@@ -254,7 +254,7 @@ const DocumentsDetailPage = () => {
 
   const handleDeleteDocument = async () => {
     if (!documentId) return
-    await deleteDocument(documentId)
+    await documentApplicationService.remove(documentId)
     emitDataChanged("/documents")
     navigate("/documents")
   }

@@ -4,7 +4,7 @@ import { Position, type NodeProps } from "@xyflow/react"
 
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
-import type { WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
 import { cn } from "@/lib/utils"
 import { useWorkflowNodeActions } from "@/views/workflows/components/workflow-node-actions-context"
 import { WorkflowNodeHandle, WorkflowNodeShell } from "@/views/workflows/components/workflow-node-primitives"

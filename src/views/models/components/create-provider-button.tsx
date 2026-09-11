@@ -3,8 +3,8 @@ import { useNavigate } from "react-router"
 import { PlusIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { emitDataChanged } from "@/data/repositories/data-events"
-import { createModelProvider } from "@/data/repositories/model-config-repository"
+import { emitDataChanged } from "@/application/shared/data-events"
+import { modelQueryService } from "@/application/models/model-query-service"
 
 type CreateProviderButtonProps = {
   className?: string
@@ -20,7 +20,7 @@ export function CreateProviderButton({ className, iconOnly = false, size = "sm",
   const handleCreateProvider = async () => {
     setIsCreating(true)
     try {
-      const provider = await createModelProvider("custom")
+      const provider = await modelQueryService.create("custom")
       emitDataChanged("/models")
       navigate(`/models/${provider.id}`)
     } finally {

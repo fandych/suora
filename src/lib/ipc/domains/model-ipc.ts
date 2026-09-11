@@ -1,4 +1,4 @@
-import type { ProviderConfigRecord } from "@/data/domain/models"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
 import { getProjectBridge } from "@/lib/ipc/bridge"
 import { parseArrayJson } from "@/lib/serialization/json"
 

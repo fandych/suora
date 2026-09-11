@@ -1,8 +1,8 @@
 import { useNavigate } from "react-router"
 import { PlusIcon } from "lucide-react"
 
-import { emitDataChanged } from "@/data/repositories/data-events"
-import { createSkill } from "@/data/repositories/skill-repository"
+import { emitDataChanged } from "@/application/shared/data-events"
+import { skillApplicationService } from "@/application/skills/skill-application-service"
 import { Button } from "@/components/ui/button"
 
 type SkillCreateButtonProps = {
@@ -14,7 +14,7 @@ export function SkillCreateButton({ className, iconOnly = false }: SkillCreateBu
   const navigate = useNavigate()
 
   const handleCreate = async () => {
-    const detail = await createSkill()
+    const detail = await skillApplicationService.create()
     emitDataChanged("/skills")
     navigate(`/skills/${detail.skill.id}`)
   }

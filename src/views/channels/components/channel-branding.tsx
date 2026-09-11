@@ -11,7 +11,7 @@ import {
   type SimpleIcon,
 } from "simple-icons"
 
-import type { ChannelConfigRecord, ChannelPlatform } from "@/data/domain/models"
+import type { ChannelConfigRecord, ChannelPlatform } from "@/data/domain/channel-models"
 import { cn } from "@/lib/utils"
 
 type ChannelLogoProps = {

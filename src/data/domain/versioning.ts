@@ -1,4 +1,4 @@
-import type { VersionOption } from "@/data/domain/models"
+import type { VersionOption } from "@/data/domain/version-models"
 
 type VersionLike = {
   id: string

@@ -1,7 +1,7 @@
 import { BotIcon } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import type { AgentSummary } from "@/data/domain/models"
+import type { AgentSummary } from "@/data/domain/provider-agent-models"
 
 type AgentLogoBadgeProps = {
   agent: Pick<AgentSummary, "source" | "isDisabled">

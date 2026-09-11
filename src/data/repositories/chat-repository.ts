@@ -1,4 +1,4 @@
-import type { ChatDetail, ChatSummary } from "@/data/domain/models"
+import type { ChatDetail, ChatSummary } from "@/data/domain/chat-models"
 import type { ChatMessagePart } from "@/data/domain/chat-message-parts"
 
 import { ensureSeeded } from "@/data/repositories/seed-repository"

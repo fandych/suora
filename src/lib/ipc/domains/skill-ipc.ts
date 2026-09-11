@@ -1,4 +1,6 @@
-import type { SkillConfigRecord, SkillFileRecord, SkillSummary, VersionOption } from "@/data/domain/models"
+import type { SkillFileRecord, SkillSummary } from "@/data/domain/skill-document-models"
+import type { SkillConfigRecord } from "@/data/domain/provider-agent-models"
+import type { VersionOption } from "@/data/domain/version-models"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { getProjectBridge } from "@/lib/ipc/bridge"
 import { parseArrayJson } from "@/lib/serialization/json"

@@ -1,8 +1,8 @@
 import { useState } from "react"
 import { useNavigate } from "react-router"
 
-import { emitDataChanged } from "@/data/repositories/data-events"
-import { createDocumentWithMetadata } from "@/data/repositories/document-repository"
+import { emitDataChanged } from "@/application/shared/data-events"
+import { documentQueryService } from "@/application/documents/document-query-service"
 import { PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -27,7 +27,7 @@ export function DocumentCreateButton({ className, iconOnly = false }: DocumentCr
 
     setIsWorking(true)
     try {
-      const detail = await createDocumentWithMetadata({ title: title.trim(), summary: description.trim() })
+      const detail = await documentQueryService.create({ title: title.trim(), summary: description.trim() })
       emitDataChanged("/documents")
       navigate(`/documents/${detail.document.id}`)
       setIsOpen(false)

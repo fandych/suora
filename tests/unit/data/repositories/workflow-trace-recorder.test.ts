@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import type { Node } from "@xyflow/react"
-import type { WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
 import { createWorkflowExecutionContext } from "@/data/repositories/workflow-execution-context"
 import { createCompletedWorkflowTrace, createFailedWorkflowTrace, createRunningWorkflowTrace, createSkippedWorkflowTrace } from "@/data/repositories/workflow-trace-recorder"
 

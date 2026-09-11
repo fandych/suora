@@ -3,7 +3,7 @@ import { Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Field, FieldContent, FieldGroup, FieldTitle } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
-import type { PreferenceEnvironmentVariable, PreferenceSettings } from "@/data/repositories/preference-repository"
+import type { PreferenceEnvironmentVariable, PreferenceSettings } from "@/application/preferences/preference-application-service"
 
 import PreferenceSectionCard from "@/views/preference/components/preference-section-card"
 

@@ -1,6 +1,6 @@
 import { create } from "zustand"
-import type { SkillDetail } from "@/data/domain/models"
-import { deleteSkill, getSkillDetail, saveSkillDraft } from "@/data/repositories/skill-repository"
+import type { SkillDetail } from "@/data/domain/skill-document-models"
+import { skillApplicationService } from "@/application/skills/skill-application-service"
 
 type SkillDetailState = {
   skillId: string | null
@@ -31,7 +31,7 @@ export const useSkillDetailStore = create<SkillDetailState>((set, get) => ({
   load: async (skillId, versionId) => {
     set({ skillId, isLoading: true, error: null })
     try {
-      const draft = await getSkillDetail(skillId, versionId)
+      const draft = await skillApplicationService.getDetail(skillId, versionId)
       set({ draft, isLoading: false })
     } catch (error) {
       set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) })
@@ -48,7 +48,7 @@ export const useSkillDetailStore = create<SkillDetailState>((set, get) => ({
     if (!draft) return null
     set({ isSaving: true, error: null })
     try {
-      const saved = await saveSkillDraft(draft.skill.id, {
+      const saved = await skillApplicationService.saveDraft(draft.skill.id, {
         title: draft.skill.title,
         source: draft.skill.source,
         summary: draft.skill.summary,
@@ -67,7 +67,7 @@ export const useSkillDetailStore = create<SkillDetailState>((set, get) => ({
     if (!skillId) return
     set({ isDeleting: true, error: null })
     try {
-      await deleteSkill(skillId)
+      await skillApplicationService.delete(skillId)
       set({ draft: null, isDeleting: false })
     } catch (error) {
       set({ isDeleting: false, error: error instanceof Error ? error : new Error(String(error)) })

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Input } from "@/components/ui/input"
 import type { WorkflowDesignIssue } from "@/views/workflows/components/workflow-editor-state"
-import type { WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowNodeData } from "@/data/domain/workflow-models"
 import type { Node } from "@xyflow/react"
 
 export function WorkflowNodeSearchControl({

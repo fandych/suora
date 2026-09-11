@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { DocumentSummary } from "@/data/domain/models"
+import type { DocumentSummary } from "@/data/domain/skill-document-models"
 
 type DocumentCardProps = {
   document: DocumentSummary

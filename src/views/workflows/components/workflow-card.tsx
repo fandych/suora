@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { WorkflowSummary } from "@/data/domain/models"
+import type { WorkflowSummary } from "@/data/domain/workflow-models"
 
 type WorkflowCardProps = {
   workflow: WorkflowSummary

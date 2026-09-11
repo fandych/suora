@@ -1,4 +1,5 @@
-import type { AgentConfigRecord, AgentDetail, AgentSummary, VersionOption } from "@/data/domain/models"
+import type { AgentConfigRecord, AgentDetail, AgentSummary } from "@/data/domain/provider-agent-models"
+import type { VersionOption } from "@/data/domain/version-models"
 import { getVersionLabel } from "@/data/domain/versioning"
 import { getProjectBridge } from "@/lib/ipc/bridge"
 import { parseObjectJson } from "@/lib/serialization/json"

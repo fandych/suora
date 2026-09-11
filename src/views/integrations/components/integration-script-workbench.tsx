@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { IntegrationConfig, ScriptIntegrationConfig, ScriptWorkbenchItem } from "@/data/domain/models"
+import type { IntegrationConfig, ScriptIntegrationConfig, ScriptWorkbenchItem } from "@/data/domain/integration-models"
 
 type IntegrationScriptWorkbenchProps = {
   config: ScriptIntegrationConfig

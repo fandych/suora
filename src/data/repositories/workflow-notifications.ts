@@ -1,4 +1,4 @@
-import type { WorkflowDefinition, WorkflowNotificationSettings } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowNotificationSettings } from "@/data/domain/workflow-models"
 
 export const DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS: WorkflowNotificationSettings = {
   enabled: false,

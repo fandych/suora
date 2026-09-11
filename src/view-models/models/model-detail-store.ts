@@ -1,6 +1,6 @@
 import { create } from "zustand"
-import type { ProviderConfigRecord } from "@/data/domain/models"
-import { deleteModelProvider, getModelProvider, saveModelProvider } from "@/data/repositories/model-config-repository"
+import type { ProviderConfigRecord } from "@/data/domain/provider-agent-models"
+import { modelApplicationService } from "@/application/models/model-application-service"
 
 type ModelDetailState = {
   modelId: string | null
@@ -24,7 +24,7 @@ export const useModelDetailStore = create<ModelDetailState>((set, get) => ({
   load: async (modelId) => {
     set({ modelId, isLoading: true, error: null })
     try {
-      const draft = await getModelProvider(modelId)
+      const draft = await modelApplicationService.getDetail(modelId)
       set({ draft, isLoading: false })
     } catch (error) {
       set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) })
@@ -36,7 +36,7 @@ export const useModelDetailStore = create<ModelDetailState>((set, get) => ({
     if (!draft) return null
     set({ isSaving: true, error: null })
     try {
-      const saved = await saveModelProvider(draft)
+      const saved = await modelApplicationService.save(draft)
       set({ draft: saved, isSaving: false })
       return saved
     } catch (error) {
@@ -49,7 +49,7 @@ export const useModelDetailStore = create<ModelDetailState>((set, get) => ({
     if (!draft) return
     set({ isSaving: true, error: null })
     try {
-      await deleteModelProvider(draft.id)
+      await modelApplicationService.remove(draft.id)
       set({ draft: null, isSaving: false })
     } catch (error) {
       set({ isSaving: false, error: error instanceof Error ? error : new Error(String(error)) })

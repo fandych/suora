@@ -4,12 +4,12 @@ import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-s
 import PageHeader from "@/views/components/page-header"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listSkills } from "@/data/repositories/skill-repository"
+import { skillApplicationService } from "@/application/skills/skill-application-service"
 import { SkillCard } from "@/views/skills/components/skill-card"
 
 const SkillsPage = () => {
   const navigate = useNavigate()
-  const { data, error, isLoading, reload } = useAsyncResource(() => listSkills(), [])
+  const { data, error, isLoading, reload } = useAsyncResource(() => skillApplicationService.list(), [])
 
   return (
     <div className="flex min-h-full flex-col bg-background">

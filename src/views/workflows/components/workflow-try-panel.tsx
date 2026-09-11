@@ -4,7 +4,7 @@ import { ChevronRightIcon, CircleAlertIcon, CircleCheckIcon, CircleMinusIcon, Cl
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Textarea } from "@/components/ui/textarea"
-import type { WorkflowInvocationRecord } from "@/data/domain/models"
+import type { WorkflowInvocationRecord } from "@/data/domain/workflow-models"
 import { downloadJson } from "@/lib/browser/file-exports"
 import { WorkflowTraceJsonPreview } from "@/views/workflows/components/workflow-trace-json-preview"
 import { WorkflowTraceCopyButton, WorkflowTraceValueSection } from "@/views/workflows/components/workflow-trace-sections"

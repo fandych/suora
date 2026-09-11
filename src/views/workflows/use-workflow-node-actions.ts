@@ -1,6 +1,6 @@
 import type { Dispatch, SetStateAction } from "react"
 import { addEdge, MarkerType, type Connection, type Edge, type Node, type NodeMouseHandler, type OnSelectionChangeParams } from "@xyflow/react"
-import type { WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowEdgeData, WorkflowNodeData } from "@/data/domain/workflow-models"
 import { createWorkflowNodeData } from "@/views/workflows/components/workflow-editor-config"
 import { buildConnectedWorkflowNode, hasOutgoingWorkflowConnection, renameWorkflowNodeId } from "@/views/workflows/components/workflow-panel-helpers"
 

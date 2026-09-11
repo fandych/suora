@@ -6,7 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import type { AgentSummary, ChannelDetail } from "@/data/domain/models"
+import type { AgentSummary } from "@/data/domain/provider-agent-models"
+import type { ChannelDetail } from "@/data/domain/channel-models"
 import { buildChannelWebhookUrl, getChannelBindingLabel, getChannelPlatformLabel, getChannelStatusLabel, getChannelStatusVariant } from "@/views/channels/components/channel-utils"
 
 type ChannelRuntimePanelProps = {

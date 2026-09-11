@@ -1,4 +1,4 @@
-import type { ProviderPreset } from "@/data/domain/models"
+import type { ProviderPreset } from "@/data/domain/provider-agent-models"
 
 export const defaultProviderTypes = [
   "openai",

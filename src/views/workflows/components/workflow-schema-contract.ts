@@ -1,4 +1,4 @@
-import type { WorkflowInputParameter } from "@/data/domain/models"
+import type { WorkflowInputParameter } from "@/data/domain/workflow-models"
 
 export type WorkflowJsonSchema = {
   type?: string

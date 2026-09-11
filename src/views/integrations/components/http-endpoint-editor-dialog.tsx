@@ -8,7 +8,7 @@ import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import type { HttpEndpointConfig, HttpEndpointParameter } from "@/data/domain/models"
+import type { HttpEndpointConfig, HttpEndpointParameter } from "@/data/domain/integration-models"
 import { createHttpEndpoint, createHttpEndpointParameter } from "@/data/domain/integrations"
 
 type ParameterLocation = HttpEndpointParameter["in"]

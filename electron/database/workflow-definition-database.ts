@@ -1,5 +1,5 @@
 import crypto from "node:crypto"
-import { createDefaultWorkflowDefinition, validateWorkflowDefinitionJson } from "@electron/services/workflow-definition"
+import { createDefaultWorkflowDefinition, validateWorkflowDefinitionJson } from "@electron/others/services/workflow-definition"
 import { getWorkflowDatabase } from "@electron/database/workflow-database-context"
 
 export async function listWorkflowDefinitions() {

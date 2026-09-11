@@ -1,5 +1,6 @@
-import type { WorkflowDefinition, WorkflowInvocationRecord } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowInvocationRecord } from "@/data/domain/workflow-models"
 import { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS } from "@/data/repositories/workflow-notifications"
+export { DEFAULT_WORKFLOW_NOTIFICATION_SETTINGS }
 import { projectIpc } from "@/lib/ipc"
 
 export async function sendWorkflowNotification(input: {

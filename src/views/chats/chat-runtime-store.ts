@@ -1,13 +1,10 @@
-import { appendAssistantChatMessage, appendUserChatMessage, createChat, getChatDetail } from "@/data/repositories/chat-repository"
-import { emitDataChanged } from "@/data/repositories/data-events"
-import { saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
+import { appendAssistantChatMessage, appendUserChatMessage, createChat, getChatDetail, saveChatSessionSettings, type ChatRuntimeSettings } from "@/application/chats/chat-runtime-service"
+import { emitDataChanged } from "@/application/shared/data-events"
 import { showToast } from "@/lib/ui-toast"
 import { detectChatErrorKind, getChatErrorPresentation } from "@/data/domain/chat/chat-error-state"
-import { streamChatAgentResponse } from "@/services/ai-service"
-import type { ChatAgentEvent, ChatAttachment } from "@/services/chat/types"
-import { createPersistedAssistantPayload } from "@/services/chat/assistant-persistence"
+import { streamChatAgentResponse, type ChatAgentEvent, type ChatAttachment, createPersistedAssistantPayload } from "@/application/chats/chat-runtime-service"
 import { createPersistedUserPayload } from "@/views/chats/chat-controller-utils"
-import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts, type AssistantResponsePart } from "@/services/chat/response-parts"
+import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts, type AssistantResponsePart } from "@/application/chats/chat-runtime-service"
 import { useChatRuntimeStore } from "@/stores/chat-runtime-store"
 
 export type ChatRuntimeSnapshot = {

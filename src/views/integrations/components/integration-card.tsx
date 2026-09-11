@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { IntegrationSummary } from "@/data/domain/models"
+import type { IntegrationSummary } from "@/data/domain/integration-models"
 
 type IntegrationCardProps = {
   integration: IntegrationSummary

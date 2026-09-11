@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import type { WorkflowDefinition } from "@/data/domain/models"
+import type { WorkflowDefinition } from "@/data/domain/workflow-models"
 import {
   evaluateExpression,
   executeWorkflowDefinition,

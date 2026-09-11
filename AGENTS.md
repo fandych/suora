@@ -128,7 +128,7 @@ src/
 electron/
     ipc/                  IPC registration grouped by domain
     database/             database core and db helpers
-    others/               Electron-only helpers that are not entrypoints
+    others/               Electron-only helpers grouped by application/channels/infrastructure/integrations/services
     types/                Electron process types and payload contracts
 ```
 

@@ -1,4 +1,4 @@
-import type { ChannelConfigRecord, ChannelPlatform, ChannelStatus } from "@/data/domain/models"
+import type { ChannelConfigRecord, ChannelPlatform, ChannelStatus } from "@/data/domain/channel-models"
 import { cn } from "@/lib/utils"
 import { createElement, type ComponentType } from "react"
 import { getChannelLogo } from "@/views/channels/components/channel-branding"

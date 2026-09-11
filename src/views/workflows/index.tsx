@@ -4,12 +4,12 @@ import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-s
 import PageHeader from "@/views/components/page-header"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listWorkflows } from "@/services/workflows/workflow-service"
+import { workflowApplicationService } from "@/application/workflows/workflow-application-service"
 import { WorkflowCard } from "@/views/workflows/components/workflow-card"
 
 const WorkflowsPage = () => {
   const navigate = useNavigate()
-  const { data, error, isLoading, reload } = useAsyncResource(() => listWorkflows(), [])
+  const { data, error, isLoading, reload } = useAsyncResource(() => workflowApplicationService.list(), [])
 
   return (
     <div className="flex min-h-full flex-col bg-background">

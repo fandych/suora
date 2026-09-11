@@ -1,6 +1,6 @@
 import { useNavigate } from "react-router"
 
-import { listSchedulers } from "@/data/repositories/scheduler-repository"
+import { schedulerQueryService } from "@/application/schedulers/scheduler-query-service"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import PageHeader from "@/views/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
@@ -9,7 +9,7 @@ import { SchedulerCard } from "@/views/schedulers/components/scheduler-card"
 
 const SchedulersPage = () => {
   const navigate = useNavigate()
-  const { data, error, isLoading, reload } = useAsyncResource(() => listSchedulers(), [])
+  const { data, error, isLoading, reload } = useAsyncResource(() => schedulerQueryService.list(), [])
 
   return (
     <div className="flex min-h-full flex-col bg-background">

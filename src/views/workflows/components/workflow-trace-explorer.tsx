@@ -2,7 +2,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
-import type { WorkflowInvocationRecord } from "@/data/domain/models"
+import type { WorkflowInvocationRecord } from "@/data/domain/workflow-models"
 import { downloadText } from "@/lib/browser/file-exports"
 
 type WorkflowTraceExplorerProps = {

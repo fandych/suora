@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils"
-import type { ChannelConfigRecord } from "@/data/domain/models"
+import type { ChannelConfigRecord } from "@/data/domain/channel-models"
 import { getChannelPlatformBrandClassName } from "@/views/channels/components/channel-branding"
 import { getChannelOptionList, getChannelPlatformLogo } from "@/views/channels/components/channel-utils"
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger } from "@/components/ui/select"

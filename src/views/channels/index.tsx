@@ -1,16 +1,16 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router"
 
-import { subscribeToDataChanges } from "@/data/repositories/data-events"
+import { subscribeToDataChanges } from "@/application/shared/data-events"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listChannels } from "@/services/channels/channel-service"
+import { channelApplicationService } from "@/application/channels/channel-application-service"
 import PageHeader from "@/views/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { ChannelCard } from "@/views/channels/components/channel-card"
 
 const ChannelsPage = () => {
   const navigate = useNavigate()
-  const { data, error, isLoading, reload } = useAsyncResource(() => listChannels(), [])
+  const { data, error, isLoading, reload } = useAsyncResource(() => channelApplicationService.list(), [])
   const boundChannels = data?.filter((channel) => channel.bindingState === "connected") ?? []
 
   useEffect(() => {

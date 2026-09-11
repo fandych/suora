@@ -1,4 +1,4 @@
-import type { ChannelSummary } from "@/data/domain/models"
+import type { ChannelSummary } from "@/data/domain/channel-models"
 import { ensureChannelCatalogItems } from "@/data/repositories/channel-catalog"
 import { projectIpc } from "@/lib/ipc"
 

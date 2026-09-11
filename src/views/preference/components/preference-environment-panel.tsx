@@ -1,7 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Progress, ProgressLabel, ProgressValue } from "@/components/ui/progress"
-import type { SystemDiagnosticsSnapshot } from "@/data/repositories/system-status-repository"
+import type { SystemDiagnosticsSnapshot } from "@/application/preferences/preference-application-service"
 
 import PreferenceSectionCard from "@/views/preference/components/preference-section-card"
 

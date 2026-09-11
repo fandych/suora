@@ -1,7 +1,7 @@
-import type { WorkflowDefinition } from "@/data/domain/models"
-import type { WorkflowVariableContext } from "@/data/repositories/workflow-variable-context"
+import type { WorkflowDefinition } from "@/data/domain/workflow-models"
+import type { WorkflowExecutionContext } from "@/data/domain/workflow-runtime-context"
 
-export type WorkflowExecutionContext = WorkflowVariableContext
+export type { WorkflowExecutionContext } from "@/data/domain/workflow-runtime-context"
 
 export function createWorkflowExecutionContext(input: unknown): WorkflowExecutionContext {
   const context: WorkflowExecutionContext = {

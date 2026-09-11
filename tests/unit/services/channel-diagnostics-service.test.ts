@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import type { ChannelDetail } from "@/data/domain/models"
+import type { ChannelDetail } from "@/data/domain/channel-models"
 import { appendChannelDebug, formatWeChatPersonalDiagnostic, mergeChannelDebugLogEntries } from "@/services/channels/channel-diagnostics-service"
 
 const detail = { runtime: { debugLog: [{ id: "current", timestamp: 1, tone: "info", text: "current" }] } } as ChannelDetail

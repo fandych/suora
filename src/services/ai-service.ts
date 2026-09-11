@@ -1,7 +1,7 @@
 import { ToolLoopAgent, stepCountIs, tool } from "ai"
 import { z } from "zod"
 
-import type { ChatMessageRecord } from "@/data/domain/models"
+import type { ChatMessageRecord } from "@/data/domain/chat-models"
 import type { ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { buildChatModelMessages } from "@/services/chat/model-messages"

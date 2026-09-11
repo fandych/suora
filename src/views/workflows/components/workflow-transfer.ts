@@ -1,4 +1,4 @@
-import type { WorkflowDefinition, WorkflowNodeData } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowNodeData } from "@/data/domain/workflow-models"
 import { downloadJson } from "@/lib/browser/file-exports"
 
 export function exportWorkflowJson(payload: { title: string; summary: string; definition: WorkflowDefinition; versionLabel?: string }) {

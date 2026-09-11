@@ -1,9 +1,9 @@
 import { startTransition, useEffect, useState } from "react"
 
-import type { ChannelPlatform } from "@/data/domain/models"
+import type { ChannelPlatform } from "@/data/domain/channel-models"
 import type { PrimaryNavItem, ResolvedSecondarySidebarGroup } from "@/views/nav-config"
-import { subscribeToDataChanges } from "@/data/repositories/data-events"
-import { loadSidebarGroups } from "@/data/repositories/sidebar-repository"
+import { subscribeToDataChanges } from "@/application/shared/data-events"
+import { sidebarQueryService } from "@/application/sidebar/sidebar-query-service"
 import { getRunningChatIds } from "@/views/chats/chat-runtime-store"
 import { getProviderSidebarLogo } from "@/views/components/provider-logo"
 import { getChannelPlatformSidebarLogo } from "@/views/channels/components/channel-utils"
@@ -66,7 +66,7 @@ export function useSecondarySidebarData(item?: PrimaryNavItem) {
     setGroups(createEmptyGroups(item))
     setIsLoading(true)
 
-    loadSidebarGroups(item)
+    sidebarQueryService.loadGroups(item)
       .then((nextGroups) => {
         if (cancelled) {
           return

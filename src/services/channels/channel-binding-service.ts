@@ -1,8 +1,8 @@
-import type { ChannelDetail } from "@/data/domain/models"
+import type { ChannelDetail } from "@/data/domain/channel-models"
 import { buildUnboundChannelDetail } from "@/data/repositories/channel-defaults"
 import { buildChannelWebhookUrl, getChannelCredentialIssues } from "@/data/domain/channel-config"
 import { projectIpc } from "@/lib/ipc"
-import { appendChannelDebug, formatWeChatPersonalDiagnostic } from "@/services/channels/channel-diagnostics-service"
+import { appendChannelDebug, formatWeChatPersonalDiagnostic } from "@/data/domain/channel-diagnostics"
 
 type PersistChannel = (detail: ChannelDetail) => Promise<ChannelDetail>
 type SyncRuntime = () => Promise<unknown>

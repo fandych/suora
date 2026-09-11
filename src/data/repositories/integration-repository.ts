@@ -4,10 +4,11 @@ import type {
   IntegrationSummary,
   McpIntegrationConfig,
   ScriptIntegrationConfig,
-} from "@/data/domain/models"
+} from "@/data/domain/integration-models"
 import { executeIntegration } from "@/data/repositories/integration-execution-repository"
 import { ensureSeeded } from "@/data/repositories/seed-repository"
 import { projectIpc } from "@/lib/ipc"
+import { normalizeLegacyScriptConfig } from "@/data/compatibility/integration-legacy"
 import { buildHttpEndpointUrl, createDefaultHttpIntegrationConfig, getSelectedHttpEndpoint, normalizeHttpIntegrationConfig, readMcpTools, DEFAULT_PARAMETER_SCHEMA_JSON } from "@/data/domain/integrations"
 
 function getDefaultConfig(kind: string): IntegrationConfig {
@@ -66,18 +67,15 @@ function normalizeIntegrationConfig(config: IntegrationConfig): IntegrationConfi
 
   if (config.kind === "scripts") {
     const fallback = getDefaultConfig("scripts") as ScriptIntegrationConfig
-    const maybeLegacy = config as ScriptIntegrationConfig & { handler?: string; code?: string }
-    const scripts = maybeLegacy.scripts?.length
-      ? maybeLegacy.scripts
-      : [{ id: "script-main", name: "Main Script", handler: maybeLegacy.handler || "main", code: maybeLegacy.code || fallback.scripts[0].code }]
+    const normalizedLegacy = normalizeLegacyScriptConfig(config as ScriptIntegrationConfig & { handler?: string; code?: string }, fallback)
 
     return {
       ...fallback,
       ...config,
-      description: maybeLegacy.description ?? fallback.description,
-      scripts,
-      selectedScriptId: maybeLegacy.selectedScriptId || scripts[0].id,
-      outputSchemaJson: maybeLegacy.outputSchemaJson || fallback.outputSchemaJson,
+      description: normalizedLegacy.description ?? fallback.description,
+      scripts: normalizedLegacy.scripts,
+      selectedScriptId: normalizedLegacy.selectedScriptId || normalizedLegacy.scripts[0].id,
+      outputSchemaJson: normalizedLegacy.outputSchemaJson || fallback.outputSchemaJson,
     } as ScriptIntegrationConfig
   }
 

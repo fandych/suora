@@ -1,5 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { ChatSummary } from "@/data/domain/models"
+import type { ChatSummary } from "@/data/domain/chat-models"
 
 type ChatCardProps = {
   chat: ChatSummary

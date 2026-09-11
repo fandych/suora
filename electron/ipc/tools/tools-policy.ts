@@ -1,7 +1,7 @@
 import path from "node:path"
 import { getAppMetaValue } from "@electron/database/drizzle/system-repository"
-import { ensureWorkspace } from "@electron/infrastructure/workspace-service"
-import { getWorkspacePath } from "@electron/infrastructure/workspace-paths"
+import { ensureWorkspace } from "@electron/others/infrastructure/workspace-service"
+import { getWorkspacePath } from "@electron/others/infrastructure/workspace-paths"
 
 type ToolPreferenceSettings = { fileAccessPolicy?: "allowlist" | "denylist"; fileAccessDirectories?: string[]; commandAllowlist?: string[]; commandBlacklist?: string[]; globalEnvironmentVariables?: Array<{ key?: string; value?: string }> }
 export async function readToolPreferences(): Promise<ToolPreferenceSettings> { const value = await getAppMetaValue("preference_settings"); try { return value ? JSON.parse(value) as ToolPreferenceSettings : {} } catch { return {} } }

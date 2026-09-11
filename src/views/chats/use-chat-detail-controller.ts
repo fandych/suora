@@ -2,23 +2,22 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 
 import { useLocation, useNavigate, useParams } from "react-router"
 
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { getAgentDetail, listAvailableAgents } from "@/data/repositories/agent-repository"
-import { getChatDetail, updateChatMessageParts } from "@/data/repositories/chat-repository"
-import { getChatSessionSettings, saveChatSessionSettings, type ChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
-import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
+import { agentQueryService } from "@/application/agents/agent-query-service"
+import { getChatDetail, updateChatMessageParts, saveChatSessionSettings, type ChatRuntimeSettings } from "@/application/chats/chat-runtime-service"
+import { modelQueryService } from "@/application/models/model-query-service"
 import { hasProjectBridge, projectIpc } from "@/lib/ipc"
 import { showToast } from "@/lib/ui-toast"
-import { retryToolActivity } from "@/services/ai/tools/tool-retry"
-import type { ChatAttachment } from "@/services/chat/types"
+import { retryToolActivity, type ChatAttachment } from "@/application/chats/chat-runtime-service"
 import { deriveChatBrowserInteractionState } from "@/views/chats/chat-browser-status"
-import { getDocumentDetail } from "@/data/repositories/document-repository"
-import { getIntegrationDetail } from "@/data/repositories/integration-repository"
-import { getSkillDetail } from "@/data/repositories/skill-repository"
-import { getWorkflowDetail } from "@/services/workflows/workflow-service"
+import { documentApplicationService } from "@/application/documents/document-application-service"
+import { integrationApplicationService } from "@/application/integrations/integration-application-service"
+import { skillApplicationService } from "@/application/skills/skill-application-service"
+import { workflowApplicationService } from "@/application/workflows/workflow-application-service"
 import { resolveFallbackRuntime } from "@/views/chats/chat-controller-utils"
 import { useChatExportActions } from "@/views/chats/use-chat-export-actions"
 import { useChatAttachmentActions } from "@/views/chats/use-chat-attachment-actions"
-import { toAssistantResponseParts, updateAssistantToolActivity, type AssistantResponsePart } from "@/services/chat/response-parts"
+import { chatApplicationService } from "@/application/chats/chat-application-service"
+import { toAssistantResponseParts, updateAssistantToolActivity, type AssistantResponsePart } from "@/application/chats/chat-runtime-service"
 import type { ChatToolActivity } from "@/views/chats/components/chat-tool-event-item"
 import { getChatRuntimeSnapshot, patchChatRuntimeParts, setPendingBrowserContinue, startChatRun, stopChatRun, subscribeToChatRuntime } from "@/views/chats/chat-runtime-store"
 
@@ -56,16 +55,16 @@ export function useChatDetailController() {
         return null
       }
 
-      return getChatDetail(activeChatId)
+      return chatApplicationService.getDetail(activeChatId)
     },
     [activeChatId]
   )
   const { data: sessionSettings, error: settingsError, isLoading: settingsLoading, reload: reloadSettings, setData: setSessionSettings } = useAsyncResource(
-    () => getChatSessionSettings(activeChatId),
+    () => chatApplicationService.getSessionSettings(activeChatId),
     [activeChatId]
   )
-  const { data: agentsData } = useAsyncResource(() => listAvailableAgents(), [])
-  const { data: providerData } = useAsyncResource(() => listConfiguredModelProviders(), [])
+  const { data: agentsData } = useAsyncResource(() => agentQueryService.listAvailable(), [])
+  const { data: providerData } = useAsyncResource(() => modelQueryService.list(), [])
 
   const agents = useMemo(() => agentsData ?? [], [agentsData])
   const providers = useMemo(() => providerData ?? [], [providerData])
@@ -108,7 +107,7 @@ export function useChatDetailController() {
       return
     }
 
-    void getAgentDetail(selectedAgentId).then((detail) => {
+    void agentQueryService.getDetail(selectedAgentId).then((detail) => {
       if (!cancelled) {
         setActiveAgentMaxSteps(detail?.config.maxSteps)
       }
@@ -275,12 +274,12 @@ export function useChatDetailController() {
 
   const handleRetryTool = async (messageId: string | null, activity: ChatToolActivity) => {
     try {
-      const agentDetail = selectedAgentId ? await getAgentDetail(selectedAgentId).catch(() => null) : null
+      const agentDetail = selectedAgentId ? await agentQueryService.getDetail(selectedAgentId).catch(() => null) : null
       const output = await retryToolActivity({ toolName: activity.toolName, input: activity.input }, {
-        scopedDocuments: agentDetail ? await Promise.all((agentDetail.config.documentIds ?? []).map(async (id) => getDocumentDetail(id).catch(() => null))) : undefined,
-        scopedSkills: agentDetail ? await Promise.all((agentDetail.config.skillIds ?? []).map(async (id) => getSkillDetail(id).catch(() => null))) : undefined,
-        scopedWorkflows: agentDetail ? await Promise.all((agentDetail.config.workflowIds ?? []).map(async (id) => getWorkflowDetail(id).catch(() => null))) : undefined,
-        scopedIntegrations: agentDetail ? await Promise.all((agentDetail.config.toolsetIds ?? []).map(async (id) => getIntegrationDetail(id).catch(() => null))) : undefined,
+        scopedDocuments: agentDetail ? await Promise.all((agentDetail.config.documentIds ?? []).map(async (id) => documentApplicationService.getDetail(id).catch(() => null))) : undefined,
+        scopedSkills: agentDetail ? await Promise.all((agentDetail.config.skillIds ?? []).map(async (id) => skillApplicationService.getDetail?.(id).catch(() => null))) : undefined,
+        scopedWorkflows: agentDetail ? await Promise.all((agentDetail.config.workflowIds ?? []).map(async (id) => workflowApplicationService.getDetail(id).catch(() => null))) : undefined,
+        scopedIntegrations: agentDetail ? await Promise.all((agentDetail.config.toolsetIds ?? []).map(async (id) => integrationApplicationService.getDetail(id).catch(() => null))) : undefined,
         browserSessionId: activeChatId ?? undefined,
       })
       if (messageId && activeChatId && data?.messages.some((message) => message.id === messageId)) {

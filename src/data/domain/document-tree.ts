@@ -1,4 +1,4 @@
-import type { DocumentPageRecord } from "@/data/domain/models"
+import type { DocumentPageRecord } from "@/data/domain/skill-document-models"
 
 export type DocumentTreeEntry = {
   node: DocumentPageRecord

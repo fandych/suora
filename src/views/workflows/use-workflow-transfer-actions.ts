@@ -1,6 +1,6 @@
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from "react"
 import type { Edge, Node, Viewport } from "@xyflow/react"
-import type { WorkflowDefinition, WorkflowEdgeData, WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowEdgeData, WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/workflow-models"
 import { showToast } from "@/lib/ui-toast"
 import { defaultWorkflowBindings, defaultWorkflowNotifications } from "@/views/workflows/components/workflow-editor-config"
 import { DEFAULT_WORKFLOW_DRY_RUN_INPUT } from "@/views/workflows/components/workflow-editor-state"

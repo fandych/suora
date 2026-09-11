@@ -5,12 +5,12 @@ import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-s
 import PageHeader from "@/views/components/page-header"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listAgents } from "@/data/repositories/agent-repository"
+import { agentApplicationService } from "@/application/agents/agent-application-service"
 import { AgentCard } from "@/views/agents/components/agent-card"
 
 const AgentsPage = () => {
   const navigate = useNavigate()
-  const { data, error, isLoading, reload } = useAsyncResource(() => listAgents(), [])
+  const { data, error, isLoading, reload } = useAsyncResource(() => agentApplicationService.list(), [])
   const orderedAgents = useMemo(() => {
     const agents = data ?? []
     const customAgents = agents.filter((agent) => agent.source === "custom")

@@ -2,14 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { useEdgesState, useNodesState, type Edge, type Node, type ReactFlowInstance, type Viewport } from "@xyflow/react"
 import { useNavigate, useParams } from "react-router"
 
-import type { WorkflowEdgeData, WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/models"
-import { listAvailableAgents } from "@/data/repositories/agent-repository"
-import { listDocuments } from "@/data/repositories/document-repository"
-import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
-import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
-import { getWorkflowDetail } from "@/services/workflows/workflow-service"
-import { deleteWorkflow, publishWorkflowVersion, saveWorkflowDraft } from "@/services/workflows/workflow-publish-service"
-import { dryRunWorkflowSnapshot, runWorkflow } from "@/services/workflows/workflow-run-service"
+import type { WorkflowEdgeData, WorkflowNodeData, WorkflowNotificationSettings } from "@/data/domain/workflow-models"
+import { agentQueryService } from "@/application/agents/agent-query-service"
+import { documentQueryService } from "@/application/documents/document-query-service"
+import { integrationApplicationService } from "@/application/integrations/integration-application-service"
+import { modelQueryService } from "@/application/models/model-query-service"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { showToast } from "@/lib/ui-toast"
 import { defaultWorkflowBindings, defaultWorkflowNotifications, workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
@@ -18,6 +15,7 @@ import { parseDryRunObject } from "@/views/workflows/components/workflow-panel-h
 import { useWorkflowTransferActions } from "@/views/workflows/use-workflow-transfer-actions"
 import { useWorkflowNodeActions } from "@/views/workflows/use-workflow-node-actions"
 import { useWorkflowValidation } from "@/views/workflows/use-workflow-validation"
+import { workflowApplicationService } from "@/application/workflows/workflow-application-service"
 
 export type InspectorMode = "closed" | "properties" | "try-run" | "history"
 
@@ -28,13 +26,13 @@ export function useWorkflowDetailController() {
   const navigate = useNavigate()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(
-    () => getWorkflowDetail(workflowId ?? "", selectedVersionId),
+    () => workflowApplicationService.getDetail(workflowId ?? "", selectedVersionId),
     [workflowId, selectedVersionId]
   )
-  const { data: agentsData } = useAsyncResource(() => listAvailableAgents(), [])
-  const { data: providersData } = useAsyncResource(() => listConfiguredModelProviders(), [])
-  const { data: documentsData } = useAsyncResource(() => listDocuments(), [])
-  const { data: integrationsData } = useAsyncResource(() => listIntegrationSummaries(), [])
+  const { data: agentsData } = useAsyncResource(() => agentQueryService.listAvailable(), [])
+  const { data: providersData } = useAsyncResource(() => modelQueryService.list(), [])
+  const { data: documentsData } = useAsyncResource(() => documentQueryService.list(), [])
+  const { data: integrationsData } = useAsyncResource(() => integrationApplicationService.list(), [])
 
   const [title, setTitle] = useState("")
   const [summary, setSummary] = useState("")
@@ -141,8 +139,7 @@ export function useWorkflowDetailController() {
     }
 
     try {
-      const next = await saveWorkflowDraft({
-        workflowId,
+      const next = await workflowApplicationService.saveDraft(workflowId, {
         title,
         summary,
         selectedVersionId: data.selectedVersion.id,
@@ -173,7 +170,7 @@ export function useWorkflowDetailController() {
     }
 
     try {
-      const next = await publishWorkflowVersion(workflowId, data.selectedVersion.id)
+      const next = await workflowApplicationService.publish(workflowId, data.selectedVersion.id)
       setData(next)
       setSelectedVersionId(next.selectedVersion.id)
     } catch (error) {
@@ -191,7 +188,7 @@ export function useWorkflowDetailController() {
     }
 
     try {
-      const next = await runWorkflow(workflowId, data.selectedVersion.id)
+      const next = await workflowApplicationService.run(workflowId, data.selectedVersion.id)
       setData(next)
     } catch (error) {
       showToast({ title: "Run failed", description: error instanceof Error ? error.message : String(error), type: "error" })
@@ -233,7 +230,7 @@ export function useWorkflowDetailController() {
           }, ...current.invocations],
         } : current)
       }
-      const invocation = await dryRunWorkflowSnapshot({
+      const invocation = await workflowApplicationService.dryRun({
         workflowId,
         workflowTitle: title || data.workflow.title,
         selectedVersion: data.selectedVersion,
@@ -296,7 +293,7 @@ export function useWorkflowDetailController() {
 
     setIsDeleting(true)
     try {
-      const deleted = await deleteWorkflow(workflowId)
+      const deleted = await workflowApplicationService.delete(workflowId)
       if (!deleted) {
         showToast({ title: "Delete failed", description: "The workflow could not be deleted.", type: "error" })
         return

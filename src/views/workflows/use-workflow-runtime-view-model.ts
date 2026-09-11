@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react"
-import type { WorkflowDefinition, WorkflowInvocationRecord } from "@/data/domain/models"
+import type { WorkflowDefinition, WorkflowInvocationRecord } from "@/data/domain/workflow-models"
 import { projectIpc } from "@/lib/ipc"
-import type { WorkflowRunEvent } from "@/services/workflows/workflow-run-protocol"
+import type { WorkflowRunEvent } from "@/application/chats/chat-runtime-service"
 
 export type WorkflowRuntimeViewModel = {
   requestId: string | null

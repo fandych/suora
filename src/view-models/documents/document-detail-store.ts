@@ -1,6 +1,6 @@
 import { create } from "zustand"
-import type { DocumentDetail } from "@/data/domain/models"
-import { deleteDocument, getDocumentDetail, saveDocumentDraft } from "@/data/repositories/document-repository"
+import type { DocumentDetail } from "@/data/domain/skill-document-models"
+import { documentApplicationService } from "@/application/documents/document-application-service"
 
 type DocumentDetailState = {
   documentId: string | null
@@ -23,7 +23,7 @@ type DocumentDetailState = {
 
 export const useDocumentDetailStore = create<DocumentDetailState>((set, get) => ({
   documentId: null, draft: null, isLoading: false, isSaving: false, isDeleting: false, error: null,
-  load: async (documentId, versionId) => { set({ documentId, isLoading: true, error: null }); try { const draft = await getDocumentDetail(documentId, versionId); set({ draft, isLoading: false }) } catch (error) { set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) }) } },
+  load: async (documentId, versionId) => { set({ documentId, isLoading: true, error: null }); try { const draft = await documentApplicationService.getDetail(documentId, versionId); set({ draft, isLoading: false }) } catch (error) { set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) }) } },
   updateDraft: (draft) => set({ draft }),
   updatePages: (pages) => set((state) => state.draft ? { draft: { ...state.draft, pages } } : state),
   updateDocument: (patch) => set((state) => state.draft ? { draft: { ...state.draft, document: { ...state.draft.document, ...patch } } } : state),
@@ -40,7 +40,7 @@ export const useDocumentDetailStore = create<DocumentDetailState>((set, get) => 
     visit(pageId)
     return { draft: { ...state.draft, pages: state.draft.pages.filter((page) => page.id !== pageId && !descendants.has(page.id)) } }
   }),
-  save: async () => { const draft = get().draft; if (!draft) return null; set({ isSaving: true, error: null }); try { const saved = await saveDocumentDraft(draft.document.id, { title: draft.document.title, summary: draft.document.summary, enabled: draft.document.enabled, pages: draft.pages, graphEdges: draft.graphEdges, settings: draft.settings, selectedVersionId: draft.selectedVersion.id }); set({ draft: saved, isSaving: false }); return saved } catch (error) { set({ isSaving: false, error: error instanceof Error ? error : new Error(String(error)) }); return null } },
-  remove: async () => { const documentId = get().documentId; if (!documentId) return; set({ isDeleting: true, error: null }); try { await deleteDocument(documentId); set({ draft: null, isDeleting: false }) } catch (error) { set({ isDeleting: false, error: error instanceof Error ? error : new Error(String(error)) }) } },
+  save: async () => { const draft = get().draft; if (!draft) return null; set({ isSaving: true, error: null }); try { const saved = await documentApplicationService.saveDraft(draft.document.id, { title: draft.document.title, summary: draft.document.summary, enabled: draft.document.enabled, pages: draft.pages, graphEdges: draft.graphEdges, settings: draft.settings, selectedVersionId: draft.selectedVersion.id }); set({ draft: saved, isSaving: false }); return saved } catch (error) { set({ isSaving: false, error: error instanceof Error ? error : new Error(String(error)) }); return null } },
+  remove: async () => { const documentId = get().documentId; if (!documentId) return; set({ isDeleting: true, error: null }); try { await documentApplicationService.remove(documentId); set({ draft: null, isDeleting: false }) } catch (error) { set({ isDeleting: false, error: error instanceof Error ? error : new Error(String(error)) }) } },
   reload: async () => { const { documentId, draft } = get(); if (documentId) await get().load(documentId, draft?.selectedVersion.id) },
 }))

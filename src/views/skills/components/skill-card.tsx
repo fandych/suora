@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import type { SkillSummary } from "@/data/domain/models"
+import type { SkillSummary } from "@/data/domain/skill-document-models"
 
 type SkillCardProps = {
   skill: SkillSummary
