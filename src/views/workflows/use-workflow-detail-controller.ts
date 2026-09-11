@@ -7,14 +7,17 @@ import { listAvailableAgents } from "@/data/repositories/agent-repository"
 import { listDocuments } from "@/data/repositories/document-repository"
 import { listIntegrationSummaries } from "@/data/repositories/integration-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
-import { deleteWorkflow, dryRunWorkflowSnapshot, getWorkflowDetail, publishWorkflowVersion, runWorkflow, saveWorkflowDraft } from "@/data/repositories/workflow-repository"
+import { getWorkflowDetail } from "@/services/workflows/workflow-service"
+import { deleteWorkflow, publishWorkflowVersion, saveWorkflowDraft } from "@/services/workflows/workflow-publish-service"
+import { dryRunWorkflowSnapshot, runWorkflow } from "@/services/workflows/workflow-run-service"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { showToast } from "@/lib/ui-toast"
 import { defaultWorkflowBindings, defaultWorkflowNotifications, workflowPresetNodes } from "@/views/workflows/components/workflow-editor-config"
-import { DEFAULT_WORKFLOW_DRY_RUN_INPUT, buildWorkflowFingerprint, getAutoLayoutedWorkflowNodes, getWorkflowDesignIssues, getWorkflowDryRunInputIssue } from "@/views/workflows/components/workflow-editor-state"
+import { DEFAULT_WORKFLOW_DRY_RUN_INPUT, getAutoLayoutedWorkflowNodes } from "@/views/workflows/components/workflow-editor-state"
 import { parseDryRunObject } from "@/views/workflows/components/workflow-panel-helpers"
 import { useWorkflowTransferActions } from "@/views/workflows/use-workflow-transfer-actions"
 import { useWorkflowNodeActions } from "@/views/workflows/use-workflow-node-actions"
+import { useWorkflowValidation } from "@/views/workflows/use-workflow-validation"
 
 export type InspectorMode = "closed" | "properties" | "try-run" | "history"
 
@@ -84,37 +87,23 @@ export function useWorkflowDetailController() {
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId])
   const latestInvocation = data?.invocations[0] ?? null
   const selectedInvocation = data?.invocations.find((invocation) => invocation.id === selectedInvocationId) ?? latestInvocation
-  const currentDefinition = useMemo(() => ({ nodes, edges, viewport, resourceBindings, dryRunInputJson: dryRunInput, variables: data?.definition.variables ?? [], budget: data?.definition.budget, notifications }), [data, dryRunInput, edges, nodes, notifications, resourceBindings, viewport])
-  const designIssues = useMemo(() => getWorkflowDesignIssues({
+  const { blockingIssues, currentDefinition, hasUnsavedChanges, visibleIssues } = useWorkflowValidation({
+    title,
+    summary,
     nodes,
     edges,
+    viewport,
+    resourceBindings,
+    dryRunInput,
+    notifications,
+    savedDefinition: data?.definition,
+    savedTitle: data?.workflow.title,
+    savedSummary: data?.workflow.summary,
     availableAgentIds: agents.map((agent) => agent.id),
     availableDocumentIds: documents.map((document) => document.id),
     availableIntegrationIds: integrations.map((integration) => integration.id),
     availableModelIds: modelOptions.map((model) => model.id),
-  }), [agents, documents, edges, integrations, modelOptions, nodes])
-  const dryRunInputIssue = useMemo(() => getWorkflowDryRunInputIssue(dryRunInput), [dryRunInput])
-  const visibleIssues = useMemo(() => (dryRunInputIssue ? [...designIssues, dryRunInputIssue] : designIssues), [designIssues, dryRunInputIssue])
-  const blockingIssues = useMemo(() => visibleIssues.filter((issue) => issue.severity === "error"), [visibleIssues])
-  const currentFingerprint = useMemo(() => buildWorkflowFingerprint({ title, summary, definition: currentDefinition }), [currentDefinition, summary, title])
-  const savedFingerprint = useMemo(() => {
-    if (!data) {
-      return ""
-    }
-
-    return buildWorkflowFingerprint({
-      title: data.workflow.title,
-      summary: data.workflow.summary,
-      definition: {
-        ...data.definition,
-        viewport: data.definition.viewport ?? DEFAULT_VIEWPORT,
-        resourceBindings: data.definition.resourceBindings ?? defaultWorkflowBindings,
-        dryRunInputJson: data.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT,
-        notifications: data.definition.notifications ?? defaultWorkflowNotifications,
-      },
-    })
-  }, [data])
-  const hasUnsavedChanges = Boolean(data) && currentFingerprint !== savedFingerprint
+  })
   const isReleaseVersion = Boolean(data?.selectedVersion.isRelease)
   const isDraftVersion = Boolean(data && !data.selectedVersion.isRelease)
   const isReadOnly = isReleaseVersion
@@ -152,7 +141,8 @@ export function useWorkflowDetailController() {
     }
 
     try {
-      const next = await saveWorkflowDraft(workflowId, {
+      const next = await saveWorkflowDraft({
+        workflowId,
         title,
         summary,
         selectedVersionId: data.selectedVersion.id,

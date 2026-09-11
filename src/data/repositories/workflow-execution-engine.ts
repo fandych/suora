@@ -1,150 +1,21 @@
-import type { Edge, Node } from "@xyflow/react"
+import type { Edge } from "@xyflow/react"
 
-import type { ChatMessageRecord, WorkflowDefinition, WorkflowEdgeData, WorkflowNodeData, WorkflowNodeTraceRecord } from "@/data/domain/models"
-import { getChatRuntimeSettings } from "@/data/repositories/chat-settings-repository"
-import { getDocumentDetail } from "@/data/repositories/document-repository"
-import { executeIntegration } from "@/data/repositories/integration-execution-repository"
-import { getIntegrationDetail } from "@/data/repositories/integration-repository"
-import { combineNodeOutput, interpolate, mapNodeOutput, readPath, type WorkflowVariableContext } from "@/data/repositories/workflow-variable-context"
-import { createWorkflowTraceSnapshot } from "@/data/repositories/workflow-trace-sanitizer"
-import { projectIpc } from "@/lib/ipc"
-import { streamChatAgentResponse } from "@/services/ai-service"
+import type { WorkflowDefinition, WorkflowEdgeData, WorkflowNodeTraceRecord } from "@/data/domain/models"
+import { combineNodeOutput, mapNodeOutput } from "@/data/repositories/workflow-variable-context"
 import { evaluateExpression, toWorkflowHttpResult } from "@/data/repositories/workflow-expression"
+import { getNextWorkflowEdges, withWorkflowTimeout } from "@/data/repositories/workflow-execution-policy"
+import { applyWorkflowNodeOutput, createWorkflowExecutionContext, getWorkflowExecutionBudget, type WorkflowExecutionContext } from "@/data/repositories/workflow-execution-context"
+import { createCompletedWorkflowTrace, createFailedWorkflowTrace, createRunningWorkflowTrace, createSkippedWorkflowTrace, createWorkflowTraceId } from "@/data/repositories/workflow-trace-recorder"
+import { executeWorkflowNode, type WorkflowExecutionMode } from "@/data/repositories/workflow-node-executor"
 
 type WorkflowExecutionResult = {
   traces: WorkflowNodeTraceRecord[]
   output: Record<string, unknown>
 }
 
-export type WorkflowExecutionMode = "dry-run" | "manual"
-
-export type ExecutionContext = WorkflowVariableContext
+export type ExecutionContext = WorkflowExecutionContext
 export { evaluateExpression, toWorkflowHttpResult }
 export { interpolate, readPath } from "@/data/repositories/workflow-variable-context"
-
-async function executeNode(node: Node<WorkflowNodeData>, context: ExecutionContext, mode: WorkflowExecutionMode) {
-  const data = node.data
-  const effectfulKinds = new Set<WorkflowNodeData["kind"]>(["agent", "ai-response", "http", "webhook", "toolset", "script", "smtp"])
-  if (mode === "dry-run" && effectfulKinds.has(data.kind)) {
-    return { dryRun: true, skipped: true, message: `${data.kind} was not invoked during the safe dry run.` }
-  }
-  switch (data.kind) {
-    case "start": return context.input
-    case "end": return data.inputTemplate || data.template ? interpolate(data.inputTemplate || data.template, context) : { input: context.input, vars: context.vars }
-    case "variable-assigner": {
-      const val = data.variableValue ? interpolate(data.variableValue, context) : ""
-      const varName = data.variableName || "variable"
-      context.vars[varName] = val
-      context[varName] = val
-      return val
-    }
-    case "template": {
-      const rendered = interpolate(data.template ?? data.prompt, context)
-      if (data.templateOutputFormat === "json") {
-        try { return JSON.parse(rendered) } catch { return rendered }
-      }
-      return rendered
-    }
-    case "condition": return evaluateExpression(data.runIf || data.branches?.[0]?.expression || "", context)
-    case "if-else": return true
-    case "document-retrieval": {
-      if (!data.documentId) throw new Error("A source document is required.")
-      const detail = await getDocumentDetail(data.documentId)
-      const query = String(readPath(context, data.queryExpression || "$input.query") ?? data.queryExpression ?? "").toLowerCase()
-      return detail.pages.filter((page) => `${page.title} ${page.content}`.toLowerCase().includes(query)).slice(0, data.resultLimit ?? 5).map((page) => ({ title: page.title, content: page.content.slice(0, 1200) }))
-    }
-    case "wiki-retrieval": {
-      if (!data.documentId) return { items: [], query: data.queryExpression || "", source: "workspace" }
-      const detail = await getDocumentDetail(data.documentId)
-      const query = String(readPath(context, data.queryExpression || "$input.query") ?? "").toLowerCase()
-      return { items: detail.pages.filter((page) => `${page.title} ${page.content}`.toLowerCase().includes(query)).slice(0, data.resultLimit ?? 5).map((page) => ({ title: page.title, content: page.content.slice(0, 1200) })), query, source: detail.document.title }
-    }
-    case "loop": {
-      const collection = readPath(context, data.loopExpression || "$input.items") ?? (Array.isArray(context.input) ? context.input : [])
-      const items = Array.isArray(collection) ? collection.slice(0, data.maxIterations ?? 25) : []
-      const alias = data.itemAlias || "item"
-      const results: unknown[] = []
-      for (let i = 0; i < items.length; i += 1) {
-        context[alias] = items[i]
-        context.vars[alias] = items[i]
-        context.index = i
-        results.push(items[i])
-      }
-      return { items, results, iterations: items.length, maxIterations: data.maxIterations ?? 25 }
-    }
-    case "parallel":
-      return { mode: "parallel", concurrency: data.concurrency ?? 2, mergeStrategy: data.mergeStrategy ?? "all-settled" }
-    case "serial":
-      return { mode: "serial", notes: data.notes ?? "" }
-    case "fork":
-      return { mode: "fork", branches: data.branchCount ?? 2 }
-    case "join":
-      return { mode: "join", strategy: data.joinStrategy ?? "wait-all" }
-    case "agent":
-    case "ai-response": {
-      const runtime = await getChatRuntimeSettings()
-      const prompt = interpolate(data.prompt || data.task || "", context)
-      const systemPrompt = data.systemPrompt ? interpolate(data.systemPrompt, context) : undefined
-      const history: ChatMessageRecord[] = []
-      if (systemPrompt) {
-        history.push({ id: crypto.randomUUID(), role: "system", content: systemPrompt, createdAt: Date.now() })
-      }
-      history.push({ id: crypto.randomUUID(), role: "user", content: prompt, createdAt: Date.now() })
-      let output = ""
-      for await (const event of streamChatAgentResponse(history, runtime, { selectedAgentId: data.agentId || undefined })) {
-        if (event.type === "text-delta") output += event.text
-        if (event.type === "error") throw new Error(event.error)
-      }
-      if (data.responseFormat === "json") {
-        try { return JSON.parse(output) } catch { return output }
-      }
-      return output
-    }
-    case "http":
-    case "webhook":
-    case "toolset": {
-      const interpolatedUrl = data.url ? interpolate(data.url, context) : undefined
-      const headersJson = data.headersJson ? interpolate(data.headersJson, context) : "{}"
-      const queryJson = data.queryJson ? interpolate(data.queryJson, context) : "{}"
-      const bodyJson = data.bodyJson ? interpolate(data.bodyJson, context) : "{}"
-      const inputJson = JSON.stringify({ ...context, body: bodyJson })
-      if (data.integrationId) return toWorkflowHttpResult(await executeIntegration((await getIntegrationDetail(data.integrationId)).config, inputJson))
-      if (!interpolatedUrl) throw new Error("A URL or integration is required.")
-      return toWorkflowHttpResult(await executeIntegration({ kind: "http", baseUrl: interpolatedUrl, selectedEndpointId: "workflow", endpoints: [{ id: "workflow", name: "Workflow request", description: "", method: data.method || "POST", path: "/", bodyMode: "json", headersJson, queryJson, bodyJson, parameterSchemaJson: "{}", responseSchemaJson: "{}", responseDescription: "", parameters: [] }], method: data.method || "POST", url: interpolatedUrl, description: "", headersJson, queryJson, bodyJson, authType: "none", authConfigJson: "{}", parameterSchemaJson: "{}" }, inputJson))
-    }
-    case "script": return (await executeIntegration({ kind: "scripts", description: "Workflow script", runtime: "node", timeoutMs: Math.min(data.timeoutMs ?? 30000, 60000), inputSchemaJson: "{}", outputSchemaJson: "{}", selectedScriptId: "workflow-script", scripts: [{ id: "workflow-script", name: data.label, handler: "main", code: data.script || "" }] }, JSON.stringify(context))).body
-    case "smtp": {
-      const result = await projectIpc.mail.send({ to: interpolate(data.emailTo || "", context), subject: interpolate(data.emailSubject || "Workflow notification", context), content: interpolate(data.emailBody || "", context) })
-      if (!result.success) throw new Error(result.error || "Email could not be sent.")
-      return { sent: true }
-    }
-    default: return { kind: data.kind, context }
-  }
-}
-
-function withTimeout<T>(operation: Promise<T>, timeoutMs: number, label: string) {
-  return Promise.race<T>([
-    operation,
-    new Promise<T>((_resolve, reject) => window.setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs} ms.`)), timeoutMs)),
-  ])
-}
-
-function getNextEdges(node: Node<WorkflowNodeData>, output: unknown, outgoing: Map<string, Edge<WorkflowEdgeData>[]>, context: ExecutionContext) {
-  const edges = outgoing.get(node.id) ?? []
-  if (node.data.kind === "if-else") {
-    const branches = node.data.branches ?? []
-    const selectedBranch = branches.find((branch, index) => index < branches.length - 1 && evaluateExpression(branch.expression, context)) ?? branches.at(-1)
-    return edges.filter((edge) => edge.sourceHandle === selectedBranch?.id)
-  }
-  if (node.data.kind === "condition") {
-    const passed = Boolean(output)
-    return edges.filter((edge) => {
-      if (edge.data?.condition?.trim()) return evaluateExpression(edge.data.condition, context)
-      return passed
-    })
-  }
-  return edges
-}
 
 export async function executeWorkflowDefinition(definition: WorkflowDefinition, input: unknown, mode: WorkflowExecutionMode = "manual", onTrace?: (trace: WorkflowNodeTraceRecord) => void): Promise<WorkflowExecutionResult> {
   const nodes = new Map(definition.nodes.map((node) => [node.id, node]))
@@ -158,22 +29,11 @@ export async function executeWorkflowDefinition(definition: WorkflowDefinition, 
   const start = definition.nodes.find((node) => node.data.kind === "start")
   if (!start) throw new Error("Workflow requires a start node.")
 
-  const context: ExecutionContext = {
-    input: input && typeof input === "object" ? input : { value: input },
-    vars: {},
-    steps: {},
-    current: undefined,
-  }
-  context.$input = context.input
-  context.$vars = context.vars
-  context.$steps = context.steps
-  context.$current = context.current
-  Object.defineProperty(context, "$context", { value: context, enumerable: false, configurable: true, writable: true })
+  const context = createWorkflowExecutionContext(input)
 
   const traces: WorkflowNodeTraceRecord[] = []
-  const maxSteps = Math.min(definition.budget?.maxSteps ?? 100, 1000)
+  const { maxSteps, maxDurationMs } = getWorkflowExecutionBudget(definition)
   const workflowStartedAt = Date.now()
-  const maxDurationMs = Math.min(definition.budget?.maxDurationMs ?? 120000, 3_600_000)
 
   const nodeStatus = new Map<string, "pending" | "running" | "completed" | "skipped" | "failed">()
   const edgeActive = new Map<string, boolean>()
@@ -193,26 +53,26 @@ export async function executeWorkflowDefinition(definition: WorkflowDefinition, 
         if (!node) return
         nodeStatus.set(id, "running")
         const startedAt = Date.now()
-        const traceId = `${id}-${startedAt}-${traces.length}`
+        const traceId = createWorkflowTraceId(id, startedAt, traces.length)
 
         if (node.data.enabled === false) {
           nodeStatus.set(id, "skipped")
-          const contextBefore = createWorkflowTraceSnapshot(context)
-          traces.push({ traceId, nodeId: id, label: node.data.label, status: "skipped", input: JSON.stringify(contextBefore), output: "Node disabled.", startedAt, finishedAt: Date.now(), contextBefore, contextAfter: contextBefore })
+          traces.push(createSkippedWorkflowTrace(node, context, traceId, startedAt))
           onTrace?.(traces.at(-1)!)
           return
         }
 
+        const runningTrace = createRunningWorkflowTrace(node, context, traceId, startedAt)
+        const contextBefore = runningTrace.contextBefore!
+        const traceInput = runningTrace.input ?? ""
         try {
-          const contextBefore = createWorkflowTraceSnapshot(context)
-          const traceInput = JSON.stringify(contextBefore)
-          onTrace?.({ traceId, nodeId: id, label: node.data.label, status: "running", input: traceInput, output: "Executing…", startedAt, finishedAt: startedAt, contextBefore })
+          onTrace?.(runningTrace)
           const attempts = Math.max(0, Math.min(node.data.retryCount ?? 0, 5)) + 1
           let output: unknown
           let lastError: unknown
           for (let attempt = 0; attempt < attempts; attempt += 1) {
             try {
-              output = await withTimeout(executeNode(node, context, mode), Math.max(100, Math.min(node.data.timeoutMs ?? 30000, maxDurationMs)), node.data.label)
+              output = await withWorkflowTimeout(executeWorkflowNode(node, context, mode), Math.max(100, Math.min(node.data.timeoutMs ?? 30000, maxDurationMs)), node.data.label)
               lastError = undefined
               break
             } catch (error) {
@@ -223,30 +83,21 @@ export async function executeWorkflowDefinition(definition: WorkflowDefinition, 
 
           const outputContext: ExecutionContext = { ...context, current: output, $current: output }
           const nodeOutput = combineNodeOutput(output, mapNodeOutput(node.data.outputSchemaJson, outputContext))
-          context.current = nodeOutput
-          context.$current = nodeOutput
-          context.steps[node.id] = nodeOutput
-          context.steps[node.data.label] = nodeOutput
-          if (node.data.outputKey) {
-            context[node.data.outputKey] = nodeOutput
-            context.vars[node.data.outputKey] = nodeOutput
-          }
-          const contextAfter = createWorkflowTraceSnapshot(context)
+          applyWorkflowNodeOutput(context, node.id, node.data.label, nodeOutput, node.data.outputKey)
 
           nodeStatus.set(id, "completed")
-          const activeEdges = getNextEdges(node, output, outgoing, context)
+          const activeEdges = getNextWorkflowEdges(node, output, outgoing, context)
           const allOutgoing = outgoing.get(node.id) ?? []
           for (const edge of allOutgoing) {
             edgeActive.set(edge.id, activeEdges.includes(edge))
           }
 
           const skipped = mode === "dry-run" && typeof output === "object" && output !== null && "skipped" in output
-          traces.push({ traceId, nodeId: id, label: node.data.label, status: skipped ? "skipped" : "success", input: traceInput, output: typeof output === "string" ? output : JSON.stringify(output), startedAt, finishedAt: Date.now(), contextBefore, contextAfter })
+          traces.push(createCompletedWorkflowTrace({ node, traceId, output, status: skipped ? "skipped" : "success", traceInput, contextBefore, context, startedAt }))
           onTrace?.(traces.at(-1)!)
         } catch (error) {
           nodeStatus.set(id, "failed")
-          const contextAfter = createWorkflowTraceSnapshot(context)
-          traces.push({ traceId, nodeId: id, label: node.data.label, status: "error", input: JSON.stringify(contextAfter), output: error instanceof Error ? error.message : String(error), startedAt, finishedAt: Date.now(), contextAfter })
+          traces.push(createFailedWorkflowTrace(node, context, traceId, traceInput, startedAt, error))
           onTrace?.(traces.at(-1)!)
           if (!node.data.continueOnError) return
         }

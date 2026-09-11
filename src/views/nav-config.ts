@@ -10,7 +10,7 @@ import {
   WorkflowIcon,
   type LucideIcon,
 } from "lucide-react"
-import type { ComponentType } from "react"
+export type { ResolvedSecondarySidebarGroup, ResolvedSecondarySidebarItem } from "@/data/domain/navigation-models"
 
 export type PrimaryNavItem = {
   title: string
@@ -26,20 +26,6 @@ export type PrimaryNavItem = {
       title?: string
     }[]
   }
-}
-
-export type ResolvedSecondarySidebarItem = {
-  id: string
-  label: string
-  href: string
-  meta?: string
-  count?: number
-  icon?: ComponentType<{ className?: string }>
-  actions?: Array<{
-    id: string
-    label: string
-    variant?: "default" | "destructive"
-  }>
 }
 
 export const primaryNavItems: PrimaryNavItem[] = [
@@ -233,12 +219,6 @@ export const primaryNavItems: PrimaryNavItem[] = [
     },
   },
 ]
-
-export type ResolvedSecondarySidebarGroup = {
-  id: string
-  title?: string
-  items: ResolvedSecondarySidebarItem[]
-}
 
 export const preferenceRoute = {
   title: "Preference",

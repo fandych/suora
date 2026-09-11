@@ -90,6 +90,10 @@ declare global {
         save: (payload: unknown) => Promise<unknown>
         delete: (workflowId: string) => Promise<unknown>
         recordInvocation: (payload: unknown) => Promise<unknown>
+        startRun: (payload: unknown) => Promise<unknown>
+        cancelRun: (requestId: string) => Promise<unknown>
+        onRunEvent: (listener: (...args: unknown[]) => void) => void
+        offRunEvent: (listener: (...args: unknown[]) => void) => void
       }
       channels: {
         list: () => Promise<unknown>

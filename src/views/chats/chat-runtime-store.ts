@@ -8,6 +8,7 @@ import type { ChatAgentEvent, ChatAttachment } from "@/services/chat/types"
 import { createPersistedAssistantPayload } from "@/services/chat/assistant-persistence"
 import { createPersistedUserPayload } from "@/views/chats/chat-controller-utils"
 import { applyEventToAssistantResponseParts, finalizeAssistantResponseParts, type AssistantResponsePart } from "@/services/chat/response-parts"
+import { useChatRuntimeStore } from "@/stores/chat-runtime-store"
 
 export type ChatRuntimeSnapshot = {
   isResponding: boolean
@@ -39,7 +40,6 @@ type StartChatRunInput = {
 }
 
 const runtimeEntries = new Map<string, ChatRuntimeEntry>()
-const listeners = new Set<() => void>()
 let lastRunningChatIdsKey = ""
 const RUNTIME_RETENTION_MS = 5 * 60 * 1000
 
@@ -54,7 +54,7 @@ const EMPTY_RUNTIME: ChatRuntimeSnapshot = {
 }
 
 function emitRuntimeChange() {
-  listeners.forEach((listener) => listener())
+  useChatRuntimeStore.setState((state) => ({ revision: state.revision + 1 }))
 }
 
 function emitRuntimePresenceChangeIfNeeded() {
@@ -93,6 +93,17 @@ function setEntryState(chatId: string, patch: Partial<ChatRuntimeEntry>) {
     ...entry,
     ...patch,
   })
+  const current = runtimeEntries.get(chatId)!
+  const snapshot: ChatRuntimeSnapshot = {
+    isResponding: current.isResponding,
+    isStopping: current.isStopping,
+    toolEvents: current.toolEvents,
+    streamingText: current.streamingText,
+    assistantResponseMessageId: current.assistantResponseMessageId,
+    assistantResponseParts: current.assistantResponseParts,
+    pendingBrowserContinue: current.pendingBrowserContinue,
+  }
+  useChatRuntimeStore.getState().setSnapshot(chatId, snapshot)
   emitRuntimeChange()
   emitRuntimePresenceChangeIfNeeded()
 }
@@ -109,10 +120,7 @@ function scheduleRuntimeCleanup(chatId: string, runId: string) {
 }
 
 export function subscribeToChatRuntime(listener: () => void) {
-  listeners.add(listener)
-  return () => {
-    listeners.delete(listener)
-  }
+  return useChatRuntimeStore.subscribe(listener)
 }
 
 export function getRunningChatIds() {

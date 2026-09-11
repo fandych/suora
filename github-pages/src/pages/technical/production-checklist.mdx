@@ -1,0 +1,53 @@
+export const meta = { title: "生产发布检查清单", description: "SUORA 的架构、数据库、Smoke 和发布验证清单。" }
+
+# 生产发布检查清单
+
+## 架构
+
+- View 只依赖 ViewModel/Application Service。
+- `src/data`、`src/services` 不得依赖 `src/views`。
+- Renderer 不直接访问 Electron 主进程模块。
+- `electron/ipc` 不包含业务原生 SQL。
+- 持久化通过 Drizzle Repository 完成。
+
+执行：
+
+```text
+npm run verify:architecture
+```
+
+## 数据库
+
+- Schema 变化必须追加 migration。
+- migration 在事务中执行，失败回滚。
+- 发布前备份 `userData/workspace/suora.sqlite` 及 WAL 文件。
+- 恢复时同时恢复 `suora.sqlite`、`suora.sqlite-wal` 和 `suora.sqlite-shm`（如存在）。
+- 首次启动必须验证数据库初始化和 seed 流程。
+
+## 自动验证
+
+```text
+npm run type-check
+npm run lint
+npm run test:run
+npm run build
+npm run smoke:electron
+```
+
+## 发布包
+
+分别在目标平台执行：
+
+```text
+npm run package
+npm run verify:release-assets
+```
+
+验证安装后：
+
+- 应用能启动；
+- 数据库能初始化；
+- IPC 能注册；
+- 主页面能加载；
+- 数据能读写；
+- 应用能正常退出。

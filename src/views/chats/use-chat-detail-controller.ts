@@ -14,7 +14,7 @@ import { deriveChatBrowserInteractionState } from "@/views/chats/chat-browser-st
 import { getDocumentDetail } from "@/data/repositories/document-repository"
 import { getIntegrationDetail } from "@/data/repositories/integration-repository"
 import { getSkillDetail } from "@/data/repositories/skill-repository"
-import { getWorkflowDetail } from "@/data/repositories/workflow-repository"
+import { getWorkflowDetail } from "@/services/workflows/workflow-service"
 import { resolveFallbackRuntime } from "@/views/chats/chat-controller-utils"
 import { useChatExportActions } from "@/views/chats/use-chat-export-actions"
 import { useChatAttachmentActions } from "@/views/chats/use-chat-attachment-actions"

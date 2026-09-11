@@ -26,6 +26,11 @@ React Renderer → Preload Bridge → Electron IPC → Desktop Services
 - `src/data/mappers/`：数据库/IPC 原始行到领域模型的映射，例如 `channel-mappers.ts`。
 - `src/lib/ipc/bridge.ts`：Renderer 对 `window.project` bridge 的最小访问封装。
 - `src/lib/serialization/json.ts`：JSON 兼容解析和默认值回退。
+- **MVC 映射**：`src/data/domain/` 和 `src/data/mappers/` 是 Model；`src/data/repositories/` 负责持久化适配；`src/services/` 负责 Service/Use Case 和跨模块编排；`src/views/*/use-*.ts` 是页面 Controller；`src/views/*/components/` 是 View；`src/App.tsx` 和 layouts 负责路由与页面组合。Controller 不直接拼接 IPC，View 不实现领域规则。
+- **Workflow 分层**：`workflow-node-executor.ts` 负责单节点能力，`workflow-execution-context.ts` 管理运行上下文，`workflow-trace-recorder.ts` 生成脱敏 trace，`workflow-execution-engine.ts` 只负责图调度。Workflow 当前在 Renderer 执行，因为节点依赖 Renderer 侧的 AI、文档和 Integration service；若迁移到 Main process，必须先建立等价的 Main process ports/adapters。
+- **Channel 分层**：`channel-repository.ts` 负责持久化 facade，`src/services/channels/` 按 runtime、diagnostics、binding、messaging 拆分用例；Channel mapper 只负责 Raw row 到 Model 的转换。
+- **Ports/Adapters**：Workflow 节点执行器只依赖 `src/services/workflows/workflow-runtime-ports.ts` 定义的 AI、Document、Integration、Mail 和序列化能力；`workflow-runtime-adapter.ts` 提供 Renderer 实现。未来 Main process 执行器应提供独立 adapter，不应让节点 Model 直接依赖 Electron 或具体 repository。
+- **Main process 数据分层**：`electron/database/workflow-database-context.ts` 负责数据库生命周期，`workflow-definition-database.ts` 负责 definition CRUD，`workflow-version-database.ts` 负责版本存在性校验，`workflow-invocation-database.ts` 负责运行记录；IPC handler 通过 `workflow-database-repository.ts` facade 调用，不直接承担 SQL 业务。
 - `src/services/ai/`：AI Provider 构造和 Electron 代理网络客户端。
 - `src/services/ai-service.ts`：Chat Agent/ToolLoop 跨模块运行编排；`src/services/chat/`：Chat 消息转换等 Chat 运行时辅助服务。
 - `src/services/chat/types.ts`、`response-parts.ts`、`assistant-persistence.ts`：Chat 运行时共享类型、流式响应转换和 assistant 持久化 payload。

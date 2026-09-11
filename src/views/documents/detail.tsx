@@ -5,11 +5,10 @@ import { EllipsisIcon, PencilIcon, PowerIcon, Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
-import { useAsyncResource } from "@/hooks/use-async-resource"
 import { useAutosaveStatus } from "@/hooks/use-autosave-status"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import type { DocumentDetail } from "@/data/domain/models"
-import { deleteDocument, getDocumentDetail, saveDocumentDraft } from "@/data/repositories/document-repository"
+import { deleteDocument, saveDocumentDraft } from "@/data/repositories/document-repository"
 import { buildDocumentTree, getDocumentDisplayName } from "@/data/domain/document-tree"
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser/file-exports"
 import PageHeader from "@/views/components/page-header"
@@ -19,6 +18,7 @@ import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { DocumentCreateDialog } from "@/views/documents/components/document-create-dialog"
 import { DocumentEditorPanel } from "@/views/documents/components/document-editor-panel"
 import { DocumentTreePanel } from "@/views/documents/components/document-tree-panel"
+import { useDocumentDetailStore } from "@/view-models/documents/document-detail-store"
 
 function getUniqueDocumentTitle(existingTitles: string[], preferredTitle: string) {
   if (!existingTitles.includes(preferredTitle)) return preferredTitle
@@ -53,13 +53,16 @@ const DocumentsDetailPage = () => {
   const navigate = useNavigate()
   const { documentId } = useParams<{ documentId: string }>()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
-  const { data, error, isLoading, reload, setData } = useAsyncResource(() => getDocumentDetail(documentId ?? "", selectedVersionId), [documentId, selectedVersionId])
+  const { draft, error, isLoading, load, updateDraft, updatePages, updatePage, updateDocument, reload } = useDocumentDetailStore()
+  const setDraft = (next: DocumentDetail | ((current: DocumentDetail | null) => DocumentDetail | null)) => {
+    const current = useDocumentDetailStore.getState().draft
+    updateDraft(typeof next === "function" ? next(current) ?? current ?? ({} as DocumentDetail) : next)
+  }
   const [selectedNodeId, setSelectedNodeId] = useState("")
   const [editorMode, setEditorMode] = useState<"rich" | "source">("rich")
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const uploadParentIdRef = useRef<string | null>(null)
-  const [draft, setDraft] = useState<DocumentDetail | null>(null)
   const [entryDialogMode, setEntryDialogMode] = useState<{ kind: "add-file" | "add-directory" | "rename"; parentId?: string | null; targetId?: string } | null>(null)
   const [entryDialogValue, setEntryDialogValue] = useState("")
   const [entryDialogError, setEntryDialogError] = useState("")
@@ -79,8 +82,7 @@ const DocumentsDetailPage = () => {
       selectedVersionId: nextDraft.selectedVersion.id,
     })
     const hasSelectedPage = saved.pages.some((page) => page.id === selectedNodeId)
-    setData(saved)
-    setDraft(saved)
+    updateDraft(saved)
     setSelectedVersionId(saved.selectedVersion.id)
     if (hasSelectedPage) {
       setSelectedNodeId((current) => current)
@@ -98,22 +100,22 @@ const DocumentsDetailPage = () => {
   })
 
   useEffect(() => {
-    if (!data) return
-    setDraft(data)
-    setSelectedVersionId(data.selectedVersion.id)
+    if (documentId && !draft) void load(documentId, selectedVersionId)
+    if (!draft) return
+    setSelectedVersionId(draft.selectedVersion.id)
     setSelectedNodeId((current) => {
-      if (current && data.pages.some((page) => page.id === current)) {
+      if (current && draft.pages.some((page) => page.id === current)) {
         return current
       }
 
-      const firstDocument = data.pages.find((page) => (page.type ?? "document") === "document") ?? data.pages[0]
+      const firstDocument = draft.pages.find((page) => (page.type ?? "document") === "document") ?? draft.pages[0]
       return firstDocument?.id ?? ""
     })
     setCollapsedIds(new Set())
     setHasLoadedInitialState(true)
-    autosave.markClean(buildDocumentSnapshot(normalizeDocumentState(data)))
+    autosave.markClean(buildDocumentSnapshot(normalizeDocumentState(draft)))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data])
+  }, [documentId, draft, load, selectedVersionId])
 
   const pages = useMemo(() => draft?.pages ?? [], [draft])
   const pagesById = useMemo(() => new Map(pages.map((page) => [page.id, page])), [pages])
@@ -209,7 +211,7 @@ const DocumentsDetailPage = () => {
     if (!draft || draft.pages.length <= 1) return
     const descendantIds = getDescendantIds(nodeId)
     const nextPages = draft.pages.filter((page) => page.id !== nodeId && !descendantIds.has(page.id))
-    setDraft({ ...draft, pages: nextPages })
+    updatePages(nextPages)
     const fallback = nextPages.find((page) => (page.type ?? "document") === "document") ?? nextPages[0]
     setSelectedNodeId(fallback?.id ?? "")
     setDeleteTargetId(null)
@@ -247,10 +249,7 @@ const DocumentsDetailPage = () => {
       return
     }
 
-    setDraft({
-      ...draft,
-      pages: draft.pages.map((page) => page.id === selectedPage.id ? { ...page, content: value } : page),
-    })
+    updatePage(selectedPage.id, { content: value })
   }
 
   const handleDeleteDocument = async () => {
@@ -260,9 +259,7 @@ const DocumentsDetailPage = () => {
     navigate("/documents")
   }
 
-  const toggleDocumentEnabled = () => {
-    setDraft((current) => current ? { ...current, document: { ...current.document, enabled: !current.document.enabled } } : current)
-  }
+  const toggleDocumentEnabled = () => { if (draft) updateDocument({ enabled: !draft.document.enabled }) }
 
   return (
     <div className="flex min-h-full flex-col bg-background">

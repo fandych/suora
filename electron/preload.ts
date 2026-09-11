@@ -13,6 +13,7 @@ const allowedInvokeChannels = new Set([
 const allowedEventChannels = new Set([
   "ai:fetch:event",
   "channel:message",
+  "workflow:run:event",
   "tools:browserStateChanged",
 ])
 
@@ -121,6 +122,10 @@ contextBridge.exposeInMainWorld("project", {
     save: (payload: unknown) => ipcRenderer.invoke("workflows:save", payload),
     delete: (workflowId: string) => ipcRenderer.invoke("workflows:delete", workflowId),
     recordInvocation: (payload: unknown) => ipcRenderer.invoke("workflows:recordInvocation", payload),
+    startRun: (payload: unknown) => ipcRenderer.invoke("workflows:run:start", payload),
+    cancelRun: (requestId: string) => ipcRenderer.invoke("workflows:run:cancel", requestId),
+    onRunEvent: (listener: (...args: unknown[]) => void) => ipcRenderer.on("workflow:run:event", listener),
+    offRunEvent: (listener: (...args: unknown[]) => void) => ipcRenderer.off("workflow:run:event", listener),
   },
   channels: {
     list: async () => {

@@ -24,4 +24,12 @@ export default defineConfig([
       'react-refresh/only-export-components': 'off',
     },
   },
+  {
+    files: ['src/data/**/*.{ts,tsx}', 'src/domain/**/*.{ts,tsx}', 'src/application/**/*.{ts,tsx}', 'src/services/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', {
+        patterns: [{ group: ['@/views/*', '@/views/**'], message: 'Data, domain, application, and service layers must not depend on views.' }],
+      }],
+    },
+  },
 ])

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
-import { createWorkflow } from "@/data/repositories/workflow-repository"
+import { createWorkflow } from "@/services/workflows/workflow-service"
 import { cn } from "@/lib/utils"
 
 export function NewWorkflowButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {

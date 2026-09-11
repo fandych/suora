@@ -4,7 +4,7 @@ import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-s
 import PageHeader from "@/views/components/page-header"
 import { SummaryCardGrid } from "@/views/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listWorkflows } from "@/data/repositories/workflow-repository"
+import { listWorkflows } from "@/services/workflows/workflow-service"
 import { WorkflowCard } from "@/views/workflows/components/workflow-card"
 
 const WorkflowsPage = () => {

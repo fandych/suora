@@ -12,7 +12,7 @@ import {
   saveChannel,
   unbindChannel,
   waitForWeChatPersonalBinding,
-} from "@/data/repositories/channel-repository"
+} from "@/services/channels/channel-service"
 import { listAvailableAgents } from "@/data/repositories/agent-repository"
 import { listConfiguredModelProviders } from "@/data/repositories/model-config-repository"
 import { ChannelLogoBadge } from "@/views/channels/components/channel-logo-badge"

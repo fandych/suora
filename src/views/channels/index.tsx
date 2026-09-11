@@ -3,7 +3,7 @@ import { useNavigate } from "react-router"
 
 import { subscribeToDataChanges } from "@/data/repositories/data-events"
 import { useAsyncResource } from "@/hooks/use-async-resource"
-import { listChannels } from "@/data/repositories/channel-repository"
+import { listChannels } from "@/services/channels/channel-service"
 import PageHeader from "@/views/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { ChannelCard } from "@/views/channels/components/channel-card"

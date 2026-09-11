@@ -7,37 +7,27 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast } from "@/components/ui/toast"
 import type { SchedulerDetail } from "@/data/domain/models"
-import { listAvailableAgents } from "@/data/repositories/agent-repository"
-import { deleteScheduler, getScheduler, listSchedulerRuns, saveScheduler, setSchedulerEnabled } from "@/data/repositories/scheduler-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
-import { listWorkflows } from "@/data/repositories/workflow-repository"
-import { useAsyncResource } from "@/hooks/use-async-resource"
 import { ConfirmDeleteDialog } from "@/views/components/confirm-delete-dialog"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
 import { SchedulerBindingPanel } from "@/views/schedulers/components/scheduler-binding-panel"
 import { SchedulerGeneralPanel } from "@/views/schedulers/components/scheduler-general-panel"
 import { SchedulerRunHistory } from "@/views/schedulers/components/scheduler-run-history"
+import { useSchedulerDetailStore } from "@/view-models/schedulers/scheduler-detail-store"
 
 const SchedulerDetailPage = () => {
   const { schedulerId } = useParams<{ schedulerId: string }>()
   const navigate = useNavigate()
-  const { data, error, isLoading, reload, setData } = useAsyncResource(() => getScheduler(schedulerId ?? ""), [schedulerId])
-  const { data: workflowsData } = useAsyncResource(() => listWorkflows(), [])
-  const { data: agentsData } = useAsyncResource(() => listAvailableAgents(), [])
-  const [draft, setDraft] = useState<SchedulerDetail | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const { draft, runs, workflows, agents, error, isLoading, isDeleting, load, updateDraft, save, toggleEnabled, remove, reload } = useSchedulerDetailStore()
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false)
-  const { data: runs, isLoading: isLoadingRuns, reload: reloadRuns } = useAsyncResource(() => listSchedulerRuns(schedulerId ?? ""), [schedulerId])
-  const workflows = useMemo(() => workflowsData ?? [], [workflowsData])
-  const agents = useMemo(() => agentsData ?? [], [agentsData])
+  const isLoadingRuns = false
+  const reloadRuns = reload
 
   useEffect(() => {
-    if (data) {
-      setDraft(data)
-    }
-  }, [data])
+    if (schedulerId) void load(schedulerId)
+  }, [load, schedulerId])
 
   const targetOptions = useMemo(() => {
     if (!draft) {
@@ -53,12 +43,12 @@ const SchedulerDetailPage = () => {
     }
 
     const nextTarget = targetOptions[0]
-    setDraft({
+    updateDraft({
       ...draft,
       targetId: nextTarget.id,
       targetName: nextTarget.title,
     })
-  }, [draft, targetOptions])
+  }, [draft, targetOptions, updateDraft])
 
   const handleSave = async () => {
     if (!draft) {
@@ -66,9 +56,8 @@ const SchedulerDetailPage = () => {
     }
 
     try {
-      const next = await saveScheduler(draft)
-      setData(next)
-      setDraft(next)
+      const next = await save()
+      if (!next) return
       toast.add({ title: "Scheduler saved", type: "success" })
     } catch (error) {
       toast.add({ title: "Save failed", description: error instanceof Error ? error.message : String(error), type: "error" })
@@ -79,9 +68,8 @@ const SchedulerDetailPage = () => {
     if (!draft) return
 
     try {
-      const next = await setSchedulerEnabled(draft.id, !draft.enabled)
-      setData(next)
-      setDraft(next)
+      const next = await toggleEnabled()
+      if (!next) return
       emitDataChanged("/schedulers")
       toast.add({ title: next.enabled ? "Scheduler enabled" : "Scheduler disabled", type: "success" })
     } catch (error) {
@@ -92,16 +80,14 @@ const SchedulerDetailPage = () => {
   const handleDelete = async () => {
     if (!draft) return
 
-    setIsDeleting(true)
     try {
-      await deleteScheduler(draft.id)
+      await remove()
       emitDataChanged("/schedulers")
       navigate("/schedulers")
       toast.add({ title: "Scheduler deleted", type: "success" })
     } catch (error) {
       toast.add({ title: "Delete failed", description: error instanceof Error ? error.message : String(error), type: "error" })
     } finally {
-      setIsDeleting(false)
       setIsDeleteDialogOpen(false)
     }
   }
@@ -113,7 +99,7 @@ const SchedulerDetailPage = () => {
 
     const nextTarget = targetType === "agent" ? agents[0] : workflows[0]
 
-    setDraft({
+    updateDraft({
       ...draft,
       targetType,
       targetId: nextTarget?.id ?? "",
@@ -128,7 +114,7 @@ const SchedulerDetailPage = () => {
     }
 
     const nextTarget = targetOptions.find((item) => item.id === targetId)
-    setDraft({
+    updateDraft({
       ...draft,
       targetId,
       targetName: nextTarget?.title ?? "",
@@ -161,8 +147,8 @@ const SchedulerDetailPage = () => {
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error && draft ? (
             <>
-              <SchedulerGeneralPanel draft={draft} onChange={setDraft} onSave={() => void handleSave()} />
-              <SchedulerBindingPanel agents={agents} draft={draft} onChange={setDraft} onTargetIdChange={handleTargetIdChange} onTargetTypeChange={updateTargetType} workflows={workflows} />
+              <SchedulerGeneralPanel draft={draft} onChange={updateDraft} onSave={() => void handleSave()} />
+              <SchedulerBindingPanel agents={agents} draft={draft} onChange={updateDraft} onTargetIdChange={handleTargetIdChange} onTargetTypeChange={updateTargetType} workflows={workflows} />
             </>
           ) : null}
         </div>

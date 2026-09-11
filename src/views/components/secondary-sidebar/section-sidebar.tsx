@@ -27,7 +27,7 @@ import { deleteDocument } from "@/data/repositories/document-repository"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import { deleteModelProvider, listModelProviders, saveModelProvider } from "@/data/repositories/model-config-repository"
 import { deleteSkill, getSkillDetail, saveSkillDraft } from "@/data/repositories/skill-repository"
-import { deleteWorkflow } from "@/data/repositories/workflow-repository"
+import { deleteWorkflow } from "@/services/workflows/workflow-publish-service"
 import { ChatDeleteButton } from "@/views/chats/components/chat-delete-button"
 import { cn } from "@/lib/utils"
 

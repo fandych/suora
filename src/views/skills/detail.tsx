@@ -6,11 +6,10 @@ import { ConfirmDeleteDialog } from "@/views/components/confirm-delete-dialog"
 import { ResourceEntryDialog } from "@/views/components/resource-entry-dialog"
 import { getSkillSourceLanguage } from "@/lib/resources/skill-files"
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable"
-import { useAsyncResource } from "@/hooks/use-async-resource"
 import { useAutosaveStatus } from "@/hooks/use-autosave-status"
 import { emitDataChanged } from "@/data/repositories/data-events"
 import type { SkillDetail, SkillFileRecord } from "@/data/domain/models"
-import { getSkillDetail, saveSkillDraft } from "@/data/repositories/skill-repository"
+import { saveSkillDraft } from "@/data/repositories/skill-repository"
 import { deleteSkill } from "@/data/repositories/skill-repository"
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser/file-exports"
 import { buildSkillTree, getDefaultSkillFileName, isSafeSkillResourcePath, normalizeSkillPath, parseSkillFrontmatter, SKILL_ROOT_PATH } from "@/lib/resources/skill-files"
@@ -23,6 +22,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { toast } from "@/components/ui/toast"
 import { EllipsisIcon, SlashIcon, Trash2Icon } from "lucide-react"
+import { useSkillDetailStore } from "@/view-models/skills/skill-detail-store"
 
 function getUniqueSkillPath(files: SkillFileRecord[], preferredPath: string) {
   const used = new Set(files.map((file) => normalizeSkillPath(file.path)))
@@ -67,8 +67,7 @@ const SkillsDetailPage = () => {
   const navigate = useNavigate()
   const location = useLocation()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
-  const { data, error, isLoading, reload, setData } = useAsyncResource(() => getSkillDetail(skillId ?? "", selectedVersionId), [skillId, selectedVersionId])
-  const [draft, setDraft] = useState<SkillDetail | null>(null)
+  const { draft, error, isLoading, load, updateDraft, updateFiles, updateFile, reload } = useSkillDetailStore()
   const [selectedFilePath, setSelectedFilePath] = useState("")
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set())
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
@@ -99,8 +98,7 @@ const SkillsDetailPage = () => {
       },
     }
     const hasSelectedFile = next.files.some((file) => normalizeSkillPath(file.path) === normalizeSkillPath(selectedFilePath))
-    setData(next)
-    setDraft(next)
+    updateDraft(next)
     setSelectedVersionId(next.selectedVersion.id)
     if (hasSelectedFile) {
       setSelectedFilePath((current) => current)
@@ -118,21 +116,21 @@ const SkillsDetailPage = () => {
   })
 
   useEffect(() => {
-    if (!data) return
-    setDraft(data)
-    setSelectedVersionId(data.selectedVersion.id)
+    if (skillId && !draft) void load(skillId, selectedVersionId)
+    if (!draft) return
+    setSelectedVersionId(draft.selectedVersion.id)
     setSelectedFilePath((current) => {
-      if (current && data.files.some((file) => normalizeSkillPath(file.path) === normalizeSkillPath(current))) {
+      if (current && draft.files.some((file) => normalizeSkillPath(file.path) === normalizeSkillPath(current))) {
         return current
       }
 
-      return data.files[0]?.path ?? ""
+      return draft.files[0]?.path ?? ""
     })
     setCollapsedPaths(new Set())
     setHasLoadedInitialState(true)
-    autosave.markClean(buildSkillSnapshot(data))
+    autosave.markClean(buildSkillSnapshot(draft))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data])
+  }, [draft, load, selectedVersionId, skillId])
 
   const treeEntries = useMemo(() => buildSkillTree(draft?.files ?? [], draft?.skill.title), [draft?.files, draft?.skill.title])
   const visibleEntries = useMemo(() => treeEntries.filter((entry) => {
@@ -190,7 +188,7 @@ const SkillsDetailPage = () => {
         if (currentPath.startsWith(`${sourcePath}/`)) return { ...file, path: `${normalizedNext}/${currentPath.slice(sourcePath.length + 1)}` }
         return file
       })
-      setDraft({ ...draft, files: nextFiles })
+      updateFiles(nextFiles)
       setSelectedFilePath(normalizedNext)
       setEntryDialogMode(null)
       setEntryDialogError("")
@@ -208,7 +206,7 @@ const SkillsDetailPage = () => {
     const nextFile: SkillFileRecord = entryDialogMode.kind === "add-directory"
       ? { path: nextPath, content: "", language: "plaintext", kind: "directory", executable: false }
       : { path: nextPath, content: nextPath.startsWith("scripts/") ? "export async function main(input: unknown) {\n  return { ok: true, input }\n}\n" : "", language: getSkillSourceLanguage(nextPath), kind: "file", executable: nextPath.startsWith("scripts/") }
-    setDraft({ ...draft, files: [...draft.files, nextFile] })
+    updateFiles([...draft.files, nextFile])
     setCollapsedPaths((current) => { const next = new Set(current); next.delete(parentPath); return next })
     handleSelectEntry(nextPath)
     setEntryDialogMode(null)
@@ -221,7 +219,7 @@ const SkillsDetailPage = () => {
       const currentPath = normalizeSkillPath(file.path)
       return currentPath !== path && !currentPath.startsWith(`${path}/`)
     })
-    setDraft({ ...draft, files: nextFiles })
+    updateFiles(nextFiles)
     const fallback = nextFiles.find((file) => (file.kind ?? "file") === "file")
     setSelectedFilePath(fallback?.path ?? "SKILL.md")
     setDeleteTargetPath(null)
@@ -254,7 +252,7 @@ const SkillsDetailPage = () => {
     const nextFiles = draft.files
       .filter((file) => !uploadedPaths.includes(normalizeSkillPath(file.path)))
       .concat(files.filter((file) => uploadedPaths.includes(normalizeSkillPath(file.path))))
-    setDraft({ ...draft, files: nextFiles })
+    updateFiles(nextFiles)
     if (uploadedPaths.length > 0) handleSelectEntry(uploadedPaths[0])
     setPendingUpload(null)
   }
@@ -288,10 +286,7 @@ const SkillsDetailPage = () => {
       return
     }
 
-    setDraft({
-      ...draft,
-      files: draft.files.map((file) => normalizeSkillPath(file.path) === normalizeSkillPath(selectedFile.path) ? { ...file, content: value } : file),
-    })
+    updateFile(selectedFile.path, { content: value })
   }
 
   const handleSkillAction = async (actionId: "disable" | "delete") => {

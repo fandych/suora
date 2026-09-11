@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentSummary, SchedulerDetail, WorkflowDetail, WorkflowSummary } from "@/data/domain/models"
-import { getWorkflowDetail } from "@/data/repositories/workflow-repository"
+import { getWorkflowDetail } from "@/services/workflows/workflow-service"
 import { readWorkflowSchemaParameters, type WorkflowSchemaParameter } from "@/views/workflows/components/workflow-schema-contract"
 
 type SchedulerBindingPanelProps = {

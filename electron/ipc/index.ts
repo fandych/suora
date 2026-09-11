@@ -1,4 +1,5 @@
 import { registerWorkflowIpc } from "@electron/ipc/domain/workflow-ipc"
+import { registerWorkflowRuntimeIpc } from "@electron/ipc/domain/workflow-runtime-ipc"
 import { registerIntegrationIpc } from "@electron/ipc/domain/integration-ipc"
 import { registerSchedulerIpc } from "@electron/ipc/domain/scheduler-ipc"
 import { registerPreferenceIpc } from "@electron/ipc/system/preference-ipc"
@@ -39,6 +40,7 @@ export function setupIpc() {
   registerToolCommandIpc()
   registerToolExternalIpc()
   registerWorkflowIpc()
+  registerWorkflowRuntimeIpc()
   registerIntegrationIpc()
   registerSchedulerIpc()
   registerPreferenceIpc()

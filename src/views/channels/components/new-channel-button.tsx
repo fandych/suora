@@ -3,7 +3,7 @@ import { useState } from "react"
 import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
-import { createChannel } from "@/data/repositories/channel-repository"
+import { createChannel } from "@/services/channels/channel-service"
 import { cn } from "@/lib/utils"
 
 export function NewChannelButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {

@@ -8,22 +8,24 @@ import { listModelProviders } from "@/data/repositories/model-config-repository"
 import { listSchedulers } from "@/data/repositories/scheduler-repository"
 import { listSkills } from "@/data/repositories/skill-repository"
 import { listWorkflows } from "@/data/repositories/workflow-repository"
-import { getRunningChatIds } from "@/views/chats/chat-runtime-store"
-import { getProviderSidebarLogo } from "@/views/components/provider-logo"
-import { getChannelPlatformSidebarLogo } from "@/views/channels/components/channel-utils"
-import type { PrimaryNavItem } from "@/views/nav-config"
+type SidebarConfig = {
+  url: string
+  secondarySidebar: {
+    groups: Array<{ id: string; title?: string }>
+  }
+}
 
 function getChannelCatalogGroup(record: { platform: string; bindingState?: string; enabled: boolean }) {
   return record.bindingState === "connected" || record.enabled ? "connected" : "catalog"
 }
 
-function emptyGroups(item: PrimaryNavItem): SidebarGroupData[] {
+function emptyGroups(item: SidebarConfig): SidebarGroupData[] {
   return item.secondarySidebar.groups.map((group) => ({ id: group.id, title: group.title, items: [] }))
 }
 
 function mapItems(
-  item: PrimaryNavItem,
-  records: Array<{ id: string; title: string; group: string; meta?: string; count?: number; icon?: SidebarItemData["icon"]; actions?: SidebarItemData["actions"] }>
+  item: SidebarConfig,
+  records: Array<{ id: string; title: string; group: string; meta?: string; count?: number; icon?: SidebarItemData["icon"]; iconKey?: string; actions?: SidebarItemData["actions"] }>
 ): SidebarGroupData[] {
   return item.secondarySidebar.groups.map((group) => ({
     id: group.id,
@@ -32,13 +34,9 @@ function mapItems(
       .filter((record) => record.group === group.id)
       .map(
         (record) =>
-          ({ id: record.id, label: record.title, href: `${item.url}/${record.id}`, meta: record.meta, count: record.count, icon: record.icon, actions: record.actions }) satisfies SidebarItemData
+          ({ id: record.id, label: record.title, href: `${item.url}/${record.id}`, meta: record.meta, count: record.count, icon: record.icon, iconKey: record.iconKey, actions: record.actions }) satisfies SidebarItemData
       ),
   }))
-}
-
-function getProviderIcon(providerType: string) {
-  return getProviderSidebarLogo(providerType)
 }
 
 function compareModelSidebarRecords(
@@ -110,11 +108,10 @@ function compareChannelSidebarRecords(
   return left.title.localeCompare(right.title, undefined, { sensitivity: "base" })
 }
 
-export async function loadSidebarGroups(item: PrimaryNavItem) {
+export async function loadSidebarGroups(item: SidebarConfig) {
   switch (item.url) {
     case "/chats": {
       const records = await listChats()
-      const runningChatIds = getRunningChatIds()
       const now = Date.now()
       const oneDay = 24 * 60 * 60 * 1000
       const sevenDays = 7 * oneDay
@@ -124,9 +121,8 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
         records.map((record) => ({
           id: record.id,
           title: record.title,
-          meta: runningChatIds.has(record.id) ? `${record.summary || "In progress"} · Running` : record.summary,
+          meta: record.summary,
           group: now - record.updatedAt < oneDay ? "today" : now - record.updatedAt < sevenDays ? "week" : "older",
-          count: runningChatIds.has(record.id) ? 1 : undefined,
           actions: [{ id: "delete", label: "Delete", variant: "destructive" as const }],
         }))
       )
@@ -163,7 +159,7 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
           catalogId: record.catalogId,
           customPlatformName: record.customPlatformName,
           meta: record.meta || `${record.platform} · ${record.bindingState || record.status}`,
-          icon: getChannelPlatformSidebarLogo(record),
+          iconKey: record.platform,
         }))
         .sort(compareChannelSidebarRecords))
     }
@@ -184,7 +180,7 @@ export async function loadSidebarGroups(item: PrimaryNavItem) {
           group: record.apiKey.trim().length > 0 ? "connected" : "catalog",
           meta: record.baseUrl || record.providerType,
           count: record.models.filter((model) => model.enabled).length,
-          icon: getProviderIcon(record.providerType),
+          iconKey: record.providerType,
           actions: [
             { id: "rename", label: "Edit info" },
             { id: record.enabled ? "disable" : "enable", label: record.enabled ? "Disable" : "Enable" },

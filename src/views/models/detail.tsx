@@ -3,10 +3,9 @@ import { useParams } from "react-router"
 import { useNavigate } from "react-router"
 
 import { Badge } from "@/components/ui/badge"
-import { useAsyncResource } from "@/hooks/use-async-resource"
 import type { ProviderConfigRecord } from "@/data/domain/models"
 import { emitDataChanged } from "@/data/repositories/data-events"
-import { deleteModelProvider, discoverProviderModelCatalog, getDefaultProviderBaseUrl, getModelProvider, getProviderModelDiscoveryState, getProviderPreset, providerAllowsNoKey, saveModelProvider } from "@/data/repositories/model-config-repository"
+import { discoverProviderModelCatalog, getDefaultProviderBaseUrl, getProviderModelDiscoveryState, getProviderPreset, providerAllowsNoKey } from "@/data/repositories/model-config-repository"
 import { showToast } from "@/lib/ui-toast"
 import PageHeader from "@/views/components/page-header"
 import { ErrorCard, LoadingCard } from "@/views/components/resource-state"
@@ -14,32 +13,28 @@ import { ModelFormDialog, createModelFormState, type ModelFormState } from "@/vi
 import { ProviderLogoBadge } from "@/views/models/components/provider-logo-badge"
 import { ProviderModelList } from "@/views/models/components/provider-model-list"
 import { ProviderSettingsForm } from "@/views/models/components/provider-settings-form"
+import { useModelDetailStore } from "@/view-models/models/model-detail-store"
 
 const ModelsDetailPage = () => {
   const { modelId } = useParams<{ modelId: string }>()
   const navigate = useNavigate()
-  const { data, error, isLoading, reload, setData } = useAsyncResource(() => getModelProvider(modelId ?? ""), [modelId])
-  const [draft, setDraft] = useState<ProviderConfigRecord | null>(null)
+  const { draft, error, isLoading, load, updateDraft, save, remove, reload } = useModelDetailStore()
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
   const [editingModelIndex, setEditingModelIndex] = useState<number | null>(null)
   const [isRefreshingModels, setIsRefreshingModels] = useState(false)
   const [modelForm, setModelForm] = useState<ModelFormState>(createModelFormState())
 
-  const persistedProvider = data ?? draft
+  const persistedProvider = draft
 
   const persistProvider = async (nextProvider: ProviderConfigRecord) => {
-    const saved = await saveModelProvider(nextProvider)
-    setData(saved)
-    setDraft(saved)
+    updateDraft(nextProvider)
+    const saved = await save()
+    if (!saved) return nextProvider
     emitDataChanged("/models")
     return saved
   }
 
-  useEffect(() => {
-    if (data) {
-      setDraft(data)
-    }
-  }, [data])
+  useEffect(() => { if (modelId) void load(modelId) }, [load, modelId])
 
   const selectedPreset = getProviderPreset(draft?.providerType ?? "openai")
   const hasApiKey = Boolean(draft?.apiKey.trim())
@@ -56,7 +51,7 @@ const ModelsDetailPage = () => {
       return
     }
 
-    await deleteModelProvider(draft.id)
+    await remove()
     emitDataChanged("/models")
     navigate("/models")
   }
@@ -137,7 +132,7 @@ const ModelsDetailPage = () => {
     const previousDefault = getDefaultProviderBaseUrl(draft.providerType)
     const nextDefault = getDefaultProviderBaseUrl(providerType)
     const shouldReplaceBaseUrl = !draft.baseUrl || draft.baseUrl === previousDefault
-    setDraft({
+    updateDraft({
       ...draft,
       title: !draft.title || draft.title === currentPreset.title ? nextPreset.title : draft.title,
       providerType,
@@ -207,7 +202,7 @@ const ModelsDetailPage = () => {
                   docsUrl={selectedPreset.docsUrl}
                   canConfigureModels={canConfigureModels}
                   canDelete={true}
-                  onChange={setDraft}
+                  onChange={updateDraft}
                   onDelete={handleDeleteProvider}
                   onOpenDocs={(url) => {
                     void window.project?.tools.openExternal(url)

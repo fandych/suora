@@ -1,15 +1,17 @@
 import { describe, expect, it, vi } from "vitest"
 
+vi.mock("@electron/database/drizzle/system-repository", () => ({
+  getWorkflowVersionPolicy: vi.fn(async (workflowId: string, versionId: string) => {
+    if (workflowId !== "workflow-1" || versionId !== "version-1") throw new Error("Workflow or version not found")
+  }),
+}))
+
 import { assertWorkflowVersion } from "@electron/ipc/domain/workflow-ipc-policy"
 
 describe("workflow IPC policy", () => {
-  it("requires a version belonging to the workflow", () => {
-    const database = {
-      prepare: vi.fn(() => ({ get: vi.fn((workflowId: string, versionId: string) => workflowId === "workflow-1" && versionId === "version-1" ? { id: workflowId } : undefined) })),
-    } as never
-
-    expect(() => assertWorkflowVersion(database, "missing", "version-1")).toThrow("Workflow or version not found")
-    expect(() => assertWorkflowVersion(database, "workflow-1", "version-2")).toThrow("Workflow or version not found")
-    expect(assertWorkflowVersion(database, "workflow-1", "version-1")).toBeUndefined()
+  it("requires an existing workflow version", async () => {
+    await expect(assertWorkflowVersion("missing", "version-1")).rejects.toThrow("Workflow or version not found")
+    await expect(assertWorkflowVersion("workflow-1", "version-2")).rejects.toThrow("Workflow or version not found")
+    await expect(assertWorkflowVersion("workflow-1", "version-1")).resolves.toBeUndefined()
   })
 })
