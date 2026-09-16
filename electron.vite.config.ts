@@ -2,22 +2,31 @@ import { resolve } from "path"
 
 import react from "@vitejs/plugin-react"
 import tailwindcss from "@tailwindcss/vite"
-import { defineConfig, externalizeDepsPlugin } from "electron-vite"
+import { defineConfig } from "electron-vite"
 import { cpSync, existsSync } from "node:fs"
 
 const alias = {
   "@": resolve(__dirname, "./src"),
-  "@shared": resolve(__dirname, "./shared"),
-  "@electron": resolve(__dirname, "./electron"),
 }
 
 function copyScriptWorker() {
   return {
     name: "copy-script-worker",
     closeBundle() {
-      const source = resolve(__dirname, "electron/integrations/script-worker.mjs")
+      const source = resolve(__dirname, "src/electron/integrations/script-worker.mjs")
       const target = resolve(__dirname, "out/main/script-worker.mjs")
       if (existsSync(source)) cpSync(source, target)
+    },
+  }
+}
+
+function copyDrizzleMigrations() {
+  return {
+    name: "copy-drizzle-migrations",
+    closeBundle() {
+      const source = resolve(__dirname, "src/drizzle/migrations")
+      const target = resolve(__dirname, "out/main/drizzle/migrations")
+      cpSync(source, target, { recursive: true })
     },
   }
 }
@@ -35,26 +44,27 @@ function handleRollupWarning(
 
 export default defineConfig({
   main: {
-    plugins: [externalizeDepsPlugin(), copyScriptWorker()],
+    plugins: [copyScriptWorker(), copyDrizzleMigrations()],
     resolve: {
       alias,
     },
     build: {
       outDir: "out/main",
+      externalizeDeps: true,
       lib: {
-        entry: resolve(__dirname, "electron/main.ts"),
+        entry: resolve(__dirname, "src/electron/main.ts"),
       },
     },
   },
   preload: {
-    plugins: [externalizeDepsPlugin()],
     resolve: {
       alias,
     },
     build: {
       outDir: "out/preload",
+      externalizeDeps: true,
       lib: {
-        entry: resolve(__dirname, "electron/preload.ts"),
+        entry: resolve(__dirname, "src/electron/preload.ts"),
         formats: ["cjs"],
       },
     },

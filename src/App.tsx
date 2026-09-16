@@ -1,49 +1,43 @@
-import { useEffect } from 'react'
-import { HashRouter, Navigate, Route, Routes } from 'react-router'
-import { Toaster } from '@/components/ui/toast'
-import { restoreChannelRuntime } from '@/services/channels/channel-service'
-import { applyPreferenceSettingsToDocument, getPreferenceSettings } from '@/data/repositories/preference-repository'
-import { showToast } from '@/lib/ui-toast'
-import { hasProjectBridge, projectIpc } from '@/lib/ipc'
-import { initChannelRuntimeListener } from '@/services/channels/channel-runtime-listener'
-import RootLayout from '@/views/layout'
-import WorkflowsPage from '@/views/workflows'
-import SkillsPage from '@/views/skills'
-import DocumentsPage from '@/views/documents'
-import IntegrationsPage from '@/views/integrations'
-import ModelsPage from '@/views/models'
-import AgentsPage from '@/views/agents'
-import ChannelsPage from '@/views/channels'
-import SchedulersPage from '@/views/schedulers'
-import PreferencePage from '@/views/preference'
-import ChatDetailPage from '@/views/chats/detail'
-import WorkflowDetailPage from '@/views/workflows/detail'
-import SkillsDetailPage from '@/views/skills/detail'
-import DocumentsDetailPage from '@/views/documents/detail'
-import IntegrationsDetailPage from '@/views/integrations/detail'
-import ModelsDetailPage from '@/views/models/detail'
-import AgentsDetailPage from '@/views/agents/detail'
-import ChannelDetailPage from '@/views/channels/detail'
-import SchedulerDetailPage from '@/views/schedulers/detail'
-import ErrorPage from '@/views/error'
-import { preferenceRoute } from '@/views/nav-config'
+import { useEffect } from "react"
+import { HashRouter, Navigate, Route, Routes } from "react-router"
+import { Toaster } from "@/components/ui/toast"
+import { PreferenceApi } from "@/services/preference-service"
+import { showToast } from "@/services/toast-service"
+import { hasAppBridge } from "@/services/bridge"
+import { initChannelRuntimeListener } from "@/services/channel-runtime-listener"
+import RootLayout from "@/pages/layout"
+import WorkflowsPage from "@/pages/workflows"
+import SkillsPage from "@/pages/skills"
+import DocumentsPage from "@/pages/documents"
+import IntegrationsPage from "@/pages/integrations"
+import ModelsPage from "@/pages/models"
+import AgentsPage from "@/pages/agents"
+import ChannelsPage from "@/pages/channels"
+import SchedulersPage from "@/pages/schedulers"
+import PreferencePage from "@/pages/preference"
+import ChatDetailPage from "@/pages/chats/detail"
+import WorkflowDetailPage from "@/pages/workflows/detail"
+import SkillsDetailPage from "@/pages/skills/detail"
+import DocumentsDetailPage from "@/pages/documents/detail"
+import IntegrationsDetailPage from "@/pages/integrations/detail"
+import ModelsDetailPage from "@/pages/models/detail"
+import AgentsDetailPage from "@/pages/agents/detail"
+import ChannelDetailPage from "@/pages/channels/detail"
+import SchedulerDetailPage from "@/pages/schedulers/detail"
+import ErrorPage from "@/pages/error"
+import { preferenceRoute } from "@/pages/nav-config"
 
 const App = () => {
   useEffect(() => {
     const cleanupChannelRuntime = initChannelRuntimeListener()
-    if (hasProjectBridge()) {
-      void restoreChannelRuntime().catch(() => undefined)
-    }
-    void getPreferenceSettings().then((settings) => {
-      applyPreferenceSettingsToDocument(settings)
-      if (settings.autoCheckUpdates && hasProjectBridge()) {
-        void projectIpc.updater.check().catch(() => undefined)
+    void PreferenceApi.get().then((settings) => {
+      PreferenceApi.applyToDocument(settings)
+      if (settings.autoCheckUpdates && hasAppBridge()) {
+        void PreferenceApi.checkUpdates().catch(() => undefined)
       }
     })
 
-    return () => {
-      cleanupChannelRuntime()
-    }
+    return cleanupChannelRuntime
   }, [])
 
   useEffect(() => {
@@ -72,12 +66,22 @@ const App = () => {
     }
 
     const onWindowError = (event: ErrorEvent) => {
-      reportError("Unexpected error", event.error instanceof Error ? event.error.message : event.message || String(event.error || "Unknown error"))
+      if (/^ResizeObserver loop (completed with undelivered notifications|limit exceeded)$/i.test(event.message.trim())) {
+        return
+      }
+
+      reportError(
+        "Unexpected error",
+        event.error instanceof Error ? event.error.message : event.message || String(event.error || "Unknown error"),
+      )
     }
 
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
       const reason = event.reason
-      reportError("Unhandled rejection", reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason))
+      reportError(
+        "Unhandled rejection",
+        reason instanceof Error ? reason.message : typeof reason === "string" ? reason : JSON.stringify(reason),
+      )
     }
 
     window.addEventListener("error", onWindowError)
@@ -121,7 +125,6 @@ const App = () => {
           </Route>
         </Routes>
       </HashRouter>
-
     </Toaster>
   )
 }

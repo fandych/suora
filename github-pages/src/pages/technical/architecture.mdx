@@ -4,6 +4,8 @@ export const meta = { title: "应用架构", description: "React、Electron IPC�
 
 SUORA 采用 Electron 主进程和 React 渲染进程分离的桌面架构。渲染器负责页面和交互，preload 负责暴露窄化 API，主进程负责数据库、网络、文件、命令和渠道等特权操作。
 
+Electron 主进程正在进行模块化迁移。迁移目标为 `Renderer → preload.ts → preload/ → app/<module>/ → infrastructure/`：IPC 只处理进程边界，模块 Service 编排业务，模块 Repository 处理持久化，Provider 和 Execution 分别隔离平台差异与执行引擎。迁移期间保持所有 IPC channel、`window.electron` 和 `window.app` bridge API 兼容。
+
 ```text
 React Renderer → Preload Bridge → Electron IPC → Desktop Services
   │                                  ├── Local SQLite
@@ -15,33 +17,32 @@ React Renderer → Preload Bridge → Electron IPC → Desktop Services
 
 - `src/`：React 页面、领域模型、repositories、前端服务与渲染器状态。页面和源码模块通过 `@/` 别名引用本地模块。
 - `src/views/`：路由页面和页面级 UI contract；不向 service 层提供共享领域类型。
-- `src/data/repositories/`：数据库和 IPC 数据访问、缓存/降级及领域数据持久化边界。
-- `src/data/domain/`：领域规则和纯数据转换，例如渠道配置、文档树、Chat 错误状态、Agent 步数控制和 workflow 定义规范化。
+- `src/data/repositories/`：不属于单一业务模块的共享数据库/IPC 访问、缓存/降级及持久化适配；模块专属读写代码位于对应的 `src/domain/<module>/<module>-repository.ts`。
 - `src/lib/security/`：与运行环境相关的安全策略，例如命令执行确认和环境变量构造。
 - `src/lib/browser/`：浏览器剪贴板和文件导出能力；Electron 保存文件通过 IPC facade 访问主进程。
-- `src/lib/resources/`：Archive 导入计划、资源预览和 Skill 文件规则。
-- `src/lib/ui-toast.ts`：Renderer UI toast 适配器。
-- `src/data/domain/integrations/`：HTTP Integration 配置、cURL/OpenAPI 导入、MCP 工具解析及统一领域入口。
-- `src/data/domain/chat/persistence.ts`：Chat message parts 和 settings 的版本化 envelope 序列化/解析。
+- `src/lib/browser/`：浏览器剪贴板、资源预览和文件导出能力；Electron 保存文件通过 IPC facade 访问主进程。
+- `src/services/data-events.ts`、`src/services/toast-service.ts`：Renderer 内数据刷新与 toast 通知服务。
+- `src/pages/integrations/`：HTTP Integration 配置、cURL/OpenAPI 导入和 MCP 工具的编辑器辅助。
+- `electron/application/skill/skill-file-service.ts` 和 `electron/application/document/document-file-service.ts`：Skill/Document 文件路径验证、树和单文件查询；Renderer 通过 `src/services` 请求受控 IPC API。
 - `src/data/mappers/`：数据库/IPC 原始行到领域模型的映射，例如 `channel-mappers.ts`。
-- `src/lib/ipc/bridge.ts`：Renderer 对 `window.project` bridge 的最小访问封装。
 - `src/lib/serialization/json.ts`：JSON 兼容解析和默认值回退。
-- **MVVM 映射**：`src/data/domain/` 和 `src/data/mappers/` 是 Model；`src/data/repositories/` 负责持久化适配；`src/application/` 负责用例和跨模块编排；`src/services/` 负责无 UI 状态的运行时能力；`src/view-models/` 负责页面状态、加载和命令；`src/views/` 和 `src/views/*/components/` 负责 View 与页面组合。View 不直接依赖 Repository 或 Service。
-- **Workflow 分层**：`workflow-node-executor.ts` 负责单节点能力，`workflow-execution-context.ts` 管理运行上下文，`workflow-trace-recorder.ts` 生成脱敏 trace，`workflow-execution-engine.ts` 只负责图调度。Workflow 当前在 Renderer 执行，因为节点依赖 Renderer 侧的 AI、文档和 Integration service；若迁移到 Main process，必须先建立等价的 Main process ports/adapters。
+- **Renderer 分层**：页面专属 helper 位于 `src/pages/<module>/`；`src/services/` 负责无 UI 状态的 IPC facade、bridge adapter 和 renderer 应用服务；`src/stores/` 集中存放 Zustand Store；`src/views/` 和 `src/views/*/components/` 负责 View 与页面组合。Renderer 不创建 `src/domain/`。
+- **Workflow 分层**：所有 workflow 执行均在 `electron/application/workflow/`。该目录负责节点执行、运行上下文、表达式、分支、预算、取消和脱敏 trace；Renderer 仅编辑 definition、通过 `workflows:run:start` 发起后台运行，并订阅 `workflow:run:event` 显示进度。跨 preload 的 workflow DTO 与事件类型放在 `src/types/workflow.d.ts`，不得新增 `shared/` 目录。
 - **Channel 分层**：`channel-repository.ts` 负责持久化 facade，`src/services/channels/` 按 runtime、diagnostics、binding、messaging 拆分用例；Channel mapper 只负责 Raw row 到 Model 的转换。
-- **Ports/Adapters**：Workflow 节点执行器只依赖 `src/data/domain/workflow-runtime-ports.ts` 定义的 AI、Document、Integration、Mail 和序列化能力；runtime settings、integration execution result 和 workflow context 等契约位于 `src/data/domain/*-runtime-models.ts`，不依赖 Repository。`workflow-runtime-adapter.ts` 提供 Renderer 实现。未来 Main process 执行器应提供独立 adapter，不应让节点 Model 直接依赖 Electron 或具体 repository。
-- **Main process 数据分层**：`electron/database/workflow-database-context.ts` 负责数据库生命周期，`workflow-definition-database.ts` 负责 definition CRUD，`workflow-version-database.ts` 负责版本存在性校验，`workflow-invocation-database.ts` 负责运行记录；IPC handler 通过 `workflow-database-repository.ts` facade 调用，不直接承担 SQL 业务。
-- `src/services/ai/`：AI Provider 构造和 Electron 代理网络客户端。
-- `src/services/ai-service.ts`：Chat Agent/ToolLoop 跨模块运行编排；`src/services/chat/`：Chat 消息转换等 Chat 运行时辅助服务。
-- `src/services/chat/types.ts`、`response-parts.ts`、`assistant-persistence.ts`：Chat 运行时共享类型、流式响应转换和 assistant 持久化 payload。
-- `src/services/ai/tools/`：AI 内置工具、私有资源工具、资源搜索、scope 解析和工具重试；其中 `workspace-tools.ts`、`browser-tools.ts`、`http-tools.ts`、`resource-search-tools.ts` 按能力分类，`ai-service.ts` 只负责 Agent/ToolLoop 编排。
-- `src/services/ai/research-agent.ts`：受限资源 scope 下的 research subagent 构造和执行能力。
+- **Ports/Adapters**：Workflow、Chat、Integration、Skill 和 Document 的执行、验证及持久化适配都在 Electron application/services 中。Renderer 只经 preload/IPC 发出命令、接收 DTO 和展示状态；跨进程契约统一位于 `src/types/`。
+- **Main process 数据分层**：`electron/infrastructure/db-core.ts` 负责数据库生命周期和查询执行，`drizzle/migrations/` 负责运行时迁移，`drizzle/system-repository.ts` 负责共享 app metadata；业务 Repository 位于对应的 `electron/app/<module>/`。
+- `src/services/chat-service.ts`：Renderer Chat IPC facade；`src/services/chat-runtime-listener.ts`：Chat runtime 事件订阅 adapter。
+- `src/lib/chat/`：Renderer 的 Chat 展示、错误文案与流式 response-parts 转换 helper；跨 IPC 的 Chat 类型位于 `src/types/`。
+- `electron/app/chats/`：Chat 命令处理、Agent/ToolLoop 执行、工具重试和主进程持久化编排。
 - `electron/main.ts`：应用生命周期入口，准备工作区、迁移数据库、注册 IPC、配置更新器并创建窗口。
 - `electron/preload.ts`：在 context isolation 下暴露 `window.project` 和少量事件/通用 invoke API。
-- `electron/ipc/`：按领域注册 IPC handlers，实际子目录包括 `system/`、`workspace/`、`database/`、`ai/`、`chat/`、`document/`、`agent/`、`skill/`、`model/`、`channel/`、`workflow/`、`integration/`、`scheduler/`、`preference/`、`tools/`、`updater/` 和 `mail/`。
-- `electron/application/`、`electron/channels/`、`electron/infrastructure/`、`electron/integrations/`、`electron/services/`：分别存放 Electron 用例、渠道运行时、平台基础设施、集成执行和主进程服务；不再使用语义宽泛的 `electron/others/`。
-- `electron/database/`：SQLite 初始化、WAL、外键、迁移和查询执行。
-- `tests/unit/`：集中存放单元测试，并按 `data/`、`services/`、`views/` 保留被测模块的功能结构。
+- `electron/preload/`：按领域注册 IPC handlers，只执行输入校验、边界授权、应用服务调用和事件转发，不直接执行 SQL 或领域执行逻辑。
+- `electron/app/<module>/`：迁移目标中的业务模块边界。模块将聚合 `service.ts`、`repository.ts`，以及需要时的 `providers/` 或 `execution/`；应用层不得反向依赖 IPC，Repository 不得依赖 Service。
+- `electron/app/index.ts`：当前阶段的主进程应用装配入口，负责初始化应用级服务；业务模块迁移完成后继续作为唯一模块组合根。
+- `electron/preload/index.ts`：IPC 装配入口，按领域注册 `electron/preload/<module>/` 中的 handlers，包括系统和工具能力。
+- 已迁移的简单 CRUD 模块包括 `electron/app/agents/`、`documents/`、`skills/`、`preferences/` 和 `schedulers/`。每个模块通过 `service.ts` 编排业务、通过 `repository.ts` 访问持久化，并由对应 `electron/preload/<module>/` 注册 IPC。
+- `electron/app/`、`electron/channels/`、`electron/infrastructure/`、`electron/integrations/`：分别存放按领域组织的应用模块、渠道运行时、平台基础设施和集成执行；通用主进程 service 目录已清理。
+- `tests/unit/`：集中存放单元测试，并按 `domain/`、`data/`、`services/`、`views/` 保留被测模块的功能结构。
 
 ## Electron 启动生命周期
 
@@ -63,7 +64,7 @@ React Renderer → Preload Bridge → Electron IPC → Desktop Services
 - `nodeIntegration: false`
 - 受控的 preload bridge
 
-preload 按领域暴露 `project.chats`、`documents`、`models`、`skills`、`agents`、`integrations`、`workflows`、`channels`、`schedulers`、`preferences`、`updater`、`mail` 和 `tools` 等 API。Renderer 侧通过 `projectIpc`、`getProjectBridge` 和 `hasProjectBridge` 使用这些能力。新增业务调用应优先添加明确命名的 bridge 方法和对应 IPC handler，不要扩大通用通道权限。
+preload 按领域暴露 `project.chats`、`documents`、`models`、`skills`、`agents`、`integrations`、`workflows`、`channels`、`schedulers`、`preferences`、`updater`、`mail` 和 `tools` 等 API。Renderer 侧通过 `appIPC`、`getAppBridge` 和 `hasAppBridge` 使用这些能力。新增业务调用应优先添加明确命名的 bridge 方法和对应 IPC handler，不要扩大通用通道权限。
 
 通用 `electron.invoke` 与事件订阅还有白名单：只有列入允许集合的 AI fetch、数据库、Integration 执行和渠道预览事件可以直接访问。业务资源通常通过 `window.project` 的领域 API 调用。
 
@@ -82,27 +83,28 @@ preload 按领域暴露 `project.chats`、`documents`、`models`、`skills`、`a
 - Channels、消息和运行状态
 - Models/Providers、Schedulers 与 `app_meta`
 
-渲染器 repository 负责领域数据映射和降级策略；Electron IPC 负责将请求转发到数据库或桌面服务。Preferences 在桌面运行时存于 `app_meta`，无 bridge 时会回退到浏览器 `localStorage`。
+渲染器 repository 负责领域数据映射；Electron IPC 负责将请求转发到数据库或桌面服务。Preferences 在桌面运行时统一存于 SQLite 的 `app_meta`，IPC 不可用或数据库操作失败时直接报告错误，不再静默写入浏览器存储。
 
 ## 服务边界
 
-Domain 和 Repository 层不得反向依赖 Service 或 `src/views/`。Views 通过 `src/application/` 和 `src/view-models/` 访问数据；需要被 runtime、application 和 view 共同使用的 Chat 类型、事件转换和持久化工具，应通过 Application adapter 暴露。
+Domain 和 Repository 层不得反向依赖 Service 或 `src/views/`。Views 通过 `src/application/`、`src/stores/` 和页面 Controller 访问数据；需要被 runtime、application 和 view 共同使用的 Chat 类型、事件转换和持久化工具，应通过 Application adapter 暴露。
 
 - **AI**：主进程代理模型请求、代理/TLS、超时和连接重试；renderer 通过流式事件接收增量文本、工具调用和错误。
 - **Tools**：文件读写、命令和浏览器操作受工作区策略、命令 allowlist、大小限制与 URL 安全规则约束。
 - **Integrations**：HTTP、Script VM 与当前有限的 MCP 探测由主进程执行，避免 renderer 直接持有网络和进程权限。
-- **Channels**：Webhook server 和 stream/email clients 运行在主进程；入站消息通过 `channel:message` 事件发送到 renderer，再由 channel listener 路由到 Chat/Agent。
+- **Channels**：Webhook server 和 stream/email clients 运行在主进程；Channel 凭据完整性、绑定状态和运行状态也由 `electron/application/channels/` 推导，Renderer 只显示 Electron 返回的状态。入站消息通过 `channel:message` 事件发送到 renderer，再由 channel listener 路由到 Chat/Agent。
+- **Preferences**：Renderer 只处理主题应用和表单提示；Electron 在 `preferences:save` 时清洗并规范化配置，文件/命令访问策略和邮件配置的最终判定始终在主进程执行。Preference DTO 位于 `src/types/preference.d.ts`。
 - **Updater**：仅打包应用检查更新，开发环境跳过。
 
-依赖方向约定为：`views → view-models/application → services/repositories → data/domain/lib`；Domain 不得依赖 Repository、Service 或 View，Repository 和 Service 不得反向依赖 View，IPC domain client 不得通过 `projectIpc` facade 反向调用自身。
+依赖方向约定为：`views → stores/application → services/repositories → domain/lib`；Domain 不得依赖 Repository、Service 或 View，Repository 和 Service 不得反向依赖 View，IPC domain client 不得通过 `appIPC` facade 反向调用自身。
 
 ## 命名与目录规则
 
-- 纯领域规则放在 `src/data/domain/`，使用 `*-config`、`*-normalizer`、`*-persistence` 等反映行为的名称。
+- 不创建 `src/domain/` 或 `src/data/domain/`。跨进程序列化类型使用 `src/types/*.d.ts`；Renderer 页面辅助使用 `src/pages/<module>/`；Electron 业务逻辑按 `electron/app/<module>/` 和 `electron/preload/` 归属，Drizzle 数据库入口与迁移位于 `drizzle/`。
 - 数据库或 IPC 原始结果转换放在 `src/data/mappers/`，使用 `*-mappers.ts` 命名。
 - Renderer 基础能力按 `browser/`、`ipc/`、`resources/`、`security/`、`serialization/` 分组，不再把无关功能新增到根级 `src/lib/`。
-- AI 能力按 `src/services/ai/` 和 `src/services/ai/tools/` 分组；Chat 运行时共享能力放在 `src/services/chat/`；渠道 runtime 放在 `src/services/channels/`。
-- 新代码中的 IPC bridge 使用 `projectIpc`、`getProjectBridge`、`hasProjectBridge` 和 `window.project`，不使用产品名作为变量或函数名。
+- AI 和 Chat runtime 能力按 `electron/app/ai/` 与 `electron/app/chats/` 分组；Renderer 只保留 `chat-service.ts` facade、`chat-runtime-listener.ts` 事件 adapter 与 `src/lib` 纯 UI helper。
+- 新代码中的 IPC bridge 使用 `appIPC`、`getAppBridge`、`hasAppBridge` 和 `window.project`，不使用产品名作为变量或函数名。
 - `src/lib/utils.ts` 是 shadcn/UI 高复用基础工具，保持原位置，避免为目录整洁而破坏大量 UI import。
 
 ## 安全模型与已知边界
@@ -116,7 +118,8 @@ Agent instructions、外部网页和 Skill 内容都属于不可信输入；它�
 ## 开发约定
 
 - 新 UI 使用 `workflow` 命名，不新增 `pipeline` 术语。
-- 按 `electron/ipc/`、`electron/database/`、`electron/application/`、`electron/channels/`、`electron/infrastructure/`、`electron/integrations/`、`electron/services/` 和 `electron/types/` 分组放置 Electron 代码。
+- Electron 正在从按技术类别分散的旧目录迁移到按业务模块聚合的 `electron/app/<module>/`。新代码遵循 `preload → app → infrastructure` 的方向；`infrastructure/` 不得依赖 `app/`。完整阶段与验收记录见仓库根目录的 `electron-migration.md`。
+- `npm run type-check` 通过 `scripts/type-check.mjs` 检查 TypeScript；上游 `src/components/ui/scroll-area.tsx` 的已知 TS6133 未使用导入被明确忽略，其他诊断不得忽略。
 - 业务数据访问通过 repository/domain 层组织，避免页面直接拼接 IPC 细节。
 - 修改 IPC 合约时同步更新 preload、Electron 类型和 renderer repository。
 - 修改数据库结构时新增 migration，不直接改写已有 migration。

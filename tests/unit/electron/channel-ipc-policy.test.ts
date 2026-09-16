@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { assertChannelExists } from "@electron/ipc/domain/channel-ipc-policy"
+import { assertChannelExists } from "@/electron/preload/channels/channel-ipc-policy"
 
 describe("channel IPC policy", () => {
   const enabled = { channel: { enabled: true } } as never

@@ -8,7 +8,7 @@ vi.mock("electron", () => ({
   },
 }))
 
-import { protectCredential, revealCredential } from "@electron/infrastructure/credential-vault"
+import { protectCredential, revealCredential } from "@/electron/infrastructure/credential-vault"
 import { safeStorage } from "electron"
 
 describe("credential vault", () => {

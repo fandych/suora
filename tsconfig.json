@@ -13,7 +13,8 @@
     "useDefineForClassFields": true,
     "types": [
       "vite/client",
-      "node"
+      "node",
+      "electron"
     ],
     "allowArbitraryExtensions": true,
     "skipLibCheck": true,
@@ -35,12 +36,6 @@
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@electron/*": [
-        "./electron/*"
-      ],
-      "@shared/*": [
-        "./shared/*"
-      ],
       "@/*": [
         "./src/*"
       ]
@@ -48,8 +43,9 @@
     "strict": true
   },
   "include": [
-    "src",
-    "src/types",
-    "shared"
+    "src"
+  ],
+  "exclude": [
+    "src/components/ui/**"
   ]
 }

@@ -8,7 +8,12 @@ vi.mock("electron", () => ({
   },
 }))
 
-import { preserveConfiguredChannelCredentials, protectChannelCredentials, redactChannelCredentials, revealChannelCredentials } from "@electron/channels/channel-credential-serialization"
+import {
+  preserveConfiguredChannelCredentials,
+  protectChannelCredentials,
+  redactChannelCredentials,
+  revealChannelCredentials,
+} from "@/electron/app/channels/repositories/channel-credential-serialization"
 
 describe("channel credential serialization", () => {
   it("protects only email password fields", () => {

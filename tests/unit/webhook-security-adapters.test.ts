@@ -1,9 +1,17 @@
 import crypto from "node:crypto"
 import { describe, expect, it } from "vitest"
 
-import { buildWeChatSignature } from "@electron/channels/channel-runtime-messages"
-import { hasGenericMessageContent, readGenericWebhookMessage, requireWebhookSecret } from "@electron/channels/channel-webhook-common"
-import { verifyDingTalkSignature, verifyFeishuSignature, verifyWeChatSignature } from "@electron/channels/channel-webhook-security"
+import { buildWeChatSignature } from "@/electron/app/channels/runtime/channel-runtime-messages"
+import {
+  hasGenericMessageContent,
+  readGenericWebhookMessage,
+  requireWebhookSecret,
+} from "@/electron/app/channels/webhook/channel-webhook-common"
+import {
+  verifyDingTalkSignature,
+  verifyFeishuSignature,
+  verifyWeChatSignature,
+} from "@/electron/app/channels/webhook/channel-webhook-security"
 
 describe("webhook security adapters", () => {
   it("verifies platform signatures", () => {
@@ -12,7 +20,10 @@ describe("webhook security adapters", () => {
     const dingSign = crypto.createHmac("sha256", secret).update(`${timestamp}\n${secret}`).digest("base64")
     expect(verifyDingTalkSignature(timestamp, secret, dingSign)).toBe(true)
     const body = { challenge: "ok" }
-    const feishuSign = crypto.createHash("sha256").update(`${timestamp}\nnonce\nfeishu-key\n${JSON.stringify(body)}`).digest("hex")
+    const feishuSign = crypto
+      .createHash("sha256")
+      .update(`${timestamp}\nnonce\nfeishu-key\n${JSON.stringify(body)}`)
+      .digest("hex")
     expect(verifyFeishuSignature(timestamp, "nonce", "feishu-key", body, feishuSign)).toBe(true)
     const wechatSign = buildWeChatSignature("wechat-token", timestamp, "nonce")
     expect(verifyWeChatSignature("wechat-token", timestamp, "nonce", wechatSign)).toBe(true)

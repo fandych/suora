@@ -32,6 +32,8 @@ HTTP 支持 GET、POST、PUT、PATCH、DELETE、HEAD 和 OPTIONS。一个集成�
 
 可从单条 cURL 导入 endpoint，也可导入 OpenAPI **JSON**。OpenAPI 按 `method + path` 合并，导入前请检查生成的路径、认证和参数是否符合预期。
 
+旧版仅包含顶层 `url` 的 HTTP Integration 会在 Electron 读取和保存时转换为 endpoint 配置。该兼容转换不依赖页面打开，因此 Agent、workflow 和手动试运行都会使用同一份规范化配置。
+
 ## 试运行与执行记录
 
 HTTP endpoint 或 Script 条目必须先保存且没有阻断性配置问题，才能执行 **Try run**。测试无论成功或失败都会保存输入、输出和状态；详情页显示最近最多 8 条执行记录。

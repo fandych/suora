@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { deriveChatBrowserInteractionState } from "@/views/chats/chat-browser-status"
+import { deriveChatBrowserInteractionState } from "@/pages/chats/chat-browser-status"
 
 describe("chat browser interaction state", () => {
   it("does not show a browser state for an unrelated chat", () => {
@@ -16,7 +16,14 @@ describe("chat browser interaction state", () => {
   it("shows navigation work while the browser tool is running", () => {
     const state = deriveChatBrowserInteractionState({
       browserState: { open: true, visible: false, url: "https://example.com", loading: true },
-      toolEvents: [{ type: "tool-call", toolCallId: "tool-1", toolName: "browser_navigate", input: { url: "https://example.com" } }],
+      toolEvents: [
+        {
+          type: "tool-call",
+          toolCallId: "tool-1",
+          toolName: "browser_navigate",
+          input: { url: "https://example.com" },
+        },
+      ],
       isResponding: true,
     })
 

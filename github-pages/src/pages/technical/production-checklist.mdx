@@ -7,7 +7,7 @@ export const meta = { title: "生产发布检查清单", description: "SUORA 的
 - View 只依赖 ViewModel/Application Service。
 - `src/data`、`src/services` 不得依赖 `src/views`。
 - Renderer 不直接访问 Electron 主进程模块。
-- `electron/ipc` 不包含业务原生 SQL。
+- `electron/preload` 不包含业务原生 SQL。
 - 持久化通过 Drizzle Repository 完成。
 
 执行：

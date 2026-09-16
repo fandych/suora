@@ -10,7 +10,7 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      exclude: ["src/components/ui/**", "electron/integrations/script-worker.mjs", "**/*.d.ts", "**/index.html"],
+      exclude: ["src/components/ui/**", "src/electron/integrations/script-worker.mjs", "**/*.d.ts", "**/index.html"],
       thresholds: {
         statements: 28,
         lines: 32,
@@ -22,7 +22,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": resolve(__dirname, "./src"),
-      "@shared": resolve(__dirname, "./shared"),
+      "@drizzle": resolve(__dirname, "./drizzle"),
       "@electron": resolve(__dirname, "./electron"),
     },
   },
