@@ -5,6 +5,7 @@ export const workflowSaveSchema = z.object({
   id: entityIdSchema,
   title: z.string().trim().max(512),
   summary: z.string().max(64 * 1024),
+  enabled: z.boolean().optional(),
   definitionJson: z.string().max(16 * 1024 * 1024),
   selectedVersionId: entityIdSchema.optional(),
   publish: z.boolean().optional(),

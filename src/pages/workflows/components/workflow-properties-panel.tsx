@@ -11,15 +11,16 @@ import { Textarea } from "@/components/ui/textarea"
 import type { DocumentSummary } from "@/types/document"
 import type { IntegrationSummary } from "@/types/integration"
 import type { WorkflowNodeData } from "@/types/workflow"
+import type { ResourceSelectorOption } from "@/types/resource-selector"
 import { WorkflowField } from "@/pages/workflows/components/workflow-field"
 import { NodeForm } from "@/pages/workflows/components/form/node-form"
 import { getWorkflowExpressionSuggestions } from "@/lib/workflow/expression-suggestions"
 
 type WorkflowPropertiesPanelProps = {
-  agents: Array<{ id: string; title: string }>
+  agents: ResourceSelectorOption[]
   documents: DocumentSummary[]
   integrations: IntegrationSummary[]
-  modelOptions: Array<{ id: string; label: string }>
+  modelOptions: ResourceSelectorOption[]
   nodes: Node<WorkflowNodeData>[]
   edges: Edge[]
   onDeleteNode: () => void

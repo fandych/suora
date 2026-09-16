@@ -18,5 +18,13 @@ export function WorkflowNodeShell({ children, className }: { children: ReactNode
 }
 
 export function WorkflowNodeHandle(props: HandleProps) {
-  return <Handle {...props} className={cn("z-20! h-2.5! w-2.5! border-0! bg-border!", props.className)} />
+  return (
+    <Handle
+      {...props}
+      className={cn(
+        "z-20! h-3! w-3! border-2! border-background! bg-primary! shadow-sm transition-transform duration-150 hover:scale-125!",
+        props.className,
+      )}
+    />
+  )
 }

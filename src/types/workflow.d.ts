@@ -111,7 +111,7 @@ export type WorkflowDefinition = {
   budget?: WorkflowBudget
   notifications?: WorkflowNotificationSettings
 }
-export type WorkflowSummary = { id: string; title: string; summary: string; updatedAt: number }
+export type WorkflowSummary = { id: string; title: string; summary: string; enabled: boolean; updatedAt: number }
 export type WorkflowInvocationRecord = {
   id: string
   versionId: string

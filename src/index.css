@@ -140,6 +140,14 @@
 }
 
 @layer components {
+  .react-flow__handle.connecting {
+    @apply scale-125 bg-amber-400;
+  }
+
+  .react-flow__handle.valid {
+    @apply bg-emerald-500;
+  }
+
   .document-prose h1, .document-prose h2, .document-prose h3, .document-prose h4, .document-prose h5, .document-prose h6 {
     @apply mt-5 mb-3 font-heading font-semibold text-foreground;
   }

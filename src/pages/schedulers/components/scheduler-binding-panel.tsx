@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { ResourceSelector } from "@/components/resource-selector"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentSummary } from "@/types/agent"
 import type { SchedulerDetail } from "@/types/scheduler"
@@ -208,18 +209,17 @@ export function SchedulerBindingPanel({
               <FieldLabel htmlFor="scheduler-target">
                 {draft.targetType === "workflow" ? "Workflow" : "Agent"}
               </FieldLabel>
-              <NativeSelect
+              <ResourceSelector
                 id="scheduler-target"
                 value={draft.targetId}
+                emptyLabel="Select a target"
+                options={targetOptions.map((item) => ({
+                  id: item.id,
+                  label: item.title,
+                  enabled: "isDisabled" in item ? !item.isDisabled : item.enabled,
+                }))}
                 onChange={(event) => onTargetIdChange(event.target.value)}
-              >
-                <NativeSelectOption value="">Select a target</NativeSelectOption>
-                {targetOptions.map((item) => (
-                  <NativeSelectOption key={item.id} value={item.id}>
-                    {item.title}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelect>
+              />
             </Field>
           </div>
         </FieldGroup>

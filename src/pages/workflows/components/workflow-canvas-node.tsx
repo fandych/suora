@@ -1,4 +1,4 @@
-import { memo } from "react"
+import { memo, useEffect, useMemo } from "react"
 import {
   BotIcon,
   BracesIcon,
@@ -17,7 +17,7 @@ import {
   VariableIcon,
   type LucideIcon,
 } from "lucide-react"
-import { Position, type NodeProps } from "@xyflow/react"
+import { Position, useUpdateNodeInternals, type Node, type NodeProps } from "@xyflow/react"
 
 import { Badge } from "@/components/ui/badge"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
@@ -186,13 +186,27 @@ function getSummary(node: WorkflowNodeData) {
   }
 }
 
-export const WorkflowCanvasNode = memo(function WorkflowCanvasNode({ id, data, selected }: NodeProps) {
-  const node = data as WorkflowNodeData
+type WorkflowCanvasFlowNode = Node<WorkflowNodeData, "workflowNode">
+
+export const WorkflowCanvasNode = memo(function WorkflowCanvasNode({
+  id,
+  data: node,
+  selected,
+}: NodeProps<WorkflowCanvasFlowNode>) {
+  const updateNodeInternals = useUpdateNodeInternals()
   const style = NODE_STYLES[node.kind]
   const NodeIcon = WORKFLOW_NODE_ICONS[node.kind] ?? style.icon
   const executionStatus = node.executionStatus
   const summary = getSummary(node)
   const { canEdit, hasOutgoingConnection, onAddNodeFromHandle } = useWorkflowNodeActions()
+  const branchHandleIds = useMemo(
+    () => (node.kind === "if-else" ? (node.branches ?? []).map((branch) => branch.id).join("\u0000") : ""),
+    [node.branches, node.kind],
+  )
+
+  useEffect(() => {
+    updateNodeInternals(id)
+  }, [branchHandleIds, id, updateNodeInternals])
 
   return (
     <Tooltip>
@@ -211,24 +225,11 @@ export const WorkflowCanvasNode = memo(function WorkflowCanvasNode({ id, data, s
           >
             {node.kind !== "start" ? (
               <>
-                <WorkflowNodeHandle type="target" position={Position.Top} style={{ opacity: 0 }} />
                 <WorkflowNodeHandle
-                  id="target-right"
+                  id="target-top"
                   type="target"
-                  position={Position.Right}
-                  style={{ top: "38%", opacity: 0 }}
-                />
-                <WorkflowNodeHandle
-                  id="target-bottom"
-                  type="target"
-                  position={Position.Bottom}
-                  style={{ left: "38%", opacity: 0 }}
-                />
-                <WorkflowNodeHandle
-                  id="target-left"
-                  type="target"
-                  position={Position.Left}
-                  style={{ top: "62%", opacity: 0 }}
+                  position={Position.Top}
+                  aria-label={`Connect to ${node.label}`}
                 />
               </>
             ) : null}
@@ -284,24 +285,6 @@ export const WorkflowCanvasNode = memo(function WorkflowCanvasNode({ id, data, s
                       hasConnection={hasOutgoingConnection(id, null)}
                       getIcon={(kind) => WORKFLOW_NODE_ICONS[kind]}
                       onAdd={(kind) => onAddNodeFromHandle(id, null, kind)}
-                    />
-                    <WorkflowNodeHandle
-                      id="source-top"
-                      type="source"
-                      position={Position.Top}
-                      style={{ left: "62%", opacity: 0 }}
-                    />
-                    <WorkflowNodeHandle
-                      id="source-right"
-                      type="source"
-                      position={Position.Right}
-                      style={{ top: "62%", opacity: 0 }}
-                    />
-                    <WorkflowNodeHandle
-                      id="source-left"
-                      type="source"
-                      position={Position.Left}
-                      style={{ top: "38%", opacity: 0 }}
                     />
                   </>
                 ) : null}

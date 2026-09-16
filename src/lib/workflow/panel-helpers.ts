@@ -63,14 +63,23 @@ export function isValidWorkflowConnection(
   edges: Edge<WorkflowEdgeData>[],
 ) {
   if (!connection.source || !connection.target || connection.source === connection.target) return false
+  if (connection.targetHandle && connection.targetHandle !== "target-top") return false
   const source = nodes.find((node) => node.id === connection.source)
   const target = nodes.find((node) => node.id === connection.target)
   if (!source || !target || source.data.kind === "end" || target.data.kind === "start") return false
-  if (edges.some((edge) => edge.source === connection.source && edge.target === connection.target && edge.sourceHandle === connection.sourceHandle && edge.targetHandle === connection.targetHandle)) return false
+  if (
+    edges.some(
+      (edge) =>
+        edge.source === connection.source &&
+        edge.target === connection.target &&
+        (edge.sourceHandle ?? null) === (connection.sourceHandle ?? null),
+    )
+  )
+    return false
   if (source.data.kind === "if-else") {
     return Boolean(connection.sourceHandle && source.data.branches?.some((branch) => branch.id === connection.sourceHandle))
   }
-  return true
+  return !connection.sourceHandle || connection.sourceHandle === "source-bottom"
 }
 
 export function buildConnectedWorkflowNode(input: {
@@ -100,15 +109,16 @@ export function buildConnectedWorkflowNode(input: {
     nextNode: {
       id: nextId,
       type: "workflowNode",
-      position: sourceHandle
+      position: sourceNode.data.kind === "if-else" && sourceHandle
         ? { x: sourceNode.position.x + (branchIndex - (branchCount - 1) / 2) * 220, y: sourceNode.position.y + 180 }
-        : { x: sourceNode.position.x + 260, y: sourceNode.position.y },
+        : { x: sourceNode.position.x, y: sourceNode.position.y + 180 },
       data: createNodeData(kind, nextIndex),
     } satisfies Node<WorkflowNodeData>,
     nextEdge: {
       source: sourceNodeId,
       sourceHandle,
       target: nextId,
+      targetHandle: "target-top",
       type: "workflow",
       label: branch?.label,
       data: {

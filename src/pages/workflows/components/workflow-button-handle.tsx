@@ -43,7 +43,10 @@ export function WorkflowButtonHandle({
         position={position}
         style={offset ? { left: offset } : undefined}
       />
-      <div className="pointer-events-none absolute bottom-[-0.95rem] left-1/2 z-30 -translate-x-1/2">
+      <div
+        className="pointer-events-none absolute bottom-[-2.4rem] z-30 -translate-x-1/2"
+        style={{ left: offset ?? "50%" }}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger
             render={

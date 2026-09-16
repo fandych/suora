@@ -1,0 +1,1 @@
+ALTER TABLE `workflows` ADD COLUMN `enabled` integer DEFAULT true NOT NULL;

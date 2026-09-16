@@ -1,11 +1,10 @@
 import { Input } from "@/components/ui/input"
-import { NativeSelectOption } from "@/components/ui/native-select"
 import type { DocumentSummary } from "@/types/document"
 import type { WorkflowNodeData } from "@/types/workflow"
 import type { WorkflowExpressionSuggestion } from "@/lib/workflow/expression-suggestions"
 import { WorkflowExpressionInput } from "@/pages/workflows/components/workflow-expression-input"
 import { WorkflowField, WorkflowPanelSection } from "@/pages/workflows/components/workflow-field"
-import { WorkflowNodeSelect } from "@/pages/workflows/components/workflow-node-select"
+import { WorkflowResourceSelect } from "@/pages/workflows/components/workflow-node-select"
 
 export function NodeDocumentRetrievalForm({
   node,
@@ -20,21 +19,16 @@ export function NodeDocumentRetrievalForm({
 }) {
   return (
     <WorkflowPanelSection title="Document retrieval">
-      <WorkflowNodeSelect
+      <WorkflowResourceSelect
         label="Document"
+        emptyLabel="Select a document"
+        options={documents.map((document) => ({ id: document.id, label: document.title, enabled: document.enabled }))}
         value={node.documentId ?? ""}
         onChange={(event) => {
           const document = documents.find((item) => item.id === event.target.value)
           updateNode({ documentId: event.target.value, documentName: document?.title ?? "" })
         }}
-      >
-        <NativeSelectOption value="">Select a document</NativeSelectOption>
-        {documents.map((document) => (
-          <NativeSelectOption key={document.id} value={document.id}>
-            {document.title}
-          </NativeSelectOption>
-        ))}
-      </WorkflowNodeSelect>
+      />
       <WorkflowField label="Search question">
         <WorkflowExpressionInput
           value={node.queryExpression ?? ""}

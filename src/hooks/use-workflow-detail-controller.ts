@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import {
   useEdgesState,
   useNodesState,
@@ -10,6 +10,7 @@ import {
 import { useNavigate, useParams } from "react-router"
 
 import type { WorkflowEdgeData, WorkflowNodeData, WorkflowNotificationSettings } from "@/types/workflow"
+import type { ResourceSelectorOption } from "@/types/resource-selector"
 import { AgentApi } from "@/services/agent-service"
 import { DocumentApi } from "@/services/document-service"
 import { IntegrationApi } from "@/services/integration-service"
@@ -48,6 +49,7 @@ export function useWorkflowDetailController() {
 
   const [title, setTitle] = useState("")
   const [summary, setSummary] = useState("")
+  const [enabled, setEnabled] = useState(true)
   const [nodes, setNodes, onNodesChange] = useNodesState<Node<WorkflowNodeData>>([])
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge<WorkflowEdgeData>>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
@@ -71,25 +73,37 @@ export function useWorkflowDetailController() {
   const flowRef = useRef<ReactFlowInstance<Node<WorkflowNodeData>, Edge> | null>(null)
   const importInputRef = useRef<HTMLInputElement | null>(null)
 
-  const agents = useMemo(() => agentsData ?? [], [agentsData])
+  const agents = useMemo<ResourceSelectorOption[]>(
+    () => (agentsData ?? []).map((agent) => ({ id: agent.id, label: agent.title, enabled: !agent.isDisabled })),
+    [agentsData],
+  )
   const documents = useMemo(() => documentsData ?? [], [documentsData])
   const integrations = useMemo(() => integrationsData ?? [], [integrationsData])
-  const modelOptions = (providersData ?? []).flatMap((provider) =>
-    provider.models.map((model) => ({ id: model.id, label: `${provider.title} / ${model.name}` })),
+  const modelOptions = useMemo<ResourceSelectorOption[]>(
+    () =>
+      (providersData ?? []).flatMap((provider) =>
+        provider.models.map((model) => ({
+          id: model.id,
+          label: `${provider.title} / ${model.name}`,
+          enabled: provider.enabled && model.enabled,
+        })),
+      ),
+    [providersData],
   )
 
-  const applyViewport = (nextViewport: Viewport) => {
+  const applyViewport = useCallback((nextViewport: Viewport) => {
     setViewport(nextViewport)
     void flowRef.current?.setViewport(nextViewport, { duration: 0 })
-  }
-  const setFlowInstance = (instance: ReactFlowInstance<Node<WorkflowNodeData>, Edge> | null) => {
+  }, [])
+  const setFlowInstance = useCallback((instance: ReactFlowInstance<Node<WorkflowNodeData>, Edge> | null) => {
     flowRef.current = instance
-  }
+  }, [])
 
   useEffect(() => {
     if (!data) return
     setTitle(data.workflow.title)
     setSummary(data.workflow.summary)
+    setEnabled(data.workflow.enabled)
     setNodes(data.definition.nodes)
     setEdges(data.definition.edges)
     setResourceBindings(data.definition.resourceBindings ?? defaultWorkflowBindings)
@@ -98,7 +112,7 @@ export function useWorkflowDetailController() {
     setSelectedVersionId(data.selectedVersion.id)
     setSelectedNodeId(data.definition.nodes[0]?.id ?? null)
     applyViewport(data.definition.viewport ?? DEFAULT_VIEWPORT)
-  }, [data, setEdges, setNodes])
+  }, [applyViewport, data, setEdges, setNodes])
 
   const selectedNode = useMemo(() => nodes.find((node) => node.id === selectedNodeId) ?? null, [nodes, selectedNodeId])
   const latestInvocation = workflowRuntime.invocation ?? data?.invocations[0] ?? null
@@ -118,10 +132,10 @@ export function useWorkflowDetailController() {
     savedDefinition: data?.definition,
     savedTitle: data?.workflow.title,
     savedSummary: data?.workflow.summary,
-    availableAgentIds: agents.map((agent) => agent.id),
-    availableDocumentIds: documents.map((document) => document.id),
-    availableIntegrationIds: integrations.map((integration) => integration.id),
-    availableModelIds: modelOptions.map((model) => model.id),
+    availableAgentIds: agents.filter((agent) => agent.enabled).map((agent) => agent.id),
+    availableDocumentIds: documents.filter((document) => document.enabled).map((document) => document.id),
+    availableIntegrationIds: integrations.filter((integration) => integration.enabled).map((integration) => integration.id),
+    availableModelIds: modelOptions.filter((model) => model.enabled).map((model) => model.id),
   })
   const isReleaseVersion = Boolean(data?.selectedVersion.isRelease)
   const isDraftVersion = Boolean(data && !data.selectedVersion.isRelease)
@@ -168,6 +182,7 @@ export function useWorkflowDetailController() {
         type: "workflowNode",
         data: { ...node.data, executionStatus: trace.status },
         style: {
+          ...node.style,
           border: trace.status === "success" ? "1px solid var(--color-primary)" : "1px solid var(--color-destructive)",
           boxShadow:
             trace.status === "success"
@@ -196,6 +211,7 @@ export function useWorkflowDetailController() {
         id: workflowId,
         title,
         summary,
+        enabled,
         selectedVersionId: data.selectedVersion.id,
         definition: currentDefinition,
       })
@@ -240,6 +256,7 @@ export function useWorkflowDetailController() {
         id: workflowId,
         title: data.workflow.title,
         summary: data.workflow.summary,
+        enabled: data.workflow.enabled,
         definition: data.definition,
         selectedVersionId: data.selectedVersion.id,
         publish: true,
@@ -324,29 +341,29 @@ export function useWorkflowDetailController() {
     }
   }
 
-  const focusNode = (nodeId: string) => {
+  const focusNode = useCallback((nodeId: string) => {
     setSelectedNodeId(nodeId)
     setInspectorMode("properties")
     const node = nodes.find((item) => item.id === nodeId)
     if (node) {
       void flowRef.current?.fitView({ nodes: [node], duration: 350, maxZoom: 1.2, padding: 0.35 })
     }
-  }
+  }, [nodes])
 
-  const handleAutoLayout = () => {
+  const handleAutoLayout = useCallback(() => {
     setNodes((current) => getAutoLayoutedWorkflowNodes({ nodes: current, edges }))
     void flowRef.current?.fitView({ padding: 0.2, duration: 250 })
-  }
+  }, [edges, setNodes])
 
-  const handleZoomStep = (delta: number) => {
+  const handleZoomStep = useCallback((delta: number) => {
     const currentZoom = flowRef.current?.getZoom() ?? viewport.zoom
     const nextZoom = Math.max(0.2, Math.min(2, Number((currentZoom + delta).toFixed(2))))
     void flowRef.current?.zoomTo(nextZoom, { duration: 150 })
-  }
+  }, [viewport.zoom])
 
-  const handleFitView = () => {
+  const handleFitView = useCallback(() => {
     void flowRef.current?.fitView({ padding: 0.2, duration: 200 })
-  }
+  }, [])
 
   const handleDeleteWorkflow = async () => {
     if (!workflowId || isDeleting) {
@@ -383,6 +400,7 @@ export function useWorkflowDetailController() {
     documents,
     dryRunInput,
     edges,
+    enabled,
     error,
     dryRunError,
     flowRef,
@@ -426,6 +444,7 @@ export function useWorkflowDetailController() {
     setData,
     setDryRunInput,
     setEdges,
+    setEnabled,
     setInspectorMode,
     setIsDeleteDialogOpen,
     selectedInvocation,

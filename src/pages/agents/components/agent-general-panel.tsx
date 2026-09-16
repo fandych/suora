@@ -1,7 +1,7 @@
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select"
+import { ResourceSelector } from "@/components/resource-selector"
 import { Textarea } from "@/components/ui/textarea"
 import type { AgentDetail, ProviderConfigRecord } from "@/types/agent"
 
@@ -16,7 +16,13 @@ type AgentGeneralPanelProps = {
 export function AgentGeneralPanel({ draft, isReadOnly = false, models, onChange, onSave }: AgentGeneralPanelProps) {
   const modelValue =
     draft.config.providerId && draft.config.modelId ? `${draft.config.providerId}::${draft.config.modelId}` : ""
-  const groupedProviders = models.filter((provider) => provider.models.length > 0)
+  const modelOptions = models.flatMap((provider) =>
+    provider.models.map((model) => ({
+      id: `${provider.id}::${model.id}`,
+      label: `${provider.title} / ${model.name}`,
+      enabled: provider.enabled && model.enabled,
+    })),
+  )
 
   return (
     <Card className="h-full min-h-0">
@@ -47,9 +53,11 @@ export function AgentGeneralPanel({ draft, isReadOnly = false, models, onChange,
 
         <div className="space-y-1.5">
           <div className="text-xs font-medium text-muted-foreground">Provider / Model</div>
-          <NativeSelect
+          <ResourceSelector
             disabled={isReadOnly}
             value={modelValue}
+            emptyLabel="Select model"
+            options={modelOptions}
             onChange={(event) => {
               const [providerId, modelId] = event.target.value.split("::")
               onChange({
@@ -61,18 +69,7 @@ export function AgentGeneralPanel({ draft, isReadOnly = false, models, onChange,
                 },
               })
             }}
-          >
-            <NativeSelectOption value="">Select model</NativeSelectOption>
-            {groupedProviders.map((provider) => (
-              <NativeSelectOptGroup key={provider.id} label={provider.title}>
-                {provider.models.map((model) => (
-                  <NativeSelectOption key={`${provider.id}-${model.id}`} value={`${provider.id}::${model.id}`}>
-                    {model.name}
-                  </NativeSelectOption>
-                ))}
-              </NativeSelectOptGroup>
-            ))}
-          </NativeSelect>
+          />
         </div>
 
         <div className="space-y-1.5">

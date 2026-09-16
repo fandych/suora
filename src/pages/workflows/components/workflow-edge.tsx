@@ -1,22 +1,6 @@
-import { BaseEdge, EdgeLabelRenderer, Position, getSmoothStepPath, useStore, type EdgeProps } from "@xyflow/react"
+import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath, useStore, type EdgeProps } from "@xyflow/react"
 
 import type { WorkflowNodeData } from "@/types/workflow"
-
-const LABEL_OFFSET = 18
-
-function getSourceLabelPosition(sourceX: number, sourceY: number, sourcePosition: Position) {
-  switch (sourcePosition) {
-    case Position.Top:
-      return { x: sourceX, y: sourceY - LABEL_OFFSET }
-    case Position.Left:
-      return { x: sourceX - LABEL_OFFSET, y: sourceY }
-    case Position.Right:
-      return { x: sourceX + LABEL_OFFSET, y: sourceY }
-    case Position.Bottom:
-    default:
-      return { x: sourceX, y: sourceY + LABEL_OFFSET }
-  }
-}
 
 export function WorkflowEdge({
   id,
@@ -34,8 +18,14 @@ export function WorkflowEdge({
   selected,
 }: EdgeProps) {
   const sourceNodeData = useStore((state) => state.nodeLookup.get(source)?.data as WorkflowNodeData | undefined)
-  const [edgePath] = getSmoothStepPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition })
-  const labelPosition = getSourceLabelPosition(sourceX, sourceY, sourcePosition)
+  const [edgePath, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    sourcePosition,
+    targetX,
+    targetY,
+    targetPosition,
+  })
   const branch =
     sourceNodeData?.kind === "if-else" ? sourceNodeData.branches?.find((item) => item.id === sourceHandleId) : undefined
   const edgeLabel = branch?.label || (typeof label === "string" ? label : "")
@@ -57,7 +47,7 @@ export function WorkflowEdge({
         <EdgeLabelRenderer>
           <div
             className={`nodrag nopan pointer-events-none absolute max-w-44 rounded-md border bg-background/95 px-1.5 py-1 text-[10px] font-medium shadow-sm ${selected ? "border-primary text-primary" : "border-border/70 text-muted-foreground"}`}
-            style={{ transform: `translate(-50%, -50%) translate(${labelPosition.x}px,${labelPosition.y}px)` }}
+            style={{ transform: `translate(-50%, -50%) translate(${labelX}px,${labelY}px)` }}
             title={edgeDescription ? `${edgeLabel}: ${edgeDescription}` : edgeLabel}
           >
             <span className="block truncate text-foreground">{edgeLabel}</span>

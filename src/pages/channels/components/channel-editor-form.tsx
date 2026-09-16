@@ -15,7 +15,8 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@/components/ui/message-scroller"
-import { NativeSelect, NativeSelectOptGroup, NativeSelectOption } from "@/components/ui/native-select"
+import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { ResourceSelector } from "@/components/resource-selector"
 import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
 import type { AgentSummary, ProviderConfigRecord } from "@/types/agent"
@@ -270,7 +271,13 @@ function BasicChannelForm({
 }) {
   const update = (patch: Partial<ChannelConfigRecord>) => onChange({ ...channel, ...patch })
   const modelValue = channel.providerId && channel.modelId ? `${channel.providerId}::${channel.modelId}` : ""
-  const selectableProviders = providers.filter((provider) => provider.models.length > 0)
+  const modelOptions = providers.flatMap((provider) =>
+    provider.models.map((model) => ({
+      id: `${provider.id}::${model.id}`,
+      label: `${provider.title} / ${model.name}`,
+      enabled: provider.enabled && model.enabled,
+    })),
+  )
 
   return (
     <Section title="General">
@@ -291,41 +298,27 @@ function BasicChannelForm({
         </Field>
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="Agent">
-            <NativeSelect
+            <ResourceSelector
               className="w-full"
               size="sm"
               value={channel.replyAgentId}
+              emptyLabel="No agent"
+              options={agents.map((agent) => ({ id: agent.id, label: agent.title, enabled: !agent.isDisabled }))}
               onChange={(event) => update({ replyAgentId: event.target.value })}
-            >
-              <NativeSelectOption value="">No agent</NativeSelectOption>
-              {agents.map((agent) => (
-                <NativeSelectOption key={agent.id} value={agent.id}>
-                  {agent.title}
-                </NativeSelectOption>
-              ))}
-            </NativeSelect>
+            />
           </Field>
           <Field label="Model">
-            <NativeSelect
+            <ResourceSelector
               className="w-full"
               size="sm"
               value={modelValue}
+              emptyLabel="No model"
+              options={modelOptions}
               onChange={(event) => {
                 const [providerId, modelId] = event.target.value.split("::")
                 update({ providerId: providerId ?? "", modelId: modelId ?? "" })
               }}
-            >
-              <NativeSelectOption value="">No model</NativeSelectOption>
-              {selectableProviders.map((provider) => (
-                <NativeSelectOptGroup key={provider.id} label={provider.title}>
-                  {provider.models.map((model) => (
-                    <NativeSelectOption key={`${provider.id}-${model.id}`} value={`${provider.id}::${model.id}`}>
-                      {model.name}
-                    </NativeSelectOption>
-                  ))}
-                </NativeSelectOptGroup>
-              ))}
-            </NativeSelect>
+            />
           </Field>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">

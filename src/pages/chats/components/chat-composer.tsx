@@ -12,7 +12,7 @@ import {
   AttachmentTitle,
 } from "@/components/ui/attachment"
 import { Button } from "@/components/ui/button"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { ResourceSelector } from "@/components/resource-selector"
 import {
   Select,
   SelectContent,
@@ -340,19 +340,14 @@ export function ChatComposer({
       ) : null}
       <div className="flex min-w-0 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-          <NativeSelect
+          <ResourceSelector
             className="min-w-0 w-full sm:w-32"
             size="sm"
             value={selectedAgentId}
+            emptyLabel="Agent"
+            options={agents.map((agent) => ({ id: agent.id, label: agent.title, enabled: !agent.isDisabled }))}
             onChange={(event) => onSelectedAgentChange(event.target.value)}
-          >
-            <NativeSelectOption value="">Agent</NativeSelectOption>
-            {agents.map((agent) => (
-              <NativeSelectOption key={agent.id} value={agent.id}>
-                {agent.title}
-              </NativeSelectOption>
-            ))}
-          </NativeSelect>
+          />
           <Select
             value={modelValue}
             onValueChange={(value) => {
@@ -363,10 +358,10 @@ export function ChatComposer({
               <SelectValue placeholder="Model">{selectedModelLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent side="top" sideOffset={4} align="start">
-              {selectedModelFallback.map((provider) => (
+              {selectedModelFallback.filter((provider) => provider.enabled).map((provider) => (
                 <SelectGroup key={provider.id}>
                   <SelectLabel>{provider.title}</SelectLabel>
-                  {provider.models.map((model) => (
+                  {provider.models.filter((model) => model.enabled).map((model) => (
                     <SelectItem key={`${provider.id}-${model.id}`} value={`${provider.id}::${model.id}`}>
                       {model.name}
                     </SelectItem>

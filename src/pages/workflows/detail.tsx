@@ -1,4 +1,15 @@
-import { Background, BackgroundVariant, ConnectionLineType, MarkerType, MiniMap, Panel, ReactFlow } from "@xyflow/react"
+import { useCallback } from "react"
+import {
+  Background,
+  BackgroundVariant,
+  ConnectionLineType,
+  MarkerType,
+  MiniMap,
+  Panel,
+  ReactFlow,
+  SelectionMode,
+  type FinalConnectionState,
+} from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import {
   EllipsisIcon,
@@ -35,10 +46,43 @@ import { WorkflowInvocationHistory } from "@/pages/workflows/components/workflow
 import { WorkflowZoomControls } from "@/pages/workflows/components/workflow-zoom-controls"
 import { WorkflowPanelResizeHandle } from "@/pages/workflows/components/workflow-panel-resize-handle"
 import { useWorkflowDetailController } from "@/hooks/use-workflow-detail-controller"
+import { showToast } from "@/services/toast-service"
+
+const DEFAULT_EDGE_OPTIONS = { type: "workflow", markerEnd: { type: MarkerType.ArrowClosed } }
+const WORKFLOW_ARIA_LABELS = {
+  "node.a11yDescription.default": "Workflow step. Press Enter to select it and use arrow keys to move it.",
+  "edge.a11yDescription.default": "Workflow connection. Press Enter to select it.",
+}
 
 const WorkflowDetailPage = () => {
   const controller = useWorkflowDetailController()
-  const stopPanelEvent = (event: React.MouseEvent | React.PointerEvent) => event.stopPropagation()
+  const { inspectorMode, setFlowInstance, setInspectorMode, setSelectedNodeId, viewport } = controller
+  const stopPanelEvent = useCallback((event: React.MouseEvent | React.PointerEvent) => event.stopPropagation(), [])
+  const handlePaneClick = useCallback(() => {
+    setSelectedNodeId(null)
+    if (inspectorMode === "properties") {
+      setInspectorMode("closed")
+    }
+  }, [inspectorMode, setInspectorMode, setSelectedNodeId])
+  const handleFlowInit = useCallback(
+    (instance: Parameters<NonNullable<React.ComponentProps<typeof ReactFlow>["onInit"]>>[0]) => {
+      setFlowInstance(instance)
+      void instance.setViewport(viewport, { duration: 0 })
+    },
+    [setFlowInstance, viewport],
+  )
+  const handleConnectEnd = useCallback(
+    (_event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
+      if (!connectionState.isValid && !controller.isReadOnly && connectionState.toHandle) {
+        showToast({
+          title: "Connection not allowed",
+          description: "Connect an output to a compatible input, without duplicating an existing path.",
+          type: "warning",
+        })
+      }
+    },
+    [controller.isReadOnly],
+  )
   const workflowData = controller.data
 
   return (
@@ -96,35 +140,44 @@ const WorkflowDetailPage = () => {
                 onNodesChange={controller.isReadOnly ? undefined : controller.onNodesChange}
                 onEdgesChange={controller.isReadOnly ? undefined : controller.onEdgesChange}
                 onConnect={controller.handleConnect}
+                onConnectEnd={handleConnectEnd}
                 isValidConnection={controller.isValidConnection}
                 onNodesDelete={controller.isReadOnly ? undefined : controller.handleNodesDelete}
                 onSelectionChange={controller.handleSelectionChange}
                 onNodeClick={controller.handleNodeClick}
-                onPaneClick={() => {
-                  controller.setSelectedNodeId(null)
-                  if (controller.inspectorMode === "properties") {
-                    controller.setInspectorMode("closed")
-                  }
-                }}
+                onPaneClick={handlePaneClick}
                 defaultViewport={controller.viewport}
                 onMoveEnd={(_event, nextViewport) => controller.setViewport(nextViewport)}
-                onInit={(instance) => {
-                  controller.setFlowInstance(instance)
-                  void instance.setViewport(controller.viewport, { duration: 0 })
-                }}
+                onInit={handleFlowInit}
                 nodesDraggable={!controller.isReadOnly}
                 nodesConnectable={!controller.isReadOnly}
                 elementsSelectable
                 deleteKeyCode={controller.isReadOnly ? null : ["Backspace", "Delete"]}
                 connectionLineType={ConnectionLineType.SmoothStep}
-                defaultEdgeOptions={{ type: "workflow", markerEnd: { type: MarkerType.ArrowClosed } }}
+                connectionLineStyle={{ stroke: "var(--color-primary)", strokeWidth: 2, strokeDasharray: "5 4" }}
+                defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
                 proOptions={{ hideAttribution: true }}
+                ariaLabelConfig={WORKFLOW_ARIA_LABELS}
                 minZoom={0.25}
                 maxZoom={2}
                 snapToGrid
+                snapGrid={[16, 16]}
+                connectionDragThreshold={4}
+                connectionRadius={28}
+                autoPanOnConnect
+                autoPanOnNodeDrag
+                selectionOnDrag
+                selectionMode={SelectionMode.Partial}
+                panOnDrag={[1, 2]}
+                panOnScroll
+                panOnScrollMode="free"
+                zoomOnScroll={false}
+                zoomActivationKeyCode={["Control", "Meta"]}
+                onlyRenderVisibleElements={controller.nodes.length > 80}
                 fitView={false}
               >
-                <Background variant={BackgroundVariant.Lines} gap={24} size={1} color="var(--color-border)" />
+                <Background variant={BackgroundVariant.Dots} gap={16} size={1.5} color="var(--color-border)" />
+                <Background variant={BackgroundVariant.Lines} gap={80} size={1} color="var(--color-muted-foreground)" />
 
                 <Panel
                   position="top-right"
@@ -330,10 +383,12 @@ const WorkflowDetailPage = () => {
         open={controller.isPreferenceDialogOpen}
         title={controller.title}
         summary={controller.summary}
+        enabled={controller.enabled}
         readOnly={controller.isReadOnly}
         onOpenChange={controller.setIsPreferenceDialogOpen}
         onTitleChange={controller.setTitle}
         onSummaryChange={controller.setSummary}
+        onEnabledChange={controller.setEnabled}
       />
 
       <Dialog open={controller.isHistoryDialogOpen} onOpenChange={controller.setIsHistoryDialogOpen}>

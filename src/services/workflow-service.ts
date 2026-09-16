@@ -55,6 +55,7 @@ export const WorkflowApi = {
     id: string
     title: string
     summary: string
+    enabled?: boolean
     definition: WorkflowDefinition
     selectedVersionId?: string
     publish?: boolean

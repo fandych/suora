@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router"
 import { EllipsisIcon, HistoryIcon, PauseIcon, PlayIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { isResourceAvailable } from "@/components/resource-selector"
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import {
   DropdownMenu,
@@ -54,7 +55,9 @@ const SchedulerDetailPage = () => {
       return []
     }
 
-    return draft.targetType === "agent" ? agents : workflows
+    return draft.targetType === "agent"
+      ? agents.filter(isResourceAvailable)
+      : workflows.filter(isResourceAvailable)
   }, [agents, draft, workflows])
 
   useEffect(() => {
@@ -129,7 +132,10 @@ const SchedulerDetailPage = () => {
       return
     }
 
-    const nextTarget = targetType === "agent" ? agents[0] : workflows[0]
+    const nextTarget =
+      targetType === "agent"
+        ? agents.find(isResourceAvailable)
+        : workflows.find(isResourceAvailable)
 
     updateDraft({
       ...draft,

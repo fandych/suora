@@ -1,3 +1,4 @@
+import { useCallback } from "react"
 import type { Dispatch, SetStateAction } from "react"
 import {
   addEdge,
@@ -28,7 +29,7 @@ export function useWorkflowNodeActions(input: {
   setInspectorMode: (mode: "closed" | "properties") => void
   deleteElements?: (payload: { nodes?: Array<{ id: string }>; edges?: Array<{ id: string }> }) => Promise<unknown>
 }) {
-  const handleConnect = (connection: Connection) => {
+  const handleConnect = useCallback((connection: Connection) => {
     if (input.isReadOnly || !isValidWorkflowConnection(connection, input.nodes, input.edges)) return
     const sourceNode = input.nodes.find((node) => node.id === connection.source)
     const branch =
@@ -48,9 +49,11 @@ export function useWorkflowNodeActions(input: {
         current,
       ),
     )
-  }
-  const isValidConnection = (connection: Connection) =>
-    !input.isReadOnly && isValidWorkflowConnection(connection, input.nodes, input.edges)
+  }, [input])
+  const isValidConnection = useCallback(
+    (connection: Connection) => !input.isReadOnly && isValidWorkflowConnection(connection, input.nodes, input.edges),
+    [input.edges, input.isReadOnly, input.nodes],
+  )
   const handleNodeClick: NodeMouseHandler<Node<WorkflowNodeData>> = (_event, node) => {
     input.setSelectedNodeId(node.id)
     input.setInspectorMode("properties")

@@ -28,7 +28,7 @@ export async function createWorkflowDefinition() {
   const database = getDrizzleDatabase()
   const workflowId = crypto.randomUUID()
   const now = Date.now()
-  await database.insert(workflows).values({ id: workflowId, title: "New workflow", summary: "", updatedAt: now })
+  await database.insert(workflows).values({ id: workflowId, title: "New workflow", summary: "", enabled: true, updatedAt: now })
   await database.insert(workflowVersions).values({
     id: crypto.randomUUID(),
     workflowId,
@@ -45,6 +45,7 @@ export async function saveWorkflowDefinition(payload: {
   id: string
   title: string
   summary: string
+  enabled?: boolean
   definitionJson: string
   selectedVersionId?: string
   publish?: boolean
@@ -74,7 +75,7 @@ export async function saveWorkflowDefinition(payload: {
   const selected = target && !target.isRelease ? target : draft
   await database
     .update(workflows)
-    .set({ title: payload.title, summary: payload.summary, updatedAt: now })
+    .set({ title: payload.title, summary: payload.summary, enabled: payload.enabled ?? true, updatedAt: now })
     .where(eq(workflows.id, payload.id))
   if (!payload.publish && selected) {
     await database

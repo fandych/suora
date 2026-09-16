@@ -124,12 +124,14 @@ export function AgentBindingsForm({
   const documentSelectedIds = draft.config.documentIds ?? []
 
   const workflowItems = buildItems(
-    workflows.map((workflow) => ({ id: workflow.id, title: workflow.title, description: workflow.summary })),
+    workflows
+      .filter((workflow) => workflow.enabled)
+      .map((workflow) => ({ id: workflow.id, title: workflow.title, description: workflow.summary })),
     workflowSelectedIds,
     queries.workflows,
   )
   const integrationItems = buildItems(
-    integrations.map((integration) => ({
+    integrations.filter((integration) => integration.enabled).map((integration) => ({
       id: integration.id,
       title: integration.title,
       description: integration.endpoint || integration.kind,
@@ -143,7 +145,9 @@ export function AgentBindingsForm({
     queries.skills,
   )
   const documentItems = buildItems(
-    documents.map((document) => ({ id: document.id, title: document.title, description: document.summary })),
+    documents
+      .filter((document) => document.enabled)
+      .map((document) => ({ id: document.id, title: document.title, description: document.summary })),
     documentSelectedIds,
     queries.documents,
   )
