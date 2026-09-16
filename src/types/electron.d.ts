@@ -1,6 +1,28 @@
+import type {
+  WorkflowRunAccepted,
+  WorkflowRunCancelResult,
+  WorkflowRunEvent,
+  WorkflowRunStartCommand,
+} from "@/types/workflow"
+
 export {}
 
-import type { SendMailPayload } from "@electron/types"
+type SendMailPayload = {
+  to: string
+  subject: string
+  content: string
+  html?: string
+  attachments?: Array<{
+    filename?: string
+    content?: string
+    dataBase64?: string
+    path?: string
+    href?: string
+    contentType?: string
+    cid?: string
+    encoding?: "base64" | "hex" | "binary" | "quoted-printable"
+  }>
+}
 
 declare global {
   interface Window {
@@ -9,11 +31,7 @@ declare global {
       on: (channel: string, listener: (...args: unknown[]) => void) => void
       off: (channel: string, listener: (...args: unknown[]) => void) => void
     }
-    project?: {
-      catalog: {
-        list: (route: string) => Promise<unknown>
-        get: (route: string, itemId: string) => Promise<unknown>
-      }
+    app?: {
       system: {
         info: () => Promise<unknown>
         diagnostics: () => Promise<unknown>
@@ -34,17 +52,26 @@ declare global {
         updateMessageParts: (payload: unknown) => Promise<unknown>
         getSettings: () => Promise<unknown>
         saveSettings: (payload: unknown) => Promise<unknown>
+        getSessionSettings: (chatId?: string | null) => Promise<unknown>
+        saveSessionSettings: (payload: unknown) => Promise<unknown>
+        sendMessage: (payload: unknown) => Promise<unknown>
+        cancelRuntime: (requestId: string) => Promise<unknown>
+        retryToolActivity: (payload: unknown) => Promise<unknown>
+        onRuntimeEvent: (listener: (...args: unknown[]) => void) => void
+        offRuntimeEvent: (listener: (...args: unknown[]) => void) => void
       }
       documents: {
         list: () => Promise<unknown>
         get: (documentId: string, versionId?: string) => Promise<unknown>
+        getFileTree: (documentId: string, versionId?: string) => Promise<unknown>
+        getFile: (documentId: string, fileId: string, versionId?: string) => Promise<unknown>
         create: () => Promise<unknown>
+        createWithMetadata: (payload: unknown) => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (documentId: string) => Promise<unknown>
       }
       database: {
         ping: () => Promise<unknown>
-        ensureSeeded: (payload: unknown) => Promise<unknown>
         syncChannelCatalog: (payload: unknown) => Promise<unknown>
       }
       models: {
@@ -54,17 +81,26 @@ declare global {
         save: (payload: unknown) => Promise<unknown>
         delete: (providerId: string) => Promise<unknown>
         discover: (payload: unknown) => Promise<unknown>
+        configured: () => Promise<unknown>
+        listPresets: () => Promise<unknown>
+        getPreset: (providerType: string) => Promise<unknown>
+        getDefaultBaseUrl: (providerType: string) => Promise<unknown>
+        allowsNoKey: (providerType: string) => Promise<unknown>
+        getDiscoveryState: (payload: unknown) => Promise<unknown>
       }
       skills: {
-        list: () => Promise<unknown>
+        listAll: (options?: unknown) => Promise<unknown>
         listExternal: () => Promise<unknown>
         get: (skillId: string) => Promise<unknown>
+        getExternal: (skillId: string) => Promise<unknown>
+        getFileTree: (skillId: string, versionId?: string) => Promise<unknown>
+        getFile: (skillId: string, filePath: string, versionId?: string) => Promise<unknown>
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (skillId: string) => Promise<unknown>
       }
       agents: {
-        list: () => Promise<unknown>
+        listAll: (options?: unknown) => Promise<unknown>
         get: (agentId: string) => Promise<unknown>
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
@@ -74,7 +110,7 @@ declare global {
       }
       integrations: {
         list: () => Promise<unknown>
-        get: (integrationId: string) => Promise<unknown>
+        get: (integrationId: string, versionId?: string) => Promise<unknown>
         create: (payload?: unknown) => Promise<unknown>
         fetchApiDoc: (sourceUrl: string) => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
@@ -90,18 +126,19 @@ declare global {
         save: (payload: unknown) => Promise<unknown>
         delete: (workflowId: string) => Promise<unknown>
         recordInvocation: (payload: unknown) => Promise<unknown>
-        startRun: (payload: unknown) => Promise<unknown>
-        cancelRun: (requestId: string) => Promise<unknown>
-        onRunEvent: (listener: (...args: unknown[]) => void) => void
-        offRunEvent: (listener: (...args: unknown[]) => void) => void
+        startRun: (payload: WorkflowRunStartCommand) => Promise<WorkflowRunAccepted>
+        cancelRun: (requestId: string) => Promise<WorkflowRunCancelResult>
+        onRunEvent: (listener: (_event: Electron.IpcRendererEvent, payload: WorkflowRunEvent) => void) => void
+        offRunEvent: (listener: (_event: Electron.IpcRendererEvent, payload: WorkflowRunEvent) => void) => void
       }
       channels: {
-        list: () => Promise<unknown>
+        listAll: () => Promise<unknown>
         get: (channelId: string) => Promise<unknown>
         create: (defaults?: unknown) => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (channelId: string) => Promise<unknown>
         startRuntime: () => Promise<unknown>
+        syncRuntime: () => Promise<unknown>
         stopRuntime: () => Promise<unknown>
         getRuntimeStatus: () => Promise<unknown>
         registerRuntime: () => Promise<unknown>
@@ -113,7 +150,12 @@ declare global {
         getStreamStatus: (channelId: string) => Promise<unknown>
         debugSend: (payload: unknown) => Promise<unknown>
         startWeChatPersonalLogin: (channelId?: string, force?: boolean) => Promise<unknown>
-        waitForWeChatPersonalLogin: (channelId: string | undefined, sessionKey: string, verifyCode?: string, timeoutMs?: number) => Promise<unknown>
+        waitForWeChatPersonalLogin: (
+          channelId: string | undefined,
+          sessionKey: string,
+          verifyCode?: string,
+          timeoutMs?: number,
+        ) => Promise<unknown>
         getWeChatPersonalQrPreview: (url: string, waitMs?: number) => Promise<unknown>
       }
       schedulers: {

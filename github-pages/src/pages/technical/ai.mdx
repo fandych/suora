@@ -2,21 +2,15 @@ export const meta = { title: "AI 服务与工具", description: "Provider 工厂
 
 # AI 服务与工具
 
-SUORA 使用 Vercel AI SDK 的 `ToolLoopAgent` 处理流式文本、工具调用和多步 Agent 任务。主编排位于 `src/services/ai-service.ts`，Provider、网络、research agent 和工具实现位于 `src/services/ai/`。
+SUORA 使用 Vercel AI SDK 的 `ToolLoopAgent` 处理流式文本、工具调用和多步 Agent 任务。所有 Agent 执行位于 Electron 主进程；Renderer 仅通过 `ChatApi.sendMessage(sessionId, message)` 提交命令，并订阅 `chat-runtime-listener` 事件渲染文本和工具活动。
 
-AI service 目录约定：
+当前主进程实现位于：
 
-- `src/services/ai/model-provider-factory.ts`：按 Provider 类型创建 LanguageModel。
-- `src/services/ai/network-client.ts`：通过 Electron bridge 代理 AI 网络请求。
-- `src/services/ai/research-agent.ts`：在受限资源 scope 中创建 research subagent。
-- `src/services/ai/tools/workspace-tools.ts`：工作区文件、命令和外部 URL 工具。
-- `src/services/ai/tools/browser-tools.ts`：浏览器导航、读取、点击和表单填充工具。
-- `src/services/ai/tools/http-tools.ts`：HTTP integration 工具及 retry 执行。
-- `src/services/ai/tools/resource-search-tools.ts`：Document、Skill、Workflow 搜索和 scope 列表。
-- `src/services/ai/tools/tool-retry.ts`：工具重试分发和输入校验。
-- `src/services/ai/tools/private-resource-tools.ts`：私有资源 CRUD 工具。
+- `electron/app/chats/runtime.ts`：接收会话消息命令、加载会话设置和持久化用户消息。
+- `electron/app/chats/agent.ts`：构建 Provider、运行 `ToolLoopAgent`、持久化助手消息并发送事件。
+- `electron/app/chats/tool-retry.ts`：在主进程重新校验并重试允许的工具活动。
 
-`src/services/ai-service.ts` 是对外的 Chat Agent 流式入口；Chat 共享类型位于 `src/services/chat/types.ts`，不从 `ai-service.ts` 反向导入；Chat response parts 和 assistant persistence 工具位于 `src/services/chat/`。
+Renderer 的 `src/services/chat-service.ts` 只是 IPC facade；`src/services/chat-runtime-listener.ts` 只是事件订阅 adapter。响应 parts、错误展示和附件展示等纯 UI helper 位于 `src/lib/`，不在 `src/services/chat/` 或 `src/services/ai/` 中。
 
 ## Provider 工厂
 
@@ -31,24 +25,21 @@ AI service 目录约定：
 | `ollama` | 默认 `http://localhost:11434/v1` 的 OpenAI 兼容路径。 |
 | 其他/Custom | OpenAI-compatible SDK。 |
 
-Renderer 将自定义 fetch 注入 Provider，实际 HTTP 请求通过 Electron 主进程桥接。模型运行时主要使用 Provider type、Base URL、API Key 和 Model ID；模型库存中的 capability/API mode 元数据不会自动强制改变 SDK 调用模式。
+Provider 在主进程中直接运行。模型运行时主要使用 Provider type、Base URL、API Key 和 Model ID；模型库存中的 capability/API mode 元数据不会自动强制改变 SDK 调用模式。
 
 Agent 可覆盖 Chat 当前的 Provider、Model 和最大步骤数，但只有在 Agent 配置的 Provider 与启用模型有效时才会生效；否则回退到当前 Chat 模型。
 
-## 网络请求桥
-
-Renderer 的自定义 fetch 通过 IPC 发送：
+## 命令与事件边界
 
 ```text
-Renderer fetch
-  → ai:fetch:start
-  → Electron http/https request
-  → ai:fetch:event(response/data/end/error)
-  → ReadableStream
-  → AI SDK Provider
+Renderer ChatApi.sendMessage(sessionId, message)
+  → chats:sendMessage IPC
+  → Electron Chat Runtime / ToolLoopAgent
+  → chat-runtime-listener(text/tool/completed/error/cancelled)
+  → Renderer runtime store
 ```
 
-请求和流式数据中的 body 使用 Base64 传输。支持 AbortSignal；取消请求时调用 `ai:fetch:abort`。
+发送命令只接收 session ID、文本和可选附件；Renderer 不提供 Provider、Agent、工具集合或请求 ID。Electron 从会话设置中解析这些信息并生成 request ID。取消请求通过 `chats:runtime:cancel` 发送给主进程。
 
 主进程请求默认使用 `Connection: close`，不复用 socket，以降低企业网关或 Azure-compatible proxy 提前关闭 SSE 连接的概率。请求日志记录 host/path、代理类型、TLS 设置、请求大小和尝试次数，不记录完整 query 或 body。
 
@@ -165,7 +156,7 @@ External HTTP 和 Integration 请求继续受到 URL、认证、代理、TLS、�
 
 ## 测试与开发注意事项
 
-当前已有 `agent-loop-control.test.ts` 覆盖步骤预算规范化和 step-limit 诊断，以及 Chat error state 测试。`streamChatAgentResponse()` 尚未发现覆盖所有 Provider 和真实流式响应的完整集成测试。
+当前已有 Chat error state 与步骤预算相关测试。新增或修改 Agent 能力时，应在 Electron runtime 层覆盖 Provider fallback、abort、timeout、tool error 和 step limit。
 
 修改 AI 服务或工具时：
 

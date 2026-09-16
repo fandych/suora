@@ -83,7 +83,7 @@ platform handler/client
 chat-channel-{channelId}-{normalizedSenderId}
 ```
 
-之后追加用户消息，选择 Channel Agent/Provider/Model，调用 `streamChatAgentResponse()`，保存助手回复；`autoReply` 开启且存在原始 `chatId` 时再发送回外部平台。
+之后通过 `ChatApi.sendMessage(sessionId, message)` 提交消息。Electron 从会话加载 Agent、Provider 和 Model，持久化用户/助手消息并通过 `chat-runtime-listener` 返回完成事件；`autoReply` 开启且存在原始 `chatId` 时再发送回外部平台。
 
 ## 出站消息
 

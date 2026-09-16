@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "composite": true,
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "skipLibCheck": true,
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -10,16 +12,8 @@
 
     "noEmit": true,
     "paths": {
-      "@electron/*": [
-        "./electron/*"
-      ],
-      "@shared/*": [
-        "./shared/*"
-      ],
-      "@/*": [
-        "./src/*"
-      ]
-    },
+      "@/*": ["./src/*"]
+    }
   },
-  "include": ["electron.vite.config.ts", "electron/**/*.ts", "shared/**/*.ts"]
+  "include": ["electron.vite.config.ts"]
 }

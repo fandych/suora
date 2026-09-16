@@ -104,7 +104,7 @@ About 区显示应用与更新状态，并提供 **Check for updates**。启用 
 
 ## 保存、回退与本地数据
 
-在 Electron 桌面运行时，Preferences 保存到本地 SQLite 的 app metadata。若桌面 IPC 不可用或保存失败，渲染器会回退到浏览器 `localStorage`。
+在 Electron 桌面运行时，Preferences 保存到本地 SQLite 的 app metadata。保存时，Electron 会清洗并规范化偏好值；文件访问、命令策略和 SMTP 配置的最终安全判断在主进程执行。若桌面 IPC 不可用或保存失败，界面会报告错误并允许重试，不会回退到浏览器 `localStorage`，以避免出现两份不一致的配置。
 
 保存时会规范化常见字段：主题、语言、字体、数组列表、环境变量、端口和超时；但不会验证 workspace path 是否存在、默认 Provider 是否存在、SMTP 主机可达性或环境变量值是否安全。
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 
-describe("drizzle chat repository contract", () => {
+describe("chat repository contract", () => {
   it("keeps chat persistence behind the repository boundary", () => {
-    expect("electron/database/drizzle/chat-repository.ts").toContain("chat-repository")
+    expect("src/electron/app/chats/repository.ts").toContain("app/chats/repository")
   })
 })

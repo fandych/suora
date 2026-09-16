@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest"
 
-import { readWorkflowSchemaParameters, writeWorkflowSchemaParameters } from "@/views/workflows/components/workflow-schema-contract"
+import {
+  readWorkflowSchemaParameters,
+  writeWorkflowSchemaParameters,
+} from "@/pages/workflows/components/workflow-schema-contract"
 
 describe("workflow schema contract", () => {
   it("preserves nested contracts and schema metadata while editing a root field", () => {
@@ -8,7 +11,11 @@ describe("workflow schema contract", () => {
       type: "object",
       additionalProperties: false,
       properties: {
-        tickets: { type: "array", description: "Old", items: { type: "object", properties: { id: { type: "string", format: "uuid" } } } },
+        tickets: {
+          type: "array",
+          description: "Old",
+          items: { type: "object", properties: { id: { type: "string", format: "uuid" } } },
+        },
       },
       required: ["tickets"],
     })

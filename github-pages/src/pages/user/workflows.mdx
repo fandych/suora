@@ -76,7 +76,7 @@ Try run 会执行 Start、End、变量、模板、条件、文档检索、循环
 
 被跳过节点会在 trace 中标注为 `skipped`，不会发送请求、执行脚本或发信。
 
-**Run release** 只能运行已发布版本，并会真正执行 AI、HTTP/Integration、脚本和 SMTP 节点。当前没有独立的运行时输入表单；它会使用 workflow 已保存的 **Dry-run input** JSON 作为输入。要更改正式运行输入，请先更新并保存该字段，再执行 Run release。涉及外部系统前，请先完成 Try run，并使用测试凭据或测试环境。
+**Run release** 只能运行已发布版本，并会真正执行 AI、HTTP/Integration、脚本和 SMTP 节点。运行始终由桌面应用后台执行；界面仅显示来自后台的进度和 trace。当前没有独立的运行时输入表单，Release run 使用空对象作为输入；涉及外部系统前，请先完成 Try run，并使用测试凭据或测试环境。
 
 <Callout type="warning">
   Try run 不能证明正式运行一定成功：它会有意跳过所有副作用节点。正式运行可能产生 API 调用、写入、Webhook 请求或邮件，请先确认目标、凭据和影响范围。

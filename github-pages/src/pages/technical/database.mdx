@@ -33,7 +33,7 @@ WAL 模式可能产生 `.sqlite-wal` 和 `.sqlite-shm` 文件。备份时应在�
 
 ## Migration 约定
 
-Migration 定义在 `src/data/db/migrations.ts`，运行逻辑在 `electron/database/db-core.ts`。启动时创建：
+Migration 定义在 `drizzle/migrations/runtime-migrations.ts`，运行逻辑在 `electron/infrastructure/db-core.ts`。启动时创建：
 
 ```sql
 CREATE TABLE IF NOT EXISTS __app_migrations (
@@ -83,7 +83,7 @@ Repository
   → getDatabaseContext()
   → bridge.invoke("db:execute", payload)
   → preload whitelist
-  → electron/ipc/ipc-core.ts
+  → electron/preload/system/database-ipc.ts
   → executeQuery()
   → node:sqlite
 ```
@@ -126,7 +126,7 @@ major + minor + is_release + created_at
 
 Workflow、Agent、Skill、Integration 和 Document 的草稿可以更新；发布版本通常创建新的版本记录。查询最新版本时按主版本、次版本和创建时间排序。
 
-聊天消息 parts 与聊天设置另有应用层 envelope 版本，目前为版本 2，迁移逻辑位于 `src/data/domain/chat/persistence.ts`。
+聊天消息 parts 与聊天设置另有应用层 envelope 版本，目前为版本 2，迁移逻辑位于 `src/domain/chat/persistence.ts`。
 
 ## Seed 数据
 

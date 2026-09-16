@@ -4,7 +4,7 @@ export const meta = { title: "Workflow Engine", description: "图调度、节点
 
 Workflow Engine 将 JSON workflow definition 编译为节点图并分批执行。`workflow-execution-engine.ts` 负责图调度，`workflow-node-executor.ts` 负责节点能力，`workflow-execution-context.ts` 负责运行上下文，`workflow-trace-recorder.ts` 负责 trace 生成，编辑器校验位于 `workflow-editor-state.ts`，持久化和调用历史由 workflow service/repository 管理。
 
-节点执行器通过 `workflow-runtime-ports.ts` 依赖 AI、Document、Integration、Mail 等抽象能力，当前由 `workflow-runtime-adapter.ts` 提供 Renderer 实现。这样执行器可以在不修改节点业务逻辑的情况下替换为 Main process adapter；在完成等价的端口实现和事件回传前，Workflow 仍在 Renderer 中执行。
+执行器、运行上下文、表达式、分支策略和 trace 脱敏均位于 `electron/application/workflow/`，由 Electron 主进程执行。Renderer 只保存/编辑 definition，调用 `workflows:run:start` 启动后台任务，并监听 `workflow:run:event` 接收开始、节点 trace、完成、失败和取消状态。跨 preload 的 DTO 位于 `src/types/workflow.d.ts`；项目不使用 `shared/` 目录。
 
 ## 图调度模型
 
