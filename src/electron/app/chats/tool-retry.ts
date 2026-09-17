@@ -15,6 +15,7 @@ import {
   MAX_TOOL_FILE_BYTES,
   MAX_TOOL_WRITE_BYTES,
   parseWorkspaceCommand,
+  resolveWorkspaceSpawnCommand,
 } from "@/electron/app/tools/tool-guardrails"
 import { ensureWorkspace } from "@/electron/infrastructure/workspace-service"
 import { assertSafeHttpUrl } from "@/electron/infrastructure/url-security"
@@ -79,11 +80,16 @@ async function writeFile(relativePath: string, content: string) {
 async function runCommand(command: string, cwd?: string, timeoutMs?: number) {
   await ensureWorkspace()
   const parsed = parseWorkspaceCommand(command)
+  const spawnCommand = resolveWorkspaceSpawnCommand(parsed)
   await enforceCommandPolicy(command, parsed.executableName)
   const workingDirectory = resolveWorkspaceTarget(cwd)
   const timeout = Math.max(1_000, Math.min(timeoutMs ?? 30_000, 120_000))
   return new Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
-    const child = spawn(parsed.executable, parsed.args, { cwd: workingDirectory, shell: false, windowsHide: true })
+    const child = spawn(spawnCommand.executable, spawnCommand.args, {
+      cwd: workingDirectory,
+      shell: spawnCommand.shell,
+      windowsHide: true,
+    })
     const stdout: Buffer[] = []
     const stderr: Buffer[] = []
     let bytes = 0

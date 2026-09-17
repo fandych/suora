@@ -8,7 +8,7 @@ import {
   getWorkflowDryRunInputIssue,
 } from "@/lib/workflow/editor-state"
 import { defaultWorkflowBindings, defaultWorkflowNotifications } from "@/lib/workflow/editor-config"
-import { validateWorkflowNodeProperties } from "@/lib/workflow/validator/node-properties"
+import { validateNodeProperties } from "@/lib/workflow/validator/node"
 
 type WorkflowValidationInput = {
   title: string
@@ -19,6 +19,8 @@ type WorkflowValidationInput = {
   resourceBindings: WorkflowDefinition["resourceBindings"]
   dryRunInput: string
   notifications: WorkflowDefinition["notifications"]
+  variables: WorkflowDefinition["variables"]
+  budget: WorkflowDefinition["budget"]
   savedDefinition?: WorkflowDefinition
   savedTitle?: string
   savedSummary?: string
@@ -36,8 +38,8 @@ export function useWorkflowValidation(input: WorkflowValidationInput) {
       viewport: input.viewport,
       resourceBindings: input.resourceBindings,
       dryRunInputJson: input.dryRunInput,
-      variables: input.savedDefinition?.variables ?? [],
-      budget: input.savedDefinition?.budget,
+      variables: input.variables ?? [],
+      budget: input.budget,
       notifications: input.notifications,
     }),
     [
@@ -46,8 +48,8 @@ export function useWorkflowValidation(input: WorkflowValidationInput) {
       input.notifications,
       input.nodes,
       input.resourceBindings,
-      input.savedDefinition?.budget,
-      input.savedDefinition?.variables,
+      input.budget,
+      input.variables,
       input.viewport,
     ],
   )
@@ -64,7 +66,7 @@ export function useWorkflowValidation(input: WorkflowValidationInput) {
           availableModelIds: input.availableModelIds,
         }),
         ...input.nodes.flatMap((node) =>
-          validateWorkflowNodeProperties(node, {
+          validateNodeProperties(node, {
             availableAgentIds: input.availableAgentIds,
             availableDocumentIds: input.availableDocumentIds,
             availableIntegrationIds: input.availableIntegrationIds,

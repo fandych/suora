@@ -1,4 +1,5 @@
 import { NativeSelectOption } from "@/components/ui/native-select"
+import type { ChangeEvent } from "react"
 import type { WorkflowNodeData } from "@/types/workflow"
 import type { WorkflowExpressionSuggestion } from "@/lib/workflow/expression-suggestions"
 import { WorkflowExpressionInput } from "@/pages/workflows/components/workflow-expression-input"
@@ -19,7 +20,9 @@ export function NodeTemplateForm({
       <WorkflowNodeSelect
         label="Output format"
         value={node.templateOutputFormat ?? "text"}
-        onChange={(event) => updateNode({ templateOutputFormat: event.target.value as "text" | "json" })}
+        onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+          updateNode({ templateOutputFormat: event.target.value as "text" | "json" })
+        }
       >
         <NativeSelectOption value="text">Text</NativeSelectOption>
         <NativeSelectOption value="json">JSON</NativeSelectOption>

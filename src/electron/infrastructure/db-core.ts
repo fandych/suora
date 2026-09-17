@@ -11,6 +11,109 @@ import type { QueryPayload, SqliteDatabase } from "@/types/electron"
 
 export { validateQueryPayload } from "@/electron/infrastructure/db-query-policy"
 
+const LEGACY_UPGRADEABLE_TABLES = [
+  "agent_versions",
+  "agents",
+  "app_meta",
+  "channels",
+  "chat_messages",
+  "chats",
+  "document_versions",
+  "documents",
+  "integration_executions",
+  "integration_versions",
+  "integrations",
+  "providers",
+  "schedulers",
+  "skills",
+  "workflow_invocations",
+  "workflow_versions",
+  "workflows",
+]
+
+function hasTable(database: SqliteDatabase, tableName: string) {
+  return Boolean(database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?").get(tableName))
+}
+
+function getTableColumns(database: SqliteDatabase, tableName: string) {
+  if (!hasTable(database, tableName)) {
+    return new Set<string>()
+  }
+
+  return new Set(
+    (database.prepare(`PRAGMA table_info(${tableName})`).all() as Array<{ name: string }>).map((column) => column.name),
+  )
+}
+
+function isLegacySchemaUpgradeable(database: SqliteDatabase) {
+  const tableNames = new Set(
+    (database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'").all() as Array<{
+      name: string
+    }>).map((table) => table.name),
+  )
+
+  return LEGACY_UPGRADEABLE_TABLES.every((tableName) => tableNames.has(tableName))
+}
+
+function ensureColumn(database: SqliteDatabase, tableName: string, columnName: string, statement: string) {
+  if (!hasTable(database, tableName)) {
+    return
+  }
+
+  const columns = getTableColumns(database, tableName)
+  if (!columns.has(columnName)) {
+    database.exec(statement)
+  }
+}
+
+function repairCurrentSchema(database: SqliteDatabase) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS scheduler_runs (
+      id TEXT PRIMARY KEY NOT NULL,
+      scheduler_id TEXT NOT NULL,
+      status TEXT NOT NULL,
+      input_json TEXT NOT NULL,
+      output_json TEXT NOT NULL,
+      started_at INTEGER NOT NULL,
+      finished_at INTEGER
+    );
+  `)
+
+  ensureColumn(database, "chats", "source_type", "ALTER TABLE chats ADD COLUMN source_type TEXT DEFAULT 'manual' NOT NULL")
+  ensureColumn(database, "chats", "source_ref", "ALTER TABLE chats ADD COLUMN source_ref TEXT")
+  ensureColumn(database, "documents", "enabled", "ALTER TABLE documents ADD COLUMN enabled INTEGER DEFAULT true NOT NULL")
+  ensureColumn(
+    database,
+    "integrations",
+    "enabled",
+    "ALTER TABLE integrations ADD COLUMN enabled INTEGER DEFAULT true NOT NULL",
+  )
+  ensureColumn(database, "providers", "description", "ALTER TABLE providers ADD COLUMN description TEXT DEFAULT '' NOT NULL")
+  ensureColumn(database, "workflows", "enabled", "ALTER TABLE workflows ADD COLUMN enabled INTEGER DEFAULT true NOT NULL")
+
+  if (hasTable(database, "skills")) {
+    const skillColumns = getTableColumns(database, "skills")
+    if (!skillColumns.has("files_json")) {
+      database.exec("ALTER TABLE skills ADD COLUMN files_json TEXT NOT NULL DEFAULT '[]'")
+      if (hasTable(database, "skill_versions")) {
+        database.exec(`
+          UPDATE skills
+          SET files_json = COALESCE(
+            (
+              SELECT files_json
+              FROM skill_versions
+              WHERE skill_versions.skill_id = skills.id
+              ORDER BY major DESC, minor DESC, created_at DESC
+              LIMIT 1
+            ),
+            '[]'
+          )
+        `)
+      }
+    }
+  }
+}
+
 export function openDatabase() {
   if (appState.sqlite) {
     return appState.sqlite
@@ -42,15 +145,18 @@ export function applyMigrations(database: SqliteDatabase) {
   }
   const migrations = readMigrationFiles({ migrationsFolder })
 
-  if (database.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = '__app_migrations'").get()) {
+  if (hasTable(database, "__app_migrations")) {
     const legacyState = database.prepare("SELECT COUNT(*) as count, MAX(id) as id FROM __app_migrations").get() as {
       count: number
       id?: number
     }
-    if (legacyState.count > 0 && legacyState.id !== 14) {
-      throw new Error("Legacy database migrations are incomplete. Upgrade it before switching to Drizzle Kit migrations.")
-    }
-    if (legacyState.id === 14) {
+    const drizzleState = database.prepare("SELECT COUNT(*) as count FROM __drizzle_migrations").get() as { count: number }
+
+    if (legacyState.count > 0 && drizzleState.count === 0) {
+      if (!isLegacySchemaUpgradeable(database)) {
+        throw new Error("Legacy database migrations are incomplete. Upgrade it before switching to Drizzle Kit migrations.")
+      }
+
       const migration = migrations[migrations.length - 1]
       database
         .prepare("INSERT OR IGNORE INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)")
@@ -79,49 +185,7 @@ export function applyMigrations(database: SqliteDatabase) {
     }
   }
 
-  // Databases upgraded from the legacy migration table may already be marked
-  // as fully migrated even though the provider description column was never
-  // created. Repair that specific historical state before Drizzle queries it.
-  const providersTable = database
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'providers'")
-    .get()
-  if (providersTable) {
-    const providerColumns = database.prepare("PRAGMA table_info(providers)").all() as Array<{ name: string }>
-    if (!providerColumns.some((column) => column.name === "description")) {
-      database.exec("ALTER TABLE providers ADD COLUMN description TEXT DEFAULT '' NOT NULL")
-    }
-  }
-
-  // Early refactor builds could record the Skill migration without applying its
-  // schema change. Keep existing workspaces readable by repairing that state
-  // before Drizzle selects the direct files_json column.
-  const skillsTable = database
-    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'skills'")
-    .get()
-  if (skillsTable) {
-    const skillColumns = database.prepare("PRAGMA table_info(skills)").all() as Array<{ name: string }>
-    if (!skillColumns.some((column) => column.name === "files_json")) {
-      database.exec("ALTER TABLE skills ADD COLUMN files_json TEXT NOT NULL DEFAULT '[]'")
-      const skillVersionsTable = database
-        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'skill_versions'")
-        .get()
-      if (skillVersionsTable) {
-        database.exec(`
-          UPDATE skills
-          SET files_json = COALESCE(
-            (
-              SELECT files_json
-              FROM skill_versions
-              WHERE skill_versions.skill_id = skills.id
-              ORDER BY major DESC, minor DESC, created_at DESC
-              LIMIT 1
-            ),
-            '[]'
-          )
-        `)
-      }
-    }
-  }
+  repairCurrentSchema(database)
 }
 
 function mapRows(rows: unknown[]) {

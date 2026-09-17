@@ -38,6 +38,19 @@ const WINDOWS_EXECUTABLE_ALIASES: Record<string, string> = {
   vitest: "vitest.cmd",
   yarn: "yarn.cmd",
 }
+
+export type ParsedWorkspaceCommand = {
+  executable: string
+  args: string[]
+  executableName: string
+}
+
+export type WorkspaceSpawnCommand = {
+  executable: string
+  args: string[]
+  shell: boolean
+}
+
 function normalizeExecutableName(value: string) {
   return path
     .basename(value)
@@ -75,7 +88,7 @@ function tokenizeCommand(command: string) {
   if (current) tokens.push(current)
   return tokens
 }
-export function parseWorkspaceCommand(command: string) {
+export function parseWorkspaceCommand(command: string): ParsedWorkspaceCommand {
   const trimmed = command.trim()
   if (!trimmed) throw new Error("Command cannot be empty.")
   const tokens = tokenizeCommand(trimmed)
@@ -91,6 +104,23 @@ export function parseWorkspaceCommand(command: string) {
     executableName,
   }
 }
+
+export function resolveWorkspaceSpawnCommand(command: ParsedWorkspaceCommand): WorkspaceSpawnCommand {
+  if (process.platform === "win32" && /\.(cmd|bat)$/i.test(command.executable)) {
+    return {
+      executable: process.env.ComSpec || "cmd.exe",
+      args: ["/d", "/s", "/c", command.executable, ...command.args],
+      shell: false,
+    }
+  }
+
+  return {
+    executable: command.executable,
+    args: command.args,
+    shell: false,
+  }
+}
+
 export function ensureFileSizeWithinLimit(byteLength: number, label: string, maxBytes: number) {
   if (byteLength > maxBytes) throw new Error(`${label} exceeds the ${Math.floor(maxBytes / 1024)} KB safety limit.`)
 }

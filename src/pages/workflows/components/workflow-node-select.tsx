@@ -1,3 +1,4 @@
+import { NativeSelect } from "@/components/ui/native-select"
 import { ResourceSelector } from "@/components/resource-selector"
 import { WorkflowField } from "@/pages/workflows/components/workflow-field"
 import type { ResourceSelectorOption } from "@/types/resource-selector"

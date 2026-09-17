@@ -5,6 +5,7 @@ import {
   MarkerType,
   type Connection,
   type Edge,
+  type IsValidConnection,
   type Node,
   type NodeMouseHandler,
   type OnSelectionChangeParams,
@@ -50,8 +51,17 @@ export function useWorkflowNodeActions(input: {
       ),
     )
   }, [input])
-  const isValidConnection = useCallback(
-    (connection: Connection) => !input.isReadOnly && isValidWorkflowConnection(connection, input.nodes, input.edges),
+  const isValidConnection: IsValidConnection<Edge<WorkflowEdgeData>> = useCallback(
+    (connectionOrEdge) => {
+      if (input.isReadOnly || !("source" in connectionOrEdge) || !("target" in connectionOrEdge)) return false
+      const connection: Connection = {
+        source: connectionOrEdge.source,
+        target: connectionOrEdge.target,
+        sourceHandle: connectionOrEdge.sourceHandle ?? null,
+        targetHandle: connectionOrEdge.targetHandle ?? null,
+      }
+      return isValidWorkflowConnection(connection, input.nodes, input.edges)
+    },
     [input.edges, input.isReadOnly, input.nodes],
   )
   const handleNodeClick: NodeMouseHandler<Node<WorkflowNodeData>> = (_event, node) => {

@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process"
 import { ipcMain } from "electron"
-import { MAX_COMMAND_OUTPUT_BYTES, parseWorkspaceCommand } from "@/electron/app/tools/tool-guardrails"
+import {
+  MAX_COMMAND_OUTPUT_BYTES,
+  parseWorkspaceCommand,
+  resolveWorkspaceSpawnCommand,
+} from "@/electron/app/tools/tool-guardrails"
 import { ensureWorkspace } from "@/electron/infrastructure/workspace-service"
 import { enforceCommandPolicy, readToolPreferences, resolveWorkspaceTarget } from "@/electron/app/tools/tool-policy"
 
@@ -10,6 +14,7 @@ export function registerCommandIpc() {
     async (_event, payload: { command: string; cwd?: string; timeoutMs?: number; env?: Record<string, string> }) => {
       await ensureWorkspace()
       const parsed = parseWorkspaceCommand(payload.command)
+      const spawnCommand = resolveWorkspaceSpawnCommand(parsed)
       await enforceCommandPolicy(payload.command, parsed.executableName)
       const cwd = resolveWorkspaceTarget(payload.cwd)
       const preferences = await readToolPreferences()
@@ -24,7 +29,12 @@ export function registerCommandIpc() {
       }
       const timeoutMs = Math.max(1000, Math.min(payload.timeoutMs ?? 30000, 120000))
       return new Promise<{ ok: boolean; exitCode: number | null; stdout: string; stderr: string }>((resolve) => {
-        const child = spawn(parsed.executable, parsed.args, { cwd, shell: false, env, windowsHide: true })
+        const child = spawn(spawnCommand.executable, spawnCommand.args, {
+          cwd,
+          shell: spawnCommand.shell,
+          env,
+          windowsHide: true,
+        })
         const stdout: Buffer[] = []
         const stderr: Buffer[] = []
         let bytes = 0

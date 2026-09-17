@@ -1,4 +1,4 @@
-import { parseWorkspaceCommand } from "@/electron/app/tools/tool-guardrails"
+import { parseWorkspaceCommand, resolveWorkspaceSpawnCommand } from "@/electron/app/tools/tool-guardrails"
 import { validateQueryPayload } from "@/electron/infrastructure/db-query-policy"
 
 describe("Electron security boundaries", () => {
@@ -7,6 +7,25 @@ describe("Electron security boundaries", () => {
       executableName: "npm",
       args: ["run", "type-check"],
     })
+  })
+
+  it("wraps Windows cmd launchers in a cmd.exe spawn command", () => {
+    const parsed = parseWorkspaceCommand('npm run "type-check"')
+    const spawnCommand = resolveWorkspaceSpawnCommand(parsed)
+
+    if (process.platform === "win32") {
+      expect(spawnCommand).toMatchObject({
+        executable: expect.stringMatching(/cmd(\.exe)?$/i),
+        args: ["/d", "/s", "/c", "npm.cmd", "run", "type-check"],
+        shell: false,
+      })
+    } else {
+      expect(spawnCommand).toMatchObject({
+        executable: parsed.executable,
+        args: parsed.args,
+        shell: false,
+      })
+    }
   })
 
   it("blocks shell executables and unsupported binaries", () => {

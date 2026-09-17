@@ -1,10 +1,12 @@
 import type { ChangeEvent, Dispatch, RefObject, SetStateAction } from "react"
 import type { Edge, Node, Viewport } from "@xyflow/react"
 import type {
+  WorkflowBudget,
   WorkflowDefinition,
   WorkflowEdgeData,
   WorkflowNodeData,
   WorkflowNotificationSettings,
+  WorkflowVariable,
 } from "@/types/workflow"
 import { showToast } from "@/services/toast-service"
 import {
@@ -28,6 +30,8 @@ export function useWorkflowTransferActions(input: {
   setEdges: Dispatch<SetStateAction<Edge<WorkflowEdgeData>[]>>
   setResourceBindings: Dispatch<SetStateAction<typeof defaultWorkflowBindings>>
   setNotifications: Dispatch<SetStateAction<WorkflowNotificationSettings>>
+  setVariables: Dispatch<SetStateAction<WorkflowVariable[]>>
+  setBudget: Dispatch<SetStateAction<WorkflowBudget | undefined>>
   setDryRunInput: Dispatch<SetStateAction<string>>
   setSelectedNodeId: Dispatch<SetStateAction<string | null>>
   applyViewport: (viewport: Viewport) => void
@@ -60,6 +64,8 @@ export function useWorkflowTransferActions(input: {
       input.setEdges(payload.definition.edges)
       input.setResourceBindings(payload.definition.resourceBindings ?? defaultWorkflowBindings)
       input.setNotifications(payload.definition.notifications ?? defaultWorkflowNotifications)
+      input.setVariables(payload.definition.variables ?? [])
+      input.setBudget(payload.definition.budget)
       input.setDryRunInput(payload.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT)
       input.setSelectedNodeId(payload.definition.nodes[0]?.id ?? null)
       input.applyViewport(payload.definition.viewport)

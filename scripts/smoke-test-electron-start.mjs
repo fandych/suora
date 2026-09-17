@@ -1,9 +1,14 @@
 import { spawn } from "node:child_process"
 const timeoutMs = Number(process.env.SMOKE_TIMEOUT_MS || 30_000)
-const command = process.platform === "win32" ? "npm.cmd" : "npm"
-const args = ["run", "dev:root"]
+const isWindows = process.platform === "win32"
+const command = isWindows ? process.env.ComSpec || "cmd.exe" : "npm"
+const args = isWindows ? ["/d", "/s", "/c", "npm", "run", "dev"] : ["run", "dev"]
 
-const child = spawn(command, args, { stdio: "pipe", env: { ...process.env }, detached: process.platform !== "win32" })
+const child = spawn(command, args, {
+  stdio: "pipe",
+  env: { ...process.env, NO_SANDBOX: "1" },
+  detached: !isWindows,
+})
 let output = ""
 const append = (chunk) => { output += chunk.toString(); process.stdout.write(chunk) }
 child.stdout.on("data", append)

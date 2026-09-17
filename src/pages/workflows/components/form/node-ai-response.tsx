@@ -1,4 +1,5 @@
 import { Input } from "@/components/ui/input"
+import type { ChangeEvent } from "react"
 import type { WorkflowNodeData } from "@/types/workflow"
 import type { ResourceSelectorOption } from "@/types/resource-selector"
 import type { WorkflowExpressionSuggestion } from "@/lib/workflow/expression-suggestions"
@@ -59,7 +60,9 @@ export function NodeAiResponseForm({
       <WorkflowNodeSelect
         label="Response format"
         value={node.responseFormat ?? "text"}
-        onChange={(event) => updateNode({ responseFormat: event.target.value as "text" | "json" })}
+        onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+          updateNode({ responseFormat: event.target.value as "text" | "json" })
+        }
       >
         <option value="text">Text</option>
         <option value="json">JSON</option>

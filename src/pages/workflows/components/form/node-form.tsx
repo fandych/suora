@@ -31,10 +31,10 @@ export function NodeForm({
   suggestions,
 }: {
   node: WorkflowNodeData
-  agents: Array<{ id: string; title: string }>
+  agents: Array<{ id: string; label: string; enabled: boolean }>
   documents: DocumentSummary[]
   integrations: IntegrationSummary[]
-  modelOptions: Array<{ id: string; label: string }>
+  modelOptions: Array<{ id: string; label: string; enabled: boolean }>
   updateNode: (patch: Partial<WorkflowNodeData>) => void
   suggestions: WorkflowExpressionSuggestion[]
 }) {

@@ -28,7 +28,7 @@ export function registerWorkflowRuntimeIpc() {
         config: import("@/types/integration").IntegrationConfig,
         inputJson: string,
         integrationId?: string,
-      ) => integrationApplicationService.execute({ kind: "http", config, inputJson, integrationId }),
+      ) => integrationApplicationService.execute({ kind: config.kind, config, inputJson, integrationId }),
       sendMail: async (payload: { to: string; subject: string; content: string }) => {
         const profile = getSystemMailProfile()
         if (!profile) return { success: false, error: "SMTP is not configured." }
@@ -60,6 +60,10 @@ export function registerWorkflowRuntimeIpc() {
       .catch(async (error) => {
         activeRuns.delete(command.requestId)
         if (!controller.signal.aborted) {
+          const failureTraces =
+            error instanceof Error && "traces" in error && Array.isArray((error as { traces?: unknown }).traces)
+              ? ((error as { traces: WorkflowInvocationRecord["traces"] }).traces ?? [])
+              : []
           const invocation = (await workflowService.recordInvocation({
             workflowId: command.workflowId,
             versionId: command.versionId,
@@ -67,7 +71,7 @@ export function registerWorkflowRuntimeIpc() {
             trigger: command.mode,
             input: JSON.stringify(command.input),
             output: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-            traceJson: "[]",
+            traceJson: JSON.stringify(failureTraces),
           })) as WorkflowInvocationRecord
           _event.sender.send("workflow:run:event", {
             requestId: command.requestId,

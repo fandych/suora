@@ -47,8 +47,12 @@ export function validateWorkflowNodeProperties(
       break
     case "script":
       issues.push(...required(node, data.script, "Script node has no script body."))
-      if (!Number.isFinite(data.timeoutSeconds) || (data.timeoutSeconds ?? 0) < 1 || (data.timeoutSeconds ?? 0) > 600)
-        issues.push(issue(node, "Script timeout must be between 1 and 600 seconds."))
+      if (
+        !Number.isFinite(data.timeoutSeconds) ||
+        (data.timeoutSeconds ?? 0) < 1 ||
+        (data.timeoutSeconds ?? 0) > 60
+      )
+        issues.push(issue(node, "Script timeout must be between 1 and 60 seconds."))
       break
     case "variable-assigner":
       issues.push(...required(node, data.variableName, "Variable assignment needs a variable name."))

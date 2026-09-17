@@ -11,13 +11,17 @@ import { validateStartNode } from "@/electron/app/workflows/validator/node-start
 import { validateEndNode } from "@/electron/app/workflows/validator/node-end"
 import { validateDocumentRetrievalNode } from "@/electron/app/workflows/validator/node-document-retrieval"
 import { validateHttpNode } from "@/electron/app/workflows/validator/node-http"
+import { validateForkNode } from "@/electron/app/workflows/validator/node-fork"
+import { validateJoinNode } from "@/electron/app/workflows/validator/node-join"
+import { validateParallelNode } from "@/electron/app/workflows/validator/node-parallel"
+import { validateSerialNode } from "@/electron/app/workflows/validator/node-serial"
 import { validateScriptNode } from "@/electron/app/workflows/validator/node-script"
 import { validateVariableAssignerNode } from "@/electron/app/workflows/validator/node-variable-assigner"
 import { validateTemplateNode } from "@/electron/app/workflows/validator/node-template"
 import { validateAiResponseNode } from "@/electron/app/workflows/validator/node-ai-response"
 import { validateIntegrationNode } from "@/electron/app/workflows/validator/node-integration"
+import { validateWikiRetrievalNode } from "@/electron/app/workflows/validator/node-wiki-retrieval"
 import { validateEmailNode } from "@/electron/app/workflows/validator/node-email"
-import { validateFallbackNode } from "@/electron/app/workflows/validator/node-fallback"
 
 export type WorkflowValidationContext = NodePropertyValidationContext & {
   nodes: Node<WorkflowNodeData>[]
@@ -37,6 +41,8 @@ export function validateWorkflowNodes(input: WorkflowValidationContext): Workflo
         return validateIfElseNodeProperties(node)
       case "document-retrieval":
         return validateDocumentRetrievalNode(node, input)
+      case "wiki-retrieval":
+        return validateWikiRetrievalNode(node, input)
       case "agent":
         return validateAgentNodeProperties(node, input)
       case "variable-assigner":
@@ -56,11 +62,13 @@ export function validateWorkflowNodes(input: WorkflowValidationContext): Workflo
       case "loop":
         return validateLoopNodeProperties(node)
       case "fork":
+        return validateForkNode(node)
       case "join":
+        return validateJoinNode(node)
       case "parallel":
+        return validateParallelNode(node)
       case "serial":
-      case "wiki-retrieval":
-        return validateFallbackNode(node)
+        return validateSerialNode(node)
       default:
         return validateIntegrationNode(node, input)
     }

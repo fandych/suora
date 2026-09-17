@@ -8,6 +8,7 @@ import type { ChatRuntimeSettings } from "@/types/chat"
 import { ModelApi } from "@/services/model-service"
 import { hasAppBridge } from "@/services/bridge"
 import { ToolApi } from "@/services/tool-service"
+import { subscribeToBrowserState } from "@/services/browser-state-listener"
 import { showToast } from "@/services/toast-service"
 import type { ChatAttachment } from "@/types/chat"
 import { deriveChatBrowserInteractionState } from "@/lib/chat/browser-status"
@@ -161,10 +162,7 @@ export function useChatDetailController() {
         }
       })
 
-    const handler = (...args: unknown[]) => {
-      const payload = args[1] as
-        | { sessionId?: string; open?: boolean; visible?: boolean; url?: string; loading?: boolean; error?: string }
-        | undefined
+    const unsubscribe = subscribeToBrowserState((payload) => {
       if (payload?.sessionId !== (activeChatId ?? "global")) {
         return
       }
@@ -175,13 +173,11 @@ export function useChatDetailController() {
         loading: Boolean(payload?.loading),
         error: typeof payload?.error === "string" ? payload.error : undefined,
       })
-    }
-
-    window.electron?.on?.("tools:browserStateChanged", handler)
+    })
 
     return () => {
       cancelled = true
-      window.electron?.off?.("tools:browserStateChanged", handler)
+      unsubscribe()
     }
   }, [activeChatId])
 

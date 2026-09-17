@@ -1,4 +1,4 @@
-import { PlayIcon, SaveIcon } from "lucide-react"
+import { DownloadIcon, PlayIcon, SaveIcon, UploadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
@@ -8,12 +8,48 @@ type WorkflowRevisionActionsProps = {
   onSave: () => void
   canTryRun: boolean
   onOpenTryRun: () => void
+  onExport: () => void
+  onImport: () => void
+  importDisabled?: boolean
 }
 
-export function WorkflowRevisionActions({ canSave, onSave, canTryRun, onOpenTryRun }: WorkflowRevisionActionsProps) {
+export function WorkflowRevisionActions({
+  canSave,
+  onSave,
+  canTryRun,
+  onOpenTryRun,
+  onExport,
+  onImport,
+  importDisabled = false,
+}: WorkflowRevisionActionsProps) {
   return (
     <div className="flex h-8 items-center gap-2 rounded-2xl border bg-background/95 px-1 shadow-sm backdrop-blur">
       <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                className="h-8"
+                size="icon-sm"
+                variant="outline"
+                onClick={onImport}
+                disabled={importDisabled}
+                aria-label="Import workflow"
+              />
+            }
+          >
+            <UploadIcon />
+          </TooltipTrigger>
+          <TooltipContent>Import</TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger
+            render={<Button className="h-8" size="icon-sm" variant="outline" onClick={onExport} aria-label="Export workflow" />}
+          >
+            <DownloadIcon />
+          </TooltipTrigger>
+          <TooltipContent>Export</TooltipContent>
+        </Tooltip>
         <Tooltip>
           <TooltipTrigger
             render={

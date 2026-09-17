@@ -56,6 +56,8 @@ export function useWorkflowDetailController() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null)
   const [resourceBindings, setResourceBindings] = useState(defaultWorkflowBindings)
   const [notifications, setNotifications] = useState<WorkflowNotificationSettings>(defaultWorkflowNotifications)
+  const [variables, setVariables] = useState(data?.definition.variables ?? [])
+  const [budget, setBudget] = useState(data?.definition.budget)
   const [dryRunInput, setDryRunInput] = useState(DEFAULT_WORKFLOW_DRY_RUN_INPUT)
   const [showLibrary, setShowLibrary] = useState(true)
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>("properties")
@@ -109,6 +111,8 @@ export function useWorkflowDetailController() {
     setEdges(data.definition.edges)
     setResourceBindings(data.definition.resourceBindings ?? defaultWorkflowBindings)
     setNotifications(data.definition.notifications ?? defaultWorkflowNotifications)
+    setVariables(data.definition.variables ?? [])
+    setBudget(data.definition.budget)
     setDryRunInput(data.definition.dryRunInputJson ?? DEFAULT_WORKFLOW_DRY_RUN_INPUT)
     setSelectedVersionId(data.selectedVersion.id)
     setSelectedNodeId(data.definition.nodes[0]?.id ?? null)
@@ -130,6 +134,8 @@ export function useWorkflowDetailController() {
     resourceBindings,
     dryRunInput,
     notifications,
+    variables,
+    budget,
     savedDefinition: data?.definition,
     savedTitle: data?.workflow.title,
     savedSummary: data?.workflow.summary,
@@ -155,6 +161,8 @@ export function useWorkflowDetailController() {
     setEdges,
     setResourceBindings,
     setNotifications,
+    setVariables,
+    setBudget,
     setDryRunInput,
     setSelectedNodeId,
     applyViewport,

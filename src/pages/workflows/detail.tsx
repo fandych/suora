@@ -8,7 +8,10 @@ import {
   Panel,
   ReactFlow,
   SelectionMode,
+  type Edge,
   type FinalConnectionState,
+  type Node,
+  type ReactFlowInstance,
 } from "@xyflow/react"
 import "@xyflow/react/dist/style.css"
 import {
@@ -47,6 +50,7 @@ import { WorkflowZoomControls } from "@/pages/workflows/components/workflow-zoom
 import { WorkflowPanelResizeHandle } from "@/pages/workflows/components/workflow-panel-resize-handle"
 import { useWorkflowDetailController } from "@/hooks/use-workflow-detail-controller"
 import { showToast } from "@/services/toast-service"
+import type { WorkflowEdgeData, WorkflowNodeData } from "@/types/workflow"
 
 const DEFAULT_EDGE_OPTIONS = { type: "workflow", markerEnd: { type: MarkerType.ArrowClosed } }
 const WORKFLOW_ARIA_LABELS = {
@@ -65,7 +69,7 @@ const WorkflowDetailPage = () => {
     }
   }, [inspectorMode, setInspectorMode, setSelectedNodeId])
   const handleFlowInit = useCallback(
-    (instance: Parameters<NonNullable<React.ComponentProps<typeof ReactFlow>["onInit"]>>[0]) => {
+    (instance: ReactFlowInstance<Node<WorkflowNodeData>, Edge<WorkflowEdgeData>>) => {
       setFlowInstance(instance)
       void instance.setViewport(viewport, { duration: 0 })
     },
@@ -117,6 +121,14 @@ const WorkflowDetailPage = () => {
             </DropdownMenuContent>
           </DropdownMenu>
         }
+      />
+
+      <input
+        ref={controller.importInputRef}
+        type="file"
+        accept="application/json,.json"
+        className="hidden"
+        onChange={(event) => void controller.handleImport(event)}
       />
 
       <div className="flex min-h-0 flex-1 flex-col p-3">
@@ -186,6 +198,9 @@ const WorkflowDetailPage = () => {
                   <WorkflowRevisionActions
                     canSave={controller.hasUnsavedChanges}
                     canTryRun={!controller.isDryRunning && controller.blockingIssues.length === 0}
+                    onExport={controller.handleExport}
+                    onImport={() => controller.importInputRef.current?.click()}
+                    importDisabled={controller.isReadOnly}
                     onOpenTryRun={() => controller.setInspectorMode("try-run")}
                     onSave={() => void controller.handleSave()}
                   />

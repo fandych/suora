@@ -3,7 +3,7 @@ import { spawn } from "node:child_process"
 import { requestHttp } from "@/electron/infrastructure/http-client"
 import { assertSafeHttpUrl } from "@/electron/infrastructure/url-security"
 import { executeSandboxedScriptIntegration } from "@/electron/app/integrations/script-runner"
-import { parseWorkspaceCommand } from "@/electron/app/tools/tool-guardrails"
+import { parseWorkspaceCommand, resolveWorkspaceSpawnCommand } from "@/electron/app/tools/tool-guardrails"
 import {
   applyIntegrationAuth,
   buildIntegrationEndpointUrl,
@@ -263,8 +263,9 @@ async function executeMcpIntegration(payload: IntegrationExecutePayload) {
   }
   if (config.launchCommand) {
     const parsedCommand = parseWorkspaceCommand(config.launchCommand)
+    const spawnCommand = resolveWorkspaceSpawnCommand(parsedCommand)
     return new Promise<{ ok: boolean; status: number; body: string }>((resolve) => {
-      const child = spawn(parsedCommand.executable, parsedCommand.args, { shell: false, windowsHide: true })
+      const child = spawn(spawnCommand.executable, spawnCommand.args, { shell: spawnCommand.shell, windowsHide: true })
       const chunks: Buffer[] = []
       const errors: Buffer[] = []
       const timer = setTimeout(() => {

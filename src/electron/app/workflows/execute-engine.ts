@@ -1,11 +1,17 @@
 import { executeConditionNode } from "@/electron/app/workflows/execution/node-condition"
 import { executeEndNode } from "@/electron/app/workflows/execution/node-end"
+import { executeForkNode } from "@/electron/app/workflows/execution/node-fork"
 import { executeIfElseNode } from "@/electron/app/workflows/execution/node-if-else"
+import { executeJoinNode } from "@/electron/app/workflows/execution/node-join"
 import { executeLoopNode } from "@/electron/app/workflows/execution/node-loop"
+import { executeParallelNode } from "@/electron/app/workflows/execution/node-parallel"
+import { executeScriptNode } from "@/electron/app/workflows/execution/node-script"
+import { executeSerialNode } from "@/electron/app/workflows/execution/node-serial"
 import { executeStartNode } from "@/electron/app/workflows/execution/node-start"
 import { executeTemplateNode } from "@/electron/app/workflows/execution/node-template"
 import { executeUnsupportedNode } from "@/electron/app/workflows/execution/node-unsupported"
 import { executeVariableNode } from "@/electron/app/workflows/execution/node-variable-assigner"
+import { executeWikiRetrievalNode } from "@/electron/app/workflows/execution/node-wiki-retrieval"
 import { executeAgentNode } from "@/electron/app/workflows/execution/node-agent"
 import { executeAiResponseNode } from "@/electron/app/workflows/execution/node-ai-response"
 import { executeDocumentRetrievalNode } from "@/electron/app/workflows/execution/node-document-retrieval"
@@ -45,10 +51,16 @@ const executors: Record<string, WorkflowNodeExecutor> = {
   "variable-assigner": executeVariableNode,
   condition: executeConditionNode,
   "if-else": executeIfElseNode,
+  fork: executeForkNode,
+  join: executeJoinNode,
   loop: executeLoopNode,
+  parallel: executeParallelNode,
+  serial: executeSerialNode,
+  script: executeScriptNode,
   agent: executeAgentNode,
   "ai-response": executeAiResponseNode,
   "document-retrieval": executeDocumentRetrievalNode,
+  "wiki-retrieval": executeWikiRetrievalNode,
   http: executeHttpNode,
   toolset: executeHttpNode,
   webhook: executeHttpNode,
@@ -107,7 +119,11 @@ export async function executeWorkflowCommand(
       traces.push(trace)
       emit({ requestId: command.requestId, type: "trace", trace })
       completed.add(nodeId)
-      if (!node.data.continueOnError) throw error
+      if (!node.data.continueOnError) {
+        const workflowError = error instanceof Error ? error : new Error(String(error))
+        ;(workflowError as Error & { traces?: WorkflowNodeTraceRecord[] }).traces = traces
+        throw workflowError
+      }
       for (const edge of getNextWorkflowEdges(node, undefined, outgoing, context))
         if (!completed.has(edge.target)) queue.push(edge.target)
       continue
