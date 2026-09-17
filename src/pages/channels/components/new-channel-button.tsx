@@ -4,6 +4,7 @@ import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { ChannelApi } from "@/services/channel-service"
+import { emitDataChanged } from "@/services/data-events"
 import { cn } from "@/lib/utils"
 
 export function NewChannelButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -14,6 +15,7 @@ export function NewChannelButton({ className, iconOnly = false }: { className?: 
     setIsCreating(true)
     try {
       const detail = await ChannelApi.create()
+      emitDataChanged("/channels")
       navigate(`/channels/${detail.channel.id}`)
     } finally {
       setIsCreating(false)

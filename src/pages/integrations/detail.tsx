@@ -168,17 +168,29 @@ const IntegrationsDetailPage = () => {
   }
 
   const handleRun = async () => {
-    if (!config) {
+    if (!config || !integrationId || !data) {
       return
     }
 
     setIsRunning(true)
     try {
-      if (!integrationId) {
-        return
+      const result = await IntegrationApi.execute({
+        integrationId,
+        kind: config.kind,
+        config,
+        inputJson: runInput,
+      })
+      await IntegrationApi.recordExecution({
+        id: integrationId,
+        versionId: data.selectedVersion.id,
+        status: result.ok ? "success" : "error",
+        input: runInput,
+        output: typeof result.body === "string" ? result.body : JSON.stringify(result),
+      })
+      const refreshed = await IntegrationApi.get(integrationId, data.selectedVersion.id)
+      if (refreshed) {
+        setData(refreshed)
       }
-
-      await IntegrationApi.execute({ integrationId, inputJson: runInput, config })
     } finally {
       setIsRunning(false)
     }

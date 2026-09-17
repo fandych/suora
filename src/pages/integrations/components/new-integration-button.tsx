@@ -5,6 +5,7 @@ import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { IntegrationApi } from "@/services/integration-service"
+import { emitDataChanged } from "@/services/data-events"
 import { cn } from "@/lib/utils"
 
 export function NewIntegrationButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -15,6 +16,7 @@ export function NewIntegrationButton({ className, iconOnly = false }: { classNam
     setIsCreating(true)
     try {
       const detail = await IntegrationApi.create({ kind: "http" })
+      emitDataChanged("/integrations")
       navigate(`/integrations/${detail.integration.id}`)
     } finally {
       setIsCreating(false)

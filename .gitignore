@@ -27,3 +27,5 @@ coverage
 
 ref_projects
 electron.vite.config.*.mjs
+
+.model-provider/

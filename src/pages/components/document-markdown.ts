@@ -79,6 +79,7 @@ export function markdownToTiptapHtml(markdown: string) {
   let mathLines: string[] = []
   let tablePending: string[] = []
   let inTable = false
+  let blankRun = 0
 
   const closeList = () => {
     if (!list) {
@@ -110,6 +111,9 @@ export function markdownToTiptapHtml(markdown: string) {
   }
 
   for (const line of lines) {
+    if (line.trim()) {
+      blankRun = 0
+    }
     if (line.trim().startsWith("```")) {
       if (inCode) {
         if (codeLanguage === "mermaid") {
@@ -252,6 +256,11 @@ export function markdownToTiptapHtml(markdown: string) {
       html.push("<hr />")
     } else if (line.trim()) {
       html.push(`<p>${inlineMarkdown(line)}</p>`)
+    } else {
+      blankRun += 1
+      if (blankRun >= 2) {
+        html.push("<p></p>")
+      }
     }
   }
 
@@ -305,7 +314,6 @@ function serializeNode(node: TiptapNode, listPrefix = ""): string {
       return `${children
         .map((child) => serializeNode(child))
         .join("")
-        .replace(/\n{3,}/g, "\n\n")
         .trimEnd()}\n`
     case "paragraph": {
       const text = children.map((child) => serializeNode(child)).join("")

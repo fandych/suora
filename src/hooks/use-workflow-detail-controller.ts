@@ -15,6 +15,7 @@ import { AgentApi } from "@/services/agent-service"
 import { DocumentApi } from "@/services/document-service"
 import { IntegrationApi } from "@/services/integration-service"
 import { ModelApi } from "@/services/model-service"
+import { emitDataChanged } from "@/services/data-events"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { showToast } from "@/services/toast-service"
 import {
@@ -217,6 +218,7 @@ export function useWorkflowDetailController() {
       })
       setData(next)
       setSelectedVersionId(next.selectedVersion.id)
+      emitDataChanged("/workflows")
     } catch (error) {
       showToast({
         title: "Save failed",
@@ -379,6 +381,7 @@ export function useWorkflowDetailController() {
       }
 
       setIsDeleteDialogOpen(false)
+      emitDataChanged("/workflows")
       navigate("/workflows")
       showToast({ title: "Workflow deleted", description: "The workflow was removed.", type: "success" })
     } catch (error) {

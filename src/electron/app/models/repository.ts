@@ -52,19 +52,22 @@ export async function saveModel(payload: {
   enabled: boolean
 }) {
   const database = getDrizzleDatabase()
-  await database
-    .update(providers)
-    .set({
-      title: payload.title,
-      description: payload.description,
-      providerType: payload.providerType,
-      baseUrl: payload.baseUrl,
-      apiKey: protectCredential(payload.apiKey),
-      modelsJson: payload.modelsJson,
-      enabled: payload.enabled,
-      updatedAt: Date.now(),
-    })
-    .where(eq(providers.id, payload.id))
+  const [existing] = await database.select({ id: providers.id }).from(providers).where(eq(providers.id, payload.id)).limit(1)
+  const values = {
+    title: payload.title,
+    description: payload.description,
+    providerType: payload.providerType,
+    baseUrl: payload.baseUrl,
+    apiKey: protectCredential(payload.apiKey),
+    modelsJson: payload.modelsJson,
+    enabled: payload.enabled,
+    updatedAt: Date.now(),
+  }
+  if (existing) {
+    await database.update(providers).set(values).where(eq(providers.id, payload.id))
+  } else {
+    await database.insert(providers).values({ id: payload.id, ...values })
+  }
   return getModel(payload.id)
 }
 

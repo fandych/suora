@@ -39,7 +39,7 @@ export const chatSessionSettingsSchema = z.object({
     model: chatRuntimeModelSchema,
     proxy: chatRuntimeProxySchema,
     requestTimeoutMs: z.number().finite().min(0).max(300_000),
-    maxSteps: z.number().finite().int().min(1).max(100),
+    maxSteps: z.number().finite().int().min(1).max(500),
   }),
   selectedAgentId: z.string().trim().max(256),
 })

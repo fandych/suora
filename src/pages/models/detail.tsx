@@ -3,17 +3,6 @@ import { useParams } from "react-router"
 import { useNavigate } from "react-router"
 import { EllipsisIcon, SlashIcon, Trash2Icon } from "lucide-react"
 
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import type { ProviderConfigRecord } from "@/types/agent"
@@ -23,6 +12,7 @@ import { ModelApi } from "@/services/model-service"
 import { showToast } from "@/services/toast-service"
 import PageHeader from "@/pages/components/page-header"
 import { ErrorCard, LoadingCard } from "@/pages/components/resource-state"
+import { ConfirmDeleteDialog } from "@/pages/components/confirm-delete-dialog"
 import { ModelFormDialog, createModelFormState, type ModelFormState } from "@/pages/models/components/model-form-dialog"
 import { ProviderLogoBadge } from "@/pages/models/components/provider-logo-badge"
 import { ProviderModelList } from "@/pages/models/components/provider-model-list"
@@ -32,7 +22,7 @@ import { useModelDetailStore } from "@/stores/model-detail-store"
 const ModelsDetailPage = () => {
   const { modelId } = useParams<{ modelId: string }>()
   const navigate = useNavigate()
-  const { draft, error, isLoading, load, updateDraft, save, remove, reload } = useModelDetailStore()
+  const { draft, error, isLoading, load, updateDraft, save, reload } = useModelDetailStore()
   const [isModelDialogOpen, setIsModelDialogOpen] = useState(false)
   const [editingModelIndex, setEditingModelIndex] = useState<number | null>(null)
   const [isRefreshingModels, setIsRefreshingModels] = useState(false)
@@ -40,6 +30,7 @@ const ModelsDetailPage = () => {
   const [presets, setPresets] = useState<ProviderPreset[]>([])
   const [selectedPreset, setSelectedPreset] = useState<ProviderPreset | null>(null)
   const [canConfigureModels, setCanConfigureModels] = useState(false)
+  const [isDisconnectDialogOpen, setIsDisconnectDialogOpen] = useState(false)
   const [discoveryState, setDiscoveryState] = useState({
     capable: false,
     enabled: false,
@@ -91,8 +82,13 @@ const ModelsDetailPage = () => {
       return
     }
 
-    await remove()
-    emitDataChanged("/models")
+    await persistProvider({
+      ...draft,
+      apiKey: "",
+      enabled: false,
+      models: draft.models.map((model) => ({ ...model, enabled: false })),
+    })
+    setIsDisconnectDialogOpen(false)
     navigate("/models")
   }
 
@@ -100,7 +96,7 @@ const ModelsDetailPage = () => {
     if (draft) void persistProvider({ ...draft, enabled: !draft.enabled })
   }
 
-  const canToggleProvider = canConfigureModels && draft.models.some((model) => model.enabled)
+  const canToggleProvider = canConfigureModels && Boolean(draft?.models.some((model) => model.enabled))
 
   const handleOpenCreateModel = () => {
     setEditingModelIndex(null)
@@ -249,26 +245,10 @@ const ModelsDetailPage = () => {
                   {draft.enabled ? "Disable" : "Enable"}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <AlertDialog>
-                  <AlertDialogTrigger render={<DropdownMenuItem variant="destructive" />}>
-                    <Trash2Icon />
-                    Delete
-                  </AlertDialogTrigger>
-                  <AlertDialogContent size="sm">
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete provider?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This removes the provider and its model inventory from the workspace.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction variant="destructive" onClick={() => void handleDeleteProvider()}>
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                <DropdownMenuItem variant="destructive" onClick={() => setIsDisconnectDialogOpen(true)}>
+                  <Trash2Icon />
+                  Delete
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : null
@@ -326,6 +306,13 @@ const ModelsDetailPage = () => {
           }
         }}
         onSubmit={handleSubmitModel}
+      />
+      <ConfirmDeleteDialog
+        open={isDisconnectDialogOpen}
+        onOpenChange={setIsDisconnectDialogOpen}
+        onConfirm={() => void handleDeleteProvider()}
+        title="Disconnect provider?"
+        description="This disables the provider and clears its stored API key. It stays in the catalog and can be reconnected later."
       />
     </div>
   )

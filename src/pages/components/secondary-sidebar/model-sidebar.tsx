@@ -13,6 +13,8 @@ import {
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
 import { ModelApi } from "@/services/model-service"
+import { subscribeToDataChanges } from "@/services/data-events"
+import { getProviderLogo, getProviderBrandClassName } from "@/pages/components/provider-logo"
 import type { PrimaryNavItem } from "@/pages/nav-config"
 export default function ModelSidebar({ item, headerAction }: { item: PrimaryNavItem; headerAction?: React.ReactNode }) {
   const [items, setItems] = useState<Array<{ id: string; title: string; providerType: string; connected: boolean }>>([])
@@ -21,19 +23,25 @@ export default function ModelSidebar({ item, headerAction }: { item: PrimaryNavI
   const location = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
-    void Promise.all([ModelApi.listAll(), ModelApi.listConfigured()])
-      .then(([allProviders, configuredProviders]) => {
-        const configuredIds = new Set(configuredProviders.map((provider) => provider.id))
-        setItems(
-          allProviders.map((provider) => ({
-            id: provider.id,
-            title: provider.title,
-            providerType: provider.providerType,
-            connected: configuredIds.has(provider.id),
-          })),
-        )
-      })
-      .finally(() => setLoading(false))
+    const loadItems = () =>
+      Promise.all([ModelApi.listAll(), ModelApi.listConfigured()])
+        .then(([allProviders, configuredProviders]) => {
+          const configuredIds = new Set(configuredProviders.map((provider) => provider.id))
+          setItems(
+            allProviders.map((provider) => ({
+              id: provider.id,
+              title: provider.title,
+              providerType: provider.providerType,
+              connected: configuredIds.has(provider.id),
+            })),
+          )
+        })
+        .finally(() => setLoading(false))
+
+    void loadItems()
+    return subscribeToDataChanges((route) => {
+      if (route === "/models") void loadItems()
+    })
   }, [])
   const filteredItems = items.filter((item) =>
     `${item.title} ${item.providerType}`.toLowerCase().includes(query.toLowerCase()),
@@ -63,16 +71,20 @@ export default function ModelSidebar({ item, headerAction }: { item: PrimaryNavI
               <SidebarMenuSkeleton />
             ) : (
               <SidebarMenu>
-                {group.items.map((provider) => (
-                  <SidebarMenuItem key={provider.id}>
-                    <SidebarMenuButton
-                      isActive={location.pathname === `/models/${provider.id}`}
-                      onClick={() => navigate(`/models/${provider.id}`)}
-                    >
-                      {provider.title}
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
+                {group.items.map((provider) => {
+                  const Logo = getProviderLogo(provider.providerType)
+                  return (
+                    <SidebarMenuItem key={provider.id}>
+                      <SidebarMenuButton
+                        isActive={location.pathname === `/models/${provider.id}`}
+                        onClick={() => navigate(`/models/${provider.id}`)}
+                      >
+                        <Logo className={`size-4 shrink-0 ${getProviderBrandClassName(provider.providerType)}`} />
+                        <span className="truncate">{provider.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )
+                })}
               </SidebarMenu>
             )}
           </SidebarGroup>

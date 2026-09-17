@@ -127,8 +127,8 @@ export const modelService = {
       }),
     )
   },
-  save: async (provider: ProviderConfigRecord & { modelsJson?: string }) => {
-    const models = provider.models ?? parseModels(provider.modelsJson ?? "[]")
+  save: async (provider: Omit<ProviderConfigRecord, "models"> & { models?: ProviderModelRecord[]; modelsJson?: string }) => {
+    const models = provider.models?.length ? provider.models : parseModels(provider.modelsJson ?? "[]")
     return toProvider(await saveModel({ ...provider, modelsJson: JSON.stringify(models) }))
   },
   remove: (providerId: string) => deleteModel(providerId),

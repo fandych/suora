@@ -19,15 +19,16 @@ import { getDocumentDisplayName } from "@/pages/documents/document-tree"
 
 type DocumentTreePanelProps = {
   collapsedIds: Set<string>
+  documentTitle: string
   entries: DocumentTreeEntry[]
-  onAddDirectory: (parentId: string) => void
-  onAddFile: (parentId: string) => void
+  onAddDirectory: (parentId: string | null) => void
+  onAddFile: (parentId: string | null) => void
   onDelete: (nodeId: string) => void
   onExport: (nodeId: string) => void
   onRename: (nodeId: string) => void
   onSelect: (nodeId: string) => void
   onToggle: (nodeId: string) => void
-  onUpload: (parentId: string) => void
+  onUpload: (parentId: string | null) => void
   selectedNodeId: string
 }
 
@@ -36,6 +37,7 @@ const actionButtonClassName = "shrink-0 opacity-0 group-hover:opacity-100"
 
 export function DocumentTreePanel({
   collapsedIds,
+  documentTitle,
   entries,
   onAddDirectory,
   onAddFile,
@@ -49,6 +51,32 @@ export function DocumentTreePanel({
 }: DocumentTreePanelProps) {
   return (
     <div className="min-h-0 h-full overflow-y-auto p-2">
+      <div className={rowClass}>
+        <span className="flex min-w-0 flex-1 items-center gap-1">
+          <span className="size-4" />
+          <FolderIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="truncate font-medium">{documentTitle}</span>
+        </span>
+        <DropdownMenu>
+          <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className={actionButtonClassName} />}>
+            <span>...</span>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-44 min-w-44">
+            <DropdownMenuItem onClick={() => onAddFile(null)}>
+              <FilePlus2Icon className="size-4" />
+              New file
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onAddDirectory(null)}>
+              <FolderPlusIcon className="size-4" />
+              New folder
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onUpload(null)}>
+              <UploadIcon className="size-4" />
+              Upload
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
       {entries.map(({ node, depth }) => {
         const isFolder = (node.type ?? "document") === "folder"
         const isCollapsed = collapsedIds.has(node.id)
@@ -58,7 +86,7 @@ export function DocumentTreePanel({
             <ContextMenuTrigger className="block">
               <div className={`${rowClass} ${node.id === selectedNodeId ? "bg-muted" : ""}`}>
                 <button className="flex min-w-0 flex-1 items-center gap-1 text-left" onClick={() => onSelect(node.id)}>
-                  <span className="flex min-w-0 items-center gap-1" style={{ paddingLeft: `${depth * 12}px` }}>
+                  <span className="flex min-w-0 items-center gap-1" style={{ paddingLeft: `${(depth + 1) * 12}px` }}>
                     {isFolder ? (
                       <span
                         className="flex size-4 items-center justify-center"

@@ -11,47 +11,51 @@ import type {
 import { getVersionLabel } from "@/services/versioning"
 import { parseArrayJson, parseJson } from "@/lib/serialization/json"
 
+type RawWorkflowPayload = {
+  workflow: WorkflowSummary | null
+  versions: Array<
+    WorkflowDefinition & {
+      definitionJson?: string
+      id: string
+      major: number
+      minor: number
+      isRelease: boolean
+      createdAt: number
+    }
+  >
+  invocations: Array<WorkflowInvocationRecord & { traceJson?: string }>
+}
+
+function toWorkflowDetail(payload: RawWorkflowPayload, versionId?: string): WorkflowDetail | null {
+  if (!payload.workflow) return null
+  const versions = payload.versions.map((version) => ({
+    ...version,
+    label: getVersionLabel(version),
+  })) as VersionOption[]
+  const selected = payload.versions.find((version) => version.id === versionId) ?? payload.versions[0]
+  return {
+    workflow: payload.workflow,
+    versions,
+    latestVersion: versions[0],
+    selectedVersion: versions.find((version) => version.id === selected?.id) ?? versions[0],
+    definition: parseJson(selected?.definitionJson, {
+      nodes: [],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    } as WorkflowDefinition),
+    invocations: payload.invocations.map((item) => ({
+      ...item,
+      traces: parseArrayJson<WorkflowInvocationRecord["traces"][number]>(item.traceJson, []),
+    })),
+  } satisfies WorkflowDetail
+}
+
 export const WorkflowApi = {
   listAll: () => window.app!.workflows.list() as Promise<WorkflowSummary[]>,
-  get: async (workflowId: string, versionId?: string) => {
-    const payload = (await window.app!.workflows.get(workflowId, versionId)) as {
-      workflow: WorkflowSummary | null
-      versions: Array<
-        WorkflowDefinition & {
-          definitionJson?: string
-          id: string
-          major: number
-          minor: number
-          isRelease: boolean
-          createdAt: number
-        }
-      >
-      invocations: Array<WorkflowInvocationRecord & { traceJson?: string }>
-    }
-    if (!payload.workflow) return null
-    const versions = payload.versions.map((version) => ({
-      ...version,
-      label: getVersionLabel(version),
-    })) as VersionOption[]
-    const selected = payload.versions.find((version) => version.id === versionId) ?? payload.versions[0]
-    return {
-      workflow: payload.workflow,
-      versions,
-      latestVersion: versions[0],
-      selectedVersion: versions.find((version) => version.id === selected?.id) ?? versions[0],
-      definition: parseJson(selected?.definitionJson, {
-        nodes: [],
-        edges: [],
-        viewport: { x: 0, y: 0, zoom: 1 },
-      } as WorkflowDefinition),
-      invocations: payload.invocations.map((item) => ({
-        ...item,
-        traces: parseArrayJson<WorkflowInvocationRecord["traces"][number]>(item.traceJson, []),
-      })),
-    } satisfies WorkflowDetail
-  },
-  create: () => window.app!.workflows.create() as Promise<WorkflowDetail>,
-  save: (payload: {
+  get: async (workflowId: string, versionId?: string) =>
+    toWorkflowDetail((await window.app!.workflows.get(workflowId, versionId)) as RawWorkflowPayload, versionId),
+  create: async () => toWorkflowDetail((await window.app!.workflows.create()) as RawWorkflowPayload) as WorkflowDetail,
+  save: async (payload: {
     id: string
     title: string
     summary: string
@@ -60,10 +64,13 @@ export const WorkflowApi = {
     selectedVersionId?: string
     publish?: boolean
   }) =>
-    window.app!.workflows.save({
-      ...payload,
-      definitionJson: JSON.stringify(payload.definition),
-    }) as Promise<WorkflowDetail>,
+    toWorkflowDetail(
+      (await window.app!.workflows.save({
+        ...payload,
+        definitionJson: JSON.stringify(payload.definition),
+      })) as RawWorkflowPayload,
+      payload.publish ? undefined : payload.selectedVersionId,
+    ) as WorkflowDetail,
   remove: (workflowId: string) => window.app!.workflows.delete(workflowId),
   run: (payload: WorkflowRunStartCommand) => window.app!.workflows.startRun(payload) as Promise<WorkflowRunAccepted>,
   cancelRun: (requestId: string) => window.app!.workflows.cancelRun(requestId),

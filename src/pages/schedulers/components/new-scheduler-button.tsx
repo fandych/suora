@@ -5,6 +5,7 @@ import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { SchedulerApi } from "@/services/scheduler-service"
+import { emitDataChanged } from "@/services/data-events"
 import { cn } from "@/lib/utils"
 
 export function NewSchedulerButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -15,6 +16,7 @@ export function NewSchedulerButton({ className, iconOnly = false }: { className?
     setIsCreating(true)
     try {
       const item = await SchedulerApi.create()
+      emitDataChanged("/schedulers")
       navigate(`/schedulers/${item.id}`)
     } finally {
       setIsCreating(false)

@@ -106,7 +106,10 @@ const DocumentsDetailPage = () => {
   })
 
   useEffect(() => {
-    if (documentId && !draft) void load(documentId, selectedVersionId)
+    if (documentId && draft?.document.id !== documentId) {
+      void load(documentId, selectedVersionId)
+      return
+    }
     if (!draft) return
     setSelectedVersionId(draft.selectedVersion.id)
     setSelectedNodeId((current) => {
@@ -352,6 +355,7 @@ const DocumentsDetailPage = () => {
             <ResizablePanel defaultSize={28} minSize={18} className="min-w-0">
               <DocumentTreePanel
                 collapsedIds={collapsedIds}
+                documentTitle={draft.document.title}
                 entries={visibleEntries}
                 onAddDirectory={(parentId) => {
                   setEntryDialogMode({ kind: "add-directory", parentId })

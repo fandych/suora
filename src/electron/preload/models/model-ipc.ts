@@ -19,7 +19,6 @@ export function registerModelIpc() {
     const provider = parseIpcInput(providerSaveSchema, value)
     return modelService.save({
       ...provider,
-      models: [],
       updatedAt: Date.now(),
     })
   })

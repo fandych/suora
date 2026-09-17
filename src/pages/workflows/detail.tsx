@@ -166,13 +166,10 @@ const WorkflowDetailPage = () => {
                 connectionRadius={28}
                 autoPanOnConnect
                 autoPanOnNodeDrag
-                selectionOnDrag
+                panOnDrag
+                selectionKeyCode="Shift"
                 selectionMode={SelectionMode.Partial}
-                panOnDrag={[1, 2]}
-                panOnScroll
-                panOnScrollMode="free"
-                zoomOnScroll={false}
-                zoomActivationKeyCode={["Control", "Meta"]}
+                zoomOnScroll
                 onlyRenderVisibleElements={controller.nodes.length > 80}
                 fitView={false}
               >
@@ -187,21 +184,10 @@ const WorkflowDetailPage = () => {
                   onClick={stopPanelEvent}
                 >
                   <WorkflowRevisionActions
-                    versions={workflowData.versions}
-                    selectedVersionId={workflowData.selectedVersion.id}
-                    onVersionChange={controller.setSelectedVersionId}
-                    canSave={controller.isDraftVersion && controller.hasUnsavedChanges}
-                    canPublish={
-                      controller.isDraftVersion &&
-                      !controller.hasUnsavedChanges &&
-                      controller.blockingIssues.length === 0
-                    }
-                    canTryRun={
-                      controller.isDraftVersion && !controller.isDryRunning && controller.blockingIssues.length === 0
-                    }
+                    canSave={controller.hasUnsavedChanges}
+                    canTryRun={!controller.isDryRunning && controller.blockingIssues.length === 0}
                     onOpenTryRun={() => controller.setInspectorMode("try-run")}
                     onSave={() => void controller.handleSave()}
-                    onPublish={controller.handlePublish}
                   />
                 </Panel>
 

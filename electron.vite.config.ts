@@ -13,7 +13,7 @@ function copyScriptWorker() {
   return {
     name: "copy-script-worker",
     closeBundle() {
-      const source = resolve(__dirname, "src/electron/integrations/script-worker.mjs")
+      const source = resolve(__dirname, "src/electron/app/integrations/script-worker.mjs")
       const target = resolve(__dirname, "out/main/script-worker.mjs")
       if (existsSync(source)) cpSync(source, target)
     },

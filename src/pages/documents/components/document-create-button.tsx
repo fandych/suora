@@ -27,7 +27,7 @@ export function DocumentCreateButton({ className, iconOnly = false }: DocumentCr
 
     setIsWorking(true)
     try {
-      const detail = await DocumentApi.create()
+      const detail = await DocumentApi.createWithMetadata({ title: title.trim(), summary: description.trim() })
       emitDataChanged("/documents")
       navigate(`/documents/${detail.document.id}`)
       setIsOpen(false)

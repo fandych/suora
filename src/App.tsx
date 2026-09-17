@@ -66,14 +66,12 @@ const App = () => {
     }
 
     const onWindowError = (event: ErrorEvent) => {
-      if (/^ResizeObserver loop (completed with undelivered notifications|limit exceeded)$/i.test(event.message.trim())) {
+      const message = (event.error instanceof Error ? event.error.message : event.message || String(event.error || "")).trim()
+      if (/^ResizeObserver loop (completed with undelivered notifications|limit exceeded)/i.test(message)) {
         return
       }
 
-      reportError(
-        "Unexpected error",
-        event.error instanceof Error ? event.error.message : event.message || String(event.error || "Unknown error"),
-      )
+      reportError("Unexpected error", message || "Unknown error")
     }
 
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {

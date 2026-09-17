@@ -5,6 +5,7 @@ import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { WorkflowApi } from "@/services/workflow-service"
+import { emitDataChanged } from "@/services/data-events"
 import { cn } from "@/lib/utils"
 
 export function NewWorkflowButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
@@ -15,6 +16,7 @@ export function NewWorkflowButton({ className, iconOnly = false }: { className?:
     setIsCreating(true)
     try {
       const detail = await WorkflowApi.create()
+      emitDataChanged("/workflows")
       navigate(`/workflows/${detail.workflow.id}`)
     } finally {
       setIsCreating(false)

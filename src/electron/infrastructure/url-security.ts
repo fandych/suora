@@ -16,7 +16,7 @@ function isPrivateAddress(address: string) {
   return true
 }
 
-export async function assertSafeHttpUrl(value: string, options?: { allowLocalNetwork?: boolean }) {
+export async function assertSafeHttpUrl(value: string, options?: { allowLocalNetwork?: boolean; skipDnsResolution?: boolean }) {
   let url: URL
   try {
     url = new URL(value)
@@ -33,8 +33,14 @@ export async function assertSafeHttpUrl(value: string, options?: { allowLocalNet
     return url
   }
 
-  if (BLOCKED_HOSTNAMES.has(hostname) || isPrivateAddress(hostname)) {
+  // Only reject when the hostname is a blocked name or a literal private IP.
+  // Domain names are classified after DNS resolution below.
+  if (BLOCKED_HOSTNAMES.has(hostname) || (net.isIP(hostname) !== 0 && isPrivateAddress(hostname))) {
     throw new Error("Private and local network URLs are not allowed.")
+  }
+
+  if (options?.skipDnsResolution) {
+    return url
   }
 
   try {

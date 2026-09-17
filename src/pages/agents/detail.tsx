@@ -1,21 +1,9 @@
-import { useEffect } from "react"
+import { useEffect, useState } from "react"
 import { useNavigate, useParams } from "react-router"
 import { EllipsisIcon, SlashIcon, Trash2Icon } from "lucide-react"
 
 import { emitDataChanged } from "@/services/data-events"
 import { useAgentDetailStore } from "@/stores/agent-detail-store"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogMedia,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -28,6 +16,7 @@ import {
 import { toast } from "@/components/ui/toast"
 import { AgentLogoBadge } from "@/pages/agents/components/agent-logo-badge"
 import PageHeader from "@/pages/components/page-header"
+import { ConfirmDeleteDialog } from "@/pages/components/confirm-delete-dialog"
 import { ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { AgentBindingsForm } from "@/pages/agents/components/agent-bindings-form"
 import { AgentGeneralPanel } from "@/pages/agents/components/agent-general-panel"
@@ -44,7 +33,6 @@ const AgentsDetailPage = () => {
     workflows,
     isLoading,
     isUpdatingAvailability,
-    isDeleting,
     error,
     load,
     updateDraft,
@@ -55,6 +43,7 @@ const AgentsDetailPage = () => {
     reload,
   } = useAgentDetailStore()
   const isReadOnly = Boolean(draft?.selectedVersion.isRelease)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
 
   useEffect(() => {
     if (agentId) void load(agentId)
@@ -83,6 +72,7 @@ const AgentsDetailPage = () => {
   const handleDelete = async () => {
     await remove()
     if (!useAgentDetailStore.getState().draft) {
+      setIsDeleteDialogOpen(false)
       emitDataChanged("/agents")
       navigate("/agents")
       toast.add({ title: "Agent deleted", type: "success" })
@@ -115,34 +105,10 @@ const AgentsDetailPage = () => {
                 {draft.agent.source === "custom" ? (
                   <>
                     <DropdownMenuSeparator />
-                    <AlertDialog>
-                      <AlertDialogTrigger render={<DropdownMenuItem variant="destructive" />}>
-                        <Trash2Icon />
-                        Delete
-                      </AlertDialogTrigger>
-                      <AlertDialogContent size="sm">
-                        <AlertDialogHeader>
-                          <AlertDialogMedia>
-                            <Trash2Icon />
-                          </AlertDialogMedia>
-                          <AlertDialogTitle>Delete agent</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This permanently deletes the custom agent and all of its versions. This action cannot be
-                            undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            variant="destructive"
-                            disabled={isDeleting}
-                            onClick={() => void handleDelete()}
-                          >
-                            {isDeleting ? "Deleting..." : "Delete"}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                    <DropdownMenuItem variant="destructive" onClick={() => setIsDeleteDialogOpen(true)}>
+                      <Trash2Icon />
+                      Delete
+                    </DropdownMenuItem>
                   </>
                 ) : null}
               </DropdownMenuContent>
@@ -178,6 +144,13 @@ const AgentsDetailPage = () => {
           ) : null}
         </div>
       </div>
+      <ConfirmDeleteDialog
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={() => void handleDelete()}
+        title="Delete agent"
+        description="This permanently deletes the custom agent and all of its versions. This action cannot be undone."
+      />
     </div>
   )
 }

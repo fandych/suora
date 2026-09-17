@@ -25,6 +25,8 @@ export const IntegrationApi = {
   setEnabled: (payload: { id: string; enabled: boolean }) =>
     window.app!.integrations.setEnabled(payload) as Promise<IntegrationSummary>,
   execute: (payload: unknown) => window.app!.integrations.execute(payload) as Promise<IntegrationExecutionResult>,
+  recordExecution: (payload: { id: string; versionId: string; status: string; input: string; output: string }) =>
+    window.app!.integrations.recordExecution(payload),
   fetchApiDoc: (sourceUrl: string) => window.app!.integrations.fetchApiDoc(sourceUrl),
 }
 

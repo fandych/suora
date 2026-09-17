@@ -11,6 +11,7 @@ import {
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
 import { WorkflowApi } from "@/services/workflow-service"
+import { subscribeToDataChanges } from "@/services/data-events"
 import type { PrimaryNavItem } from "@/pages/nav-config"
 export default function WorkflowSidebar({
   item,
@@ -25,9 +26,15 @@ export default function WorkflowSidebar({
   const location = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
-    void WorkflowApi.listAll()
-      .then(setItems)
-      .finally(() => setLoading(false))
+    const loadItems = () =>
+      WorkflowApi.listAll()
+        .then(setItems)
+        .finally(() => setLoading(false))
+
+    void loadItems()
+    return subscribeToDataChanges((route) => {
+      if (route === "/workflows") void loadItems()
+    })
   }, [])
   return (
     <Sidebar collapsible="none" className="hidden min-h-0 flex-1 border-l md:flex">

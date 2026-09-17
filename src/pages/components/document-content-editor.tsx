@@ -1,4 +1,4 @@
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 
 import MonacoEditor from "@monaco-editor/react"
 import { EditorContent, useEditor } from "@tiptap/react"
@@ -41,6 +41,7 @@ type DocumentContentEditorProps = {
 }
 
 const DocumentContentEditor = ({ mode, value, onChange, sourceLanguage = "html" }: DocumentContentEditorProps) => {
+  const lastEmittedRef = useRef<string | null>(null)
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -59,7 +60,9 @@ const DocumentContentEditor = ({ mode, value, onChange, sourceLanguage = "html" 
     content: markdownToTiptapHtml(value),
     immediatelyRender: false,
     onUpdate: ({ editor: nextEditor }) => {
-      onChange(tiptapJsonToMarkdown(nextEditor.getJSON() as Parameters<typeof tiptapJsonToMarkdown>[0]))
+      const markdown = tiptapJsonToMarkdown(nextEditor.getJSON() as Parameters<typeof tiptapJsonToMarkdown>[0])
+      lastEmittedRef.current = markdown
+      onChange(markdown)
     },
     editorProps: {
       attributes: {
@@ -71,6 +74,13 @@ const DocumentContentEditor = ({ mode, value, onChange, sourceLanguage = "html" 
 
   useEffect(() => {
     if (!editor || mode !== "rich") {
+      return
+    }
+
+    // Skip re-syncing the editor from markdown when the incoming value is the
+    // editor's own output; otherwise the markdown round-trip would drop blank
+    // lines the user just typed.
+    if (value === lastEmittedRef.current) {
       return
     }
 

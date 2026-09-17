@@ -13,6 +13,7 @@ import {
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
 import { ChannelApi } from "@/services/channel-service"
+import { subscribeToDataChanges } from "@/services/data-events"
 import type { PrimaryNavItem } from "@/pages/nav-config"
 import { getChannelPlatformSidebarLogo } from "@/pages/channels/components/channel-utils"
 import type { ChannelSummary } from "@/types/channel"
@@ -38,20 +39,26 @@ export default function ChannelSidebar({
   const location = useLocation()
   const navigate = useNavigate()
   useEffect(() => {
-    void ChannelApi.listAll()
-      .then((next) =>
-        setItems(
-          next.map((x) => ({
-            id: x.id,
-            title: x.title,
-            platform: x.platform,
-            customPlatformName: x.customPlatformName,
-            bindingState: x.bindingState,
-            catalogId: x.catalogId,
-          })),
-        ),
-      )
-      .finally(() => setLoading(false))
+    const loadItems = () =>
+      ChannelApi.listAll()
+        .then((next) =>
+          setItems(
+            next.map((x) => ({
+              id: x.id,
+              title: x.title,
+              platform: x.platform,
+              customPlatformName: x.customPlatformName,
+              bindingState: x.bindingState,
+              catalogId: x.catalogId,
+            })),
+          ),
+        )
+        .finally(() => setLoading(false))
+
+    void loadItems()
+    return subscribeToDataChanges((route) => {
+      if (route === "/channels") void loadItems()
+    })
   }, [])
   const filteredItems = items.filter((x) =>
     `${x.title} ${x.platform}`.toLowerCase().includes(query.toLowerCase()),

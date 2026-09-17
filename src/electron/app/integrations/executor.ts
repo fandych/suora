@@ -143,14 +143,123 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
   }
 }
 
-async function executeMcpIntegration(payload: IntegrationExecutePayload) {
-  const config = payload.config as { endpoint?: string; launchCommand?: string }
-  if (config.endpoint) {
-    const probe = await executeHttpIntegration({
-      kind: "http",
-      config: { method: "GET", url: config.endpoint, headersJson: "{}", queryJson: "{}", bodyJson: "{}" },
+function parseMcpAuthHeaders(authConfigJson?: string): Record<string, string> {
+  const headers: Record<string, string> = {}
+  try {
+    const parsed = JSON.parse(authConfigJson || "{}") as {
+      token?: string
+      apiKey?: string
+      headerName?: string
+      headers?: Record<string, string>
+    }
+    if (parsed.token) headers["authorization"] = `Bearer ${parsed.token}`
+    if (parsed.apiKey) headers[parsed.headerName || "x-api-key"] = parsed.apiKey
+    if (parsed.headers && typeof parsed.headers === "object") {
+      for (const [key, value] of Object.entries(parsed.headers)) headers[key.toLowerCase()] = String(value)
+    }
+  } catch {
+    // Ignore malformed auth config; proceed without extra headers.
+  }
+  return headers
+}
+
+function parseMcpResponseBody(contentType: string, text: string): unknown {
+  if (contentType.includes("text/event-stream")) {
+    const dataLines = text
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim())
+      .filter(Boolean)
+    for (const line of dataLines.reverse()) {
+      try {
+        return JSON.parse(line)
+      } catch {
+        // Try the next SSE data frame.
+      }
+    }
+    return null
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+async function callMcpHttpEndpoint(endpoint: string, authConfigJson?: string) {
+  const url = await assertSafeHttpUrl(endpoint)
+  const baseHeaders: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+    ...parseMcpAuthHeaders(authConfigJson),
+  }
+  const rpc = async (
+    headers: Record<string, string>,
+    method: string,
+    params: Record<string, unknown> | undefined,
+    id: number | null,
+  ) => {
+    const message: Record<string, unknown> = { jsonrpc: "2.0", method }
+    if (id !== null) message.id = id
+    if (params) message.params = params
+    return requestHttp(url.toString(), {
+      method: "POST",
+      headers,
+      body: JSON.stringify(message),
+      timeoutMs: 30_000,
     })
-    return { ...probe, body: `MCP endpoint responded with status ${probe.status}\n\n${probe.body}` }
+  }
+  const initResponse = await rpc(
+    baseHeaders,
+    "initialize",
+    {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "suora", version: "1.0.0" },
+    },
+    1,
+  )
+  if (initResponse.status >= 400) {
+    return {
+      ok: false,
+      status: initResponse.status,
+      body: `MCP initialize failed with status ${initResponse.status}\n\n${initResponse.text}`,
+    }
+  }
+  const sessionHeaderKey = Object.keys(initResponse.headers).find((key) => key.toLowerCase() === "mcp-session-id")
+  const sessionId = sessionHeaderKey ? initResponse.headers[sessionHeaderKey] : undefined
+  const sessionHeaders = { ...baseHeaders }
+  if (typeof sessionId === "string" && sessionId) sessionHeaders["mcp-session-id"] = sessionId
+  await rpc(sessionHeaders, "notifications/initialized", undefined, null)
+  const toolsResponse = await rpc(sessionHeaders, "tools/list", {}, 2)
+  const contentType = String(toolsResponse.headers["content-type"] ?? "")
+  const parsed = parseMcpResponseBody(contentType, toolsResponse.text) as {
+    result?: { tools?: unknown[] }
+    error?: { message?: string }
+  } | null
+  if (parsed?.error) {
+    return {
+      ok: false,
+      status: toolsResponse.status >= 400 ? toolsResponse.status : 500,
+      body: `MCP tools/list error: ${parsed.error.message ?? "Unknown error"}`,
+    }
+  }
+  const tools = parsed?.result?.tools ?? []
+  return {
+    ok: toolsResponse.status < 400,
+    status: toolsResponse.status,
+    body: JSON.stringify({ sessionId: sessionId ?? null, toolCount: tools.length, tools }, null, 2),
+  }
+}
+
+async function executeMcpIntegration(payload: IntegrationExecutePayload) {
+  const config = payload.config as {
+    endpoint?: string
+    launchCommand?: string
+    authConfigJson?: string
+  }
+  if (config.endpoint) {
+    return callMcpHttpEndpoint(config.endpoint, config.authConfigJson)
   }
   if (config.launchCommand) {
     const parsedCommand = parseWorkspaceCommand(config.launchCommand)
