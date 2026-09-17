@@ -63,7 +63,7 @@ export async function ensureChat(payload: {
   chatbotId: string
   summary?: string
   sourceType?: string
-  sourceRef?: string
+  sourceRef?: string | null
 }) {
   const database = getDrizzleDatabase()
   const [existing] = await database.select().from(chats).where(eq(chats.id, payload.chatId)).limit(1)

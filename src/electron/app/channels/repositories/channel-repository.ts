@@ -5,6 +5,10 @@ import { channels } from "@/drizzle/schema"
 import { parseChannelDetailRow } from "@/electron/app/channels/repositories/channel-store"
 import type { ChannelDetail } from "@/types/channel"
 import { normalizeChannelRuntimeState } from "@/electron/app/channels/application/channel-status-policy"
+import {
+  preserveConfiguredChannelCredentials,
+  protectChannelCredentials,
+} from "@/electron/app/channels/repositories/channel-credential-serialization"
 
 export async function listChannels() {
   const rows = await getDrizzleDatabase().select().from(channels).orderBy(desc(channels.updatedAt))
@@ -17,8 +21,16 @@ export async function getChannel(id: string) {
 }
 
 export async function saveChannel(detail: ChannelDetail) {
-  const channel = normalizeChannelRuntimeState(detail.channel)
   const database = getDrizzleDatabase()
+  const current = await getChannel(detail.channel.id)
+  if (!current) return null
+  const channel = normalizeChannelRuntimeState(
+    preserveConfiguredChannelCredentials(
+      detail.channel as Record<string, unknown>,
+      current.channel as Record<string, unknown>,
+    ) as ChannelDetail["channel"],
+  )
+  const protectedChannel = protectChannelCredentials(channel as Record<string, unknown>)
   await database
     .update(channels)
     .set({
@@ -28,13 +40,13 @@ export async function saveChannel(detail: ChannelDetail) {
       status: channel.status,
       connectionMode: channel.connectionMode,
       webhookPath: channel.webhookPath,
-      webhookSecret: channel.webhookSecret,
+      webhookSecret: String(protectedChannel.webhookSecret ?? ""),
       autoReply: channel.autoReply,
       replyAgentId: channel.replyAgentId,
       createdAt: channel.createdAt,
       lastMessageAt: channel.lastMessageAt ?? null,
       messageCount: channel.messageCount,
-      configJson: JSON.stringify(channel),
+      configJson: JSON.stringify(protectedChannel),
       runtimeJson: JSON.stringify(detail.runtime),
       updatedAt: Date.now(),
     })

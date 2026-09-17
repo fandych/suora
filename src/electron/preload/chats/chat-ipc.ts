@@ -3,7 +3,7 @@ import { z } from "zod"
 import { chatApplicationService } from "@/electron/app/chats/service"
 import type { ChatRuntimeSettingsPayload } from "@/types/electron"
 import { entityIdSchema, parseIpcInput } from "@/electron/preload/system/ipc-input-schemas"
-import { chatEnsureSchema } from "@/electron/preload/chats/chat-ipc-schemas"
+import { chatEnsureSchema, chatSessionSettingsSchema } from "@/electron/preload/chats/chat-ipc-schemas"
 import { cancelChatRuntime, startChatRuntime } from "@/electron/app/chats/runtime"
 import { retryChatToolActivity } from "@/electron/app/chats/tool-retry"
 
@@ -39,9 +39,7 @@ export function registerChatIpc() {
     chatApplicationService.getSessionSettings(typeof value === "string" ? value : null),
   )
   ipcMain.handle("chats:saveSessionSettings", (_event, value: unknown) =>
-    chatApplicationService.saveSessionSettings(
-      value as Parameters<typeof chatApplicationService.saveSessionSettings>[0],
-    ),
+    chatApplicationService.saveSessionSettings(parseIpcInput(chatSessionSettingsSchema, value)),
   )
   ipcMain.handle("chats:sendMessage", (event, value: unknown) => startChatRuntime(value, event.sender))
   ipcMain.handle("chats:runtime:cancel", (_event, value: unknown) =>

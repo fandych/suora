@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   readWorkflowSchemaParameters,
   writeWorkflowSchemaParameters,
-} from "@/pages/workflows/components/workflow-schema-contract"
+} from "@/lib/workflow/schema-contract"
 
 describe("workflow schema contract", () => {
   it("preserves nested contracts and schema metadata while editing a root field", () => {

@@ -39,7 +39,7 @@ export function useWorkflowDetailController() {
   const navigate = useNavigate()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(
-    () => WorkflowApi.get(workflowId ?? ""),
+    () => WorkflowApi.get(workflowId ?? "", selectedVersionId),
     [workflowId, selectedVersionId],
   )
   const { data: agentsData } = useAsyncResource(() => AgentApi.listAvailable(), [])

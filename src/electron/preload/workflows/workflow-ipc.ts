@@ -5,8 +5,11 @@ import { workflowInvocationSchema, workflowSaveSchema } from "@/electron/preload
 
 export function registerWorkflowIpc() {
   ipcMain.handle("workflows:list", () => workflowService.list())
-  ipcMain.handle("workflows:get", (_event, workflowId: unknown) =>
-    workflowService.get(parseIpcInput(entityIdSchema, workflowId)),
+  ipcMain.handle("workflows:get", (_event, workflowId: unknown, versionId?: unknown) =>
+    workflowService.get(
+      parseIpcInput(entityIdSchema, workflowId),
+      versionId === undefined ? undefined : parseIpcInput(entityIdSchema, versionId),
+    ),
   )
   ipcMain.handle("workflows:create", () => workflowService.create())
   ipcMain.handle("workflows:save", (_event, value: unknown) =>

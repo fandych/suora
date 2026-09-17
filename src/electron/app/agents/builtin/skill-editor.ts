@@ -18,6 +18,7 @@ export const skillEditor: AgentPayload = {
       minor: 0,
       isRelease: true,
       createdAt: now,
+      label: "1.0 (Release)",
       configJson: JSON.stringify({
         instructions: "You are the Skill Editor. Manage only private workspace skills.",
         providerId: "",

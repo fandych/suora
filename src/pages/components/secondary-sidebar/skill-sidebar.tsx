@@ -40,6 +40,7 @@ export default function SkillSidebar({ item, headerAction }: { item: PrimaryNavI
   useEffect(() => {
     const loadItems = () =>
       Promise.all([SkillApi.listAll(), SkillApi.listExternal()])
+        .then(([localItems, externalItems]) => [localItems, externalItems] as [SkillSidebarItem[], SkillSidebarItem[]])
         .then(([localItems, externalItems]) => setItems([...localItems, ...externalItems]))
         .finally(() => setLoading(false))
 

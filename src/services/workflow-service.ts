@@ -14,7 +14,7 @@ import { parseArrayJson, parseJson } from "@/lib/serialization/json"
 export const WorkflowApi = {
   listAll: () => window.app!.workflows.list() as Promise<WorkflowSummary[]>,
   get: async (workflowId: string, versionId?: string) => {
-    const payload = (await window.app!.workflows.get(workflowId)) as {
+    const payload = (await window.app!.workflows.get(workflowId, versionId)) as {
       workflow: WorkflowSummary | null
       versions: Array<
         WorkflowDefinition & {

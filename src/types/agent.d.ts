@@ -35,9 +35,6 @@ export type ProviderPreset = {
 }
 export type SkillConfigRecord = {
   skill: SkillSummary
-  versions: VersionOption[]
-  latestVersion: VersionOption
-  selectedVersion: VersionOption
   files: SkillFileRecord[]
 }
 export type AgentConfigRecord = {

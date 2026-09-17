@@ -6,7 +6,7 @@ export { documentVersions, documents } from "@/drizzle/schema/documents"
 export { integrationExecutions, integrationVersions, integrations } from "@/drizzle/schema/integrations"
 export { providers } from "@/drizzle/schema/providers"
 export { schedulerRuns, schedulers } from "@/drizzle/schema/schedulers"
-export { skillVersions, skills } from "@/drizzle/schema/skills"
+export { skills } from "@/drizzle/schema/skills"
 export { workflowInvocations, workflowVersions, workflows } from "@/drizzle/schema/workflows"
 
 import { agentVersions, agents } from "@/drizzle/schema/agents"
@@ -17,7 +17,7 @@ import { documentVersions, documents } from "@/drizzle/schema/documents"
 import { integrationExecutions, integrationVersions, integrations } from "@/drizzle/schema/integrations"
 import { providers } from "@/drizzle/schema/providers"
 import { schedulerRuns, schedulers } from "@/drizzle/schema/schedulers"
-import { skillVersions, skills } from "@/drizzle/schema/skills"
+import { skills } from "@/drizzle/schema/skills"
 import { workflowInvocations, workflowVersions, workflows } from "@/drizzle/schema/workflows"
 
 export const schema = {
@@ -31,7 +31,6 @@ export const schema = {
   documentVersions,
   providers,
   skills,
-  skillVersions,
   schedulers,
   schedulerRuns,
   chats,

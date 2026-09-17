@@ -105,9 +105,8 @@ contextBridge.exposeInMainWorld("app", {
     listExternal: () => ipcRenderer.invoke("skills:listExternal"),
     get: (skillId: string) => ipcRenderer.invoke("skills:get", skillId),
     getExternal: (skillId: string) => ipcRenderer.invoke("skills:getExternal", skillId),
-    getFileTree: (skillId: string, versionId?: string) => ipcRenderer.invoke("skills:getFileTree", skillId, versionId),
-    getFile: (skillId: string, filePath: string, versionId?: string) =>
-      ipcRenderer.invoke("skills:getFile", skillId, filePath, versionId),
+    getFileTree: (skillId: string) => ipcRenderer.invoke("skills:getFileTree", skillId),
+    getFile: (skillId: string, filePath: string) => ipcRenderer.invoke("skills:getFile", skillId, filePath),
     create: () => ipcRenderer.invoke("skills:create"),
     save: (payload: unknown) => ipcRenderer.invoke("skills:save", payload),
     delete: (skillId: string) => ipcRenderer.invoke("skills:delete", skillId),

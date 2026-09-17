@@ -9,7 +9,7 @@ type SkillDetailState = {
   isSaving: boolean
   isDeleting: boolean
   error: Error | null
-  load: (skillId: string, versionId?: string) => Promise<void>
+  load: (skillId: string) => Promise<void>
   updateDraft: (draft: SkillDetail) => void
   updateFiles: (files: SkillDetail["files"]) => void
   updateSkill: (patch: Partial<SkillDetail["skill"]>) => void
@@ -28,10 +28,10 @@ export const useSkillDetailStore = create<SkillDetailState>((set, get) => ({
   isSaving: false,
   isDeleting: false,
   error: null,
-  load: async (skillId, versionId) => {
+  load: async (skillId) => {
     set({ skillId, isLoading: true, error: null })
     try {
-      const draft = await SkillApi.getDetail(skillId, versionId)
+      const draft = await SkillApi.getDetail(skillId)
       set({ draft, isLoading: false })
     } catch (error) {
       set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) })
@@ -75,7 +75,6 @@ export const useSkillDetailStore = create<SkillDetailState>((set, get) => ({
         source: draft.skill.source,
         summary: draft.skill.summary,
         files: draft.files,
-        selectedVersionId: draft.selectedVersion.id,
       })
       set({ draft: { ...saved, files: saved.files }, isSaving: false })
       return { ...saved, files: saved.files }
@@ -96,7 +95,7 @@ export const useSkillDetailStore = create<SkillDetailState>((set, get) => ({
     }
   },
   reload: async () => {
-    const { skillId, draft } = get()
-    if (skillId) await get().load(skillId, draft?.selectedVersion.id)
+    const { skillId } = get()
+    if (skillId) await get().load(skillId)
   },
 }))

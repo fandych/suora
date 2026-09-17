@@ -32,6 +32,8 @@ type IntegrationHttpEndpointsPanelProps = {
   onTryRun: (endpointId: string) => void
 }
 
+const API_DOC_IMPORT_TIMEOUT_MS = 35_000
+
 function createDraftFromEndpoint(endpoint?: HttpEndpointConfig) {
   return createHttpEndpoint(endpoint)
 }
@@ -134,9 +136,21 @@ export function IntegrationHttpEndpointsPanel({
       return
     }
 
+    setImportError(null)
     setIsFetchingApiDoc(true)
     try {
-      const source = await window.app?.integrations.fetchApiDoc(openApiUrl.trim())
+      if (!window.app?.integrations.fetchApiDoc) {
+        throw new Error("API documentation import is available only in the desktop application.")
+      }
+      const source = await Promise.race([
+        window.app.integrations.fetchApiDoc(openApiUrl.trim()),
+        new Promise<never>((_resolve, reject) => {
+          window.setTimeout(
+            () => reject(new Error("API documentation import timed out after 35 seconds.")),
+            API_DOC_IMPORT_TIMEOUT_MS,
+          )
+        }),
+      ])
       if (typeof source !== "string" || !source.trim()) {
         throw new Error("The API doc URL returned an empty response.")
       }

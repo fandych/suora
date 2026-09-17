@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { deriveChatBrowserInteractionState } from "@/pages/chats/chat-browser-status"
+import { deriveChatBrowserInteractionState } from "@/lib/chat/browser-status"
 
 describe("chat browser interaction state", () => {
   it("does not show a browser state for an unrelated chat", () => {

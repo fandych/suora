@@ -103,6 +103,7 @@ export async function runChatAgent(
   const agent = new ToolLoopAgent({
     model: createModel(settings),
     instructions:
+      settings.model.systemPrompt ||
       "You are a helpful workspace assistant. Use workspace tools when they help answer grounded questions.",
     stopWhen: stepCountIs(normalizeChatAgentMaxSteps(settings.maxSteps)),
     tools: {

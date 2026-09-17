@@ -22,7 +22,7 @@ const SkillsPage = () => {
           {!isLoading && !error && data?.length ? (
             <SummaryCardGrid
               emptyTitle="No skills yet"
-              emptyDescription="Create the first skill package to store prompt files and release versions."
+              emptyDescription="Create the first skill package to store prompt files."
               items={data}
               renderItem={(skill) => (
                 <SkillCard key={skill.id} skill={skill} onOpen={(nextSkillId) => navigate(`/skills/${nextSkillId}`)} />
@@ -32,7 +32,7 @@ const SkillsPage = () => {
           {!isLoading && !error && data?.length === 0 ? (
             <EmptyCard
               title="No skills yet"
-              description="Create the first skill package to store prompt files and release versions."
+              description="Create the first skill package to store prompt files."
             />
           ) : null}
         </div>

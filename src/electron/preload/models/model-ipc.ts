@@ -15,7 +15,14 @@ export function registerModelIpc() {
   ipcMain.handle("models:create", (_event, value?: unknown) =>
     modelService.create(parseIpcInput(providerCreateSchema, value ?? {}).providerType),
   )
-  ipcMain.handle("models:save", (_event, value: unknown) => modelService.save(parseIpcInput(providerSaveSchema, value)))
+  ipcMain.handle("models:save", (_event, value: unknown) => {
+    const provider = parseIpcInput(providerSaveSchema, value)
+    return modelService.save({
+      ...provider,
+      models: [],
+      updatedAt: Date.now(),
+    })
+  })
   ipcMain.handle("models:delete", (_event, id: unknown) => modelService.remove(parseIpcInput(entityIdSchema, id)))
   ipcMain.handle("models:discover", async (_event, value: unknown) => {
     const payload = parseIpcInput(providerDiscoverySchema, value)
@@ -43,7 +50,8 @@ export function registerModelIpc() {
     modelService.allowsNoKey(parseIpcInput(providerTypeSchema, providerType)),
   )
   ipcMain.handle("models:configured", () => modelService.configured())
-  ipcMain.handle("models:preset:discoveryState", (_event, provider: unknown) =>
-    modelService.discoveryState(provider as never),
-  )
+  ipcMain.handle("models:preset:discoveryState", (_event, provider: unknown) => {
+    const payload = parseIpcInput(providerDiscoverySchema, provider)
+    return modelService.discoveryState(payload)
+  })
 }

@@ -12,6 +12,7 @@ import {
 import { ChatApi } from "@/services/chat-service"
 import { subscribeToChatRuntime as subscribeToElectronChatRuntime } from "@/services/chat-runtime-listener"
 import { createChat, getChatDetail, saveChatSessionSettings } from "@/services/chat-service"
+import { hasAppBridge } from "@/services/bridge"
 
 export type ChatRuntimeSnapshot = {
   isResponding: boolean
@@ -163,7 +164,7 @@ export function clearChatRuntime(chatId: string | null) {
 function beginChatRun(chatId: string, runId: string | null) {
   const entry = getOrCreateEntry(chatId)
   if (entry.isResponding) {
-    if (!entry.runId && runId) {
+    if (runId && (!entry.runId || entry.runId === runId)) {
       setEntryState(chatId, { runId })
       return
     }
@@ -265,7 +266,9 @@ function handleRuntimeEvent(payload: Parameters<Parameters<typeof subscribeToEle
   }
 }
 
-subscribeToElectronChatRuntime(handleRuntimeEvent)
+if (hasAppBridge()) {
+  subscribeToElectronChatRuntime(handleRuntimeEvent)
+}
 
 export async function startChatRun(input: StartChatRunInput) {
   let workingChatId = input.activeChatId

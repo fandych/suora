@@ -31,5 +31,10 @@ export const executeHttpNode: WorkflowNodeExecutor = async (node, context) => {
     authConfigJson: "{}",
     parameterSchemaJson: "{}",
   } satisfies HttpIntegrationConfig
-  return runtime.executeIntegration(config, interpolateJson(node.data.bodyJson), node.data.integrationId)
+  const result = await runtime.executeIntegration(config, interpolateJson(node.data.bodyJson), node.data.integrationId)
+  if (result && typeof result === "object" && "ok" in result && result.ok === false) {
+    const error = "error" in result && typeof result.error === "string" ? result.error : "Integration execution failed."
+    throw new Error(error)
+  }
+  return result
 }

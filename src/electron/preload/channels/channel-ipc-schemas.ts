@@ -37,6 +37,42 @@ export const channelDebugMessageSchema = z.object({
   content: message,
 })
 
+export const channelCreateSchema = z
+  .object({
+    providerId: identifier.optional(),
+    modelId: identifier.optional(),
+  })
+  .optional()
+
+export const channelDetailSchema = z.object({
+  channel: z
+    .object({
+      id: identifier,
+      title: z.string().trim().min(1).max(512),
+      platform: z.string().trim().min(1).max(128),
+      enabled: z.boolean(),
+      status: z.enum(["inactive", "active", "error"]),
+      connectionMode: z.enum(["webhook", "stream"]),
+      webhookPath: z.string().trim().min(1).max(2_048),
+      webhookSecret: z.string().max(16_384),
+      autoReply: z.boolean(),
+      replyAgentId: z.string().max(256),
+      createdAt: z.number().finite().nonnegative(),
+      updatedAt: z.number().finite().nonnegative(),
+      lastMessageAt: z.number().finite().nonnegative().optional(),
+      messageCount: z.number().int().nonnegative(),
+    })
+    .passthrough(),
+  runtime: z
+    .object({
+      messages: z.array(z.unknown()).max(10_000),
+      users: z.array(z.unknown()).max(10_000),
+      health: z.record(z.string(), z.unknown()),
+      debugLog: z.array(z.unknown()).max(10_000),
+    })
+    .passthrough(),
+})
+
 export const wechatLoginStartSchema = z.object({
   channelId: identifier.optional(),
   force: z.boolean().optional().default(false),

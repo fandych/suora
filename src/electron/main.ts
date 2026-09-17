@@ -8,6 +8,7 @@ import { configureAutoUpdater } from "@/electron/infrastructure/updater-service"
 import { createWindow } from "@/electron/infrastructure/main-window"
 import { configureAppStoragePaths, ensureWorkspace } from "@/electron/infrastructure/workspace-service"
 import { setupIpc } from "@/electron/preload/index"
+import { schedulerRuntime } from "@/electron/app/schedulers/runtime"
 
 configureAppStoragePaths()
 const electronApp = createElectronApp()
@@ -53,6 +54,7 @@ process.on("unhandledRejection", (reason) => {
 })
 
 app.on("before-quit", () => {
+  schedulerRuntime.stop()
   try {
     closeBrowserWindow()
   } catch {

@@ -1,5 +1,5 @@
-import type { SkillConfigRecord, SkillSummary } from "@/types/agent"
-import type { VersionOption } from "@/types/version"
+import type { SkillConfigRecord } from "@/types/agent"
+import type { SkillSummary } from "@/types/document"
 import {
   createSkill,
   deleteSkill,
@@ -14,29 +14,11 @@ import {
   serializeSkillFiles,
 } from "@/electron/app/skills/file-service"
 
-type SkillVersionRow = {
-  id: string
-  major: number
-  minor: number
-  isRelease: boolean
-  createdAt: number
-  filesJson: string
-}
-
-function mapVersion(version: SkillVersionRow): VersionOption {
-  return { ...version, label: `${version.major}.${version.minor}${version.isRelease ? " (Release)" : ""}` }
-}
-
-function toDetail(payload: { skill: SkillSummary | null; versions: SkillVersionRow[] }): SkillConfigRecord | null {
+function toDetail(payload: { skill: (SkillSummary & { filesJson: string }) | null }): SkillConfigRecord | null {
   if (!payload.skill) return null
-  const versions = payload.versions.map(mapVersion)
-  const selectedVersion = versions[0]
   return {
     skill: payload.skill,
-    versions,
-    latestVersion: selectedVersion,
-    selectedVersion,
-    files: parseSkillFiles(payload.versions[0]?.filesJson),
+    files: parseSkillFiles(payload.skill.filesJson),
   }
 }
 
@@ -52,31 +34,25 @@ export const skillService = {
       }),
     ),
   remove: (skillId: string) => deleteSkill(skillId),
-  async getFileTree(skillId: string, versionId?: string) {
+  async getFileTree(skillId: string) {
     const detail = await this.get(skillId)
     if (!detail) throw new Error("Skill was not found.")
-    const version = versionId ? detail.versions.find((item) => item.id === versionId) : detail.selectedVersion
-    const payload = await getSkill(skillId)
-    const row = payload.versions.find((item) => item.id === version?.id) ?? payload.versions[0]
     return buildSkillFileTree(
       detail.skill.id,
       detail.skill.title,
       detail.skill.summary,
-      parseSkillFiles(row?.filesJson),
+      detail.files,
     )
   },
-  async getFile(skillId: string, filePath: string, versionId?: string) {
+  async getFile(skillId: string, filePath: string) {
     const detail = await this.get(skillId)
     if (!detail) throw new Error("Skill was not found.")
-    const version = versionId ? detail.versions.find((item) => item.id === versionId) : detail.selectedVersion
-    const payload = await getSkill(skillId)
-    const row = payload.versions.find((item) => item.id === version?.id) ?? payload.versions[0]
     return getSkillFileContent(
       detail.skill.id,
       detail.skill.title,
       detail.skill.summary,
-      row?.createdAt ?? detail.skill.updatedAt,
-      parseSkillFiles(row?.filesJson),
+      detail.skill.updatedAt,
+      detail.files,
       filePath,
     )
   },

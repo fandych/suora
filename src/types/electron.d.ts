@@ -93,8 +93,8 @@ declare global {
         listExternal: () => Promise<unknown>
         get: (skillId: string) => Promise<unknown>
         getExternal: (skillId: string) => Promise<unknown>
-        getFileTree: (skillId: string, versionId?: string) => Promise<unknown>
-        getFile: (skillId: string, filePath: string, versionId?: string) => Promise<unknown>
+        getFileTree: (skillId: string) => Promise<unknown>
+        getFile: (skillId: string, filePath: string) => Promise<unknown>
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (skillId: string) => Promise<unknown>
@@ -121,7 +121,7 @@ declare global {
       }
       workflows: {
         list: () => Promise<unknown>
-        get: (workflowId: string) => Promise<unknown>
+        get: (workflowId: string, versionId?: string) => Promise<unknown>
         create: () => Promise<unknown>
         save: (payload: unknown) => Promise<unknown>
         delete: (workflowId: string) => Promise<unknown>

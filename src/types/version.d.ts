@@ -4,5 +4,6 @@ export type VersionOption = {
   minor: number
   isRelease: boolean
   createdAt: number
-  label: string
+  label?: string
+  configJson?: string
 }

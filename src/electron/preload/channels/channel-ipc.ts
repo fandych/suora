@@ -9,6 +9,8 @@ import { ensureWorkspace } from "@/electron/infrastructure/workspace-service"
 import { assertChannelExists } from "@/electron/preload/channels/channel-ipc-policy"
 import {
   channelDebugMessageSchema,
+  channelCreateSchema,
+  channelDetailSchema,
   channelIdSchema,
   channelMessageSchema,
   channelPreviewOptionsSchema,
@@ -23,12 +25,18 @@ export function registerChannelIpc() {
     await ensureChannelCatalog()
     return channelApplicationService.list()
   })
-  ipcMain.handle("channels:get", (_event, channelId: string) => channelApplicationService.getDetail(channelId))
-  ipcMain.handle("channels:create", (_event, defaults?: { providerId?: string; modelId?: string }) =>
-    channelApplicationService.create(defaults),
+  ipcMain.handle("channels:get", (_event, channelId: unknown) =>
+    channelApplicationService.getDetail(parseChannelIpcInput(channelIdSchema, channelId)),
   )
-  ipcMain.handle("channels:save", (_event, detail: unknown) => channelApplicationService.save(detail as never))
-  ipcMain.handle("channels:delete", (_event, channelId: string) => channelApplicationService.remove(channelId))
+  ipcMain.handle("channels:create", (_event, defaults: unknown) =>
+    channelApplicationService.create(parseChannelIpcInput(channelCreateSchema, defaults)),
+  )
+  ipcMain.handle("channels:save", (_event, detail: unknown) =>
+    channelApplicationService.save(parseChannelIpcInput(channelDetailSchema, detail) as never),
+  )
+  ipcMain.handle("channels:delete", (_event, channelId: unknown) =>
+    channelApplicationService.remove(parseChannelIpcInput(channelIdSchema, channelId)),
+  )
   ipcMain.handle("channel:start", async () => {
     await ensureWorkspace()
     await ensureChannelCatalog()

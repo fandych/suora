@@ -87,17 +87,37 @@ async function handleChannelRuntimeEvent(event: ChannelRuntimeEvent) {
     : { runtime: settings.runtime, selectedAgentId }
   await saveChatSessionSettings(chatId, nextSettings)
 
-  const sent = await ChatApi.sendMessage(chatId, { content: event.message.content })
   const runtimeResult = await new Promise<{ detail?: ChatDetail; error?: string }>((resolve) => {
+    const timeoutId = window.setTimeout(() => {
+      ChatApi.offRuntimeEvent(listener)
+      resolve({ error: "Timed out while waiting for the chat response." })
+    }, 5 * 60 * 1000)
     const listener = (...args: unknown[]) => {
-      const payload = args[1] as { requestId?: string; type?: string; detail?: ChatDetail; error?: string } | undefined
-      if (payload?.requestId !== sent.requestId) return
-      if (payload.type === "completed" || payload.type === "error") {
+      const payload = args[1] as {
+        requestId?: string
+        chatId?: string
+        type?: string
+        detail?: ChatDetail
+        error?: string
+      } | undefined
+      if (payload?.chatId !== chatId || (requestId && payload.requestId !== requestId)) return
+      if (payload.type === "completed" || payload.type === "error" || payload.type === "cancelled") {
         ChatApi.offRuntimeEvent(listener)
-        resolve(payload)
+        window.clearTimeout(timeoutId)
+        resolve(payload.type === "cancelled" ? { error: "Chat response was cancelled." } : payload)
       }
     }
     ChatApi.onRuntimeEvent(listener)
+    let requestId = ""
+    void ChatApi.sendMessage(chatId, { content: event.message.content })
+      .then((sent) => {
+        requestId = sent.requestId
+      })
+      .catch((error) => {
+        ChatApi.offRuntimeEvent(listener)
+        window.clearTimeout(timeoutId)
+        resolve({ error: error instanceof Error ? error.message : String(error) })
+      })
   })
   if (runtimeResult.error) throw new Error(runtimeResult.error)
   const assistant = runtimeResult.detail?.messages.at(-1)

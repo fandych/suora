@@ -50,10 +50,9 @@ async function readExternalSkill(skillId: string) {
   const manifestName = readManifestField(manifest.content, "name")
   const summary = readManifestField(manifest.content, "description")
   const now = Date.now()
-  const version = { id: `${skillId}:external`, major: 1, minor: 0, isRelease: true, createdAt: now, label: "External" }
   return {
     skill: { id: skillId, title: manifestName || name, source: skillId.slice(0, skillId.indexOf(":")), summary, updatedAt: now },
-    versions: [version], latestVersion: version, selectedVersion: version, files,
+    files,
   }
 }
 
@@ -81,17 +80,13 @@ export function registerSkillIpc() {
   })
   ipcMain.handle("skills:getExternal", (_event, value: unknown) => readExternalSkill(parseIpcInput(entityIdSchema, value)))
   ipcMain.handle("skills:get", (_event, value: unknown) => skillService.get(parseIpcInput(entityIdSchema, value)))
-  ipcMain.handle("skills:getFileTree", (_event, skillId: unknown, versionId?: unknown) =>
-    skillService.getFileTree(
-      parseIpcInput(entityIdSchema, skillId),
-      versionId === undefined ? undefined : parseIpcInput(entityIdSchema, versionId),
-    ),
+  ipcMain.handle("skills:getFileTree", (_event, skillId: unknown) =>
+    skillService.getFileTree(parseIpcInput(entityIdSchema, skillId)),
   )
-  ipcMain.handle("skills:getFile", (_event, skillId: unknown, filePath: unknown, versionId?: unknown) =>
+  ipcMain.handle("skills:getFile", (_event, skillId: unknown, filePath: unknown) =>
     skillService.getFile(
       parseIpcInput(entityIdSchema, skillId),
       parseIpcInput(entityIdSchema, filePath),
-      versionId === undefined ? undefined : parseIpcInput(entityIdSchema, versionId),
     ),
   )
   ipcMain.handle("skills:create", () => skillService.create())

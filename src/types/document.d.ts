@@ -1,5 +1,3 @@
-import type { VersionOption } from "@/types/version"
-
 export type SkillFileRecord = {
   path: string
   content: string
@@ -33,9 +31,6 @@ export type SkillFileContent = {
 export type SkillSummary = { id: string; title: string; source: string; summary: string; updatedAt: number }
 export type SkillDetail = {
   skill: SkillSummary
-  versions: VersionOption[]
-  latestVersion: VersionOption
-  selectedVersion: VersionOption
   files: SkillFileRecord[]
 }
 export type DocumentPageRecord = {

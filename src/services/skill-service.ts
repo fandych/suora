@@ -5,19 +5,16 @@ export const SkillApi = {
   listAll: () => window.app!.skills.listAll() as Promise<SkillSummary[]>,
   list: () => SkillApi.listAll(),
   get: (skillId: string) => window.app!.skills.get(skillId) as Promise<SkillConfigRecord | null>,
-  getDetail: (skillId: string, selectedVersionId?: string) => {
-    void selectedVersionId
+  getDetail: (skillId: string) => {
     return (skillId.includes(":") ? window.app!.skills.getExternal(skillId) : SkillApi.get(skillId)) as Promise<SkillDetail>
   },
-  getFileTree: (skillId: string, versionId?: string) =>
-    window.app!.skills.getFileTree(skillId, versionId) as Promise<SkillFileTree>,
-  getFile: (skillId: string, filePath: string, versionId?: string) =>
-    window.app!.skills.getFile(skillId, filePath, versionId) as Promise<SkillFileContent>,
+  getFileTree: (skillId: string) => window.app!.skills.getFileTree(skillId) as Promise<SkillFileTree>,
+  getFile: (skillId: string, filePath: string) => window.app!.skills.getFile(skillId, filePath) as Promise<SkillFileContent>,
   create: () => window.app!.skills.create() as Promise<SkillConfigRecord>,
   save: (payload: unknown) => window.app!.skills.save(payload) as Promise<SkillConfigRecord>,
   saveDraft: (
     skillId: string,
-    payload: { title: string; source: string; summary: string; files: SkillFileRecord[]; selectedVersionId?: string },
+    payload: { title: string; source: string; summary: string; files: SkillFileRecord[] },
   ) =>
     window.app!.skills.save({
       ...payload,

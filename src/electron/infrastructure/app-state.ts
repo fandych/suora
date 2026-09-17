@@ -2,7 +2,7 @@ import { app } from "electron"
 import type { AppState } from "@/types/electron"
 
 export const appState: AppState = {
-  isDev: !app.isPackaged,
+  isDev: !app?.isPackaged,
   mainWindow: null,
   browserWindow: null,
   browserWindows: new Map(),

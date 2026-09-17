@@ -91,6 +91,37 @@ export function applyMigrations(database: SqliteDatabase) {
       database.exec("ALTER TABLE providers ADD COLUMN description TEXT DEFAULT '' NOT NULL")
     }
   }
+
+  // Early refactor builds could record the Skill migration without applying its
+  // schema change. Keep existing workspaces readable by repairing that state
+  // before Drizzle selects the direct files_json column.
+  const skillsTable = database
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'skills'")
+    .get()
+  if (skillsTable) {
+    const skillColumns = database.prepare("PRAGMA table_info(skills)").all() as Array<{ name: string }>
+    if (!skillColumns.some((column) => column.name === "files_json")) {
+      database.exec("ALTER TABLE skills ADD COLUMN files_json TEXT NOT NULL DEFAULT '[]'")
+      const skillVersionsTable = database
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'skill_versions'")
+        .get()
+      if (skillVersionsTable) {
+        database.exec(`
+          UPDATE skills
+          SET files_json = COALESCE(
+            (
+              SELECT files_json
+              FROM skill_versions
+              WHERE skill_versions.skill_id = skills.id
+              ORDER BY major DESC, minor DESC, created_at DESC
+              LIMIT 1
+            ),
+            '[]'
+          )
+        `)
+      }
+    }
+  }
 }
 
 function mapRows(rows: unknown[]) {

@@ -83,7 +83,7 @@ const IntegrationsDetailPage = () => {
   const navigate = useNavigate()
   const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
   const { data, error, isLoading, reload, setData } = useAsyncResource(
-    () => IntegrationApi.get(integrationId ?? ""),
+    () => IntegrationApi.get(integrationId ?? "", selectedVersionId),
     [integrationId, selectedVersionId],
   )
 

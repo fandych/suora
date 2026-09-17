@@ -69,7 +69,6 @@ function buildSkillSnapshot(detail: SkillDetail | null) {
 
   return JSON.stringify({
     id: detail.skill.id,
-    selectedVersionId: detail.selectedVersion.id,
     title: detail.skill.title,
     summary: detail.skill.summary,
     source: detail.skill.source,
@@ -88,7 +87,6 @@ const SkillsDetailPage = () => {
   const isExternalSkill = skillId?.includes(":") ?? false
   const navigate = useNavigate()
   const location = useLocation()
-  const [selectedVersionId, setSelectedVersionId] = useState<string | undefined>()
   const { draft, error, isLoading, load, updateDraft, updateFiles, updateFile, reload } = useSkillDetailStore()
   const [selectedFilePath, setSelectedFilePath] = useState("")
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set())
@@ -113,7 +111,6 @@ const SkillsDetailPage = () => {
       source: nextDraft.skill.source,
       summary: frontmatter.description || nextDraft.skill.summary,
       files: nextDraft.files,
-      selectedVersionId: nextDraft.selectedVersion.id,
     })
     const next = {
       ...saved,
@@ -127,7 +124,6 @@ const SkillsDetailPage = () => {
       (file) => normalizeSkillPath(file.path) === normalizeSkillPath(selectedFilePath),
     )
     updateDraft(next)
-    setSelectedVersionId(next.selectedVersion.id)
     if (hasSelectedFile) {
       setSelectedFilePath((current) => current)
     } else {
@@ -144,9 +140,8 @@ const SkillsDetailPage = () => {
   })
 
   useEffect(() => {
-    if (skillId && (!draft || skillId !== useSkillDetailStore.getState().skillId)) void load(skillId, selectedVersionId)
+    if (skillId && (!draft || skillId !== useSkillDetailStore.getState().skillId)) void load(skillId)
     if (!draft) return
-    setSelectedVersionId(draft.selectedVersion.id)
     setSelectedFilePath((current) => {
       if (current && draft.files.some((file) => normalizeSkillPath(file.path) === normalizeSkillPath(current))) {
         return current
@@ -158,7 +153,7 @@ const SkillsDetailPage = () => {
     setHasLoadedInitialState(true)
     autosave.markClean(buildSkillSnapshot(draft))
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft, load, selectedVersionId, skillId])
+  }, [draft, load, skillId])
 
   const treeEntries = useMemo(
     () => buildSkillTree(draft?.files ?? [], draft?.skill.title),
@@ -375,7 +370,6 @@ const SkillsDetailPage = () => {
         source: draft.skill.source,
         summary: `[disabled] ${draft.skill.summary}`.trim(),
         files: draft.files,
-        selectedVersionId: draft.selectedVersion.id,
       })
       emitDataChanged("/skills")
       toast.add({ title: "Skill disabled", description: "The skill is no longer active.", type: "success" })

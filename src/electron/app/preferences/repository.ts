@@ -6,8 +6,10 @@ export async function getPreferenceValue() {
   if (!value) return null
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>
-    if (typeof parsed.mailServerPassword === "string")
-      parsed.mailServerPassword = revealCredential(parsed.mailServerPassword)
+    if (typeof parsed.mailServerPassword === "string") {
+      parsed.mailServerPasswordConfigured = Boolean(revealCredential(parsed.mailServerPassword))
+      parsed.mailServerPassword = ""
+    }
     return JSON.stringify(parsed)
   } catch {
     return value
@@ -16,7 +18,15 @@ export async function getPreferenceValue() {
 
 export async function setPreferenceValue(value: string) {
   const parsed = JSON.parse(value) as Record<string, unknown>
-  if (typeof parsed.mailServerPassword === "string")
-    parsed.mailServerPassword = protectCredential(parsed.mailServerPassword)
+  const currentValue = await getAppMetaValue("preference_settings")
+  const current = currentValue ? (JSON.parse(currentValue) as Record<string, unknown>) : {}
+  if (typeof parsed.mailServerPassword === "string") {
+    parsed.mailServerPassword = parsed.mailServerPassword
+      ? protectCredential(parsed.mailServerPassword)
+      : typeof current.mailServerPassword === "string"
+        ? current.mailServerPassword
+        : ""
+  }
+  delete parsed.mailServerPasswordConfigured
   await setAppMetaValue("preference_settings", JSON.stringify(parsed))
 }

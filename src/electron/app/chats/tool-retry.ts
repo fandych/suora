@@ -136,8 +136,17 @@ export async function retryChatToolActivity(value: unknown) {
   const { sessionId, activity } = retryToolSchema.parse(value)
   const input = activity.input ?? {}
   switch (activity.toolName) {
+    case "listFiles":
     case "listWorkspaceFiles":
-      return stringify(await listFiles(typeof input.relativePath === "string" ? input.relativePath : undefined))
+      return stringify(
+        await listFiles(
+          typeof input.path === "string"
+            ? input.path
+            : typeof input.relativePath === "string"
+              ? input.relativePath
+              : undefined,
+        ),
+      )
     case "readWorkspaceFile":
       return stringify(await readFile(readString(input, "path", "Tool input is missing the file path.")))
     case "writeWorkspaceFile":

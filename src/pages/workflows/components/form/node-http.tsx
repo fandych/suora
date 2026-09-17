@@ -32,7 +32,7 @@ export function NodeHttpForm({
       <WorkflowNodeSelect
         label="Method"
         value={node.method ?? "POST"}
-        onChange={(event) => updateNode({ method: event.target.value })}
+          onChange={(event: React.ChangeEvent<HTMLSelectElement>) => updateNode({ method: event.target.value })}
       >
         {["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => (
           <option key={method} value={method}>

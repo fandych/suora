@@ -9,7 +9,10 @@ import {
 
 export const workflowService = {
   list: () => listWorkflowDefinitions(),
-  get: (workflowId: string) => getWorkflowDefinition(workflowId),
+  get: (workflowId: string, versionId?: string) => {
+    void versionId
+    return getWorkflowDefinition(workflowId)
+  },
   create: () => createWorkflowDefinition(),
   save: (payload: Parameters<typeof saveWorkflowDefinition>[0]) => saveWorkflowDefinition(payload),
   remove: (workflowId: string) => deleteWorkflowDefinition(workflowId),

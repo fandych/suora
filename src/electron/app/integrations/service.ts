@@ -108,8 +108,16 @@ export const integrationApplicationService = {
     config: IntegrationConfig
     inputJson?: string
   }) => {
-    if (payload.integrationId) await assertIntegrationEnabled(payload.integrationId)
-    return executeIntegration(payload)
+    if (!payload.integrationId) return executeIntegration(payload)
+    await assertIntegrationEnabled(payload.integrationId)
+    const detail = await getIntegration(payload.integrationId)
+    const selected = detail.versions[0]
+    if (!detail.integration || !selected) throw new Error("Integration was not found.")
+    return executeIntegration({
+      ...payload,
+      kind: detail.integration.kind as "http" | "scripts" | "mcp",
+      config: normalizeIntegrationConfig(detail.integration.kind, parseConfig(selected.configJson)),
+    })
   },
   recordExecution: (payload: { id: string; versionId: string; status: string; input: string; output: string }) =>
     recordIntegrationExecution(payload),

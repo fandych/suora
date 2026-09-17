@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   getExpressionIssues,
   getWorkflowExpressionSuggestions,
-} from "@/pages/workflows/components/workflow-expression-suggestions"
+} from "@/lib/workflow/expression-suggestions"
 
 describe("workflow expression suggestions", () => {
   it("offers current fields and only transitive upstream step fields", () => {
