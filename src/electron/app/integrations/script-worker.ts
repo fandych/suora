@@ -95,7 +95,9 @@ async function run(request: WorkerRequest) {
       respond({ ok: false, error: "Handler not found" })
       return
     }
-    const output = await Promise.resolve((handler as (input: Record<string, unknown>) => unknown)(sandbox.input as Record<string, unknown>))
+    const output = await Promise.resolve(
+      (handler as (input: Record<string, unknown>) => unknown)(sandbox.input as Record<string, unknown>),
+    )
     const body = JSON.stringify({ output, logs }, null, 2)
     if (Buffer.byteLength(body, "utf8") > MAX_OUTPUT_BYTES)
       throw new Error("Script output exceeds the 1 MB safety limit.")
@@ -113,13 +115,21 @@ async function resolveSafeFetchTarget(value: string) {
     return { url, address: hostname, family: ipVersion }
   }
   const [resolved] = await dns.lookup(hostname, { all: true, verbatim: true })
-  if (!resolved) {
+  if (
+    !resolved ||
+    !resolved.address ||
+    net.isIP(resolved.address) === 0 ||
+    (resolved.family !== 4 && resolved.family !== 6)
+  ) {
     throw new Error("Unable to resolve the target URL.")
   }
   return { url, address: resolved.address, family: resolved.family }
 }
 
 function createPinnedDispatcher(target: { url: URL; address: string; family: number }) {
+  if (!target.address || net.isIP(target.address) === 0 || (target.family !== 4 && target.family !== 6)) {
+    throw new Error("Unable to resolve the target URL.")
+  }
   return new Agent({
     connect: {
       lookup: ((

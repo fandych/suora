@@ -17,7 +17,20 @@ export function isValidWeChatPersonalToken(token: string) {
   return token.length > 0 && token.length <= 4096 && !/[\r\n]/.test(token)
 }
 export function getWeChatPersonalBaseUrl(channel: ChannelConfigRecord) {
-  return channel.wechatPersonalBaseUrl?.trim() || WECHAT_PERSONAL_DEFAULT_BASE_URL
+  const candidate = channel.wechatPersonalBaseUrl?.trim()
+  if (!candidate) {
+    return WECHAT_PERSONAL_DEFAULT_BASE_URL
+  }
+
+  try {
+    const parsed = new URL(candidate)
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return WECHAT_PERSONAL_DEFAULT_BASE_URL
+    }
+    return parsed.toString()
+  } catch {
+    return WECHAT_PERSONAL_DEFAULT_BASE_URL
+  }
 }
 export function normalizeWeChatPersonalQrCodeUrl(value?: string) {
   const trimmed = value?.trim()

@@ -42,6 +42,15 @@ export class CustomWebSocketClient {
       throw new Error("Custom WebSocket URL is empty")
     }
 
+    try {
+      const parsed = new URL(endpoint)
+      if (!["ws:", "wss:"].includes(parsed.protocol)) {
+        throw new Error("Custom WebSocket URL must use ws:// or wss://")
+      }
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : "Invalid custom WebSocket URL")
+    }
+
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null

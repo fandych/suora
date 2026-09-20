@@ -1,5 +1,5 @@
 import crypto from "node:crypto"
-import { and, desc, eq, exists, lt, or, sql } from "drizzle-orm"
+import { and, desc, eq, exists, isNull, lt, ne, notLike, or, sql } from "drizzle-orm"
 import { getDrizzleDatabase } from "@/drizzle/db"
 import { appMeta, chatMessages, chats } from "@/drizzle/schema"
 import {
@@ -13,7 +13,7 @@ import {
   serializeChatSettingsStore,
 } from "@/electron/app/chats/chat-schemas"
 import type { ChatMessagePart } from "@/types/chat"
-import { setProxySettings } from "@/electron/infrastructure/proxy-service"
+import { normalizeProxySettings, setProxySettings } from "@/electron/infrastructure/proxy-service"
 import { recordRecentlyDeletedResource } from "@/electron/app/system/system-repository"
 import type { ChatDetail, ChatMessageCursor, ChatSummary } from "@/types/chat"
 import { openDatabase } from "@/electron/infrastructure/db-core"
@@ -74,8 +74,7 @@ async function readChat(chatId: string, options?: ChatReadOptions) {
   return {
     chat: chat ?? null,
     messages: pageRows.map((row) => ({ ...row, parts: parseStoredChatMessageParts(row.partsJson) })),
-    nextCursor:
-      hasMore && pageRows[0] ? { createdAt: pageRows[0].createdAt, id: pageRows[0].id } : null,
+    nextCursor: hasMore && pageRows[0] ? { createdAt: pageRows[0].createdAt, id: pageRows[0].id } : null,
   }
 }
 
@@ -84,7 +83,13 @@ export async function listChats() {
   return database
     .select()
     .from(chats)
-    .where(exists(database.select({ id: chatMessages.id }).from(chatMessages).where(eq(chatMessages.chatId, chats.id))))
+    .where(
+      and(
+        notLike(chats.id, "chat-channel-%"),
+        or(isNull(chats.sourceType), ne(chats.sourceType, "channel")),
+        exists(database.select({ id: chatMessages.id }).from(chatMessages).where(eq(chatMessages.chatId, chats.id))),
+      ),
+    )
     .orderBy(desc(chats.updatedAt))
 }
 
@@ -96,17 +101,15 @@ export async function createChat() {
   const database = getDrizzleDatabase()
   const id = crypto.randomUUID()
   const now = Date.now()
-  await database
-    .insert(chats)
-    .values({
-      id,
-      title: "New chat",
-      chatbotId: "assistant-main",
-      summary: "",
-      sourceType: "manual",
-      sourceRef: null,
-      updatedAt: now,
-    })
+  await database.insert(chats).values({
+    id,
+    title: "New chat",
+    chatbotId: "assistant-main",
+    summary: "",
+    sourceType: "manual",
+    sourceRef: null,
+    updatedAt: now,
+  })
   return readChat(id)
 }
 
@@ -143,8 +146,7 @@ export async function ensureChat(payload: {
         payload.chatId,
       )
     assertStatementChanged(result, "Chat update failed because the chat no longer exists.")
-  }
-  else await database.insert(chats).values({ id: payload.chatId, ...values })
+  } else await database.insert(chats).values({ id: payload.chatId, ...values })
   return readChat(payload.chatId)
 }
 
@@ -204,16 +206,14 @@ export async function appendChatMessage(
   if (!chat) return null
   const content = payload.content.trim()
   const now = Date.now()
-  await database
-    .insert(chatMessages)
-    .values({
-      id: crypto.randomUUID(),
-      chatId: payload.chatId,
-      role,
-      content,
-      partsJson: serializeChatMessageParts(payload.parts ?? []),
-      createdAt: now,
-    })
+  await database.insert(chatMessages).values({
+    id: crypto.randomUUID(),
+    chatId: payload.chatId,
+    role,
+    content,
+    partsJson: serializeChatMessageParts(payload.parts ?? []),
+    createdAt: now,
+  })
   const updateResult = openDatabase()
     .prepare("UPDATE chats SET title = ?, summary = ?, updated_at = ? WHERE id = ?")
     .run(
@@ -226,11 +226,7 @@ export async function appendChatMessage(
   return getChat(payload.chatId)
 }
 
-export async function updateChatMessageParts(payload: {
-  chatId: string
-  messageId: string
-  parts: ChatMessagePart[]
-}) {
+export async function updateChatMessageParts(payload: { chatId: string; messageId: string; parts: ChatMessagePart[] }) {
   const database = getDrizzleDatabase()
   const [existing] = await database
     .select({ id: chatMessages.id })
@@ -253,7 +249,7 @@ export async function getChatSettings() {
     .where(eq(appMeta.key, "chat_runtime_settings"))
     .limit(1)
   const parsed = parseStoredChatSettingsStore(row?.value ?? null)
-  if (parsed?.store.defaultRuntime?.proxy) setProxySettings(parsed.store.defaultRuntime.proxy)
+  if (parsed?.store.defaultRuntime?.proxy) setProxySettings(normalizeProxySettings(parsed.store.defaultRuntime.proxy))
   return parsed ? serializeChatSettingsStore(parsed.store) : (row?.value ?? null)
 }
 
@@ -276,6 +272,6 @@ export async function saveChatSettings(value: ChatSettingsSavePayload) {
     .values({ key: "chat_runtime_settings", value: serializeChatSettingsStore(store) })
     .onConflictDoUpdate({ target: appMeta.key, set: { value: sql`excluded.value` } })
   if ("proxy" in parsed ? parsed.proxy : store.defaultRuntime?.proxy)
-    setProxySettings(("proxy" in parsed ? parsed.proxy : store.defaultRuntime?.proxy)!)
+    setProxySettings(normalizeProxySettings(("proxy" in parsed ? parsed.proxy : store.defaultRuntime?.proxy)!))
   return "version" in parsed ? parsed : { version: CHAT_SETTINGS_STORE_VERSION, store }
 }

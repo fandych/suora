@@ -47,7 +47,7 @@ const ChatDetailPage = () => {
         {!controller.combinedError && controller.settingsDraft ? (
           <Card size="sm" className="min-h-0 flex-1 rounded-none py-0 shadow-sm overflow-hidden">
             <div className="flex min-h-0 flex-1 flex-col">
-              <CardContent className="relative min-h-0 overflow-hidden -mb-(--card-spacing) px-0">
+              <CardContent className="relative flex min-h-0 flex-1 overflow-hidden -mb-(--card-spacing) px-0">
                 <div className="flex min-h-0 flex-1 overflow-hidden">
                   <ChatTranscript
                     activeProviderType={controller.activeProviderType}

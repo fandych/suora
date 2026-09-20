@@ -70,8 +70,8 @@ export default function ChatSidebar({ item, headerAction }: { item: PrimaryNavIt
   return (
     <Sidebar collapsible="none" className="hidden min-h-0 flex-1 border-l md:flex">
       <SidebarHeader className="gap-2.5 border-b p-3">
-        <div className="flex items-center justify-between">
-          <div className="text-base font-medium">{item.title}</div>
+        <div className="flex justify-between">
+          <b>{item.title}</b>
           {headerAction}
         </div>
         <SidebarInput
@@ -95,8 +95,10 @@ export default function ChatSidebar({ item, headerAction }: { item: PrimaryNavIt
                       <SidebarMenuButton
                         isActive={location.pathname === `/chats/${record.id}`}
                         onClick={() => navigate(`/chats/${record.id}`)}
+                        title={record.title}
+                        className="min-w-0 max-w-full"
                       >
-                        {record.title}
+                        <span className="block w-0 flex-1 truncate">{record.title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}

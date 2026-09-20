@@ -7,7 +7,15 @@ import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
 import { cn } from "@/lib/utils"
 
-export function NewChatButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
+export function NewChatButton({
+  className,
+  iconOnly = false,
+  variant = "outline",
+}: {
+  className?: string
+  iconOnly?: boolean
+  variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link"
+}) {
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
 
@@ -25,7 +33,7 @@ export function NewChatButton({ className, iconOnly = false }: { className?: str
     <Button
       className={cn(iconOnly ? "h-8 shrink-0" : "h-8 shrink-0 whitespace-nowrap", className)}
       size={iconOnly ? "icon-sm" : "sm"}
-      variant="outline"
+      variant={variant}
       type="button"
       data-chat-new-button
       onClick={() => void handleCreate()}

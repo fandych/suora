@@ -9,10 +9,26 @@ import {
   providerTypeSchema,
 } from "@/electron/preload/models/model-ipc-schema"
 
-function redactProvider<T extends { apiKey: string } | null>(provider: T): T extends null ? null : Omit<NonNullable<T>, "apiKey"> & {
-  apiKey: string
-  apiKeyConfigured: boolean
-} {
+function maskSecretPreview(secret: string) {
+  const value = secret.trim()
+  if (!value) {
+    return ""
+  }
+  if (value.length <= 8) {
+    return `${value.slice(0, 1)}*******${value.slice(-1)}`
+  }
+  return `${value.slice(0, 4)}*******${value.slice(-4)}`
+}
+
+function redactProvider<T extends { apiKey: string } | null>(
+  provider: T,
+): T extends null
+  ? null
+  : Omit<NonNullable<T>, "apiKey"> & {
+      apiKey: string
+      apiKeyConfigured: boolean
+      apiKeyPreview?: string
+    } {
   if (!provider) {
     return null as T extends null ? null : never
   }
@@ -20,6 +36,7 @@ function redactProvider<T extends { apiKey: string } | null>(provider: T): T ext
   return {
     ...provider,
     apiKeyConfigured: Boolean(provider.apiKey),
+    apiKeyPreview: provider.apiKey ? maskSecretPreview(provider.apiKey) : "",
     apiKey: "",
   } as unknown as T extends null ? null : never
 }
@@ -30,7 +47,9 @@ export function registerModelIpc() {
     redactProvider(await modelService.get(parseIpcInput(entityIdSchema, id))),
   )
   ipcMain.handle("models:create", (_event, value?: unknown) =>
-    modelService.create(parseIpcInput(providerCreateSchema, value ?? {}).providerType).then((provider) => redactProvider(provider)),
+    modelService
+      .create(parseIpcInput(providerCreateSchema, value ?? {}).providerType)
+      .then((provider) => redactProvider(provider)),
   )
   ipcMain.handle("models:save", (_event, value: unknown) => {
     const provider = parseIpcInput(providerSaveSchema, value)
@@ -70,7 +89,9 @@ export function registerModelIpc() {
   ipcMain.handle("models:preset:allowsNoKey", (_event, providerType: unknown) =>
     modelService.allowsNoKey(parseIpcInput(providerTypeSchema, providerType)),
   )
-  ipcMain.handle("models:configured", () => modelService.configured())
+  ipcMain.handle("models:configured", async () =>
+    (await modelService.configured()).map((provider) => redactProvider(provider)),
+  )
   ipcMain.handle("models:preset:discoveryState", (_event, provider: unknown) => {
     const payload = parseIpcInput(providerDiscoverySchema, provider)
     return modelService.discoveryState(payload)

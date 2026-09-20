@@ -4,7 +4,7 @@ import net from "node:net"
 import { getPreferenceSettingsSnapshot } from "@/electron/app/preferences/runtime"
 import { appState } from "@/electron/infrastructure/app-state"
 import { getProxyAgent } from "@/electron/infrastructure/proxy-service"
-import { resolveSafeHttpTarget } from "@/electron/infrastructure/url-security"
+import { assertSafeHttpUrl } from "@/electron/infrastructure/url-security"
 
 export type HttpRequestOptions = {
   method?: string
@@ -23,7 +23,7 @@ export type HttpResponse = {
 
 export async function configuredFetch(input: string | URL | Request, init: RequestInit = {}): Promise<Response> {
   const request = input instanceof Request ? input : new Request(input, init)
-  const { url: parsedUrl, lookup } = await resolveSafeHttpTarget(request.url)
+  const parsedUrl = await assertSafeHttpUrl(request.url)
   const preferenceSettings = getPreferenceSettingsSnapshot()
   const proxySettings = appState.currentProxySettings
   const ignoreSsl = proxySettings.ignoreSslErrors === true || preferenceSettings.ignoreSslErrors === true
@@ -33,7 +33,8 @@ export async function configuredFetch(input: string | URL | Request, init: Reque
     (parsedUrl.protocol === "https:"
       ? new https.Agent({ keepAlive: false, rejectUnauthorized: !ignoreSsl })
       : new http.Agent({ keepAlive: false }))
-  const body = request.method === "GET" || request.method === "HEAD" ? undefined : Buffer.from(await request.arrayBuffer())
+  const body =
+    request.method === "GET" || request.method === "HEAD" ? undefined : Buffer.from(await request.arrayBuffer())
 
   return new Promise((resolve, reject) => {
     const nodeRequest = transport.request(
@@ -43,8 +44,9 @@ export async function configuredFetch(input: string | URL | Request, init: Reque
         headers: Object.fromEntries(request.headers),
         agent,
         rejectUnauthorized: ignoreSsl ? false : (proxySettings.rejectUnauthorized ?? true),
-        ...(!getProxyAgent(parsedUrl, ignoreSsl) && lookup ? { lookup } : {}),
-        ...(parsedUrl.protocol === "https:" && net.isIP(parsedUrl.hostname) === 0 ? { servername: parsedUrl.hostname } : {}),
+        ...(parsedUrl.protocol === "https:" && net.isIP(parsedUrl.hostname) === 0
+          ? { servername: parsedUrl.hostname }
+          : {}),
       },
       (response) => {
         const bodyStream = new ReadableStream<Uint8Array>({
@@ -57,7 +59,12 @@ export async function configuredFetch(input: string | URL | Request, init: Reque
             response.destroy()
           },
         })
-        resolve(new Response(bodyStream, { status: response.statusCode ?? 0, headers: response.headers as Record<string, string> }))
+        resolve(
+          new Response(bodyStream, {
+            status: response.statusCode ?? 0,
+            headers: response.headers as Record<string, string>,
+          }),
+        )
       },
     )
     const abort = () => nodeRequest.destroy(new Error("HTTP request aborted"))
@@ -70,7 +77,7 @@ export async function configuredFetch(input: string | URL | Request, init: Reque
 }
 
 export async function requestHttp(url: string, options: HttpRequestOptions = {}): Promise<HttpResponse> {
-  const { url: parsedUrl, lookup } = await resolveSafeHttpTarget(url)
+  const parsedUrl = await assertSafeHttpUrl(url)
   const proxySettings = appState.currentProxySettings
   const ignoreSsl = proxySettings.ignoreSslErrors === true || options.ignoreSslErrors === true
   const transport = parsedUrl.protocol === "https:" ? https : http
@@ -88,8 +95,9 @@ export async function requestHttp(url: string, options: HttpRequestOptions = {})
         agent,
         rejectUnauthorized: ignoreSsl ? false : (proxySettings.rejectUnauthorized ?? true),
         signal: options.signal,
-        ...(!getProxyAgent(parsedUrl, ignoreSsl) && lookup ? { lookup } : {}),
-        ...(parsedUrl.protocol === "https:" && net.isIP(parsedUrl.hostname) === 0 ? { servername: parsedUrl.hostname } : {}),
+        ...(parsedUrl.protocol === "https:" && net.isIP(parsedUrl.hostname) === 0
+          ? { servername: parsedUrl.hostname }
+          : {}),
       },
       (response) => {
         const chunks: Buffer[] = []

@@ -9,11 +9,24 @@ function isPrivateAddress(address: string) {
   const version = net.isIP(address)
   if (version === 4) {
     const [a, b] = address.split(".").map(Number)
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)
+    return (
+      a === 10 ||
+      a === 127 ||
+      a === 0 ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    )
   }
   if (version === 6) {
     const normalized = address.toLowerCase()
-    return normalized === "::1" || normalized === "::" || normalized.startsWith("fc") || normalized.startsWith("fd") || normalized.startsWith("fe80:")
+    return (
+      normalized === "::1" ||
+      normalized === "::" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe80:")
+    )
   }
   return true
 }
@@ -34,12 +47,31 @@ function parseHttpUrl(value: string | URL) {
   return { url, hostname }
 }
 
+function normalizeLookupTarget(address: string, family?: number) {
+  const normalizedAddress = address?.trim()
+  const detectedFamily = net.isIP(normalizedAddress)
+  const normalizedFamily = family === 4 || family === 6 ? family : detectedFamily
+
+  if (!normalizedAddress || detectedFamily === 0 || (normalizedFamily !== 4 && normalizedFamily !== 6)) {
+    throw new Error("Unable to resolve the target URL.")
+  }
+
+  return { address: normalizedAddress, family: normalizedFamily }
+}
+
 function createPinnedLookup(address: string, family: number) {
+  const target = normalizeLookupTarget(address, family)
   return ((
     _hostname: string,
     _options: LookupOneOptions,
     callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void,
-  ) => callback(null, address, family)) as NonNullable<RequestOptions["lookup"]>
+  ) => {
+    if (!target.address || net.isIP(target.address) === 0 || (target.family !== 4 && target.family !== 6)) {
+      callback(new Error(`Invalid pinned lookup target: ${String(target.address)}`) as NodeJS.ErrnoException, "", 0)
+      return
+    }
+    callback(null, target.address, target.family)
+  }) as NonNullable<RequestOptions["lookup"]>
 }
 
 export async function resolveSafeHttpTarget(
@@ -63,7 +95,8 @@ export async function resolveSafeHttpTarget(
 
   const ipFamily = net.isIP(hostname)
   if (ipFamily !== 0) {
-    return { url, lookup: createPinnedLookup(hostname, ipFamily) }
+    const target = normalizeLookupTarget(hostname, ipFamily)
+    return { url, lookup: createPinnedLookup(target.address, target.family) }
   }
 
   try {
@@ -72,7 +105,8 @@ export async function resolveSafeHttpTarget(
       throw new Error("Private and local network URLs are not allowed.")
     }
     const [selected] = records
-    return { url, lookup: createPinnedLookup(selected.address, selected.family) }
+    const target = normalizeLookupTarget(selected.address, selected.family)
+    return { url, lookup: createPinnedLookup(target.address, target.family) }
   } catch (error) {
     if (error instanceof Error && error.message.includes("Private and local")) {
       throw error
@@ -81,6 +115,9 @@ export async function resolveSafeHttpTarget(
   }
 }
 
-export async function assertSafeHttpUrl(value: string | URL, options?: { allowLocalNetwork?: boolean; skipDnsResolution?: boolean }) {
+export async function assertSafeHttpUrl(
+  value: string | URL,
+  options?: { allowLocalNetwork?: boolean; skipDnsResolution?: boolean },
+) {
   return (await resolveSafeHttpTarget(value, options)).url
 }

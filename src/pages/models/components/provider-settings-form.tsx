@@ -97,7 +97,9 @@ export function ProviderSettingsForm({
             placeholder={draft.apiKeyConfigured ? "Configured. Enter a new key to replace it." : "API key"}
           />
           {draft.apiKeyConfigured && !draft.apiKey ? (
-            <div className="text-xs text-muted-foreground">A key is already stored. Leave this blank to keep it.</div>
+            <div className="text-xs text-muted-foreground">
+              Stored key: {draft.apiKeyPreview || "Configured"}. Leave this blank to keep it.
+            </div>
           ) : null}
         </div>
 
