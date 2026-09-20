@@ -48,7 +48,9 @@ export class CustomWebSocketClient {
         throw new Error("Custom WebSocket URL must use ws:// or wss://")
       }
     } catch (error) {
-      throw new Error(error instanceof Error ? error.message : "Invalid custom WebSocket URL")
+      throw new Error(error instanceof Error ? error.message : "Invalid custom WebSocket URL", {
+        cause: error,
+      })
     }
 
     if (this.reconnectTimer) {

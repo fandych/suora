@@ -82,7 +82,7 @@ async function main() {
 
   for (const manifestName of REQUIRED_MANIFESTS) {
     if (!assetsByName.has(manifestName)) {
-      errors.push(`Missing updater manifest asset \"${manifestName}\" on release ${tag}.`)
+      errors.push(`Missing updater manifest asset "${manifestName}" on release ${tag}.`)
     }
   }
 
@@ -92,14 +92,14 @@ async function main() {
 
     const manifestText = await fetchText(manifestAsset.browser_download_url, buildHeaders(token))
     if (!looksLikeUpdaterManifest(manifestText)) {
-      errors.push(`Release asset \"${manifestName}\" is not a valid updater manifest.`)
+      errors.push(`Release asset "${manifestName}" is not a valid updater manifest.`)
       continue
     }
 
     const references = extractManifestReferences(manifestText)
     const missingAssets = references.filter((reference) => !assetNames.has(reference))
     if (missingAssets.length > 0) {
-      errors.push(`Updater manifest \"${manifestName}\" references missing release asset(s): ${missingAssets.join(", ")}.`)
+      errors.push(`Updater manifest "${manifestName}" references missing release asset(s): ${missingAssets.join(", ")}.`)
     }
   }
 

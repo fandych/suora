@@ -25,6 +25,21 @@ export default defineConfig([
     },
   },
   {
+    files: [
+      'scripts/**/*.{js,mjs,ts}',
+      'drizzle.config.ts',
+      'electron.vite.config.ts',
+      'eslint.config.js',
+      'vitest.config.ts',
+    ],
+    extends: [js.configs.recommended, tseslint.configs.recommended],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
     files: ['src/data/**/*.{ts,tsx}', 'src/domain/**/*.{ts,tsx}', 'src/application/**/*.{ts,tsx}', 'src/services/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': ['error', {
