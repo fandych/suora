@@ -2,6 +2,25 @@ import type { WorkflowNodeData, WorkflowNodeTraceRecord, WorkflowTraceSnapshot }
 import type { WorkflowExecutionContext } from "@/types/workflow"
 import { createWorkflowTraceSnapshot } from "@/electron/app/workflows/trace-sanitizer"
 
+const MAX_TRACE_TEXT_BYTES = 16 * 1024
+
+function truncateTraceText(value: string) {
+  if (Buffer.byteLength(value, "utf8") <= MAX_TRACE_TEXT_BYTES) return value
+  let truncated = value
+  while (Buffer.byteLength(`${truncated}… [truncated]`, "utf8") > MAX_TRACE_TEXT_BYTES && truncated.length > 0) {
+    truncated = truncated.slice(0, -128)
+  }
+  return `${truncated}… [truncated]`
+}
+
+function serializeTraceValue(value: unknown) {
+  try {
+    return truncateTraceText(typeof value === "string" ? value : JSON.stringify(value))
+  } catch {
+    return truncateTraceText(String(value))
+  }
+}
+
 export function createWorkflowTraceId(nodeId: string, startedAt: number, traceCount: number) {
   return `${nodeId}-${startedAt}-${traceCount}`
 }
@@ -18,7 +37,7 @@ export function createRunningWorkflowTrace(
     nodeId: node.id,
     label: node.data.label,
     status: "running",
-    input: JSON.stringify(contextBefore),
+    input: serializeTraceValue(contextBefore),
     output: "Executing…",
     startedAt,
     finishedAt: startedAt,
@@ -38,7 +57,7 @@ export function createSkippedWorkflowTrace(
     nodeId: node.id,
     label: node.data.label,
     status: "skipped",
-    input: JSON.stringify(snapshot),
+    input: serializeTraceValue(snapshot),
     output: "Node disabled.",
     startedAt,
     finishedAt: Date.now(),
@@ -63,8 +82,8 @@ export function createCompletedWorkflowTrace(input: {
     nodeId: input.node.id,
     label: input.node.data.label,
     status: input.status,
-    input: input.traceInput,
-    output: typeof input.output === "string" ? input.output : JSON.stringify(input.output),
+    input: truncateTraceText(input.traceInput),
+    output: serializeTraceValue(input.output),
     startedAt: input.startedAt,
     finishedAt: Date.now(),
     contextBefore: input.contextBefore,
@@ -86,8 +105,8 @@ export function createFailedWorkflowTrace(
     nodeId: node.id,
     label: node.data.label,
     status: "error",
-    input: traceInput,
-    output: error instanceof Error ? error.message : String(error),
+    input: truncateTraceText(traceInput),
+    output: truncateTraceText(error instanceof Error ? error.message : String(error)),
     startedAt,
     finishedAt: Date.now(),
     contextAfter,

@@ -45,6 +45,10 @@ contextBridge.exposeInMainWorld("app", {
   system: {
     info: () => ipcRenderer.invoke("system:info"),
     diagnostics: () => ipcRenderer.invoke("system:diagnostics"),
+    listRecentlyDeleted: (kind?: "chat" | "document" | "workflow") =>
+      ipcRenderer.invoke("system:recentlyDeleted:list", kind),
+    restoreRecentlyDeleted: (entryId: string) =>
+      ipcRenderer.invoke("system:recentlyDeleted:restore", { entryId }),
   },
   workspace: {
     getPaths: () => ipcRenderer.invoke("workspace:getPaths"),
@@ -53,7 +57,8 @@ contextBridge.exposeInMainWorld("app", {
   },
   chats: {
     list: () => ipcRenderer.invoke("chats:list"),
-    get: (chatId: string) => ipcRenderer.invoke("chats:get", chatId),
+    get: (payload: string | { chatId: string; limit?: number; beforeCursor?: { createdAt: number; id: string } }) =>
+      ipcRenderer.invoke("chats:get", payload),
     create: () => ipcRenderer.invoke("chats:create"),
     ensure: (payload: unknown) => ipcRenderer.invoke("chats:ensure", payload),
     delete: (chatId: string) => ipcRenderer.invoke("chats:delete", chatId),

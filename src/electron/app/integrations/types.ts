@@ -42,6 +42,7 @@ const RESTRICTED_HEADER_NAMES = [/^authorization$/i, /^proxy-authorization$/i, /
 
 function sanitizeMultipartFilename(value?: string) {
   const baseName = path.basename((value || "upload").trim() || "upload")
+  // eslint-disable-next-line no-control-regex -- multipart filenames must strip ASCII control characters on input.
   return baseName.replace(/[\x00-\x1f\x7f"\\]/g, "_")
 }
 

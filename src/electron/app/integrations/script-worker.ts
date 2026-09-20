@@ -50,6 +50,32 @@ async function run(request: WorkerRequest) {
       codeGeneration: { strings: false, wasm: false },
       name: "suora-script-sandbox",
     })
+    new Script(
+      `
+        "use strict";
+        for (const key of ["constructor", "globalThis", "process", "require"]) {
+          try {
+            Object.defineProperty(globalThis, key, {
+              value: undefined,
+              configurable: false,
+              enumerable: false,
+              writable: false,
+            })
+          } catch {}
+        }
+        for (const prototype of [Object.prototype, Function.prototype]) {
+          try {
+            Object.defineProperty(prototype, "constructor", {
+              value: undefined,
+              configurable: false,
+              enumerable: false,
+              writable: false,
+            })
+            Object.freeze(prototype)
+          } catch {}
+        }
+      `,
+    ).runInContext(context, { timeout: request.timeoutMs })
     new Script(`"use strict";\n${request.source}`).runInContext(context, { timeout: request.timeoutMs })
     const handler = sandbox[request.handler || "main"]
     if (typeof handler !== "function") {

@@ -14,6 +14,8 @@ Chats 是 SUORA 的日常对话入口。可在此选择模型或 Agent、添加�
 
 历史会话按最近更新时间排列。可在侧边栏选择会话；删除前会显示确认提示，删除后无法恢复，并会一同删除全部消息。Channels 写入的外部会话会保留在本地 Chat 中，但不会显示在普通 Chats 列表。
 
+当前详情页默认先加载最近一段消息历史；当会话较长时，可在转录顶部使用 **Load earlier messages** 逐页向前加载更早消息，而不是一次性把全部历史拉进前端。
+
 <Callout>
   目前 Chats 没有手动重命名会话的界面。若需要清晰的标题，请在首条消息中写出简短、明确的任务名称。
 </Callout>
@@ -94,6 +96,10 @@ Chats 是 SUORA 的日常对话入口。可在此选择模型或 Agent、添加�
 ### 无法发送或提示 Desktop runtime required
 
 Chats 发送请求依赖 Electron 的 IPC bridge。请从桌面应用启动，而不是仅在普通浏览器中打开渲染页面。
+
+### 误删了会话怎么办
+
+Chats 详情页顶部提供 **Recently deleted** 对话框，可恢复最近删除的聊天快照。恢复会把聊天和消息重新写回本地工作区；若原 ID 已被其他数据占用，则恢复会失败并提示冲突。
 
 ### 出现 Request failed、Request timed out 或 Response failed
 

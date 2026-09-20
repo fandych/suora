@@ -2,6 +2,30 @@ import path from "node:path"
 import type { SkillFileContent, SkillFileRecord, SkillFileTree, SkillFileTreeNode } from "@/types/document"
 
 const topLevelFolders = ["scripts", "references", "assets", "other"] as const
+const WINDOWS_RESERVED_FILE_NAMES = new Set([
+  "aux",
+  "com1",
+  "com2",
+  "com3",
+  "com4",
+  "com5",
+  "com6",
+  "com7",
+  "com8",
+  "com9",
+  "con",
+  "lpt1",
+  "lpt2",
+  "lpt3",
+  "lpt4",
+  "lpt5",
+  "lpt6",
+  "lpt7",
+  "lpt8",
+  "lpt9",
+  "nul",
+  "prn",
+])
 
 export function normalizeSkillPath(value: string) {
   return value.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\/+/g, "/").replace(/\/$/, "")
@@ -16,15 +40,26 @@ export function getSkillFileType(filePath: string): SkillFileContent["fileType"]
   return "binary"
 }
 
+function assertNoReservedWindowsPathSegments(parts: string[]) {
+  for (const part of parts) {
+    const stem = part.split(".")[0]?.trim().toLowerCase()
+    if (stem && WINDOWS_RESERVED_FILE_NAMES.has(stem)) {
+      throw new Error(`Skill file path contains a reserved Windows file name: ${part}`)
+    }
+  }
+}
+
 export function assertSafeSkillFilePath(value: string, allowSkillManifest = true) {
   const normalized = normalizeSkillPath(value)
   if (!normalized || normalized.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(value))
     throw new Error("Skill file path must be relative.")
   if (normalized === "SKILL.md" && allowSkillManifest) return normalized
+  const parts = normalized.split("/")
+  assertNoReservedWindowsPathSegments(parts)
   const [topLevel] = normalized.split("/")
   if (
     !topLevelFolders.includes(topLevel as (typeof topLevelFolders)[number]) ||
-    normalized.split("/").some((part) => !part || part === "." || part === "..")
+    parts.some((part) => !part || part === "." || part === "..")
   )
     throw new Error("Skill files must be SKILL.md or located under scripts, references, assets, or other.")
   return normalized

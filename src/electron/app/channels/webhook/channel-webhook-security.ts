@@ -25,7 +25,7 @@ export function verifyFeishuSignature(
 
 export function verifyDingTalkSignature(timestamp: string, appSecret: string, receivedSignature: string) {
   const timestampMs = Number.parseInt(timestamp, 10)
-  if (!Number.isFinite(timestampMs) || timestampMs <= 0 || Math.abs(Date.now() - timestampMs) > 10 * 60 * 1000)
+  if (!Number.isFinite(timestampMs) || timestampMs <= 0 || Math.abs(Date.now() - timestampMs) > 5 * 60 * 1000)
     return false
   const sign = crypto.createHmac("sha256", appSecret).update(`${timestamp}\n${appSecret}`).digest("base64")
   return timingSafeCompare(sign, receivedSignature)
@@ -34,6 +34,7 @@ export function verifyDingTalkSignature(timestamp: string, appSecret: string, re
 export function getWebhookRawBody(req: Request, fallbackBody?: unknown) {
   const rawBody = (req as Request & { rawBody?: string }).rawBody
   if (typeof rawBody === "string") return rawBody
+  if (fallbackBody === undefined) return null
   return typeof fallbackBody === "string" ? fallbackBody : JSON.stringify(fallbackBody ?? {})
 }
 

@@ -1,3 +1,4 @@
+import fs from "node:fs/promises"
 import path from "node:path"
 import { getAppMetaValue } from "@/electron/app/system/system-repository"
 import { ensureWorkspace } from "@/electron/infrastructure/workspace-service"
@@ -20,6 +21,18 @@ function isPathWithinRoot(root: string, target: string) {
   const normalizedRoot = normalizePathForComparison(root)
   const normalizedTarget = normalizePathForComparison(target)
   return normalizedTarget === normalizedRoot || normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+}
+
+async function resolvePathForPolicy(target: string) {
+  try {
+    return await fs.realpath(target)
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code !== "ENOENT") throw error
+    const parent = path.dirname(target)
+    const resolvedParent = await fs.realpath(parent)
+    return path.join(resolvedParent, path.basename(target))
+  }
 }
 
 export async function readToolPreferences(): Promise<ToolPreferenceSettings> {
@@ -48,8 +61,9 @@ export function resolveWorkspaceTarget(relativePath = ".") {
 export async function enforceRelativePathPolicy(relativePath: string | undefined, target: string) {
   const preferences = await readToolPreferences()
   const root = path.resolve(getWorkspacePath())
-  if (!isPathWithinRoot(root, target)) throw new Error("Path must stay within the workspace root.")
-  const relative = path.relative(root, target).replace(/\\/g, "/").toLowerCase()
+  const [resolvedRoot, resolvedTarget] = await Promise.all([fs.realpath(root), resolvePathForPolicy(target)])
+  if (!isPathWithinRoot(resolvedRoot, resolvedTarget)) throw new Error("Path must stay within the workspace root.")
+  const relative = path.relative(resolvedRoot, resolvedTarget).replace(/\\/g, "/").toLowerCase()
   const rules = normalizeRuleList(preferences.fileAccessDirectories)
   if (!rules.length) return
   const matches = rules.some((rule) => {

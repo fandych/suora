@@ -150,4 +150,21 @@ channel:healthCheck
 - `:platform` webhook 参数当前只用于路径，不是独立的安全校验。
 - 健康检查对部分平台是配置级检查，不是完整端到端探测。
 
+## 下一迭代：频道 Blob Schema 技术债
+
+当前频道运行态把最近消息、用户聚合和 debug log 主要存放在单个 JSON blob 中。短期内它简化了落地，但在以下场景会放大成本：
+
+- 单个渠道消息很多时，每次更新都会触发整段 JSON 反序列化与重序列化。
+- debug log、消息摘要和用户聚合无法独立裁剪、索引或按时间分页。
+- 后续若要补“最近删除”“审计导出”“增量同步”或更长历史保留，需要继续在 blob 上叠加迁移逻辑。
+
+建议将该问题作为单独一期处理，范围控制为：
+
+1. 为 channel message 与 debug log 建独立表，保留 channel summary 为轻量聚合字段。
+2. 迁移现有 blob 数据到新表，并在迁移完成前保留一次性回退能力。
+3. 让 runtime persistence 改为 append-only 写入，Renderer 再按需分页读取，而不是每次整段覆盖。
+4. 为消息裁剪、日志上限、重建 summary 与旧 blob 兼容读取补单元与迁移测试。
+
+这一期不应顺带重做 Channel UI；目标是先把 schema 和 persistence 边界拆开，再决定是否增加历史面板、过滤器或导出能力。
+
 修改 Channel Runtime 时应测试启动/停止、重复注册、断线重连、消息去重、队列重试、Webhook 签名、Agent 回流和 Electron 重启恢复。

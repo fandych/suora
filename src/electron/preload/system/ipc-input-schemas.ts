@@ -1,6 +1,7 @@
 import { z } from "zod"
 
 export const entityIdSchema = z.string().trim().min(1).max(256)
+export const recentlyDeletedKindSchema = z.enum(["chat", "document", "workflow"])
 export const agentListSchema = z
   .object({
     source: z.enum(["custom", "system"]).optional(),
@@ -89,6 +90,9 @@ export const aiFetchStartSchema = z
   .refine((value) => !(value.bodyText && value.bodyBase64), {
     message: "Provide either bodyText or bodyBase64, not both.",
   })
+export const recentlyDeletedRestoreSchema = z.object({
+  entryId: entityIdSchema,
+})
 export const versionedResourceSaveSchema = z.object({
   id: entityIdSchema,
   title: z.string().trim().max(512),

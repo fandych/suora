@@ -4,7 +4,7 @@ import { useLocation, useNavigate, useParams } from "react-router"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { AgentApi } from "@/services/agent-service"
 import { getChatDetail, updateChatMessageParts, saveChatSessionSettings } from "@/services/chat-service"
-import type { ChatRuntimeSettings } from "@/types/chat"
+import type { ChatDetail, ChatRuntimeSettings } from "@/types/chat"
 import { ModelApi } from "@/services/model-service"
 import { hasAppBridge } from "@/services/bridge"
 import { ToolApi } from "@/services/tool-service"
@@ -41,6 +41,7 @@ export function useChatDetailController() {
   const [autoScroll, setAutoScroll] = useState(true)
   const [selectedAgentId, setSelectedAgentId] = useState("")
   const [attachments, setAttachments] = useState<ChatAttachment[]>([])
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false)
   const attachmentActions = useChatAttachmentActions(setAttachments)
   const [browserState, setBrowserState] = useState<{
     open: boolean
@@ -99,6 +100,7 @@ export function useChatDetailController() {
     settingsDraft?.model.providerType ??
     "openai"
   const supportsAttachments = Boolean(selectedModelRecord?.capabilities?.includes("vision"))
+  const hasOlderMessages = Boolean(selectedChat?.nextCursor)
   const combinedError = (activeChatId ? error : null) ?? settingsError
   const modelValue = useMemo(() => {
     if (!settingsDraft) {
@@ -245,6 +247,40 @@ export function useChatDetailController() {
     persistChatSessionSettings(nextRuntime, selectedAgentId, "Model updated")
   }
 
+  const handleLoadEarlierMessages = useCallback(async () => {
+    if (!activeChatId || !selectedChat?.nextCursor || isLoadingOlderMessages) {
+      return
+    }
+
+    try {
+      setIsLoadingOlderMessages(true)
+      const olderDetail = await ChatApi.get(activeChatId, { beforeCursor: selectedChat.nextCursor, limit: 200 })
+      setData((current) => {
+        if (!current || !olderDetail) return current
+        const seen = new Set<string>()
+        const mergedMessages = [...olderDetail.messages, ...current.messages].filter((message) => {
+          if (seen.has(message.id)) return false
+          seen.add(message.id)
+          return true
+        })
+        return {
+          ...current,
+          chat: olderDetail.chat,
+          messages: mergedMessages,
+          nextCursor: olderDetail.nextCursor ?? null,
+        } satisfies ChatDetail
+      })
+    } catch (nextError) {
+      showToast({
+        title: "Failed to load earlier messages",
+        description: nextError instanceof Error ? nextError.message : String(nextError),
+        type: "error",
+      })
+    } finally {
+      setIsLoadingOlderMessages(false)
+    }
+  }, [activeChatId, isLoadingOlderMessages, selectedChat, setData])
+
   const handleSend = async (draftOverride?: string) => {
     const nextDraft = draftOverride ?? draft
     if ((!nextDraft.trim() && attachments.length === 0) || !settingsDraft || isResponding) {
@@ -379,6 +415,7 @@ export function useChatDetailController() {
     combinedError,
     draft,
     groupedProviders,
+    handleLoadEarlierMessages,
     ...attachmentActions,
     handleExportChat,
     handleRetryTool,
@@ -405,8 +442,10 @@ export function useChatDetailController() {
       })
     },
     isLoading,
+    isLoadingOlderMessages,
     isResponding,
     isStopping,
+    hasOlderMessages,
     modelValue,
     onModelChange: (value: string) => {
       const [providerId, modelId] = value.split("::")

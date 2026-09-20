@@ -23,7 +23,8 @@ import type { ChatRuntimeSettings, ChatSessionSettings } from "@/types/chat"
 
 export const chatApplicationService = {
   list: () => listChats(),
-  get: (chatId: string) => getChat(chatId),
+  get: (payload: string | { chatId: string; limit?: number; beforeCreatedAt?: number }) =>
+    typeof payload === "string" ? getChat(payload) : getChat(payload.chatId, payload),
   create: () => createChat(),
   ensure: (payload: Parameters<typeof ensureChat>[0]) => ensureChat(payload),
   remove: (chatId: string) => deleteChat(chatId),

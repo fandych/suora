@@ -1,5 +1,40 @@
 import type { DocumentFileContent, DocumentFileTree, DocumentFileTreeNode, DocumentPageRecord } from "@/types/document"
 
+const WINDOWS_RESERVED_FILE_NAMES = new Set([
+  "aux",
+  "com1",
+  "com2",
+  "com3",
+  "com4",
+  "com5",
+  "com6",
+  "com7",
+  "com8",
+  "com9",
+  "con",
+  "lpt1",
+  "lpt2",
+  "lpt3",
+  "lpt4",
+  "lpt5",
+  "lpt6",
+  "lpt7",
+  "lpt8",
+  "lpt9",
+  "nul",
+  "prn",
+])
+
+export function assertSafeDocumentFileName(value: string) {
+  const normalized = value.trim()
+  if (!normalized) throw new Error("Document file name is required.")
+  const stem = normalized.split(/[\\/]/).pop()?.split(".")[0]?.trim().toLowerCase()
+  if (stem && WINDOWS_RESERVED_FILE_NAMES.has(stem)) {
+    throw new Error(`Document file name uses a reserved Windows name: ${value}`)
+  }
+  return normalized
+}
+
 export function buildDocumentFileTree(
   documentId: string,
   documentName: string,
@@ -18,7 +53,7 @@ export function buildDocumentFileTree(
             : 1,
       )
       .map((page) => ({
-        fileName: page.title,
+        fileName: assertSafeDocumentFileName(page.title),
         fileId: page.id,
         fileType: (page.type ?? "document") === "folder" ? "directory" : "document",
         ...((page.type ?? "document") === "folder" ? { children: build(page.id) } : {}),
@@ -41,7 +76,7 @@ export function getDocumentFileContent(
     documentName,
     description,
     fileId: page.id,
-    fileName: page.title,
+    fileName: assertSafeDocumentFileName(page.title),
     fileContent: page.content,
     fileType: (page.type ?? "document") === "folder" ? "directory" : "document",
     lastModifyDate: updatedAt,

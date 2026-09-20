@@ -1,5 +1,5 @@
 import crypto from "node:crypto"
-import { and, desc, eq, exists, sql } from "drizzle-orm"
+import { and, desc, eq, exists, lt, or, sql } from "drizzle-orm"
 import { getDrizzleDatabase } from "@/drizzle/db"
 import { appMeta, chatMessages, chats } from "@/drizzle/schema"
 import {
@@ -14,18 +14,61 @@ import {
 } from "@/electron/app/chats/chat-schemas"
 import type { ChatMessagePart } from "@/types/chat"
 import { setProxySettings } from "@/electron/infrastructure/proxy-service"
+import { recordRecentlyDeletedResource } from "@/electron/app/system/system-repository"
+import type { ChatDetail, ChatMessageCursor, ChatSummary } from "@/types/chat"
 
-async function readChat(chatId: string) {
+const DEFAULT_CHAT_MESSAGE_LIMIT = 200
+const MAX_CHAT_MESSAGE_LIMIT = 500
+
+type ChatReadOptions = {
+  limit?: number
+  beforeCursor?: ChatMessageCursor
+}
+
+function normalizeChatReadOptions(options?: ChatReadOptions) {
+  const limit =
+    typeof options?.limit === "number" && Number.isFinite(options.limit)
+      ? Math.max(1, Math.min(Math.trunc(options.limit), MAX_CHAT_MESSAGE_LIMIT))
+      : DEFAULT_CHAT_MESSAGE_LIMIT
+  const beforeCursor =
+    options?.beforeCursor &&
+    typeof options.beforeCursor.createdAt === "number" &&
+    Number.isFinite(options.beforeCursor.createdAt) &&
+    options.beforeCursor.createdAt > 0 &&
+    typeof options.beforeCursor.id === "string" &&
+    options.beforeCursor.id
+      ? { createdAt: Math.trunc(options.beforeCursor.createdAt), id: options.beforeCursor.id }
+      : undefined
+  return { limit, beforeCursor }
+}
+
+async function readChat(chatId: string, options?: ChatReadOptions) {
   const database = getDrizzleDatabase()
+  const { limit, beforeCursor } = normalizeChatReadOptions(options)
   const [chat] = await database.select().from(chats).where(eq(chats.id, chatId)).limit(1)
   const rows = await database
     .select()
     .from(chatMessages)
-    .where(eq(chatMessages.chatId, chatId))
-    .orderBy(chatMessages.createdAt)
+    .where(
+      beforeCursor
+        ? and(
+            eq(chatMessages.chatId, chatId),
+            or(
+              lt(chatMessages.createdAt, beforeCursor.createdAt),
+              and(eq(chatMessages.createdAt, beforeCursor.createdAt), lt(chatMessages.id, beforeCursor.id)),
+            ),
+          )
+        : eq(chatMessages.chatId, chatId),
+    )
+    .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+    .limit(limit + 1)
+  const hasMore = rows.length > limit
+  const pageRows = (hasMore ? rows.slice(0, limit) : rows).reverse()
   return {
     chat: chat ?? null,
-    messages: rows.map((row) => ({ ...row, parts: parseStoredChatMessageParts(row.partsJson) })),
+    messages: pageRows.map((row) => ({ ...row, parts: parseStoredChatMessageParts(row.partsJson) })),
+    nextCursor:
+      hasMore && pageRows[0] ? { createdAt: pageRows[0].createdAt, id: pageRows[0].id } : null,
   }
 }
 
@@ -38,8 +81,8 @@ export async function listChats() {
     .orderBy(desc(chats.updatedAt))
 }
 
-export async function getChat(chatId: string) {
-  return readChat(chatId)
+export async function getChat(chatId: string, options?: ChatReadOptions) {
+  return readChat(chatId, options)
 }
 
 export async function createChat() {
@@ -85,10 +128,49 @@ export async function ensureChat(payload: {
 
 export async function deleteChat(chatId: string) {
   const database = getDrizzleDatabase()
+  const snapshot = await readChat(chatId, { limit: MAX_CHAT_MESSAGE_LIMIT })
+  if (snapshot.chat) {
+    await recordRecentlyDeletedResource({
+      resourceId: snapshot.chat.id,
+      kind: "chat",
+      title: snapshot.chat.title,
+      deletedAt: Date.now(),
+      snapshot,
+    })
+  }
   await database.delete(chatMessages).where(eq(chatMessages.chatId, chatId))
   const existing = await database.select({ id: chats.id }).from(chats).where(eq(chats.id, chatId)).limit(1)
   await database.delete(chats).where(eq(chats.id, chatId))
   return existing.length > 0
+}
+
+export async function restoreChatSnapshot(snapshot: ChatDetail & { nextCursor?: ChatMessageCursor | null }) {
+  const database = getDrizzleDatabase()
+  const chat = snapshot.chat as ChatSummary
+  const [existing] = await database.select({ id: chats.id }).from(chats).where(eq(chats.id, chat.id)).limit(1)
+  if (existing) throw new Error(`Chat '${chat.title}' already exists.`)
+  await database.insert(chats).values({
+    id: chat.id,
+    title: chat.title,
+    chatbotId: chat.chatbotId,
+    summary: chat.summary,
+    sourceType: chat.sourceType ?? "manual",
+    sourceRef: chat.sourceRef ?? null,
+    updatedAt: chat.updatedAt,
+  })
+  if (snapshot.messages.length > 0) {
+    await database.insert(chatMessages).values(
+      snapshot.messages.map((message) => ({
+        id: message.id,
+        chatId: chat.id,
+        role: message.role,
+        content: message.content,
+        partsJson: serializeChatMessageParts(message.parts ?? []),
+        createdAt: message.createdAt,
+      })),
+    )
+  }
+  return getChat(chat.id)
 }
 
 export async function appendChatMessage(
@@ -127,11 +209,16 @@ export async function updateChatMessageParts(payload: {
   parts: ChatMessagePart[]
 }) {
   const database = getDrizzleDatabase()
-  const result = await database
+  const [existing] = await database
+    .select({ id: chatMessages.id })
+    .from(chatMessages)
+    .where(and(eq(chatMessages.id, payload.messageId), eq(chatMessages.chatId, payload.chatId)))
+    .limit(1)
+  if (!existing) throw new Error("Message update failed.")
+  await database
     .update(chatMessages)
     .set({ partsJson: serializeChatMessageParts(payload.parts) })
     .where(and(eq(chatMessages.id, payload.messageId), eq(chatMessages.chatId, payload.chatId)))
-  if (!result) throw new Error("Message update failed.")
   return getChat(payload.chatId)
 }
 

@@ -1,3 +1,8 @@
+export type ChatMessageCursor = {
+  createdAt: number
+  id: string
+}
+
 export type ChatSummary = {
   id: string
   title: string
@@ -21,6 +26,7 @@ export type ChatMessageRecord = {
 export type ChatDetail = {
   chat: ChatSummary
   messages: ChatMessageRecord[]
+  nextCursor?: ChatMessageCursor | null
 }
 
 export type ChatErrorKind = "step-limit" | "timeout" | "tool" | "permission" | "request" | "unknown"

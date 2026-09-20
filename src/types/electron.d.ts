@@ -1,3 +1,4 @@
+import type { RecentlyDeletedResourceEntry, RecentlyDeletedRestoreResult, RecentlyDeletedResourceKind } from "@/types/system"
 import type {
   WorkflowRunAccepted,
   WorkflowRunCancelResult,
@@ -109,6 +110,8 @@ declare global {
       system: {
         info: () => Promise<unknown>
         diagnostics: () => Promise<unknown>
+        listRecentlyDeleted: (kind?: RecentlyDeletedResourceKind) => Promise<RecentlyDeletedResourceEntry[]>
+        restoreRecentlyDeleted: (entryId: string) => Promise<RecentlyDeletedRestoreResult>
       }
       workspace: {
         getPaths: () => Promise<unknown>
@@ -117,7 +120,7 @@ declare global {
       }
       chats: {
         list: () => Promise<unknown>
-        get: (chatId: string) => Promise<unknown>
+        get: (payload: string | { chatId: string; limit?: number; beforeCursor?: { createdAt: number; id: string } }) => Promise<unknown>
         create: (defaults?: unknown) => Promise<unknown>
         ensure: (payload: unknown) => Promise<unknown>
         delete: (chatId: string) => Promise<unknown>

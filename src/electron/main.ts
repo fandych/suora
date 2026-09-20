@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron"
+import { app, BrowserWindow, dialog } from "electron"
 
 import { createElectronApp } from "@/electron/app"
 import { applyMigrations, closeDatabase, openDatabase } from "@/electron/infrastructure/db-core"
@@ -13,21 +13,28 @@ import { schedulerRuntime } from "@/electron/app/schedulers/runtime"
 configureAppStoragePaths()
 const electronApp = createElectronApp()
 
-app.whenReady().then(async () => {
-  await ensureWorkspace()
-  applyMigrations(openDatabase())
-  await electronApp.initialize()
-  setupIpc()
-  configureAutoUpdater()
+app.whenReady()
+  .then(async () => {
+    await ensureWorkspace()
+    applyMigrations(openDatabase())
+    await electronApp.initialize()
+    setupIpc()
+    configureAutoUpdater()
 
-  await createWindow()
+    await createWindow()
 
-  app.on("activate", async () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      await createWindow()
-    }
+    app.on("activate", async () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        await createWindow()
+      }
+    })
   })
-})
+  .catch((error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error("Failed to initialize Electron app:", error)
+    dialog.showErrorBox("SUORA failed to start", message)
+    app.quit()
+  })
 
 app.on("certificate-error", (event, _webContents, _url, _error, _certificate, callback) => {
   const settings = getPreferenceSettingsSnapshot()
@@ -54,7 +61,11 @@ process.on("unhandledRejection", (reason) => {
 })
 
 app.on("before-quit", () => {
-  schedulerRuntime.stop()
+  try {
+    schedulerRuntime.stop()
+  } catch {
+    // Ignore shutdown errors
+  }
   try {
     closeBrowserWindow()
   } catch {

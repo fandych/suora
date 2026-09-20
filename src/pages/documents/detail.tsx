@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router"
-import { EllipsisIcon, PencilIcon, PowerIcon, Trash2Icon } from "lucide-react"
+import { EllipsisIcon, PencilIcon, PowerIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -9,10 +9,12 @@ import { useAutosaveStatus } from "@/hooks/use-autosave-status"
 import { emitDataChanged } from "@/services/data-events"
 import type { DocumentDetail } from "@/types/document"
 import { DocumentApi } from "@/services/document-service"
+import { assertSafeDocumentFileName } from "@/electron/app/documents/file-service"
 import { buildDocumentTree, getDocumentDisplayName } from "@/pages/documents/document-tree"
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser/file-exports"
 import PageHeader from "@/pages/components/page-header"
 import { ConfirmDeleteDialog } from "@/pages/components/confirm-delete-dialog"
+import { RecentlyDeletedDialog } from "@/pages/components/recently-deleted-dialog"
 import { ResourceEntryDialog } from "@/pages/components/resource-entry-dialog"
 import { ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { DocumentCreateDialog } from "@/pages/documents/components/document-create-dialog"
@@ -75,6 +77,7 @@ const DocumentsDetailPage = () => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false)
   const [isDocumentDeleteDialogOpen, setIsDocumentDeleteDialogOpen] = useState(false)
+  const [isRecentlyDeletedOpen, setIsRecentlyDeletedOpen] = useState(false)
 
   const persistDraft = async (nextDraft: DocumentDetail) => {
     const saved = await DocumentApi.save({
@@ -166,6 +169,12 @@ const DocumentsDetailPage = () => {
     const rawValue = entryDialogValue.trim()
     if (!rawValue) {
       setEntryDialogError("Name is required.")
+      return
+    }
+    try {
+      assertSafeDocumentFileName(rawValue)
+    } catch (error) {
+      setEntryDialogError(error instanceof Error ? error.message : String(error))
       return
     }
 
@@ -321,25 +330,31 @@ const DocumentsDetailPage = () => {
         description={draft?.document.summary}
         actions={
           draft ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Document actions" />}>
-                <EllipsisIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={toggleDocumentEnabled}>
-                  <PowerIcon />
-                  {draft.document.enabled ? "Disable" : "Enable"}
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => setIsMetadataDialogOpen(true)}>
-                  <PencilIcon className="size-4" />
-                  Edit Info
-                </DropdownMenuItem>
-                <DropdownMenuItem variant="destructive" onClick={() => setIsDocumentDeleteDialogOpen(true)}>
-                  <Trash2Icon className="size-4" />
-                  Delete
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <>
+              <Button type="button" variant="outline" size="sm" onClick={() => setIsRecentlyDeletedOpen(true)}>
+                <RotateCcwIcon className="size-4" />
+                Recently deleted
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Document actions" />}>
+                  <EllipsisIcon />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={toggleDocumentEnabled}>
+                    <PowerIcon />
+                    {draft.document.enabled ? "Disable" : "Enable"}
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setIsMetadataDialogOpen(true)}>
+                    <PencilIcon className="size-4" />
+                    Edit Info
+                  </DropdownMenuItem>
+                  <DropdownMenuItem variant="destructive" onClick={() => setIsDocumentDeleteDialogOpen(true)}>
+                    <Trash2Icon className="size-4" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           ) : null
         }
       />
@@ -456,6 +471,16 @@ const DocumentsDetailPage = () => {
         }}
         open={Boolean(deleteTargetId)}
         title="Delete item"
+      />
+      <RecentlyDeletedDialog
+        kind="document"
+        open={isRecentlyDeletedOpen}
+        onOpenChange={setIsRecentlyDeletedOpen}
+        onRestored={async (result) => {
+          emitDataChanged("/documents")
+          navigate(`/documents/${result.resourceId}`)
+        }}
+        title="Restore deleted documents"
       />
     </div>
   )

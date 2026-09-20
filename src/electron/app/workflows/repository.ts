@@ -3,6 +3,15 @@ import { and, desc, eq } from "drizzle-orm"
 import { getDrizzleDatabase } from "@/drizzle/db"
 import { workflowInvocations, workflowVersions, workflows } from "@/drizzle/schema"
 import { createDefaultWorkflowDefinition, validateWorkflowDefinitionJson } from "@/electron/app/workflows/definition"
+import { recordRecentlyDeletedResource } from "@/electron/app/system/system-repository"
+
+type WorkflowVersionSnapshot = typeof workflowVersions.$inferSelect
+type WorkflowInvocationSnapshot = typeof workflowInvocations.$inferSelect
+type WorkflowSnapshot = {
+  workflow: typeof workflows.$inferSelect | null
+  versions: WorkflowVersionSnapshot[]
+  invocations: WorkflowInvocationSnapshot[]
+}
 
 export async function listWorkflowDefinitions() {
   return getDrizzleDatabase().select().from(workflows).orderBy(desc(workflows.updatedAt))
@@ -98,15 +107,63 @@ export async function saveWorkflowDefinition(payload: {
 
 export async function deleteWorkflowDefinition(workflowId: string) {
   const database = getDrizzleDatabase()
-  const existing = await database
-    .select({ id: workflows.id })
-    .from(workflows)
-    .where(eq(workflows.id, workflowId))
-    .limit(1)
+  const snapshot = await getWorkflowDefinition(workflowId)
+  const existing = snapshot.workflow ? [{ id: snapshot.workflow.id }] : []
+  if (snapshot.workflow) {
+    await recordRecentlyDeletedResource({
+      resourceId: snapshot.workflow.id,
+      kind: "workflow",
+      title: snapshot.workflow.title,
+      deletedAt: Date.now(),
+      snapshot,
+    })
+  }
   await database.delete(workflowInvocations).where(eq(workflowInvocations.workflowId, workflowId))
   await database.delete(workflowVersions).where(eq(workflowVersions.workflowId, workflowId))
   await database.delete(workflows).where(eq(workflows.id, workflowId))
   return existing.length > 0
+}
+
+export async function restoreWorkflowSnapshot(snapshot: WorkflowSnapshot) {
+  const database = getDrizzleDatabase()
+  const workflow = snapshot.workflow
+  if (!workflow) throw new Error("Workflow snapshot is missing the workflow record.")
+  const [existing] = await database.select({ id: workflows.id }).from(workflows).where(eq(workflows.id, workflow.id)).limit(1)
+  if (existing) throw new Error(`Workflow '${workflow.title}' already exists.`)
+  await database.insert(workflows).values({
+    id: workflow.id,
+    title: workflow.title,
+    summary: workflow.summary,
+    enabled: workflow.enabled,
+    updatedAt: workflow.updatedAt,
+  })
+  await database.insert(workflowVersions).values(
+    snapshot.versions.map((version) => ({
+      id: version.id,
+      workflowId: workflow.id,
+      major: version.major,
+      minor: version.minor,
+      isRelease: version.isRelease,
+      definitionJson: version.definitionJson,
+      createdAt: version.createdAt,
+    })),
+  )
+  if (snapshot.invocations.length > 0) {
+    await database.insert(workflowInvocations).values(
+      snapshot.invocations.map((invocation) => ({
+        id: invocation.id,
+        workflowId: workflow.id,
+        versionId: invocation.versionId,
+        status: invocation.status,
+        trigger: invocation.trigger,
+        inputJson: invocation.inputJson,
+        outputJson: invocation.outputJson,
+        traceJson: invocation.traceJson,
+        createdAt: invocation.createdAt,
+      })),
+    )
+  }
+  return getWorkflowDefinition(workflow.id)
 }
 
 export async function assertWorkflowVersion(workflowId: string, versionId: string) {

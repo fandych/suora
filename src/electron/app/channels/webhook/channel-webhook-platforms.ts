@@ -29,7 +29,12 @@ export async function handleFeishuWebhook(
     const timestamp = String(req.headers["x-lark-request-timestamp"] || "")
     const nonce = String(req.headers["x-lark-request-nonce"] || "")
     const signature = String(req.headers["x-lark-signature"] || "")
-    if (!verifyFeishuSignature(timestamp, nonce, channel.feishuEncryptKey, getWebhookRawBody(req, body), signature)) {
+    const rawBody = getWebhookRawBody(req)
+    if (!rawBody) {
+      res.status(400).json({ error: "Missing raw request body for signature verification" })
+      return
+    }
+    if (!verifyFeishuSignature(timestamp, nonce, channel.feishuEncryptKey, rawBody, signature)) {
       res.status(403).json({ error: "Invalid signature" })
       return
     }

@@ -2,6 +2,15 @@ import { z } from "zod"
 import { entityIdSchema } from "@/electron/preload/system/ipc-input-schemas"
 import { chatRuntimeModelSchema, chatRuntimeSettingsPayloadSchema, proxySettingsSchema } from "@/electron/app/chats/chat-schemas"
 
+export const chatGetSchema = z.union([
+  entityIdSchema,
+  z.object({
+    chatId: entityIdSchema,
+    limit: z.number().finite().int().min(1).max(500).optional(),
+    beforeCreatedAt: z.number().finite().int().positive().optional(),
+  }),
+])
+
 export const chatEnsureSchema = z.object({
   chatId: entityIdSchema,
   title: z.string().trim().max(512),

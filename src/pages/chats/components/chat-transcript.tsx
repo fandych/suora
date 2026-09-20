@@ -1,6 +1,7 @@
 import { useMemo } from "react"
 import { BotIcon } from "lucide-react"
 
+import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import {
   MessageScroller,
@@ -22,6 +23,9 @@ type ChatTranscriptProps = {
   assistantResponseMessageId: string | null
   assistantResponseParts: AssistantResponsePart[]
   autoScroll: boolean
+  hasOlderMessages?: boolean
+  isLoadingOlderMessages?: boolean
+  onLoadEarlierMessages?: () => Promise<void> | void
   onRetryTool?: (messageId: string | null, activity: ChatToolActivity) => Promise<void> | void
   selectedChat: ChatDetail | null
 }
@@ -31,6 +35,9 @@ export function ChatTranscript({
   assistantResponseMessageId,
   assistantResponseParts,
   autoScroll,
+  hasOlderMessages = false,
+  isLoadingOlderMessages = false,
+  onLoadEarlierMessages,
   onRetryTool,
   selectedChat,
 }: ChatTranscriptProps) {
@@ -52,6 +59,19 @@ export function ChatTranscript({
         <MessageScroller className="flex-1 min-h-0">
           <MessageScrollerViewport aria-label="Chat transcript" className="border-t bg-muted/20">
             <MessageScrollerContent className="min-h-0 gap-3 px-(--card-spacing) py-4">
+              {hasOlderMessages ? (
+                <MessageScrollerItem messageId="conversation-load-earlier" className="flex justify-center">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isLoadingOlderMessages}
+                    onClick={() => void onLoadEarlierMessages?.()}
+                  >
+                    {isLoadingOlderMessages ? "Loading…" : "Load earlier messages"}
+                  </Button>
+                </MessageScrollerItem>
+              ) : null}
               {selectedChat?.messages.map((message) => (
                 <MessageScrollerItem key={message.id} messageId={message.id}>
                   {message.id === assistantResponseMessageId && assistantResponseParts.length > 0 ? (

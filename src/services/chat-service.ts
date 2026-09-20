@@ -2,6 +2,12 @@ import type { ChatDetail, ChatRuntimeStatus, ChatSummary } from "@/types/chat"
 import type { ChatAttachment, ChatMessagePart, ChatRuntimeSettings, ChatSessionSettings } from "@/types/chat"
 import { requireAppBridge } from "@/services/bridge"
 
+type ChatGetPayload = {
+  chatId: string
+  limit?: number
+  beforeCursor?: { createdAt: number; id: string }
+}
+
 type ChatEnsurePayload = {
   chatId: string
   title: string
@@ -28,7 +34,8 @@ export type RetryableChatToolActivity = {
 
 export const ChatApi = {
   listAll: () => requireAppBridge().chats.list() as Promise<ChatSummary[]>,
-  get: (chatId: string) => requireAppBridge().chats.get(chatId) as Promise<ChatDetail>,
+  get: (chatId: string, options?: Omit<ChatGetPayload, "chatId">) =>
+    requireAppBridge().chats.get(options ? { chatId, ...options } : chatId) as Promise<ChatDetail>,
   create: () => requireAppBridge().chats.create() as Promise<ChatDetail>,
   ensure: async (payload: ChatEnsurePayload) => {
     const detail = (await requireAppBridge().chats.ensure(payload)) as ChatDetail | null
