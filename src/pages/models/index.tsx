@@ -1,15 +1,27 @@
+import { useEffect } from "react"
 import { useNavigate } from "react-router"
 
 import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import PageHeader from "@/pages/components/page-header"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { ModelApi } from "@/services/model-service"
+import { subscribeToDataChanges } from "@/services/data-events"
 import { ProviderCard } from "@/pages/models/components/provider-card"
 
 const ModelsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => ModelApi.listConfigured(), [])
   const providers = data ?? []
+
+  useEffect(
+    () =>
+      subscribeToDataChanges((route) => {
+        if (route === "/models") {
+          reload()
+        }
+      }),
+    [reload],
+  )
 
   return (
     <div className="flex min-h-full flex-col bg-background">

@@ -2,6 +2,7 @@ import type { Request, Response } from "express"
 
 import type { ChannelConfigRecord } from "@/types/channel"
 import { verifyWebhookSecret } from "@/electron/app/channels/webhook/channel-webhook-security"
+import { appendDebugLog } from "@/electron/app/channels/runtime/channel-runtime-persistence"
 import {
   executeEmailActions,
   formatEmailContent,
@@ -32,22 +33,43 @@ import {
 
 type EmitMessage = EmitChannelMessage
 
+async function withWebhookErrorBoundary(
+  channel: ChannelConfigRecord,
+  res: Response,
+  action: () => Promise<void>,
+) {
+  try {
+    await action()
+  } catch (error) {
+    appendDebugLog(
+      channel.id,
+      "error",
+      `Webhook handler failed for ${channel.platform}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+    if (!res.headersSent) {
+      res.status(500).json({ error: "Webhook processing failed" })
+    }
+  }
+}
+
 export async function handleGetWebhookRequest(
   req: Request,
   res: Response,
   channel: ChannelConfigRecord,
   emitMessage: EmitMessage,
 ) {
-  switch (channel.platform) {
-    case "wechat":
-    case "wechat_official":
-    case "wechat_miniprogram":
-      await handleWeChatWebhook(req, res, channel, emitMessage)
-      return
-    default:
-      if (dispatchGetWebhook(channel.platform)) return
-      respondUnsupportedMethod(res, channel.platform)
-  }
+  await withWebhookErrorBoundary(channel, res, async () => {
+    switch (channel.platform) {
+      case "wechat":
+      case "wechat_official":
+      case "wechat_miniprogram":
+        await handleWeChatWebhook(req, res, channel, emitMessage)
+        return
+      default:
+        if (dispatchGetWebhook(channel.platform)) return
+        respondUnsupportedMethod(res, channel.platform)
+    }
+  })
 }
 
 export async function handlePostWebhookRequest(
@@ -56,36 +78,38 @@ export async function handlePostWebhookRequest(
   channel: ChannelConfigRecord,
   emitMessage: EmitMessage,
 ) {
-  switch (channel.platform) {
-    case "feishu":
-      await handleFeishuWebhook(req, res, channel, emitMessage)
-      return
-    case "dingtalk":
-      await handleDingTalkWebhook(req, res, channel, emitMessage)
-      return
-    case "wechat":
-    case "wechat_official":
-    case "wechat_miniprogram":
-      await handleWeChatWebhook(req, res, channel, emitMessage)
-      return
-    case "wechat_personal":
-      await handleWeChatPersonalWebhook(req, res, channel, emitMessage)
-      return
-    case "telegram":
-      await handleTelegramWebhook(req, res, channel, emitMessage)
-      return
-    case "teams":
-      await handleTeamsWebhook(req, res, channel, emitMessage)
-      return
-    case "email":
-      await handleEmailWebhook(req, res, channel, emitMessage)
-      return
-    case "custom":
-      await handleCustomWebhook(req, res, channel, emitMessage)
-      return
-    default:
-      respondUnsupportedPlatform(res, channel.platform)
-  }
+  await withWebhookErrorBoundary(channel, res, async () => {
+    switch (channel.platform) {
+      case "feishu":
+        await handleFeishuWebhook(req, res, channel, emitMessage)
+        return
+      case "dingtalk":
+        await handleDingTalkWebhook(req, res, channel, emitMessage)
+        return
+      case "wechat":
+      case "wechat_official":
+      case "wechat_miniprogram":
+        await handleWeChatWebhook(req, res, channel, emitMessage)
+        return
+      case "wechat_personal":
+        await handleWeChatPersonalWebhook(req, res, channel, emitMessage)
+        return
+      case "telegram":
+        await handleTelegramWebhook(req, res, channel, emitMessage)
+        return
+      case "teams":
+        await handleTeamsWebhook(req, res, channel, emitMessage)
+        return
+      case "email":
+        await handleEmailWebhook(req, res, channel, emitMessage)
+        return
+      case "custom":
+        await handleCustomWebhook(req, res, channel, emitMessage)
+        return
+      default:
+        respondUnsupportedPlatform(res, channel.platform)
+    }
+  })
 }
 
 /* async function handleFeishuWebhook(req: Request, res: Response, channel: ChannelConfigRecord, emitMessage: EmitMessage) {

@@ -1,4 +1,5 @@
 import type { SchedulerDetail, SchedulerRunRecord } from "@/types/scheduler"
+import { requireAppBridge } from "@/services/bridge"
 
 function assertValidJson(value: string) {
   const normalized = value.trim()
@@ -28,15 +29,15 @@ function normalizeSavePayload(payload: SchedulerDetail) {
 }
 
 export const SchedulerApi = {
-  listAll: () => window.app!.schedulers.list() as Promise<SchedulerDetail[]>,
-  get: (schedulerId: string) => window.app!.schedulers.get(schedulerId) as Promise<SchedulerDetail | null>,
-  create: () => window.app!.schedulers.create() as Promise<SchedulerDetail>,
+  listAll: () => requireAppBridge().schedulers.list() as Promise<SchedulerDetail[]>,
+  get: (schedulerId: string) => requireAppBridge().schedulers.get(schedulerId) as Promise<SchedulerDetail | null>,
+  create: () => requireAppBridge().schedulers.create() as Promise<SchedulerDetail>,
   save: (payload: SchedulerDetail) =>
-    window.app!.schedulers.save(normalizeSavePayload(payload)) as Promise<SchedulerDetail>,
+    requireAppBridge().schedulers.save(normalizeSavePayload(payload)) as Promise<SchedulerDetail>,
   setEnabled: (payload: { id: string; enabled: boolean }) =>
-    window.app!.schedulers.setEnabled(payload) as Promise<SchedulerDetail | null>,
-  listRuns: (schedulerId: string) => window.app!.schedulers.listRuns(schedulerId) as Promise<SchedulerRunRecord[]>,
-  remove: (schedulerId: string) => window.app!.schedulers.delete(schedulerId),
+    requireAppBridge().schedulers.setEnabled(payload) as Promise<SchedulerDetail | null>,
+  listRuns: (schedulerId: string) => requireAppBridge().schedulers.listRuns(schedulerId) as Promise<SchedulerRunRecord[]>,
+  remove: (schedulerId: string) => requireAppBridge().schedulers.delete(schedulerId),
 }
 
 export type { SchedulerDetail, SchedulerRunRecord }

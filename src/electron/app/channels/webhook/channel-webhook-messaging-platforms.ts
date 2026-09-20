@@ -11,15 +11,13 @@ export async function handleTelegramWebhook(
   channel: ChannelConfigRecord,
   emitMessage: EmitChannelMessage,
 ) {
-  if (channel.webhookSecret) {
-    const provided =
-      typeof req.headers["x-telegram-bot-api-secret-token"] === "string"
-        ? req.headers["x-telegram-bot-api-secret-token"]
-        : ""
-    if (!provided || !timingSafeCompare(provided, channel.webhookSecret)) {
-      res.status(403).json({ error: "Invalid secret token" })
-      return
-    }
+  const provided =
+    typeof req.headers["x-telegram-bot-api-secret-token"] === "string"
+      ? req.headers["x-telegram-bot-api-secret-token"]
+      : ""
+  if (!channel.webhookSecret || !provided || !timingSafeCompare(provided, channel.webhookSecret)) {
+    res.status(403).json({ error: "Invalid secret token" })
+    return
   }
   const update = req.body as Record<string, unknown>
   const msg = update.message as Record<string, unknown> | undefined

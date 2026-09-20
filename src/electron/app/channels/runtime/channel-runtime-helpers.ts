@@ -1,14 +1,26 @@
 import crypto from "node:crypto"
 
 import type { ChannelConfigRecord } from "@/types/channel"
+import {
+  WECHAT_PERSONAL_API_TIMEOUT_MS,
+  WECHAT_PERSONAL_APP_ID,
+  WECHAT_PERSONAL_CLIENT_VERSION,
+  WECHAT_PERSONAL_DEFAULT_BASE_URL,
+  WECHAT_PERSONAL_LONG_POLL_TIMEOUT_MS,
+  WECHAT_PERSONAL_LOGIN_TTL_MS,
+  WECHAT_PERSONAL_QR_BOT_TYPE,
+  type WeChatPersonalInboundMessage,
+  type WeChatPersonalLoginSession,
+  type WeChatPersonalMessageItem,
+  type WeChatPersonalQrCodeResponse,
+  type WeChatPersonalQrStatusResponse,
+  type WeChatPersonalUpdatesResponse,
+} from "@/electron/app/channels/providers/wechat-personal-types"
+import { getWeChatPersonalBaseUrl } from "@/electron/app/channels/providers/wechat-personal-client"
 export * from "@/electron/app/channels/providers/wechat-personal-types"
 export * from "@/electron/app/channels/providers/wechat-personal-client"
 import type { RuntimeChannelMessage } from "@/electron/app/channels/runtime/channel-runtime-types"
 import { httpRequest } from "@/electron/app/channels/runtime/channel-runtime-http"
-import {
-  WECHAT_PERSONAL_APP_ID,
-  WECHAT_PERSONAL_CLIENT_VERSION,
-} from "@/electron/app/channels/providers/wechat-personal-types"
 export {
   buildWeChatSignature,
   parseWeChatWebhookPayload,
@@ -22,7 +34,6 @@ export * from "@/electron/app/channels/runtime/channel-runtime-email"
 export * from "@/electron/app/channels/runtime/channel-runtime-outbound"
 
 export const WECHAT_XML_CONTENT_TYPES = ["text/xml", "application/xml", "application/*+xml"]
-export const WECHAT_PERSONAL_LOGIN_TTL_MS = 5 * 60 * 1000
 export const SLACK_REQUEST_MAX_AGE_SECONDS = 300
 
 function buildWeChatPersonalHeaders(token?: string) {

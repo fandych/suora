@@ -8,6 +8,7 @@ import WebSocket from "ws"
 import type { ChannelConfigRecord } from "@/types/channel"
 import { httpRequest } from "@/electron/app/channels/runtime/channel-runtime-http"
 import { parseDingTalkStreamMessage } from "@/electron/app/channels/providers/dingtalk-stream-message"
+import type { RuntimeChannelMessage } from "@/electron/app/channels/runtime/channel-runtime-types"
 
 type StreamConnectionInfo = {
   endpoint: string

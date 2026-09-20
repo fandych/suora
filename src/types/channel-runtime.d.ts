@@ -59,5 +59,8 @@ export type WeChatWebhookPayload = {
   Event?: string
   EventKey?: string
   Ticket?: string
+  MsgId?: string
+  AgentID?: string
+  Encrypt?: string
   raw: Record<string, unknown>
 }

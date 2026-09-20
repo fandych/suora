@@ -1,6 +1,6 @@
 import crypto from "node:crypto"
 
-import type { ChannelConfigRecord } from "@/types/channel"
+import type { ChannelConfigRecord, ChannelDetail, ChannelUserRecord } from "@/types/channel"
 import type { ChannelHealthStatus, RuntimeChannelMessage } from "@/electron/app/channels/runtime/channel-runtime-types"
 import {
   getChannelDetail,
@@ -19,7 +19,7 @@ export function appendDebugLog(channelId: string, tone: "info" | "success" | "er
           timestamp: Date.now(),
           tone,
           text,
-        },
+        } satisfies ChannelDetail["runtime"]["debugLog"][number],
         ...detail.runtime.debugLog,
       ].slice(0, 100),
     },
@@ -48,7 +48,7 @@ export function recordHealthCheck(channelId: string, health: ChannelHealthStatus
           timestamp: Date.now(),
           tone: health.isHealthy ? "success" : "error",
           text: health.isHealthy ? "Health check passed." : health.error || "Health check failed.",
-        },
+        } satisfies ChannelDetail["runtime"]["debugLog"][number],
         ...detail.runtime.debugLog,
       ].slice(0, 100),
     },
@@ -58,6 +58,15 @@ export function recordHealthCheck(channelId: string, health: ChannelHealthStatus
 export function recordIncomingMessage(channel: ChannelConfigRecord, message: RuntimeChannelMessage) {
   return updateChannelDetail(channel.id, (detail) => {
     const nextUsers = upsertRuntimeUser(detail.runtime.users, channel.id, message, undefined)
+    const incomingRecord: ChannelDetail["runtime"]["messages"][number] = {
+      id: message.id,
+      direction: "incoming",
+      senderId: message.senderId,
+      senderName: message.senderName,
+      content: message.content,
+      status: "received",
+      createdAt: message.timestamp,
+    }
     return {
       ...detail,
       channel: {
@@ -67,18 +76,7 @@ export function recordIncomingMessage(channel: ChannelConfigRecord, message: Run
       },
       runtime: {
         ...detail.runtime,
-        messages: [
-          ...detail.runtime.messages,
-          {
-            id: message.id,
-            direction: "incoming",
-            senderId: message.senderId,
-            senderName: message.senderName,
-            content: message.content,
-            status: "received",
-            createdAt: message.timestamp,
-          },
-        ].slice(-500),
+        messages: [...detail.runtime.messages, incomingRecord].slice(-500),
         users: nextUsers,
         debugLog: [
           {
@@ -86,7 +84,7 @@ export function recordIncomingMessage(channel: ChannelConfigRecord, message: Run
             timestamp: message.timestamp,
             tone: "info",
             text: `Inbound ${channel.platform} message received from ${message.senderName || message.senderId}.`,
-          },
+          } satisfies ChannelDetail["runtime"]["debugLog"][number],
           ...detail.runtime.debugLog,
         ].slice(0, 100),
       },
@@ -107,6 +105,15 @@ export function recordOutgoingMessage(
 ) {
   return updateChannelDetail(channelId, (detail) => {
     const timestamp = Date.now()
+    const outgoingRecord: ChannelDetail["runtime"]["messages"][number] = {
+      id: crypto.randomUUID(),
+      direction: "outgoing",
+      senderId: message.senderId,
+      senderName: message.senderName,
+      content: message.content,
+      status: message.status,
+      createdAt: timestamp,
+    }
     const nextUsers = message.chatId
       ? upsertRuntimeUser(
           detail.runtime.users,
@@ -138,15 +145,7 @@ export function recordOutgoingMessage(
         ...detail.runtime,
         messages: [
           ...detail.runtime.messages,
-          {
-            id: crypto.randomUUID(),
-            direction: "outgoing",
-            senderId: message.senderId,
-            senderName: message.senderName,
-            content: message.content,
-            status: message.status,
-            createdAt: timestamp,
-          },
+          outgoingRecord,
         ].slice(-500),
         users: nextUsers,
         debugLog: [
@@ -158,7 +157,7 @@ export function recordOutgoingMessage(
               message.status === "sent"
                 ? `Reply sent via ${detail.channel.platform}.`
                 : `Reply failed via ${detail.channel.platform}: ${message.error || "unknown error"}.`,
-          },
+          } satisfies ChannelDetail["runtime"]["debugLog"][number],
           ...detail.runtime.debugLog,
         ].slice(0, 100),
       },
@@ -180,13 +179,13 @@ export function replaceRuntimeChannelConfig(channel: ChannelConfigRecord) {
 }
 
 function upsertRuntimeUser(
-  users: ReturnType<NonNullable<ReturnType<typeof getChannelDetail>>["runtime"]["users"]>,
+  users: ChannelUserRecord[],
   channelId: string,
   message: RuntimeChannelMessage,
   roleOverride?: "assistant",
 ) {
   const userId = message.senderId || message.chatId || "unknown"
-  const existing = users.find((user) => user.senderId === userId)
+  const existing = users.find((user: ChannelUserRecord) => user.senderId === userId)
   const role = roleOverride === "assistant" ? "assistant" : "user"
   const entry = { role, content: message.content, timestamp: message.timestamp } as const
 
@@ -206,7 +205,7 @@ function upsertRuntimeUser(
     ]
   }
 
-  return users.map((user) =>
+  return users.map((user: ChannelUserRecord) =>
     user.senderId === userId
       ? {
           ...user,

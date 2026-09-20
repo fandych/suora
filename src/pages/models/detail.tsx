@@ -51,7 +51,7 @@ const ModelsDetailPage = () => {
     if (modelId) void load(modelId)
   }, [load, modelId])
 
-  const hasApiKey = Boolean(draft?.apiKey.trim())
+  const hasApiKey = Boolean(draft?.apiKey.trim() || draft?.apiKeyConfigured)
   useEffect(() => {
     void ModelApi.listPresets().then((items) => setPresets(items as ProviderPreset[]))
   }, [])
@@ -85,6 +85,7 @@ const ModelsDetailPage = () => {
     await persistProvider({
       ...draft,
       apiKey: "",
+      apiKeyConfigured: false,
       enabled: false,
       models: draft.models.map((model) => ({ ...model, enabled: false })),
     })

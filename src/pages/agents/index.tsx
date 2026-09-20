@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useEffect, useMemo } from "react"
 import { useNavigate } from "react-router"
 
 import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
@@ -6,11 +6,23 @@ import PageHeader from "@/pages/components/page-header"
 import { SummaryCardGrid } from "@/pages/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { AgentApi } from "@/services/agent-service"
+import { subscribeToDataChanges } from "@/services/data-events"
 import { AgentCard } from "@/pages/agents/components/agent-card"
 
 const AgentsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => AgentApi.listAll(), [])
+
+  useEffect(
+    () =>
+      subscribeToDataChanges((route) => {
+        if (route === "/agents") {
+          reload()
+        }
+      }),
+    [reload],
+  )
+
   const orderedAgents = useMemo(() => {
     const agents = data ?? []
     const customAgents = agents.filter((agent) => agent.source === "custom")

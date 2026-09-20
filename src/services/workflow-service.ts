@@ -8,6 +8,7 @@ import type {
   WorkflowRunStartCommand,
   WorkflowSummary,
 } from "@/types/workflow"
+import { requireAppBridge } from "@/services/bridge"
 import { getVersionLabel } from "@/services/versioning"
 import { parseArrayJson, parseJson } from "@/lib/serialization/json"
 
@@ -51,10 +52,10 @@ function toWorkflowDetail(payload: RawWorkflowPayload, versionId?: string): Work
 }
 
 export const WorkflowApi = {
-  listAll: () => window.app!.workflows.list() as Promise<WorkflowSummary[]>,
+  listAll: () => requireAppBridge().workflows.list() as Promise<WorkflowSummary[]>,
   get: async (workflowId: string, versionId?: string) =>
-    toWorkflowDetail((await window.app!.workflows.get(workflowId, versionId)) as RawWorkflowPayload, versionId),
-  create: async () => toWorkflowDetail((await window.app!.workflows.create()) as RawWorkflowPayload) as WorkflowDetail,
+    toWorkflowDetail((await requireAppBridge().workflows.get(workflowId, versionId)) as RawWorkflowPayload, versionId),
+  create: async () => toWorkflowDetail((await requireAppBridge().workflows.create()) as RawWorkflowPayload) as WorkflowDetail,
   save: async (payload: {
     id: string
     title: string
@@ -65,22 +66,22 @@ export const WorkflowApi = {
     publish?: boolean
   }) =>
     toWorkflowDetail(
-      (await window.app!.workflows.save({
+      (await requireAppBridge().workflows.save({
         ...payload,
         definitionJson: JSON.stringify(payload.definition),
       })) as RawWorkflowPayload,
       payload.publish ? undefined : payload.selectedVersionId,
     ) as WorkflowDetail,
-  remove: (workflowId: string) => window.app!.workflows.delete(workflowId),
-  run: (payload: WorkflowRunStartCommand) => window.app!.workflows.startRun(payload) as Promise<WorkflowRunAccepted>,
-  cancelRun: (requestId: string) => window.app!.workflows.cancelRun(requestId),
+  remove: (workflowId: string) => requireAppBridge().workflows.delete(workflowId),
+  run: (payload: WorkflowRunStartCommand) => requireAppBridge().workflows.startRun(payload) as Promise<WorkflowRunAccepted>,
+  cancelRun: (requestId: string) => requireAppBridge().workflows.cancelRun(requestId),
   onRunEvent: (listener: (event: WorkflowRunEvent) => void) => {
     const bridgeListener = (_event: Electron.IpcRendererEvent, event: WorkflowRunEvent) => listener(event)
-    window.app!.workflows.onRunEvent(bridgeListener)
+    requireAppBridge().workflows.onRunEvent(bridgeListener)
     return bridgeListener
   },
   offRunEvent: (listener: (_event: Electron.IpcRendererEvent, event: WorkflowRunEvent) => void) =>
-    window.app!.workflows.offRunEvent(listener),
+    requireAppBridge().workflows.offRunEvent(listener),
 }
 
 export const listWorkflows = WorkflowApi.listAll

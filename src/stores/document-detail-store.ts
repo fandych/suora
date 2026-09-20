@@ -32,8 +32,10 @@ export const useDocumentDetailStore = create<DocumentDetailState>((set, get) => 
     set({ documentId, isLoading: true, error: null })
     try {
       const draft = await DocumentApi.get(documentId, versionId)
+      if (get().documentId !== documentId) return
       set({ draft, isLoading: false })
     } catch (error) {
+      if (get().documentId !== documentId) return
       set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) })
     }
   },

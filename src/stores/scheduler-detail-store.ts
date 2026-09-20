@@ -41,8 +41,10 @@ export const useSchedulerDetailStore = create<SchedulerDetailState>((set, get) =
         WorkflowApi.listAll(),
         AgentApi.listAvailable(),
       ])
+      if (get().schedulerId !== schedulerId) return
       set({ draft, runs, workflows, agents, isLoading: false })
     } catch (error) {
+      if (get().schedulerId !== schedulerId) return
       set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) })
     }
   },

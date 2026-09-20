@@ -15,7 +15,7 @@ function createRuntime(overrides?: Partial<WorkflowExecutionRuntime>): WorkflowE
 }
 
 describe("workflow runtime extended nodes", () => {
-  it("executes fork, join, parallel, serial, and wiki retrieval nodes", async () => {
+  it("executes serial and wiki retrieval nodes", async () => {
     const result = await executeWorkflowCommand(
       {
         requestId: "request-extended",
@@ -27,7 +27,6 @@ describe("workflow runtime extended nodes", () => {
         definition: {
           nodes: [
             { id: "start", data: { label: "Start", prompt: "", kind: "start", outputKey: "request", enabled: true } },
-            { id: "fork", data: { label: "Fork", prompt: "", kind: "fork", branchCount: 2, enabled: true } },
             {
               id: "wiki",
               data: {
@@ -40,18 +39,13 @@ describe("workflow runtime extended nodes", () => {
                 enabled: true,
               },
             },
-            { id: "parallel", data: { label: "Parallel", prompt: "", kind: "parallel", concurrency: 2, mergeStrategy: "all-settled", enabled: true } },
             { id: "serial", data: { label: "Serial", prompt: "", kind: "serial", notes: "ordered stage", enabled: true } },
-            { id: "join", data: { label: "Join", prompt: "", kind: "join", joinStrategy: "wait-all", enabled: true } },
             { id: "end", data: { label: "End", prompt: "", kind: "end", inputTemplate: "{{current}}", enabled: true } },
           ] satisfies WorkflowNode[],
           edges: [
-            { source: "start", target: "fork" },
-            { source: "fork", target: "wiki" },
-            { source: "wiki", target: "parallel" },
-            { source: "parallel", target: "serial" },
-            { source: "serial", target: "join" },
-            { source: "join", target: "end" },
+            { source: "start", target: "wiki" },
+            { source: "wiki", target: "serial" },
+            { source: "serial", target: "end" },
           ],
           budget: { maxSteps: 16, maxDurationMs: 5000 },
         },
@@ -60,8 +54,41 @@ describe("workflow runtime extended nodes", () => {
       new AbortController().signal,
     )
 
-    expect(result.traces.map((trace) => trace.nodeId)).toEqual(["start", "fork", "wiki", "parallel", "serial", "join", "end"])
+    expect(result.traces.map((trace) => trace.nodeId)).toEqual(["start", "wiki", "serial", "end"])
     expect(result.traces.find((trace) => trace.nodeId === "wiki")?.output).toContain("Python overview")
+  })
+
+  it("rejects unsupported control-flow nodes", async () => {
+    await expect(
+      executeWorkflowCommand(
+        {
+          requestId: "request-unsupported",
+          workflowId: "workflow-unsupported",
+          versionId: "version-unsupported",
+          mode: "manual",
+          input: { items: [1, 2], query: "python" },
+          runtime: createRuntime(),
+          definition: {
+            nodes: [
+              { id: "start", data: { label: "Start", prompt: "", kind: "start", outputKey: "request", enabled: true } },
+              { id: "fork", data: { label: "Fork", prompt: "", kind: "fork", branchCount: 2, enabled: true } },
+              { id: "parallel", data: { label: "Parallel", prompt: "", kind: "parallel", concurrency: 2, mergeStrategy: "all-settled", enabled: true } },
+              { id: "join", data: { label: "Join", prompt: "", kind: "join", joinStrategy: "wait-all", enabled: true } },
+              { id: "end", data: { label: "End", prompt: "", kind: "end", inputTemplate: "{{current}}", enabled: true } },
+            ] satisfies WorkflowNode[],
+            edges: [
+              { source: "start", target: "fork" },
+              { source: "fork", target: "parallel" },
+              { source: "parallel", target: "join" },
+              { source: "join", target: "end" },
+            ],
+            budget: { maxSteps: 16, maxDurationMs: 5000 },
+          },
+        },
+        () => undefined,
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("Workflow control nodes are not available yet")
   })
 
   it("persists partial traces on workflow failure", async () => {

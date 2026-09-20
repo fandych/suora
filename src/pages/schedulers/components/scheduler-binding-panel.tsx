@@ -216,7 +216,7 @@ export function SchedulerBindingPanel({
                 options={targetOptions.map((item) => ({
                   id: item.id,
                   label: item.title,
-                  enabled: "isDisabled" in item ? !item.isDisabled : item.enabled,
+                  enabled: "enabled" in item ? item.enabled : !("isDisabled" in item && item.isDisabled),
                 }))}
                 onChange={(event) => onTargetIdChange(event.target.value)}
               />

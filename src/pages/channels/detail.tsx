@@ -60,6 +60,12 @@ const ChannelDetailPage = () => {
   }, [data])
 
   useEffect(() => {
+    return () => {
+      activeWeChatMonitorSessionRef.current = null
+    }
+  }, [channelId])
+
+  useEffect(() => {
     return subscribeToDataChanges((route) => {
       if (route === "/channels" && channelId) {
         void getChannel(channelId)

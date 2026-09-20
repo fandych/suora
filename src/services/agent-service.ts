@@ -1,4 +1,5 @@
 import { getVersionLabel } from "@/services/versioning"
+import { requireAppBridge } from "@/services/bridge"
 import type { AgentConfigRecord, AgentDetail, AgentSummary } from "@/types/agent"
 import type { VersionOption } from "@/types/version"
 
@@ -75,19 +76,19 @@ function parseSettings(value: string | null) {
 
 export const AgentApi = {
   listAll: (options?: { source?: "custom" | "system"; title?: string; isDisabled?: boolean }) =>
-    window.app!.agents.listAll(options) as Promise<AgentSummary[]>,
+    requireAppBridge().agents.listAll(options) as Promise<AgentSummary[]>,
   listAvailable: () => AgentApi.listAll({ isDisabled: false }),
   get: async (agentId: string, versionId?: string) => {
-    const detail = toAgentDetail((await window.app!.agents.get(agentId)) as AgentPayload, versionId)
+    const detail = toAgentDetail((await requireAppBridge().agents.get(agentId)) as AgentPayload, versionId)
     return detail
   },
   create: async () => {
-    const detail = toAgentDetail((await window.app!.agents.create()) as AgentPayload)
+    const detail = toAgentDetail((await requireAppBridge().agents.create()) as AgentPayload)
     if (!detail) throw new Error("Failed to create agent.")
     return detail
   },
   save: async (payload: AgentSavePayload) => {
-    const result = (await window.app!.agents.save({
+    const result = (await requireAppBridge().agents.save({
       ...payload,
       configJson: JSON.stringify(payload.config),
     })) as AgentPayload & { selectedVersionId: string | null }
@@ -95,9 +96,9 @@ export const AgentApi = {
     if (!detail) throw new Error("Failed to save agent.")
     return detail
   },
-  remove: (agentId: string) => window.app!.agents.delete(agentId),
-  getSettings: () => window.app!.agents.getSettings() as Promise<string | null>,
-  saveSettings: (payload: unknown) => window.app!.agents.saveSettings(payload),
+  remove: (agentId: string) => requireAppBridge().agents.delete(agentId),
+  getSettings: () => requireAppBridge().agents.getSettings() as Promise<string | null>,
+  saveSettings: (payload: unknown) => requireAppBridge().agents.saveSettings(payload),
 }
 
 export async function listAgents() {

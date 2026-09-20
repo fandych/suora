@@ -17,8 +17,11 @@ export class ChannelMessageQueue {
   private readonly lastSentPerChannel = new Map<string, number>()
   private processing = false
   private readonly rateLimitWindow = 1000
+  private readonly tokenCache: Map<string, TokenCacheEntry>
 
-  constructor(private readonly tokenCache: Map<string, TokenCacheEntry>) {}
+  constructor(tokenCache: Map<string, TokenCacheEntry>) {
+    this.tokenCache = tokenCache
+  }
 
   enqueue(channel: ChannelConfigRecord, chatId: string, content: string, maxRetries = 3) {
     const id = `mq-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`

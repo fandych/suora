@@ -3,6 +3,7 @@ import { ipcMain } from "electron"
 import { captureBrowserPagePreview } from "@/electron/infrastructure/browser-preview"
 import { ensureChannelCatalog } from "@/electron/app/channels/application/channel-catalog-service"
 import { channelApplicationService } from "@/electron/app/channels/application/channel-application-service"
+import { redactChannelDetail } from "@/electron/app/channels/repositories/channel-credential-serialization"
 import { getChannelDetail } from "@/electron/app/channels/repositories/channel-store"
 import { getChannelService } from "@/electron/app/channels/runtime/channel-service"
 import { ensureWorkspace } from "@/electron/infrastructure/workspace-service"
@@ -120,12 +121,48 @@ export function registerChannelIpc() {
     async (_event, channelId: string | undefined, sessionKey: string, verifyCode?: string, timeoutMs?: number) => {
       const input = parseChannelIpcInput(wechatLoginWaitSchema, { channelId, sessionKey, verifyCode, timeoutMs })
       await ensureWorkspace()
-      return getChannelService().waitForWeChatPersonalLogin(
+      const result = await getChannelService().waitForWeChatPersonalLogin(
         input.channelId,
         input.sessionKey,
         input.verifyCode,
         input.timeoutMs,
       )
+
+      if (input.channelId && result.status === "connected") {
+        const detail = await channelApplicationService.getDetail(input.channelId)
+        if (detail) {
+          const saved = await channelApplicationService.save({
+            ...detail,
+            channel: {
+              ...detail.channel,
+              enabled: true,
+              bindingState: "connected",
+              wechatPersonalBindingStatus: "bound",
+              wechatPersonalBotToken: result.botToken ?? detail.channel.wechatPersonalBotToken,
+              wechatPersonalBaseUrl: result.baseUrl ?? detail.channel.wechatPersonalBaseUrl,
+              wechatPersonalAccountId: result.accountId ?? detail.channel.wechatPersonalAccountId,
+              wechatPersonalUserId: result.userId ?? detail.channel.wechatPersonalUserId,
+              wechatPersonalQrCodeUrl: undefined,
+            },
+          })
+          return {
+            ...result,
+            botToken: undefined,
+            baseUrl: undefined,
+            accountId: undefined,
+            userId: undefined,
+            detail: saved ? redactChannelDetail(saved as unknown as Record<string, unknown>) : null,
+          }
+        }
+      }
+
+      return {
+        ...result,
+        botToken: undefined,
+        baseUrl: undefined,
+        accountId: undefined,
+        userId: undefined,
+      }
     },
   )
   ipcMain.handle("channel:wechatPersonalQrPreview", async (_event, url: unknown, waitMs?: unknown) => {

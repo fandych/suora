@@ -30,7 +30,7 @@ import {
   createWorkflowExecutionContext,
   getWorkflowExecutionBudget,
 } from "@/electron/app/workflows/context"
-import { getNextWorkflowEdges, type WorkflowEdge } from "@/electron/app/workflows/policy"
+import { getNextWorkflowEdges, type WorkflowEdge, withWorkflowTimeout } from "@/electron/app/workflows/policy"
 import {
   createCompletedWorkflowTrace,
   createFailedWorkflowTrace,
@@ -43,6 +43,8 @@ type WorkflowCommand = WorkflowRunStartCommand & {
   definition: WorkflowRunStartCommand["definition"] & { nodes: WorkflowNode[]; edges: WorkflowEdge[] }
   runtime: WorkflowExecutionRuntime
 }
+
+const unsupportedWorkflowNodeKinds = new Set(["fork", "join", "loop", "parallel"])
 
 const executors: Record<string, WorkflowNodeExecutor> = {
   start: executeStartNode,
@@ -79,6 +81,12 @@ export async function executeWorkflowCommand(
   const nodes = new Map(command.definition.nodes.map((node) => [node.id, node]))
   const outgoing = new Map<string, WorkflowEdge[]>()
   for (const edge of command.definition.edges) outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge])
+  const unsupportedKinds = [
+    ...new Set(command.definition.nodes.map((node) => node.data.kind).filter((kind) => unsupportedWorkflowNodeKinds.has(kind))),
+  ]
+  if (unsupportedKinds.length > 0) {
+    throw new Error(`Workflow control nodes are not available yet: ${unsupportedKinds.join(", ")}.`)
+  }
   const start = command.definition.nodes.find((node) => node.data.kind === "start")
   if (!start) throw new Error("Workflow requires a start node.")
   const queue = [start.id]
@@ -163,7 +171,8 @@ async function executeNodeWithRetry(
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (signal.aborted) throw new Error("Workflow execution cancelled.")
     try {
-      return await executor(node, context, mode)
+      const timeoutMs = Math.max(1000, Math.min(node.data.timeoutMs ?? 30_000, 300_000))
+      return await withWorkflowTimeout(executor(node, context, mode), timeoutMs, `${node.data.label || node.id} node`)
     } catch (error) {
       lastError = error
     }

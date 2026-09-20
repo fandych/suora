@@ -173,10 +173,14 @@ export async function waitForWeChatPersonalLogin(
         session.qrcode,
         session.pendingVerifyCode,
       )
+      const redirectHost = "redirect_host" in status ? status.redirect_host : undefined
+      const hasBotToken = "bot_token" in status && Boolean(status.bot_token)
+      const hasBotId = "ilink_bot_id" in status && Boolean(status.ilink_bot_id)
+      const hasUserId = "ilink_user_id" in status && Boolean(status.ilink_user_id)
       logWeChatPersonalSession(
         channelId,
         status.diagnosticEvent === "error" || status.diagnosticEvent === "invalid_response" ? "error" : "info",
-        `QR poll result. sessionKey=${sessionKey} upstreamStatus=${status.status || "missing"} event=${status.diagnosticEvent || "unknown"} baseUrl=${status.diagnosticBaseUrl || session.currentApiBaseUrl} endpoint=${status.diagnosticEndpoint || "unknown"} message=${status.diagnosticMessage || "none"} redirectHost=${status.redirect_host || "none"} hasBotToken=${String(Boolean(status.bot_token))} hasBotId=${String(Boolean(status.ilink_bot_id))} hasUserId=${String(Boolean(status.ilink_user_id))}`,
+        `QR poll result. sessionKey=${sessionKey} upstreamStatus=${status.status || "missing"} event=${status.diagnosticEvent || "unknown"} baseUrl=${status.diagnosticBaseUrl || session.currentApiBaseUrl} endpoint=${status.diagnosticEndpoint || "unknown"} message=${status.diagnosticMessage || "none"} redirectHost=${redirectHost || "none"} hasBotToken=${String(hasBotToken)} hasBotId=${String(hasBotId)} hasUserId=${String(hasUserId)}`,
       )
       switch (status.status) {
         case "wait":

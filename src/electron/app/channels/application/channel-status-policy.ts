@@ -9,6 +9,7 @@ export function getChannelCredentialIssues(channel: ChannelConfigRecord) {
         !channel.emailImapUser ? "IMAP user" : null,
         !channel.emailUseGlobalMailService && !channel.emailSmtpHost ? "SMTP host" : null,
         !channel.emailUseGlobalMailService && !channel.emailFromAddress ? "From address" : null,
+        channel.connectionMode === "webhook" && !channel.webhookSecret ? "Webhook secret" : null,
       ])
     case "wechat":
       return missing([
@@ -18,6 +19,9 @@ export function getChannelCredentialIssues(channel: ChannelConfigRecord) {
         !channel.wechatToken ? "Verification token" : null,
       ])
     case "wechat_personal":
+      if (channel.wechatPersonalWebhookUrl && !channel.webhookSecret) {
+        return ["Webhook secret"]
+      }
       return (channel.wechatPersonalBindingStatus === "bound" &&
         channel.wechatPersonalBotToken &&
         channel.wechatPersonalBaseUrl) ||
@@ -53,7 +57,7 @@ export function getChannelCredentialIssues(channel: ChannelConfigRecord) {
             !channel.dingtalkSigningSecret ? "Signing secret" : null,
           ])
     case "telegram":
-      return channel.telegramBotToken ? [] : ["Bot token"]
+      return missing([!channel.telegramBotToken ? "Bot token" : null, !channel.webhookSecret ? "Webhook secret" : null])
     case "teams":
       return missing([!channel.teamsAppId ? "App ID" : null, !channel.teamsAppPassword ? "App password" : null])
     case "custom":
@@ -61,9 +65,7 @@ export function getChannelCredentialIssues(channel: ChannelConfigRecord) {
         ? channel.customWebsocketUrl
           ? []
           : ["WebSocket URL"]
-        : channel.customWebhookUrl
-          ? []
-          : ["Webhook URL"]
+        : missing([!channel.customWebhookUrl ? "Webhook URL" : null, !channel.webhookSecret ? "Webhook secret" : null])
     default:
       return []
   }

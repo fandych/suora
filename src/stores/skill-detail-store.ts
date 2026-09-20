@@ -32,8 +32,10 @@ export const useSkillDetailStore = create<SkillDetailState>((set, get) => ({
     set({ skillId, isLoading: true, error: null })
     try {
       const draft = await SkillApi.getDetail(skillId)
+      if (get().skillId !== skillId) return
       set({ draft, isLoading: false })
     } catch (error) {
+      if (get().skillId !== skillId) return
       set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) })
     }
   },

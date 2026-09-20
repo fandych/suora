@@ -9,6 +9,7 @@ import { runWorkflowAgent } from "@/electron/app/workflows/runtime-agent"
 import { documentService } from "@/electron/app/documents/service"
 import { integrationApplicationService } from "@/electron/app/integrations/service"
 import { getSystemMailProfile, sendMail } from "@/electron/app/channels/mail-service"
+import type { ChatRuntimeSettings } from "@/types/chat"
 
 const activeRuns = new Map<string, AbortController>()
 
@@ -20,7 +21,7 @@ export function registerWorkflowRuntimeIpc() {
     _event.sender.send("workflow:run:event", { requestId: command.requestId, type: "started" })
     const runtime = {
       getChatRuntimeSettings: () =>
-        chatApplicationService.getSessionSettings(null).then((settings) => settings.runtime),
+        chatApplicationService.getSessionSettings(null).then((settings) => settings.runtime as ChatRuntimeSettings),
       executeAgent: (input: { prompt: string; systemPrompt?: string; modelId?: string; selectedAgentId?: string }) =>
         runWorkflowAgent(input, controller.signal),
       getDocumentDetail: (documentId: string) => documentService.get(documentId),

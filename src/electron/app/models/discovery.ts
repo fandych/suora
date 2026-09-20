@@ -1,4 +1,5 @@
 import type {
+  ProviderApiMode,
   ProviderConfigRecord,
   ProviderModelCapability,
   ProviderModelRecord,
@@ -27,6 +28,7 @@ const openAiCompatibleProviders = new Set([
   "fireworks",
   "custom",
 ])
+const OPENAI_API_MODES: ProviderApiMode[] = ["messages", "completions", "responses"]
 function normalizeBaseUrl(baseUrl: string) {
   return baseUrl.trim().replace(/\/+$/, "")
 }
@@ -93,7 +95,7 @@ function normalizeOpenAiCompatibleModels(data: unknown) {
             : String(row.id),
       enabled: false,
       capabilities: inferCapabilities(row),
-      apiModes: ["messages", "completions", "responses"] as const,
+      apiModes: [...OPENAI_API_MODES],
       contextWindow: inferContextWindow(row),
       maxOutputTokens: inferMaxOutputTokens(row),
       supportsParallelToolCalls: true,
@@ -113,9 +115,9 @@ function normalizeOllamaModels(data: unknown) {
       name: String(row.name),
       enabled: false,
       capabilities: /vision|vl|llava|minicpm-v|pixtral/i.test(String(row.name))
-        ? (["toolcalling", "vision"] as const)
-        : (["toolcalling"] as const),
-      apiModes: ["messages", "completions", "responses"] as const,
+        ? (["toolcalling", "vision"] as ProviderModelCapability[])
+        : (["toolcalling"] as ProviderModelCapability[]),
+      apiModes: [...OPENAI_API_MODES],
       contextWindow: 128000,
       maxOutputTokens: 8192,
       supportsParallelToolCalls: false,

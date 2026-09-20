@@ -305,6 +305,10 @@ export async function startChatRun(input: StartChatRunInput) {
     const presentation = getChatErrorPresentation(message, errorKind)
     const entry = getOrCreateEntry(workingChatId)
     setEntryState(workingChatId, {
+      runId: null,
+      isResponding: false,
+      isStopping: false,
+      assistantResponseParts: finalizeAssistantResponseParts(entry.assistantResponseParts),
       toolEvents: [...entry.toolEvents, { type: "error", error: message, errorKind }],
     })
     showToast({

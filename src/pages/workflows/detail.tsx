@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs */
 import { useCallback } from "react"
 import {
   Background,
@@ -75,6 +76,9 @@ const WorkflowDetailPage = () => {
     },
     [setFlowInstance, viewport],
   )
+      const handleOpenImport = () => {
+        controller.importInputRef.current?.click()
+      }
   const handleConnectEnd = useCallback(
     (_event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       if (!connectionState.isValid && !controller.isReadOnly && connectionState.toHandle) {
@@ -199,7 +203,7 @@ const WorkflowDetailPage = () => {
                     canSave={controller.hasUnsavedChanges}
                     canTryRun={!controller.isDryRunning && controller.blockingIssues.length === 0}
                     onExport={controller.handleExport}
-                    onImport={() => controller.importInputRef.current?.click()}
+                    onImport={handleOpenImport}
                     importDisabled={controller.isReadOnly}
                     onOpenTryRun={() => controller.setInspectorMode("try-run")}
                     onSave={() => void controller.handleSave()}

@@ -43,7 +43,7 @@ function parseConfig(value: string | undefined): IntegrationConfig {
     const parsed = JSON.parse(value) as unknown
     return parsed && typeof parsed === "object" ? (parsed as IntegrationConfig) : {}
   } catch {
-    return {}
+    throw new Error("Integration config must be valid JSON.")
   }
 }
 

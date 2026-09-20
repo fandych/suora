@@ -86,6 +86,14 @@ export type ChatRuntimeSettings = {
 }
 
 export type ChatSessionSettings = { runtime: ChatRuntimeSettings; selectedAgentId: string }
+export type ChatRuntimeStatus = {
+  requestId: string
+  chatId: string
+  status: "running" | "completed" | "failed" | "cancelled"
+  error?: string
+  errorKind?: ChatErrorKind
+  updatedAt: number
+}
 
 export type AssistantResponsePart =
   | { id: string; type: "text"; content: string; isPending?: boolean }

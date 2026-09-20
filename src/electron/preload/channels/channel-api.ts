@@ -16,8 +16,14 @@ export const channelApi = {
     const result = await ipcRenderer.invoke("channels:get", channelId)
     return result && typeof result === "object" ? redactChannelDetail(result as Record<string, unknown>) : result
   },
-  create: (defaults?: unknown) => ipcRenderer.invoke("channels:create", defaults),
-  save: (payload: unknown) => ipcRenderer.invoke("channels:save", payload),
+  create: async (defaults?: unknown) => {
+    const result = await ipcRenderer.invoke("channels:create", defaults)
+    return result && typeof result === "object" ? redactChannelDetail(result as Record<string, unknown>) : result
+  },
+  save: async (payload: unknown) => {
+    const result = await ipcRenderer.invoke("channels:save", payload)
+    return result && typeof result === "object" ? redactChannelDetail(result as Record<string, unknown>) : result
+  },
   delete: (channelId: string) => ipcRenderer.invoke("channels:delete", channelId),
   startRuntime: () => ipcRenderer.invoke("channel:start"),
   syncRuntime: () => ipcRenderer.invoke("channel:syncRuntime"),

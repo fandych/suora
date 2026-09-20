@@ -4,7 +4,7 @@ import { chatApplicationService } from "@/electron/app/chats/service"
 import type { ChatRuntimeSettingsPayload } from "@/types/electron"
 import { entityIdSchema, parseIpcInput } from "@/electron/preload/system/ipc-input-schemas"
 import { chatEnsureSchema, chatSessionSettingsSchema } from "@/electron/preload/chats/chat-ipc-schemas"
-import { cancelChatRuntime, startChatRuntime } from "@/electron/app/chats/runtime"
+import { cancelChatRuntime, getChatRuntimeStatus, startChatRuntime } from "@/electron/app/chats/runtime"
 import { retryChatToolActivity } from "@/electron/app/chats/tool-retry"
 
 export function registerChatIpc() {
@@ -44,6 +44,9 @@ export function registerChatIpc() {
   ipcMain.handle("chats:sendMessage", (event, value: unknown) => startChatRuntime(value, event.sender))
   ipcMain.handle("chats:runtime:cancel", (_event, value: unknown) =>
     cancelChatRuntime(z.string().min(1).max(128).parse(value)),
+  )
+  ipcMain.handle("chats:runtime:status", (_event, value: unknown) =>
+    getChatRuntimeStatus(z.string().min(1).max(128).parse(value)),
   )
   ipcMain.handle("chats:retryToolActivity", (_event, value: unknown) => retryChatToolActivity(value))
 }

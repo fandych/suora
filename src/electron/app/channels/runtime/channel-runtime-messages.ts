@@ -32,7 +32,7 @@ function parseWeChatRecord(get: (tag: string) => unknown): WeChatWebhookPayload 
   return {
     ToUserName: String(get("ToUserName") || ""),
     FromUserName: String(get("FromUserName") || ""),
-    CreateTime: numberValue(get("CreateTime")),
+    CreateTime: String(numberValue(get("CreateTime"))),
     MsgType: String(get("MsgType") || "").trim() as WeChatWebhookPayload["MsgType"],
     Content: stringValue(get("Content")),
     PicUrl: stringValue(get("PicUrl")),
@@ -51,6 +51,7 @@ function parseWeChatRecord(get: (tag: string) => unknown): WeChatWebhookPayload 
     MsgId: stringValue(get("MsgId")),
     AgentID: stringValue(get("AgentID")),
     Encrypt: stringValue(get("Encrypt")),
+    raw: {},
   }
 }
 
@@ -96,7 +97,7 @@ export function weChatWebhookToChannelMessage(
     senderId: payload.FromUserName,
     senderName: payload.FromUserName,
     content,
-    timestamp: (payload.CreateTime || Math.floor(Date.now() / 1000)) * 1000,
+    timestamp: numberValue(payload.CreateTime || Math.floor(Date.now() / 1000)) * 1000,
     messageType,
     chatId: payload.FromUserName,
     chatType: "private",

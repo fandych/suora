@@ -177,7 +177,7 @@ export function saveChannelDetail(detail: ChannelDetail) {
       channel.status,
       channel.connectionMode,
       channel.webhookPath,
-      protectChannelCredentials({ webhookSecret: channel.webhookSecret }).webhookSecret,
+      String(protectChannelCredentials({ webhookSecret: channel.webhookSecret }).webhookSecret ?? ""),
       channel.autoReply ? 1 : 0,
       channel.replyAgentId,
       channel.createdAt,

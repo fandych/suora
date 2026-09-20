@@ -8,7 +8,7 @@ import { WORKFLOW_NODE_ICONS } from "@/pages/workflows/components/workflow-canva
 import type { WorkflowDesignIssue } from "@/lib/workflow/editor-state"
 
 const libraryGroups: Array<{ title: string; kinds: WorkflowNodeData["kind"][] }> = [
-  { title: "Core", kinds: ["start", "end", "condition", "if-else", "fork", "join", "parallel", "serial", "loop"] },
+  { title: "Core", kinds: ["start", "end", "condition", "if-else", "serial"] },
   { title: "AI", kinds: ["agent", "ai-response", "document-retrieval", "wiki-retrieval", "variable-assigner", "template"] },
   { title: "Execution", kinds: ["http", "toolset", "webhook", "script", "smtp"] },
 ]

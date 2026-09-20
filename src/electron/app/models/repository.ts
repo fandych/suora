@@ -48,17 +48,27 @@ export async function saveModel(payload: {
   providerType: string
   baseUrl: string
   apiKey: string
+  apiKeyConfigured?: boolean
   modelsJson: string
   enabled: boolean
 }) {
   const database = getDrizzleDatabase()
-  const [existing] = await database.select({ id: providers.id }).from(providers).where(eq(providers.id, payload.id)).limit(1)
+  const [existing] = await database
+    .select({ id: providers.id, apiKey: providers.apiKey })
+    .from(providers)
+    .where(eq(providers.id, payload.id))
+    .limit(1)
+  const nextApiKey = payload.apiKey
+    ? protectCredential(payload.apiKey)
+    : payload.apiKeyConfigured && typeof existing?.apiKey === "string"
+      ? existing.apiKey
+      : ""
   const values = {
     title: payload.title,
     description: payload.description,
     providerType: payload.providerType,
     baseUrl: payload.baseUrl,
-    apiKey: protectCredential(payload.apiKey),
+    apiKey: nextApiKey,
     modelsJson: payload.modelsJson,
     enabled: payload.enabled,
     updatedAt: Date.now(),

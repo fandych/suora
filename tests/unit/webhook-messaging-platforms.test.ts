@@ -14,7 +14,7 @@ describe("messaging webhook platforms", () => {
     const emit = vi.fn(async () => undefined)
     await handleTelegramWebhook(
       {
-        headers: {},
+        headers: { "x-telegram-bot-api-secret-token": "secret-token" },
         body: {
           message: {
             message_id: 1,
@@ -25,7 +25,7 @@ describe("messaging webhook platforms", () => {
         },
       } as never,
       response(),
-      { id: "telegram-1", platform: "telegram", webhookSecret: "", teamsAppId: "" } as never,
+      { id: "telegram-1", platform: "telegram", webhookSecret: "secret-token", teamsAppId: "" } as never,
       emit,
     )
     expect(emit).toHaveBeenCalledWith(

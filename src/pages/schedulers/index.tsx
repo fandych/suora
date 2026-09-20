@@ -1,3 +1,4 @@
+import { useEffect } from "react"
 import { useNavigate } from "react-router"
 
 import { SchedulerApi } from "@/services/scheduler-service"
@@ -5,11 +6,22 @@ import { useAsyncResource } from "@/hooks/use-async-resource"
 import PageHeader from "@/pages/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { SummaryCardGrid } from "@/pages/components/summary-card-grid"
+import { subscribeToDataChanges } from "@/services/data-events"
 import { SchedulerCard } from "@/pages/schedulers/components/scheduler-card"
 
 const SchedulersPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => SchedulerApi.listAll(), [])
+
+  useEffect(
+    () =>
+      subscribeToDataChanges((route) => {
+        if (route === "/schedulers") {
+          reload()
+        }
+      }),
+    [reload],
+  )
 
   return (
     <div className="flex min-h-full flex-col bg-background">

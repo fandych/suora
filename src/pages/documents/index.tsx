@@ -1,15 +1,27 @@
+import { useEffect } from "react"
 import { useNavigate } from "react-router"
 
 import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import PageHeader from "@/pages/components/page-header"
 import { SummaryCardGrid } from "@/pages/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { subscribeToDataChanges } from "@/services/data-events"
 import { DocumentApi } from "@/services/document-service"
 import { DocumentCard } from "@/pages/documents/components/document-card"
 
 const DocumentsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => DocumentApi.listAll(), [])
+
+  useEffect(
+    () =>
+      subscribeToDataChanges((route) => {
+        if (route === "/documents") {
+          reload()
+        }
+      }),
+    [reload],
+  )
 
   return (
     <div className="flex min-h-full flex-col bg-background">

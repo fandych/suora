@@ -5,6 +5,7 @@ import { isIP } from "node:net"
 const MAX_LOG_ENTRIES = 500
 const MAX_LOG_BYTES = 256 * 1024
 const MAX_OUTPUT_BYTES = 1024 * 1024
+const MAX_FETCH_REDIRECTS = 5
 
 process.stdin.setEncoding("utf8")
 let buffer = ""
@@ -26,6 +27,24 @@ async function safeUrl(value) {
   if (!records.length || records.some((record) => isPrivate(record.address)))
     throw new Error("Private and local network URLs are not allowed.")
   return url
+}
+
+async function safeFetch(input, init = {}, redirectsRemaining = MAX_FETCH_REDIRECTS) {
+  const url = await safeUrl(String(input))
+  const response = await fetch(url, { ...init, redirect: "manual" })
+  if (![301, 302, 303, 307, 308].includes(response.status)) {
+    return response
+  }
+  if (redirectsRemaining <= 0) {
+    throw new Error("Too many HTTP redirects.")
+  }
+  const location = response.headers.get("location")
+  if (!location) {
+    return response
+  }
+  const nextUrl = new URL(location, url)
+  const nextInit = response.status === 307 || response.status === 308 ? init : { ...init, method: "GET", body: undefined }
+  return safeFetch(nextUrl.toString(), nextInit, redirectsRemaining - 1)
 }
 
 function isPrivate(address) {
@@ -59,7 +78,7 @@ async function run(request) {
         warn: (...args) => appendLog(logs, args),
         error: (...args) => appendLog(logs, args),
       },
-      fetch: async (input, init) => fetch(await safeUrl(String(input)), init),
+      fetch: async (input, init) => safeFetch(input, init),
       input: parseInput(request.inputJson),
       structuredClone,
     }

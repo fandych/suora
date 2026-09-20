@@ -40,8 +40,8 @@ import {
 import {
   startWeChatPersonalLogin,
   waitForWeChatPersonalLogin,
-  type WeChatPersonalLoginSession,
 } from "@/electron/app/channels/providers/channel-wechat-personal"
+import type { WeChatPersonalLoginSession } from "@/electron/app/channels/providers/wechat-personal-types"
 import {
   handleGetWebhookRequest,
   handlePostWebhookRequest,
@@ -77,16 +77,30 @@ export class ChannelService {
     this.messageHandler = handler
   }
 
+  private getSyncContext() {
+    return {
+      channels: this.channels,
+      streamClients: this.streamClients,
+      customSocketClients: this.customSocketClients,
+      weChatPersonalPollers: this.weChatPersonalPollers,
+      weChatPersonalContextTokens: this.weChatPersonalContextTokens,
+      emailPollers: this.emailPollers,
+      emailLastSeenUid: this.emailLastSeenUid,
+      sessionWebhooks: this.sessionWebhooks,
+    }
+  }
+
   async registerEnabledChannels() {
     const details = listEnabledChannelDetails()
     this.channels.clear()
     for (const detail of details) {
       this.channels.set(detail.channel.id, detail.channel)
     }
-    await syncStreamClients(this, this.emitMessage.bind(this))
-    await syncCustomSocketClients(this, this.emitMessage.bind(this))
-    await syncWeChatPersonalPollers(this, this.emitMessage.bind(this))
-    syncEmailPollers(this, this.emitMessage.bind(this))
+    const syncContext = this.getSyncContext()
+    await syncStreamClients(syncContext, this.emitMessage.bind(this))
+    await syncCustomSocketClients(syncContext, this.emitMessage.bind(this))
+    await syncWeChatPersonalPollers(syncContext, this.emitMessage.bind(this))
+    syncEmailPollers(syncContext, this.emitMessage.bind(this))
   }
 
   async start() {
@@ -100,7 +114,7 @@ export class ChannelService {
   }
 
   async stop() {
-    await stopAllRuntimeClients(this)
+    await stopAllRuntimeClients(this.getSyncContext())
     this.processedMessageIds.clear()
     this.stopDedupCleanup()
 

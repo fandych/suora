@@ -21,16 +21,15 @@ const collect = async (directory) => {
 const dataFiles = await collect(path.join(root, "src", "data"))
 const domainFiles = await collect(path.join(root, "src", "domain"))
 const serviceFiles = await collect(path.join(root, "src", "services"))
-const preloadIpcFiles = await collect(path.join(root, "electron", "preload"))
-const appFiles = await collect(path.join(root, "electron", "app"))
-const infrastructureFiles = await collect(path.join(root, "electron", "infrastructure"))
+const preloadIpcFiles = await collect(path.join(root, "src", "electron", "preload"))
+const appFiles = await collect(path.join(root, "src", "electron", "app"))
+const infrastructureFiles = await collect(path.join(root, "src", "electron", "infrastructure"))
 const sharedFiles = await collect(path.join(root, "shared"))
 const forbiddenViewImport = /from\s+["']@\/views\//
 const forbiddenRepositoryServiceImport = /from\s+["']@\/services\//
 const forbiddenRelativeImport = /from\s+["']\.\.?\//
 const forbiddenViewRepositoryImport = /from\s+["']@\/(?:data\/repositories|services)\//
-const forbiddenElectronRootImport =
-  /from\s+["']@\/electron\/(?:application|channels|infrastructure|integrations|services)\//
+const forbiddenElectronRootImport = /from\s+["']@\/electron\/(?:application|channels|database|integrations|others|services)\//
 const forbiddenElectronRendererImport =
   /from\s+["']@\/(?:application|data|services|views|components|hooks|stores|view-models)\//
 const forbiddenAppIpcImport = /from\s+["']@electron\/preload\//
@@ -40,8 +39,8 @@ const forbiddenAppLegacyRepositoryImport = /from\s+["']@electron\/database\/driz
 const rawSql = /(?:database|db)\.(?:prepare|exec)\s*\(/
 const violations = []
 const requiredPhaseTwoFiles = [
-  path.join(root, "electron", "app", "index.ts"),
-  path.join(root, "electron", "preload", "index.ts"),
+  path.join(root, "src", "electron", "main.ts"),
+  path.join(root, "src", "electron", "preload.ts"),
 ]
 for (const file of requiredPhaseTwoFiles)
   if (!(await directoryExists(file)))
@@ -75,7 +74,7 @@ for (const file of appFiles) {
 for (const file of infrastructureFiles)
   if (forbiddenInfrastructureAppImport.test(await readFile(file, "utf8")))
     violations.push(`Infrastructure -> app dependency: ${path.relative(root, file)}`)
-for (const file of await collect(path.join(root, "electron"))) {
+for (const file of await collect(path.join(root, "src", "electron"))) {
   const source = await readFile(file, "utf8")
   if (forbiddenElectronRootImport.test(source))
     violations.push(`Electron old-root dependency: ${path.relative(root, file)}`)
@@ -86,8 +85,8 @@ for (const file of sharedFiles)
   if (forbiddenElectronRendererImport.test(await readFile(file, "utf8")))
     violations.push(`Shared -> renderer dependency: ${path.relative(root, file)}`)
 try {
-  await readdir(path.join(root, "electron", "others"))
-  violations.push("Electron old directory remains: electron/others")
+  await readdir(path.join(root, "src", "electron", "others"))
+  violations.push("Electron old directory remains: src/electron/others")
 } catch {
   /* expected */
 }

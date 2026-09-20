@@ -1,15 +1,27 @@
+import { useEffect } from "react"
 import { useNavigate } from "react-router"
 
 import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import PageHeader from "@/pages/components/page-header"
 import { SummaryCardGrid } from "@/pages/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { subscribeToDataChanges } from "@/services/data-events"
 import { SkillApi } from "@/services/skill-service"
 import { SkillCard } from "@/pages/skills/components/skill-card"
 
 const SkillsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => SkillApi.list(), [])
+
+  useEffect(
+    () =>
+      subscribeToDataChanges((route) => {
+        if (route === "/skills") {
+          reload()
+        }
+      }),
+    [reload],
+  )
 
   return (
     <div className="flex min-h-full flex-col bg-background">

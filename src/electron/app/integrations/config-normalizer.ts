@@ -3,6 +3,7 @@ import type {
   HttpEndpointConfig,
   HttpEndpointParameter,
   HttpIntegrationAuthType,
+  HttpIntegrationConfig,
   IntegrationConfig,
 } from "@/types/integration"
 
@@ -60,7 +61,11 @@ export function normalizeIntegrationConfig(
   config: Record<string, unknown>,
 ): IntegrationConfig | Record<string, unknown> {
   if (kind !== "http") return config
-  const source = config as Partial<IntegrationConfig> & { url?: string }
+  const source = config as Partial<HttpIntegrationConfig> & {
+    url?: string
+    description?: string
+    parameterSchemaJson?: string
+  }
   const fallback = {
     kind: "http" as const,
     baseUrl: "",
@@ -93,7 +98,7 @@ export function normalizeIntegrationConfig(
   }
   const existingEndpoints =
     Array.isArray(source.endpoints) && source.endpoints.length > 0
-      ? source.endpoints.map((endpoint) => createEndpoint(endpoint))
+      ? source.endpoints.map((endpoint: HttpEndpointConfig) => createEndpoint(endpoint))
       : [
           createEndpoint({
             name: "Imported endpoint",
@@ -110,7 +115,7 @@ export function normalizeIntegrationConfig(
           }),
         ]
   const selectedEndpoint =
-    existingEndpoints.find((endpoint) => endpoint.id === source.selectedEndpointId) ?? existingEndpoints[0]
+    existingEndpoints.find((endpoint: HttpEndpointConfig) => endpoint.id === source.selectedEndpointId) ?? existingEndpoints[0]
   return {
     ...fallback,
     ...source,

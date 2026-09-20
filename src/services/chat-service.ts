@@ -1,5 +1,6 @@
-import type { ChatDetail, ChatSummary } from "@/types/chat"
+import type { ChatDetail, ChatRuntimeStatus, ChatSummary } from "@/types/chat"
 import type { ChatAttachment, ChatMessagePart, ChatRuntimeSettings, ChatSessionSettings } from "@/types/chat"
+import { requireAppBridge } from "@/services/bridge"
 
 type ChatEnsurePayload = {
   chatId: string
@@ -26,43 +27,44 @@ export type RetryableChatToolActivity = {
 }
 
 export const ChatApi = {
-  listAll: () => window.app!.chats.list() as Promise<ChatSummary[]>,
-  get: (chatId: string) => window.app!.chats.get(chatId) as Promise<ChatDetail>,
-  create: () => window.app!.chats.create() as Promise<ChatDetail>,
+  listAll: () => requireAppBridge().chats.list() as Promise<ChatSummary[]>,
+  get: (chatId: string) => requireAppBridge().chats.get(chatId) as Promise<ChatDetail>,
+  create: () => requireAppBridge().chats.create() as Promise<ChatDetail>,
   ensure: async (payload: ChatEnsurePayload) => {
-    const detail = (await window.app!.chats.ensure(payload)) as ChatDetail | null
+    const detail = (await requireAppBridge().chats.ensure(payload)) as ChatDetail | null
     if (!detail) throw new Error(`Chat ${payload.chatId} could not be ensured.`)
     return detail
   },
-  remove: (chatId: string) => window.app!.chats.delete(chatId),
+  remove: (chatId: string) => requireAppBridge().chats.delete(chatId),
   appendUser: async (chatId: string, content: string, parts?: ChatMessagePart[]) => {
-    const detail = (await window.app!.chats.appendUser({ chatId, content, parts })) as ChatDetail | null
+    const detail = (await requireAppBridge().chats.appendUser({ chatId, content, parts })) as ChatDetail | null
     if (!detail) throw new Error(`Chat ${chatId} was not found.`)
     return detail
   },
   appendAssistant: async (chatId: string, content: string, parts?: ChatMessagePart[]) => {
-    const detail = (await window.app!.chats.appendAssistant({ chatId, content, parts })) as ChatDetail | null
+    const detail = (await requireAppBridge().chats.appendAssistant({ chatId, content, parts })) as ChatDetail | null
     if (!detail) throw new Error(`Chat ${chatId} was not found.`)
     return detail
   },
   updateMessageParts: async (chatId: string, messageId: string, parts: ChatMessagePart[]) => {
-    const detail = (await window.app!.chats.updateMessageParts({ chatId, messageId, parts })) as ChatDetail | null
+    const detail = (await requireAppBridge().chats.updateMessageParts({ chatId, messageId, parts })) as ChatDetail | null
     if (!detail) throw new Error(`Chat ${chatId} was not found.`)
     return detail
   },
-  getSettings: () => window.app!.chats.getSettings() as Promise<string | null>,
-  saveSettings: (payload: unknown) => window.app!.chats.saveSettings(payload),
+  getSettings: () => requireAppBridge().chats.getSettings() as Promise<string | null>,
+  saveSettings: (payload: unknown) => requireAppBridge().chats.saveSettings(payload),
   getSessionSettings: (chatId?: string | null) =>
-    window.app!.chats.getSessionSettings(chatId) as Promise<ChatSessionSettings>,
+    requireAppBridge().chats.getSessionSettings(chatId) as Promise<ChatSessionSettings>,
   saveSessionSettings: (payload: { chatId?: string | null; runtime: ChatRuntimeSettings; selectedAgentId: string }) =>
-    window.app!.chats.saveSessionSettings(payload) as Promise<ChatSessionSettings>,
+    requireAppBridge().chats.saveSessionSettings(payload) as Promise<ChatSessionSettings>,
   sendMessage: (sessionId: string, message: SendChatMessage) =>
-    window.app!.chats.sendMessage({ sessionId, message }) as Promise<SendMessageResult>,
-  cancelRuntime: (requestId: string) => window.app!.chats.cancelRuntime(requestId),
+    requireAppBridge().chats.sendMessage({ sessionId, message }) as Promise<SendMessageResult>,
+  cancelRuntime: (requestId: string) => requireAppBridge().chats.cancelRuntime(requestId),
+  getRuntimeStatus: (requestId: string) => requireAppBridge().chats.getRuntimeStatus(requestId) as Promise<ChatRuntimeStatus | null>,
   retryToolActivity: (sessionId: string, activity: RetryableChatToolActivity) =>
-    window.app!.chats.retryToolActivity({ sessionId, activity }) as Promise<string>,
-  onRuntimeEvent: (listener: (...args: unknown[]) => void) => window.app!.chats.onRuntimeEvent(listener),
-  offRuntimeEvent: (listener: (...args: unknown[]) => void) => window.app!.chats.offRuntimeEvent(listener),
+    requireAppBridge().chats.retryToolActivity({ sessionId, activity }) as Promise<string>,
+  onRuntimeEvent: (listener: (...args: unknown[]) => void) => requireAppBridge().chats.onRuntimeEvent(listener),
+  offRuntimeEvent: (listener: (...args: unknown[]) => void) => requireAppBridge().chats.offRuntimeEvent(listener),
 }
 
 export const listChats = ChatApi.listAll

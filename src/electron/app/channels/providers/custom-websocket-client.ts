@@ -106,8 +106,9 @@ export class CustomWebSocketClient {
       body = { content: raw }
     }
 
-    const senderId = String(body.senderId || body.sender_id || body.user_id || body.from?.id || "custom-socket")
-    const senderName = String(body.senderName || body.sender_name || body.user_name || body.from?.name || senderId)
+    const from = body.from as { id?: unknown; name?: unknown } | undefined
+    const senderId = String(body.senderId || body.sender_id || body.user_id || from?.id || "custom-socket")
+    const senderName = String(body.senderName || body.sender_name || body.user_name || from?.name || senderId)
     const content = String(body.content || body.text || body.message || body.msg || "")
     const chatId = String(body.chatId || body.chat_id || body.conversation_id || body.channel_id || senderId)
     if (!content) {

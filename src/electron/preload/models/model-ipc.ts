@@ -9,30 +9,52 @@ import {
   providerTypeSchema,
 } from "@/electron/preload/models/model-ipc-schema"
 
+function redactProvider<T extends { apiKey: string } | null>(provider: T): T extends null ? null : Omit<NonNullable<T>, "apiKey"> & {
+  apiKey: string
+  apiKeyConfigured: boolean
+} {
+  if (!provider) {
+    return null as T extends null ? null : never
+  }
+
+  return {
+    ...provider,
+    apiKeyConfigured: Boolean(provider.apiKey),
+    apiKey: "",
+  } as unknown as T extends null ? null : never
+}
+
 export function registerModelIpc() {
-  ipcMain.handle("models:list", () => modelService.list())
-  ipcMain.handle("models:get", (_event, id: unknown) => modelService.get(parseIpcInput(entityIdSchema, id)))
+  ipcMain.handle("models:list", async () => (await modelService.list()).map((provider) => redactProvider(provider)))
+  ipcMain.handle("models:get", async (_event, id: unknown) =>
+    redactProvider(await modelService.get(parseIpcInput(entityIdSchema, id))),
+  )
   ipcMain.handle("models:create", (_event, value?: unknown) =>
-    modelService.create(parseIpcInput(providerCreateSchema, value ?? {}).providerType),
+    modelService.create(parseIpcInput(providerCreateSchema, value ?? {}).providerType).then((provider) => redactProvider(provider)),
   )
   ipcMain.handle("models:save", (_event, value: unknown) => {
     const provider = parseIpcInput(providerSaveSchema, value)
-    return modelService.save({
-      ...provider,
-      updatedAt: Date.now(),
-    })
+    return modelService
+      .save({
+        ...provider,
+        updatedAt: Date.now(),
+      })
+      .then((saved) => redactProvider(saved))
   })
   ipcMain.handle("models:delete", (_event, id: unknown) => modelService.remove(parseIpcInput(entityIdSchema, id)))
   ipcMain.handle("models:discover", async (_event, value: unknown) => {
     const payload = parseIpcInput(providerDiscoverySchema, value)
     await ensureWorkspace()
+    const persistedProvider = payload.id ? await modelService.get(payload.id) : null
+    const apiKey = payload.apiKey || (payload.apiKeyConfigured ? persistedProvider?.apiKey || "" : "")
     return modelService.discover({
-      id: "discovery-preview",
+      id: payload.id || "discovery-preview",
       title: payload.providerType,
       description: "",
       providerType: payload.providerType,
       baseUrl: payload.baseUrl,
-      apiKey: payload.apiKey,
+      apiKey,
+      apiKeyConfigured: Boolean(apiKey),
       enabled: false,
       models: [],
       updatedAt: Date.now(),

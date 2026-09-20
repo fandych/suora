@@ -8,7 +8,9 @@ import {
   applyIntegrationAuth,
   buildIntegrationEndpointUrl,
   buildMultipartIntegrationBody,
+  isRestrictedHeaderName,
   parseIntegrationJson,
+  sanitizeHeaderRecord,
   type HttpIntegrationConfig,
   type UploadedIntegrationFile,
 } from "@/electron/app/integrations/types"
@@ -24,7 +26,9 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
   const url = await assertSafeHttpUrl(requestUrl)
   const input = parseIntegrationJson<Record<string, unknown>>(payload.inputJson, {})
   const query = parseIntegrationJson<Record<string, string>>(selectedEndpoint?.queryJson ?? config.queryJson, {})
-  const headers = parseIntegrationJson<Record<string, string>>(selectedEndpoint?.headersJson ?? config.headersJson, {})
+  const headers = sanitizeHeaderRecord(
+    parseIntegrationJson<Record<string, unknown>>(selectedEndpoint?.headersJson ?? config.headersJson, {}),
+  )
   const endpointParameters = selectedEndpoint?.parameters ?? []
   const invalidFileParameter = endpointParameters.find(
     (parameter) =>
@@ -49,7 +53,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
         .replaceAll(`:${parameter.name}`, encodeURIComponent(String(runtimeValue)))
     }
     if (parameter.in === "query") query[parameter.name] = String(runtimeValue)
-    if (parameter.in === "header") headers[parameter.name] = String(runtimeValue)
+    if (parameter.in === "header" && !isRestrictedHeaderName(parameter.name)) headers[parameter.name] = String(runtimeValue)
   }
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value))
   applyIntegrationAuth(headers, url, config)
@@ -153,9 +157,14 @@ function parseMcpAuthHeaders(authConfigJson?: string): Record<string, string> {
       headers?: Record<string, string>
     }
     if (parsed.token) headers["authorization"] = `Bearer ${parsed.token}`
-    if (parsed.apiKey) headers[parsed.headerName || "x-api-key"] = parsed.apiKey
+    if (parsed.apiKey) {
+      const configuredHeaderName = parsed.headerName || "x-api-key"
+      headers[isRestrictedHeaderName(configuredHeaderName) ? "x-api-key" : configuredHeaderName] = parsed.apiKey
+    }
     if (parsed.headers && typeof parsed.headers === "object") {
-      for (const [key, value] of Object.entries(parsed.headers)) headers[key.toLowerCase()] = String(value)
+      for (const [key, value] of Object.entries(sanitizeHeaderRecord(parsed.headers))) {
+        headers[key.toLowerCase()] = String(value)
+      }
     }
   } catch {
     // Ignore malformed auth config; proceed without extra headers.

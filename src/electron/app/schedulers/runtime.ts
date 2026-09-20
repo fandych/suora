@@ -10,6 +10,7 @@ import { runWorkflowAgent } from "@/electron/app/workflows/runtime-agent"
 import { documentService } from "@/electron/app/documents/service"
 import { integrationApplicationService } from "@/electron/app/integrations/service"
 import { getSystemMailProfile, sendMail } from "@/electron/app/channels/mail-service"
+import type { ChatRuntimeSettings } from "@/types/chat"
 import { invokeAgent } from "@/electron/app/agents/runtime"
 
 type Scheduler = typeof schedulers.$inferSelect
@@ -86,7 +87,7 @@ async function invokeWorkflow(scheduler: Scheduler, input: unknown, signal: Abor
       ...command,
       runtime: {
         getChatRuntimeSettings: () =>
-          chatApplicationService.getSessionSettings(null).then((settings) => settings.runtime),
+          chatApplicationService.getSessionSettings(null).then((settings) => settings.runtime as ChatRuntimeSettings),
         executeAgent: (agentInput) => runWorkflowAgent(agentInput, signal),
         getDocumentDetail: (documentId) => documentService.get(documentId),
         executeIntegration: (config, inputJson, integrationId) =>

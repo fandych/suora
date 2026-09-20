@@ -11,7 +11,11 @@ type ProviderCardProps = {
 
 export function ProviderCard({ provider, onOpen }: ProviderCardProps) {
   const maskedKey =
-    provider.apiKey.length > 6 ? `${provider.apiKey.slice(0, 3)}***${provider.apiKey.slice(-3)}` : provider.apiKey
+    provider.apiKeyConfigured
+      ? "Configured"
+      : provider.apiKey.length > 6
+        ? `${provider.apiKey.slice(0, 3)}***${provider.apiKey.slice(-3)}`
+        : provider.apiKey
 
   return (
     <BrandedResourceCard

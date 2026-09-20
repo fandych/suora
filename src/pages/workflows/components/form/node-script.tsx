@@ -21,7 +21,6 @@ export function NodeScriptForm({
         onChange={(event: ChangeEvent<HTMLSelectElement>) => updateNode({ runtime: event.target.value })}
       >
         <NativeSelectOption value="node">Node</NativeSelectOption>
-        <NativeSelectOption value="sandbox">Sandbox</NativeSelectOption>
         <NativeSelectOption value="javascript">JavaScript</NativeSelectOption>
       </WorkflowNodeSelect>
       <WorkflowField label="Timeout seconds">

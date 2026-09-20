@@ -22,7 +22,9 @@ function createCallback(database: SqliteDatabase): AsyncRemoteCallback {
 
     statement.setReturnArrays?.(method === "values")
     const rows = statement.all(...normalizedParams)
-    return { rows: rows.map((row) => (Array.isArray(row) ? row : Object.values(row as Record<string, unknown>))) }
+    return {
+      rows: rows.map((row: unknown) => (Array.isArray(row) ? row : Object.values(row as Record<string, unknown>))),
+    }
   }
 }
 

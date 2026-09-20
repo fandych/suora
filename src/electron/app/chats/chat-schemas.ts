@@ -19,13 +19,21 @@ const chatAttachmentSchema = z.object({
   sizeBytes: z.number().finite().nonnegative().optional(),
 })
 
+export const chatSendMessageSchema = z.object({
+  sessionId: z.string().min(1),
+  message: z.object({
+    content: z.string().max(100_000),
+    attachments: z.array(chatAttachmentSchema).default([]),
+  }),
+})
+
 export const chatMessagePartSchema = z.discriminatedUnion("type", [
   z.object({ id: z.string().min(1), type: z.literal("text"), content: z.string(), isPending: z.boolean().optional() }),
   z.object({ id: z.string().min(1), type: z.literal("tool"), activity: chatToolActivitySchema }),
   z.object({ id: z.string().min(1), type: z.literal("attachment"), attachment: chatAttachmentSchema }),
 ])
 
-const chatRuntimeModelSchema = z.object({
+export const chatRuntimeModelSchema = z.object({
   providerId: z.string().min(1),
   providerType: z.string().min(1),
   modelId: z.string().min(1),
@@ -34,7 +42,7 @@ const chatRuntimeModelSchema = z.object({
   systemPrompt: z.string(),
 })
 
-const proxySettingsSchema = z.object({
+export const proxySettingsSchema = z.object({
   enabled: z.boolean(),
   type: z.enum(["http", "https", "socks5"]),
   host: z.string(),
@@ -45,7 +53,7 @@ const proxySettingsSchema = z.object({
   ignoreSslErrors: z.boolean().optional(),
 })
 
-const chatRuntimeSettingsPayloadSchema = z.object({
+export const chatRuntimeSettingsPayloadSchema = z.object({
   model: chatRuntimeModelSchema,
   proxy: proxySettingsSchema,
   requestTimeoutMs: z.number().finite().nonnegative().optional(),
@@ -88,8 +96,16 @@ const versionedChatSettingsStoreSchema = z.object({
 export const CHAT_MESSAGE_PARTS_VERSION = 2
 export const CHAT_SETTINGS_STORE_VERSION = 2
 
+export type ChatRuntimeSettingsPayload = z.infer<typeof chatRuntimeSettingsPayloadSchema>
+export type StoredChatSessionPayload = z.infer<typeof storedChatSessionSchema>
+export type ChatSettingsStorePayload = z.infer<typeof chatSettingsStoreSchema>
+
 type VersionedPartsEnvelope = z.infer<typeof versionedPartsSchema>
-type VersionedChatSettingsEnvelope = z.infer<typeof versionedChatSettingsStoreSchema>
+export type VersionedChatSettingsEnvelope = z.infer<typeof versionedChatSettingsStoreSchema>
+export type ChatSettingsSavePayload =
+  | ChatRuntimeSettingsPayload
+  | VersionedChatSettingsEnvelope
+  | ChatSettingsStorePayload
 
 function migrateChatMessagePartsEnvelope(parsed: unknown): VersionedPartsEnvelope | null {
   if (Array.isArray(parsed))
@@ -146,7 +162,11 @@ export function parseUpdateMessagePartsPayload(payload: unknown) {
   return updateMessagePartsPayloadSchema.parse(payload)
 }
 
-export function parseChatSettingsSavePayload(payload: unknown) {
+export function parseChatSendMessagePayload(payload: unknown) {
+  return chatSendMessageSchema.parse(payload)
+}
+
+export function parseChatSettingsSavePayload(payload: unknown): ChatSettingsSavePayload {
   const runtimeResult = chatRuntimeSettingsPayloadSchema.safeParse(payload)
   if (runtimeResult.success) return runtimeResult.data
   const versionedResult = versionedChatSettingsStoreSchema.safeParse(payload)
@@ -154,7 +174,7 @@ export function parseChatSettingsSavePayload(payload: unknown) {
   return chatSettingsStoreSchema.parse(payload)
 }
 
-export function parseStoredChatSettingsStore(value?: string | null) {
+export function parseStoredChatSettingsStore(value?: string | null): VersionedChatSettingsEnvelope | null {
   if (!value) return null
   try {
     return migrateChatSettingsStoreEnvelope(JSON.parse(value))
@@ -163,6 +183,6 @@ export function parseStoredChatSettingsStore(value?: string | null) {
   }
 }
 
-export function serializeChatSettingsStore(store: z.infer<typeof chatSettingsStoreSchema>) {
+export function serializeChatSettingsStore(store: ChatSettingsStorePayload) {
   return JSON.stringify({ version: CHAT_SETTINGS_STORE_VERSION, store })
 }

@@ -4,6 +4,9 @@ import type {
   WorkflowRunEvent,
   WorkflowRunStartCommand,
 } from "@/types/workflow"
+import type { BrowserWindow } from "electron"
+import type { ClientRequest } from "node:http"
+import type { DatabaseSync } from "node:sqlite"
 
 export {}
 
@@ -22,6 +25,77 @@ type SendMailPayload = {
     cid?: string
     encoding?: "base64" | "hex" | "binary" | "quoted-printable"
   }>
+}
+
+export type { SendMailPayload }
+export type ProxySettings = {
+  enabled: boolean
+  type: "http" | "https" | "socks5"
+  host: string
+  port: number
+  username?: string
+  password?: string
+  rejectUnauthorized?: boolean
+  ignoreSslErrors?: boolean
+}
+
+export type ChatRuntimeSettingsPayload = {
+  model: {
+    providerId: string
+    providerType: string
+    modelId: string
+    baseUrl: string
+    apiKey: string
+    systemPrompt: string
+  }
+  proxy: ProxySettings
+  requestTimeoutMs?: number
+  maxSteps?: number
+}
+
+export type QueryMethod = "run" | "all" | "values" | "get"
+
+export type QueryPayload = {
+  sql: string
+  params: unknown[]
+  method: QueryMethod
+}
+
+export type SqliteDatabase = DatabaseSync
+
+export type BrowserWindowState = {
+  open: boolean
+  visible: boolean
+  url: string
+  loading?: boolean
+  error?: string
+}
+
+export type BrowserPageSnapshot = BrowserWindowState & {
+  title: string
+  text?: string
+  links?: Array<{ text: string; href: string }>
+  clicked?: string
+  filled?: string
+}
+
+export type AiFetchStartPayload = {
+  url: string
+  method?: string
+  headers?: Record<string, string>
+  bodyText?: string
+  bodyBase64?: string
+  timeoutMs?: number
+}
+
+export type AppState = {
+  isDev: boolean
+  mainWindow: BrowserWindow | null
+  browserWindow: BrowserWindow | null
+  browserWindows: Map<string, BrowserWindow>
+  sqlite: SqliteDatabase | null
+  activeAiRequests: Map<string, ClientRequest>
+  currentProxySettings: ProxySettings
 }
 
 declare global {
@@ -56,6 +130,7 @@ declare global {
         saveSessionSettings: (payload: unknown) => Promise<unknown>
         sendMessage: (payload: unknown) => Promise<unknown>
         cancelRuntime: (requestId: string) => Promise<unknown>
+        getRuntimeStatus: (requestId: string) => Promise<unknown>
         retryToolActivity: (payload: unknown) => Promise<unknown>
         onRuntimeEvent: (listener: (...args: unknown[]) => void) => void
         offRuntimeEvent: (listener: (...args: unknown[]) => void) => void

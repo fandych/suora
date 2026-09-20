@@ -66,6 +66,7 @@ contextBridge.exposeInMainWorld("app", {
     saveSessionSettings: (payload: unknown) => ipcRenderer.invoke("chats:saveSessionSettings", payload),
     sendMessage: (payload: unknown) => ipcRenderer.invoke("chats:sendMessage", payload),
     cancelRuntime: (requestId: string) => ipcRenderer.invoke("chats:runtime:cancel", requestId),
+    getRuntimeStatus: (requestId: string) => ipcRenderer.invoke("chats:runtime:status", requestId),
     retryToolActivity: (payload: unknown) => ipcRenderer.invoke("chats:retryToolActivity", payload),
     onRuntimeEvent: (listener: (...args: unknown[]) => void) => ipcRenderer.on("chat-runtime-listener", listener),
     offRuntimeEvent: (listener: (...args: unknown[]) => void) => ipcRenderer.off("chat-runtime-listener", listener),

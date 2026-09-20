@@ -22,12 +22,40 @@ async function assertRealPath(target: string) {
   if (stats.isSymbolicLink()) throw new Error("Symbolic links are not allowed for filesystem tools.")
   return stats
 }
+
+async function assertPathHasNoSymlinkSegments(target: string, allowMissingLeaf = false) {
+  const workspaceRoot = path.resolve(resolveWorkspaceTarget())
+  const absoluteTarget = path.resolve(target)
+  const relativeTarget = path.relative(workspaceRoot, absoluteTarget)
+  if (relativeTarget.startsWith("..") || path.isAbsolute(relativeTarget)) {
+    throw new Error("Filesystem target must stay within the workspace root.")
+  }
+  if (!relativeTarget) {
+    return
+  }
+  let current = workspaceRoot
+  const segments = relativeTarget.split(path.sep).filter(Boolean)
+  for (let index = 0; index < segments.length; index += 1) {
+    current = path.join(current, segments[index])
+    try {
+      await assertRealPath(current)
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      const isLeaf = index === segments.length - 1
+      if (code === "ENOENT" && (allowMissingLeaf || !isLeaf)) {
+        return
+      }
+      throw error
+    }
+  }
+}
 export function registerFilesystemIpc() {
   ipcMain.handle("tools:listFiles", async (_event, relativePath?: string) => {
     const input = parseFilesystemInput(relativePathSchema, relativePath)
     await ensureWorkspace()
     const target = resolveWorkspaceTarget(input)
     await enforceRelativePathPolicy(input, target)
+    await assertPathHasNoSymlinkSegments(target)
     await assertRealPath(target)
     return (await fs.readdir(target, { withFileTypes: true })).map((entry) => ({
       name: entry.name,
@@ -40,6 +68,7 @@ export function registerFilesystemIpc() {
     await ensureWorkspace()
     const target = resolveWorkspaceTarget(input)
     await enforceRelativePathPolicy(input, target)
+    await assertPathHasNoSymlinkSegments(target)
     const stats = await assertRealPath(target)
     ensureFileSizeWithinLimit(stats.size, `File '${input}'`, MAX_TOOL_FILE_BYTES)
     return {
@@ -52,28 +81,45 @@ export function registerFilesystemIpc() {
     await ensureWorkspace()
     const target = resolveWorkspaceTarget(input.path)
     await enforceRelativePathPolicy(input.path, target)
+    const parentDirectory = path.dirname(target)
+    await assertPathHasNoSymlinkSegments(parentDirectory, true)
     try {
+      await assertPathHasNoSymlinkSegments(target, true)
       await assertRealPath(target)
     } catch (error) {
-      if ((error as Error).code !== "ENOENT") throw error
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
     }
     ensureFileSizeWithinLimit(
       Buffer.byteLength(input.content, "utf8"),
       `Write payload for '${input.path}'`,
       MAX_TOOL_WRITE_BYTES,
     )
-    await fs.mkdir(path.dirname(target), { recursive: true })
-    await fs.writeFile(target, input.content, "utf8", { flag: "w" })
+    await fs.mkdir(parentDirectory, { recursive: true })
+    await assertPathHasNoSymlinkSegments(parentDirectory)
+    const tempPath = path.join(
+      parentDirectory,
+      `.suora-write-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`,
+    )
+    try {
+      await fs.writeFile(tempPath, input.content, { encoding: "utf8", flag: "wx" })
+      await assertPathHasNoSymlinkSegments(tempPath)
+      await assertPathHasNoSymlinkSegments(parentDirectory)
+      await fs.rename(tempPath, target)
+    } catch (error) {
+      await fs.rm(tempPath, { force: true }).catch(() => undefined)
+      throw error
+    }
     return { ok: true, path: path.relative(resolveWorkspaceTarget(), target).replace(/\\/g, "/") }
   })
   ipcMain.handle("tools:saveFile", async (_event, payload: unknown) => {
     const input = parseFilesystemInput(saveFileSchema, payload)
     const browserWindow = appState.mainWindow ?? undefined
     const { dialog, app } = await import("electron")
-    const result = await dialog.showSaveDialog(browserWindow, {
+    const options = {
       defaultPath: path.join(app.getPath("documents"), path.basename(input.defaultName)),
       filters: input.filters,
-    })
+    }
+    const result = browserWindow ? await dialog.showSaveDialog(browserWindow, options) : await dialog.showSaveDialog(options)
     if (result.canceled || !result.filePath) return { ok: true, canceled: true, path: null }
     await fs.writeFile(result.filePath, Buffer.from(input.dataBase64, "base64"))
     return { ok: true, canceled: false, path: result.filePath }

@@ -116,20 +116,22 @@ export const modelService = {
   },
   create: async (providerType = "custom") => {
     const preset = getProviderPreset(providerType)
-    return toProvider(
-      await createModel({
-        title: preset.title,
-        providerType: preset.providerType,
-        baseUrl: preset.baseUrl,
-        apiKey: "",
-        modelsJson: JSON.stringify(preset.models),
-        enabled: false,
-      }),
-    )
+    const created = await createModel({
+      title: preset.title,
+      providerType: preset.providerType,
+      baseUrl: preset.baseUrl,
+      apiKey: "",
+      modelsJson: JSON.stringify(preset.models),
+      enabled: false,
+    })
+    if (!created) throw new Error("Failed to create provider.")
+    return toProvider(created)
   },
   save: async (provider: Omit<ProviderConfigRecord, "models"> & { models?: ProviderModelRecord[]; modelsJson?: string }) => {
     const models = provider.models?.length ? provider.models : parseModels(provider.modelsJson ?? "[]")
-    return toProvider(await saveModel({ ...provider, modelsJson: JSON.stringify(models) }))
+    const saved = await saveModel({ ...provider, modelsJson: JSON.stringify(models) })
+    if (!saved) throw new Error(`Provider ${provider.id} was not found.`)
+    return toProvider(saved)
   },
   remove: (providerId: string) => deleteModel(providerId),
   configured: async () =>
@@ -140,13 +142,13 @@ export const modelService = {
   preset: (providerType: string) => getProviderPreset(providerType),
   defaultBaseUrl: (providerType: string) => getDefaultProviderBaseUrl(providerType),
   allowsNoKey: (providerType: string) => providerAllowsNoKey(providerType),
-  discoveryState: (provider: Pick<ProviderConfigRecord, "providerType" | "baseUrl" | "apiKey">) => {
+  discoveryState: (provider: Pick<ProviderConfigRecord, "providerType" | "baseUrl" | "apiKey" | "apiKeyConfigured">) => {
     if (provider.providerType === "ollama") return { capable: true, enabled: true, reason: null }
     if (unsupportedDiscoveryReasons.has(provider.providerType))
       return { capable: false, enabled: false, reason: unsupportedDiscoveryReasons.get(provider.providerType) ?? null }
     if (!provider.baseUrl.trim())
       return { capable: true, enabled: false, reason: "Configure a base URL before refreshing remote models." }
-    if (!provider.apiKey.trim() && !providerAllowsNoKey(provider.providerType))
+    if (!provider.apiKey.trim() && !provider.apiKeyConfigured && !providerAllowsNoKey(provider.providerType))
       return { capable: true, enabled: false, reason: "Configure an API key before refreshing remote models." }
     return { capable: true, enabled: true, reason: null }
   },

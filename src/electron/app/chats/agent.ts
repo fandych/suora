@@ -15,6 +15,7 @@ import { modelService } from "@/electron/app/models/service"
 import { normalizeChatAgentMaxSteps } from "@/electron/app/chats/chat-agent-loop-policy"
 import { classifyChatRuntimeError } from "@/electron/app/chats/chat-runtime-error-classifier"
 import { configuredFetch } from "@/electron/infrastructure/http-client"
+import type { ChatMessagePart } from "@/types/chat"
 
 type RuntimeEvent = { requestId: string; chatId: string; type: string; [key: string]: unknown }
 
@@ -52,8 +53,10 @@ function createModel(settings: ChatRuntimeSettingsPayload) {
       return createOpenAI(options)(settings.model.modelId)
     default:
       return createOpenAICompatible({
-        ...options,
+        apiKey: settings.model.apiKey,
+        baseURL: settings.model.baseUrl || "http://localhost:11434/v1",
         name: settings.model.providerId,
+        fetch: configuredFetch,
         headers: { "api-key": settings.model.apiKey },
       })(settings.model.modelId)
   }
@@ -132,7 +135,7 @@ export async function runChatAgent(
       abortSignal: command.abortSignal,
     })
     let text = ""
-    const parts: Array<Record<string, unknown>> = []
+    const parts: ChatMessagePart[] = []
     for await (const part of result.fullStream) {
       if (part.type === "text-delta") {
         text += part.text
@@ -145,7 +148,11 @@ export async function runChatAgent(
         parts.push({
           id: part.toolCallId,
           type: "tool",
-          activity: { id: part.toolCallId, toolName: part.toolName, input: part.input },
+          activity: {
+            id: part.toolCallId,
+            toolName: part.toolName,
+            input: part.input && typeof part.input === "object" ? (part.input as Record<string, unknown>) : undefined,
+          },
         })
         emit(target, {
           requestId: command.requestId,
@@ -158,8 +165,8 @@ export async function runChatAgent(
       } else if (part.type === "tool-result") {
         const output = JSON.stringify(part.output)
         const toolPart = parts.find((item) => item.id === part.toolCallId)
-        if (toolPart && typeof toolPart.activity === "object" && toolPart.activity)
-          toolPart.activity = { ...(toolPart.activity as Record<string, unknown>), output }
+        if (toolPart?.type === "tool" && typeof toolPart.activity === "object" && toolPart.activity)
+          toolPart.activity = { ...toolPart.activity, output }
         emit(target, {
           requestId: command.requestId,
           chatId: command.chatId,
@@ -172,22 +179,26 @@ export async function runChatAgent(
     }
     if (command.abortSignal?.aborted) {
       emit(target, { requestId: command.requestId, chatId: command.chatId, type: "cancelled" })
-      return
+      return { status: "cancelled" as const }
     }
     await appendChatMessage({ chatId: command.chatId, content: text, parts }, "assistant")
     const detail = await getChat(command.chatId)
     emit(target, { requestId: command.requestId, chatId: command.chatId, type: "completed", detail })
+    return { status: "completed" as const }
   } catch (error) {
     if (command.abortSignal?.aborted) {
       emit(target, { requestId: command.requestId, chatId: command.chatId, type: "cancelled" })
-      return
+      return { status: "cancelled" as const }
     }
+    const message = error instanceof Error ? error.message : String(error)
+    const errorKind = classifyChatRuntimeError(error)
     emit(target, {
       requestId: command.requestId,
       chatId: command.chatId,
       type: "error",
-      error: error instanceof Error ? error.message : String(error),
-      errorKind: classifyChatRuntimeError(error),
+      error: message,
+      errorKind,
     })
+    return { status: "failed" as const, error: message, errorKind }
   }
 }

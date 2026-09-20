@@ -5,7 +5,7 @@ import type { Request } from "express"
 import { buildWeChatSignature } from "@/electron/app/channels/runtime/channel-runtime-messages"
 
 export function verifyWebhookSecret(req: Request, secret?: string) {
-  if (!secret) return true
+  if (!secret) return false
   const header = req.headers["x-webhook-secret"]
   const provided = Array.isArray(header) ? header[0] : header
   return timingSafeCompare(String(secret), String(provided || ""))

@@ -1,3 +1,5 @@
+import net from "node:net"
+import tls from "node:tls"
 import type { ChannelConfigRecord, EmailAction, EmailFilterRule } from "@/types/channel"
 import type { MailAttachment, MailProfile, ParsedEmail } from "@/types/mail"
 import { httpRequest } from "@/electron/app/channels/runtime/channel-runtime-http"
@@ -93,7 +95,7 @@ export async function fetchNewEmails(channel: ChannelConfigRecord, lastSeenUid: 
       buffer += data
       processBuffer()
     })
-    socket.on("error", (error) => {
+    socket.on("error", (error: Error) => {
       clearTimeout(timeout)
       reject(error)
     })

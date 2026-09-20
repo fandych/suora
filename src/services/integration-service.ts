@@ -1,11 +1,12 @@
 import type { IntegrationDetail, IntegrationSummary } from "@/types/integration"
 import type { IntegrationExecutionResult } from "@/types/integration"
+import { requireAppBridge } from "@/services/bridge"
 
 export const IntegrationApi = {
-  listAll: () => window.app!.integrations.list() as Promise<IntegrationSummary[]>,
+  listAll: () => requireAppBridge().integrations.list() as Promise<IntegrationSummary[]>,
   get: (integrationId: string, versionId?: string) =>
-    window.app!.integrations.get(integrationId, versionId) as Promise<IntegrationDetail | null>,
-  create: (payload?: unknown) => window.app!.integrations.create(payload) as Promise<IntegrationDetail>,
+    requireAppBridge().integrations.get(integrationId, versionId) as Promise<IntegrationDetail | null>,
+  create: (payload?: unknown) => requireAppBridge().integrations.create(payload) as Promise<IntegrationDetail>,
   save: (payload: {
     id: string
     title: string
@@ -16,18 +17,18 @@ export const IntegrationApi = {
     selectedVersionId?: string
     publish?: boolean
   }) =>
-    window.app!.integrations.save({
+    requireAppBridge().integrations.save({
       ...payload,
       endpoint: payload.endpoint ?? "",
       configJson: JSON.stringify(payload.config),
     }) as Promise<IntegrationDetail>,
-  remove: (integrationId: string) => window.app!.integrations.delete(integrationId),
+  remove: (integrationId: string) => requireAppBridge().integrations.delete(integrationId),
   setEnabled: (payload: { id: string; enabled: boolean }) =>
-    window.app!.integrations.setEnabled(payload) as Promise<IntegrationSummary>,
-  execute: (payload: unknown) => window.app!.integrations.execute(payload) as Promise<IntegrationExecutionResult>,
+    requireAppBridge().integrations.setEnabled(payload) as Promise<IntegrationSummary>,
+  execute: (payload: unknown) => requireAppBridge().integrations.execute(payload) as Promise<IntegrationExecutionResult>,
   recordExecution: (payload: { id: string; versionId: string; status: string; input: string; output: string }) =>
-    window.app!.integrations.recordExecution(payload),
-  fetchApiDoc: (sourceUrl: string) => window.app!.integrations.fetchApiDoc(sourceUrl),
+    requireAppBridge().integrations.recordExecution(payload),
+  fetchApiDoc: (sourceUrl: string) => requireAppBridge().integrations.fetchApiDoc(sourceUrl),
 }
 
 export const listIntegrationSummaries = IntegrationApi.listAll

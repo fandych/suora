@@ -1,24 +1,25 @@
 import type { ChannelDetail, ChannelSummary } from "@/types/channel"
+import { requireAppBridge } from "@/services/bridge"
 
 export const ChannelApi = {
-  listAll: () => window.app!.channels.listAll() as Promise<ChannelSummary[]>,
-  get: (channelId: string) => window.app!.channels.get(channelId) as Promise<ChannelDetail | null>,
-  create: (defaults?: unknown) => window.app!.channels.create(defaults) as Promise<ChannelDetail>,
-  save: (payload: ChannelDetail) => window.app!.channels.save(payload) as Promise<ChannelDetail>,
-  remove: (channelId: string) => window.app!.channels.delete(channelId),
-  startRuntime: () => window.app!.channels.startRuntime(),
-  stopRuntime: () => window.app!.channels.stopRuntime(),
-  syncRuntime: () => window.app!.channels.syncRuntime(),
-  runtimeStatus: () => window.app!.channels.getRuntimeStatus(),
-  healthCheck: (channelId: string) => window.app!.channels.healthCheck(channelId),
-  sendMessage: (payload: unknown) => window.app!.channels.sendMessage(payload),
-  sendMessageQueued: (payload: unknown) => window.app!.channels.sendMessageQueued(payload),
-  getWebhookUrl: (channelId: string) => window.app!.channels.getWebhookUrl({ id: channelId }),
-  debugSend: (payload: unknown) => window.app!.channels.debugSend(payload),
+  listAll: () => requireAppBridge().channels.listAll() as Promise<ChannelSummary[]>,
+  get: (channelId: string) => requireAppBridge().channels.get(channelId) as Promise<ChannelDetail | null>,
+  create: (defaults?: unknown) => requireAppBridge().channels.create(defaults) as Promise<ChannelDetail>,
+  save: (payload: ChannelDetail) => requireAppBridge().channels.save(payload) as Promise<ChannelDetail>,
+  remove: (channelId: string) => requireAppBridge().channels.delete(channelId),
+  startRuntime: () => requireAppBridge().channels.startRuntime(),
+  stopRuntime: () => requireAppBridge().channels.stopRuntime(),
+  syncRuntime: () => requireAppBridge().channels.syncRuntime(),
+  runtimeStatus: () => requireAppBridge().channels.getRuntimeStatus(),
+  healthCheck: (channelId: string) => requireAppBridge().channels.healthCheck(channelId),
+  sendMessage: (payload: unknown) => requireAppBridge().channels.sendMessage(payload),
+  sendMessageQueued: (payload: unknown) => requireAppBridge().channels.sendMessageQueued(payload),
+  getWebhookUrl: (channelId: string) => requireAppBridge().channels.getWebhookUrl({ id: channelId }),
+  debugSend: (payload: unknown) => requireAppBridge().channels.debugSend(payload),
   startWeChatPersonalLogin: (channelId: string, force = false) =>
-    window.app!.channels.startWeChatPersonalLogin(channelId, force),
+    requireAppBridge().channels.startWeChatPersonalLogin(channelId, force),
   waitForWeChatPersonalLogin: (channelId: string, sessionKey: string, verifyCode?: string, timeoutMs?: number) =>
-    window.app!.channels.waitForWeChatPersonalLogin(channelId, sessionKey, verifyCode, timeoutMs),
+    requireAppBridge().channels.waitForWeChatPersonalLogin(channelId, sessionKey, verifyCode, timeoutMs),
 }
 
 export const bindChannel = async (detail: ChannelDetail) => {
@@ -66,11 +67,11 @@ export const waitForWeChatPersonalBinding = async (
     status?: string
     success?: boolean
     message?: string
-    botToken?: string
-    baseUrl?: string
-    accountId?: string
-    userId?: string
     qrCodeUrl?: string
+    detail?: ChannelDetail | null
+  }
+  if (result.detail) {
+    return { detail: result.detail, status: result.status ?? "error", message: result.message }
   }
   const connected = result.status === "connected" || result.status === "already_bound"
   const next = await ChannelApi.save({
@@ -79,10 +80,6 @@ export const waitForWeChatPersonalBinding = async (
       ...detail.channel,
       enabled: connected,
       wechatPersonalBindingStatus: connected ? "bound" : "pending",
-      wechatPersonalBotToken: result.botToken ?? detail.channel.wechatPersonalBotToken,
-      wechatPersonalBaseUrl: result.baseUrl ?? detail.channel.wechatPersonalBaseUrl,
-      wechatPersonalAccountId: result.accountId ?? detail.channel.wechatPersonalAccountId,
-      wechatPersonalUserId: result.userId ?? detail.channel.wechatPersonalUserId,
       wechatPersonalQrCodeUrl: connected ? undefined : (result.qrCodeUrl ?? detail.channel.wechatPersonalQrCodeUrl),
       bindingState: connected ? "connected" : "draft",
     },

@@ -70,8 +70,10 @@ export const useAgentDetailStore = create<AgentDetailState>((set, get) => ({
         WorkflowApi.listAll(),
       ])
       if (!detail) throw new Error("Agent not found.")
+      if (get().agentId !== agentId || get().selectedVersionId !== selectedVersionId) return
       set({ draft: normalizeDraft(detail), providers, skills, integrations, documents, workflows, isLoading: false })
     } catch (error) {
+      if (get().agentId !== agentId || get().selectedVersionId !== selectedVersionId) return
       set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) })
     }
   },

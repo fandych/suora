@@ -3,7 +3,7 @@ import { fileURLToPath } from "node:url"
 import type { IntegrationExecutePayload } from "@/electron/app/integrations/types"
 import { getProxySettings, getProxyUrl } from "@/electron/infrastructure/proxy-service"
 
-const ALLOWED_SCRIPT_RUNTIMES = new Set(["node", "sandbox", "javascript"])
+const ALLOWED_SCRIPT_RUNTIMES = new Set(["node", "javascript"])
 const BLOCKED_SCRIPT_PATTERNS = [
   /\brequire\s*\(/,
   /\bprocess\b/,
@@ -39,7 +39,7 @@ export async function executeSandboxedScriptIntegration(payload: IntegrationExec
     return {
       ok: false,
       status: 400,
-      body: `Unsupported script runtime: ${config.runtime || "unknown"}. Allowed values: node, sandbox, javascript.`,
+      body: `Unsupported script runtime: ${config.runtime || "unknown"}. Allowed values: node, javascript.`,
     }
   const selectedScript = config.scripts?.find((item) => item.id === config.selectedScriptId) ?? config.scripts?.[0]
   if (!selectedScript) return { ok: false, status: 400, body: "No script entry is configured." }

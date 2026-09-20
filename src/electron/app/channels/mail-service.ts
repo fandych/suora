@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer"
-import type { Attachment } from "nodemailer/lib/mailer"
+import type Mail from "nodemailer/lib/mailer"
 
 import type { PreferenceSettings } from "@/electron/app/preferences/settings"
 import { getPreferenceSettingsSnapshot } from "@/electron/app/preferences/runtime"
@@ -72,7 +72,7 @@ export async function sendMail({
   }
 }
 
-function toNodemailerAttachment(attachment: MailAttachment): Attachment {
+function toNodemailerAttachment(attachment: MailAttachment): Mail.Attachment {
   const content = resolveAttachmentContent(attachment)
   if (!content && !attachment.path && !attachment.href)
     throw new Error(`Attachment '${attachment.filename || "unnamed"}' has no content, path, or URL.`)

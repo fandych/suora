@@ -9,15 +9,17 @@ import {
   saveChatSettings,
   updateChatMessageParts,
 } from "@/electron/app/chats/repository"
-import type { ChatRuntimeSettingsPayload } from "@/types/electron"
 import { getPreferenceValue } from "@/electron/app/preferences/repository"
 import {
+  type ChatRuntimeSettingsPayload,
+  type ChatSettingsStorePayload,
   parseStoredChatSettingsStore,
   parseAppendAssistantPayload,
   parseAppendUserPayload,
   parseUpdateMessagePartsPayload,
 } from "@/electron/app/chats/chat-schemas"
 import { normalizeChatAgentMaxSteps } from "@/electron/app/chats/chat-agent-loop-policy"
+import type { ChatRuntimeSettings, ChatSessionSettings } from "@/types/chat"
 
 export const chatApplicationService = {
   list: () => listChats(),
@@ -37,8 +39,8 @@ export const chatApplicationService = {
           chats?: Record<string, { runtime?: ChatRuntimeSettingsPayload; selectedAgentId?: string }>
         },
   ) => saveChatSettings(value),
-  async getSessionSettings(chatId?: string | null) {
-    const store = parseStoredChatSettingsStore(await getChatSettings())?.store ?? {}
+  async getSessionSettings(chatId?: string | null): Promise<ChatSessionSettings> {
+    const store: ChatSettingsStorePayload = parseStoredChatSettingsStore(await getChatSettings())?.store ?? {}
     const chat = chatId ? store.chats?.[chatId] : undefined
     const preference = parseJson(await getPreferenceValue())
     const defaultRuntime = normalizeRuntime(store.defaultRuntime)
@@ -62,8 +64,8 @@ export const chatApplicationService = {
     chatId?: string | null
     runtime: ChatRuntimeSettingsPayload
     selectedAgentId: string
-  }) {
-    const store = parseStoredChatSettingsStore(await getChatSettings())?.store ?? {}
+  }): Promise<ChatSessionSettings> {
+    const store: ChatSettingsStorePayload = parseStoredChatSettingsStore(await getChatSettings())?.store ?? {}
     const runtime = normalizeRuntime(payload.runtime)
     const nextStore = {
       defaultRuntime: store.defaultRuntime,
@@ -89,9 +91,11 @@ function parseJson(value: string | null) {
   }
 }
 
-function normalizeRuntime(value?: Partial<ChatRuntimeSettingsPayload> | null): ChatRuntimeSettingsPayload {
-  const model = value?.model ?? {}
-  const proxy = value?.proxy ?? {}
+function normalizeRuntime(value?: Partial<ChatRuntimeSettingsPayload> | null): ChatRuntimeSettings {
+  const model: Partial<ChatRuntimeSettingsPayload["model"]> = value?.model ?? {}
+  const proxy: Partial<ChatRuntimeSettingsPayload["proxy"]> = value?.proxy ?? {}
+  const requestTimeoutMs = typeof value?.requestTimeoutMs === "number" && value.requestTimeoutMs > 0 ? value.requestTimeoutMs : 0
+  const proxyPort = typeof proxy.port === "number" && Number.isFinite(proxy.port) ? proxy.port : 0
   return {
     model: {
       providerId: model.providerId?.trim() || model.providerType || "provider-ollama",
@@ -105,14 +109,13 @@ function normalizeRuntime(value?: Partial<ChatRuntimeSettingsPayload> | null): C
       enabled: Boolean(proxy.enabled),
       type: proxy.type || "http",
       host: proxy.host?.trim() || "",
-      port: Number.isFinite(proxy.port) ? proxy.port : 0,
+      port: proxyPort,
       username: proxy.username?.trim() || "",
       password: proxy.password || "",
       rejectUnauthorized: proxy.rejectUnauthorized ?? true,
       ignoreSslErrors: proxy.ignoreSslErrors ?? false,
     },
-    requestTimeoutMs:
-      Number.isFinite(value?.requestTimeoutMs) && value.requestTimeoutMs! > 0 ? value.requestTimeoutMs : 0,
+    requestTimeoutMs,
     maxSteps: normalizeChatAgentMaxSteps(value?.maxSteps),
   }
 }

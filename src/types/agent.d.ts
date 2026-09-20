@@ -21,6 +21,7 @@ export type ProviderConfigRecord = {
   providerType: string
   baseUrl: string
   apiKey: string
+  apiKeyConfigured?: boolean
   enabled: boolean
   models: ProviderModelRecord[]
   updatedAt: number

@@ -25,8 +25,10 @@ export const useModelDetailStore = create<ModelDetailState>((set, get) => ({
     set({ modelId, isLoading: true, error: null })
     try {
       const draft = await ModelApi.get(modelId)
+      if (get().modelId !== modelId) return
       set({ draft, isLoading: false })
     } catch (error) {
+      if (get().modelId !== modelId) return
       set({ isLoading: false, error: error instanceof Error ? error : new Error(String(error)) })
     }
   },

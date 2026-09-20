@@ -6,6 +6,7 @@ import {
   getSystemInfo,
   getUpdaterState,
 } from "@/services/preference-system-status"
+import { requireAppBridge } from "@/services/bridge"
 
 function applyToDocument(settings: Pick<PreferenceSettings, "themeMode" | "themeAccent" | "fontScale" | "language">) {
   if (typeof document === "undefined") return
@@ -34,11 +35,11 @@ function applyToDocument(settings: Pick<PreferenceSettings, "themeMode" | "theme
 
 export const PreferenceApi = {
   get: async () => {
-    const value = (await window.app!.preferences.get()) as string | null
+    const value = (await requireAppBridge().preferences.get()) as string | null
     return value ? (JSON.parse(value) as PreferenceSettings) : createRendererPreferenceDefaults()
   },
   save: async (settings: PreferenceSettings) => {
-    const value = (await window.app!.preferences.save(JSON.stringify(settings))) as string
+    const value = (await requireAppBridge().preferences.save(JSON.stringify(settings))) as string
     const normalized = JSON.parse(value) as PreferenceSettings
     applyToDocument(normalized)
     return normalized
@@ -50,10 +51,10 @@ export const PreferenceApi = {
   getDiagnostics: getSystemDiagnostics,
   getUpdaterState,
   checkForUpdates,
-  systemInfo: () => window.app!.system.info(),
-  diagnostics: () => window.app!.system.diagnostics(),
-  updaterState: () => window.app!.updater.getState(),
-  checkUpdates: () => window.app!.updater.check(),
+  systemInfo: () => requireAppBridge().system.info(),
+  diagnostics: () => requireAppBridge().system.diagnostics(),
+  updaterState: () => requireAppBridge().updater.getState(),
+  checkUpdates: () => requireAppBridge().updater.check(),
 }
 
 function createRendererPreferenceDefaults(): PreferenceSettings {

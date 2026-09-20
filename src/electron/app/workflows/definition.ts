@@ -1,3 +1,8 @@
+import { getWorkflowStructureIssues } from "@/lib/workflow/validator"
+import { normalizeWorkflowDefinition } from "@/electron/app/workflows/normalizer"
+
+const unsupportedWorkflowNodeKinds = new Set(["fork", "join", "loop", "parallel"])
+
 export function createDefaultWorkflowDefinition() {
   return {
     nodes: [
@@ -104,5 +109,29 @@ export function validateWorkflowDefinitionJson(value: string) {
     maxDurationMs > 3_600_000
   ) {
     throw new Error("Workflow execution budget is outside the supported limits.")
+  }
+
+  const normalized = normalizeWorkflowDefinition(definition)
+  const unsupportedKinds = [
+    ...new Set(
+      normalized.nodes
+        .map((node) => node.data.kind)
+        .filter((kind): kind is string => typeof kind === "string" && unsupportedWorkflowNodeKinds.has(kind)),
+    ),
+  ]
+  if (unsupportedKinds.length > 0) {
+    throw new Error(`Workflow control nodes are not available yet: ${unsupportedKinds.join(", ")}.`)
+  }
+
+  const structureIssues = getWorkflowStructureIssues(normalized.nodes as never[], normalized.edges as never[]).filter(
+    (issue) => issue.severity === "error",
+  )
+  if (structureIssues.length > 0) {
+    throw new Error(
+      `Workflow validation failed: ${structureIssues
+        .slice(0, 5)
+        .map((issue) => issue.message)
+        .join("; ")}`,
+    )
   }
 }

@@ -3,13 +3,16 @@ import { and, desc, eq, exists, sql } from "drizzle-orm"
 import { getDrizzleDatabase } from "@/drizzle/db"
 import { appMeta, chatMessages, chats } from "@/drizzle/schema"
 import {
+  CHAT_SETTINGS_STORE_VERSION,
+  type ChatSettingsSavePayload,
+  type ChatSettingsStorePayload,
   parseStoredChatMessageParts,
   parseStoredChatSettingsStore,
   parseChatSettingsSavePayload,
   serializeChatMessageParts,
   serializeChatSettingsStore,
 } from "@/electron/app/chats/chat-schemas"
-import type { ChatRuntimeSettingsPayload } from "@/types/electron"
+import type { ChatMessagePart } from "@/types/chat"
 import { setProxySettings } from "@/electron/infrastructure/proxy-service"
 
 async function readChat(chatId: string) {
@@ -89,7 +92,7 @@ export async function deleteChat(chatId: string) {
 }
 
 export async function appendChatMessage(
-  payload: { chatId: string; content: string; parts?: unknown[] },
+  payload: { chatId: string; content: string; parts?: ChatMessagePart[] },
   role: "user" | "assistant",
 ) {
   const database = getDrizzleDatabase()
@@ -121,7 +124,7 @@ export async function appendChatMessage(
 export async function updateChatMessageParts(payload: {
   chatId: string
   messageId: string
-  parts: unknown[]
+  parts: ChatMessagePart[]
 }) {
   const database = getDrizzleDatabase()
   const result = await database
@@ -144,16 +147,19 @@ export async function getChatSettings() {
   return parsed ? serializeChatSettingsStore(parsed.store) : (row?.value ?? null)
 }
 
-export async function saveChatSettings(
-  value:
-    | ChatRuntimeSettingsPayload
-    | {
-        defaultRuntime?: ChatRuntimeSettingsPayload
-        chats?: Record<string, { runtime?: ChatRuntimeSettingsPayload; selectedAgentId?: string }>
-      },
-) {
+export async function saveChatSettings(value: ChatSettingsSavePayload) {
   const parsed = parseChatSettingsSavePayload(value)
-  const store = "version" in parsed ? parsed.store : parsed
+  const store: ChatSettingsStorePayload =
+    "version" in parsed
+      ? parsed.store
+      : "model" in parsed
+        ? {
+            defaultRuntime: parsed,
+            defaultSelectedAgentId: "agent-general-assistant",
+            drafts: {},
+            chats: {},
+          }
+        : parsed
   const database = getDrizzleDatabase()
   await database
     .insert(appMeta)
@@ -161,5 +167,5 @@ export async function saveChatSettings(
     .onConflictDoUpdate({ target: appMeta.key, set: { value: sql`excluded.value` } })
   if ("proxy" in parsed ? parsed.proxy : store.defaultRuntime?.proxy)
     setProxySettings(("proxy" in parsed ? parsed.proxy : store.defaultRuntime?.proxy)!)
-  return "version" in parsed ? parsed : { version: 1, store }
+  return "version" in parsed ? parsed : { version: CHAT_SETTINGS_STORE_VERSION, store }
 }

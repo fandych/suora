@@ -1,7 +1,9 @@
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { toast } from "@/components/ui/toast"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { ChatApi } from "@/services/chat-service"
+import { subscribeToDataChanges } from "@/services/data-events"
 import PageHeader from "@/pages/components/page-header"
 import { ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { SummaryCardGrid } from "@/pages/components/summary-card-grid"
@@ -11,6 +13,16 @@ import { useNavigate } from "react-router"
 const ChatsPage = () => {
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => ChatApi.listAll(), [])
+
+  useEffect(
+    () =>
+      subscribeToDataChanges((route) => {
+        if (route === "/chats") {
+          reload()
+        }
+      }),
+    [reload],
+  )
 
   const handleCreate = () => {
     navigate("/chats")

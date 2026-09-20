@@ -36,6 +36,21 @@ export type HttpIntegrationConfig = {
   bodyJson?: string
 }
 
+const RESTRICTED_HEADER_NAMES = [/^authorization$/i, /^proxy-authorization$/i, /^cookie$/i, /^host$/i, /^connection$/i, /^content-length$/i, /^transfer-encoding$/i, /^upgrade$/i, /^proxy-/i, /^sec-/i, /^x-forwarded-/i]
+
+export function isRestrictedHeaderName(name: string) {
+  const normalized = name.trim().toLowerCase()
+  return !normalized || RESTRICTED_HEADER_NAMES.some((pattern) => pattern.test(normalized))
+}
+
+export function sanitizeHeaderRecord(headers: Record<string, unknown>) {
+  return Object.fromEntries(
+    Object.entries(headers)
+      .filter(([name, value]) => !isRestrictedHeaderName(name) && typeof value === "string")
+      .map(([name, value]) => [name, value]),
+  ) as Record<string, string>
+}
+
 export function parseIntegrationJson<T>(value: string | undefined, fallback: T): T {
   if (!value?.trim()) return fallback
   try {
@@ -60,14 +75,15 @@ export function applyIntegrationAuth(
   config: Pick<HttpIntegrationConfig, "authType" | "authConfigJson">,
 ) {
   const authConfig = parseIntegrationJson<Record<string, unknown>>(config.authConfigJson, {})
-  const sharedHeaders =
+  const sharedHeaders = sanitizeHeaderRecord(
     authConfig.headers && typeof authConfig.headers === "object"
       ? (authConfig.headers as Record<string, unknown>)
       : config.authType === "custom"
         ? authConfig
-        : {}
+        : {},
+  )
   for (const [name, value] of Object.entries(sharedHeaders)) {
-    if (typeof value === "string" && name.trim()) headers[name] = value
+    headers[name] = value
   }
   if (config.authType === "bearer" && authConfig.token) headers.Authorization = `Bearer ${authConfig.token}`
   if (config.authType === "basic") {
@@ -75,7 +91,8 @@ export function applyIntegrationAuth(
     headers.Authorization = `Basic ${Buffer.from(String(credentials)).toString("base64")}`
   }
   if (config.authType === "api-key") {
-    const name = String(authConfig.name || "x-api-key")
+    const configuredName = String(authConfig.name || "x-api-key")
+    const name = isRestrictedHeaderName(configuredName) ? "x-api-key" : configuredName
     const value = String(authConfig.value || "")
     if (authConfig.location === "query") url.searchParams.set(name, value)
     else headers[name] = value

@@ -6,6 +6,7 @@ import type {
   DocumentPageRecord,
   DocumentSummary,
 } from "@/types/document"
+import { requireAppBridge } from "@/services/bridge"
 
 export type DocumentSavePayload = {
   id: string
@@ -20,18 +21,18 @@ export type DocumentSavePayload = {
 }
 
 export const DocumentApi = {
-  listAll: () => window.app!.documents.list() as Promise<DocumentSummary[]>,
+  listAll: () => requireAppBridge().documents.list() as Promise<DocumentSummary[]>,
   get: (documentId: string, versionId?: string) =>
-    window.app!.documents.get(documentId, versionId) as Promise<DocumentDetail | null>,
+    requireAppBridge().documents.get(documentId, versionId) as Promise<DocumentDetail | null>,
   getFileTree: (documentId: string, versionId?: string) =>
-    window.app!.documents.getFileTree(documentId, versionId) as Promise<DocumentFileTree>,
+    requireAppBridge().documents.getFileTree(documentId, versionId) as Promise<DocumentFileTree>,
   getFile: (documentId: string, fileId: string, versionId?: string) =>
-    window.app!.documents.getFile(documentId, fileId, versionId) as Promise<DocumentFileContent>,
-  create: () => window.app!.documents.create() as Promise<DocumentDetail>,
+    requireAppBridge().documents.getFile(documentId, fileId, versionId) as Promise<DocumentFileContent>,
+  create: () => requireAppBridge().documents.create() as Promise<DocumentDetail>,
   createWithMetadata: (payload: { title: string; summary: string }) =>
-    window.app!.documents.createWithMetadata(payload) as Promise<DocumentDetail>,
+    requireAppBridge().documents.createWithMetadata(payload) as Promise<DocumentDetail>,
   save: (payload: DocumentSavePayload) =>
-    window.app!.documents.save({
+    requireAppBridge().documents.save({
       id: payload.id,
       title: payload.title,
       summary: payload.summary,
@@ -42,7 +43,7 @@ export const DocumentApi = {
       selectedVersionId: payload.selectedVersionId,
       publish: payload.publish,
     }) as Promise<DocumentDetail>,
-  remove: (documentId: string) => window.app!.documents.delete(documentId),
+  remove: (documentId: string) => requireAppBridge().documents.delete(documentId),
 }
 
 export const listDocuments = DocumentApi.listAll

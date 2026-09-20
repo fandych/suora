@@ -16,7 +16,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "electron:download": "node scripts/ensure-electron-dist.mjs --strict",
-    "lint": "eslint .",
+    "lint": "eslint src tests scripts drizzle.config.ts electron.vite.config.ts eslint.config.js vitest.config.ts",
     "format": "prettier --write src/pages src/services src/types src/lib src/stores src/hooks src/components tests",
     "format:check": "prettier --check src/pages/components/secondary-sidebar src/pages/components/app-sidebar.tsx src/services src/types src/lib src/stores src/hooks src/components tests --ignore-path .prettierignore",
     "preview": "electron-vite preview",

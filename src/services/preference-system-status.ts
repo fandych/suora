@@ -1,4 +1,4 @@
-import { hasAppBridge } from "@/services/bridge"
+import { hasAppBridge, requireAppBridge } from "@/services/bridge"
 import type {
   EnvironmentToolStatus,
   SystemDiagnosticsSnapshot,
@@ -99,7 +99,7 @@ function sanitizeDiagnostics(value: unknown): SystemDiagnosticsSnapshot {
 
 export async function getSystemInfo(): Promise<SystemInfoSnapshot> {
   if (!hasAppBridge()) return fallbackInfo
-  const value = await window.app!.system.info()
+  const value = await requireAppBridge().system.info()
   if (!isObject(value)) return fallbackInfo
   return {
     isDev: Boolean(value.isDev),
@@ -113,12 +113,12 @@ export async function getSystemInfo(): Promise<SystemInfoSnapshot> {
 }
 
 export const getSystemDiagnostics = async () =>
-  hasAppBridge() ? sanitizeDiagnostics(await window.app!.system.diagnostics()) : fallbackDiagnostics
+  hasAppBridge() ? sanitizeDiagnostics(await requireAppBridge().system.diagnostics()) : fallbackDiagnostics
 export async function getUpdaterState(): Promise<UpdaterStateSnapshot> {
-  const value = hasAppBridge() ? await window.app!.updater.getState() : null
+  const value = hasAppBridge() ? await requireAppBridge().updater.getState() : null
   return isObject(value)
     ? { enabled: Boolean(value.enabled), channel: asString(value.channel, "latest") }
     : { enabled: false, channel: "latest" }
 }
 export const checkForUpdates = async (): Promise<UpdateCheckResult> =>
-  hasAppBridge() ? window.app!.updater.check() : { skipped: true, reason: "bridge-unavailable" }
+  hasAppBridge() ? requireAppBridge().updater.check() : { skipped: true, reason: "bridge-unavailable" }

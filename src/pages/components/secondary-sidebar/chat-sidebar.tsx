@@ -19,7 +19,6 @@ import type { PrimaryNavItem } from "@/pages/nav-config"
 export default function ChatSidebar({ item, headerAction }: { item: PrimaryNavItem; headerAction?: React.ReactNode }) {
   const [query, setQuery] = useState("")
   const [records, setRecords] = useState<Array<{ id: string; title: string; summary: string; updatedAt: number }>>([])
-  const [loadedAt, setLoadedAt] = useState(0)
   const [loading, setLoading] = useState(true)
   const location = useLocation()
   const navigate = useNavigate()
@@ -30,7 +29,6 @@ export default function ChatSidebar({ item, headerAction }: { item: PrimaryNavIt
       .then((next) => {
         if (!cancelled) {
           setRecords(next)
-          setLoadedAt(Date.now())
           setLoading(false)
         }
       })
@@ -47,21 +45,28 @@ export default function ChatSidebar({ item, headerAction }: { item: PrimaryNavIt
         if (route === item.url) {
           void ChatApi.listAll().then((next) => {
             setRecords(next)
-            setLoadedAt(Date.now())
           })
         }
       }),
     [item.url],
   )
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const todayStartMs = startOfToday.getTime()
+  const weekStartMs = todayStartMs - 6 * 86400000
   const groups = [
     {
       id: "today",
       title: "今天",
-      records: records.filter((record) => record.updatedAt >= loadedAt - 86400000),
+      records: records.filter((record) => record.updatedAt >= todayStartMs),
     },
-    { id: "week", title: "本周", records },
-    { id: "older", title: "更早", records: [] },
-  ]
+    {
+      id: "week",
+      title: "本周",
+      records: records.filter((record) => record.updatedAt < todayStartMs && record.updatedAt >= weekStartMs),
+    },
+    { id: "older", title: "更早", records: records.filter((record) => record.updatedAt < weekStartMs) },
+  ].filter((group) => loading || group.records.length > 0)
   return (
     <Sidebar collapsible="none" className="hidden min-h-0 flex-1 border-l md:flex">
       <SidebarHeader className="gap-2.5 border-b p-3">
