@@ -1,7 +1,7 @@
 import type { WorkflowNodeExecutor } from "@/types/workflow-runtime"
 import { interpolate } from "@/electron/app/workflows/variable-context"
 
-export const executeAgentNode: WorkflowNodeExecutor = async (node, context) => {
+export const executeAgentNode: WorkflowNodeExecutor = async (node, context, _mode, signal) => {
   const runtime = (
     context as typeof context & {
       runtime?: {
@@ -10,7 +10,7 @@ export const executeAgentNode: WorkflowNodeExecutor = async (node, context) => {
           systemPrompt?: string
           modelId?: string
           selectedAgentId?: string
-        }) => Promise<unknown>
+        }, abortSignal?: AbortSignal) => Promise<unknown>
       }
     }
   ).runtime
@@ -20,5 +20,5 @@ export const executeAgentNode: WorkflowNodeExecutor = async (node, context) => {
     systemPrompt: node.data.systemPrompt ? interpolate(node.data.systemPrompt, context) : undefined,
     modelId: node.data.modelId,
     selectedAgentId: node.data.agentId,
-  })
+  }, signal)
 }

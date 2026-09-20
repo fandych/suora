@@ -15,7 +15,10 @@ export class CustomWebSocketClient {
   private handler: CustomSocketMessageHandler | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private reconnectAttempts = 0
+  private readonly maxReconnectAttempts = 50
   private closed = false
+  private connecting = false
+  private connectionGeneration = 0
 
   constructor(channel: ChannelConfigRecord) {
     this.channel = channel
@@ -30,6 +33,10 @@ export class CustomWebSocketClient {
   }
 
   connect() {
+    if (this.connecting || this.socket?.readyState === WebSocket.OPEN) {
+      return
+    }
+
     const endpoint = this.channel.customWebsocketUrl?.trim()
     if (!endpoint) {
       throw new Error("Custom WebSocket URL is empty")
@@ -50,32 +57,47 @@ export class CustomWebSocketClient {
     }
 
     this.closed = false
+    this.connecting = true
+    const generation = ++this.connectionGeneration
     const protocols = this.channel.customWebsocketProtocol?.trim()
       ? [this.channel.customWebsocketProtocol.trim()]
       : undefined
 
-    this.socket = new WebSocket(endpoint, protocols)
-    this.socket.on("open", () => {
+    const socket = new WebSocket(endpoint, protocols)
+    this.socket = socket
+    socket.on("open", () => {
+      if (this.connectionGeneration !== generation || this.socket !== socket) {
+        try {
+          socket.close(1000, "Superseded")
+        } catch {
+          // Ignore close errors for superseded sockets.
+        }
+        return
+      }
+      this.connecting = false
       this.reconnectAttempts = 0
     })
-    this.socket.on("message", (data) => {
+    socket.on("message", (data) => {
+      if (this.connectionGeneration !== generation || this.socket !== socket) return
       void this.handleMessage(typeof data === "string" ? data : data.toString())
     })
-    this.socket.on("close", () => {
+    socket.on("close", () => {
+      if (this.connectionGeneration !== generation || this.socket !== socket) return
+      this.connecting = false
       this.socket = null
       if (!this.closed) {
         this.scheduleReconnect()
       }
     })
-    this.socket.on("error", () => {
-      if (!this.closed) {
-        this.scheduleReconnect()
-      }
+    socket.on("error", () => {
+      if (this.connectionGeneration !== generation || this.socket !== socket) return
+      this.connecting = false
     })
   }
 
   disconnect() {
     this.closed = true
+    this.connecting = false
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
@@ -149,6 +171,9 @@ export class CustomWebSocketClient {
 
   private scheduleReconnect() {
     if (this.reconnectTimer || this.closed) {
+      return
+    }
+    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
       return
     }
 

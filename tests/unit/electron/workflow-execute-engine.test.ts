@@ -77,6 +77,7 @@ describe("workflow execute engine", () => {
       }),
       JSON.stringify({ approved: true, items: [1, 2] }),
       undefined,
+      expect.any(AbortSignal),
     )
     expect(result.traces.map((trace) => trace.nodeId)).toEqual(["start", "script-1", "end"])
   })

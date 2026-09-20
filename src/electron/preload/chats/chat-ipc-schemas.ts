@@ -7,7 +7,12 @@ export const chatGetSchema = z.union([
   z.object({
     chatId: entityIdSchema,
     limit: z.number().finite().int().min(1).max(500).optional(),
-    beforeCreatedAt: z.number().finite().int().positive().optional(),
+    beforeCursor: z
+      .object({
+        createdAt: z.number().finite().int().positive(),
+        id: entityIdSchema,
+      })
+      .optional(),
   }),
 ])
 

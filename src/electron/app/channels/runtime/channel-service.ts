@@ -333,9 +333,9 @@ export class ChannelService {
     const captureRawBody = (req: express.Request, _res: express.Response, buffer: Buffer, encoding: BufferEncoding) => {
       ;(req as RawBodyRequest).rawBody = buffer.toString(encoding || "utf8")
     }
-    this.app.use(express.text({ type: WECHAT_XML_CONTENT_TYPES }))
-    this.app.use(express.json({ verify: captureRawBody }))
-    this.app.use(express.urlencoded({ extended: true, verify: captureRawBody }))
+    this.app.use(express.text({ type: WECHAT_XML_CONTENT_TYPES, limit: "1mb" }))
+    this.app.use(express.json({ verify: captureRawBody, limit: "1mb" }))
+    this.app.use(express.urlencoded({ extended: true, verify: captureRawBody, limit: "256kb" }))
   }
 
   private setupRoutes() {

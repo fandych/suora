@@ -12,37 +12,67 @@ import { getSystemMailProfile, sendMail } from "@/electron/app/channels/mail-ser
 import type { ChatRuntimeSettings } from "@/types/chat"
 
 const activeRuns = new Map<string, AbortController>()
+const cancelledRunIds = new Set<string>()
+
+function sendIfAlive(sender: Electron.WebContents, payload: WorkflowRunEvent | { requestId: string; type: "started" | "cancelled" }) {
+  if (sender.isDestroyed()) return
+  try {
+    sender.send("workflow:run:event", payload)
+  } catch {
+    // Ignore renderer teardown races.
+  }
+}
 
 export function registerWorkflowRuntimeIpc() {
   ipcMain.handle("workflows:run:start", async (_event, value: unknown) => {
     const command = await executeWorkflowRun(value)
+    if (activeRuns.has(command.requestId)) {
+      throw new Error("A workflow run with the same requestId is already active.")
+    }
     const controller = new AbortController()
     activeRuns.set(command.requestId, controller)
-    _event.sender.send("workflow:run:event", { requestId: command.requestId, type: "started" })
+    let terminalState: "completed" | "failed" | "cancelled" | null = null
+    const finishRun = (nextState: typeof terminalState) => {
+      if (terminalState) return false
+      terminalState = nextState
+      activeRuns.delete(command.requestId)
+      return true
+    }
+    sendIfAlive(_event.sender, { requestId: command.requestId, type: "started" })
     const runtime = {
       getChatRuntimeSettings: () =>
         chatApplicationService.getSessionSettings(null).then((settings) => settings.runtime as ChatRuntimeSettings),
-      executeAgent: (input: { prompt: string; systemPrompt?: string; modelId?: string; selectedAgentId?: string }) =>
-        runWorkflowAgent(input, controller.signal),
+      executeAgent: (
+        input: { prompt: string; systemPrompt?: string; modelId?: string; selectedAgentId?: string },
+        abortSignal?: AbortSignal,
+      ) => runWorkflowAgent(input, abortSignal ?? controller.signal),
       getDocumentDetail: (documentId: string) => documentService.get(documentId),
       executeIntegration: (
         config: import("@/types/integration").IntegrationConfig,
         inputJson: string,
         integrationId?: string,
-      ) => integrationApplicationService.execute({ kind: config.kind, config, inputJson, integrationId }),
-      sendMail: async (payload: { to: string; subject: string; content: string }) => {
+        abortSignal?: AbortSignal,
+      ) => integrationApplicationService.execute({ kind: config.kind, config, inputJson, integrationId, abortSignal }),
+      sendMail: async (payload: { to: string; subject: string; content: string }, abortSignal?: AbortSignal) => {
+        if (abortSignal?.aborted) throw new Error("Workflow execution cancelled.")
         const profile = getSystemMailProfile()
         if (!profile) return { success: false, error: "SMTP is not configured." }
-        return sendMail({ profile, toAddress: payload.to, subject: payload.subject, content: payload.content })
+        const result = await sendMail({ profile, toAddress: payload.to, subject: payload.subject, content: payload.content })
+        if (abortSignal?.aborted) throw new Error("Workflow execution cancelled.")
+        return result
       },
     }
     void executeWorkflowCommand(
       { ...command, runtime },
-      (event) => _event.sender.send("workflow:run:event", event),
+      (event) => sendIfAlive(_event.sender, event),
       controller.signal,
     )
       .then(async (result) => {
-        activeRuns.delete(command.requestId)
+        if (cancelledRunIds.delete(command.requestId)) {
+          finishRun("cancelled")
+          return
+        }
+        if (!finishRun("completed")) return
         const invocation = (await workflowService.recordInvocation({
           workflowId: command.workflowId,
           versionId: command.versionId,
@@ -52,15 +82,19 @@ export function registerWorkflowRuntimeIpc() {
           output: JSON.stringify(result.output),
           traceJson: JSON.stringify(result.traces),
         })) as WorkflowInvocationRecord
-        _event.sender.send("workflow:run:event", {
+        sendIfAlive(_event.sender, {
           requestId: command.requestId,
           type: "completed",
           invocation,
         } satisfies WorkflowRunEvent)
       })
       .catch(async (error) => {
-        activeRuns.delete(command.requestId)
-        if (!controller.signal.aborted) {
+        if (controller.signal.aborted) {
+          cancelledRunIds.delete(command.requestId)
+          finishRun("cancelled")
+          return
+        }
+        if (finishRun("failed")) {
           const failureTraces =
             error instanceof Error && "traces" in error && Array.isArray((error as { traces?: unknown }).traces)
               ? ((error as { traces: WorkflowInvocationRecord["traces"] }).traces ?? [])
@@ -74,7 +108,7 @@ export function registerWorkflowRuntimeIpc() {
             output: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
             traceJson: JSON.stringify(failureTraces),
           })) as WorkflowInvocationRecord
-          _event.sender.send("workflow:run:event", {
+          sendIfAlive(_event.sender, {
             requestId: command.requestId,
             type: "failed",
             error: error instanceof Error ? error.message : String(error),
@@ -90,7 +124,8 @@ export function registerWorkflowRuntimeIpc() {
     const wasActive = Boolean(controller)
     controller?.abort()
     activeRuns.delete(id)
-    if (wasActive) _event.sender.send("workflow:run:event", { requestId: id, type: "cancelled" })
+    if (wasActive) cancelledRunIds.add(id)
+    if (wasActive) sendIfAlive(_event.sender, { requestId: id, type: "cancelled" })
     return { cancelled: wasActive, requestId: id }
   })
 }

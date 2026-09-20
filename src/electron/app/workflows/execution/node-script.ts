@@ -9,7 +9,7 @@ function serializeScriptInput(input: unknown) {
   return JSON.stringify(input ?? {})
 }
 
-export const executeScriptNode: WorkflowNodeExecutor = async (node, context) => {
+export const executeScriptNode: WorkflowNodeExecutor = async (node, context, _mode, signal) => {
   const runtime = (
     context as typeof context & {
       runtime?: {
@@ -17,6 +17,7 @@ export const executeScriptNode: WorkflowNodeExecutor = async (node, context) => 
           config: ScriptIntegrationConfig,
           inputJson: string,
           integrationId?: string,
+          abortSignal?: AbortSignal,
         ) => Promise<unknown>
       }
     }
@@ -42,7 +43,7 @@ export const executeScriptNode: WorkflowNodeExecutor = async (node, context) => 
     ],
   } satisfies ScriptIntegrationConfig
 
-  const result = await runtime.executeIntegration(config, serializeScriptInput(context.current ?? context.input), node.data.integrationId)
+  const result = await runtime.executeIntegration(config, serializeScriptInput(context.current ?? context.input), node.data.integrationId, signal)
   if (result && typeof result === "object" && "ok" in result && result.ok === false) {
     const error = "error" in result && typeof result.error === "string" ? result.error : "Integration execution failed."
     throw new Error(error)

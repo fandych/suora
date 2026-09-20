@@ -9,6 +9,7 @@ export type WorkflowNodeExecutor = (
   node: WorkflowNode,
   context: WorkflowExecutionContext,
   mode: WorkflowExecutionMode,
+  signal?: AbortSignal,
 ) => Promise<unknown>
 
 export type WorkflowExecutionRuntime = {
@@ -18,14 +19,15 @@ export type WorkflowExecutionRuntime = {
     systemPrompt?: string
     modelId?: string
     selectedAgentId?: string
-  }) => Promise<unknown>
+  }, abortSignal?: AbortSignal) => Promise<unknown>
   getDocumentDetail: (documentId: string) => Promise<unknown>
   executeIntegration: (
     config: IntegrationConfig,
     inputJson: string,
     integrationId?: string,
+    abortSignal?: AbortSignal,
   ) => Promise<IntegrationExecutionResult>
-  sendMail: (payload: { to: string; subject: string; content: string }) => Promise<{ success: boolean; error?: string }>
+  sendMail: (payload: { to: string; subject: string; content: string }, abortSignal?: AbortSignal) => Promise<{ success: boolean; error?: string }>
 }
 
 export type WorkflowExecutionContextWithRuntime = WorkflowExecutionContext & {

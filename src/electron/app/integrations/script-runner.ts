@@ -41,11 +41,12 @@ export async function executeSandboxedScriptIntegration(payload: IntegrationExec
     handler: selectedScript.handler || "main",
     inputJson: payload.inputJson,
     timeoutMs,
+    abortSignal: payload.abortSignal,
   })
   return { ok: true, status: 200, body }
 }
 
-function executeInWorker(request: { source: string; handler: string; inputJson?: string; timeoutMs: number }) {
+function executeInWorker(request: { source: string; handler: string; inputJson?: string; timeoutMs: number; abortSignal?: AbortSignal }) {
   return new Promise<string>((resolve, reject) => {
     const workerUrl = new URL("./script-worker.mjs", import.meta.url)
     const workerPath =
@@ -86,6 +87,8 @@ function executeInWorker(request: { source: string; handler: string; inputJson?:
       () => finish(new Error(`Script integration timed out after ${request.timeoutMs}ms.`), true),
       request.timeoutMs,
     )
+    const abortWorker = () => finish(new Error("Script integration cancelled."), true)
+    request.abortSignal?.addEventListener("abort", abortWorker, { once: true })
     child.stdout.setEncoding("utf8")
     child.stdout.on("data", (chunk: string) => {
       output += chunk
@@ -96,6 +99,7 @@ function executeInWorker(request: { source: string; handler: string; inputJson?:
     child.on("error", (error) => finish(error, true))
     child.on("close", (code) => {
       clearTimers()
+      request.abortSignal?.removeEventListener("abort", abortWorker)
       if (settled) return
       const line = output.trim().split("\n").filter(Boolean).at(-1)
       if (!line) return finish(new Error(`Script worker exited with code ${code ?? "unknown"}.`))
@@ -113,6 +117,7 @@ function executeInWorker(request: { source: string; handler: string; inputJson?:
     child.stdin.end(
       `${JSON.stringify({
         ...request,
+        abortSignal: undefined,
         proxy: toProxyAgentConfig(proxySettings),
       })}\n`,
     )

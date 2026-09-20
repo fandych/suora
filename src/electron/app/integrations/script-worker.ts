@@ -1,5 +1,7 @@
+import dns from "node:dns/promises"
+import net from "node:net"
 import { Script, createContext } from "node:vm"
-import { ProxyAgent, setGlobalDispatcher } from "undici"
+import { Agent, ProxyAgent, setGlobalDispatcher } from "undici"
 import { assertSafeHttpUrl } from "@/electron/infrastructure/url-security"
 
 type WorkerRequest = {
@@ -27,6 +29,7 @@ process.stdin.on("data", (chunk) => {
 async function run(request: WorkerRequest) {
   try {
     if (request.proxy) setGlobalDispatcher(new ProxyAgent(buildProxyUrl(request.proxy)))
+    const useProxy = Boolean(request.proxy)
     const logs: string[] = []
     const consoleApi = Object.freeze({
       log: (...args: unknown[]) => appendLog(logs, args),
@@ -40,7 +43,11 @@ async function run(request: WorkerRequest) {
       TextDecoder,
       TextEncoder,
       console: consoleApi,
-      fetch: async (input: string | URL, init?: RequestInit) => fetch(await assertSafeHttpUrl(String(input)), init),
+      fetch: async (input: string | URL, init?: RequestInit) => {
+        const target = await resolveSafeFetchTarget(String(input))
+        const dispatcher = useProxy ? undefined : createPinnedDispatcher(target)
+        return fetch(target.url, { ...init, ...(dispatcher ? { dispatcher } : {}) })
+      },
       input: parseInput(request.inputJson),
       structuredClone,
     })
@@ -96,6 +103,33 @@ async function run(request: WorkerRequest) {
   } catch (error) {
     respond({ ok: false, error: error instanceof Error ? error.message : String(error) })
   }
+}
+
+async function resolveSafeFetchTarget(value: string) {
+  const url = await assertSafeHttpUrl(value)
+  const hostname = url.hostname.replace(/^\[|\]$/g, "")
+  const ipVersion = net.isIP(hostname)
+  if (ipVersion !== 0) {
+    return { url, address: hostname, family: ipVersion }
+  }
+  const [resolved] = await dns.lookup(hostname, { all: true, verbatim: true })
+  if (!resolved) {
+    throw new Error("Unable to resolve the target URL.")
+  }
+  return { url, address: resolved.address, family: resolved.family }
+}
+
+function createPinnedDispatcher(target: { url: URL; address: string; family: number }) {
+  return new Agent({
+    connect: {
+      lookup: ((
+        _hostname: string,
+        _options: unknown,
+        callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void,
+      ) => callback(null, target.address, target.family)) as never,
+      ...(target.url.protocol === "https:" ? { servername: target.url.hostname } : {}),
+    },
+  })
 }
 
 function buildProxyUrl(proxy: NonNullable<WorkerRequest["proxy"]>) {

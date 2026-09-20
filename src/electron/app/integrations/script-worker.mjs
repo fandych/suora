@@ -1,5 +1,7 @@
 import dns from "node:dns/promises"
+import net from "node:net"
 import { Script, createContext } from "node:vm"
+import { Agent, ProxyAgent, setGlobalDispatcher } from "undici"
 import { isIP } from "node:net"
 
 const MAX_LOG_ENTRIES = 500
@@ -29,9 +31,29 @@ async function safeUrl(value) {
   return url
 }
 
-async function safeFetch(input, init = {}, redirectsRemaining = MAX_FETCH_REDIRECTS) {
-  const url = await safeUrl(String(input))
-  const response = await fetch(url, { ...init, redirect: "manual" })
+async function resolveSafeFetchTarget(value) {
+  const url = await safeUrl(value)
+  const hostname = url.hostname.replace(/^\[|\]$/g, "")
+  const ipVersion = net.isIP(hostname)
+  if (ipVersion !== 0) {
+    return { url, address: hostname, family: ipVersion }
+  }
+  const records = await dns.lookup(hostname, { all: true, verbatim: true })
+  if (!records.length) {
+    throw new Error("Unable to resolve the target URL.")
+  }
+  return { url, address: records[0].address, family: records[0].family }
+}
+
+async function safeFetch(input, init = {}, useProxy = false, redirectsRemaining = MAX_FETCH_REDIRECTS) {
+  const target = await resolveSafeFetchTarget(String(input))
+  const dispatcher = useProxy ? undefined : new Agent({
+    connect: {
+      lookup: (_hostname, _options, callback) => callback(null, target.address, target.family),
+      ...(target.url.protocol === "https:" ? { servername: target.url.hostname } : {}),
+    },
+  })
+  const response = await fetch(target.url, { ...init, redirect: "manual", ...(dispatcher ? { dispatcher } : {}) })
   if (![301, 302, 303, 307, 308].includes(response.status)) {
     return response
   }
@@ -42,9 +64,9 @@ async function safeFetch(input, init = {}, redirectsRemaining = MAX_FETCH_REDIRE
   if (!location) {
     return response
   }
-  const nextUrl = new URL(location, url)
+  const nextUrl = new URL(location, target.url)
   const nextInit = response.status === 307 || response.status === 308 ? init : { ...init, method: "GET", body: undefined }
-  return safeFetch(nextUrl.toString(), nextInit, redirectsRemaining - 1)
+  return safeFetch(nextUrl.toString(), nextInit, useProxy, redirectsRemaining - 1)
 }
 
 function isPrivate(address) {
@@ -66,6 +88,7 @@ function isPrivate(address) {
 
 async function run(request) {
   try {
+    const useProxy = Boolean(request.proxy)
     if (request.proxy) {
       const auth = request.proxy.username
         ? `${encodeURIComponent(request.proxy.username)}:${encodeURIComponent(request.proxy.password || "")}@`
@@ -85,7 +108,7 @@ async function run(request) {
       TextDecoder,
       TextEncoder,
       console: consoleApi,
-      fetch: async (input, init) => safeFetch(input, init),
+      fetch: async (input, init) => safeFetch(input, init, useProxy),
       input: parseInput(request.inputJson),
       structuredClone,
     })

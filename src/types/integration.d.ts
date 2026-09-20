@@ -98,3 +98,11 @@ export type IntegrationExecutionResult = {
   request?: { url: string; method: string; headers: Record<string, string>; body: string | null }
   response?: { status: number; headers: Record<string, string | string[]>; body: string; json?: unknown }
 }
+
+export type IntegrationExecutionRequest = {
+  integrationId?: string
+  kind: "http" | "scripts" | "mcp"
+  config: Record<string, unknown>
+  inputJson?: string
+  abortSignal?: AbortSignal
+}

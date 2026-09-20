@@ -107,6 +107,7 @@ export const integrationApplicationService = {
     kind: "http" | "scripts" | "mcp"
     config: IntegrationConfig
     inputJson?: string
+    abortSignal?: AbortSignal
   }) => {
     if (!payload.integrationId) return executeIntegration(payload)
     await assertIntegrationEnabled(payload.integrationId)

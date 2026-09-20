@@ -2,7 +2,7 @@ import type { WorkflowNodeExecutor } from "@/types/workflow-runtime"
 import type { HttpIntegrationConfig, IntegrationConfig } from "@/types/integration"
 import { interpolate } from "@/electron/app/workflows/variable-context"
 
-export const executeHttpNode: WorkflowNodeExecutor = async (node, context) => {
+export const executeHttpNode: WorkflowNodeExecutor = async (node, context, _mode, signal) => {
   const runtime = (
     context as typeof context & {
       runtime?: {
@@ -10,6 +10,7 @@ export const executeHttpNode: WorkflowNodeExecutor = async (node, context) => {
           config: HttpIntegrationConfig,
           inputJson: string,
           integrationId?: string,
+          abortSignal?: AbortSignal,
         ) => Promise<unknown>
       }
     }
@@ -31,7 +32,7 @@ export const executeHttpNode: WorkflowNodeExecutor = async (node, context) => {
     authConfigJson: "{}",
     parameterSchemaJson: "{}",
   } satisfies HttpIntegrationConfig
-  const result = await runtime.executeIntegration(config, interpolateJson(node.data.bodyJson), node.data.integrationId)
+  const result = await runtime.executeIntegration(config, interpolateJson(node.data.bodyJson), node.data.integrationId, signal)
   if (result && typeof result === "object" && "ok" in result && result.ok === false) {
     const error = "error" in result && typeof result.error === "string" ? result.error : "Integration execution failed."
     throw new Error(error)

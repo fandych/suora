@@ -172,7 +172,15 @@ async function executeNodeWithRetry(
     if (signal.aborted) throw new Error("Workflow execution cancelled.")
     try {
       const timeoutMs = Math.max(1000, Math.min(node.data.timeoutMs ?? 30_000, 300_000))
-      return await withWorkflowTimeout(executor(node, context, mode), timeoutMs, `${node.data.label || node.id} node`)
+      const timeoutController = new AbortController()
+      const abortFromParent = () => timeoutController.abort()
+      signal.addEventListener("abort", abortFromParent, { once: true })
+      try {
+        return await withWorkflowTimeout(executor(node, context, mode, timeoutController.signal), timeoutMs, `${node.data.label || node.id} node`)
+      } finally {
+        signal.removeEventListener("abort", abortFromParent)
+        timeoutController.abort()
+      }
     } catch (error) {
       lastError = error
     }

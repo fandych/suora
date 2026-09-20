@@ -122,6 +122,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
     method,
     headers,
     body: body && method !== "GET" ? body : undefined,
+    signal: payload.abortSignal,
     timeoutMs: 60_000,
   })
   const responseBody = response.text
@@ -196,7 +197,7 @@ function parseMcpResponseBody(contentType: string, text: string): unknown {
   }
 }
 
-async function callMcpHttpEndpoint(endpoint: string, authConfigJson?: string) {
+async function callMcpHttpEndpoint(endpoint: string, authConfigJson?: string, abortSignal?: AbortSignal) {
   const url = await assertSafeHttpUrl(endpoint)
   const baseHeaders: Record<string, string> = {
     "content-type": "application/json",
@@ -216,6 +217,7 @@ async function callMcpHttpEndpoint(endpoint: string, authConfigJson?: string) {
       method: "POST",
       headers,
       body: JSON.stringify(message),
+      signal: abortSignal,
       timeoutMs: 30_000,
     })
   }
@@ -269,7 +271,7 @@ async function executeMcpIntegration(payload: IntegrationExecutePayload) {
     authConfigJson?: string
   }
   if (config.endpoint) {
-    return callMcpHttpEndpoint(config.endpoint, config.authConfigJson)
+    return callMcpHttpEndpoint(config.endpoint, config.authConfigJson, payload.abortSignal)
   }
   if (config.launchCommand) {
     const parsedCommand = parseWorkspaceCommand(config.launchCommand)

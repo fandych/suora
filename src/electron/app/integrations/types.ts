@@ -5,6 +5,7 @@ export type IntegrationExecutePayload = {
   kind: "http" | "scripts" | "mcp"
   config: Record<string, unknown>
   inputJson?: string
+  abortSignal?: AbortSignal
 }
 
 export type UploadedIntegrationFile = {

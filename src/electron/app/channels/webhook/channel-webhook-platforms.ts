@@ -21,14 +21,14 @@ export async function handleFeishuWebhook(
   emitMessage: EmitChannelMessage,
 ) {
   const body = req.body as Record<string, unknown>
-  if (body.type === "url_verification") {
-    res.json({ challenge: body.challenge })
-    return
-  }
-  if (channel.feishuEncryptKey && req.headers["x-lark-signature"]) {
+  if (channel.feishuEncryptKey) {
     const timestamp = String(req.headers["x-lark-request-timestamp"] || "")
     const nonce = String(req.headers["x-lark-request-nonce"] || "")
     const signature = String(req.headers["x-lark-signature"] || "")
+    if (!timestamp || !nonce || !signature) {
+      res.status(403).json({ error: "Missing signature headers" })
+      return
+    }
     const rawBody = getWebhookRawBody(req)
     if (!rawBody) {
       res.status(400).json({ error: "Missing raw request body for signature verification" })
@@ -38,6 +38,10 @@ export async function handleFeishuWebhook(
       res.status(403).json({ error: "Invalid signature" })
       return
     }
+  }
+  if (body.type === "url_verification") {
+    res.json({ challenge: body.challenge })
+    return
   }
   if (body.header && (body.header as Record<string, unknown>).event_type === "im.message.receive_v1") {
     const event = body.event as Record<string, unknown>
@@ -80,8 +84,14 @@ export async function handleDingTalkWebhook(
 ) {
   const body = req.body as Record<string, unknown>
   const signingSecret = channel.dingtalkSigningSecret || channel.appSecret
-  if (signingSecret && req.headers.sign) {
-    if (!verifyDingTalkSignature(String(req.headers.timestamp || ""), signingSecret, String(req.headers.sign || ""))) {
+  if (signingSecret) {
+    const timestamp = String(req.headers.timestamp || "")
+    const sign = String(req.headers.sign || "")
+    if (!timestamp || !sign) {
+      res.status(403).json({ error: "Missing signature headers" })
+      return
+    }
+    if (!verifyDingTalkSignature(timestamp, signingSecret, sign)) {
       res.status(403).json({ error: "Invalid signature" })
       return
     }

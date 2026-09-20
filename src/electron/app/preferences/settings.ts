@@ -146,19 +146,20 @@ export function sanitizePreferenceSettings(
   settings: Partial<PreferenceSettings> | null | undefined,
 ): PreferenceSettings {
   const next = { ...createDefaultPreferenceSettings(), ...(settings ?? {}) }
+  const readString = (value: unknown, fallback: string) => (typeof value === "string" ? value : fallback)
   return {
     ...next,
     themeMode: next.themeMode === "light" || next.themeMode === "dark" ? next.themeMode : "system",
     themeAccent: next.themeAccent && next.themeAccent in THEME_ACCENTS ? next.themeAccent : "ocean",
     fontScale: next.fontScale === "sm" || next.fontScale === "lg" ? next.fontScale : "md",
     language: next.language === "en" ? "en" : "zh",
-    workspaceName: next.workspaceName.trim(),
-    workspacePath: next.workspacePath.trim(),
+    workspaceName: readString(next.workspaceName, DEFAULT_PREFERENCES.workspaceName).trim(),
+    workspacePath: readString(next.workspacePath, DEFAULT_PREFERENCES.workspacePath).trim(),
     autoSaveConversations: Boolean(next.autoSaveConversations),
     autoStartEnabled: Boolean(next.autoStartEnabled),
-    defaultModelProviderId: next.defaultModelProviderId.trim(),
+    defaultModelProviderId: readString(next.defaultModelProviderId, DEFAULT_PREFERENCES.defaultModelProviderId).trim(),
     chatRequestTimeoutMs: Math.max(0, Number(next.chatRequestTimeoutMs) || 0),
-    notes: next.notes,
+    notes: readString(next.notes, DEFAULT_PREFERENCES.notes),
     commandConfirmationMode:
       next.commandConfirmationMode === "never" || next.commandConfirmationMode === "always"
         ? next.commandConfirmationMode
@@ -168,11 +169,11 @@ export function sanitizePreferenceSettings(
     commandBlacklist: normalizeStringArray(next.commandBlacklist),
     commandAllowlist: normalizeStringArray(next.commandAllowlist),
     mailServiceEnabled: Boolean(next.mailServiceEnabled),
-    mailServerHost: next.mailServerHost.trim(),
+    mailServerHost: readString(next.mailServerHost, DEFAULT_PREFERENCES.mailServerHost).trim(),
     mailServerPort: Math.min(65535, Math.max(1, Number(next.mailServerPort) || DEFAULT_PREFERENCES.mailServerPort)),
-    mailServerUsername: next.mailServerUsername.trim(),
-    mailServerPassword: next.mailServerPassword,
-    mailServerFrom: next.mailServerFrom.trim(),
+    mailServerUsername: readString(next.mailServerUsername, DEFAULT_PREFERENCES.mailServerUsername).trim(),
+    mailServerPassword: readString(next.mailServerPassword, DEFAULT_PREFERENCES.mailServerPassword),
+    mailServerFrom: readString(next.mailServerFrom, DEFAULT_PREFERENCES.mailServerFrom).trim(),
     mailServerTls: Boolean(next.mailServerTls),
     globalEnvironmentVariables: normalizeEnvironmentVariables(next.globalEnvironmentVariables),
     autoCheckUpdates: Boolean(next.autoCheckUpdates),
