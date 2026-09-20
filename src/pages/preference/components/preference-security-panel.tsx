@@ -42,7 +42,9 @@ const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelPro
             <FieldTitle>Ignore SSL / CA certificate validation</FieldTitle>
             <FieldDescription>
               Bypass CA and SSL certificate verification for HTTPS requests, LLM model APIs, and WebHooks. Enable this
-              if your environment uses custom CA certificates, self-signed certs, or enterprise proxy inspection.
+              if your environment uses custom CA certificates, self-signed certs, or enterprise proxy inspection. This
+              lowers TLS security for the entire desktop runtime and should stay disabled outside controlled debugging or
+              enterprise-trust scenarios.
             </FieldDescription>
           </FieldContent>
           <Switch

@@ -2,16 +2,31 @@ import crypto from "node:crypto"
 import { desc, eq } from "drizzle-orm"
 import { getDrizzleDatabase } from "@/drizzle/db"
 import { providers } from "@/drizzle/schema"
-import { protectCredential, revealCredential } from "@/electron/infrastructure/credential-vault"
+import { protectCredential, revealCredentialState } from "@/electron/infrastructure/credential-vault"
+
+async function migrateLegacyProviderCredential(providerId: string, apiKey: string) {
+  await getDrizzleDatabase().update(providers).set({ apiKey: protectCredential(apiKey) }).where(eq(providers.id, providerId))
+}
 
 export async function listModels() {
   const rows = await getDrizzleDatabase().select().from(providers).orderBy(desc(providers.updatedAt))
-  return rows.map((row) => ({ ...row, apiKey: revealCredential(row.apiKey) }))
+  return rows.map((row) => {
+    const credential = revealCredentialState(row.apiKey)
+    if (credential.legacyPlaintext && credential.value) {
+      void migrateLegacyProviderCredential(row.id, credential.value)
+    }
+    return { ...row, apiKey: credential.value }
+  })
 }
 
 export async function getModel(providerId: string) {
   const [row] = await getDrizzleDatabase().select().from(providers).where(eq(providers.id, providerId)).limit(1)
-  return row ? { ...row, apiKey: revealCredential(row.apiKey) } : null
+  if (!row) return null
+  const credential = revealCredentialState(row.apiKey)
+  if (credential.legacyPlaintext && credential.value) {
+    void migrateLegacyProviderCredential(providerId, credential.value)
+  }
+  return { ...row, apiKey: credential.value }
 }
 
 export async function createModel(payload: {

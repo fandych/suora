@@ -2,7 +2,13 @@ import { Script, createContext } from "node:vm"
 import { ProxyAgent, setGlobalDispatcher } from "undici"
 import { assertSafeHttpUrl } from "@/electron/infrastructure/url-security"
 
-type WorkerRequest = { source: string; handler: string; inputJson?: string; timeoutMs: number; proxyUrl?: string }
+type WorkerRequest = {
+  source: string
+  handler: string
+  inputJson?: string
+  timeoutMs: number
+  proxy?: { type: "http" | "https"; host: string; port: number; username?: string; password?: string } | null
+}
 const MAX_LOG_ENTRIES = 500
 const MAX_LOG_BYTES = 256 * 1024
 const MAX_OUTPUT_BYTES = 1024 * 1024
@@ -20,7 +26,7 @@ process.stdin.on("data", (chunk) => {
 
 async function run(request: WorkerRequest) {
   try {
-    if (request.proxyUrl) setGlobalDispatcher(new ProxyAgent(request.proxyUrl))
+    if (request.proxy) setGlobalDispatcher(new ProxyAgent(buildProxyUrl(request.proxy)))
     const logs: string[] = []
     const consoleApi = Object.freeze({
       log: (...args: unknown[]) => appendLog(logs, args),
@@ -90,6 +96,13 @@ async function run(request: WorkerRequest) {
   } catch (error) {
     respond({ ok: false, error: error instanceof Error ? error.message : String(error) })
   }
+}
+
+function buildProxyUrl(proxy: NonNullable<WorkerRequest["proxy"]>) {
+  const auth = proxy.username
+    ? `${encodeURIComponent(proxy.username)}:${encodeURIComponent(proxy.password ?? "")}@`
+    : ""
+  return `${proxy.type}://${auth}${proxy.host}:${proxy.port}`
 }
 
 function parseInput(value?: string) {

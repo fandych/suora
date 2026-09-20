@@ -9,7 +9,7 @@ import {
   MAX_TOOL_WRITE_BYTES,
 } from "@/electron/app/tools/tool-guardrails"
 import { ensureWorkspace } from "@/electron/infrastructure/workspace-service"
-import { resolveWorkspaceTarget, enforceRelativePathPolicy } from "@/electron/app/tools/tool-policy"
+import { resolveWorkspaceTarget, enforceRelativePathPolicy, resolveWorkspacePolicyTarget } from "@/electron/app/tools/tool-policy"
 import {
   parseFilesystemInput,
   readPathSchema,
@@ -103,6 +103,7 @@ export function registerFilesystemIpc() {
     await ensureWorkspace()
     const target = resolveWorkspaceTarget(input.path)
     await enforceRelativePathPolicy(input.path, target)
+    const resolvedTarget = await resolveWorkspacePolicyTarget(target)
     const parentDirectory = path.dirname(target)
     await assertPathHasNoSymlinkSegments(parentDirectory, true)
     try {
@@ -118,26 +119,45 @@ export function registerFilesystemIpc() {
     )
     await fs.mkdir(parentDirectory, { recursive: true })
     await assertPathHasNoSymlinkSegments(parentDirectory)
-    const resolvedParentDirectory = await resolveVerifiedPath(parentDirectory)
+    const resolvedParentDirectory = path.dirname(resolvedTarget)
     const tempPath = path.join(
       resolvedParentDirectory,
       `.suora-write-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`,
     )
     try {
-      const handle = await fs.open(tempPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | NOFOLLOW_FLAG)
-      try {
-        await handle.writeFile(input.content, { encoding: "utf8" })
-      } finally {
-        await handle.close()
+      const targetAlreadyExists = await fs
+        .lstat(resolvedTarget)
+        .then(() => true)
+        .catch((error) => {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") return false
+          throw error
+        })
+      if (!targetAlreadyExists) {
+        const handle = await fs.open(
+          resolvedTarget,
+          fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | NOFOLLOW_FLAG,
+        )
+        try {
+          await handle.writeFile(input.content, { encoding: "utf8" })
+        } finally {
+          await handle.close()
+        }
+      } else {
+        const handle = await fs.open(tempPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | NOFOLLOW_FLAG)
+        try {
+          await handle.writeFile(input.content, { encoding: "utf8" })
+        } finally {
+          await handle.close()
+        }
+        await assertPathHasNoSymlinkSegments(tempPath)
+        await assertPathHasNoSymlinkSegments(resolvedParentDirectory)
+        await fs.rename(tempPath, resolvedTarget)
       }
-      await assertPathHasNoSymlinkSegments(tempPath)
-      await assertPathHasNoSymlinkSegments(resolvedParentDirectory)
-      await fs.rename(tempPath, target)
     } catch (error) {
       await fs.rm(tempPath, { force: true }).catch(() => undefined)
       throw error
     }
-    return { ok: true, path: path.relative(resolveWorkspaceTarget(), target).replace(/\\/g, "/") }
+    return { ok: true, path: path.relative(resolveWorkspaceTarget(), resolvedTarget).replace(/\\/g, "/") }
   })
   ipcMain.handle("tools:saveFile", async (_event, payload: unknown) => {
     const input = parseFilesystemInput(saveFileSchema, payload)

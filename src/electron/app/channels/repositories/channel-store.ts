@@ -4,8 +4,10 @@ import {
   preserveConfiguredChannelCredentials,
   protectChannelCredentials,
   revealChannelCredentials,
+  revealChannelCredentialsWithState,
 } from "@/electron/app/channels/repositories/channel-credential-serialization"
 import { normalizeChannelRuntimeState } from "@/electron/app/channels/application/channel-status-policy"
+import { revealCredentialState } from "@/electron/infrastructure/credential-vault"
 
 type RawChannelRow = {
   id: string
@@ -76,13 +78,21 @@ function createDefaultConfig(row: RawChannelRow): ChannelConfigRecord {
   }
 }
 
-export function parseChannelDetailRow(row: RawChannelRow): ChannelDetail {
+export function parseChannelDetailRow(row: RawChannelRow, database = openDatabase()): ChannelDetail {
   const baseConfig = createDefaultConfig(row)
-  const parsedConfig = revealChannelCredentials(
-    parseJson<Partial<ChannelConfigRecord>>(row.configJson, {}),
-  ) as Partial<ChannelConfigRecord>
+  const rawConfig = parseJson<Partial<ChannelConfigRecord>>(row.configJson, {})
+  const revealedConfigState = revealChannelCredentialsWithState(rawConfig as Record<string, unknown>)
+  const parsedConfig = revealedConfigState.config as Partial<ChannelConfigRecord>
   const parsedRuntime = parseJson<Partial<ChannelRuntimeState>>(row.runtimeJson, {})
   const baseRuntime = createDefaultRuntime()
+  const webhookSecretCredential = revealCredentialState(row.webhookSecret)
+
+  if ((webhookSecretCredential.legacyPlaintext && webhookSecretCredential.value) || revealedConfigState.legacyPlaintextFields.length > 0) {
+    const migratedConfig = protectChannelCredentials(rawConfig as Record<string, unknown>)
+    database
+      .prepare(`UPDATE channels SET webhook_secret = ?, config_json = ? WHERE id = ?`)
+      .run(String(protectChannelCredentials({ webhookSecret: row.webhookSecret }).webhookSecret ?? ""), JSON.stringify(migratedConfig), row.id)
+  }
 
   const channel = normalizeChannelRuntimeState({
     ...baseConfig,
@@ -96,9 +106,7 @@ export function parseChannelDetailRow(row: RawChannelRow): ChannelDetail {
       parsedConfig.connectionMode ||
       "webhook") as ChannelConfigRecord["connectionMode"],
     webhookPath: row.webhookPath || parsedConfig.webhookPath || `/channels/${row.id}`,
-    webhookSecret: row.webhookSecret
-      ? (revealChannelCredentials({ webhookSecret: row.webhookSecret }).webhookSecret as string)
-      : parsedConfig.webhookSecret || "",
+    webhookSecret: row.webhookSecret ? webhookSecretCredential.value : parsedConfig.webhookSecret || "",
     autoReply: row.autoReply == null ? (parsedConfig.autoReply ?? true) : Boolean(row.autoReply),
     replyAgentId: row.replyAgentId || parsedConfig.replyAgentId || "",
     createdAt: row.createdAt ?? parsedConfig.createdAt ?? row.updatedAt,
@@ -137,7 +145,9 @@ function readChannelRows() {
 }
 
 export function listChannelDetails() {
-  return readChannelRows().map(parseChannelDetailRow)
+  const database = openDatabase()
+  applyMigrations(database)
+  return readChannelRows().map((row) => parseChannelDetailRow(row, database))
 }
 
 export function listEnabledChannelDetails() {
@@ -152,7 +162,7 @@ export function getChannelDetail(channelId: string) {
       `SELECT id, title, platform, enabled, status, connection_mode as connectionMode, webhook_path as webhookPath, webhook_secret as webhookSecret, auto_reply as autoReply, reply_agent_id as replyAgentId, created_at as createdAt, last_message_at as lastMessageAt, message_count as messageCount, config_json as configJson, runtime_json as runtimeJson, updated_at as updatedAt FROM channels WHERE id = ?`,
     )
     .get(channelId) as RawChannelRow | undefined
-  return row ? parseChannelDetailRow(row) : null
+  return row ? parseChannelDetailRow(row, database) : null
 }
 
 export function saveChannelDetail(detail: ChannelDetail) {

@@ -8,6 +8,14 @@ export function getProxySettings() {
   return appState.currentProxySettings
 }
 
+export type ProxyAgentConfig = {
+  type: "http" | "https"
+  host: string
+  port: number
+  username?: string
+  password?: string
+}
+
 export function setProxySettings(settings: ProxySettings) {
   appState.currentProxySettings = settings
 }
@@ -22,6 +30,19 @@ export function getProxyUrl(settings: ProxySettings) {
 export function getProxyDisplayUrl(settings: ProxySettings) {
   const auth = settings.username ? `${encodeURIComponent(settings.username)}:***@` : ""
   return `${settings.type}://${auth}${settings.host}:${settings.port}`
+}
+
+export function toProxyAgentConfig(settings: ProxySettings): ProxyAgentConfig | null {
+  if (!settings.enabled || !settings.host || !settings.port || settings.type === "socks5") {
+    return null
+  }
+  return {
+    type: settings.type,
+    host: settings.host,
+    port: settings.port,
+    ...(settings.username ? { username: settings.username } : {}),
+    ...(settings.password ? { password: settings.password } : {}),
+  }
 }
 
 export function getProxyAgent(targetUrl: URL, ignoreSsl = false) {

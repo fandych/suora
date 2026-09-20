@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { RotateCcwIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -40,6 +40,7 @@ export function RecentlyDeletedDialog({
   const [entries, setEntries] = useState<RecentlyDeletedResourceEntry[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [restoringEntryId, setRestoringEntryId] = useState<string | null>(null)
+  const restoreLockRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!open) return
@@ -67,7 +68,11 @@ export function RecentlyDeletedDialog({
   }, [kind, open])
 
   const handleRestore = async (entryId: string) => {
+    if (restoreLockRef.current.has(entryId)) {
+      return
+    }
     try {
+      restoreLockRef.current.add(entryId)
       setRestoringEntryId(entryId)
       const result = await SystemApi.restoreRecentlyDeleted(entryId)
       setEntries((current) => current.filter((entry) => entry.entryId !== entryId))
@@ -81,6 +86,7 @@ export function RecentlyDeletedDialog({
         type: "error",
       })
     } finally {
+      restoreLockRef.current.delete(entryId)
       setRestoringEntryId(null)
     }
   }

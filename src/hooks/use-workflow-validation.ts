@@ -31,6 +31,18 @@ type WorkflowValidationInput = {
 }
 
 export function useWorkflowValidation(input: WorkflowValidationInput) {
+  const availableAgentIdsKey = input.availableAgentIds.join("\u0000")
+  const availableDocumentIdsKey = input.availableDocumentIds.join("\u0000")
+  const availableIntegrationIdsKey = input.availableIntegrationIds.join("\u0000")
+  const availableModelIdsKey = input.availableModelIds.join("\u0000")
+  const availableAgentIds = useMemo(() => (availableAgentIdsKey ? availableAgentIdsKey.split("\u0000") : []), [availableAgentIdsKey])
+  const availableDocumentIds = useMemo(() => (availableDocumentIdsKey ? availableDocumentIdsKey.split("\u0000") : []), [availableDocumentIdsKey])
+  const availableIntegrationIds = useMemo(
+    () => (availableIntegrationIdsKey ? availableIntegrationIdsKey.split("\u0000") : []),
+    [availableIntegrationIdsKey],
+  )
+  const availableModelIds = useMemo(() => (availableModelIdsKey ? availableModelIdsKey.split("\u0000") : []), [availableModelIdsKey])
+
   const currentDefinition = useMemo<WorkflowDefinition>(
     () => ({
       nodes: input.nodes,
@@ -60,17 +72,17 @@ export function useWorkflowValidation(input: WorkflowValidationInput) {
         ...getWorkflowDesignIssues({
           nodes: input.nodes,
           edges: input.edges,
-          availableAgentIds: input.availableAgentIds,
-          availableDocumentIds: input.availableDocumentIds,
-          availableIntegrationIds: input.availableIntegrationIds,
-          availableModelIds: input.availableModelIds,
+          availableAgentIds,
+          availableDocumentIds,
+          availableIntegrationIds,
+          availableModelIds,
         }),
         ...input.nodes.flatMap((node) =>
           validateNodeProperties(node, {
-            availableAgentIds: input.availableAgentIds,
-            availableDocumentIds: input.availableDocumentIds,
-            availableIntegrationIds: input.availableIntegrationIds,
-            availableModelIds: input.availableModelIds,
+            availableAgentIds,
+            availableDocumentIds,
+            availableIntegrationIds,
+            availableModelIds,
           }),
         ),
       ].filter(
@@ -79,10 +91,10 @@ export function useWorkflowValidation(input: WorkflowValidationInput) {
           index,
       ),
     [
-      input.availableAgentIds,
-      input.availableDocumentIds,
-      input.availableIntegrationIds,
-      input.availableModelIds,
+      availableAgentIds,
+      availableDocumentIds,
+      availableIntegrationIds,
+      availableModelIds,
       input.edges,
       input.nodes,
     ],

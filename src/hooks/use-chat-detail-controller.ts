@@ -92,6 +92,7 @@ export function useChatDetailController() {
   const handleExportChat = useChatExportActions(selectedChat, assistantResponseParts)
   const groupedProviders = providers.filter((provider) => provider.models.length > 0)
   const selectedAgentRecord = agents.find((agent) => agent.id === selectedAgentId) ?? null
+  const selectedAgentUpdatedAt = selectedAgentRecord?.updatedAt ?? null
   const selectedProviderRecord = providers.find((provider) => provider.id === settingsDraft?.model.providerId) ?? null
   const selectedModelRecord =
     selectedProviderRecord?.models.find((model) => model.id === settingsDraft?.model.modelId) ?? null
@@ -132,6 +133,7 @@ export function useChatDetailController() {
       return
     }
 
+    // Keep this effect keyed to the selected agent identity and its persisted version timestamp only.
     void AgentApi.get(selectedAgentId)
       .then((detail) => {
         if (!cancelled) {
@@ -147,7 +149,7 @@ export function useChatDetailController() {
     return () => {
       cancelled = true
     }
-  }, [selectedAgentId, selectedAgentRecord?.updatedAt])
+  }, [selectedAgentId, selectedAgentUpdatedAt])
 
   useEffect(() => {
     let cancelled = false
@@ -228,6 +230,7 @@ export function useChatDetailController() {
       return
     }
 
+    // Resolve stale provider/model selections after availability changes without broadening the effect inputs.
     const fallbackRuntime = resolveFallbackRuntime(settingsDraft, groupedProviders)
     if (!fallbackRuntime) {
       return

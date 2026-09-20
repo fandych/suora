@@ -16,6 +16,7 @@ import type { ChatMessagePart } from "@/types/chat"
 import { setProxySettings } from "@/electron/infrastructure/proxy-service"
 import { recordRecentlyDeletedResource } from "@/electron/app/system/system-repository"
 import type { ChatDetail, ChatMessageCursor, ChatSummary } from "@/types/chat"
+import { openDatabase } from "@/electron/infrastructure/db-core"
 
 const DEFAULT_CHAT_MESSAGE_LIMIT = 200
 const MAX_CHAT_MESSAGE_LIMIT = 500
@@ -40,6 +41,12 @@ function normalizeChatReadOptions(options?: ChatReadOptions) {
       ? { createdAt: Math.trunc(options.beforeCursor.createdAt), id: options.beforeCursor.id }
       : undefined
   return { limit, beforeCursor }
+}
+
+function assertStatementChanged(result: { changes?: number | bigint }, message: string) {
+  if (result.changes !== undefined && Number(result.changes) === 0) {
+    throw new Error(message)
+  }
 }
 
 async function readChat(chatId: string, options?: ChatReadOptions) {
@@ -121,7 +128,22 @@ export async function ensureChat(payload: {
     sourceRef: payload.sourceRef ?? existing?.sourceRef ?? null,
     updatedAt: Date.now(),
   }
-  if (existing) await database.update(chats).set(values).where(eq(chats.id, payload.chatId))
+  if (existing) {
+    const result = openDatabase()
+      .prepare(
+        "UPDATE chats SET title = ?, chatbot_id = ?, summary = ?, source_type = ?, source_ref = ?, updated_at = ? WHERE id = ?",
+      )
+      .run(
+        values.title,
+        values.chatbotId,
+        values.summary,
+        values.sourceType,
+        values.sourceRef,
+        values.updatedAt,
+        payload.chatId,
+      )
+    assertStatementChanged(result, "Chat update failed because the chat no longer exists.")
+  }
   else await database.insert(chats).values({ id: payload.chatId, ...values })
   return readChat(payload.chatId)
 }
@@ -148,7 +170,7 @@ export async function restoreChatSnapshot(snapshot: ChatDetail & { nextCursor?: 
   const database = getDrizzleDatabase()
   const chat = snapshot.chat as ChatSummary
   const [existing] = await database.select({ id: chats.id }).from(chats).where(eq(chats.id, chat.id)).limit(1)
-  if (existing) throw new Error(`Chat '${chat.title}' already exists.`)
+  if (existing) throw new Error("A chat with the same identifier already exists.")
   await database.insert(chats).values({
     id: chat.id,
     title: chat.title,
@@ -192,14 +214,15 @@ export async function appendChatMessage(
       partsJson: serializeChatMessageParts(payload.parts ?? []),
       createdAt: now,
     })
-  await database
-    .update(chats)
-    .set({
-      title: role === "user" && chat.title === "New chat" ? content.slice(0, 18) || "Untitled chat" : chat.title,
-      summary: role === "user" ? content : chat.summary,
-      updatedAt: now,
-    })
-    .where(eq(chats.id, payload.chatId))
+  const updateResult = openDatabase()
+    .prepare("UPDATE chats SET title = ?, summary = ?, updated_at = ? WHERE id = ?")
+    .run(
+      role === "user" && chat.title === "New chat" ? content.slice(0, 18) || "Untitled chat" : chat.title,
+      role === "user" ? content : chat.summary,
+      now,
+      payload.chatId,
+    )
+  assertStatementChanged(updateResult, "Chat update failed because the chat no longer exists.")
   return getChat(payload.chatId)
 }
 
@@ -215,10 +238,10 @@ export async function updateChatMessageParts(payload: {
     .where(and(eq(chatMessages.id, payload.messageId), eq(chatMessages.chatId, payload.chatId)))
     .limit(1)
   if (!existing) throw new Error("Message update failed.")
-  await database
-    .update(chatMessages)
-    .set({ partsJson: serializeChatMessageParts(payload.parts) })
-    .where(and(eq(chatMessages.id, payload.messageId), eq(chatMessages.chatId, payload.chatId)))
+  const updateResult = openDatabase()
+    .prepare("UPDATE chat_messages SET parts_json = ? WHERE id = ? AND chat_id = ?")
+    .run(serializeChatMessageParts(payload.parts), payload.messageId, payload.chatId)
+  assertStatementChanged(updateResult, "Message update failed.")
   return getChat(payload.chatId)
 }
 

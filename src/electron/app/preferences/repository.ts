@@ -1,4 +1,4 @@
-import { protectCredential, revealCredential } from "@/electron/infrastructure/credential-vault"
+import { protectCredential, revealCredentialState } from "@/electron/infrastructure/credential-vault"
 import { getAppMetaValue, setAppMetaValue } from "@/electron/app/system/system-repository"
 
 export async function getPreferenceValue() {
@@ -7,7 +7,11 @@ export async function getPreferenceValue() {
   try {
     const parsed = JSON.parse(value) as Record<string, unknown>
     if (typeof parsed.mailServerPassword === "string") {
-      parsed.mailServerPasswordConfigured = Boolean(revealCredential(parsed.mailServerPassword))
+      const credential = revealCredentialState(parsed.mailServerPassword)
+      parsed.mailServerPasswordConfigured = Boolean(credential.value)
+      if (credential.legacyPlaintext && credential.value) {
+        void setPreferenceValue(JSON.stringify({ ...parsed, mailServerPassword: credential.value }))
+      }
       parsed.mailServerPassword = ""
     }
     return JSON.stringify(parsed)

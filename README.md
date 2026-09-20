@@ -17,6 +17,8 @@ SUORA 是一个基于 Electron、React 和 TypeScript 的本地优先 AI 工作�
 - **Channels**：接入 Email、DingTalk、Feishu、Microsoft Teams、Telegram、WeChat、Webhook、WebSocket 和其他渠道运行时。
 - **Preference**：管理主题、安全、代理、SMTP、环境监控、更新和应用信息。
 
+当前内置的“Recently deleted”恢复能力仅覆盖 Chats、Documents 和 Workflows。Agents、Integrations、Schedulers 与 Skills 删除后暂不进入回收站。
+
 ## 技术栈
 
 - Electron 43、electron-vite、electron-builder
@@ -92,6 +94,8 @@ Electron 主进程使用 Node `node:sqlite` 的 `DatabaseSync`，通过 Drizzle 
 - MCP 支持 HTTP endpoint 探测和受命令策略约束的 `launchCommand`，不应夸大为完整通用 MCP client/transport 实现。
 - `ignoreSslErrors` 会降低 TLS 校验安全性，除非调试需要，不应启用。
 - 渠道 HTTP runtime 默认绑定 `127.0.0.1:3000`，提供 `/health` 和 `/webhook/:platform/:channelId`。`WEBHOOK_HOST`、`WEBHOOK_PORT` 和 `NODE_ENV` 只影响生成/显示的 URL，不会让服务自动监听公网地址。
+
+命令工具默认 executable allowlist 比较保守；如确有新增需求，应在 Preferences > Security 中显式扩展 allowlist，而不是绕过主进程命令护栏。
 
 Workflow 当前限制包括最多 200 个节点、400 条边，`maxSteps` 为 1–1000，最长执行时间为 1 小时。具体节点语义以 `src/electron/app/workflows/nodes/` 的实现为准。
 

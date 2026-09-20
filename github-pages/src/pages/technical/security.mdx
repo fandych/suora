@@ -65,6 +65,8 @@ git node npm npx pnpm python python3 rg tsc tsx vite vitest eslint bun yarn
 - blacklist 是命令字符串的大小写不敏感子串匹配，不是完整语义解析。
 - 环境变量会合并进命令进程，调用方提供的 env 可覆盖全局环境变量。
 
+如果工作流或 Agent 需要额外的 CLI，可在 Preferences 的 Security 面板中显式扩展 command allowlist；不要通过更换 executable 名称、包装 shell 或 MCP `launchCommand` 去绕过主进程命令策略。
+
 命令确认模式 `daily`、`always`、`never` 是用户交互护栏；它不会允许被禁止的 executable，也不构成沙箱。
 
 ## 浏览器工具

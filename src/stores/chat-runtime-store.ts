@@ -10,7 +10,7 @@ import {
   type AssistantResponsePart,
 } from "@/lib/chat/response-parts"
 import { ChatApi } from "@/services/chat-service"
-import { subscribeToChatRuntime as subscribeToElectronChatRuntime } from "@/services/chat-runtime-listener"
+import { subscribeToChatRuntime as subscribeToElectronChatRuntime, type ChatRuntimePayload } from "@/services/chat-runtime-listener"
 import { createChat, getChatDetail, saveChatSessionSettings } from "@/services/chat-service"
 import { hasAppBridge } from "@/services/bridge"
 
@@ -38,6 +38,7 @@ export const useChatRuntimeStore = create<ChatRuntimeStore>((set) => ({
 
 type ChatRuntimeEntry = ChatRuntimeSnapshot & {
   runId: string | null
+  pendingRuntimeEvents: ChatRuntimePayload[]
 }
 
 type StartChatRunInput = {
@@ -93,6 +94,7 @@ function getOrCreateEntry(chatId: string) {
   const created: ChatRuntimeEntry = {
     ...EMPTY_RUNTIME,
     runId: null,
+    pendingRuntimeEvents: [],
   }
   runtimeEntries.set(chatId, created)
   return created
@@ -174,11 +176,68 @@ function beginChatRun(chatId: string, runId: string | null) {
   setEntryState(chatId, {
     isResponding: true,
     runId,
+    pendingRuntimeEvents: [],
     toolEvents: [],
     streamingText: "",
     assistantResponseMessageId: null,
     assistantResponseParts: [{ id: "assistant-stream", type: "text", content: "", isPending: true }],
   })
+}
+
+function applyRuntimeEvent(chatId: string, payload: ChatRuntimePayload) {
+  const entry = getOrCreateEntry(chatId)
+
+  if (
+    payload.type === "text-delta" ||
+    payload.type === "tool-call" ||
+    payload.type === "tool-result" ||
+    payload.type === "error"
+  ) {
+    const parts = applyEventToAssistantResponseParts(entry.assistantResponseParts, payload, entry.toolEvents.length + 1)
+    setEntryState(chatId, {
+      assistantResponseParts: parts,
+      streamingText: parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.content)
+        .join(""),
+      toolEvents: payload.type === "error" ? [...entry.toolEvents, payload] : entry.toolEvents,
+    })
+  }
+
+  if (payload.type === "completed") {
+    const assistant = payload.detail.messages.at(-1)
+    if (assistant?.role === "assistant") {
+      setEntryState(chatId, {
+        assistantResponseMessageId: assistant.id,
+        assistantResponseParts: assistant.parts as AssistantResponsePart[],
+        streamingText: assistant.content,
+      })
+    }
+    emitDataChanged("/chats")
+  }
+
+  if (payload.type === "completed" || payload.type === "error" || payload.type === "cancelled") {
+    const current = getOrCreateEntry(chatId)
+    setEntryState(chatId, {
+      isResponding: false,
+      isStopping: false,
+      assistantResponseParts: finalizeAssistantResponseParts(current.assistantResponseParts),
+      pendingRuntimeEvents: [],
+    })
+    scheduleRuntimeCleanup(chatId, payload.requestId)
+  }
+}
+
+function bindChatRun(chatId: string, runId: string) {
+  const entry = getOrCreateEntry(chatId)
+  if (!entry.isResponding) {
+    throw new Error("This chat is not generating a response.")
+  }
+  const pendingRuntimeEvents = entry.pendingRuntimeEvents.filter((event) => event.requestId === runId)
+  setEntryState(chatId, { runId, pendingRuntimeEvents: [] })
+  for (const event of pendingRuntimeEvents) {
+    applyRuntimeEvent(chatId, event)
+  }
 }
 
 export function stopChatRun(chatId: string | null) {
@@ -223,47 +282,11 @@ function handleRuntimeEvent(payload: Parameters<Parameters<typeof subscribeToEle
   if (!entry || (entry.runId && entry.runId !== payload.requestId)) return
 
   if (!entry.runId) {
-    setEntryState(payload.chatId, { runId: payload.requestId })
+    setEntryState(payload.chatId, { pendingRuntimeEvents: [...entry.pendingRuntimeEvents, payload] })
+    return
   }
 
-  if (
-    payload.type === "text-delta" ||
-    payload.type === "tool-call" ||
-    payload.type === "tool-result" ||
-    payload.type === "error"
-  ) {
-    const parts = applyEventToAssistantResponseParts(entry.assistantResponseParts, payload, entry.toolEvents.length + 1)
-    setEntryState(payload.chatId, {
-      assistantResponseParts: parts,
-      streamingText: parts
-        .filter((part) => part.type === "text")
-        .map((part) => part.content)
-        .join(""),
-      toolEvents: payload.type === "error" ? [...entry.toolEvents, payload] : entry.toolEvents,
-    })
-  }
-
-  if (payload.type === "completed") {
-    const assistant = payload.detail.messages.at(-1)
-    if (assistant?.role === "assistant") {
-      setEntryState(payload.chatId, {
-        assistantResponseMessageId: assistant.id,
-        assistantResponseParts: assistant.parts as AssistantResponsePart[],
-        streamingText: assistant.content,
-      })
-    }
-    emitDataChanged("/chats")
-  }
-
-  if (payload.type === "completed" || payload.type === "error" || payload.type === "cancelled") {
-    const current = getOrCreateEntry(payload.chatId)
-    setEntryState(payload.chatId, {
-      isResponding: false,
-      isStopping: false,
-      assistantResponseParts: finalizeAssistantResponseParts(current.assistantResponseParts),
-    })
-    scheduleRuntimeCleanup(payload.chatId, payload.requestId)
-  }
+  applyRuntimeEvent(payload.chatId, payload)
 }
 
 if (hasAppBridge()) {
@@ -297,7 +320,7 @@ export async function startChatRun(input: StartChatRunInput) {
       content: input.draft,
       attachments: input.attachments,
     })
-    beginChatRun(workingChatId, result.requestId)
+    bindChatRun(workingChatId, result.requestId)
     input.onAttachmentsConsumed()
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)

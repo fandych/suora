@@ -1,4 +1,4 @@
-import { protectCredential, revealCredential } from "@/electron/infrastructure/credential-vault"
+import { protectCredential, revealCredential, revealCredentialState } from "@/electron/infrastructure/credential-vault"
 
 const CREDENTIAL_FIELDS = [
   "emailImapPassword",
@@ -56,6 +56,19 @@ export function protectChannelCredentials(config: ChannelCredentialConfig) {
 
 export function revealChannelCredentials(config: ChannelCredentialConfig) {
   return mapChannelCredentials(config, revealCredential)
+}
+
+export function revealChannelCredentialsWithState(config: ChannelCredentialConfig) {
+  const next = { ...config }
+  const legacyPlaintextFields: string[] = []
+  for (const field of CREDENTIAL_FIELDS) {
+    if (typeof next[field] === "string") {
+      const credential = revealCredentialState(next[field])
+      next[field] = credential.value
+      if (credential.legacyPlaintext && credential.value) legacyPlaintextFields.push(field)
+    }
+  }
+  return { config: next, legacyPlaintextFields }
 }
 
 export function redactChannelCredentials(config: ChannelCredentialConfig) {

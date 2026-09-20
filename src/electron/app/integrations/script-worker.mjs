@@ -66,6 +66,12 @@ function isPrivate(address) {
 
 async function run(request) {
   try {
+    if (request.proxy) {
+      const auth = request.proxy.username
+        ? `${encodeURIComponent(request.proxy.username)}:${encodeURIComponent(request.proxy.password || "")}@`
+        : ""
+      setGlobalDispatcher(new ProxyAgent(`${request.proxy.type}://${auth}${request.proxy.host}:${request.proxy.port}`))
+    }
     const logs = []
     const consoleApi = Object.freeze({
       log: (...args) => appendLog(logs, args),

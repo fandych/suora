@@ -2,7 +2,7 @@ import { spawn } from "node:child_process"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type { IntegrationExecutePayload } from "@/electron/app/integrations/types"
-import { getProxySettings, getProxyUrl } from "@/electron/infrastructure/proxy-service"
+import { getProxySettings, toProxyAgentConfig } from "@/electron/infrastructure/proxy-service"
 
 const ALLOWED_SCRIPT_RUNTIMES = new Set(["node", "javascript"])
 const MAX_SCRIPT_SOURCE_BYTES = 256 * 1024
@@ -113,7 +113,7 @@ function executeInWorker(request: { source: string; handler: string; inputJson?:
     child.stdin.end(
       `${JSON.stringify({
         ...request,
-        proxyUrl: proxySettings.enabled ? getProxyUrl(proxySettings) : undefined,
+        proxy: toProxyAgentConfig(proxySettings),
       })}\n`,
     )
   })

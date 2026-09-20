@@ -35,6 +35,15 @@ async function resolvePathForPolicy(target: string) {
   }
 }
 
+export async function resolveWorkspacePolicyTarget(target: string) {
+  const root = path.resolve(getWorkspacePath())
+  const [resolvedRoot, resolvedTarget] = await Promise.all([fs.realpath(root), resolvePathForPolicy(target)])
+  if (!isPathWithinRoot(resolvedRoot, resolvedTarget)) {
+    throw new Error("Path must stay within the workspace root.")
+  }
+  return resolvedTarget
+}
+
 export async function readToolPreferences(): Promise<ToolPreferenceSettings> {
   const value = await getAppMetaValue("preference_settings")
   try {
@@ -60,8 +69,8 @@ export function resolveWorkspaceTarget(relativePath = ".") {
 }
 export async function enforceRelativePathPolicy(relativePath: string | undefined, target: string) {
   const preferences = await readToolPreferences()
-  const root = path.resolve(getWorkspacePath())
-  const [resolvedRoot, resolvedTarget] = await Promise.all([fs.realpath(root), resolvePathForPolicy(target)])
+  const resolvedRoot = await fs.realpath(path.resolve(getWorkspacePath()))
+  const resolvedTarget = await resolveWorkspacePolicyTarget(target)
   if (!isPathWithinRoot(resolvedRoot, resolvedTarget)) throw new Error("Path must stay within the workspace root.")
   const relative = path.relative(resolvedRoot, resolvedTarget).replace(/\\/g, "/").toLowerCase()
   const rules = normalizeRuleList(preferences.fileAccessDirectories)

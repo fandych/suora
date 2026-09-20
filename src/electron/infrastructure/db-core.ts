@@ -233,7 +233,11 @@ export function executeQuery(payload: QueryPayload) {
   const database = openDatabase()
   applyMigrations(database)
 
-  const statement = prepareStatement(database, payload.sql)
+  const sql =
+    ["all", "values"].includes(payload.method) && /^select\b/i.test(payload.sql.trim()) && !/\blimit\b/i.test(payload.sql)
+      ? `${payload.sql.trim()} LIMIT 500`
+      : payload.sql
+  const statement = prepareStatement(database, sql)
   const params = normalizeSqlParams(payload.params)
 
   switch (payload.method) {

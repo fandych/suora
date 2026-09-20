@@ -1,5 +1,6 @@
 import { applyMigrations, openDatabase } from "@/electron/infrastructure/db-core"
-import { revealCredential } from "@/electron/infrastructure/credential-vault"
+import { protectCredential, revealCredentialState } from "@/electron/infrastructure/credential-vault"
+import { setAppMetaValue } from "@/electron/app/system/system-repository"
 import { resolvePreferenceSettings, type PreferenceSettings } from "@/electron/app/preferences/settings"
 
 export function getPreferenceSettingsValue() {
@@ -11,7 +12,14 @@ export function getPreferenceSettingsValue() {
   try {
     const settings = JSON.parse(row.value) as Record<string, unknown>
     if (typeof settings.mailServerPassword === "string") {
-      settings.mailServerPassword = revealCredential(settings.mailServerPassword)
+      const credential = revealCredentialState(settings.mailServerPassword)
+      settings.mailServerPassword = credential.value
+      if (credential.legacyPlaintext && credential.value) {
+        void setAppMetaValue(
+          "preference_settings",
+          JSON.stringify({ ...settings, mailServerPassword: protectCredential(credential.value) }),
+        )
+      }
     }
     return JSON.stringify(settings)
   } catch {

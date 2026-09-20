@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 
 export type AutosaveState = "saved" | "pending" | "saving" | "error"
 
@@ -14,8 +14,11 @@ export function useAutosaveStatus({ delayMs = 900, enabled, onSave, snapshotKey 
   const [error, setError] = useState<Error | null>(null)
   const cleanSnapshotRef = useRef(snapshotKey)
   const latestSnapshotRef = useRef(snapshotKey)
+  const delayMsRef = useRef(delayMs)
   const onSaveRef = useRef(onSave)
   const saveRunIdRef = useRef(0)
+  const timeoutIdRef = useRef<number | null>(null)
+  const scheduleSaveRef = useRef<(snapshot: string) => void>(() => undefined)
 
   useEffect(() => {
     onSaveRef.current = onSave
@@ -25,7 +28,11 @@ export function useAutosaveStatus({ delayMs = 900, enabled, onSave, snapshotKey 
     latestSnapshotRef.current = snapshotKey
   }, [snapshotKey])
 
-  const runSave = async (nextSnapshotKey: string) => {
+  useEffect(() => {
+    delayMsRef.current = delayMs
+  }, [delayMs])
+
+  const runSave = useCallback(async (nextSnapshotKey: string) => {
     const runId = ++saveRunIdRef.current
     setState("saving")
     setError(null)
@@ -37,6 +44,7 @@ export function useAutosaveStatus({ delayMs = 900, enabled, onSave, snapshotKey 
       }
       if (latestSnapshotRef.current !== nextSnapshotKey) {
         setState("pending")
+        scheduleSaveRef.current(latestSnapshotRef.current)
         return
       }
       cleanSnapshotRef.current = cleanSnapshotKey ?? nextSnapshotKey
@@ -48,7 +56,21 @@ export function useAutosaveStatus({ delayMs = 900, enabled, onSave, snapshotKey 
       setError(nextError instanceof Error ? nextError : new Error("Autosave failed."))
       setState("error")
     }
-  }
+  }, [])
+
+  const scheduleSave = useCallback((nextSnapshotKey: string) => {
+    if (timeoutIdRef.current !== null) {
+      window.clearTimeout(timeoutIdRef.current)
+    }
+    timeoutIdRef.current = window.setTimeout(() => {
+      timeoutIdRef.current = null
+      void runSave(nextSnapshotKey)
+    }, delayMsRef.current)
+  }, [runSave])
+
+  useEffect(() => {
+    scheduleSaveRef.current = scheduleSave
+  }, [scheduleSave])
 
   useEffect(() => {
     if (!enabled) {
@@ -59,14 +81,15 @@ export function useAutosaveStatus({ delayMs = 900, enabled, onSave, snapshotKey 
     }
 
     setState("pending")
-    const timeoutId = window.setTimeout(() => {
-      void runSave(snapshotKey)
-    }, delayMs)
+    scheduleSave(snapshotKey)
 
     return () => {
-      window.clearTimeout(timeoutId)
+      if (timeoutIdRef.current !== null) {
+        window.clearTimeout(timeoutIdRef.current)
+        timeoutIdRef.current = null
+      }
     }
-  }, [delayMs, enabled, snapshotKey])
+  }, [enabled, scheduleSave, snapshotKey])
 
   return {
     error,

@@ -91,7 +91,7 @@ export const aiFetchStartSchema = z
     message: "Provide either bodyText or bodyBase64, not both.",
   })
 export const recentlyDeletedRestoreSchema = z.object({
-  entryId: entityIdSchema,
+  entryId: z.string().trim().min(1).max(256).regex(/^[A-Za-z0-9:_-]+$/),
 })
 export const versionedResourceSaveSchema = z.object({
   id: entityIdSchema,
