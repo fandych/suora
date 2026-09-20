@@ -2,7 +2,17 @@ export const MAX_CHAT_ATTACHMENT_BYTES = 10 * 1024 * 1024
 export const MAX_CHAT_ATTACHMENTS = 5
 export const MAX_CHAT_ATTACHMENT_TOTAL_BYTES = 25 * 1024 * 1024
 
-const allowedMediaTypes = ["image/", "text/", "application/pdf", "application/json"]
+const ALLOWED_ATTACHMENT_MEDIA_TYPES = new Set([
+  "application/json",
+  "application/pdf",
+  "image/gif",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "text/csv",
+  "text/markdown",
+  "text/plain",
+])
 
 export function validateChatAttachments(
   attachments: Array<{ name: string; mediaType: string; data: string; sizeBytes?: number }>,
@@ -12,7 +22,7 @@ export function validateChatAttachments(
   for (const attachment of attachments) {
     const sizeBytes = attachment.sizeBytes ?? getDataUrlSize(attachment.data)
     if (sizeBytes > MAX_CHAT_ATTACHMENT_BYTES) throw new Error(`${attachment.name} exceeds the 10 MB attachment limit.`)
-    if (!allowedMediaTypes.some((type) => attachment.mediaType.startsWith(type)))
+    if (!ALLOWED_ATTACHMENT_MEDIA_TYPES.has(attachment.mediaType))
       throw new Error(`${attachment.name} has an unsupported attachment type.`)
     if (!attachment.data.startsWith("data:"))
       throw new Error(`${attachment.name} must use a data URL attachment payload.`)

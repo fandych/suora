@@ -1,7 +1,7 @@
 import type { WorkflowTraceSnapshot, WorkflowExecutionContext } from "@/types/workflow"
 
 const sensitiveKey =
-  /authorization|proxy-authorization|cookie|api[-_]?key|token|secret|password|passwd|credential|private_key/i
+  /authorization|proxy-authorization|cookie|bearer|api[-_]?key|apikey|token|secret|password|passwd|credential|private[-_]?key|access[-_]?key/i
 
 export function createWorkflowTraceSnapshot(context: WorkflowExecutionContext): WorkflowTraceSnapshot {
   const redactedPaths: string[] = []

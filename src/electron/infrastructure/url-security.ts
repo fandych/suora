@@ -1,4 +1,6 @@
 import dns from "node:dns/promises"
+import type { LookupOneOptions } from "node:dns"
+import type { RequestOptions } from "node:http"
 import net from "node:net"
 
 const BLOCKED_HOSTNAMES = new Set(["localhost", "localhost.localdomain", "metadata.google.internal"])
@@ -16,10 +18,10 @@ function isPrivateAddress(address: string) {
   return true
 }
 
-export async function assertSafeHttpUrl(value: string, options?: { allowLocalNetwork?: boolean; skipDnsResolution?: boolean }) {
+function parseHttpUrl(value: string | URL) {
   let url: URL
   try {
-    url = new URL(value)
+    url = value instanceof URL ? new URL(value.toString()) : new URL(value)
   } catch {
     throw new Error("Invalid URL.")
   }
@@ -29,8 +31,24 @@ export async function assertSafeHttpUrl(value: string, options?: { allowLocalNet
   }
 
   const hostname = url.hostname.toLowerCase().replace(/^\[|\]$/g, "")
+  return { url, hostname }
+}
+
+function createPinnedLookup(address: string, family: number) {
+  return ((
+    _hostname: string,
+    _options: LookupOneOptions,
+    callback: (error: NodeJS.ErrnoException | null, address: string, family: number) => void,
+  ) => callback(null, address, family)) as NonNullable<RequestOptions["lookup"]>
+}
+
+export async function resolveSafeHttpTarget(
+  value: string | URL,
+  options?: { allowLocalNetwork?: boolean; skipDnsResolution?: boolean },
+) {
+  const { url, hostname } = parseHttpUrl(value)
   if (options?.allowLocalNetwork) {
-    return url
+    return { url }
   }
 
   // Only reject when the hostname is a blocked name or a literal private IP.
@@ -40,7 +58,12 @@ export async function assertSafeHttpUrl(value: string, options?: { allowLocalNet
   }
 
   if (options?.skipDnsResolution) {
-    return url
+    return { url }
+  }
+
+  const ipFamily = net.isIP(hostname)
+  if (ipFamily !== 0) {
+    return { url, lookup: createPinnedLookup(hostname, ipFamily) }
   }
 
   try {
@@ -48,12 +71,16 @@ export async function assertSafeHttpUrl(value: string, options?: { allowLocalNet
     if (records.length === 0 || records.some((record) => isPrivateAddress(record.address))) {
       throw new Error("Private and local network URLs are not allowed.")
     }
+    const [selected] = records
+    return { url, lookup: createPinnedLookup(selected.address, selected.family) }
   } catch (error) {
     if (error instanceof Error && error.message.includes("Private and local")) {
       throw error
     }
     throw new Error("Unable to resolve the target URL.", { cause: error })
   }
+}
 
-  return url
+export async function assertSafeHttpUrl(value: string | URL, options?: { allowLocalNetwork?: boolean; skipDnsResolution?: boolean }) {
+  return (await resolveSafeHttpTarget(value, options)).url
 }

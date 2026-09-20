@@ -1,7 +1,10 @@
+import { z } from "zod"
 import type { Node } from "@xyflow/react"
 import type { WorkflowNodeData } from "@/types/workflow"
 import type { WorkflowValidationIssue } from "@/lib/workflow/validator"
 import { createIssue, requireValue } from "@/lib/workflow/validator/node/types"
+
+const emailSchema = z.string().email()
 
 export function validateEmailNode(node: Node<WorkflowNodeData>): WorkflowValidationIssue[] {
   const issues = [
@@ -9,7 +12,8 @@ export function validateEmailNode(node: Node<WorkflowNodeData>): WorkflowValidat
     ...requireValue(node, node.data.emailSubject, "Email node needs a subject."),
     ...requireValue(node, node.data.emailBody, "Email node needs a message."),
   ]
-  if (node.data.emailTo?.trim() && !/\$|\{\{|^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(node.data.emailTo.trim()))
+  const recipient = node.data.emailTo?.trim()
+  if (recipient && !recipient.includes("$") && !recipient.includes("{{") && !emailSchema.safeParse(recipient).success)
     issues.push(createIssue(node, "Email recipient must be a valid email address or expression."))
   return issues
 }

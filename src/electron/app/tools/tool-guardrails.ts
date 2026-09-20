@@ -38,6 +38,7 @@ const WINDOWS_EXECUTABLE_ALIASES: Record<string, string> = {
   vitest: "vitest.cmd",
   yarn: "yarn.cmd",
 }
+const WINDOWS_SHELL_META_PATTERN = /[&|<>^%]/
 
 export type ParsedWorkspaceCommand = {
   executable: string
@@ -107,6 +108,10 @@ export function parseWorkspaceCommand(command: string): ParsedWorkspaceCommand {
 
 export function resolveWorkspaceSpawnCommand(command: ParsedWorkspaceCommand): WorkspaceSpawnCommand {
   if (process.platform === "win32" && /\.(cmd|bat)$/i.test(command.executable)) {
+    const unsafeArgument = command.args.find((arg) => WINDOWS_SHELL_META_PATTERN.test(arg))
+    if (unsafeArgument) {
+      throw new Error(`Command argument contains unsupported Windows shell metacharacters: ${unsafeArgument}`)
+    }
     return {
       executable: process.env.ComSpec || "cmd.exe",
       args: ["/d", "/s", "/c", command.executable, ...command.args],

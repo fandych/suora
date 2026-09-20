@@ -7,6 +7,7 @@ import {
   weChatWebhookToChannelMessage,
 } from "@/electron/app/channels/runtime/channel-runtime-helpers"
 import {
+  getWebhookRawBody,
   verifyDingTalkSignature,
   verifyFeishuSignature,
   verifyWeChatSignature,
@@ -28,7 +29,7 @@ export async function handleFeishuWebhook(
     const timestamp = String(req.headers["x-lark-request-timestamp"] || "")
     const nonce = String(req.headers["x-lark-request-nonce"] || "")
     const signature = String(req.headers["x-lark-signature"] || "")
-    if (!verifyFeishuSignature(timestamp, nonce, channel.feishuEncryptKey, body, signature)) {
+    if (!verifyFeishuSignature(timestamp, nonce, channel.feishuEncryptKey, getWebhookRawBody(req, body), signature)) {
       res.status(403).json({ error: "Invalid signature" })
       return
     }

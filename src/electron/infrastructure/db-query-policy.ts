@@ -9,7 +9,7 @@ export function validateQueryPayload(payload: QueryPayload) {
   }
 
   const sql = payload.sql.trim()
-  if (sql.includes(";") || /\b(?:attach|detach|pragma|vacuum|load_extension)\b/i.test(sql)) {
+  if (sql.includes(";") || /\b(?:attach|detach|pragma|vacuum|load_extension|with)\b/i.test(sql)) {
     throw new Error("This database operation is not allowed through the renderer database bridge.")
   }
   if (/\b(?:sqlite_master|sqlite_schema|__app_migrations|__drizzle_migrations)\b/i.test(sql)) {
@@ -21,7 +21,7 @@ export function validateQueryPayload(payload: QueryPayload) {
   if (payload.method === "run" && keyword === "select") {
     throw new Error("Read queries must use a read query method.")
   }
-  if (readMethods.has(payload.method) && keyword && !["select", "with", "explain"].includes(keyword)) {
+  if (readMethods.has(payload.method) && keyword && !["select", "explain"].includes(keyword)) {
     throw new Error("Read query methods only accept read-only SQL.")
   }
 }

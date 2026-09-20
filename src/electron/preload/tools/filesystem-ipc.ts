@@ -1,3 +1,4 @@
+import { constants as fsConstants } from "node:fs"
 import fs from "node:fs/promises"
 import path from "node:path"
 import { ipcMain } from "electron"
@@ -16,6 +17,8 @@ import {
   saveFileSchema,
   writeFileSchema,
 } from "@/electron/preload/tools/filesystem-ipc-schemas"
+
+const NOFOLLOW_FLAG = process.platform === "win32" ? 0 : fsConstants.O_NOFOLLOW
 
 async function assertRealPath(target: string) {
   const stats = await fs.lstat(target)
@@ -49,6 +52,17 @@ async function assertPathHasNoSymlinkSegments(target: string, allowMissingLeaf =
     }
   }
 }
+
+async function resolveVerifiedPath(target: string) {
+  const workspaceRoot = await fs.realpath(resolveWorkspaceTarget())
+  const resolvedTarget = await fs.realpath(target)
+  const relativeTarget = path.relative(workspaceRoot, resolvedTarget)
+  if (relativeTarget.startsWith("..") || path.isAbsolute(relativeTarget)) {
+    throw new Error("Filesystem target must stay within the workspace root.")
+  }
+  return resolvedTarget
+}
+
 export function registerFilesystemIpc() {
   ipcMain.handle("tools:listFiles", async (_event, relativePath?: string) => {
     const input = parseFilesystemInput(relativePathSchema, relativePath)
@@ -57,9 +71,10 @@ export function registerFilesystemIpc() {
     await enforceRelativePathPolicy(input, target)
     await assertPathHasNoSymlinkSegments(target)
     await assertRealPath(target)
-    return (await fs.readdir(target, { withFileTypes: true })).map((entry) => ({
+    const resolvedTarget = await resolveVerifiedPath(target)
+    return (await fs.readdir(resolvedTarget, { withFileTypes: true })).map((entry) => ({
       name: entry.name,
-      path: path.relative(resolveWorkspaceTarget(), path.join(target, entry.name)).replace(/\\/g, "/"),
+      path: path.relative(resolveWorkspaceTarget(), path.join(resolvedTarget, entry.name)).replace(/\\/g, "/"),
       type: entry.isDirectory() ? "directory" : "file",
     }))
   })
@@ -69,11 +84,18 @@ export function registerFilesystemIpc() {
     const target = resolveWorkspaceTarget(input)
     await enforceRelativePathPolicy(input, target)
     await assertPathHasNoSymlinkSegments(target)
-    const stats = await assertRealPath(target)
-    ensureFileSizeWithinLimit(stats.size, `File '${input}'`, MAX_TOOL_FILE_BYTES)
-    return {
-      path: path.relative(resolveWorkspaceTarget(), target).replace(/\\/g, "/"),
-      content: await fs.readFile(target, "utf8"),
+    await assertRealPath(target)
+    const resolvedTarget = await resolveVerifiedPath(target)
+    const handle = await fs.open(resolvedTarget, fsConstants.O_RDONLY | NOFOLLOW_FLAG)
+    try {
+      const stats = await handle.stat()
+      ensureFileSizeWithinLimit(stats.size, `File '${input}'`, MAX_TOOL_FILE_BYTES)
+      return {
+        path: path.relative(resolveWorkspaceTarget(), resolvedTarget).replace(/\\/g, "/"),
+        content: await handle.readFile("utf8"),
+      }
+    } finally {
+      await handle.close()
     }
   })
   ipcMain.handle("tools:writeFile", async (_event, payload: unknown) => {
@@ -96,14 +118,20 @@ export function registerFilesystemIpc() {
     )
     await fs.mkdir(parentDirectory, { recursive: true })
     await assertPathHasNoSymlinkSegments(parentDirectory)
+    const resolvedParentDirectory = await resolveVerifiedPath(parentDirectory)
     const tempPath = path.join(
-      parentDirectory,
+      resolvedParentDirectory,
       `.suora-write-${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}.tmp`,
     )
     try {
-      await fs.writeFile(tempPath, input.content, { encoding: "utf8", flag: "wx" })
+      const handle = await fs.open(tempPath, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY | NOFOLLOW_FLAG)
+      try {
+        await handle.writeFile(input.content, { encoding: "utf8" })
+      } finally {
+        await handle.close()
+      }
       await assertPathHasNoSymlinkSegments(tempPath)
-      await assertPathHasNoSymlinkSegments(parentDirectory)
+      await assertPathHasNoSymlinkSegments(resolvedParentDirectory)
       await fs.rename(tempPath, target)
     } catch (error) {
       await fs.rm(tempPath, { force: true }).catch(() => undefined)

@@ -1,30 +1,17 @@
 import { spawn } from "node:child_process"
+import path from "node:path"
 import { fileURLToPath } from "node:url"
 import type { IntegrationExecutePayload } from "@/electron/app/integrations/types"
 import { getProxySettings, getProxyUrl } from "@/electron/infrastructure/proxy-service"
 
 const ALLOWED_SCRIPT_RUNTIMES = new Set(["node", "javascript"])
-const BLOCKED_SCRIPT_PATTERNS = [
-  /\brequire\s*\(/,
-  /\bprocess\b/,
-  /\bchild_process\b/,
-  /\bfs\b/,
-  /\bimport\s*\(/,
-  /\bnew\s+Function\b/,
-  /\beval\s*\(/,
-]
 const MAX_SCRIPT_SOURCE_BYTES = 256 * 1024
 const MAX_SCRIPT_INPUT_BYTES = 512 * 1024
 const MAX_SCRIPT_OUTPUT_BYTES = 1024 * 1024
+const SCRIPT_KILL_GRACE_MS = 1_000
 
 function normalizeScriptSource(code: string) {
   return code.replace(/^\s*export\s+/gm, "")
-}
-
-function assertScriptIsSafe(code: string) {
-  if (BLOCKED_SCRIPT_PATTERNS.some((pattern) => pattern.test(code))) {
-    throw new Error("Script contains blocked runtime APIs. Use HTTP or MCP integrations for privileged operations.")
-  }
 }
 
 export async function executeSandboxedScriptIntegration(payload: IntegrationExecutePayload) {
@@ -49,7 +36,6 @@ export async function executeSandboxedScriptIntegration(payload: IntegrationExec
     throw new Error("Script source exceeds the 256 KB safety limit.")
   if (Buffer.byteLength(payload.inputJson || "{}", "utf8") > MAX_SCRIPT_INPUT_BYTES)
     throw new Error("Script input exceeds the 512 KB safety limit.")
-  assertScriptIsSafe(source)
   const body = await executeInWorker({
     source,
     handler: selectedScript.handler || "main",
@@ -61,7 +47,11 @@ export async function executeSandboxedScriptIntegration(payload: IntegrationExec
 
 function executeInWorker(request: { source: string; handler: string; inputJson?: string; timeoutMs: number }) {
   return new Promise<string>((resolve, reject) => {
-    const workerPath = fileURLToPath(new URL("./script-worker.mjs", import.meta.url))
+    const workerUrl = new URL("./script-worker.mjs", import.meta.url)
+    const workerPath =
+      workerUrl.protocol === "file:"
+        ? fileURLToPath(workerUrl)
+        : path.resolve(process.cwd(), "src/electron/app/integrations/script-worker.mjs")
     const child = spawn(process.execPath, [workerPath], {
       env: { ELECTRON_RUN_AS_NODE: "1", PATH: process.env.PATH || "", NODE_ENV: "production" },
       stdio: ["pipe", "pipe", "pipe"],
@@ -70,26 +60,42 @@ function executeInWorker(request: { source: string; handler: string; inputJson?:
     })
     let output = ""
     let settled = false
-    const finish = (error?: Error) => {
+    let forceKillTimer: ReturnType<typeof setTimeout> | null = null
+    const clearTimers = () => {
+      clearTimeout(timer)
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer)
+        forceKillTimer = null
+      }
+    }
+    const terminateChild = () => {
+      if (child.exitCode !== null || child.killed) return
+      child.kill("SIGTERM")
+      forceKillTimer = setTimeout(() => {
+        if (child.exitCode === null) child.kill("SIGKILL")
+      }, SCRIPT_KILL_GRACE_MS)
+    }
+    const finish = (error?: Error, terminate = false) => {
       if (settled) return
       settled = true
-      clearTimeout(timer)
-      child.kill()
+      clearTimers()
+      if (terminate) terminateChild()
       if (error) reject(error)
     }
     const timer = setTimeout(
-      () => finish(new Error(`Script integration timed out after ${request.timeoutMs}ms.`)),
+      () => finish(new Error(`Script integration timed out after ${request.timeoutMs}ms.`), true),
       request.timeoutMs,
     )
     child.stdout.setEncoding("utf8")
     child.stdout.on("data", (chunk: string) => {
       output += chunk
       if (Buffer.byteLength(output, "utf8") > MAX_SCRIPT_OUTPUT_BYTES * 2)
-        finish(new Error("Script worker output exceeded the safety limit."))
+        finish(new Error("Script worker output exceeded the safety limit."), true)
     })
     child.stderr.on("data", () => undefined)
-    child.on("error", (error) => finish(error))
+    child.on("error", (error) => finish(error, true))
     child.on("close", (code) => {
+      clearTimers()
       if (settled) return
       const line = output.trim().split("\n").filter(Boolean).at(-1)
       if (!line) return finish(new Error(`Script worker exited with code ${code ?? "unknown"}.`))

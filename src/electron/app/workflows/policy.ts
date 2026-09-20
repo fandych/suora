@@ -11,12 +11,15 @@ export type WorkflowEdge = {
 export type WorkflowNode = { id: string; data: WorkflowNodeData }
 
 export function withWorkflowTimeout<T>(operation: Promise<T>, timeoutMs: number, label: string) {
+  let timerId: ReturnType<typeof globalThis.setTimeout> | null = null
   return Promise.race<T>([
     operation,
-    new Promise<T>((_resolve, reject) =>
-      globalThis.setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs} ms.`)), timeoutMs),
-    ),
-  ])
+    new Promise<T>((_resolve, reject) => {
+      timerId = globalThis.setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs} ms.`)), timeoutMs)
+    }),
+  ]).finally(() => {
+    if (timerId) globalThis.clearTimeout(timerId)
+  })
 }
 
 export function getNextWorkflowEdges(

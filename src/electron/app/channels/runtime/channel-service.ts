@@ -48,6 +48,7 @@ import {
 } from "@/electron/app/channels/webhook/channel-webhook-handlers"
 
 const tokenCache = new Map<string, TokenCacheEntry>()
+const MAX_DEDUP_MESSAGE_IDS = 5_000
 
 export class ChannelService {
   private readonly app = express()
@@ -328,9 +329,13 @@ export class ChannelService {
   }
 
   private setupMiddleware() {
+    type RawBodyRequest = express.Request & { rawBody?: string }
+    const captureRawBody = (req: express.Request, _res: express.Response, buffer: Buffer, encoding: BufferEncoding) => {
+      ;(req as RawBodyRequest).rawBody = buffer.toString(encoding || "utf8")
+    }
     this.app.use(express.text({ type: WECHAT_XML_CONTENT_TYPES }))
-    this.app.use(express.json())
-    this.app.use(express.urlencoded({ extended: true }))
+    this.app.use(express.json({ verify: captureRawBody }))
+    this.app.use(express.urlencoded({ extended: true, verify: captureRawBody }))
   }
 
   private setupRoutes() {
@@ -362,6 +367,10 @@ export class ChannelService {
       return
     }
     if (message.id) {
+      if (this.processedMessageIds.size >= MAX_DEDUP_MESSAGE_IDS) {
+        const oldestId = this.processedMessageIds.keys().next().value
+        if (typeof oldestId === "string") this.processedMessageIds.delete(oldestId)
+      }
       this.processedMessageIds.set(message.id, Date.now())
     }
     recordIncomingMessage(channel, message)

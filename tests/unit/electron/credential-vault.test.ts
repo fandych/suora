@@ -30,9 +30,9 @@ describe("credential vault", () => {
     expect(safeStorage.decryptString).not.toHaveBeenCalled()
   })
 
-  it("falls back to plaintext when secure storage is unavailable", () => {
+  it("rejects storing new plaintext credentials when secure storage is unavailable", () => {
     safeStorage.isEncryptionAvailable.mockReturnValue(false)
-    expect(protectCredential("secret")).toBe("secret")
+    expect(() => protectCredential("secret")).toThrow(/cannot be stored safely/)
     expect(() => revealCredential("enc:v1:ZW5jcnlwdGVk")).toThrow(/secure storage is unavailable/)
   })
 })

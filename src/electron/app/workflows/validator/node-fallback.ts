@@ -3,7 +3,12 @@ import type { WorkflowNodeData } from "@/types/workflow"
 import type { WorkflowValidationIssue } from "@/lib/workflow/validator"
 import { createIssue } from "@/lib/workflow/validator/node/types"
 
+const UNSUPPORTED_RUNTIME_KINDS = new Set(["fork", "join", "parallel"])
+
 export function validateFallbackNode(node: Node<WorkflowNodeData>): WorkflowValidationIssue[] {
+  if (UNSUPPORTED_RUNTIME_KINDS.has(String(node.data.kind))) {
+    return [createIssue(node, `Node type '${node.data.kind}' is not supported by the desktop workflow runtime yet.`)]
+  }
   return node.data.kind === "fork" ||
     node.data.kind === "join" ||
     node.data.kind === "parallel" ||

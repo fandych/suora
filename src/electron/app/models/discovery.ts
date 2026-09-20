@@ -129,6 +129,7 @@ async function requestJson(url: string, options: { method?: string; headers?: Re
   const response = await requestHttp(url, {
     ...options,
     ignoreSslErrors: getPreferenceSettingsSnapshot().ignoreSslErrors,
+    timeoutMs: 30_000,
   })
   if (response.status < 200 || response.status >= 300) {
     const data = response.data

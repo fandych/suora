@@ -13,6 +13,12 @@ const runtimeStatuses = new Map<
   string,
   { requestId: string; chatId: string; status: "running" | "completed" | "failed" | "cancelled"; error?: string; errorKind?: string; updatedAt: number }
 >()
+const COMPLETED_STATUS_TTL_MS = 5 * 60_000
+
+function scheduleRuntimeStatusCleanup(requestId: string) {
+  const handle = globalThis.setTimeout(() => runtimeStatuses.delete(requestId), COMPLETED_STATUS_TTL_MS)
+  ;(handle as { unref?: () => void }).unref?.()
+}
 
 function setRuntimeStatus(
   requestId: string,
@@ -22,6 +28,7 @@ function setRuntimeStatus(
   errorKind?: string,
 ) {
   runtimeStatuses.set(requestId, { requestId, chatId, status, error, errorKind, updatedAt: Date.now() })
+  if (status !== "running") scheduleRuntimeStatusCleanup(requestId)
 }
 
 export function getChatRuntimeStatus(requestId: string) {
@@ -78,7 +85,11 @@ export function startChatRuntime(value: unknown, sender: Electron.WebContents) {
     } finally {
       runControllers.delete(requestId)
     }
-  })()
+  })().catch((error) => {
+    const message = error instanceof Error ? error.message : String(error)
+    console.error(`Unhandled chat runtime failure for ${requestId}:`, error)
+    setRuntimeStatus(requestId, input.sessionId, "failed", message, classifyChatRuntimeError(error))
+  })
   return { requestId, sessionId: input.sessionId }
 }
 

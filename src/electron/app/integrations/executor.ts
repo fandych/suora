@@ -57,6 +57,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
   }
   for (const [key, value] of Object.entries(query)) url.searchParams.set(key, String(value))
   applyIntegrationAuth(headers, url, config)
+  const finalUrl = await assertSafeHttpUrl(url.toString())
   const bodyMode = selectedEndpoint?.bodyMode ?? "json"
   const bodyConfig = parseIntegrationJson<Record<string, unknown>>(selectedEndpoint?.bodyJson ?? config.bodyJson, {})
   let body: string | Buffer | undefined
@@ -117,7 +118,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
         .map(([key, value]) => [key, /set-cookie/i.test(key) ? "[REDACTED]" : value]),
     )
   const sentBody = method === "GET" || Buffer.isBuffer(body) ? null : (body ?? null)
-  const response = await requestHttp(url.toString(), {
+  const response = await requestHttp(finalUrl.toString(), {
     method,
     headers,
     body: body && method !== "GET" ? body : undefined,
@@ -137,7 +138,7 @@ async function executeHttpIntegration(payload: IntegrationExecutePayload) {
     ok: status < 400,
     status,
     body: responseBody,
-    request: { url: url.toString(), method, headers: redactHeaders(headers), body: sentBody },
+    request: { url: finalUrl.toString(), method, headers: redactHeaders(headers), body: sentBody },
     response: {
       status,
       headers: responseHeaders(response.headers),

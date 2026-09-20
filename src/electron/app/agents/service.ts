@@ -18,7 +18,8 @@ function parseSettings(value: string | null) {
         ? parsed.disabledSystemAgentIds.filter((id): id is string => typeof id === "string")
         : [],
     )
-  } catch {
+  } catch (error) {
+    console.warn("Failed to parse agent settings. Falling back to an empty disabled set.", error)
     return new Set<string>()
   }
 }

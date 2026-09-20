@@ -1,6 +1,11 @@
 import type { WorkflowExecutionContext } from "@/types/workflow"
 import { interpolate, readPath } from "@/electron/app/workflows/variable-context"
 
+function toFiniteNumber(value: unknown) {
+  const numericValue = typeof value === "number" ? value : Number(value)
+  return Number.isFinite(numericValue) ? numericValue : null
+}
+
 export function evaluateExpression(expression: string, context: WorkflowExecutionContext): boolean {
   const normalized = expression.trim()
   if (!normalized) return false
@@ -39,14 +44,26 @@ export function evaluateExpression(expression: string, context: WorkflowExecutio
       return String(left ?? "") === String(right ?? "")
     case "!=":
       return String(left ?? "") !== String(right ?? "")
-    case ">":
-      return Number(left) > Number(right)
-    case "<":
-      return Number(left) < Number(right)
-    case ">=":
-      return Number(left) >= Number(right)
-    case "<=":
-      return Number(left) <= Number(right)
+    case ">": {
+      const leftNumber = toFiniteNumber(left)
+      const rightNumber = toFiniteNumber(right)
+      return leftNumber !== null && rightNumber !== null ? leftNumber > rightNumber : false
+    }
+    case "<": {
+      const leftNumber = toFiniteNumber(left)
+      const rightNumber = toFiniteNumber(right)
+      return leftNumber !== null && rightNumber !== null ? leftNumber < rightNumber : false
+    }
+    case ">=": {
+      const leftNumber = toFiniteNumber(left)
+      const rightNumber = toFiniteNumber(right)
+      return leftNumber !== null && rightNumber !== null ? leftNumber >= rightNumber : false
+    }
+    case "<=": {
+      const leftNumber = toFiniteNumber(left)
+      const rightNumber = toFiniteNumber(right)
+      return leftNumber !== null && rightNumber !== null ? leftNumber <= rightNumber : false
+    }
     case "contains":
       return String(left ?? "").includes(String(right ?? ""))
     case "startsWith":

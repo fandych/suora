@@ -7,7 +7,11 @@ import type { WebContents } from "electron"
 import { appState } from "@/electron/infrastructure/app-state"
 import { getPreferenceSettingsSnapshot } from "@/electron/app/preferences/runtime"
 import { getProxyAgent } from "@/electron/infrastructure/proxy-service"
+import { resolveSafeHttpTarget } from "@/electron/infrastructure/url-security"
 import type { AiFetchStartPayload } from "@/types/electron"
+
+const DEFAULT_AI_FETCH_TIMEOUT_MS = 60_000
+const MAX_AI_FETCH_TIMEOUT_MS = 10 * 60_000
 
 function sendAiEvent(target: WebContents, payload: Record<string, unknown>) {
   if (!target.isDestroyed()) target.send("ai:fetch:event", payload)
@@ -38,15 +42,23 @@ function formatNetworkError(error: unknown): string {
   return message
 }
 
-export function startAiFetch(target: WebContents, payload: AiFetchStartPayload) {
+function normalizeTimeout(timeoutMs?: number) {
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return DEFAULT_AI_FETCH_TIMEOUT_MS
+  }
+  return Math.min(Math.max(Math.trunc(timeoutMs), 1_000), MAX_AI_FETCH_TIMEOUT_MS)
+}
+
+export async function startAiFetch(target: WebContents, payload: AiFetchStartPayload) {
   const requestId = crypto.randomUUID()
-  const url = new URL(payload.url)
+  const { url, lookup } = await resolveSafeHttpTarget(payload.url)
   const transport = url.protocol === "https:" ? https : http
   const body = payload.bodyBase64
     ? Buffer.from(payload.bodyBase64, "base64")
     : payload.bodyText
       ? Buffer.from(payload.bodyText)
       : undefined
+  const timeoutMs = normalizeTimeout(payload.timeoutMs)
   const preferenceSettings = getPreferenceSettingsSnapshot()
   const proxySettings = appState.currentProxySettings
   const ignoreSsl = proxySettings.ignoreSslErrors === true || preferenceSettings.ignoreSslErrors === true
@@ -61,7 +73,7 @@ export function startAiFetch(target: WebContents, payload: AiFetchStartPayload) 
     ignoreSsl,
     proxyRejectUnauthorized: proxySettings.rejectUnauthorized ?? true,
     bodyBytes: body?.byteLength ?? 0,
-    timeoutMs: payload.timeoutMs ?? 0,
+    timeoutMs,
   })
 
   const proxyAgent = getProxyAgent(url, ignoreSsl)
@@ -88,6 +100,8 @@ export function startAiFetch(target: WebContents, payload: AiFetchStartPayload) 
         headers,
         agent: requestAgent,
         rejectUnauthorized: ignoreSsl ? false : (appState.currentProxySettings.rejectUnauthorized ?? true),
+        ...(!proxyAgent && lookup ? { lookup } : {}),
+        ...(url.protocol === "https:" ? { servername: url.hostname } : {}),
       },
       (response) => {
         responseBytes = 0
@@ -154,11 +168,10 @@ export function startAiFetch(target: WebContents, payload: AiFetchStartPayload) 
       logAiFetch(requestId, "request error", { attempt: attemptCount, responseBytes, error: errMsg })
       sendAiEvent(target, { requestId, type: "error", error: formatNetworkError(error) })
     })
-    if (payload.timeoutMs && payload.timeoutMs > 0)
-      request.setTimeout(payload.timeoutMs, () => {
-        logAiFetch(requestId, "timeout", { attempt: attemptCount, timeoutMs: payload.timeoutMs })
-        request.destroy(new Error("AI request timed out"))
-      })
+    request.setTimeout(timeoutMs, () => {
+      logAiFetch(requestId, "timeout", { attempt: attemptCount, timeoutMs })
+      request.destroy(new Error("AI request timed out"))
+    })
     if (body) request.write(body)
     request.end()
   }

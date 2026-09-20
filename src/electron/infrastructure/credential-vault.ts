@@ -1,12 +1,13 @@
 import { safeStorage } from "electron"
 
 const ENCRYPTED_PREFIX = "enc:v1:"
+const UNAVAILABLE_MESSAGE = "OS secure storage is unavailable, so credentials cannot be stored safely."
 
 export function protectCredential(value: string) {
   if (!value) return ""
   if (value.startsWith(ENCRYPTED_PREFIX)) return value
   if (!safeStorage.isEncryptionAvailable()) {
-    return value
+    throw new Error(UNAVAILABLE_MESSAGE)
   }
   return `${ENCRYPTED_PREFIX}${safeStorage.encryptString(value).toString("base64")}`
 }

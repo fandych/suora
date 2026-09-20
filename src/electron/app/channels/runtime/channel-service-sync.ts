@@ -23,6 +23,9 @@ type SyncContext = {
   sessionWebhooks: Map<string, { url: string; expiresAt: number }>
 }
 
+const INITIAL_WECHAT_POLL_ERROR_BACKOFF_MS = 5_000
+const MAX_WECHAT_POLL_ERROR_BACKOFF_MS = 60_000
+
 export async function syncStreamClients(context: SyncContext, emitMessage: EmitMessage) {
   const activeIds = new Set<string>()
   for (const [id, channel] of context.channels) {
@@ -187,7 +190,7 @@ async function runWeChatPersonalPoller(
   controller: AbortController,
 ) {
   let cursor = await readWeChatPersonalSyncCursor(initialChannel.id)
-  let pollTimeoutMs = 35_000
+  let errorBackoffMs = INITIAL_WECHAT_POLL_ERROR_BACKOFF_MS
   try {
     while (!controller.signal.aborted) {
       const channel = context.channels.get(initialChannel.id)
@@ -201,7 +204,6 @@ async function runWeChatPersonalPoller(
         )
         const previousCursor = cursor
         cursor = result.nextCursor
-        pollTimeoutMs = result.timeoutMs
         await writeWeChatPersonalSyncCursor(channel.id, cursor)
         if (
           (result.response.ret && result.response.ret !== 0) ||
@@ -215,6 +217,7 @@ async function runWeChatPersonalPoller(
         if (cursor !== previousCursor) {
           await writeWeChatPersonalSyncCursor(channel.id, cursor)
         }
+        errorBackoffMs = INITIAL_WECHAT_POLL_ERROR_BACKOFF_MS
         for (const message of result.messages) {
           await emitMessage(channel, message, result.response)
         }
@@ -225,7 +228,8 @@ async function runWeChatPersonalPoller(
           "error",
           `Personal WeChat poll failed: ${error instanceof Error ? error.message : String(error)}`,
         )
-        await new Promise((resolve) => setTimeout(resolve, Math.min(pollTimeoutMs, 5000)))
+        await new Promise((resolve) => setTimeout(resolve, errorBackoffMs))
+        errorBackoffMs = Math.min(errorBackoffMs * 2, MAX_WECHAT_POLL_ERROR_BACKOFF_MS)
       }
     }
   } finally {

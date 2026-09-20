@@ -2,6 +2,8 @@ import net from "node:net"
 import tls from "node:tls"
 import type { ChannelConfigRecord, EmailAction, EmailFilterRule } from "@/types/channel"
 import type { MailAttachment, MailProfile, ParsedEmail } from "@/types/mail"
+import { getPreferenceSettingsSnapshot } from "@/electron/app/preferences/runtime"
+import { appState } from "@/electron/infrastructure/app-state"
 import { httpRequest } from "@/electron/app/channels/runtime/channel-runtime-http"
 import {
   getSystemMailProfile,
@@ -67,6 +69,8 @@ export async function fetchNewEmails(channel: ChannelConfigRecord, lastSeenUid: 
   const pass = channel.emailImapPassword
   const useTls = channel.emailImapTls !== false
   const mailbox = channel.emailImapMailbox || "INBOX"
+  const preferences = getPreferenceSettingsSnapshot()
+  const ignoreSsl = preferences.ignoreSslErrors === true || appState.currentProxySettings.ignoreSslErrors === true
 
   return new Promise((resolve, reject) => {
     let buffer = ""
@@ -83,7 +87,7 @@ export async function fetchNewEmails(channel: ChannelConfigRecord, lastSeenUid: 
       socket.write(`${tag} ${command}\r\n`)
     }
     const socket: net.Socket = useTls
-      ? tls.connect({ host, port, rejectUnauthorized: false })
+      ? tls.connect({ host, port, rejectUnauthorized: !ignoreSsl })
       : net.createConnection({ host, port })
     const timeout = setTimeout(() => {
       socket.destroy()

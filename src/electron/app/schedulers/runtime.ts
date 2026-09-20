@@ -1,5 +1,5 @@
 import crypto from "node:crypto"
-import { desc, eq } from "drizzle-orm"
+import { and, desc, eq, lt } from "drizzle-orm"
 import { getDrizzleDatabase } from "@/drizzle/db"
 import { schedulerRuns, schedulers, workflowVersions } from "@/drizzle/schema"
 import { executeWorkflowCommand } from "@/electron/app/workflows/execute-engine"
@@ -18,6 +18,7 @@ type Scheduler = typeof schedulers.$inferSelect
 let timer: ReturnType<typeof setTimeout> | null = null
 let started = false
 const activeRuns = new Map<string, AbortController>()
+let runtimeStartedAt = 0
 
 function parseField(value: string, min: number, max: number) {
   const values = new Set<number>()
@@ -64,6 +65,17 @@ function nextMinuteDelay() {
 function arm() {
   if (!started) return
   timer = setTimeout(() => void tick().finally(arm), nextMinuteDelay())
+}
+
+async function recoverInterruptedRuns(startedAt: number) {
+  await getDrizzleDatabase()
+    .update(schedulerRuns)
+    .set({
+      status: "interrupted",
+      outputJson: JSON.stringify({ error: "Scheduler run interrupted by a previous process shutdown." }),
+      finishedAt: startedAt,
+    })
+    .where(and(eq(schedulerRuns.status, "running"), lt(schedulerRuns.startedAt, startedAt)))
 }
 
 async function invokeWorkflow(scheduler: Scheduler, input: unknown, signal: AbortSignal) {
@@ -115,6 +127,7 @@ async function invokeWorkflow(scheduler: Scheduler, input: unknown, signal: Abor
 }
 
 async function runScheduler(scheduler: Scheduler) {
+  if (activeRuns.has(scheduler.id)) return
   const now = Date.now()
   let input: unknown
   try {
@@ -124,7 +137,7 @@ async function runScheduler(scheduler: Scheduler) {
   }
   const id = crypto.randomUUID()
   const controller = new AbortController()
-  activeRuns.set(id, controller)
+  activeRuns.set(scheduler.id, controller)
   await getDrizzleDatabase().insert(schedulerRuns).values({
     id,
     schedulerId: scheduler.id,
@@ -155,7 +168,7 @@ async function runScheduler(scheduler: Scheduler) {
   } catch (error) {
     await getDrizzleDatabase().update(schedulerRuns).set({ status: "error", outputJson: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }), finishedAt: Date.now() }).where(eq(schedulerRuns.id, id))
   } finally {
-    activeRuns.delete(id)
+    if (activeRuns.get(scheduler.id) === controller) activeRuns.delete(scheduler.id)
   }
 }
 
@@ -164,7 +177,12 @@ async function tick() {
   const rows = await getDrizzleDatabase().select().from(schedulers).where(eq(schedulers.enabled, true))
   for (const scheduler of rows) {
     try {
-      if (matchesSchedule(scheduler.schedule, minute, scheduler.timeZone)) void runScheduler(scheduler)
+      if (activeRuns.has(scheduler.id)) continue
+      if (matchesSchedule(scheduler.schedule, minute, scheduler.timeZone)) {
+        void runScheduler(scheduler).catch((error) => {
+          console.error(`Scheduler '${scheduler.id}' failed:`, error)
+        })
+      }
     } catch (error) {
       console.error(`Invalid scheduler '${scheduler.id}':`, error)
     }
@@ -175,6 +193,8 @@ export const schedulerRuntime = {
   async start() {
     if (started) return
     started = true
+    runtimeStartedAt = Date.now()
+    await recoverInterruptedRuns(runtimeStartedAt)
     await tick()
     arm()
   },

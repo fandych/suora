@@ -67,27 +67,41 @@ function isPrivate(address) {
 async function run(request) {
   try {
     const logs = []
-    const sandbox = {
+    const consoleApi = Object.freeze({
+      log: (...args) => appendLog(logs, args),
+      warn: (...args) => appendLog(logs, args),
+      error: (...args) => appendLog(logs, args),
+    })
+    const sandbox = Object.assign(Object.create(null), {
       AbortController,
       URL,
       URLSearchParams,
       TextDecoder,
       TextEncoder,
-      console: {
-        log: (...args) => appendLog(logs, args),
-        warn: (...args) => appendLog(logs, args),
-        error: (...args) => appendLog(logs, args),
-      },
+      console: consoleApi,
       fetch: async (input, init) => safeFetch(input, init),
       input: parseInput(request.inputJson),
       structuredClone,
+    })
+    for (const key of ["Buffer", "exports", "global", "module", "process", "require"]) {
+      Object.defineProperty(sandbox, key, {
+        value: undefined,
+        configurable: false,
+        enumerable: false,
+        writable: false,
+      })
     }
-    const context = createContext(sandbox)
-    const handlerName = JSON.stringify(request.handler || "main")
-    const script = new Script(
-      `"use strict";\n${request.source}\n(async () => { const handlerFn = globalThis[${handlerName}]; if (typeof handlerFn !== 'function') return { ok: false, error: 'Handler not found' }; return await handlerFn(input); })();`,
-    )
-    const output = await script.runInContext(context, { timeout: request.timeoutMs })
+    const context = createContext(sandbox, {
+      codeGeneration: { strings: false, wasm: false },
+      name: "suora-script-sandbox",
+    })
+    new Script(`"use strict";\n${request.source}`).runInContext(context, { timeout: request.timeoutMs })
+    const handler = sandbox[request.handler || "main"]
+    if (typeof handler !== "function") {
+      respond({ ok: false, error: "Handler not found" })
+      return
+    }
+    const output = await Promise.resolve(handler(sandbox.input))
     const body = JSON.stringify({ output, logs }, null, 2)
     if (Buffer.byteLength(body) > MAX_OUTPUT_BYTES) throw new Error("Script output exceeds the 1 MB safety limit.")
     respond({ ok: true, body })

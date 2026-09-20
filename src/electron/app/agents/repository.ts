@@ -5,8 +5,8 @@ import { agentVersions, agents, appMeta } from "@/drizzle/schema"
 
 const defaultConfig = JSON.stringify({
   instructions: "You are a helpful agent.",
-  providerId: "provider-openai",
-  modelId: "gpt-5",
+  providerId: "",
+  modelId: "",
   maxSteps: 100,
   workflowIds: [],
   skillIds: [],

@@ -67,6 +67,28 @@ export const providerDiscoverySchema = z.object({
   baseUrl: z.string().trim().max(8192),
   apiKey: z.string().max(16 * 1024),
 })
+export const proxySettingsSchema = z.object({
+  enabled: z.boolean(),
+  type: z.enum(["http", "https", "socks5"]),
+  host: z.string().trim().max(512),
+  port: z.number().int().min(0).max(65535),
+  username: z.string().max(1024).optional(),
+  password: z.string().max(16 * 1024).optional(),
+  rejectUnauthorized: z.boolean().optional(),
+  ignoreSslErrors: z.boolean().optional(),
+})
+export const aiFetchStartSchema = z
+  .object({
+    url: z.string().trim().url().max(8192),
+    method: z.string().trim().min(1).max(16).optional(),
+    headers: z.record(z.string().max(256), z.string().max(8192)).optional(),
+    bodyText: z.string().max(8 * 1024 * 1024).optional(),
+    bodyBase64: z.string().max(12 * 1024 * 1024).optional(),
+    timeoutMs: z.number().finite().int().positive().max(10 * 60_000).optional(),
+  })
+  .refine((value) => !(value.bodyText && value.bodyBase64), {
+    message: "Provide either bodyText or bodyBase64, not both.",
+  })
 export const versionedResourceSaveSchema = z.object({
   id: entityIdSchema,
   title: z.string().trim().max(512),

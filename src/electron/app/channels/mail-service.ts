@@ -57,7 +57,7 @@ export async function sendMail({
   })
   try {
     await transporter.sendMail({
-      from: profile.fromName ? `"${profile.fromName}" <${profile.fromAddress}>` : profile.fromAddress,
+      from: profile.fromName ? { name: profile.fromName, address: profile.fromAddress } : profile.fromAddress,
       to: toAddress,
       subject,
       text: content,

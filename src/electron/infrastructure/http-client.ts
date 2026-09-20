@@ -1,8 +1,10 @@
 import http from "node:http"
 import https from "node:https"
+import net from "node:net"
 import { getPreferenceSettingsSnapshot } from "@/electron/app/preferences/runtime"
 import { appState } from "@/electron/infrastructure/app-state"
 import { getProxyAgent } from "@/electron/infrastructure/proxy-service"
+import { resolveSafeHttpTarget } from "@/electron/infrastructure/url-security"
 
 export type HttpRequestOptions = {
   method?: string
@@ -21,7 +23,7 @@ export type HttpResponse = {
 
 export async function configuredFetch(input: string | URL | Request, init: RequestInit = {}): Promise<Response> {
   const request = input instanceof Request ? input : new Request(input, init)
-  const parsedUrl = parseHttpUrl(request.url)
+  const { url: parsedUrl, lookup } = await resolveSafeHttpTarget(request.url)
   const preferenceSettings = getPreferenceSettingsSnapshot()
   const proxySettings = appState.currentProxySettings
   const ignoreSsl = proxySettings.ignoreSslErrors === true || preferenceSettings.ignoreSslErrors === true
@@ -41,6 +43,8 @@ export async function configuredFetch(input: string | URL | Request, init: Reque
         headers: Object.fromEntries(request.headers),
         agent,
         rejectUnauthorized: ignoreSsl ? false : (proxySettings.rejectUnauthorized ?? true),
+        ...(!getProxyAgent(parsedUrl, ignoreSsl) && lookup ? { lookup } : {}),
+        ...(parsedUrl.protocol === "https:" && net.isIP(parsedUrl.hostname) === 0 ? { servername: parsedUrl.hostname } : {}),
       },
       (response) => {
         const bodyStream = new ReadableStream<Uint8Array>({
@@ -66,7 +70,7 @@ export async function configuredFetch(input: string | URL | Request, init: Reque
 }
 
 export async function requestHttp(url: string, options: HttpRequestOptions = {}): Promise<HttpResponse> {
-  const parsedUrl = parseHttpUrl(url)
+  const { url: parsedUrl, lookup } = await resolveSafeHttpTarget(url)
   const proxySettings = appState.currentProxySettings
   const ignoreSsl = proxySettings.ignoreSslErrors === true || options.ignoreSslErrors === true
   const transport = parsedUrl.protocol === "https:" ? https : http
@@ -84,6 +88,8 @@ export async function requestHttp(url: string, options: HttpRequestOptions = {})
         agent,
         rejectUnauthorized: ignoreSsl ? false : (proxySettings.rejectUnauthorized ?? true),
         signal: options.signal,
+        ...(!getProxyAgent(parsedUrl, ignoreSsl) && lookup ? { lookup } : {}),
+        ...(parsedUrl.protocol === "https:" && net.isIP(parsedUrl.hostname) === 0 ? { servername: parsedUrl.hostname } : {}),
       },
       (response) => {
         const chunks: Buffer[] = []
@@ -103,16 +109,6 @@ export async function requestHttp(url: string, options: HttpRequestOptions = {})
     if (options.body) request.write(options.body)
     request.end()
   })
-}
-function parseHttpUrl(value: string) {
-  let url: URL
-  try {
-    url = new URL(value)
-  } catch {
-    throw new Error(`Invalid URL: ${value}`)
-  }
-  if (url.protocol !== "http:" && url.protocol !== "https:") throw new Error("Only HTTP and HTTPS URLs are supported.")
-  return url
 }
 function parseResponseBody(text: string): unknown {
   if (!text) return null

@@ -19,6 +19,11 @@ export function getProxyUrl(settings: ProxySettings) {
   return `${settings.type}://${auth}${settings.host}:${settings.port}`
 }
 
+export function getProxyDisplayUrl(settings: ProxySettings) {
+  const auth = settings.username ? `${encodeURIComponent(settings.username)}:***@` : ""
+  return `${settings.type}://${auth}${settings.host}:${settings.port}`
+}
+
 export function getProxyAgent(targetUrl: URL, ignoreSsl = false) {
   const settings = appState.currentProxySettings
   if (!settings.enabled || !settings.host || !settings.port) {

@@ -10,6 +10,18 @@ type ToolPreferenceSettings = {
   commandBlacklist?: string[]
   globalEnvironmentVariables?: Array<{ key?: string; value?: string }>
 }
+
+function normalizePathForComparison(value: string) {
+  const normalized = path.normalize(path.resolve(value))
+  return process.platform === "win32" ? normalized.toLowerCase() : normalized
+}
+
+function isPathWithinRoot(root: string, target: string) {
+  const normalizedRoot = normalizePathForComparison(root)
+  const normalizedTarget = normalizePathForComparison(target)
+  return normalizedTarget === normalizedRoot || normalizedTarget.startsWith(`${normalizedRoot}${path.sep}`)
+}
+
 export async function readToolPreferences(): Promise<ToolPreferenceSettings> {
   const value = await getAppMetaValue("preference_settings")
   try {
@@ -29,13 +41,15 @@ export function normalizeRuleList(value: unknown) {
 export function resolveWorkspaceTarget(relativePath = ".") {
   const root = path.resolve(getWorkspacePath())
   const target = path.resolve(root, relativePath)
-  if (target !== root && !target.startsWith(`${root}${path.sep}`))
+  if (!isPathWithinRoot(root, target))
     throw new Error("Path must stay within the workspace root.")
   return target
 }
 export async function enforceRelativePathPolicy(relativePath: string | undefined, target: string) {
   const preferences = await readToolPreferences()
-  const relative = path.relative(path.resolve(getWorkspacePath()), target).replace(/\\/g, "/").toLowerCase()
+  const root = path.resolve(getWorkspacePath())
+  if (!isPathWithinRoot(root, target)) throw new Error("Path must stay within the workspace root.")
+  const relative = path.relative(root, target).replace(/\\/g, "/").toLowerCase()
   const rules = normalizeRuleList(preferences.fileAccessDirectories)
   if (!rules.length) return
   const matches = rules.some((rule) => {

@@ -1,3 +1,5 @@
+import path from "node:path"
+
 export type IntegrationExecutePayload = {
   integrationId?: string
   kind: "http" | "scripts" | "mcp"
@@ -37,6 +39,11 @@ export type HttpIntegrationConfig = {
 }
 
 const RESTRICTED_HEADER_NAMES = [/^authorization$/i, /^proxy-authorization$/i, /^cookie$/i, /^host$/i, /^connection$/i, /^content-length$/i, /^transfer-encoding$/i, /^upgrade$/i, /^proxy-/i, /^sec-/i, /^x-forwarded-/i]
+
+function sanitizeMultipartFilename(value?: string) {
+  const baseName = path.basename((value || "upload").trim() || "upload")
+  return baseName.replace(/[\x00-\x1f\x7f"\\]/g, "_")
+}
 
 export function isRestrictedHeaderName(name: string) {
   const normalized = name.trim().toLowerCase()
@@ -105,7 +112,7 @@ export function buildMultipartIntegrationBody(fields: Record<string, unknown>, b
     const file = value as UploadedIntegrationFile
     chunks.push(Buffer.from(`--${boundary}\r\n`, "utf8"))
     if (file?.__suoraFile && file.dataBase64) {
-      const safeFilename = (file.name || "upload").replaceAll(/["\\\r\n]/g, "_")
+      const safeFilename = sanitizeMultipartFilename(file.name)
       chunks.push(
         Buffer.from(
           `Content-Disposition: form-data; name="${key}"; filename="${safeFilename}"\r\nContent-Type: ${file.type || "application/octet-stream"}\r\n\r\n`,

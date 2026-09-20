@@ -12,6 +12,8 @@ type QueueItem = {
   nextRetryAt: number
 }
 
+const MAX_RETRY_DELAY_MS = 5 * 60 * 1000
+
 export class ChannelMessageQueue {
   private readonly queue: QueueItem[] = []
   private readonly lastSentPerChannel = new Map<string, number>()
@@ -62,7 +64,7 @@ export class ChannelMessageQueue {
     if (result.success || item.retryCount >= item.maxRetries - 1) return
 
     item.retryCount += 1
-    item.nextRetryAt = Date.now() + 2 ** item.retryCount * 1000
+    item.nextRetryAt = Date.now() + Math.min(2 ** item.retryCount * 1000, MAX_RETRY_DELAY_MS)
     this.queue.push(item)
   }
 
