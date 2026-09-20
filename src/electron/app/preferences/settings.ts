@@ -169,7 +169,7 @@ export function sanitizePreferenceSettings(
     commandAllowlist: normalizeStringArray(next.commandAllowlist),
     mailServiceEnabled: Boolean(next.mailServiceEnabled),
     mailServerHost: next.mailServerHost.trim(),
-    mailServerPort: Math.max(1, Number(next.mailServerPort) || DEFAULT_PREFERENCES.mailServerPort),
+    mailServerPort: Math.min(65535, Math.max(1, Number(next.mailServerPort) || DEFAULT_PREFERENCES.mailServerPort)),
     mailServerUsername: next.mailServerUsername.trim(),
     mailServerPassword: next.mailServerPassword,
     mailServerFrom: next.mailServerFrom.trim(),

@@ -75,7 +75,7 @@ export async function saveModel(payload: {
     .limit(1)
   const nextApiKey = payload.apiKey
     ? protectCredential(payload.apiKey)
-    : payload.apiKeyConfigured && typeof existing?.apiKey === "string"
+    : payload.apiKeyConfigured !== false && typeof existing?.apiKey === "string"
       ? existing.apiKey
       : ""
   const values = {

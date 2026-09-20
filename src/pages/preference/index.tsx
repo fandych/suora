@@ -16,6 +16,8 @@ import PreferenceGlobalEnvironmentPanel from "@/pages/preference/components/pref
 import PreferenceMailPanel from "@/pages/preference/components/preference-mail-panel"
 import PreferenceSecurityPanel from "@/pages/preference/components/preference-security-panel"
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
 const PreferencePage = () => {
   const { section } = useParams()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => PreferenceApi.get(), [])
@@ -118,6 +120,14 @@ const PreferencePage = () => {
       showToast({
         title: "Recipient required",
         description: "Provide a test recipient email address before sending.",
+        type: "warning",
+      })
+      return
+    }
+    if (!EMAIL_PATTERN.test(recipient)) {
+      showToast({
+        title: "Invalid recipient",
+        description: "Provide a valid recipient email address before sending.",
         type: "warning",
       })
       return

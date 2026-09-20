@@ -138,8 +138,9 @@ export function ModelFormDialog({ form, mode, open, onFormChange, onOpenChange, 
               <Input
                 id="context-window"
                 type="number"
+                min="1"
                 value={String(form.contextWindow)}
-                onChange={(event) => onFormChange({ ...form, contextWindow: Number(event.target.value) || 0 })}
+                onChange={(event) => onFormChange({ ...form, contextWindow: Math.max(1, Number(event.target.value) || 1) })}
               />
             </div>
             <div className="space-y-2">
@@ -147,8 +148,9 @@ export function ModelFormDialog({ form, mode, open, onFormChange, onOpenChange, 
               <Input
                 id="max-output"
                 type="number"
+                min="1"
                 value={String(form.maxOutputTokens)}
-                onChange={(event) => onFormChange({ ...form, maxOutputTokens: Number(event.target.value) || 0 })}
+                onChange={(event) => onFormChange({ ...form, maxOutputTokens: Math.max(1, Number(event.target.value) || 1) })}
               />
             </div>
           </div>

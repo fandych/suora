@@ -47,11 +47,13 @@ export class DingTalkStreamClient {
   private reconnectAttempts = 0
   private readonly maxReconnectAttempts = 50
   private readonly reconnectBaseDelay = 3000
+  private readonly maxProcessedEvents = 5000
   private pingInterval: ReturnType<typeof setInterval> | null = null
   private dedupCleanupInterval: ReturnType<typeof setInterval> | null = null
   private readonly processedEvents = new Map<string, number>()
   private readonly dedupTTL = 5 * 60 * 1000
   private closed = false
+  private lastPongAt = 0
 
   constructor(channel: ChannelConfigRecord) {
     this.channel = channel
@@ -157,8 +159,13 @@ export class DingTalkStreamClient {
         settled = true
         clearTimeout(connectTimer)
         this.reconnectAttempts = 0
+        this.lastPongAt = Date.now()
         this.startHeartbeat()
         resolve()
+      })
+
+      this.ws.on("pong", () => {
+        this.lastPongAt = Date.now()
       })
 
       this.ws.on("message", (raw) => {
@@ -264,8 +271,13 @@ export class DingTalkStreamClient {
 
   private startHeartbeat() {
     this.stopHeartbeat()
+    this.lastPongAt = Date.now()
     this.pingInterval = setInterval(() => {
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (this.lastPongAt > 0 && Date.now() - this.lastPongAt > 60_000) {
+          this.ws.terminate()
+          return
+        }
         this.ws.ping()
       }
     }, 30_000)
@@ -291,6 +303,11 @@ export class DingTalkStreamClient {
         if (timestamp < cutoff) {
           this.processedEvents.delete(id)
         }
+      }
+      while (this.processedEvents.size > this.maxProcessedEvents) {
+        const oldestId = this.processedEvents.keys().next().value
+        if (typeof oldestId !== "string") break
+        this.processedEvents.delete(oldestId)
       }
     }, 60_000)
   }

@@ -1,11 +1,21 @@
 import { z } from "zod"
 import { entityIdSchema } from "@/electron/preload/system/ipc-input-schemas"
 
+function isValidBaseUrl(value: string) {
+  if (!value.trim()) return true
+  try {
+    const url = new URL(value)
+    return url.protocol === "http:" || url.protocol === "https:"
+  } catch {
+    return false
+  }
+}
+
 export const providerCreateSchema = z.object({
   title: z.string().trim().max(512).optional(),
   description: z.string().max(4096).optional(),
   providerType: z.string().trim().min(1).max(128).optional(),
-  baseUrl: z.string().trim().max(8192).optional(),
+  baseUrl: z.string().trim().max(8192).refine(isValidBaseUrl, "Invalid base URL.").optional(),
   apiKey: z
     .string()
     .max(16 * 1024)
@@ -22,16 +32,16 @@ export const providerSaveSchema = z.object({
   title: z.string().trim().max(512),
   description: z.string().max(4096),
   providerType: z.string().trim().min(1).max(128),
-  baseUrl: z.string().trim().max(8192),
+  baseUrl: z.string().trim().max(8192).refine(isValidBaseUrl, "Invalid base URL."),
   apiKey: z.string().max(16 * 1024),
-  apiKeyConfigured: z.boolean().optional(),
+  apiKeyConfigured: z.boolean(),
   modelsJson: z.string().max(2 * 1024 * 1024),
   enabled: z.boolean(),
 })
 export const providerDiscoverySchema = z.object({
   id: entityIdSchema.optional(),
   providerType: z.string().trim().min(1).max(128),
-  baseUrl: z.string().trim().max(8192),
+  baseUrl: z.string().trim().max(8192).refine(isValidBaseUrl, "Invalid base URL."),
   apiKey: z.string().max(16 * 1024),
   apiKeyConfigured: z.boolean().optional(),
 })

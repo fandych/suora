@@ -33,7 +33,8 @@ function parseModels(value: string) {
   try {
     const parsed = JSON.parse(value) as unknown
     return Array.isArray(parsed) ? (parsed as ProviderModelRecord[]) : []
-  } catch {
+  } catch (error) {
+    console.warn("Failed to parse provider models JSON. Falling back to an empty model list.", error)
     return []
   }
 }

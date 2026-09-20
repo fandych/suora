@@ -15,7 +15,10 @@ export function validateDocumentRetrievalNode(
   )
     issues.push(createIssue(node, "Bound document no longer exists in the workspace."))
   issues.push(...requireValue(node, node.data.queryExpression, "Document retrieval node needs a search question."))
-  if (!Number.isInteger(node.data.resultLimit) || (node.data.resultLimit ?? 0) < 1 || (node.data.resultLimit ?? 0) > 20)
-    issues.push(createIssue(node, "Document retrieval result count must be between 1 and 20."))
+  if (node.data.resultLimit == null) {
+    issues.push(createIssue(node, "Document retrieval node needs a result count between 1 and 20."))
+  } else if (!Number.isInteger(node.data.resultLimit) || node.data.resultLimit < 1 || node.data.resultLimit > 20) {
+    issues.push(createIssue(node, "Document retrieval result count must be an integer between 1 and 20."))
+  }
   return issues
 }

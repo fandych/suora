@@ -35,6 +35,20 @@ export class CustomWebSocketClient {
       throw new Error("Custom WebSocket URL is empty")
     }
 
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    if (this.socket) {
+      try {
+        this.socket.removeAllListeners()
+        this.socket.close(1000, "Reconnect")
+      } catch {
+        // Ignore close errors while replacing an existing socket.
+      }
+      this.socket = null
+    }
+
     this.closed = false
     const protocols = this.channel.customWebsocketProtocol?.trim()
       ? [this.channel.customWebsocketProtocol.trim()]

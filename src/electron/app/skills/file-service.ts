@@ -85,11 +85,13 @@ export function parseSkillFiles(value: string | undefined): SkillFileRecord[] {
             executable: Boolean(candidate.executable),
           },
         ]
-      } catch {
+      } catch (error) {
+        console.warn(`Skipping invalid skill file entry '${candidate.path}'.`, error)
         return []
       }
     })
-  } catch {
+  } catch (error) {
+    console.warn("Failed to parse skill files JSON. Falling back to an empty file list.", error)
     return []
   }
 }

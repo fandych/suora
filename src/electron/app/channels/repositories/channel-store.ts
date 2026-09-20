@@ -208,5 +208,6 @@ export function updateChannelDetail(channelId: string, updater: (detail: Channel
     return null
   }
 
+  // This read-modify-write helper must stay synchronous end-to-end; do not introduce await inside updater paths.
   return saveChannelDetail(updater(current))
 }

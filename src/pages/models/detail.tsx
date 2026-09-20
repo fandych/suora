@@ -119,6 +119,14 @@ const ModelsDetailPage = () => {
     if (!draft || !persistedProvider || !modelForm.id.trim()) {
       return
     }
+    if (modelForm.contextWindow < 1 || modelForm.maxOutputTokens < 1) {
+      showToast({
+        title: "Invalid model limits",
+        description: "Context window and max output tokens must both be at least 1.",
+        type: "warning",
+      })
+      return
+    }
 
     const nextModel = {
       id: modelForm.id.trim(),
