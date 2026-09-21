@@ -59,16 +59,14 @@ export async function createDocument() {
     const database = getDrizzleDatabase()
     const id = crypto.randomUUID()
     const versionId = crypto.randomUUID()
-    const folderId = crypto.randomUUID()
     const now = Date.now()
     const pages = [
-      { id: folderId, title: "guides", content: "", type: "folder", parentId: null },
       {
         id: crypto.randomUUID(),
         title: "overview.md",
         content: "# New document\n\n## Overview\n\nStart writing here.\n",
         type: "document",
-        parentId: folderId,
+        parentId: null,
       },
     ]
     await database.insert(documents).values({ id, title: "New document", summary: "", enabled: true, updatedAt: now })

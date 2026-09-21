@@ -1,6 +1,5 @@
 import { Input } from "@/components/ui/input"
 import { NativeSelectOption } from "@/components/ui/native-select"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import type { ChangeEvent } from "react"
 import type { WorkflowNodeData } from "@/types/workflow"
 import { WorkflowField, WorkflowPanelSection } from "@/pages/workflows/components/workflow-field"
@@ -15,16 +14,8 @@ export function NodeParallelForm({
 }) {
   return (
     <WorkflowPanelSection title="Parallel execution">
-      <Alert>
-        <AlertTitle>Desktop runtime support is pending</AlertTitle>
-        <AlertDescription>
-          Parallel nodes are validated as unsupported during execution. Concurrency options stay read-only until the
-          runtime semantics land.
-        </AlertDescription>
-      </Alert>
       <WorkflowField label="Concurrency">
         <Input
-          disabled
           type="number"
           min={2}
           max={20}
@@ -33,7 +24,6 @@ export function NodeParallelForm({
         />
       </WorkflowField>
       <WorkflowNodeSelect
-        disabled
         label="Merge strategy"
         value={node.mergeStrategy ?? "all-settled"}
         onChange={(event: ChangeEvent<HTMLSelectElement>) =>

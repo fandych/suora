@@ -5,8 +5,7 @@ import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
 import { ChatMessageActions } from "@/pages/chats/components/chat-message-actions"
 import { ChatRichContent } from "@/pages/chats/components/chat-rich-content"
-import { ChatToolActivityGroup } from "@/pages/chats/components/chat-tool-activity-group"
-import type { ChatToolActivity } from "@/pages/chats/components/chat-tool-event-item"
+import { ChatToolEventItem, type ChatToolActivity } from "@/pages/chats/components/chat-tool-event-item"
 import { getProviderLogo } from "@/pages/components/provider-logo"
 import type { AssistantResponsePart } from "@/types/chat"
 
@@ -22,7 +21,7 @@ type ChatAssistantResponseGroupProps = {
 
 type AssistantRenderSection =
   | { id: string; type: "text"; content: string; isPending?: boolean }
-  | { id: string; type: "tool-group"; activities: ChatToolActivity[] }
+  | { id: string; type: "tool"; activity: ChatToolActivity }
 
 function buildActionContent(parts: AssistantResponsePart[]) {
   return parts
@@ -55,27 +54,35 @@ function buildActionContent(parts: AssistantResponsePart[]) {
 
 function buildSections(parts: AssistantResponsePart[]): AssistantRenderSection[] {
   const sections: AssistantRenderSection[] = []
-  const mergedText = parts
-    .filter((part): part is Extract<AssistantResponsePart, { type: "text" }> => part.type === "text")
-    .map((part) => part.content.trim())
-    .filter(Boolean)
-    .join("\n\n---\n\n")
-  const hasPendingText = parts.some((part) => part.type === "text" && part.isPending)
-  const toolActivities = parts
-    .filter((part): part is Extract<AssistantResponsePart, { type: "tool" }> => part.type === "tool")
-    .map((part) => part.activity)
+  let bufferedTextParts: Array<Extract<AssistantResponsePart, { type: "text" }>> = []
 
-  if (mergedText || hasPendingText) {
-    sections.push({ id: "assistant-text-merged", type: "text", content: mergedText, isPending: hasPendingText })
-  }
-
-  if (toolActivities.length > 0) {
+  const flushTextBuffer = () => {
+    if (bufferedTextParts.length === 0) return
+    const content = bufferedTextParts
+      .map((part) => part.content.trim())
+      .filter(Boolean)
+      .join("\n\n---\n\n")
+    const isPending = bufferedTextParts.some((part) => part.isPending)
     sections.push({
-      id: toolActivities.map((activity) => activity.id).join(":"),
-      type: "tool-group",
-      activities: toolActivities,
+      id: bufferedTextParts.map((part) => part.id).join(":"),
+      type: "text",
+      content,
+      isPending,
     })
+    bufferedTextParts = []
   }
+
+  for (const part of parts) {
+    if (part.type === "text") {
+      bufferedTextParts.push(part)
+      continue
+    }
+
+    flushTextBuffer()
+    sections.push({ id: part.activity.id, type: "tool", activity: part.activity })
+  }
+
+  flushTextBuffer()
 
   return sections
 }
@@ -110,11 +117,10 @@ export function ChatAssistantResponseGroup({
         <div className="flex max-w-[min(100%,56rem)] min-w-0 flex-col gap-3 self-start">
           {sections.map((section) => (
             <Fragment key={section.id}>
-              {section.type === "tool-group" ? (
-                <ChatToolActivityGroup
-                  activities={section.activities}
-                  messageId={messageId}
-                  onRetryTool={onRetryTool}
+              {section.type === "tool" ? (
+                <ChatToolEventItem
+                  activity={section.activity}
+                  onRetry={onRetryTool ? (activity) => onRetryTool(messageId, activity) : undefined}
                 />
               ) : (
                 <Bubble variant="outline" align="start" className="max-w-full">

@@ -28,17 +28,7 @@ export type WorkflowValidationContext = NodePropertyValidationContext & {
   edges: unknown[]
 }
 
-const unsupportedWorkflowNodeKinds = new Set<WorkflowNodeData["kind"]>(["fork", "join", "loop", "parallel"])
-
 export function validateWorkflowNodes(input: WorkflowValidationContext): WorkflowValidationIssue[] {
-  const unsupportedIssues = input.nodes
-    .filter((node) => unsupportedWorkflowNodeKinds.has(node.data.kind))
-    .map((node) => ({
-      nodeId: node.id,
-      label: node.data.label || node.id,
-      message: `Workflow node '${node.data.kind}' is disabled until control-flow runtime support is implemented.`,
-      severity: "error" as const,
-    }))
   const nodeIssues = input.nodes.flatMap((node) => {
     switch (node.data.kind) {
       case "start":
@@ -83,5 +73,5 @@ export function validateWorkflowNodes(input: WorkflowValidationContext): Workflo
         return validateIntegrationNode(node, input)
     }
   })
-  return [...getWorkflowStructureIssues(input.nodes, input.edges as never[]), ...unsupportedIssues, ...nodeIssues]
+  return [...getWorkflowStructureIssues(input.nodes, input.edges as never[]), ...nodeIssues]
 }

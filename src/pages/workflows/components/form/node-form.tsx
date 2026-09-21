@@ -19,6 +19,7 @@ import { NodeSerialForm } from "@/pages/workflows/components/form/node-serial"
 import { NodeStartForm } from "@/pages/workflows/components/form/node-start"
 import { NodeTemplateForm } from "@/pages/workflows/components/form/node-template"
 import { NodeVariableAssignerForm } from "@/pages/workflows/components/form/node-variable-assigner"
+import { NodeWikiRetrievalForm } from "@/pages/workflows/components/form/node-wiki-retrieval"
 import { NodeDefaultForm } from "@/pages/workflows/components/form/node-default"
 
 export function NodeForm({
@@ -70,6 +71,8 @@ export function NodeForm({
           suggestions={suggestions}
         />
       )
+    case "wiki-retrieval":
+      return <NodeWikiRetrievalForm node={node} documents={documents} updateNode={updateNode} suggestions={suggestions} />
     case "http":
     case "toolset":
     case "webhook":

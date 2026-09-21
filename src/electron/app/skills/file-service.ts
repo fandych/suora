@@ -65,12 +65,54 @@ export function assertSafeSkillFilePath(value: string, allowSkillManifest = true
   return normalized
 }
 
+function normalizeLegacySkillTopLevelPath(value: string) {
+  const normalized = normalizeSkillPath(value)
+  if (normalized === "other") return "references"
+  if (normalized.startsWith("other/")) return `references/${normalized.slice("other/".length)}`
+  return normalized
+}
+
+function getUniqueNormalizedSkillPath(pathValue: string, seen: Set<string>) {
+  if (!seen.has(pathValue)) return pathValue
+  const dotIndex = pathValue.lastIndexOf(".")
+  const slashIndex = pathValue.lastIndexOf("/")
+  const hasExtension = dotIndex > slashIndex
+  const base = hasExtension ? pathValue.slice(0, dotIndex) : pathValue
+  const extension = hasExtension ? pathValue.slice(dotIndex) : ""
+  let index = 2
+  let candidate = `${base}-legacy-${index}${extension}`
+  while (seen.has(candidate)) {
+    index += 1
+    candidate = `${base}-legacy-${index}${extension}`
+  }
+  return candidate
+}
+
+export function normalizeLegacySkillFiles(files: SkillFileRecord[]) {
+  const seen = new Set<string>()
+  const normalizedFiles: SkillFileRecord[] = []
+  for (const file of files) {
+    const candidatePath = normalizeLegacySkillTopLevelPath(file.path)
+    const nextPath =
+      file.kind === "directory"
+        ? seen.has(candidatePath)
+          ? ""
+          : candidatePath
+        : getUniqueNormalizedSkillPath(candidatePath, seen)
+    if (!nextPath) continue
+    seen.add(nextPath)
+    normalizedFiles.push({ ...file, path: nextPath })
+  }
+  return normalizedFiles
+}
+
 export function parseSkillFiles(value: string | undefined): SkillFileRecord[] {
   if (!value) return []
   try {
     const parsed = JSON.parse(value) as unknown
     if (!Array.isArray(parsed)) return []
-    return parsed.flatMap((item): SkillFileRecord[] => {
+    return normalizeLegacySkillFiles(
+      parsed.flatMap((item): SkillFileRecord[] => {
       if (!item || typeof item !== "object") return []
       const candidate = item as Partial<SkillFileRecord>
       if (typeof candidate.path !== "string" || typeof candidate.content !== "string") return []
@@ -89,7 +131,8 @@ export function parseSkillFiles(value: string | undefined): SkillFileRecord[] {
         console.warn(`Skipping invalid skill file entry '${candidate.path}'.`, error)
         return []
       }
-    })
+      }),
+    )
   } catch (error) {
     console.warn("Failed to parse skill files JSON. Falling back to an empty file list.", error)
     return []

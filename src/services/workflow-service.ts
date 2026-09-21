@@ -8,6 +8,7 @@ import type {
   WorkflowRunStartCommand,
   WorkflowSummary,
 } from "@/types/workflow"
+import { normalizeWorkflowDefinition } from "@/electron/app/workflows/normalizer"
 import { requireAppBridge } from "@/services/bridge"
 import { getVersionLabel } from "@/services/versioning"
 import { parseArrayJson, parseJson } from "@/lib/serialization/json"
@@ -34,16 +35,19 @@ function toWorkflowDetail(payload: RawWorkflowPayload, versionId?: string): Work
     label: getVersionLabel(version),
   })) as VersionOption[]
   const selected = payload.versions.find((version) => version.id === versionId) ?? payload.versions[0]
+  const normalizedDefinition = normalizeWorkflowDefinition(
+    parseJson(selected?.definitionJson, {
+      nodes: [],
+      edges: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+    } as WorkflowDefinition),
+  ) as WorkflowDefinition
   return {
     workflow: payload.workflow,
     versions,
     latestVersion: versions[0],
     selectedVersion: versions.find((version) => version.id === selected?.id) ?? versions[0],
-    definition: parseJson(selected?.definitionJson, {
-      nodes: [],
-      edges: [],
-      viewport: { x: 0, y: 0, zoom: 1 },
-    } as WorkflowDefinition),
+    definition: normalizedDefinition,
     invocations: payload.invocations.map((item) => ({
       ...item,
       traces: parseArrayJson<WorkflowInvocationRecord["traces"][number]>(item.traceJson, []),

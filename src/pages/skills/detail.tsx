@@ -59,7 +59,7 @@ function isVisibleSkillEntry(path: string, collapsedPaths: Set<string>) {
 }
 
 function isCoreSkillNode(path: string) {
-  return path === SKILL_ROOT_PATH || path === "SKILL.md" || ["scripts", "references", "assets", "other"].includes(path)
+  return path === SKILL_ROOT_PATH || path === "SKILL.md" || ["scripts", "references", "assets"].includes(path)
 }
 
 function buildSkillSnapshot(detail: SkillDetail | null) {
@@ -91,7 +91,7 @@ const SkillsDetailPage = () => {
   const [selectedFilePath, setSelectedFilePath] = useState("")
   const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set())
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
-  const [uploadTargetPath, setUploadTargetPath] = useState("other")
+  const [uploadTargetPath, setUploadTargetPath] = useState("references")
   const [hasLoadedInitialState, setHasLoadedInitialState] = useState(false)
   const [entryDialogValue, setEntryDialogValue] = useState("")
   const [entryDialogError, setEntryDialogError] = useState("")
@@ -204,7 +204,7 @@ const SkillsDetailPage = () => {
         return
       }
       if (!isSafeSkillResourcePath(normalizedNext)) {
-        setEntryDialogError("Use SKILL.md or a path under scripts, references, assets, or other.")
+        setEntryDialogError("Use SKILL.md or a path under scripts, references, or assets.")
         return
       }
       if (
@@ -231,11 +231,11 @@ const SkillsDetailPage = () => {
     }
 
     const parentPath =
-      entryDialogMode.parentPath === SKILL_ROOT_PATH ? "other" : (entryDialogMode.parentPath ?? "other")
+      entryDialogMode.parentPath === SKILL_ROOT_PATH ? "references" : (entryDialogMode.parentPath ?? "references")
     const basePath = rawValue.includes("/") ? rawValue : `${parentPath}/${rawValue}`
     const nextPath = getUniqueSkillPath(draft.files, normalizeSkillPath(basePath))
     if (!isSafeSkillResourcePath(nextPath)) {
-      setEntryDialogError("Use a path inside scripts, references, assets, or other.")
+      setEntryDialogError("Use a path inside scripts, references, or assets.")
       return
     }
 
@@ -313,7 +313,7 @@ const SkillsDetailPage = () => {
     const inputFiles = Array.from(event.target.files ?? [])
     if (inputFiles.length === 0) return
     const nextFiles: SkillFileRecord[] = []
-    const uploadParentPath = uploadTargetPath === SKILL_ROOT_PATH ? "other" : uploadTargetPath
+    const uploadParentPath = uploadTargetPath === SKILL_ROOT_PATH ? "references" : uploadTargetPath
     for (const file of inputFiles) {
       const preferredPath = `${uploadParentPath}/${file.name}`
       const existingPath = draft.files.some(

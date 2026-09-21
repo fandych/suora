@@ -7,6 +7,10 @@ export const workflowPresetNodes: Array<{
 }> = [
   { kind: "start", label: "Start", summary: "Entry trigger and input mapping." },
   { kind: "end", label: "End", summary: "Return or finalize workflow output." },
+  { kind: "fork", label: "Fork", summary: "Split execution into multiple downstream branches." },
+  { kind: "join", label: "Join", summary: "Merge multiple upstream branches before continuing." },
+  { kind: "parallel", label: "Parallel", summary: "Describe concurrent downstream work and merge strategy." },
+  { kind: "loop", label: "Loop", summary: "Iterate through an array from workflow context." },
   { kind: "document-retrieval", label: "Document Retrieval", summary: "Search indexed documents before reasoning." },
   { kind: "wiki-retrieval", label: "Wiki retrieval", summary: "Search the bound knowledge document using workflow context." },
   { kind: "agent", label: "Agent", summary: "Prompted execution step." },

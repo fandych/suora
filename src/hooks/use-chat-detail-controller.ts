@@ -12,10 +12,12 @@ import { subscribeToBrowserState } from "@/services/browser-state-listener"
 import { showToast } from "@/services/toast-service"
 import type { ChatAttachment } from "@/types/chat"
 import { deriveChatBrowserInteractionState } from "@/lib/chat/browser-status"
+import { mergeChatDetail } from "@/lib/chat/merge-chat-detail"
 import { resolveFallbackRuntime } from "@/lib/chat/chat-controller-utils"
 import { useChatExportActions } from "@/hooks/use-chat-export-actions"
 import { useChatAttachmentActions } from "@/hooks/use-chat-attachment-actions"
 import { ChatApi } from "@/services/chat-service"
+import { subscribeToChatRuntime, type ChatRuntimePayload } from "@/services/chat-runtime-listener"
 import {
   toAssistantResponseParts,
   updateAssistantToolActivity,
@@ -185,6 +187,18 @@ export function useChatDetailController() {
     }
   }, [activeChatId])
 
+  useEffect(() => {
+    const unsubscribe = subscribeToChatRuntime((payload: ChatRuntimePayload) => {
+      if (payload.chatId !== activeChatId || payload.type !== "completed") {
+        return
+      }
+
+      setData((current) => mergeChatDetail(current, payload.detail))
+    })
+
+    return unsubscribe
+  }, [activeChatId, setData])
+
   const persistChatSessionSettings = useCallback(
     (nextRuntime: ChatRuntimeSettings, nextAgentId: string, toastTitle?: string) => {
       void saveChatSessionSettings(activeChatId ?? null, {
@@ -324,6 +338,9 @@ export function useChatDetailController() {
           setActiveChatId(createdChatId)
           setData(createdDetail)
           navigate(`/chats/${createdChatId}`, { replace: true })
+        },
+        onMessagesPersisted: async (detail) => {
+          setData((current) => mergeChatDetail(current, detail))
         },
         onAttachmentsConsumed: () => {
           setAttachments([])

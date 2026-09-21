@@ -44,8 +44,6 @@ type WorkflowCommand = WorkflowRunStartCommand & {
   runtime: WorkflowExecutionRuntime
 }
 
-const unsupportedWorkflowNodeKinds = new Set(["fork", "join", "loop", "parallel"])
-
 const executors: Record<string, WorkflowNodeExecutor> = {
   start: executeStartNode,
   end: executeEndNode,
@@ -81,12 +79,6 @@ export async function executeWorkflowCommand(
   const nodes = new Map(command.definition.nodes.map((node) => [node.id, node]))
   const outgoing = new Map<string, WorkflowEdge[]>()
   for (const edge of command.definition.edges) outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge])
-  const unsupportedKinds = [
-    ...new Set(command.definition.nodes.map((node) => node.data.kind).filter((kind) => unsupportedWorkflowNodeKinds.has(kind))),
-  ]
-  if (unsupportedKinds.length > 0) {
-    throw new Error(`Workflow control nodes are not available yet: ${unsupportedKinds.join(", ")}.`)
-  }
   const start = command.definition.nodes.find((node) => node.data.kind === "start")
   if (!start) throw new Error("Workflow requires a start node.")
   const queue = [start.id]

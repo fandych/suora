@@ -49,6 +49,7 @@ type StartChatRunInput = {
   draft: string
   attachments: ChatAttachment[]
   onChatCreated: (chatId: string) => Promise<void> | void
+  onMessagesPersisted: (detail: Awaited<ReturnType<typeof getChatDetail>>) => Promise<void> | void
   onAttachmentsConsumed: () => void
 }
 
@@ -320,6 +321,7 @@ export async function startChatRun(input: StartChatRunInput) {
       content: input.draft,
       attachments: input.attachments,
     })
+    await input.onMessagesPersisted(result.detail)
     bindChatRun(workingChatId, result.requestId)
     input.onAttachmentsConsumed()
   } catch (error) {

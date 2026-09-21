@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { PencilIcon, PlayIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import "@/lib/monaco/configure-monaco"
 import MonacoEditor from "@monaco-editor/react"
 
 import { Button } from "@/components/ui/button"

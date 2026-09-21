@@ -13,6 +13,31 @@ type WorkflowRevisionActionsProps = {
   importDisabled?: boolean
 }
 
+function WorkflowActionButton({
+  label,
+  disabled = false,
+  onClick,
+  children,
+}: {
+  label: string
+  disabled?: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={<Button className="h-8" size="icon-sm" variant="outline" type="button" aria-label={label} title={label} />}
+        disabled={disabled}
+        onClick={onClick}
+      >
+        {children}
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  )
+}
+
 export function WorkflowRevisionActions({
   canSave,
   onSave,
@@ -25,65 +50,18 @@ export function WorkflowRevisionActions({
   return (
     <div className="flex h-8 items-center gap-2 rounded-2xl border bg-background/95 px-1 shadow-sm backdrop-blur">
       <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                className="h-8"
-                size="icon-sm"
-                variant="outline"
-                onClick={onImport}
-                disabled={importDisabled}
-                aria-label="Import workflow"
-              />
-            }
-          >
+        <WorkflowActionButton label="Import workflow" disabled={importDisabled} onClick={onImport}>
             <UploadIcon />
-          </TooltipTrigger>
-          <TooltipContent>Import</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={<Button className="h-8" size="icon-sm" variant="outline" onClick={onExport} aria-label="Export workflow" />}
-          >
+        </WorkflowActionButton>
+        <WorkflowActionButton label="Export workflow" onClick={onExport}>
             <DownloadIcon />
-          </TooltipTrigger>
-          <TooltipContent>Export</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                className="h-8"
-                size="icon-sm"
-                variant="outline"
-                onClick={onSave}
-                disabled={!canSave}
-                aria-label="Save workflow"
-              />
-            }
-          >
+        </WorkflowActionButton>
+        <WorkflowActionButton label="Save workflow" disabled={!canSave} onClick={onSave}>
             <SaveIcon />
-          </TooltipTrigger>
-          <TooltipContent>Save</TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                className="h-8"
-                size="icon-sm"
-                variant="outline"
-                onClick={onOpenTryRun}
-                disabled={!canTryRun}
-                aria-label="Try run workflow"
-              />
-            }
-          >
+        </WorkflowActionButton>
+        <WorkflowActionButton label="Try run workflow" disabled={!canTryRun} onClick={onOpenTryRun}>
             <PlayIcon />
-          </TooltipTrigger>
-          <TooltipContent>Try run</TooltipContent>
-        </Tooltip>
+        </WorkflowActionButton>
       </TooltipProvider>
     </div>
   )

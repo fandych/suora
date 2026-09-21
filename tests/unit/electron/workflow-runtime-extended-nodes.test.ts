@@ -58,37 +58,42 @@ describe("workflow runtime extended nodes", () => {
     expect(result.traces.find((trace) => trace.nodeId === "wiki")?.output).toContain("Python overview")
   })
 
-  it("rejects unsupported control-flow nodes", async () => {
-    await expect(
-      executeWorkflowCommand(
-        {
-          requestId: "request-unsupported",
-          workflowId: "workflow-unsupported",
-          versionId: "version-unsupported",
-          mode: "manual",
-          input: { items: [1, 2], query: "python" },
-          runtime: createRuntime(),
-          definition: {
-            nodes: [
-              { id: "start", data: { label: "Start", prompt: "", kind: "start", outputKey: "request", enabled: true } },
-              { id: "fork", data: { label: "Fork", prompt: "", kind: "fork", branchCount: 2, enabled: true } },
-              { id: "parallel", data: { label: "Parallel", prompt: "", kind: "parallel", concurrency: 2, mergeStrategy: "all-settled", enabled: true } },
-              { id: "join", data: { label: "Join", prompt: "", kind: "join", joinStrategy: "wait-all", enabled: true } },
-              { id: "end", data: { label: "End", prompt: "", kind: "end", inputTemplate: "{{current}}", enabled: true } },
-            ] satisfies WorkflowNode[],
-            edges: [
-              { source: "start", target: "fork" },
-              { source: "fork", target: "parallel" },
-              { source: "parallel", target: "join" },
-              { source: "join", target: "end" },
-            ],
-            budget: { maxSteps: 16, maxDurationMs: 5000 },
-          },
+  it("executes control-flow nodes without rejecting the workflow", async () => {
+    const result = await executeWorkflowCommand(
+      {
+        requestId: "request-control-flow",
+        workflowId: "workflow-control-flow",
+        versionId: "version-control-flow",
+        mode: "manual",
+        input: [1, 2, 3],
+        runtime: createRuntime(),
+        definition: {
+          nodes: [
+            { id: "start", data: { label: "Start", prompt: "", kind: "start", outputKey: "request", enabled: true } },
+            { id: "fork", data: { label: "Fork", prompt: "", kind: "fork", branchCount: 2, enabled: true } },
+            { id: "parallel", data: { label: "Parallel", prompt: "", kind: "parallel", concurrency: 2, mergeStrategy: "all-settled", enabled: true } },
+            { id: "loop", data: { label: "Loop", prompt: "", kind: "loop", maxIterations: 2, enabled: true } },
+            { id: "join", data: { label: "Join", prompt: "", kind: "join", joinStrategy: "wait-all", enabled: true } },
+            { id: "end", data: { label: "End", prompt: "", kind: "end", inputTemplate: "{{current}}", enabled: true } },
+          ] satisfies WorkflowNode[],
+          edges: [
+            { source: "start", target: "fork" },
+            { source: "fork", target: "parallel" },
+            { source: "parallel", target: "loop" },
+            { source: "loop", target: "join" },
+            { source: "join", target: "end" },
+          ],
+          budget: { maxSteps: 16, maxDurationMs: 5000 },
         },
-        () => undefined,
-        new AbortController().signal,
-      ),
-    ).rejects.toThrow("Workflow control nodes are not available yet")
+      },
+      () => undefined,
+      new AbortController().signal,
+    )
+
+    expect(result.traces.map((trace) => trace.nodeId)).toEqual(["start", "fork", "parallel", "loop", "join", "end"])
+    expect(result.traces.find((trace) => trace.nodeId === "fork")?.output).toContain("branch")
+    expect(result.traces.find((trace) => trace.nodeId === "parallel")?.output).toContain("all-settled")
+    expect(result.traces.find((trace) => trace.nodeId === "loop")?.output).toContain("iterations")
   })
 
   it("persists partial traces on workflow failure", async () => {

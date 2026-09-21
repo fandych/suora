@@ -1,15 +1,12 @@
 import { ToolLoopAgent, stepCountIs, tool } from "ai"
-import { z } from "zod"
 import type { WebContents } from "electron"
 import { createOpenAI } from "@ai-sdk/openai"
 import { createAnthropic } from "@ai-sdk/anthropic"
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible"
+import { chatToolDefinitions, executeChatTool } from "@/electron/app/chats/chat-tools"
 import { getChat, appendChatMessage } from "@/electron/app/chats/repository"
 import type { ChatRuntimeSettingsPayload } from "@/types/electron"
-import fs from "node:fs/promises"
-import path from "node:path"
 import { ensureWorkspace } from "@/electron/infrastructure/workspace-service"
-import { resolveWorkspaceTarget, enforceRelativePathPolicy } from "@/electron/app/tools/tool-policy"
 import { agentService } from "@/electron/app/agents/service"
 import { modelService } from "@/electron/app/models/service"
 import { normalizeChatAgentMaxSteps } from "@/electron/app/chats/chat-agent-loop-policy"
@@ -103,28 +100,27 @@ export async function runChatAgent(
   await ensureWorkspace()
   const history = await getChat(command.chatId)
   const settings = await resolveRuntimeSettings(command.settings, command.selectedAgentId)
+  const tools = Object.fromEntries(
+    Object.entries(chatToolDefinitions).map(([name, definition]) => [
+      name,
+      tool({
+        description: definition.description,
+        inputSchema: definition.inputSchema as never,
+        execute: (input: unknown) =>
+          executeChatTool(name, input as Record<string, unknown>, {
+            sessionId: command.chatId,
+            selectedAgentId: command.selectedAgentId,
+          }),
+      } as never),
+    ]),
+  )
   const agent = new ToolLoopAgent({
     model: createModel(settings),
     instructions:
       settings.model.systemPrompt ||
       "You are a helpful workspace assistant. Use workspace tools when they help answer grounded questions.",
     stopWhen: stepCountIs(normalizeChatAgentMaxSteps(settings.maxSteps)),
-    tools: {
-      listFiles: tool({
-        description: "List workspace files.",
-        inputSchema: z.object({ path: z.string().optional() }),
-        execute: async ({ path: relativePath }) => {
-          const target = resolveWorkspaceTarget(relativePath)
-          enforceRelativePathPolicy(relativePath, target)
-          const entries = await fs.readdir(target, { withFileTypes: true })
-          return entries.map((entry) => ({
-            name: entry.name,
-            path: path.relative(resolveWorkspaceTarget(), path.join(target, entry.name)).replace(/\\/g, "/"),
-            type: entry.isDirectory() ? "directory" : "file",
-          }))
-        },
-      }),
-    },
+    tools,
   })
   try {
     const result = await agent.stream({

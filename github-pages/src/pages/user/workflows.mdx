@@ -19,14 +19,14 @@ Workflows 使用可视化画布把 AI、文档检索、条件分支、变量、H
 当前节点库可直接添加：
 
 - **Start / End**：定义入口和最终输出。
+- **Condition / If / Else**：按表达式继续、分支或回退。
+- **Fork / Join / Parallel / Loop / Serial**：表达并行、汇合、循环和顺序阶段。
 - **Set variable / Template**：设置变量、组装文本或 JSON。
-- **If / Else**：按表达式选择路径。
 - **Document Retrieval**：检索工作区文档。
+- **Wiki retrieval**：按工作流上下文查询绑定知识文档。
 - **Agent / AI response**：调用 Agent 或模型生成内容。
 - **HTTP / Webhook / Toolset**：访问节点 URL 或已绑定的 Integration。
 - **Script / Send email (SMTP)**：执行脚本或发送邮件。
-
-Loop、Fork、Join、Parallel、Serial、Condition 与 Wiki retrieval 虽有底层节点定义，但当前 UI 节点库没有新增入口。导入含这些节点的 workflow 前，应先在受控环境验证运行语义。
 
 可复制单个节点，副本会生成新 ID 并稍微偏移位置。当前没有复制整个 workflow 的功能。
 

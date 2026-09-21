@@ -25,6 +25,7 @@ export type SendChatMessage = {
 export type SendMessageResult = {
   requestId: string
   sessionId: string
+  detail: ChatDetail
 }
 
 export type RetryableChatToolActivity = {

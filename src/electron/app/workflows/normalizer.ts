@@ -11,20 +11,30 @@ type WorkflowDefinition = {
   [key: string]: unknown
 }
 
+function normalizeWorkflowNodeKind(kind: string | undefined) {
+  switch (kind) {
+    case "output":
+      return "end"
+    default:
+      return kind
+  }
+}
+
 function normalizeNode(
   data: Partial<WorkflowNodeData>,
   fallback: Pick<WorkflowNodeData, "kind" | "label" | "prompt">,
 ): WorkflowNodeData {
+  const normalizedKind = normalizeWorkflowNodeKind(data.kind ?? fallback.kind) ?? fallback.kind
   return {
     ...data,
     label: data.label ?? fallback.label,
     prompt: data.prompt ?? fallback.prompt,
-    kind: data.kind ?? fallback.kind,
+    kind: normalizedKind,
     agentId: data.agentId ?? "",
     task: data.task ?? data.prompt ?? fallback.prompt,
     description: data.description ?? "",
     enabled: data.enabled ?? true,
-    continueOnError: data.continueOnError ?? fallback.kind === "start",
+    continueOnError: data.continueOnError ?? normalizedKind === "start",
     retryCount: data.retryCount ?? 0,
     timeoutMs: data.timeoutMs ?? 30000,
     modelId: data.modelId ?? "",
@@ -82,7 +92,7 @@ export function normalizeWorkflowDefinition(value: unknown): WorkflowDefinition 
       ...node,
       type: node.type ?? "workflowNode",
       data: normalizeNode(node.data, {
-        kind: node.data.kind ?? "agent",
+        kind: normalizeWorkflowNodeKind(node.data.kind) ?? "agent",
         label: node.data.label ?? `Step ${index + 1}`,
         prompt: node.data.prompt ?? "Describe what this node should do.",
       }),

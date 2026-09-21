@@ -31,6 +31,22 @@ type DocumentPayload = {
   selectedVersionId: string | null
 }
 
+export function normalizeDocumentPages(pages: DocumentPageRecord[]) {
+  const rootPages = pages.filter((page) => page.parentId == null)
+  if (rootPages.length !== 1) return pages
+
+  const [rootPage] = rootPages
+  if ((rootPage.type ?? "document") !== "folder" || rootPage.title.trim().toLowerCase() !== "guides") {
+    return pages
+  }
+
+  return pages.flatMap((page) => {
+    if (page.id === rootPage.id) return []
+    if (page.parentId === rootPage.id) return [{ ...page, parentId: null }]
+    return [page]
+  })
+}
+
 function parseObject<T>(value: string | undefined, fallback: T) {
   if (!value) return fallback
   try {
@@ -51,12 +67,13 @@ function toDetail(payload: DocumentPayload): DocumentDetail | null {
   const structure = parseObject<{ pages?: DocumentPageRecord[] }>(selectedRow?.structureJson, {})
   const graph = parseObject<{ edges?: DocumentGraphEdge[] }>(selectedRow?.graphJson, {})
   const settings = parseObject<DocumentSettings>(selectedRow?.settingsJson, { isPublic: false, includeInLlmsTxt: true })
+  const pages = normalizeDocumentPages(structure.pages ?? [])
   return {
     document: payload.document,
     versions,
     latestVersion: versions[0],
     selectedVersion: versions.find((version) => version.id === payload.selectedVersionId) ?? versions[0],
-    pages: structure.pages ?? [],
+    pages,
     graphEdges: graph.edges ?? [],
     settings,
   }

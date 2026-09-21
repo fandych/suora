@@ -7,6 +7,7 @@ import { cpSync, existsSync } from "node:fs"
 
 const alias = {
   "@": resolve(__dirname, "./src"),
+  "@monaco-vs": resolve(__dirname, "./node_modules/monaco-editor/esm/vs"),
 }
 
 function copyScriptWorker() {
@@ -71,6 +72,15 @@ export default defineConfig({
   },
   renderer: {
     root: ".",
+    optimizeDeps: {
+      exclude: [
+        "@monaco-vs/editor/editor.worker.js?worker",
+        "@monaco-vs/language/css/css.worker.js?worker",
+        "@monaco-vs/language/html/html.worker.js?worker",
+        "@monaco-vs/language/json/json.worker.js?worker",
+        "@monaco-vs/language/typescript/ts.worker.js?worker",
+      ],
+    },
     build: {
       outDir: "out/renderer",
       target: "chrome120",

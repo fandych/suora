@@ -33,7 +33,7 @@ Workflow Engine 将 JSON workflow definition 编译为节点图并分批执行�
 
 `parallel`、`serial`、`fork`、`join` 当前主要返回描述性控制对象；实际分支并发和汇合依赖通用图调度逻辑，而不是这些节点实现完整的专用调度语义。
 
-当前编辑器节点库只提供 Start、End、Document Retrieval、Agent、If / Else、HTTP、Script、Set variable、Template、AI response、Toolset、Webhook 和 SMTP 的新增入口。`loop`、`fork`、`join`、`parallel`、`serial`、`condition` 与 `wiki-retrieval` 可由底层 definition 识别，但不能从当前 UI 节点库新增。
+当前编辑器节点库可直接新增 Start、End、Condition、If / Else、Fork、Join、Parallel、Loop、Serial、Document Retrieval、Wiki retrieval、Agent、Set variable、Template、AI response、HTTP、Script、Toolset、Webhook 和 SMTP。
 
 ## 分支与汇合
 

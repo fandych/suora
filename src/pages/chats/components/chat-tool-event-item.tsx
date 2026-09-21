@@ -43,12 +43,12 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
   useEffect(() => {
     const stored = window.localStorage.getItem(storageKey)
     if (stored == null) {
-      setIsOpen(false)
+      setIsOpen(status === "running" || status === "error")
       return
     }
 
     setIsOpen(stored === "1")
-  }, [storageKey])
+  }, [status, storageKey])
 
   const handleOpenChange = (open: boolean) => {
     setIsOpen(open)
@@ -91,7 +91,7 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
     <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
       <div
         className={cn(
-          "rounded-lg border px-2.5 py-2",
+          "rounded-xl border px-3 py-2.5 shadow-xs transition-colors",
           status === "error"
             ? "border-destructive/35 bg-destructive/8"
             : status === "stopped"
@@ -101,16 +101,35 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
                 : "border-border bg-background/70",
         )}
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-start gap-3">
+          <div
+            className={cn(
+              "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border bg-background/90",
+              status === "error"
+                ? "border-destructive/30 text-destructive"
+                : status === "stopped"
+                  ? "border-amber-300 text-amber-700"
+                  : status === "success"
+                    ? "border-emerald-300 text-emerald-700"
+                    : "border-border text-foreground",
+            )}
+          >
+            <Icon className={cn(status === "running" ? "animate-spin" : "", "size-4 shrink-0")} />
+          </div>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <Icon className={cn(status === "running" ? "animate-spin" : "", "size-3.5 shrink-0")} />
-              <span className="truncate text-xs font-medium text-foreground">{summary}</span>
+              <span className="rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Tool
+              </span>
+              <span className="truncate font-mono text-[12px] font-medium text-foreground">{activity.toolName}</span>
               {stepLabel ? (
-                <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                <span className="rounded-md bg-muted/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
                   {stepLabel}
                 </span>
               ) : null}
+            </div>
+            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
+              <span className="truncate text-[11px] text-muted-foreground">{summary}</span>
               <Badge variant={badgeVariant}>
                 {status === "error"
                   ? "Error"
@@ -122,31 +141,34 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
               </Badge>
             </div>
           </div>
-          {onRetry ? (
-            <Button
-              size="icon-sm"
-              variant="ghost"
-              type="button"
-              onClick={() => void handleRetry()}
-              disabled={isRetrying}
-            >
-              {" "}
-              <RotateCcwIcon />{" "}
-            </Button>
-          ) : null}
-          {hasDetails ? (
-            <CollapsibleTrigger className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
-              {isOpen ? "Hide details" : "Details"}
-            </CollapsibleTrigger>
-          ) : null}
+          <div className="flex shrink-0 items-center gap-1">
+            {onRetry ? (
+              <Button
+                size="icon-sm"
+                variant="ghost"
+                type="button"
+                onClick={() => void handleRetry()}
+                disabled={isRetrying}
+              >
+                <RotateCcwIcon />
+              </Button>
+            ) : null}
+            {hasDetails ? (
+              <CollapsibleTrigger className="rounded-md border border-border/80 bg-background/70 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
+                {isOpen ? "Hide data" : "Input & output"}
+              </CollapsibleTrigger>
+            ) : null}
+          </div>
         </div>
         {hasDetails ? (
           <CollapsibleContent>
-            <div className="mt-3 flex flex-col gap-3 border-t pt-3">
+            <div className="mt-3 flex flex-col gap-2.5 border-t pt-2.5">
               {activity.input ? (
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    <span>Input</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="rounded-md bg-muted/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Input
+                    </span>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -158,15 +180,17 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
                       Copy
                     </Button>
                   </div>
-                  <pre className="overflow-x-auto rounded-xl border border-border bg-background/80 p-3 text-xs leading-6 text-foreground">
+                  <pre className="max-h-64 overflow-x-auto rounded-lg border border-border/80 bg-background/90 p-2.5 text-[11px] leading-5 text-foreground">
                     {JSON.stringify(activity.input, null, 2)}
                   </pre>
                 </div>
               ) : null}
               {hasOutput ? (
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between gap-2 text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                    <span>Output</span>
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="rounded-md bg-muted/70 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                      Output
+                    </span>
                     <Button
                       size="sm"
                       variant="ghost"
@@ -178,23 +202,27 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
                       Copy
                     </Button>
                   </div>
-                  <pre className="overflow-x-auto rounded-xl border border-border bg-background/80 p-3 text-xs leading-6 text-foreground">
+                  <pre className="max-h-64 overflow-x-auto rounded-lg border border-border/80 bg-background/90 p-2.5 text-[11px] leading-5 text-foreground">
                     {activity.output}
                   </pre>
                 </div>
               ) : null}
               {activity.error ? (
                 <div className="flex flex-col gap-1.5">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-destructive">Error</div>
-                  <div className="rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-xs leading-6 text-destructive">
+                  <div className="rounded-md bg-destructive/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-destructive">
+                    Error
+                  </div>
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-2.5 text-[11px] leading-5 text-destructive">
                     {activity.error}
                   </div>
                 </div>
               ) : null}
               {activity.stopped && !activity.error ? (
                 <div className="flex flex-col gap-1.5">
-                  <div className="text-[11px] font-medium uppercase tracking-[0.12em] text-amber-700">Status</div>
-                  <div className="rounded-xl border border-amber-300 bg-amber-100/70 p-3 text-xs leading-6 text-amber-900">
+                  <div className="rounded-md bg-amber-100 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-amber-800">
+                    Status
+                  </div>
+                  <div className="rounded-lg border border-amber-300 bg-amber-100/70 p-2.5 text-[11px] leading-5 text-amber-900">
                     Stopped before a tool result was returned.
                   </div>
                 </div>

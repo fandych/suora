@@ -3,6 +3,7 @@ import os from "node:os"
 import path from "node:path"
 import { ipcMain } from "electron"
 import { skillService } from "@/electron/app/skills/service"
+import { normalizeLegacySkillFiles } from "@/electron/app/skills/file-service"
 import { entityIdSchema, parseIpcInput, versionedResourceSaveSchema } from "@/electron/preload/system/ipc-input-schemas"
 
 const externalSources = ["codex", "claude", "agents"] as const
@@ -44,7 +45,8 @@ async function readExternalSkill(skillId: string) {
     }
   }
   await visit(root)
-  const manifest = files.find((file) => file.path === "SKILL.md")
+  const normalizedFiles = normalizeLegacySkillFiles(files)
+  const manifest = normalizedFiles.find((file) => file.path === "SKILL.md")
   if (!manifest) throw new Error("External skill is missing SKILL.md.")
   const name = skillId.slice(skillId.indexOf(":") + 1)
   const manifestName = readManifestField(manifest.content, "name")
@@ -52,7 +54,7 @@ async function readExternalSkill(skillId: string) {
   const now = Date.now()
   return {
     skill: { id: skillId, title: manifestName || name, source: skillId.slice(0, skillId.indexOf(":")), summary, updatedAt: now },
-    files,
+    files: normalizedFiles,
   }
 }
 

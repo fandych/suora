@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 
+import "@/lib/monaco/configure-monaco"
 import MonacoEditor from "@monaco-editor/react"
 import { EditorContent, useEditor } from "@tiptap/react"
 import Image from "@tiptap/extension-image"

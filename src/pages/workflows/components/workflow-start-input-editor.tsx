@@ -274,7 +274,7 @@ export function WorkflowStartInputEditor({
                     onMouseEnter={() => startDetailHover(parameter.id)}
                     onMouseLeave={endDetailHover}
                   >
-                    <div className="min-w-0 overflow-hidden [overflow-wrap:anywhere]">
+                    <div className="min-w-0 overflow-hidden wrap-anywhere">
                       <div className="flex min-w-0 max-w-full items-center gap-2 overflow-hidden font-medium">
                         <span className="min-w-0 truncate">{parameter.name}</span>
                         <span className="shrink-0 text-muted-foreground">

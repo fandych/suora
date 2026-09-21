@@ -1,7 +1,8 @@
 import type { SkillFileRecord } from "@/types/document"
 
 export const SKILL_ROOT_PATH = "__skill_root__"
-const topLevelFolders = ["scripts", "references", "assets", "other"]
+const coreTopLevelFolders = ["scripts", "references", "assets"] as const
+const allowedTopLevelFolders = [...coreTopLevelFolders, "other"] as const
 export type SkillTreeEntry = {
   path: string
   label: string
@@ -15,7 +16,7 @@ export const normalizeSkillPath = (path: string) => path.replace(/\\/g, "/").rep
 export function isSafeSkillResourcePath(path: string) {
   if (!path || path.startsWith("/") || /^[a-zA-Z]:[\\/]/.test(path)) return false
   const parts = normalizeSkillPath(path).split("/").filter(Boolean)
-  return Boolean(parts.length && !parts.includes(".") && !parts.includes("..") && topLevelFolders.includes(parts[0]))
+  return Boolean(parts.length && !parts.includes(".") && !parts.includes("..") && allowedTopLevelFolders.includes(parts[0] as (typeof allowedTopLevelFolders)[number]))
 }
 
 export function getSkillSourceLanguage(path: string, language?: string) {
@@ -78,6 +79,8 @@ export function parseSkillFrontmatter(content: string) {
 export function buildSkillTree(files: SkillFileRecord[], skillName = "Skill"): SkillTreeEntry[] {
   const entries: SkillTreeEntry[] = [{ path: SKILL_ROOT_PATH, label: skillName, depth: 0, kind: "directory" }]
   const added = new Set([SKILL_ROOT_PATH])
+  const normalizedFiles = files.map((file) => ({ ...file, path: normalizeSkillPath(file.path) }))
+  const fileMap = new Map(normalizedFiles.map((file) => [file.path, file] as const))
   const push = (path: string, kind: "file" | "directory", file?: SkillFileRecord) => {
     if (!added.has(path)) {
       const parts = normalizeSkillPath(path).split("/")
@@ -85,29 +88,38 @@ export function buildSkillTree(files: SkillFileRecord[], skillName = "Skill"): S
       added.add(path)
     }
   }
-  for (const file of files
-    .filter((item) => !normalizeSkillPath(item.path).includes("/"))
-    .sort((left, right) => left.path.localeCompare(right.path))) {
-    push(file.path, file.kind === "directory" ? "directory" : "file", file)
-  }
-  for (const folder of topLevelFolders) {
-    push(
-      folder,
-      "directory",
-      files.find((file) => normalizeSkillPath(file.path) === folder),
-    )
-    for (const file of files
-      .filter((item) => normalizeSkillPath(item.path).startsWith(`${folder}/`))
+
+  const appendBranch = (topLevelPath: string, forceDirectory: boolean) => {
+    const topLevelFile = fileMap.get(topLevelPath)
+    push(topLevelPath, forceDirectory ? "directory" : (topLevelFile?.kind === "directory" ? "directory" : "file"), topLevelFile)
+    for (const file of normalizedFiles
+      .filter((item) => item.path.startsWith(`${topLevelPath}/`))
       .sort((left, right) => left.path.localeCompare(right.path))) {
-      const parts = normalizeSkillPath(file.path).split("/")
-      for (let index = 0; index < parts.length - 1; index += 1)
-        push(
-          parts.slice(0, index + 1).join("/"),
-          "directory",
-          files.find((item) => normalizeSkillPath(item.path) === parts.slice(0, index + 1).join("/")),
-        )
+      const parts = file.path.split("/")
+      for (let index = 0; index < parts.length - 1; index += 1) {
+        const currentPath = parts.slice(0, index + 1).join("/")
+        push(currentPath, "directory", fileMap.get(currentPath))
+      }
       push(file.path, file.kind === "directory" ? "directory" : "file", file)
     }
   }
+
+  const manifest = fileMap.get("SKILL.md")
+  if (manifest) {
+    push("SKILL.md", "file", manifest)
+  }
+
+  for (const folder of coreTopLevelFolders) appendBranch(folder, true)
+
+  const extraTopLevelPaths = Array.from(
+    new Set(
+      normalizedFiles
+        .map((file) => file.path.split("/")[0] ?? "")
+        .filter((path) => path && path !== "SKILL.md" && !coreTopLevelFolders.includes(path as (typeof coreTopLevelFolders)[number])),
+    ),
+  ).sort((left, right) => left.localeCompare(right))
+
+  for (const path of extraTopLevelPaths) appendBranch(path, normalizedFiles.some((file) => file.path.startsWith(`${path}/`)))
+
   return entries
 }
