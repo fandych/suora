@@ -1,3 +1,5 @@
+// @vitest-environment node
+
 import { describe, expect, it } from "vitest"
 
 import { normalizeDocumentPages } from "@/electron/app/documents/service"
