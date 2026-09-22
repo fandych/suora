@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router"
-import { EllipsisIcon, PencilIcon, PowerIcon, RotateCcwIcon, Trash2Icon } from "lucide-react"
+import { EllipsisIcon, PencilIcon, PowerIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -14,7 +14,6 @@ import { buildDocumentTree, getDocumentDisplayName } from "@/pages/documents/doc
 import { downloadJson, downloadStoredContent, readBrowserFile } from "@/lib/browser/file-exports"
 import PageHeader from "@/pages/components/page-header"
 import { ConfirmDeleteDialog } from "@/pages/components/confirm-delete-dialog"
-import { RecentlyDeletedDialog } from "@/pages/components/recently-deleted-dialog"
 import { ResourceEntryDialog } from "@/pages/components/resource-entry-dialog"
 import { ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { DocumentCreateDialog } from "@/pages/documents/components/document-create-dialog"
@@ -77,7 +76,6 @@ const DocumentsDetailPage = () => {
   const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const [isMetadataDialogOpen, setIsMetadataDialogOpen] = useState(false)
   const [isDocumentDeleteDialogOpen, setIsDocumentDeleteDialogOpen] = useState(false)
-  const [isRecentlyDeletedOpen, setIsRecentlyDeletedOpen] = useState(false)
 
   const persistDraft = async (nextDraft: DocumentDetail) => {
     const saved = await DocumentApi.save({
@@ -331,10 +329,6 @@ const DocumentsDetailPage = () => {
         actions={
           draft ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={() => setIsRecentlyDeletedOpen(true)}>
-                <RotateCcwIcon className="size-4" />
-                Recently deleted
-              </Button>
               <DropdownMenu>
                 <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" aria-label="Document actions" />}>
                   <EllipsisIcon />
@@ -471,16 +465,6 @@ const DocumentsDetailPage = () => {
         }}
         open={Boolean(deleteTargetId)}
         title="Delete item"
-      />
-      <RecentlyDeletedDialog
-        kind="document"
-        open={isRecentlyDeletedOpen}
-        onOpenChange={setIsRecentlyDeletedOpen}
-        onRestored={async (result) => {
-          emitDataChanged("/documents")
-          navigate(`/documents/${result.resourceId}`)
-        }}
-        title="Restore deleted documents"
       />
     </div>
   )

@@ -15,6 +15,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover"
 import { Switch } from "@/components/ui/switch"
+import { useAppIntl } from "@/lib/i18n"
 import type { ProviderConfigRecord } from "@/types/agent"
 
 type ModelStatusFilter = "all" | "enabled" | "disabled"
@@ -44,6 +45,7 @@ export function ProviderModelList({
   onRefreshModels,
   onToggleModel,
 }: ProviderModelListProps) {
+  const { t } = useAppIntl()
   const [deleteIndex, setDeleteIndex] = useState<number | null>(null)
   const [query, setQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<ModelStatusFilter>("all")
@@ -87,7 +89,7 @@ export function ProviderModelList({
     <Card className="min-h-0 overflow-hidden xl:h-[calc(100vh-10.5rem)]">
       <CardHeader>
         <div className="flex items-center justify-between gap-3">
-          <CardTitle>Model inventory</CardTitle>
+          <CardTitle>{t("models.modelList.title", "Model inventory")}</CardTitle>
           <div className="flex items-center gap-2">
             {showRefreshAction ? (
               <Button
@@ -95,26 +97,36 @@ export function ProviderModelList({
                 variant="outline"
                 onClick={onRefreshModels}
                 disabled={refreshDisabled}
-                title={refreshDisabledReason ?? "Refresh models"}
-                aria-label="Refresh models"
+                title={refreshDisabledReason ?? t("models.modelList.refresh", "Refresh models")}
+                aria-label={t("models.modelList.refresh", "Refresh models")}
               >
                 <RefreshCwIcon className={`size-4 ${isRefreshingModels ? "animate-spin" : ""}`} />
               </Button>
             ) : null}
-            <Button size="icon-sm" variant="outline" onClick={onAddModel} aria-label="Add model" title="Add model">
+            <Button
+              size="icon-sm"
+              variant="outline"
+              onClick={onAddModel}
+              aria-label={t("models.modelList.add", "Add model")}
+              title={t("models.modelList.add", "Add model")}
+            >
               <PlusIcon className="size-4" />
             </Button>
           </div>
         </div>
         <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_10rem]">
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search models..." />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={t("models.modelList.search", "Search models...")}
+          />
           <NativeSelect
             value={statusFilter}
             onChange={(event) => setStatusFilter(event.target.value as ModelStatusFilter)}
           >
-            <NativeSelectOption value="all">All</NativeSelectOption>
-            <NativeSelectOption value="enabled">Enabled</NativeSelectOption>
-            <NativeSelectOption value="disabled">Disabled</NativeSelectOption>
+            <NativeSelectOption value="all">{t("models.modelList.filter.all", "All")}</NativeSelectOption>
+            <NativeSelectOption value="enabled">{t("models.modelList.filter.enabled", "Enabled")}</NativeSelectOption>
+            <NativeSelectOption value="disabled">{t("models.modelList.filter.disabled", "Disabled")}</NativeSelectOption>
           </NativeSelect>
         </div>
       </CardHeader>
@@ -142,10 +154,26 @@ export function ProviderModelList({
                   ))}
                 </div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                  <span>{model.contextWindow?.toLocaleString() ?? 0} context</span>
-                  <span>{model.maxOutputTokens?.toLocaleString() ?? 0} max output</span>
-                  <span>{model.supportsParallelToolCalls ? "parallel tools" : "single-tool flow"}</span>
-                  <span>{model.supportsReasoning ? "reasoning" : "standard"}</span>
+                  <span>
+                    {t("models.modelList.context", "{value} context", {
+                      value: model.contextWindow?.toLocaleString() ?? 0,
+                    })}
+                  </span>
+                  <span>
+                    {t("models.modelList.maxOutput", "{value} max output", {
+                      value: model.maxOutputTokens?.toLocaleString() ?? 0,
+                    })}
+                  </span>
+                  <span>
+                    {model.supportsParallelToolCalls
+                      ? t("models.modelList.parallelTools", "parallel tools")
+                      : t("models.modelList.singleTool", "single-tool flow")}
+                  </span>
+                  <span>
+                    {model.supportsReasoning
+                      ? t("models.modelList.reasoning", "reasoning")
+                      : t("models.modelList.standard", "standard")}
+                  </span>
                 </div>
                 <div className="flex items-center justify-end gap-2 pt-1">
                   <div className="flex h-7 items-center justify-center rounded-lg border px-2">
@@ -158,8 +186,8 @@ export function ProviderModelList({
                   <Button
                     size="icon-sm"
                     variant="outline"
-                    aria-label={`Edit ${model.name}`}
-                    title="Edit model"
+                    aria-label={t("models.modelList.edit", "Edit {name}", { name: model.name })}
+                    title={t("models.modelList.editModel", "Edit model")}
                     onClick={() => onEditModel(index)}
                   >
                     <PencilIcon className="size-4" />
@@ -170,8 +198,8 @@ export function ProviderModelList({
                         <Button
                           size="icon-sm"
                           variant="destructive"
-                          aria-label={`Delete ${model.name}`}
-                          title="Delete model"
+                          aria-label={t("models.modelList.delete", "Delete {name}", { name: model.name })}
+                          title={t("models.modelList.deleteModel", "Delete model")}
                         />
                       }
                     >
@@ -179,12 +207,14 @@ export function ProviderModelList({
                     </PopoverTrigger>
                     <PopoverContent align="end">
                       <PopoverHeader>
-                        <PopoverTitle>Delete model?</PopoverTitle>
-                        <PopoverDescription>This change is saved immediately.</PopoverDescription>
+                        <PopoverTitle>{t("models.modelList.deleteConfirmTitle", "Delete model?")}</PopoverTitle>
+                        <PopoverDescription>
+                          {t("models.modelList.deleteConfirmDescription", "This change is saved immediately.")}
+                        </PopoverDescription>
                       </PopoverHeader>
                       <div className="flex items-center justify-end gap-2">
                         <Button size="sm" variant="outline" onClick={() => setDeleteIndex(null)}>
-                          Cancel
+                          {t("models.modelList.cancel", "Cancel")}
                         </Button>
                         <Button
                           size="sm"
@@ -194,7 +224,7 @@ export function ProviderModelList({
                             onDeleteModel(index)
                           }}
                         >
-                          Delete
+                          {t("models.modelList.deleteAction", "Delete")}
                         </Button>
                       </div>
                     </PopoverContent>
@@ -206,12 +236,12 @@ export function ProviderModelList({
         })}
         {models.length === 0 ? (
           <div className="rounded-xl border border-dashed px-4 py-6 text-sm text-muted-foreground">
-            No models registered for this provider yet.
+            {t("models.modelList.empty", "No models registered for this provider yet.")}
           </div>
         ) : null}
         {models.length > 0 && visibleModels.length === 0 ? (
           <div className="rounded-xl border border-dashed px-4 py-6 text-sm text-muted-foreground">
-            No models match the current search.
+            {t("models.modelList.noMatch", "No models match the current search.")}
           </div>
         ) : null}
       </CardContent>

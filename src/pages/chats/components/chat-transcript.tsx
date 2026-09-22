@@ -1,4 +1,4 @@
-import { useMemo } from "react"
+import { useEffect, useMemo, useRef } from "react"
 import { BotIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -31,6 +31,8 @@ type ChatTranscriptProps = {
   selectedChat: ChatDetail | null
 }
 
+const transcriptScrollPositions = new Map<string, number>()
+
 export function ChatTranscript({
   activeProviderType,
   assistantResponseMessageId,
@@ -43,6 +45,8 @@ export function ChatTranscript({
   selectedChat,
 }: ChatTranscriptProps) {
   const { t } = useAppIntl()
+  const transcriptKey = selectedChat?.chat.id ?? "draft"
+  const viewportRef = useRef<HTMLDivElement | null>(null)
   const hasMessages = (selectedChat?.messages.length ?? 0) > 0 || assistantResponseParts.length > 0
   const hasPersistedAssistantResponse = Boolean(
     assistantResponseMessageId && selectedChat?.messages.some((message) => message.id === assistantResponseMessageId),
@@ -55,11 +59,60 @@ export function ChatTranscript({
     return selectedChat?.messages.find((message) => message.id === assistantResponseMessageId)?.createdAt
   }, [assistantResponseMessageId, selectedChat?.messages])
 
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) {
+      return
+    }
+
+    const handleScroll = () => {
+      transcriptScrollPositions.set(transcriptKey, viewport.scrollTop)
+    }
+
+    handleScroll()
+    viewport.addEventListener("scroll", handleScroll, { passive: true })
+
+    return () => {
+      transcriptScrollPositions.set(transcriptKey, viewport.scrollTop)
+      viewport.removeEventListener("scroll", handleScroll)
+    }
+  }, [transcriptKey])
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    const savedScrollTop = transcriptScrollPositions.get(transcriptKey)
+    if (!viewport || typeof savedScrollTop !== "number") {
+      return
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      viewport.scrollTop = savedScrollTop
+    })
+
+    return () => {
+      window.cancelAnimationFrame(frameId)
+    }
+  }, [
+    transcriptKey,
+    selectedChat?.messages.length,
+    assistantResponseParts.length,
+    assistantResponseMessageId,
+  ])
+
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
-      <MessageScrollerProvider autoScroll={autoScroll} defaultScrollPosition="end" scrollPreviousItemPeek={12}>
+      <MessageScrollerProvider
+        key={transcriptKey}
+        autoScroll={autoScroll}
+        defaultScrollPosition="end"
+        scrollPreviousItemPeek={12}
+      >
         <MessageScroller className="flex-1 min-h-0">
-          <MessageScrollerViewport aria-label={t("chat.transcript.label", "Chat transcript")} className="border-t bg-muted/20">
+          <MessageScrollerViewport
+            ref={viewportRef}
+            aria-label={t("chat.transcript.label", "Chat transcript")}
+            className="border-t bg-muted/20"
+          >
             <MessageScrollerContent className="min-h-0 gap-3 px-(--card-spacing) py-4">
               {hasOlderMessages ? (
                 <MessageScrollerItem messageId="conversation-load-earlier" className="flex justify-center">

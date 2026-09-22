@@ -1,35 +1,18 @@
-import { useState } from "react"
-import { useNavigate } from "react-router"
-import { RotateCcwIcon } from "lucide-react"
-
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { useAppIntl } from "@/lib/i18n"
+import { Card, CardContent, CardFooter } from "@/components/ui/card"
 import { ChatComposer } from "@/pages/chats/components/chat-composer"
 import { ChatTranscript } from "@/pages/chats/components/chat-transcript"
 import PageHeader from "@/pages/components/page-header"
-import { RecentlyDeletedDialog } from "@/pages/components/recently-deleted-dialog"
 import { ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { useChatDetailController } from "@/hooks/use-chat-detail-controller"
-import { emitDataChanged } from "@/services/data-events"
 
 const ChatDetailPage = () => {
   const { t } = useAppIntl()
   const controller = useChatDetailController()
-  const navigate = useNavigate()
-  const [isRecentlyDeletedOpen, setIsRecentlyDeletedOpen] = useState(false)
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <PageHeader
-        title={controller.selectedChat?.chat.title ?? t("chat.detail.newChat", "New chat")}
-        actions={
-          <Button type="button" variant="outline" size="sm" onClick={() => setIsRecentlyDeletedOpen(true)}>
-            <RotateCcwIcon className="size-4" />
-            {t("chat.detail.recentlyDeleted", "Recently deleted")}
-          </Button>
-        }
-      />
+      <PageHeader title={controller.selectedChat?.chat.title ?? t("chat.detail.newChat", "New chat")} />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {controller.activeChatId && controller.isLoading && !controller.selectedChat ? (
           <LoadingCard title={t("chat.detail.loadingSession", "Loading chat session...")} />
@@ -103,16 +86,6 @@ const ChatDetailPage = () => {
           </Card>
         ) : null}
       </div>
-      <RecentlyDeletedDialog
-        kind="chat"
-        open={isRecentlyDeletedOpen}
-        onOpenChange={setIsRecentlyDeletedOpen}
-        onRestored={async (result) => {
-          emitDataChanged("/chats")
-          navigate(`/chats/${result.resourceId}`)
-        }}
-        title={t("chat.detail.restoreDeleted", "Restore deleted chats")}
-      />
     </div>
   )
 }

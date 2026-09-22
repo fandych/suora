@@ -1,4 +1,5 @@
 import type { ChannelConfigRecord } from "@/types/channel"
+import { useAppIntl } from "@/lib/i18n"
 import { CompactInput, CompactTextarea, Field, Hint } from "@/pages/channels/components/channel-form-fields"
 
 type ChannelPlatformCustomFormProps = {
@@ -27,59 +28,69 @@ function GroupSection({
 }
 
 export function ChannelPlatformCustomForm({ channel, onPatch }: ChannelPlatformCustomFormProps) {
+  const { t } = useAppIntl()
   const isStream = channel.connectionMode === "stream"
 
   return (
     <div className="space-y-3">
       <GroupSection
-        title="Identity"
-        description="Name the custom platform and define any branding that should appear in the workbench."
+        title={t("channels.custom.identity", "Identity")}
+        description={t(
+          "channels.custom.identityDescription",
+          "Name the custom platform and define any branding that should appear in the workbench.",
+        )}
       >
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Display name">
+          <Field label={t("channels.custom.displayName", "Display name")}>
             <CompactInput
               value={channel.customPlatformName ?? ""}
               onChange={(event) => onPatch({ customPlatformName: event.target.value })}
-              placeholder="e.g. LINE, WhatsApp, My Bot"
+              placeholder={t("channels.custom.displayNamePlaceholder", "e.g. LINE, WhatsApp, My Bot")}
             />
           </Field>
-          <Field label="Display icon">
+          <Field label={t("channels.custom.displayIcon", "Display icon")}>
             <CompactInput
               value={channel.customPlatformIcon ?? ""}
               onChange={(event) => onPatch({ customPlatformIcon: event.target.value })}
-              placeholder="e.g. mdi:chat, lucide:bot"
+              placeholder={t("channels.custom.displayIconPlaceholder", "e.g. mdi:chat, lucide:bot")}
             />
           </Field>
         </div>
       </GroupSection>
 
       <GroupSection
-        title="Custom delivery"
+        title={t("channels.custom.delivery", "Custom delivery")}
         description={
           isStream
-            ? "Define the persistent WebSocket endpoint that will receive and send messages for this custom integration."
-            : "Define how outgoing replies leave the workspace when you are integrating a platform that is not built in."
+            ? t(
+                "channels.custom.streamDescription",
+                "Define the persistent WebSocket endpoint that will receive and send messages for this custom integration.",
+              )
+            : t(
+                "channels.custom.webhookDescription",
+                "Define how outgoing replies leave the workspace when you are integrating a platform that is not built in.",
+              )
         }
       >
         {isStream ? (
           <div className="grid gap-3 md:grid-cols-2">
-            <Field label="WebSocket URL" className="md:col-span-2">
+            <Field label={t("channels.custom.websocketUrl", "WebSocket URL")} className="md:col-span-2">
               <CompactInput
                 value={channel.customWebsocketUrl ?? ""}
                 onChange={(event) => onPatch({ customWebsocketUrl: event.target.value })}
                 placeholder="wss://example.com/socket"
               />
             </Field>
-            <Field label="Subprotocol">
+            <Field label={t("channels.custom.subprotocol", "Subprotocol")}>
               <CompactInput
                 value={channel.customWebsocketProtocol ?? ""}
                 onChange={(event) => onPatch({ customWebsocketProtocol: event.target.value })}
-                placeholder="Optional protocol name"
+                placeholder={t("channels.custom.subprotocolPlaceholder", "Optional protocol name")}
               />
             </Field>
           </div>
         ) : (
-          <Field label="Outgoing webhook URL">
+          <Field label={t("channels.custom.outgoingWebhookUrl", "Outgoing webhook URL")}>
             <CompactInput
               value={channel.customWebhookUrl ?? ""}
               onChange={(event) => onPatch({ customWebhookUrl: event.target.value })}
@@ -90,18 +101,21 @@ export function ChannelPlatformCustomForm({ channel, onPatch }: ChannelPlatformC
       </GroupSection>
 
       <GroupSection
-        title="Authentication"
-        description="Add optional headers when the remote endpoint requires credentials or a shared secret."
+        title={t("channels.custom.authentication", "Authentication")}
+        description={t(
+          "channels.custom.authenticationDescription",
+          "Add optional headers when the remote endpoint requires credentials or a shared secret.",
+        )}
       >
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Auth header name">
+          <Field label={t("channels.custom.authHeaderName", "Auth header name")}>
             <CompactInput
               value={channel.customAuthHeader ?? ""}
               onChange={(event) => onPatch({ customAuthHeader: event.target.value })}
-              placeholder="e.g. Authorization, X-API-Key"
+              placeholder={t("channels.custom.authHeaderNamePlaceholder", "e.g. Authorization, X-API-Key")}
             />
           </Field>
-          <Field label="Auth header value">
+          <Field label={t("channels.custom.authHeaderValue", "Auth header value")}>
             <CompactInput
               value={channel.customAuthValue ?? ""}
               onChange={(event) => onPatch({ customAuthValue: event.target.value })}
@@ -112,10 +126,13 @@ export function ChannelPlatformCustomForm({ channel, onPatch }: ChannelPlatformC
       </GroupSection>
 
       <GroupSection
-        title="Payload template"
-        description="Use {{content}} and {{chatId}} as placeholders inside the outgoing payload."
+        title={t("channels.custom.payloadTemplate", "Payload template")}
+        description={t(
+          "channels.custom.payloadTemplateDescription",
+          "Use {{content}} and {{chatId}} as placeholders inside the outgoing payload.",
+        )}
       >
-        <Field label="Payload template" className="md:col-span-2">
+        <Field label={t("channels.custom.payloadTemplate", "Payload template")} className="md:col-span-2">
           <CompactTextarea
             value={channel.customPayloadTemplate ?? '{\n  "chat_id": "{{chatId}}",\n  "text": "{{content}}"\n}'}
             onChange={(event) => onPatch({ customPayloadTemplate: event.target.value })}

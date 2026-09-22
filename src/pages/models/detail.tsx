@@ -18,8 +18,10 @@ import { ProviderLogoBadge } from "@/pages/models/components/provider-logo-badge
 import { ProviderModelList } from "@/pages/models/components/provider-model-list"
 import { ProviderSettingsForm } from "@/pages/models/components/provider-settings-form"
 import { useModelDetailStore } from "@/stores/model-detail-store"
+import { useAppIntl } from "@/lib/i18n"
 
 const ModelsDetailPage = () => {
+  const { t } = useAppIntl()
   const { modelId } = useParams<{ modelId: string }>()
   const navigate = useNavigate()
   const { draft, error, isLoading, load, updateDraft, save, reload } = useModelDetailStore()
@@ -121,8 +123,11 @@ const ModelsDetailPage = () => {
     }
     if (modelForm.contextWindow < 1 || modelForm.maxOutputTokens < 1) {
       showToast({
-        title: "Invalid model limits",
-        description: "Context window and max output tokens must both be at least 1.",
+        title: t("models.detail.invalidLimits.title", "Invalid model limits"),
+        description: t(
+          "models.detail.invalidLimits.description",
+          "Context window and max output tokens must both be at least 1.",
+        ),
         type: "warning",
       })
       return
@@ -203,8 +208,10 @@ const ModelsDetailPage = () => {
 
     if (!discoveryState.enabled) {
       showToast({
-        title: "Model catalog refresh unavailable",
-        description: discoveryState.reason ?? "Remote model discovery is not available for this provider.",
+        title: t("models.detail.discoveryUnavailable.title", "Model catalog refresh unavailable"),
+        description:
+          discoveryState.reason ??
+          t("models.detail.discoveryUnavailable.description", "Remote model discovery is not available for this provider."),
         type: "warning",
       })
       return
@@ -215,13 +222,16 @@ const ModelsDetailPage = () => {
       const result = await ModelApi.discover(draft)
       await persistProvider(result.provider)
       showToast({
-        title: "Model catalog refreshed",
-        description: `Loaded ${result.discoveredCount} models from ${result.source}.`,
+        title: t("models.detail.discoverySuccess.title", "Model catalog refreshed"),
+        description: t("models.detail.discoverySuccess.description", "Loaded {count} models from {source}.", {
+          count: result.discoveredCount,
+          source: result.source,
+        }),
         type: "success",
       })
     } catch (error) {
       showToast({
-        title: "Model catalog refresh failed",
+        title: t("models.detail.discoveryFailed.title", "Model catalog refresh failed"),
         description: error instanceof Error ? error.message : String(error),
         type: "error",
       })
@@ -244,19 +254,26 @@ const ModelsDetailPage = () => {
           draft ? (
             <DropdownMenu>
               <DropdownMenuTrigger
-                render={<Button variant="ghost" size="icon-sm" aria-label="Provider actions" title="Provider actions" />}
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={t("models.detail.actions", "Provider actions")}
+                    title={t("models.detail.actions", "Provider actions")}
+                  />
+                }
               >
                 <EllipsisIcon />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44 min-w-44">
                 <DropdownMenuItem disabled={!canToggleProvider} onClick={handleToggleProvider}>
                   <SlashIcon />
-                  {draft.enabled ? "Disable" : "Enable"}
+                  {draft.enabled ? t("models.detail.disable", "Disable") : t("models.detail.enable", "Enable")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem variant="destructive" onClick={() => setIsDisconnectDialogOpen(true)}>
                   <Trash2Icon />
-                  Delete
+                  {t("models.detail.delete", "Delete")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -266,7 +283,7 @@ const ModelsDetailPage = () => {
 
       <div className="flex-1 overflow-x-hidden p-4">
         <div className="flex w-full min-w-0 flex-col gap-4">
-          {isLoading ? <LoadingCard title="Loading provider..." /> : null}
+          {isLoading ? <LoadingCard title={t("models.detail.loading", "Loading provider...")} /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error && draft ? (
             <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,0.86fr)_minmax(0,1.14fr)]">
@@ -320,8 +337,11 @@ const ModelsDetailPage = () => {
         open={isDisconnectDialogOpen}
         onOpenChange={setIsDisconnectDialogOpen}
         onConfirm={() => void handleDeleteProvider()}
-        title="Disconnect provider?"
-        description="This disables the provider and clears its stored API key. It stays in the catalog and can be reconnected later."
+        title={t("models.detail.disconnectTitle", "Disconnect provider?")}
+        description={t(
+          "models.detail.disconnectDescription",
+          "This disables the provider and clears its stored API key. It stays in the catalog and can be reconnected later.",
+        )}
       />
     </div>
   )

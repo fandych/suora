@@ -1,4 +1,5 @@
 import type { ChannelConfigRecord } from "@/types/channel"
+import { useAppIntl } from "@/lib/i18n"
 import { CompactInput, Field, FormGroupSection, Hint } from "@/pages/channels/components/channel-form-fields"
 
 type ChannelPlatformDingTalkFormProps = {
@@ -7,28 +8,35 @@ type ChannelPlatformDingTalkFormProps = {
 }
 
 export function ChannelPlatformDingTalkForm({ channel, onPatch }: ChannelPlatformDingTalkFormProps) {
+  const { t } = useAppIntl()
   const isStream = channel.connectionMode === "stream"
 
   return (
     <div className="space-y-3">
       <FormGroupSection
-        title="Transport"
+        title={t("channels.dingtalk.transport", "Transport")}
         description={
           isStream
-            ? "Stream mode keeps the desktop app connected over WebSocket, so you do not need a public callback URL."
-            : "Webhook mode expects DingTalk to POST events into the workspace through the configured robot endpoint."
+            ? t(
+                "channels.dingtalk.streamDescription",
+                "Stream mode keeps the desktop app connected over WebSocket, so you do not need a public callback URL.",
+              )
+            : t(
+                "channels.dingtalk.webhookDescription",
+                "Webhook mode expects DingTalk to POST events into the workspace through the configured robot endpoint.",
+              )
         }
       >
         <div className="grid gap-3 md:grid-cols-2">
           {isStream ? (
             <>
-              <Field label="Client ID">
+              <Field label={t("channels.dingtalk.clientId", "Client ID")}>
                 <CompactInput
                   value={channel.dingtalkClientId ?? channel.appId ?? ""}
                   onChange={(event) => onPatch({ dingtalkClientId: event.target.value, appId: event.target.value })}
                 />
               </Field>
-              <Field label="Client secret">
+              <Field label={t("channels.dingtalk.clientSecret", "Client secret")}>
                 <CompactInput
                   type="password"
                   value={channel.dingtalkClientSecret ?? channel.appSecret ?? ""}
@@ -40,19 +48,19 @@ export function ChannelPlatformDingTalkForm({ channel, onPatch }: ChannelPlatfor
             </>
           ) : (
             <>
-              <Field label="Robot webhook URL" className="md:col-span-2">
+              <Field label={t("channels.dingtalk.robotWebhookUrl", "Robot webhook URL")} className="md:col-span-2">
                 <CompactInput
                   value={channel.dingtalkWebhookUrl ?? ""}
                   onChange={(event) => onPatch({ dingtalkWebhookUrl: event.target.value })}
                   placeholder="https://oapi.dingtalk.com/robot/send?..."
                 />
               </Field>
-              <Field label="Signing secret" className="md:col-span-2">
+              <Field label={t("channels.dingtalk.signingSecret", "Signing secret")} className="md:col-span-2">
                 <CompactInput
                   type="password"
                   value={channel.dingtalkSigningSecret ?? ""}
                   onChange={(event) => onPatch({ dingtalkSigningSecret: event.target.value })}
-                  placeholder="SEC..."
+                  placeholder={t("channels.dingtalk.signingSecretPlaceholder", "SEC...")}
                 />
               </Field>
             </>
@@ -61,8 +69,8 @@ export function ChannelPlatformDingTalkForm({ channel, onPatch }: ChannelPlatfor
       </FormGroupSection>
       <Hint>
         {isStream
-          ? "DingTalk Stream mode requires enterprise app credentials."
-          : "DingTalk Webhook mode requires the robot webhook URL and signing secret."}
+          ? t("channels.dingtalk.streamHint", "DingTalk Stream mode requires enterprise app credentials.")
+          : t("channels.dingtalk.webhookHint", "DingTalk Webhook mode requires the robot webhook URL and signing secret.")}
       </Hint>
     </div>
   )

@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useAppIntl } from "@/lib/i18n"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
 import type {
@@ -29,29 +30,31 @@ export function IntegrationBasicEditor({
   onSave,
   saveDisabled,
 }: IntegrationBasicEditorProps) {
+  const { t } = useAppIntl()
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Basic information</CardTitle>
-        <CardDescription>Set the toolset identity and shared connection settings.</CardDescription>
+        <CardTitle>{t("integrations.basic.title", "Basic information")}</CardTitle>
+        <CardDescription>{t("integrations.basic.description", "Set the toolset identity and shared connection settings.")}</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Name</div>
+            <div className="text-sm text-muted-foreground">{t("integrations.basic.name", "Name")}</div>
             <Input value={title} onChange={(event) => onTitleChange(event.target.value)} />
           </div>
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Kind</div>
+            <div className="text-sm text-muted-foreground">{t("integrations.basic.kind", "Kind")}</div>
             <NativeSelect
               value={config.kind}
               onChange={(event) =>
                 onChange(createChangedKindConfig(event.target.value as IntegrationConfig["kind"], config))
               }
             >
-              <NativeSelectOption value="http">HTTP</NativeSelectOption>
-              <NativeSelectOption value="scripts">Scripts</NativeSelectOption>
-              <NativeSelectOption value="mcp">MCP</NativeSelectOption>
+              <NativeSelectOption value="http">{t("integrations.basic.kind.http", "HTTP")}</NativeSelectOption>
+              <NativeSelectOption value="scripts">{t("integrations.basic.kind.scripts", "Scripts")}</NativeSelectOption>
+              <NativeSelectOption value="mcp">{t("integrations.basic.kind.mcp", "MCP")}</NativeSelectOption>
             </NativeSelect>
           </div>
         </div>
@@ -63,7 +66,7 @@ export function IntegrationBasicEditor({
       <CardFooter className="justify-end border-t pt-4">
         <Button size="sm" onClick={onSave} disabled={saveDisabled}>
           <SaveIcon />
-          Save
+          {t("integrations.basic.save", "Save")}
         </Button>
       </CardFooter>
     </Card>
@@ -130,6 +133,7 @@ function CustomHeadersEditor({
   headers: Record<string, string>
   onChange: (headers: Record<string, string>) => void
 }) {
+  const { t } = useAppIntl()
   const entries = Object.entries(headers)
 
   const updateEntry = (index: number, field: "key" | "value", value: string) => {
@@ -164,17 +168,19 @@ function CustomHeadersEditor({
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm text-muted-foreground">Request headers</div>
-          <div className="text-xs text-muted-foreground">Add shared request headers as key/value pairs.</div>
+          <div className="text-sm text-muted-foreground">{t("integrations.basic.requestHeaders", "Request headers")}</div>
+          <div className="text-xs text-muted-foreground">
+            {t("integrations.basic.requestHeadersDescription", "Add shared request headers as key/value pairs.")}
+          </div>
         </div>
         <Button type="button" size="sm" variant="outline" onClick={addEntry}>
           <PlusIcon />
-          Add header
+          {t("integrations.basic.addHeader", "Add header")}
         </Button>
       </div>
       {entries.length === 0 ? (
         <div className="rounded-lg border border-dashed px-3 py-2 text-xs text-muted-foreground">
-          No custom headers.
+          {t("integrations.basic.noHeaders", "No custom headers.")}
         </div>
       ) : null}
       {entries.map(([key, value], index) => (
@@ -182,21 +188,21 @@ function CustomHeadersEditor({
           <Input
             value={key}
             onChange={(event) => updateEntry(index, "key", event.target.value)}
-            placeholder="Header name"
-            aria-label={`Header name ${index + 1}`}
+            placeholder={t("integrations.basic.headerName", "Header name")}
+            aria-label={t("integrations.basic.headerNameIndex", "Header name {index}", { index: index + 1 })}
           />
           <Input
             value={value}
             onChange={(event) => updateEntry(index, "value", event.target.value)}
-            placeholder="Header value"
-            aria-label={`Header value ${index + 1}`}
+            placeholder={t("integrations.basic.headerValue", "Header value")}
+            aria-label={t("integrations.basic.headerValueIndex", "Header value {index}", { index: index + 1 })}
           />
           <Button
             type="button"
             size="icon-sm"
             variant="destructive"
-            aria-label={`Delete header ${key || index + 1}`}
-            title="Delete header"
+            aria-label={t("integrations.basic.deleteHeader", "Delete header {name}", { name: key || index + 1 })}
+            title={t("integrations.basic.deleteHeaderAction", "Delete header")}
             onClick={() => removeEntry(key)}
           >
             <Trash2Icon />
@@ -214,12 +220,13 @@ function HttpConnectionFields({
   config: HttpIntegrationConfig
   onChange: (config: IntegrationConfig) => void
 }) {
+  const { t } = useAppIntl()
   const authConfig = parseAuthConfig(config)
 
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Description</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.http.description", "Description")}</div>
         <Textarea
           value={config.description}
           onChange={(event) => onChange({ ...config, description: event.target.value })}
@@ -227,22 +234,22 @@ function HttpConnectionFields({
         />
       </div>
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Base URL</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.http.baseUrl", "Base URL")}</div>
         <Input
           value={config.baseUrl}
           onChange={(event) => onChange({ ...config, baseUrl: event.target.value })}
-          placeholder="https://api.example.com"
+          placeholder={t("integrations.basic.http.baseUrlPlaceholder", "https://api.example.com")}
         />
       </div>
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Authorization</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.http.authorization", "Authorization")}</div>
         <NativeSelect
           value={config.authType}
           onChange={(event) =>
             onChange({ ...config, authType: event.target.value as HttpIntegrationConfig["authType"] })
           }
         >
-          <NativeSelectOption value="none">None</NativeSelectOption>
+          <NativeSelectOption value="none">{t("integrations.basic.http.auth.none", "None")}</NativeSelectOption>
           <NativeSelectOption value="bearer">Bearer token</NativeSelectOption>
           <NativeSelectOption value="basic">Basic auth</NativeSelectOption>
           <NativeSelectOption value="api-key">API key</NativeSelectOption>
@@ -326,10 +333,12 @@ function McpConnectionFields({
   config: McpIntegrationConfig
   onChange: (config: IntegrationConfig) => void
 }) {
+  const { t } = useAppIntl()
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Description</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.description", "Description")}</div>
         <Textarea
           value={config.description}
           onChange={(event) => onChange({ ...config, description: event.target.value })}
@@ -338,11 +347,11 @@ function McpConnectionFields({
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Endpoint</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.endpoint", "Endpoint")}</div>
           <Input value={config.endpoint} onChange={(event) => onChange({ ...config, endpoint: event.target.value })} />
         </div>
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Launch command</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.launchCommand", "Launch command")}</div>
           <Input
             value={config.launchCommand}
             onChange={(event) => onChange({ ...config, launchCommand: event.target.value })}
@@ -351,7 +360,7 @@ function McpConnectionFields({
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Protocols</div>
+          <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.protocols", "Protocols")}</div>
           <Input
             value={config.protocols.join(", ")}
             onChange={(event) =>
@@ -366,7 +375,7 @@ function McpConnectionFields({
           />
         </div>
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Auth modes</div>
+          <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.authModes", "Auth modes")}</div>
           <Input
             value={config.authModes.join(", ")}
             onChange={(event) =>
@@ -382,7 +391,7 @@ function McpConnectionFields({
         </div>
       </div>
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Auth config JSON</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.authConfigJson", "Auth config JSON")}</div>
         <Textarea
           value={config.authConfigJson}
           onChange={(event) => onChange({ ...config, authConfigJson: event.target.value })}
@@ -391,13 +400,16 @@ function McpConnectionFields({
         />
       </div>
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Tool catalog JSON</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.toolCatalogJson", "Tool catalog JSON")}</div>
         <Textarea
           value={config.toolCatalogJson}
           onChange={(event) => onChange({ ...config, toolCatalogJson: event.target.value })}
           rows={8}
           className="font-mono"
-          placeholder='[{ "name": "listRepositories", "description": "List repos" }]'
+          placeholder={t(
+            "integrations.basic.mcp.toolCatalogPlaceholder",
+            '[{ "name": "listRepositories", "description": "List repos" }]',
+          )}
         />
       </div>
     </div>
@@ -411,10 +423,12 @@ function ScriptRuntimeFields({
   config: ScriptIntegrationConfig
   onChange: (config: IntegrationConfig) => void
 }) {
+  const { t } = useAppIntl()
+
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">Description</div>
+        <div className="text-sm text-muted-foreground">{t("integrations.basic.scripts.description", "Description")}</div>
         <Textarea
           value={config.description}
           onChange={(event) => onChange({ ...config, description: event.target.value })}
@@ -423,11 +437,11 @@ function ScriptRuntimeFields({
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Runtime</div>
+          <div className="text-sm text-muted-foreground">{t("integrations.basic.scripts.runtime", "Runtime")}</div>
           <Input value={config.runtime} onChange={(event) => onChange({ ...config, runtime: event.target.value })} />
         </div>
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Timeout ms</div>
+          <div className="text-sm text-muted-foreground">{t("integrations.basic.scripts.timeoutMs", "Timeout ms")}</div>
           <Input
             type="number"
             value={String(config.timeoutMs)}

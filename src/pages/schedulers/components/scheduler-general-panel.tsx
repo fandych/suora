@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { useAppIntl } from "@/lib/i18n"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -15,49 +16,57 @@ type SchedulerGeneralPanelProps = {
 }
 
 export function SchedulerGeneralPanel({ draft, onChange, onSave }: SchedulerGeneralPanelProps) {
+  const { t } = useAppIntl()
+
   return (
     <Card className="h-full min-h-0">
       <CardHeader className="border-b">
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle>General</CardTitle>
-          <Badge variant={draft.enabled ? "default" : "secondary"}>{draft.enabled ? "Enabled" : "Disabled"}</Badge>
+          <CardTitle>{t("schedulers.general.title", "General")}</CardTitle>
+          <Badge variant={draft.enabled ? "default" : "secondary"}>
+            {draft.enabled ? t("schedulers.general.enabled", "Enabled") : t("schedulers.general.disabled", "Disabled")}
+          </Badge>
         </div>
-        <CardDescription>Set when this scheduler runs and how missed runs are handled.</CardDescription>
+        <CardDescription>
+          {t("schedulers.general.description", "Set when this scheduler runs and how missed runs are handled.")}
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-5">
         <FieldGroup>
           <Field>
-            <FieldLabel htmlFor="scheduler-name">Name</FieldLabel>
+            <FieldLabel htmlFor="scheduler-name">{t("schedulers.general.name", "Name")}</FieldLabel>
             <Input
               id="scheduler-name"
               value={draft.title}
               onChange={(event) => onChange({ ...draft, title: event.target.value })}
-              placeholder="Scheduler name"
+              placeholder={t("schedulers.general.namePlaceholder", "Scheduler name")}
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="scheduler-description">Description</FieldLabel>
+            <FieldLabel htmlFor="scheduler-description">{t("schedulers.general.descriptionLabel", "Description")}</FieldLabel>
             <Textarea
               id="scheduler-description"
               value={draft.description}
               onChange={(event) => onChange({ ...draft, description: event.target.value })}
               rows={4}
-              placeholder="Describe this scheduled task."
+              placeholder={t("schedulers.general.descriptionPlaceholder", "Describe this scheduled task.")}
             />
           </Field>
           <div className="grid gap-5 md:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="scheduler-cron">Cron expression</FieldLabel>
+              <FieldLabel htmlFor="scheduler-cron">{t("schedulers.general.cron", "Cron expression")}</FieldLabel>
               <Input
                 id="scheduler-cron"
                 value={draft.schedule}
                 onChange={(event) => onChange({ ...draft, schedule: event.target.value })}
                 placeholder="0 9 * * *"
               />
-              <FieldDescription>Use a standard five-part cron expression.</FieldDescription>
+              <FieldDescription>
+                {t("schedulers.general.cronHint", "Use a standard five-part cron expression.")}
+              </FieldDescription>
             </Field>
             <Field>
-              <FieldLabel htmlFor="scheduler-time-zone">Time zone</FieldLabel>
+              <FieldLabel htmlFor="scheduler-time-zone">{t("schedulers.general.timeZone", "Time zone")}</FieldLabel>
               <Input
                 id="scheduler-time-zone"
                 value={draft.timeZone}
@@ -68,7 +77,7 @@ export function SchedulerGeneralPanel({ draft, onChange, onSave }: SchedulerGene
           </div>
           <div className="grid gap-5 md:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="scheduler-missed-policy">Missed runs</FieldLabel>
+              <FieldLabel htmlFor="scheduler-missed-policy">{t("schedulers.general.missedRuns", "Missed runs")}</FieldLabel>
               <NativeSelect
                 id="scheduler-missed-policy"
                 value={draft.missedRunPolicy}
@@ -76,12 +85,12 @@ export function SchedulerGeneralPanel({ draft, onChange, onSave }: SchedulerGene
                   onChange({ ...draft, missedRunPolicy: event.target.value as SchedulerDetail["missedRunPolicy"] })
                 }
               >
-                <NativeSelectOption value="skip">Skip missed runs</NativeSelectOption>
-                <NativeSelectOption value="catch-up">Catch up missed runs</NativeSelectOption>
+                <NativeSelectOption value="skip">{t("schedulers.general.missedRuns.skip", "Skip missed runs")}</NativeSelectOption>
+                <NativeSelectOption value="catch-up">{t("schedulers.general.missedRuns.catchUp", "Catch up missed runs")}</NativeSelectOption>
               </NativeSelect>
             </Field>
             <Field orientation="horizontal" className="self-end rounded-lg border px-3 py-2.5">
-              <FieldLabel htmlFor="scheduler-enabled">Enabled</FieldLabel>
+              <FieldLabel htmlFor="scheduler-enabled">{t("schedulers.general.enabled", "Enabled")}</FieldLabel>
               <Switch
                 id="scheduler-enabled"
                 checked={draft.enabled}
@@ -91,7 +100,7 @@ export function SchedulerGeneralPanel({ draft, onChange, onSave }: SchedulerGene
           </div>
           <div className="grid gap-5 md:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="scheduler-retry-limit">Retry limit</FieldLabel>
+              <FieldLabel htmlFor="scheduler-retry-limit">{t("schedulers.general.retryLimit", "Retry limit")}</FieldLabel>
               <Input
                 id="scheduler-retry-limit"
                 type="number"
@@ -101,7 +110,9 @@ export function SchedulerGeneralPanel({ draft, onChange, onSave }: SchedulerGene
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="scheduler-retry-backoff">Retry backoff (seconds)</FieldLabel>
+              <FieldLabel htmlFor="scheduler-retry-backoff">
+                {t("schedulers.general.retryBackoff", "Retry backoff (seconds)")}
+              </FieldLabel>
               <Input
                 id="scheduler-retry-backoff"
                 type="number"
@@ -115,7 +126,7 @@ export function SchedulerGeneralPanel({ draft, onChange, onSave }: SchedulerGene
           </div>
         </FieldGroup>
         <div className="mt-auto flex justify-end pt-1">
-          <Button onClick={onSave}>Save scheduler</Button>
+          <Button onClick={onSave}>{t("schedulers.general.save", "Save scheduler")}</Button>
         </div>
       </CardContent>
     </Card>

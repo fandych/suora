@@ -3,6 +3,7 @@ import path from "node:path"
 import { BrowserWindow, Menu, nativeImage } from "electron"
 
 import { appState, setMainWindow } from "@/electron/infrastructure/app-state"
+import { rendererOrigin } from "@/electron/infrastructure/renderer-protocol"
 import { getMainWindowIconPath } from "@/electron/infrastructure/runtime-resource-paths"
 
 export async function createWindow() {
@@ -59,7 +60,7 @@ export async function createWindow() {
     }
     await mainWindow.loadURL(rendererUrl)
   } else {
-    await mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"))
+    await mainWindow.loadURL(`${rendererOrigin}/`)
   }
 
   return mainWindow

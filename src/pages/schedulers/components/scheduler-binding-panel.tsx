@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { useAppIntl } from "@/lib/i18n"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ResourceSelector } from "@/components/resource-selector"
 import { Textarea } from "@/components/ui/textarea"
@@ -70,10 +71,12 @@ function WorkflowInputFields({
   draft,
   parameters,
   onChange,
+  t,
 }: {
   draft: SchedulerDetail
   parameters: WorkflowSchemaParameter[]
   onChange: (next: SchedulerDetail) => void
+  t: ReturnType<typeof useAppIntl>["t"]
 }) {
   const payload = useMemo(() => readPayload(draft.inputPayloadJson), [draft.inputPayloadJson])
 
@@ -81,9 +84,12 @@ function WorkflowInputFields({
     return (
       <Alert>
         <BracesIcon />
-        <AlertTitle>No declared inputs</AlertTitle>
+        <AlertTitle>{t("schedulers.binding.noInputs.title", "No declared inputs")}</AlertTitle>
         <AlertDescription>
-          This workflow has no inputs on its start node. It will run with an empty object.
+          {t(
+            "schedulers.binding.noInputs.description",
+            "This workflow has no inputs on its start node. It will run with an empty object.",
+          )}
         </AlertDescription>
       </Alert>
     )
@@ -113,8 +119,8 @@ function WorkflowInputFields({
                 value={value || "false"}
                 onChange={(event) => updateField(parameter, event.target.value)}
               >
-                <NativeSelectOption value="false">False</NativeSelectOption>
-                <NativeSelectOption value="true">True</NativeSelectOption>
+                <NativeSelectOption value="false">{t("schedulers.binding.boolean.false", "False")}</NativeSelectOption>
+                <NativeSelectOption value="true">{t("schedulers.binding.boolean.true", "True")}</NativeSelectOption>
               </NativeSelect>
             ) : supportsTextarea ? (
               <Textarea
@@ -149,6 +155,7 @@ export function SchedulerBindingPanel({
   onTargetTypeChange,
   workflows,
 }: SchedulerBindingPanelProps) {
+  const { t } = useAppIntl()
   const [workflowDetail, setWorkflowDetail] = useState<WorkflowDetail | null>(null)
   const [isLoadingWorkflow, setIsLoadingWorkflow] = useState(false)
   const targetOptions = draft.targetType === "agent" ? agents : workflows
@@ -186,33 +193,37 @@ export function SchedulerBindingPanel({
     <Card className="h-full min-h-0">
       <CardHeader className="border-b">
         <div className="flex flex-wrap items-center gap-2">
-          <CardTitle>Binding</CardTitle>
+          <CardTitle>{t("schedulers.binding.title", "Binding")}</CardTitle>
           <Badge variant="outline">{draft.targetType}</Badge>
         </div>
-        <CardDescription>Select what this scheduler invokes and configure the invocation data.</CardDescription>
+        <CardDescription>
+          {t("schedulers.binding.description", "Select what this scheduler invokes and configure the invocation data.")}
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex min-h-0 flex-1 flex-col gap-5 overflow-auto">
         <FieldGroup>
           <div className="grid gap-5 md:grid-cols-2">
             <Field>
-              <FieldLabel htmlFor="scheduler-target-type">Target type</FieldLabel>
+              <FieldLabel htmlFor="scheduler-target-type">{t("schedulers.binding.targetType", "Target type")}</FieldLabel>
               <NativeSelect
                 id="scheduler-target-type"
                 value={draft.targetType}
                 onChange={(event) => onTargetTypeChange(event.target.value as SchedulerDetail["targetType"])}
               >
-                <NativeSelectOption value="workflow">Workflow</NativeSelectOption>
-                <NativeSelectOption value="agent">Agent</NativeSelectOption>
+                <NativeSelectOption value="workflow">{t("schedulers.binding.workflow", "Workflow")}</NativeSelectOption>
+                <NativeSelectOption value="agent">{t("schedulers.binding.agent", "Agent")}</NativeSelectOption>
               </NativeSelect>
             </Field>
             <Field>
               <FieldLabel htmlFor="scheduler-target">
-                {draft.targetType === "workflow" ? "Workflow" : "Agent"}
+                {draft.targetType === "workflow"
+                  ? t("schedulers.binding.workflow", "Workflow")
+                  : t("schedulers.binding.agent", "Agent")}
               </FieldLabel>
               <ResourceSelector
                 id="scheduler-target"
                 value={draft.targetId}
-                emptyLabel="Select a target"
+                emptyLabel={t("schedulers.binding.selectTarget", "Select a target")}
                 options={targetOptions.map((item) => ({
                   id: item.id,
                   label: item.title,
@@ -228,29 +239,36 @@ export function SchedulerBindingPanel({
           <>
             <Alert>
               <WorkflowIcon />
-              <AlertTitle>{selectedTarget?.title ?? "Workflow inputs"}</AlertTitle>
+              <AlertTitle>{selectedTarget?.title ?? t("schedulers.binding.workflowInputs", "Workflow inputs")}</AlertTitle>
               <AlertDescription>
-                Fields are generated from the selected workflow’s start-node input schema.
+                {t(
+                  "schedulers.binding.workflowInputsDescription",
+                  "Fields are generated from the selected workflow’s start-node input schema.",
+                )}
               </AlertDescription>
             </Alert>
             {isLoadingWorkflow ? (
-              <div className="text-sm text-muted-foreground">Loading workflow input contract…</div>
+              <div className="text-sm text-muted-foreground">
+                {t("schedulers.binding.loadingWorkflow", "Loading workflow input contract…")}
+              </div>
             ) : (
-              <WorkflowInputFields draft={draft} parameters={parameters} onChange={onChange} />
+              <WorkflowInputFields draft={draft} parameters={parameters} onChange={onChange} t={t} />
             )}
           </>
         ) : (
           <>
             <Alert>
               <BotIcon />
-              <AlertTitle>{selectedTarget?.title ?? "Agent prompt"}</AlertTitle>
+              <AlertTitle>{selectedTarget?.title ?? t("schedulers.binding.agentPrompt", "Agent prompt")}</AlertTitle>
               <AlertDescription>
-                The selected agent owns its system prompt. Add the task, context, and any prompt instructions for this
-                scheduled invocation below.
+                {t(
+                  "schedulers.binding.agentPromptDescription",
+                  "The selected agent owns its system prompt. Add the task, context, and any prompt instructions for this scheduled invocation below.",
+                )}
               </AlertDescription>
             </Alert>
             <Field>
-              <FieldLabel htmlFor="scheduler-agent-prompt">Invocation prompt</FieldLabel>
+              <FieldLabel htmlFor="scheduler-agent-prompt">{t("schedulers.binding.invocationPrompt", "Invocation prompt")}</FieldLabel>
               <Textarea
                 id="scheduler-agent-prompt"
                 className="min-h-44 flex-1 font-mono"
@@ -264,10 +282,16 @@ export function SchedulerBindingPanel({
                     }),
                   })
                 }
-                placeholder="Describe the task this agent should complete on each run."
+                placeholder={t(
+                  "schedulers.binding.invocationPromptPlaceholder",
+                  "Describe the task this agent should complete on each run.",
+                )}
               />
               <FieldDescription>
-                Saved as the agent invocation payload. Do not put secrets in this field.
+                {t(
+                  "schedulers.binding.invocationPromptHint",
+                  "Saved as the agent invocation payload. Do not put secrets in this field.",
+                )}
               </FieldDescription>
             </Field>
           </>

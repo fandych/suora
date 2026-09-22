@@ -3,6 +3,7 @@ import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTit
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
+import { useAppIntl } from "@/lib/i18n"
 import type { PreferenceSettings } from "@/services/preference-service"
 
 import PreferenceSectionCard from "@/pages/preference/components/preference-section-card"
@@ -24,27 +25,32 @@ function splitLines(value: string) {
 }
 
 const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelProps) => {
+  const { t } = useAppIntl()
+
   return (
     <PreferenceSectionCard
       id="security"
-      title="Security"
-      description="Execution, SSL certificates, and file access rules."
+      title={t("preference.security.title", "Security")}
+      description={t("preference.security.description", "Execution, SSL certificates, and file access rules.")}
     >
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Badge variant="outline">Enforced</Badge>
+        <Badge variant="outline">{t("preference.security.enforced", "Enforced")}</Badge>
         <span>
-          Workspace commands, file tools, and network connections respect these preferences inside the desktop runtime.
+          {t(
+            "preference.security.enforcedDescription",
+            "Workspace commands, file tools, and network connections respect these preferences inside the desktop runtime.",
+          )}
         </span>
       </div>
       <FieldGroup className="grid gap-4 md:grid-cols-2">
         <Field className="md:col-span-2 rounded-lg border p-4" orientation="horizontal">
           <FieldContent>
-            <FieldTitle>Ignore SSL / CA certificate validation</FieldTitle>
+            <FieldTitle>{t("preference.security.ignoreSsl.title", "Ignore SSL / CA certificate validation")}</FieldTitle>
             <FieldDescription>
-              Bypass CA and SSL certificate verification for HTTPS requests, LLM model APIs, and WebHooks. Enable this
-              if your environment uses custom CA certificates, self-signed certs, or enterprise proxy inspection. This
-              lowers TLS security for the entire desktop runtime and should stay disabled outside controlled debugging or
-              enterprise-trust scenarios.
+              {t(
+                "preference.security.ignoreSsl.description",
+                "Bypass CA and SSL certificate verification for HTTPS requests, LLM model APIs, and WebHooks. Enable this if your environment uses custom CA certificates, self-signed certs, or enterprise proxy inspection. This lowers TLS security for the entire desktop runtime and should stay disabled outside controlled debugging or enterprise-trust scenarios.",
+              )}
             </FieldDescription>
           </FieldContent>
           <Switch
@@ -54,7 +60,7 @@ const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelPro
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="preference-command-confirm">Command confirmation</FieldLabel>
+          <FieldLabel htmlFor="preference-command-confirm">{t("preference.security.commandConfirmation", "Command confirmation")}</FieldLabel>
           <NativeSelect
             id="preference-command-confirm"
             className="w-full"
@@ -63,13 +69,13 @@ const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelPro
               onChange({ commandConfirmationMode: event.target.value as PreferenceSettings["commandConfirmationMode"] })
             }
           >
-            <NativeSelectOption value="daily">Prompt once per day</NativeSelectOption>
-            <NativeSelectOption value="never">Never prompt</NativeSelectOption>
-            <NativeSelectOption value="always">Prompt every time</NativeSelectOption>
+            <NativeSelectOption value="daily">{t("preference.security.commandConfirmation.daily", "Prompt once per day")}</NativeSelectOption>
+            <NativeSelectOption value="never">{t("preference.security.commandConfirmation.never", "Never prompt")}</NativeSelectOption>
+            <NativeSelectOption value="always">{t("preference.security.commandConfirmation.always", "Prompt every time")}</NativeSelectOption>
           </NativeSelect>
         </Field>
         <Field>
-          <FieldLabel htmlFor="preference-file-policy">File access policy</FieldLabel>
+          <FieldLabel htmlFor="preference-file-policy">{t("preference.security.fileAccessPolicy", "File access policy")}</FieldLabel>
           <NativeSelect
             id="preference-file-policy"
             className="w-full"
@@ -78,14 +84,16 @@ const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelPro
               onChange({ fileAccessPolicy: event.target.value as PreferenceSettings["fileAccessPolicy"] })
             }
           >
-            <NativeSelectOption value="allowlist">Allowlist directories</NativeSelectOption>
-            <NativeSelectOption value="denylist">Denylist directories</NativeSelectOption>
+            <NativeSelectOption value="allowlist">{t("preference.security.fileAccessPolicy.allowlist", "Allowlist directories")}</NativeSelectOption>
+            <NativeSelectOption value="denylist">{t("preference.security.fileAccessPolicy.denylist", "Denylist directories")}</NativeSelectOption>
           </NativeSelect>
         </Field>
         <Field className="md:col-span-2">
           <FieldContent>
             <FieldTitle>
-              {draft.fileAccessPolicy === "allowlist" ? "Allowed directories" : "Blocked directories"}
+              {draft.fileAccessPolicy === "allowlist"
+                ? t("preference.security.allowedDirectories", "Allowed directories")
+                : t("preference.security.blockedDirectories", "Blocked directories")}
             </FieldTitle>
           </FieldContent>
           <Textarea
@@ -98,7 +106,7 @@ const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelPro
         </Field>
         <Field className="md:col-span-2">
           <FieldContent>
-            <FieldTitle>Command allowlist</FieldTitle>
+            <FieldTitle>{t("preference.security.commandAllowlist", "Command allowlist")}</FieldTitle>
           </FieldContent>
           <Textarea
             rows={6}
@@ -110,7 +118,7 @@ const PreferenceSecurityPanel = ({ draft, onChange }: PreferenceSecurityPanelPro
         </Field>
         <Field className="md:col-span-2">
           <FieldContent>
-            <FieldTitle>Command blacklist</FieldTitle>
+            <FieldTitle>{t("preference.security.commandBlacklist", "Command blacklist")}</FieldTitle>
           </FieldContent>
           <Textarea
             rows={6}

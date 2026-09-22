@@ -3,6 +3,7 @@ import { Trash2Icon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Switch } from "@/components/ui/switch"
+import { useAppIntl } from "@/lib/i18n"
 import type { ChannelConfigRecord, EmailAction, EmailFilterRule } from "@/types/channel"
 import { CompactInput, Field, Hint, Label } from "@/pages/channels/components/channel-form-fields"
 
@@ -31,41 +32,44 @@ function GroupSection({
   )
 }
 
-function getActionValueLabel(action: EmailAction) {
+function getActionValueLabel(action: EmailAction, t: ReturnType<typeof useAppIntl>["t"]) {
   switch (action.type) {
     case "forward":
-      return "Forward to"
+      return t("channels.email.actionValue.forward", "Forward to")
     case "label":
-      return "Label"
+      return t("channels.email.actionValue.label", "Label")
     case "webhook":
-      return "Webhook URL"
+      return t("channels.email.actionValue.webhook", "Webhook URL")
     case "auto_reply":
-      return action.useAgent === false ? "Reply template" : "Reply target"
+      return action.useAgent === false
+        ? t("channels.email.actionValue.replyTemplate", "Reply template")
+        : t("channels.email.actionValue.replyTarget", "Reply target")
     default:
-      return "Value"
+      return t("channels.email.actionValue.value", "Value")
   }
 }
 
-function getActionValuePlaceholder(action: EmailAction) {
+function getActionValuePlaceholder(action: EmailAction, t: ReturnType<typeof useAppIntl>["t"]) {
   switch (action.type) {
     case "forward":
-      return "recipient@example.com"
+      return t("channels.email.actionPlaceholder.forward", "recipient@example.com")
     case "label":
-      return "e.g. processed, support"
+      return t("channels.email.actionPlaceholder.label", "e.g. processed, support")
     case "webhook":
-      return "https://your-api.example.com/email-hook"
+      return t("channels.email.actionPlaceholder.webhook", "https://your-api.example.com/email-hook")
     case "auto_reply":
       return action.useAgent === false
-        ? "Use {{subject}}, {{from}}, {{body}} as placeholders"
-        : "Leave empty to use the channel reply agent"
+        ? t("channels.email.actionPlaceholder.replyTemplate", "Use {{subject}}, {{from}}, {{body}} as placeholders")
+        : t("channels.email.actionPlaceholder.replyTarget", "Leave empty to use the channel reply agent")
     case "agent_process":
-      return "Use the selected reply agent to process matched emails"
+      return t("channels.email.actionPlaceholder.agentProcess", "Use the selected reply agent to process matched emails")
     default:
-      return "Target or value"
+      return t("channels.email.actionPlaceholder.default", "Target or value")
   }
 }
 
 export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEmailFormProps) {
+  const { t } = useAppIntl()
   const emailFilters = channel.emailFilters ?? []
   const emailActions = channel.emailActions ?? []
 
@@ -80,46 +84,49 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
   return (
     <div className="space-y-3">
       <GroupSection
-        title="IMAP"
-        description="Configure the IMAP server to monitor incoming emails. The channel will periodically poll the mailbox for new messages matching your filter rules."
+        title={t("channels.email.imap", "IMAP")}
+        description={t(
+          "channels.email.imapDescription",
+          "Configure the IMAP server to monitor incoming emails. The channel will periodically poll the mailbox for new messages matching your filter rules.",
+        )}
       >
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="IMAP host">
+          <Field label={t("channels.email.imapHost", "IMAP host")}>
             <CompactInput
               value={channel.emailImapHost ?? ""}
               onChange={(event) => onPatch({ emailImapHost: event.target.value })}
-              placeholder="e.g. imap.gmail.com"
+              placeholder={t("channels.email.imapHostPlaceholder", "e.g. imap.gmail.com")}
             />
           </Field>
-          <Field label="IMAP port">
+          <Field label={t("channels.email.imapPort", "IMAP port")}>
             <CompactInput
               type="number"
               value={String(channel.emailImapPort ?? 993)}
               onChange={(event) => onPatch({ emailImapPort: Number(event.target.value) || 993 })}
             />
           </Field>
-          <Field label="Username / email">
+          <Field label={t("channels.email.username", "Username / email")}>
             <CompactInput
               value={channel.emailImapUser ?? ""}
               onChange={(event) => onPatch({ emailImapUser: event.target.value })}
-              placeholder="your@email.com"
+              placeholder={t("channels.email.usernamePlaceholder", "your@email.com")}
             />
           </Field>
-          <Field label="Password">
+          <Field label={t("channels.email.password", "Password")}>
             <CompactInput
               type="password"
               value={channel.emailImapPassword ?? ""}
               onChange={(event) => onPatch({ emailImapPassword: event.target.value })}
-              placeholder="App password or IMAP password"
+              placeholder={t("channels.email.passwordPlaceholder", "App password or IMAP password")}
             />
           </Field>
-          <Field label="Mailbox">
+          <Field label={t("channels.email.mailbox", "Mailbox")}>
             <CompactInput
               value={channel.emailImapMailbox ?? "INBOX"}
               onChange={(event) => onPatch({ emailImapMailbox: event.target.value })}
             />
           </Field>
-          <Field label="Poll interval (seconds)">
+          <Field label={t("channels.email.pollInterval", "Poll interval (seconds)")}>
             <CompactInput
               type="number"
               value={String(channel.emailPollInterval ?? 60)}
@@ -129,7 +136,7 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
         </div>
 
         <label className="flex items-center justify-between rounded-xl border px-3 py-2 text-xs">
-          <span>Use TLS / SSL</span>
+          <span>{t("channels.email.useTls", "Use TLS / SSL")}</span>
           <Switch
             checked={channel.emailImapTls !== false}
             onCheckedChange={(checked) => onPatch({ emailImapTls: checked })}
@@ -138,65 +145,68 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
       </GroupSection>
 
       <GroupSection
-        title="SMTP"
-        description="Configure SMTP for sending reply emails. If not set, replies will use the IMAP credentials with common SMTP defaults."
+        title={t("channels.email.smtp", "SMTP")}
+        description={t(
+          "channels.email.smtpDescription",
+          "Configure SMTP for sending reply emails. If not set, replies will use the IMAP credentials with common SMTP defaults.",
+        )}
       >
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="SMTP host">
+          <Field label={t("channels.email.smtpHost", "SMTP host")}>
             <CompactInput
               value={channel.emailSmtpHost ?? ""}
               onChange={(event) => onPatch({ emailSmtpHost: event.target.value })}
-              placeholder="e.g. smtp.gmail.com"
+              placeholder={t("channels.email.smtpHostPlaceholder", "e.g. smtp.gmail.com")}
             />
           </Field>
-          <Field label="SMTP port">
+          <Field label={t("channels.email.smtpPort", "SMTP port")}>
             <CompactInput
               type="number"
               value={String(channel.emailSmtpPort ?? 465)}
               onChange={(event) => onPatch({ emailSmtpPort: Number(event.target.value) || 465 })}
             />
           </Field>
-          <Field label="SMTP username">
+          <Field label={t("channels.email.smtpUsername", "SMTP username")}>
             <CompactInput
               value={channel.emailSmtpUser ?? ""}
               onChange={(event) => onPatch({ emailSmtpUser: event.target.value })}
-              placeholder="Leave blank to use IMAP username"
+              placeholder={t("channels.email.smtpUsernamePlaceholder", "Leave blank to use IMAP username")}
             />
           </Field>
-          <Field label="SMTP password">
+          <Field label={t("channels.email.smtpPassword", "SMTP password")}>
             <CompactInput
               type="password"
               value={channel.emailSmtpPassword ?? ""}
               onChange={(event) => onPatch({ emailSmtpPassword: event.target.value })}
-              placeholder="Leave blank to use IMAP password"
+              placeholder={t("channels.email.smtpPasswordPlaceholder", "Leave blank to use IMAP password")}
             />
           </Field>
-          <Field label="From name">
+          <Field label={t("channels.email.fromName", "From name")}>
             <CompactInput
               value={channel.emailFromName ?? ""}
               onChange={(event) => onPatch({ emailFromName: event.target.value })}
-              placeholder="e.g. Support Bot"
+              placeholder={t("channels.email.fromNamePlaceholder", "e.g. Support Bot")}
             />
           </Field>
-          <Field label="From address">
+          <Field label={t("channels.email.fromAddress", "From address")}>
             <CompactInput
               value={channel.emailFromAddress ?? ""}
               onChange={(event) => onPatch({ emailFromAddress: event.target.value })}
-              placeholder="Leave blank to use IMAP email"
+              placeholder={t("channels.email.fromAddressPlaceholder", "Leave blank to use IMAP email")}
             />
           </Field>
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
           <label className="flex items-center justify-between rounded-xl border px-3 py-2 text-xs">
-            <span>Use TLS / SSL for SMTP</span>
+            <span>{t("channels.email.useTlsSmtp", "Use TLS / SSL for SMTP")}</span>
             <Switch
               checked={channel.emailSmtpTls !== false}
               onCheckedChange={(checked) => onPatch({ emailSmtpTls: checked })}
             />
           </label>
           <label className="flex items-center justify-between rounded-xl border px-3 py-2 text-xs">
-            <span>Mark processed emails as read</span>
+            <span>{t("channels.email.markAsRead", "Mark processed emails as read")}</span>
             <Switch
               checked={channel.emailMarkAsRead ?? true}
               onCheckedChange={(checked) => onPatch({ emailMarkAsRead: checked })}
@@ -205,7 +215,7 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
         </div>
 
         <label className="flex items-center justify-between rounded-xl border px-3 py-2 text-xs">
-          <span>Use global mail service for SMTP sending</span>
+          <span>{t("channels.email.useGlobalMailService", "Use global mail service for SMTP sending")}</span>
           <Switch
             checked={channel.emailUseGlobalMailService ?? false}
             onCheckedChange={(checked) => onPatch({ emailUseGlobalMailService: checked })}
@@ -214,11 +224,14 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
       </GroupSection>
 
       <GroupSection
-        title="Filters"
-        description="Define rules to filter incoming emails. Only emails matching all enabled rules will be processed. Leave empty to process all incoming emails."
+        title={t("channels.email.filters", "Filters")}
+        description={t(
+          "channels.email.filtersDescription",
+          "Define rules to filter incoming emails. Only emails matching all enabled rules will be processed. Leave empty to process all incoming emails.",
+        )}
       >
         <div className="flex items-center justify-between">
-          <Label>Email filters</Label>
+          <Label>{t("channels.email.emailFilters", "Email filters")}</Label>
           <Button
             size="sm"
             variant="outline"
@@ -231,7 +244,7 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
               })
             }
           >
-            Add filter
+            {t("channels.email.addFilter", "Add filter")}
           </Button>
         </div>
         {emailFilters.map((filter) => (
@@ -241,12 +254,12 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
               value={filter.field}
               onChange={(event) => updateFilter(filter.id, { field: event.target.value as EmailFilterRule["field"] })}
             >
-              <NativeSelectOption value="subject">Subject</NativeSelectOption>
-              <NativeSelectOption value="from">From</NativeSelectOption>
-              <NativeSelectOption value="to">To</NativeSelectOption>
-              <NativeSelectOption value="cc">CC</NativeSelectOption>
-              <NativeSelectOption value="body">Body</NativeSelectOption>
-              <NativeSelectOption value="has_attachment">Has attachment</NativeSelectOption>
+              <NativeSelectOption value="subject">{t("channels.email.filterField.subject", "Subject")}</NativeSelectOption>
+              <NativeSelectOption value="from">{t("channels.email.filterField.from", "From")}</NativeSelectOption>
+              <NativeSelectOption value="to">{t("channels.email.filterField.to", "To")}</NativeSelectOption>
+              <NativeSelectOption value="cc">{t("channels.email.filterField.cc", "CC")}</NativeSelectOption>
+              <NativeSelectOption value="body">{t("channels.email.filterField.body", "Body")}</NativeSelectOption>
+              <NativeSelectOption value="has_attachment">{t("channels.email.filterField.hasAttachment", "Has attachment")}</NativeSelectOption>
             </NativeSelect>
             <NativeSelect
               size="sm"
@@ -255,18 +268,18 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
                 updateFilter(filter.id, { operator: event.target.value as EmailFilterRule["operator"] })
               }
             >
-              <NativeSelectOption value="contains">Contains</NativeSelectOption>
-              <NativeSelectOption value="not_contains">Not contains</NativeSelectOption>
-              <NativeSelectOption value="equals">Equals</NativeSelectOption>
-              <NativeSelectOption value="starts_with">Starts with</NativeSelectOption>
-              <NativeSelectOption value="ends_with">Ends with</NativeSelectOption>
-              <NativeSelectOption value="regex">Regex</NativeSelectOption>
-              <NativeSelectOption value="is_true">Is true</NativeSelectOption>
+              <NativeSelectOption value="contains">{t("channels.email.filterOperator.contains", "Contains")}</NativeSelectOption>
+              <NativeSelectOption value="not_contains">{t("channels.email.filterOperator.notContains", "Not contains")}</NativeSelectOption>
+              <NativeSelectOption value="equals">{t("channels.email.filterOperator.equals", "Equals")}</NativeSelectOption>
+              <NativeSelectOption value="starts_with">{t("channels.email.filterOperator.startsWith", "Starts with")}</NativeSelectOption>
+              <NativeSelectOption value="ends_with">{t("channels.email.filterOperator.endsWith", "Ends with")}</NativeSelectOption>
+              <NativeSelectOption value="regex">{t("channels.email.filterOperator.regex", "Regex")}</NativeSelectOption>
+              <NativeSelectOption value="is_true">{t("channels.email.filterOperator.isTrue", "Is true")}</NativeSelectOption>
             </NativeSelect>
             <CompactInput
               value={filter.value}
               onChange={(event) => updateFilter(filter.id, { value: event.target.value })}
-              placeholder="Keyword or pattern..."
+              placeholder={t("channels.email.filterValuePlaceholder", "Keyword or pattern...")}
               disabled={filter.field === "has_attachment" && filter.operator === "is_true"}
             />
             <label className="flex items-center justify-center rounded-lg border px-2 text-xs">
@@ -278,8 +291,8 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
             <Button
               size="icon-sm"
               variant="destructive"
-              aria-label="Remove filter"
-              title="Remove filter"
+              aria-label={t("channels.email.removeFilter", "Remove filter")}
+              title={t("channels.email.removeFilter", "Remove filter")}
               onClick={() => onPatch({ emailFilters: emailFilters.filter((item) => item.id !== filter.id) })}
             >
               <Trash2Icon className="size-4" />
@@ -289,11 +302,14 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
       </GroupSection>
 
       <GroupSection
-        title="Actions"
-        description="Configure what happens when an email matches the filter rules. Multiple actions can be executed for each matched email."
+        title={t("channels.email.actions", "Actions")}
+        description={t(
+          "channels.email.actionsDescription",
+          "Configure what happens when an email matches the filter rules. Multiple actions can be executed for each matched email.",
+        )}
       >
         <div className="flex items-center justify-between">
-          <Label>Email actions</Label>
+          <Label>{t("channels.email.emailActions", "Email actions")}</Label>
           <Button
             size="sm"
             variant="outline"
@@ -306,7 +322,7 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
               })
             }
           >
-            Add action
+            {t("channels.email.addAction", "Add action")}
           </Button>
         </div>
         {emailActions.map((action) => (
@@ -317,11 +333,11 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
                 value={action.type}
                 onChange={(event) => updateAction(action.id, { type: event.target.value as EmailAction["type"] })}
               >
-                <NativeSelectOption value="auto_reply">Auto reply</NativeSelectOption>
-                <NativeSelectOption value="forward">Forward</NativeSelectOption>
-                <NativeSelectOption value="label">Label</NativeSelectOption>
-                <NativeSelectOption value="agent_process">Agent process</NativeSelectOption>
-                <NativeSelectOption value="webhook">Webhook</NativeSelectOption>
+                <NativeSelectOption value="auto_reply">{t("channels.email.actionType.autoReply", "Auto reply")}</NativeSelectOption>
+                <NativeSelectOption value="forward">{t("channels.email.actionType.forward", "Forward")}</NativeSelectOption>
+                <NativeSelectOption value="label">{t("channels.email.actionType.label", "Label")}</NativeSelectOption>
+                <NativeSelectOption value="agent_process">{t("channels.email.actionType.agentProcess", "Agent process")}</NativeSelectOption>
+                <NativeSelectOption value="webhook">{t("channels.email.actionType.webhook", "Webhook")}</NativeSelectOption>
               </NativeSelect>
               <label className="flex items-center justify-center rounded-lg border px-2 text-xs">
                 <Switch
@@ -332,8 +348,8 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
               <Button
                 size="icon-sm"
                 variant="destructive"
-                aria-label="Remove action"
-                title="Remove action"
+                aria-label={t("channels.email.removeAction", "Remove action")}
+                title={t("channels.email.removeAction", "Remove action")}
                 onClick={() => onPatch({ emailActions: emailActions.filter((item) => item.id !== action.id) })}
               >
                 <Trash2Icon className="size-4" />
@@ -342,7 +358,7 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
 
             {action.type === "auto_reply" || action.type === "agent_process" ? (
               <label className="flex items-center justify-between rounded-xl border px-3 py-2 text-xs">
-                <span>Use channel reply agent to generate response</span>
+                <span>{t("channels.email.useReplyAgent", "Use channel reply agent to generate response")}</span>
                 <Switch
                   checked={action.useAgent !== false}
                   onCheckedChange={(checked) => updateAction(action.id, { useAgent: checked })}
@@ -351,17 +367,17 @@ export function ChannelPlatformEmailForm({ channel, onPatch }: ChannelPlatformEm
             ) : null}
 
             {action.type !== "agent_process" || action.useAgent === false ? (
-              <Field label={getActionValueLabel(action)}>
+              <Field label={getActionValueLabel(action, t)}>
                 <CompactInput
                   value={action.value ?? ""}
                   onChange={(event) => updateAction(action.id, { value: event.target.value })}
-                  placeholder={getActionValuePlaceholder(action)}
+                  placeholder={getActionValuePlaceholder(action, t)}
                 />
               </Field>
             ) : null}
 
             {action.type === "agent_process" && action.useAgent !== false ? (
-              <Hint>Matched emails will be handed to the selected channel reply agent.</Hint>
+              <Hint>{t("channels.email.agentProcessHint", "Matched emails will be handed to the selected channel reply agent.")}</Hint>
             ) : null}
           </div>
         ))}

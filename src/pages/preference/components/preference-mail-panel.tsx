@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button"
 import { Field, FieldContent, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
+import { useAppIntl } from "@/lib/i18n"
 import { PreferenceApi, type PreferenceSettings } from "@/services/preference-service"
 
 import PreferenceSectionCard from "@/pages/preference/components/preference-section-card"
@@ -23,13 +24,14 @@ const PreferenceMailPanel = ({
   onSendTestMail,
   isSendingTestMail,
 }: PreferenceMailPanelProps) => {
+  const { t } = useAppIntl()
   const mailIssues = PreferenceApi.validateMail(draft)
 
   return (
     <PreferenceSectionCard
       id="mail-service"
-      title="Mail Service"
-      description="Global SMTP settings."
+      title={t("preference.mail.title", "Mail Service")}
+      description={t("preference.mail.description", "Global SMTP settings.")}
       actions={
         <Button
           size="sm"
@@ -37,13 +39,13 @@ const PreferenceMailPanel = ({
           onClick={onSendTestMail}
           disabled={isSendingTestMail || !draft.mailServiceEnabled}
         >
-          {isSendingTestMail ? "Sending..." : "Send test mail"}
+          {isSendingTestMail ? t("preference.mail.sending", "Sending...") : t("preference.mail.sendTest", "Send test mail")}
         </Button>
       }
     >
       <Field className="rounded-lg border p-4" orientation="horizontal">
         <FieldContent>
-          <FieldTitle>Enable mail service</FieldTitle>
+          <FieldTitle>{t("preference.mail.enable", "Enable mail service")}</FieldTitle>
         </FieldContent>
         <Switch
           checked={draft.mailServiceEnabled}
@@ -52,13 +54,15 @@ const PreferenceMailPanel = ({
       </Field>
       {draft.mailServiceEnabled && mailIssues.length > 0 ? (
         <div className="rounded-lg border border-border bg-muted/20 px-4 py-3 text-sm text-muted-foreground">
-          Complete these fields before live mail can be used: {mailIssues.join(", ")}.
+          {t("preference.mail.validation", "Complete these fields before live mail can be used: {issues}.", {
+            issues: mailIssues.join(", "),
+          })}
         </div>
       ) : null}
       <fieldset disabled={!draft.mailServiceEnabled}>
         <FieldGroup className="grid gap-4 md:grid-cols-2">
           <Field>
-            <FieldLabel htmlFor="preference-mail-host">SMTP host</FieldLabel>
+            <FieldLabel htmlFor="preference-mail-host">{t("preference.mail.host", "SMTP host")}</FieldLabel>
             <Input
               id="preference-mail-host"
               value={draft.mailServerHost}
@@ -67,7 +71,7 @@ const PreferenceMailPanel = ({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="preference-mail-port">SMTP port</FieldLabel>
+            <FieldLabel htmlFor="preference-mail-port">{t("preference.mail.port", "SMTP port")}</FieldLabel>
             <Input
               id="preference-mail-port"
               type="number"
@@ -79,7 +83,7 @@ const PreferenceMailPanel = ({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="preference-mail-username">Username</FieldLabel>
+            <FieldLabel htmlFor="preference-mail-username">{t("preference.mail.username", "Username")}</FieldLabel>
             <Input
               id="preference-mail-username"
               value={draft.mailServerUsername}
@@ -88,7 +92,7 @@ const PreferenceMailPanel = ({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="preference-mail-password">Password</FieldLabel>
+            <FieldLabel htmlFor="preference-mail-password">{t("preference.mail.password", "Password")}</FieldLabel>
             <Input
               id="preference-mail-password"
               type="password"
@@ -98,7 +102,7 @@ const PreferenceMailPanel = ({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="preference-mail-from">From address</FieldLabel>
+            <FieldLabel htmlFor="preference-mail-from">{t("preference.mail.fromAddress", "From address")}</FieldLabel>
             <Input
               id="preference-mail-from"
               value={draft.mailServerFrom}
@@ -107,7 +111,7 @@ const PreferenceMailPanel = ({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="preference-mail-test-recipient">Test recipient</FieldLabel>
+            <FieldLabel htmlFor="preference-mail-test-recipient">{t("preference.mail.testRecipient", "Test recipient")}</FieldLabel>
             <Input
               id="preference-mail-test-recipient"
               value={testRecipient}
@@ -117,7 +121,7 @@ const PreferenceMailPanel = ({
           </Field>
           <Field className="md:col-span-2 rounded-lg border px-4 py-3" orientation="horizontal">
             <FieldContent>
-              <FieldTitle>Use TLS</FieldTitle>
+              <FieldTitle>{t("preference.mail.useTls", "Use TLS")}</FieldTitle>
             </FieldContent>
             <Switch checked={draft.mailServerTls} onCheckedChange={(checked) => onChange({ mailServerTls: checked })} />
           </Field>

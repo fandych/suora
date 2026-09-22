@@ -32,12 +32,13 @@ function MessageScroller({
   )
 }
 
-function MessageScrollerViewport({
-  className,
-  ...props
-}: React.ComponentProps<typeof MessageScrollerPrimitive.Viewport>) {
+const MessageScrollerViewport = React.forwardRef<
+  React.ElementRef<typeof MessageScrollerPrimitive.Viewport>,
+  React.ComponentProps<typeof MessageScrollerPrimitive.Viewport>
+>(({ className, ...props }, ref) => {
   return (
     <MessageScrollerPrimitive.Viewport
+      ref={ref}
       data-slot="message-scroller-viewport"
       className={cn(
         "size-full min-h-0 min-w-0 scroll-fade-b scrollbar-thin scrollbar-gutter-stable overflow-y-auto overscroll-contain contain-content data-autoscrolling:scrollbar-thumb-transparent data-autoscrolling:scrollbar-track-transparent data-pending-scroll:invisible",
@@ -46,7 +47,9 @@ function MessageScrollerViewport({
       {...props}
     />
   )
-}
+})
+
+MessageScrollerViewport.displayName = "MessageScrollerViewport"
 
 function MessageScrollerContent({
   className,

@@ -18,6 +18,7 @@ import {
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { ResourceSelector } from "@/components/resource-selector"
 import { Switch } from "@/components/ui/switch"
+import { useAppIntl } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import type { AgentSummary, ProviderConfigRecord } from "@/types/agent"
 import type { ChannelConfigRecord, ChannelMessageRecord } from "@/types/channel"
@@ -54,15 +55,21 @@ type ChannelEditorFormProps = {
   isUnbinding?: boolean
 }
 
-function ChannelHistoryMessageItem({ message }: { message: ChannelMessageRecord }) {
+function ChannelHistoryMessageItem({
+  message,
+  labels,
+}: {
+  message: ChannelMessageRecord
+  labels: { replyAgent: string; contact: string; system: string }
+}) {
   const role = message.direction === "outgoing" ? "assistant" : message.direction === "incoming" ? "user" : "system"
   const align = role === "assistant" ? "end" : "start"
   const label =
     role === "assistant"
-      ? message.senderName || "Reply agent"
+      ? message.senderName || labels.replyAgent
       : role === "user"
-        ? message.senderName || "Contact"
-        : "System"
+        ? message.senderName || labels.contact
+        : labels.system
   const bubbleVariant = role === "system" ? "muted" : "outline"
 
   return (
@@ -119,25 +126,29 @@ function Section({
 }
 
 function MessageRecordSection({ messages }: { messages: ChannelMessageRecord[] }) {
+  const { t } = useAppIntl()
   const orderedMessages = [...messages].sort((left, right) => left.createdAt - right.createdAt)
   const [open, setOpen] = useState(false)
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Message record</CardTitle>
+        <CardTitle className="text-sm">{t("channels.form.messageRecord", "Message record")}</CardTitle>
         <CardDescription className="text-xs">
-          Recent inbound and outbound channel traffic. Open the transcript in a separate layer.
+          {t(
+            "channels.form.messageRecordDescription",
+            "Recent inbound and outbound channel traffic. Open the transcript in a separate layer.",
+          )}
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
           <div className="flex items-center gap-2 text-sm">
-            <span>History messages</span>
+            <span>{t("channels.form.historyMessages", "History messages")}</span>
             <Badge variant="secondary">{orderedMessages.length}</Badge>
           </div>
           <Button size="sm" variant="outline" onClick={() => setOpen(true)} disabled={orderedMessages.length === 0}>
-            Open transcript
+            {t("channels.form.openTranscript", "Open transcript")}
           </Button>
         </div>
 
@@ -147,17 +158,26 @@ function MessageRecordSection({ messages }: { messages: ChannelMessageRecord[] }
             showCloseButton
           >
             <DialogHeader className="border-b px-4 py-3">
-              <DialogTitle>History messages</DialogTitle>
-              <DialogDescription>Channel transcript rendered with the shared chat message layout.</DialogDescription>
+              <DialogTitle>{t("channels.form.historyMessages", "History messages")}</DialogTitle>
+              <DialogDescription>
+                {t("channels.form.transcriptDescription", "Channel transcript rendered with the shared chat message layout.")}
+              </DialogDescription>
             </DialogHeader>
             <div className="flex min-h-0 flex-1 overflow-hidden">
               <MessageScrollerProvider autoScroll defaultScrollPosition="end" scrollPreviousItemPeek={12}>
                 <MessageScroller className="flex-1 min-h-0">
-                  <MessageScrollerViewport aria-label="Channel transcript" className="bg-muted/20">
+                  <MessageScrollerViewport aria-label={t("channels.form.transcriptLabel", "Channel transcript")} className="bg-muted/20">
                     <MessageScrollerContent className="min-h-0 gap-3 px-4 py-4">
                       {orderedMessages.map((message) => (
                         <MessageScrollerItem key={message.id} messageId={message.id}>
-                          <ChannelHistoryMessageItem message={message} />
+                          <ChannelHistoryMessageItem
+                            message={message}
+                            labels={{
+                              replyAgent: t("channels.form.replyAgent", "Reply agent"),
+                              contact: t("channels.form.contact", "Contact"),
+                              system: t("channels.form.system", "System"),
+                            }}
+                          />
                         </MessageScrollerItem>
                       ))}
                       <MessageScrollerItem messageId="channel-history-end" scrollAnchor className="h-px" />
@@ -210,6 +230,7 @@ function getWebhookSecretLabel(channel: ChannelConfigRecord) {
 function renderPlatformForm(
   channel: ChannelConfigRecord,
   patch: (next: Partial<ChannelConfigRecord>) => void,
+  t: ReturnType<typeof useAppIntl>["t"],
   wechatVerificationCode: string,
   showWechatVerification: boolean,
   onBind: () => void,
@@ -250,7 +271,7 @@ function renderPlatformForm(
       return <ChannelPlatformCustomForm channel={channel} onPatch={patch} />
     case "web":
     default:
-      return <Hint>Web channel uses the shared webhook path and reply-agent routing only.</Hint>
+      return <Hint>{t("channels.form.webHint", "Web channel uses the shared webhook path and reply-agent routing only.")}</Hint>
   }
 }
 
@@ -258,6 +279,7 @@ function BasicChannelForm({
   channel,
   agents,
   providers,
+  t,
   onChange,
   onSaveGeneral,
   isSavingGeneral,
@@ -265,6 +287,7 @@ function BasicChannelForm({
   channel: ChannelConfigRecord
   agents: AgentSummary[]
   providers: ProviderConfigRecord[]
+  t: ReturnType<typeof useAppIntl>["t"]
   onChange: (channel: ChannelConfigRecord) => void
   onSaveGeneral: () => void
   isSavingGeneral?: boolean
@@ -280,39 +303,39 @@ function BasicChannelForm({
   )
 
   return (
-    <Section title="General">
+    <Section title={t("channels.form.general", "General")}>
       <div className="space-y-3">
-        <Field label="Name">
+        <Field label={t("channels.form.name", "Name")}>
           <CompactInput
             value={channel.title}
             onChange={(event) => update({ title: event.target.value })}
-            placeholder="Channel name"
+            placeholder={t("channels.form.namePlaceholder", "Channel name")}
           />
         </Field>
-        <Field label="Description">
+        <Field label={t("channels.form.description", "Description")}>
           <CompactTextarea
             value={channel.description ?? ""}
             onChange={(event) => update({ description: event.target.value })}
-            placeholder="Describe what this channel is for."
+            placeholder={t("channels.form.descriptionPlaceholder", "Describe what this channel is for.")}
           />
         </Field>
         <div className="grid gap-3 md:grid-cols-2">
-          <Field label="Agent">
+          <Field label={t("channels.form.agent", "Agent")}>
             <ResourceSelector
               className="w-full"
               size="sm"
               value={channel.replyAgentId}
-              emptyLabel="No agent"
+              emptyLabel={t("channels.form.noAgent", "No agent")}
               options={agents.map((agent) => ({ id: agent.id, label: agent.title, enabled: !agent.isDisabled }))}
               onChange={(event) => update({ replyAgentId: event.target.value })}
             />
           </Field>
-          <Field label="Model">
+          <Field label={t("channels.form.model", "Model")}>
             <ResourceSelector
               className="w-full"
               size="sm"
               value={modelValue}
-              emptyLabel="No model"
+              emptyLabel={t("channels.form.noModel", "No model")}
               options={modelOptions}
               onChange={(event) => {
                 const [providerId, modelId] = event.target.value.split("::")
@@ -323,20 +346,20 @@ function BasicChannelForm({
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex items-center justify-between rounded-xl border px-3 py-2 text-xs">
-            <span>Enabled</span>
+            <span>{t("channels.form.enabled", "Enabled")}</span>
             <Switch
               checked={channel.enabled}
               onCheckedChange={(checked) => update({ enabled: checked, status: checked ? "active" : "inactive" })}
             />
           </label>
           <label className="flex items-center justify-between rounded-xl border px-3 py-2 text-xs">
-            <span>Auto reply</span>
+            <span>{t("channels.form.autoReply", "Auto reply")}</span>
             <Switch checked={channel.autoReply} onCheckedChange={(checked) => update({ autoReply: checked })} />
           </label>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={onSaveGeneral} disabled={isSavingGeneral}>
-            {isSavingGeneral ? "Saving..." : "Save general"}
+            {isSavingGeneral ? t("channels.form.saving", "Saving...") : t("channels.form.saveGeneral", "Save general")}
           </Button>
         </div>
       </div>
@@ -363,6 +386,7 @@ export function ChannelEditorForm({
   isSavingConfiguration = false,
   isUnbinding = false,
 }: ChannelEditorFormProps) {
+  const { t } = useAppIntl()
   const update = (patch: Partial<ChannelConfigRecord>) => onChange({ ...channel, ...patch })
   const showMethodField = supportsMethodSelection(channel)
   const showWebhookPath = showsWebhookPathField(channel)
@@ -376,18 +400,19 @@ export function ChannelEditorForm({
           channel={channel}
           agents={agents}
           providers={providers}
+          t={t}
           onChange={onChange}
           onSaveGeneral={onSaveGeneral}
           isSavingGeneral={isSavingGeneral}
         />
 
         <Section
-          title="Channel Configuration"
+          title={t("channels.form.configuration", "Channel configuration")}
           className="xl:flex xl:max-h-[calc(100svh-18rem)] xl:min-h-0 xl:flex-col"
           contentClassName="xl:min-h-0 xl:flex-1 xl:overflow-y-auto xl:pr-1"
         >
           <div className="space-y-3">
-            <Field label="Provider">
+            <Field label={t("channels.form.provider", "Provider")}>
               <ChannelPlatformSelect
                 channel={channel}
                 onChange={(nextPlatform) =>
@@ -404,7 +429,7 @@ export function ChannelEditorForm({
             {showMethodField || showWebhookPath || webhookSecretLabel ? (
               <div className="grid gap-3 md:grid-cols-2">
                 {showMethodField ? (
-                  <Field label="Method">
+                  <Field label={t("channels.form.method", "Method")}>
                     <NativeSelect
                       className="w-full"
                       size="sm"
@@ -413,29 +438,29 @@ export function ChannelEditorForm({
                         update({ connectionMode: event.target.value as ChannelConfigRecord["connectionMode"] })
                       }
                     >
-                      <NativeSelectOption value="webhook">Webhook</NativeSelectOption>
-                      <NativeSelectOption value="stream">Stream</NativeSelectOption>
+                      <NativeSelectOption value="webhook">{t("channels.form.methodWebhook", "Webhook")}</NativeSelectOption>
+                      <NativeSelectOption value="stream">{t("channels.form.methodStream", "Stream")}</NativeSelectOption>
                     </NativeSelect>
                   </Field>
                 ) : null}
                 {showWebhookPath ? (
-                  <Field label="Webhook path">
+                  <Field label={t("channels.form.webhookPath", "Webhook path")}>
                     <CompactInput
                       value={channel.webhookPath}
                       onChange={(event) => update({ webhookPath: event.target.value })}
-                      placeholder="/channels/my-channel"
+                      placeholder={t("channels.form.webhookPathPlaceholder", "/channels/my-channel")}
                     />
                   </Field>
                 ) : null}
                 {webhookSecretLabel ? (
                   <Field
-                    label={webhookSecretLabel}
+                    label={t("channels.form.webhookSecret", webhookSecretLabel)}
                     className={showMethodField || showWebhookPath ? "md:col-span-2" : undefined}
                   >
                     <CompactInput
                       value={channel.webhookSecret}
                       onChange={(event) => update({ webhookSecret: event.target.value })}
-                      placeholder="Optional verification secret"
+                      placeholder={t("channels.form.webhookSecretPlaceholder", "Optional verification secret")}
                     />
                   </Field>
                 ) : null}
@@ -444,6 +469,7 @@ export function ChannelEditorForm({
             {renderPlatformForm(
               channel,
               update,
+              t,
               wechatVerificationCode,
               showWechatVerification,
               onBind,
@@ -454,12 +480,12 @@ export function ChannelEditorForm({
             <div className="flex flex-wrap justify-end gap-2">
               {showUnbind ? (
                 <Button size="sm" variant="destructive" onClick={onUnbind} disabled={isUnbinding}>
-                  {isUnbinding ? "Unbinding..." : "Unbind channel"}
+                  {isUnbinding ? t("channels.form.unbinding", "Unbinding...") : t("channels.form.unbind", "Unbind channel")}
                 </Button>
               ) : null}
               {channel.platform !== "wechat_personal" ? (
                 <Button size="sm" onClick={onSaveConfiguration} disabled={isSavingConfiguration}>
-                  {isSavingConfiguration ? "Saving..." : "Save configuration"}
+                  {isSavingConfiguration ? t("channels.form.saving", "Saving...") : t("channels.form.saveConfiguration", "Save configuration")}
                 </Button>
               ) : null}
             </div>

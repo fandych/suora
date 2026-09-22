@@ -5,6 +5,7 @@ import { SlidersHorizontalIcon, Trash2Icon } from "lucide-react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { useAppIntl } from "@/lib/i18n"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
@@ -43,6 +44,7 @@ export function WorkflowPropertiesPanel({
   selectedNode,
   updateNode,
 }: WorkflowPropertiesPanelProps) {
+  const { t } = useAppIntl()
   const node = selectedNode?.data ?? null
   const [draftNodeId, setDraftNodeId] = useState(selectedNode?.id ?? "")
   const [nodeIdError, setNodeIdError] = useState<string | null>(null)
@@ -56,11 +58,11 @@ export function WorkflowPropertiesPanel({
     return (
       <Card className="shadow-none ring-0">
         <CardHeader>
-          <CardTitle>Node configuration</CardTitle>
-          <CardDescription>Select a node from the graph to edit its behavior.</CardDescription>
+          <CardTitle>{t("workflows.properties.title", "Node configuration")}</CardTitle>
+          <CardDescription>{t("workflows.properties.description", "Select a node from the graph to edit its behavior.")}</CardDescription>
         </CardHeader>
         <CardContent className="text-sm text-muted-foreground">
-          Choose any node on the canvas to open its properties.
+          {t("workflows.properties.empty", "Choose any node on the canvas to open its properties.")}
         </CardContent>
       </Card>
     )
@@ -72,7 +74,7 @@ export function WorkflowPropertiesPanel({
     <div className="flex h-full min-h-0 min-w-0 max-w-full flex-col gap-2 overflow-hidden rounded-xl border bg-background/95 p-2 shadow-xl">
       <div className="flex items-center gap-2 border-b px-1 pb-2 text-xs font-semibold">
         <SlidersHorizontalIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
-        Properties for {node.kind}
+        {t("workflows.properties.forKind", "Properties for {kind}", { kind: node.kind })}
       </div>
 
       <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-hidden">
@@ -80,18 +82,18 @@ export function WorkflowPropertiesPanel({
           <fieldset disabled={readOnly} className="space-y-2">
             <div className="flex flex-col gap-2 border-b pb-2">
               <div className="flex items-center justify-between">
-                <div className="text-[10px] font-semibold text-muted-foreground">Basic</div>
+                <div className="text-[10px] font-semibold text-muted-foreground">{t("workflows.properties.basic", "Basic")}</div>
                 <Button
                   size="icon-xs"
                   variant="destructive"
-                  aria-label="Delete node"
-                  title="Delete node"
+                  aria-label={t("workflows.properties.deleteNode", "Delete node")}
+                  title={t("workflows.properties.deleteNode", "Delete node")}
                   onClick={onDeleteNode}
                 >
                   <Trash2Icon />
                 </Button>
               </div>
-              <WorkflowField label="Node Id">
+              <WorkflowField label={t("workflows.properties.nodeId", "Node ID")}>
                 <Input
                   value={draftNodeId}
                   onChange={(event) => setDraftNodeId(event.target.value)}
@@ -102,7 +104,7 @@ export function WorkflowPropertiesPanel({
                 {nodeIdError ? <p className="text-xs text-destructive">{nodeIdError}</p> : null}
               </WorkflowField>
 
-              <WorkflowField label="name">
+              <WorkflowField label={t("workflows.properties.name", "Name")}>
                 <Input
                   value={node.label}
                   onChange={(event) => updateNode({ label: event.target.value })}
@@ -110,17 +112,20 @@ export function WorkflowPropertiesPanel({
                 />
               </WorkflowField>
 
-              <WorkflowField label="description">
+              <WorkflowField label={t("workflows.properties.nodeDescriptionLabel", "Description")}>
                 <Textarea
                   rows={2}
                   value={node.description ?? ""}
                   onChange={(event) => updateNode({ description: event.target.value })}
-                  placeholder="Describe this node."
+                  placeholder={t("workflows.properties.nodeDescriptionPlaceholder", "Describe this node.")}
                 />
               </WorkflowField>
 
               <div className="grid gap-3 sm:grid-cols-2">
-                <WorkflowField label="Retry" hint="Number of retry attempts after a failed execution.">
+                <WorkflowField
+                  label={t("workflows.properties.retry", "Retry")}
+                  hint={t("workflows.properties.retryHint", "Number of retry attempts after a failed execution.")}
+                >
                   <Input
                     type="number"
                     min={0}
@@ -128,7 +133,10 @@ export function WorkflowPropertiesPanel({
                     onChange={(event) => updateNode({ retryCount: Number(event.target.value) || 0 })}
                   />
                 </WorkflowField>
-                <WorkflowField label="Timeout" hint="Maximum execution time in milliseconds.">
+                <WorkflowField
+                  label={t("workflows.properties.timeout", "Timeout")}
+                  hint={t("workflows.properties.timeoutHint", "Maximum execution time in milliseconds.")}
+                >
                   <Input
                     type="number"
                     min={100}
@@ -138,7 +146,10 @@ export function WorkflowPropertiesPanel({
                 </WorkflowField>
               </div>
               <div className="flex items-center justify-between gap-2">
-                <WorkflowField label="Continue On Error" hint="Continue with the next node when this node fails.">
+                <WorkflowField
+                  label={t("workflows.properties.continueOnError", "Continue on error")}
+                  hint={t("workflows.properties.continueOnErrorHint", "Continue with the next node when this node fails.")}
+                >
                   <span />
                 </WorkflowField>
                 <Switch

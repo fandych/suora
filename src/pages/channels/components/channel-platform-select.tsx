@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils"
+import { useAppIntl } from "@/lib/i18n"
 import type { ChannelConfigRecord } from "@/types/channel"
 import { getChannelPlatformBrandClassName } from "@/pages/channels/components/channel-branding"
 import { getChannelOptionList, getChannelPlatformLogo } from "@/pages/channels/components/channel-utils"
@@ -19,6 +20,7 @@ type ChannelPlatformSelectProps = {
 }
 
 export function ChannelPlatformSelect({ channel, onChange }: ChannelPlatformSelectProps) {
+  const { t } = useAppIntl()
   const platformOptions = getChannelOptionList()
   const selectedLabel =
     channel.customPlatformName?.trim() ||
@@ -39,7 +41,13 @@ export function ChannelPlatformSelect({ channel, onChange }: ChannelPlatformSele
       <SelectContent align="start">
         {groupedChannelPlatformOptions.map((group) => (
           <SelectGroup key={group.label}>
-            <SelectLabel>{group.label}</SelectLabel>
+            <SelectLabel>
+              {group.label === "Chinese platforms"
+                ? t("channels.platformSelect.chinese", "Chinese platforms")
+                : group.label === "International platforms"
+                  ? t("channels.platformSelect.international", "International platforms")
+                  : t("channels.platformSelect.other", "Other")}
+            </SelectLabel>
             {group.values.map((value) => {
               const item = platformOptions.find((candidate) => candidate.value === value)
               if (!item) {

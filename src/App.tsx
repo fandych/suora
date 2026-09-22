@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { HashRouter, Navigate, Route, Routes } from "react-router"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router"
 import { IntlProvider } from "react-intl"
 import { useState } from "react"
 import { Toaster } from "@/components/ui/toast"
@@ -118,7 +118,7 @@ const App = () => {
       }}
     >
       <Toaster>
-        <HashRouter>
+        <BrowserRouter>
           <Routes>
             <Route path="/" element={<RootLayout />}>
               <Route index element={<Navigate to="/chats" replace />} />
@@ -147,7 +147,7 @@ const App = () => {
               <Route path="*" element={<ErrorPage />} />
             </Route>
           </Routes>
-        </HashRouter>
+        </BrowserRouter>
       </Toaster>
     </IntlProvider>
   )

@@ -1,6 +1,5 @@
 /* eslint-disable react-hooks/refs */
-import { useCallback, useState } from "react"
-import { useNavigate } from "react-router"
+import { useCallback } from "react"
 import {
   Background,
   BackgroundVariant,
@@ -22,7 +21,6 @@ import {
   PanelLeftCloseIcon,
   PanelLeftOpenIcon,
   PencilIcon,
-  RotateCcwIcon,
   SparklesIcon,
   Trash2Icon,
 } from "lucide-react"
@@ -38,7 +36,6 @@ import {
 } from "@/components/ui/dropdown-menu"
 import PageHeader from "@/pages/components/page-header"
 import { ConfirmDeleteDialog } from "@/pages/components/confirm-delete-dialog"
-import { RecentlyDeletedDialog } from "@/pages/components/recently-deleted-dialog"
 import { ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { WorkflowIssuesControl, WorkflowNodeSearchControl } from "@/pages/workflows/components/workflow-canvas-controls"
 import { workflowNodeTypes } from "@/pages/workflows/components/workflow-canvas-node"
@@ -53,7 +50,6 @@ import { WorkflowInvocationHistory } from "@/pages/workflows/components/workflow
 import { WorkflowZoomControls } from "@/pages/workflows/components/workflow-zoom-controls"
 import { WorkflowPanelResizeHandle } from "@/pages/workflows/components/workflow-panel-resize-handle"
 import { useWorkflowDetailController } from "@/hooks/use-workflow-detail-controller"
-import { emitDataChanged } from "@/services/data-events"
 import { showToast } from "@/services/toast-service"
 import type { WorkflowEdgeData, WorkflowNodeData } from "@/types/workflow"
 
@@ -65,8 +61,6 @@ const WORKFLOW_ARIA_LABELS = {
 
 const WorkflowDetailPage = () => {
   const controller = useWorkflowDetailController()
-  const navigate = useNavigate()
-  const [isRecentlyDeletedOpen, setIsRecentlyDeletedOpen] = useState(false)
   const { inspectorMode, setFlowInstance, setInspectorMode, setSelectedNodeId, viewport } = controller
   const stopPanelEvent = useCallback((event: React.MouseEvent | React.PointerEvent) => event.stopPropagation(), [])
   const handlePaneClick = useCallback(() => {
@@ -104,49 +98,33 @@ const WorkflowDetailPage = () => {
       <PageHeader
         title={controller.title || controller.data?.workflow.title || "Workflow"}
         actions={
-          <>
-            <Button type="button" variant="outline" size="sm" onClick={() => setIsRecentlyDeletedOpen(true)}>
-              <RotateCcwIcon className="size-4" />
-              Recently deleted
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                render={<Button type="button" size="icon-sm" variant="ghost" aria-label="Workflow actions" />}
-              >
-                <EllipsisIcon />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuGroup>
-                  <DropdownMenuItem
-                    onClick={() => controller.setIsPreferenceDialogOpen(true)}
-                    disabled={controller.isReadOnly}
-                  >
-                    <PencilIcon />
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => controller.setIsHistoryDialogOpen(true)}>
-                    <HistoryIcon />
-                    Run history
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => controller.setIsDeleteDialogOpen(true)} variant="destructive">
-                    <Trash2Icon />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={<Button type="button" size="icon-sm" variant="ghost" aria-label="Workflow actions" />}
+            >
+              <EllipsisIcon />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuGroup>
+                <DropdownMenuItem
+                  onClick={() => controller.setIsPreferenceDialogOpen(true)}
+                  disabled={controller.isReadOnly}
+                >
+                  <PencilIcon />
+                  Edit
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => controller.setIsHistoryDialogOpen(true)}>
+                  <HistoryIcon />
+                  Run history
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => controller.setIsDeleteDialogOpen(true)} variant="destructive">
+                  <Trash2Icon />
+                  Delete
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         }
-      />
-      <RecentlyDeletedDialog
-        kind="workflow"
-        open={isRecentlyDeletedOpen}
-        onOpenChange={setIsRecentlyDeletedOpen}
-        onRestored={async (result) => {
-          emitDataChanged("/workflows")
-          navigate(`/workflows/${result.resourceId}`)
-        }}
-        title="Restore deleted workflows"
       />
 
       <input

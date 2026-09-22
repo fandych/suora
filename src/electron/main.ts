@@ -6,6 +6,7 @@ import { closeBrowserWindow } from "@/electron/infrastructure/browser-window"
 import { getPreferenceSettingsSnapshot } from "@/electron/app/preferences/runtime"
 import { configureAutoUpdater } from "@/electron/infrastructure/updater-service"
 import { createWindow } from "@/electron/infrastructure/main-window"
+import { registerRendererProtocol } from "@/electron/infrastructure/renderer-protocol"
 import { configureAppStoragePaths, ensureWorkspace } from "@/electron/infrastructure/workspace-service"
 import { setupIpc } from "@/electron/preload/index"
 import { schedulerRuntime } from "@/electron/app/schedulers/runtime"
@@ -20,6 +21,7 @@ app.whenReady()
     await electronApp.initialize()
     setupIpc()
     configureAutoUpdater()
+    registerRendererProtocol()
 
     await createWindow()
 
