@@ -99,6 +99,11 @@ export type IntegrationExecutionResult = {
   response?: { status: number; headers: Record<string, string | string[]>; body: string; json?: unknown }
 }
 
+export type IntegrationTryRunResult = IntegrationExecutionResult & {
+  executedAt: number
+  errorMessage?: string
+}
+
 export type IntegrationExecutionRequest = {
   integrationId?: string
   kind: "http" | "scripts" | "mcp"

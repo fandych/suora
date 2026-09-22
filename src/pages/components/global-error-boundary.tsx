@@ -3,7 +3,7 @@ import { Component, type ErrorInfo, type ReactNode } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { AlertTriangleIcon, HomeIcon, RotateCcwIcon } from "lucide-react"
+import { AlertTriangleIcon, RotateCcwIcon } from "lucide-react"
 
 type GlobalErrorBoundaryProps = {
   children: ReactNode
@@ -11,22 +11,19 @@ type GlobalErrorBoundaryProps = {
 
 type GlobalErrorBoundaryState = {
   error: Error | null
-  componentStack?: string
 }
 
 export class GlobalErrorBoundary extends Component<GlobalErrorBoundaryProps, GlobalErrorBoundaryState> {
   state: GlobalErrorBoundaryState = {
     error: null,
-    componentStack: undefined,
   }
 
   static getDerivedStateFromError(error: Error): GlobalErrorBoundaryState {
-    return { error, componentStack: undefined }
+    return { error }
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Global render error", error, errorInfo)
-    this.setState({ componentStack: errorInfo.componentStack || undefined })
   }
 
   render() {
@@ -35,44 +32,29 @@ export class GlobalErrorBoundary extends Component<GlobalErrorBoundaryProps, Glo
     }
 
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,rgba(59,130,246,0.12),transparent_35%),linear-gradient(180deg,transparent,rgba(15,23,42,0.03))] p-6">
-        <Card className="w-full max-w-xl shadow-sm">
+      <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+        <Card className="w-full max-w-2xl shadow-sm">
           <CardHeader>
-            <CardTitle>Application error</CardTitle>
-            <CardDescription>An unexpected error interrupted the current view.</CardDescription>
+            <CardTitle>View unavailable</CardTitle>
+            <CardDescription>
+              This item could not be rendered. You can retry without reloading the whole app.
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            <Empty className="border border-dashed border-border bg-muted/30">
+            <Empty className="border border-dashed border-border bg-muted/20">
               <EmptyHeader>
                 <EmptyMedia variant="icon">
                   <AlertTriangleIcon />
                 </EmptyMedia>
                 <EmptyTitle>Something went wrong</EmptyTitle>
-                <EmptyDescription>Reload the app, or return to chats and reopen the current item.</EmptyDescription>
-                <div className="mt-3 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-left text-xs text-destructive">
-                  <div className="font-medium">{this.state.error.name || "Error"}</div>
-                  <div className="mt-1 whitespace-pre-wrap wrap-break-word">
-                    {this.state.error.message || "Unknown render error"}
-                  </div>
-                  {this.state.componentStack ? (
-                    <div className="mt-2 whitespace-pre-wrap wrap-break-word text-[11px] text-muted-foreground">
-                      {this.state.componentStack.trim()}
-                    </div>
-                  ) : null}
-                </div>
+                <EmptyDescription>
+                  We showed a toast with the error details. Try opening the item again or refresh this view.
+                </EmptyDescription>
               </EmptyHeader>
               <EmptyContent className="flex-row justify-center gap-2">
                 <Button variant="outline" onClick={() => window.history.back()}>
                   <RotateCcwIcon />
                   Back
-                </Button>
-                <Button
-                  onClick={() => {
-                    window.location.hash = "#/chats"
-                  }}
-                >
-                  <HomeIcon />
-                  Chats
                 </Button>
                 <Button variant="outline" onClick={() => window.location.reload()}>
                   <RotateCcwIcon />

@@ -11,10 +11,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { Input } from "@/components/ui/input"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Textarea } from "@/components/ui/textarea"
+import { useAppIntl } from "@/lib/i18n"
 import type { HttpEndpointConfig, HttpIntegrationConfig, IntegrationConfig } from "@/types/integration"
 import {
   createHttpEndpoint,
@@ -28,7 +29,8 @@ import { HttpEndpointEditorDialog } from "@/pages/integrations/components/http-e
 type IntegrationHttpEndpointsPanelProps = {
   config: HttpIntegrationConfig
   canTryRun: boolean
-  onChange: (config: IntegrationConfig) => void
+  isSaving?: boolean
+  onChange: (config: IntegrationConfig, options?: { persist?: boolean }) => void
   onTryRun: (endpointId: string) => void
 }
 
@@ -41,9 +43,11 @@ function createDraftFromEndpoint(endpoint?: HttpEndpointConfig) {
 export function IntegrationHttpEndpointsPanel({
   config,
   canTryRun,
+  isSaving = false,
   onChange,
   onTryRun,
 }: IntegrationHttpEndpointsPanelProps) {
+  const { t } = useAppIntl()
   const [editingEndpoint, setEditingEndpoint] = useState<HttpEndpointConfig | null>(null)
   const [curlImport, setCurlImport] = useState("")
   const [openApiImport, setOpenApiImport] = useState("")
@@ -53,13 +57,13 @@ export function IntegrationHttpEndpointsPanel({
   const [isOpenApiDialogOpen, setIsOpenApiDialogOpen] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
 
-  const updateConfig = (next: HttpIntegrationConfig) => {
-    onChange(syncHttpIntegrationConfig(next))
+  const commitConfig = (next: HttpIntegrationConfig) => {
+    onChange(syncHttpIntegrationConfig(next), { persist: true })
   }
 
   const saveEndpoint = (endpoint: HttpEndpointConfig) => {
     const hasExisting = config.endpoints.some((item) => item.id === endpoint.id)
-    updateConfig({
+    commitConfig({
       ...config,
       endpoints: hasExisting
         ? config.endpoints.map((item) => (item.id === endpoint.id ? endpoint : item))
@@ -71,7 +75,7 @@ export function IntegrationHttpEndpointsPanel({
 
   const removeEndpoint = (endpointId: string) => {
     const remaining = config.endpoints.filter((endpoint) => endpoint.id !== endpointId)
-    updateConfig({
+    commitConfig({
       ...config,
       endpoints: remaining,
       selectedEndpointId:
@@ -86,7 +90,7 @@ export function IntegrationHttpEndpointsPanel({
       const selectedEndpoint = mergedEndpoints.find(
         (endpoint) => endpoint.method === imported.endpoint.method && endpoint.path === imported.endpoint.path,
       )
-      updateConfig({
+      commitConfig({
         ...config,
         baseUrl: imported.baseUrl || config.baseUrl,
         authType: imported.authType === "none" ? config.authType : imported.authType,
@@ -113,7 +117,7 @@ export function IntegrationHttpEndpointsPanel({
               endpoint.method === firstImportedEndpoint.method && endpoint.path === firstImportedEndpoint.path,
           )
         : undefined
-      updateConfig({
+      commitConfig({
         ...config,
         baseUrl: imported.baseUrl || config.baseUrl,
         description: config.description || imported.description,
@@ -132,7 +136,7 @@ export function IntegrationHttpEndpointsPanel({
 
   const fetchOpenApiImport = async () => {
     if (!openApiUrl.trim()) {
-      setImportError("Enter an API doc URL first.")
+      setImportError(t("integrations.http.import.urlRequired", "Enter an API doc URL first."))
       return
     }
 
@@ -140,19 +144,29 @@ export function IntegrationHttpEndpointsPanel({
     setIsFetchingApiDoc(true)
     try {
       if (!window.app?.integrations.fetchApiDoc) {
-        throw new Error("API documentation import is available only in the desktop application.")
+        throw new Error(
+          t(
+            "integrations.http.import.desktopOnly",
+            "API documentation import is available only in the desktop application.",
+          ),
+        )
       }
       const source = await Promise.race([
         window.app.integrations.fetchApiDoc(openApiUrl.trim()),
         new Promise<never>((_resolve, reject) => {
           window.setTimeout(
-            () => reject(new Error("API documentation import timed out after 35 seconds.")),
+            () =>
+              reject(
+                new Error(
+                  t("integrations.http.import.timeout", "API documentation import timed out after 35 seconds."),
+                ),
+              ),
             API_DOC_IMPORT_TIMEOUT_MS,
           )
         }),
       ])
       if (typeof source !== "string" || !source.trim()) {
-        throw new Error("The API doc URL returned an empty response.")
+        throw new Error(t("integrations.http.import.empty", "The API doc URL returned an empty response."))
       }
 
       setOpenApiImport(source)
@@ -170,30 +184,33 @@ export function IntegrationHttpEndpointsPanel({
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle>Endpoints</CardTitle>
+              <CardTitle>{t("integrations.http.endpoints.title", "Endpoints")}</CardTitle>
               <CardDescription>
-                Manage HTTP-style operations, parameter locations, cURL imports, and API-doc imports.
+                {t(
+                  "integrations.http.endpoints.description",
+                  "Manage HTTP-style operations, parameter locations, cURL imports, and API-doc imports.",
+                )}
               </CardDescription>
             </div>
             <DropdownMenu>
-              <DropdownMenuTrigger render={<Button variant="outline" size="sm" />}>
+              <DropdownMenuTrigger render={<Button variant="outline" size="sm" disabled={isSaving} />}>
                 <PlusIcon />
-                Add endpoint
+                {t("integrations.http.endpoints.add", "Add endpoint")}
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52 min-w-52">
                 <DropdownMenuItem onClick={() => setEditingEndpoint(createDraftFromEndpoint())}>
                   <PlusIcon className="size-4" />
-                  Add endpoint
+                  {t("integrations.http.endpoints.add", "Add endpoint")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
                     setImportError(null)
-                    setCurlImport('curl https://api.example.com/items -X POST -H "Authorization: Bearer token"')
+                    setCurlImport('curl https://api.example.com/items -X POST -H "Authorization: ******"')
                     setIsCurlDialogOpen(true)
                   }}
                 >
                   <UploadIcon className="size-4" />
-                  Import from cURL
+                  {t("integrations.http.endpoints.importCurl", "Import from cURL")}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={() => {
@@ -204,7 +221,7 @@ export function IntegrationHttpEndpointsPanel({
                   }}
                 >
                   <FileJson2Icon className="size-4" />
-                  Import API doc
+                  {t("integrations.http.endpoints.importApiDoc", "Import API doc")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -215,7 +232,7 @@ export function IntegrationHttpEndpointsPanel({
             <div className="flex flex-col gap-3">
               {config.endpoints.length === 0 ? (
                 <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No endpoints configured. Add an endpoint to get started.
+                  {t("integrations.http.endpoints.empty", "No endpoints configured. Add an endpoint to get started.")}
                 </div>
               ) : null}
               {config.endpoints.map((endpoint) => (
@@ -230,18 +247,23 @@ export function IntegrationHttpEndpointsPanel({
                       </div>
                       <div className="mt-1 truncate text-xs text-muted-foreground">{endpoint.path}</div>
                       <div className="mt-2 line-clamp-2 text-xs text-muted-foreground">
-                        {endpoint.description || "No endpoint description yet."}
+                        {endpoint.description ||
+                          t("integrations.http.endpoints.noDescription", "No endpoint description yet.")}
                       </div>
                       <div className="mt-2 text-xs text-muted-foreground">
-                        {endpoint.parameters.length} parameters · {endpoint.bodyMode}
+                        {t("integrations.http.endpoints.summary", "{count} parameters · {bodyMode}", {
+                          count: endpoint.parameters.length,
+                          bodyMode: endpoint.bodyMode,
+                        })}
                       </div>
                     </div>
                     <div className="flex shrink-0 gap-2">
                       <Button
                         size="icon-sm"
                         variant="outline"
-                        aria-label={`Edit ${endpoint.name}`}
-                        title="Edit endpoint"
+                        disabled={isSaving}
+                        aria-label={t("integrations.http.endpoints.editAria", "Edit {name}", { name: endpoint.name })}
+                        title={t("integrations.http.endpoints.edit", "Edit endpoint")}
                         onClick={() => setEditingEndpoint(createDraftFromEndpoint(endpoint))}
                       >
                         <PencilIcon />
@@ -249,15 +271,23 @@ export function IntegrationHttpEndpointsPanel({
                       <Button
                         size="icon-sm"
                         variant="destructive"
-                        aria-label={`Delete ${endpoint.name}`}
-                        title="Delete endpoint"
+                        disabled={isSaving}
+                        aria-label={t("integrations.http.endpoints.deleteAria", "Delete {name}", {
+                          name: endpoint.name,
+                        })}
+                        title={t("integrations.http.endpoints.delete", "Delete endpoint")}
                         onClick={() => removeEndpoint(endpoint.id)}
                       >
                         <Trash2Icon />
                       </Button>
-                      <Button size="sm" variant="outline" disabled={!canTryRun} onClick={() => onTryRun(endpoint.id)}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!canTryRun || isSaving}
+                        onClick={() => onTryRun(endpoint.id)}
+                      >
                         <PlayIcon />
-                        Try run
+                        {t("integrations.tryRun.open", "Try run")}
                       </Button>
                     </div>
                   </div>
@@ -270,14 +300,18 @@ export function IntegrationHttpEndpointsPanel({
 
       <HttpEndpointEditorDialog
         endpoint={editingEndpoint}
+        isSaving={isSaving}
         onClose={() => setEditingEndpoint(null)}
         onSave={saveEndpoint}
       />
 
       <ImportDialog
         open={isCurlDialogOpen}
-        title="Import from cURL"
-        description="Paste a curl command. The importer will create or update one endpoint and try to infer auth headers."
+        title={t("integrations.http.import.curlTitle", "Import from cURL")}
+        description={t(
+          "integrations.http.import.curlDescription",
+          "Paste a curl command. The importer will create or update one endpoint and try to infer auth headers.",
+        )}
         value={curlImport}
         onChange={setCurlImport}
         onClose={() => {
@@ -287,12 +321,16 @@ export function IntegrationHttpEndpointsPanel({
         }}
         onApply={applyCurlImport}
         error={importError}
+        isSaving={isSaving}
       />
 
       <ImportDialog
         open={isOpenApiDialogOpen}
-        title="Import API doc"
-        description="Enter an API doc URL or paste OpenAPI JSON. Endpoints are merged by method + path."
+        title={t("integrations.http.import.apiDocTitle", "Import API doc")}
+        description={t(
+          "integrations.http.import.apiDocDescription",
+          "Enter an API doc URL or paste OpenAPI JSON. Endpoints are merged by method + path.",
+        )}
         value={openApiImport}
         onChange={setOpenApiImport}
         url={openApiUrl}
@@ -306,6 +344,7 @@ export function IntegrationHttpEndpointsPanel({
         }}
         onApply={applyOpenApiImport}
         error={importError}
+        isSaving={isSaving}
       />
     </>
   )
@@ -324,6 +363,7 @@ function ImportDialog({
   onClose,
   onApply,
   error,
+  isSaving,
 }: {
   open: boolean
   title: string
@@ -337,7 +377,10 @@ function ImportDialog({
   onClose: () => void
   onApply: () => void
   error: string | null
+  isSaving: boolean
 }) {
+  const { t } = useAppIntl()
+
   return (
     <Dialog
       open={open}
@@ -355,13 +398,15 @@ function ImportDialog({
         {url !== undefined && onChangeUrl && onFetch ? (
           <div className="flex gap-2">
             <Input
-              placeholder="https://example.com/openapi.json"
+              placeholder={t("integrations.http.import.urlPlaceholder", "https://example.com/openapi.json")}
               value={url}
               onChange={(event) => onChangeUrl(event.target.value)}
             />
-            <Button variant="outline" onClick={onFetch} disabled={isFetching}>
+            <Button variant="outline" disabled={isSaving || isFetching} onClick={onFetch}>
               <LinkIcon />
-              {isFetching ? "Loading..." : "Load URL"}
+              {isFetching
+                ? t("integrations.http.import.loading", "Loading...")
+                : t("integrations.http.import.loadUrl", "Load URL")}
             </Button>
           </div>
         ) : null}
@@ -372,12 +417,12 @@ function ImportDialog({
           </div>
         ) : null}
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
+          <Button variant="outline" disabled={isSaving} onClick={onClose}>
+            {t("integrations.common.cancel", "Cancel")}
           </Button>
-          <Button onClick={onApply}>
+          <Button disabled={isSaving || isFetching} onClick={onApply}>
             <FileJson2Icon />
-            Apply
+            {t("integrations.http.import.apply", "Apply")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,17 +1,18 @@
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
+
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { useAppIntl } from "@/lib/i18n"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Textarea } from "@/components/ui/textarea"
+import { useAppIntl } from "@/lib/i18n"
+import { createChangedKindConfig } from "@/pages/integrations/components/integration-editor-utils"
 import type {
   HttpIntegrationConfig,
   IntegrationConfig,
   McpIntegrationConfig,
   ScriptIntegrationConfig,
 } from "@/types/integration"
-import { createChangedKindConfig } from "@/pages/integrations/components/integration-editor-utils"
-import { PlusIcon, SaveIcon, Trash2Icon } from "lucide-react"
 
 type IntegrationBasicEditorProps = {
   config: IntegrationConfig
@@ -36,7 +37,9 @@ export function IntegrationBasicEditor({
     <Card>
       <CardHeader>
         <CardTitle>{t("integrations.basic.title", "Basic information")}</CardTitle>
-        <CardDescription>{t("integrations.basic.description", "Set the toolset identity and shared connection settings.")}</CardDescription>
+        <CardDescription>
+          {t("integrations.basic.description", "Set the toolset identity and shared connection settings.")}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
@@ -145,8 +148,7 @@ function CustomHeadersEditor({
       return field === "key" ? ([value, headerValue] as const) : ([key, value] as const)
     })
 
-    const nextHeaders = Object.fromEntries(nextEntries)
-    onChange(nextHeaders)
+    onChange(Object.fromEntries(nextEntries))
   }
 
   const addEntry = () => {
@@ -160,15 +162,16 @@ function CustomHeadersEditor({
   }
 
   const removeEntry = (keyToRemove: string) => {
-    const nextHeaders = Object.fromEntries(entries.filter(([key]) => key !== keyToRemove))
-    onChange(nextHeaders)
+    onChange(Object.fromEntries(entries.filter(([key]) => key !== keyToRemove)))
   }
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <div className="text-sm text-muted-foreground">{t("integrations.basic.requestHeaders", "Request headers")}</div>
+          <div className="text-sm text-muted-foreground">
+            {t("integrations.basic.requestHeaders", "Request headers")}
+          </div>
           <div className="text-xs text-muted-foreground">
             {t("integrations.basic.requestHeadersDescription", "Add shared request headers as key/value pairs.")}
           </div>
@@ -184,7 +187,7 @@ function CustomHeadersEditor({
         </div>
       ) : null}
       {entries.map(([key, value], index) => (
-        <div key={`${key}-${index}`} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+        <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
           <Input
             value={key}
             onChange={(event) => updateEntry(index, "key", event.target.value)}
@@ -242,7 +245,9 @@ function HttpConnectionFields({
         />
       </div>
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">{t("integrations.basic.http.authorization", "Authorization")}</div>
+        <div className="text-sm text-muted-foreground">
+          {t("integrations.basic.http.authorization", "Authorization")}
+        </div>
         <NativeSelect
           value={config.authType}
           onChange={(event) =>
@@ -250,26 +255,34 @@ function HttpConnectionFields({
           }
         >
           <NativeSelectOption value="none">{t("integrations.basic.http.auth.none", "None")}</NativeSelectOption>
-          <NativeSelectOption value="bearer">Bearer token</NativeSelectOption>
-          <NativeSelectOption value="basic">Basic auth</NativeSelectOption>
-          <NativeSelectOption value="api-key">API key</NativeSelectOption>
-          <NativeSelectOption value="custom">Custom headers</NativeSelectOption>
+          <NativeSelectOption value="bearer">
+            {t("integrations.basic.http.auth.bearer", "Bearer token")}
+          </NativeSelectOption>
+          <NativeSelectOption value="basic">{t("integrations.basic.http.auth.basic", "Basic auth")}</NativeSelectOption>
+          <NativeSelectOption value="api-key">{t("integrations.basic.http.auth.apiKey", "API key")}</NativeSelectOption>
+          <NativeSelectOption value="custom">
+            {t("integrations.basic.http.auth.custom", "Custom headers")}
+          </NativeSelectOption>
         </NativeSelect>
       </div>
       {config.authType === "bearer" ? (
         <div className="space-y-2">
-          <div className="text-sm text-muted-foreground">Bearer token</div>
+          <div className="text-sm text-muted-foreground">
+            {t("integrations.basic.http.auth.bearerToken", "Bearer token")}
+          </div>
           <Input
             value={typeof authConfig.token === "string" ? authConfig.token : ""}
             onChange={(event) => updateHttpAuthConfig(config, onChange, { token: event.target.value })}
-            placeholder="token"
+            placeholder={t("integrations.basic.http.auth.tokenPlaceholder", "token")}
           />
         </div>
       ) : null}
       {config.authType === "basic" ? (
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Username</div>
+            <div className="text-sm text-muted-foreground">
+              {t("integrations.basic.http.auth.username", "Username")}
+            </div>
             <Input
               value={typeof authConfig.username === "string" ? authConfig.username : ""}
               onChange={(event) =>
@@ -278,7 +291,9 @@ function HttpConnectionFields({
             />
           </div>
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Password</div>
+            <div className="text-sm text-muted-foreground">
+              {t("integrations.basic.http.auth.password", "Password")}
+            </div>
             <Input
               value={typeof authConfig.password === "string" ? authConfig.password : ""}
               onChange={(event) =>
@@ -291,26 +306,32 @@ function HttpConnectionFields({
       {config.authType === "api-key" ? (
         <div className="grid gap-4 md:grid-cols-3">
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Location</div>
+            <div className="text-sm text-muted-foreground">
+              {t("integrations.basic.http.auth.location", "Location")}
+            </div>
             <NativeSelect
               value={typeof authConfig.location === "string" ? authConfig.location : "header"}
               onChange={(event) =>
                 updateHttpAuthConfig(config, onChange, { ...authConfig, location: event.target.value })
               }
             >
-              <NativeSelectOption value="header">Header</NativeSelectOption>
-              <NativeSelectOption value="query">Query</NativeSelectOption>
+              <NativeSelectOption value="header">
+                {t("integrations.basic.http.auth.location.header", "Header")}
+              </NativeSelectOption>
+              <NativeSelectOption value="query">
+                {t("integrations.basic.http.auth.location.query", "Query")}
+              </NativeSelectOption>
             </NativeSelect>
           </div>
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Key name</div>
+            <div className="text-sm text-muted-foreground">{t("integrations.basic.http.auth.keyName", "Key name")}</div>
             <Input
               value={typeof authConfig.name === "string" ? authConfig.name : "x-api-key"}
               onChange={(event) => updateHttpAuthConfig(config, onChange, { ...authConfig, name: event.target.value })}
             />
           </div>
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Value</div>
+            <div className="text-sm text-muted-foreground">{t("integrations.basic.http.auth.value", "Value")}</div>
             <Input
               value={typeof authConfig.value === "string" ? authConfig.value : ""}
               onChange={(event) => updateHttpAuthConfig(config, onChange, { ...authConfig, value: event.target.value })}
@@ -347,11 +368,13 @@ function McpConnectionFields({
       </div>
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.endpoint", "Endpoint")}</div>
+          <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.endpoint", "Endpoint")}</div>
           <Input value={config.endpoint} onChange={(event) => onChange({ ...config, endpoint: event.target.value })} />
         </div>
         <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.launchCommand", "Launch command")}</div>
+          <div className="text-sm text-muted-foreground">
+            {t("integrations.basic.mcp.launchCommand", "Launch command")}
+          </div>
           <Input
             value={config.launchCommand}
             onChange={(event) => onChange({ ...config, launchCommand: event.target.value })}
@@ -391,7 +414,9 @@ function McpConnectionFields({
         </div>
       </div>
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.authConfigJson", "Auth config JSON")}</div>
+        <div className="text-sm text-muted-foreground">
+          {t("integrations.basic.mcp.authConfigJson", "Auth config JSON")}
+        </div>
         <Textarea
           value={config.authConfigJson}
           onChange={(event) => onChange({ ...config, authConfigJson: event.target.value })}
@@ -400,7 +425,9 @@ function McpConnectionFields({
         />
       </div>
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">{t("integrations.basic.mcp.toolCatalogJson", "Tool catalog JSON")}</div>
+        <div className="text-sm text-muted-foreground">
+          {t("integrations.basic.mcp.toolCatalogJson", "Tool catalog JSON")}
+        </div>
         <Textarea
           value={config.toolCatalogJson}
           onChange={(event) => onChange({ ...config, toolCatalogJson: event.target.value })}
@@ -428,7 +455,9 @@ function ScriptRuntimeFields({
   return (
     <div className="space-y-4">
       <div className="space-y-2">
-        <div className="text-sm text-muted-foreground">{t("integrations.basic.scripts.description", "Description")}</div>
+        <div className="text-sm text-muted-foreground">
+          {t("integrations.basic.scripts.description", "Description")}
+        </div>
         <Textarea
           value={config.description}
           onChange={(event) => onChange({ ...config, description: event.target.value })}

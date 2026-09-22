@@ -1,4 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useAppIntl } from "@/lib/i18n"
 import type { IntegrationDetail } from "@/types/integration"
 
 type IntegrationVersionHistoryPanelProps = {
@@ -6,19 +7,25 @@ type IntegrationVersionHistoryPanelProps = {
 }
 
 export function IntegrationVersionHistoryPanel({ detail }: IntegrationVersionHistoryPanelProps) {
+  const { t } = useAppIntl()
+
   return (
     <Card className="h-full min-h-0">
       <CardHeader>
-        <CardTitle>Connection / history</CardTitle>
-        <CardDescription>Current endpoint summary and recent execution activity.</CardDescription>
+        <CardTitle>{t("integrations.history.title", "Connection / history")}</CardTitle>
+        <CardDescription>
+          {t("integrations.history.description", "Current endpoint summary and recent execution activity.")}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div>
-          <div className="text-muted-foreground">Resolved endpoint</div>
-          <div className="font-medium break-all">{detail.integration.endpoint || "Pending config"}</div>
+          <div className="text-muted-foreground">{t("integrations.history.endpoint", "Resolved endpoint")}</div>
+          <div className="font-medium break-all">
+            {detail.integration.endpoint || t("integrations.history.pending", "Pending config")}
+          </div>
         </div>
         <div className="space-y-2 rounded-xl border p-3">
-          <div className="font-medium">Recent executions</div>
+          <div className="font-medium">{t("integrations.history.executions", "Recent executions")}</div>
           <div className="space-y-2">
             {detail.executions.length ? (
               detail.executions.slice(0, 8).map((execution) => (
@@ -32,7 +39,7 @@ export function IntegrationVersionHistoryPanel({ detail }: IntegrationVersionHis
               ))
             ) : (
               <div className="rounded-lg border border-dashed px-3 py-4 text-sm text-muted-foreground">
-                No executions yet.
+                {t("integrations.history.empty", "No executions yet.")}
               </div>
             )}
           </div>

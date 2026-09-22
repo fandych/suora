@@ -41,8 +41,8 @@ export function createChangedKindConfig(
         {
           id: "script-main",
           name: "Main Script",
-          handler: "main",
-          code: "export async function main(input) {\n  return { ok: true, input }\n}\n",
+          handler: "handler",
+          code: "export async function handler(input) {\n  return { ok: true, input }\n}\n",
         },
       ],
     } satisfies ScriptIntegrationConfig

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { PencilIcon, PlayIcon, PlusIcon, Trash2Icon } from "lucide-react"
 import "@/lib/monaco/configure-monaco"
 import MonacoEditor from "@monaco-editor/react"
@@ -16,22 +16,38 @@ import {
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useAppIntl } from "@/lib/i18n"
 import type { IntegrationConfig, ScriptIntegrationConfig, ScriptWorkbenchItem } from "@/types/integration"
 
 type IntegrationScriptWorkbenchProps = {
   config: ScriptIntegrationConfig
   canTryRun?: boolean
-  onChange: (config: IntegrationConfig) => void
+  isSaving?: boolean
+  onChange: (config: IntegrationConfig, options?: { persist?: boolean }) => void
   onTryRun?: (scriptId: string) => void
 }
 
-type SchemaField = { key: string; type: string; description: string }
+type SchemaField = {
+  id: string
+  key: string
+  type: string
+  description: string
+}
+
+function createSchemaField(partial?: Partial<Omit<SchemaField, "id">> & { id?: string }): SchemaField {
+  return {
+    id: partial?.id ?? globalThis.crypto.randomUUID(),
+    key: partial?.key ?? "",
+    type: partial?.type ?? "string",
+    description: partial?.description ?? "",
+  }
+}
 
 function createScript(index: number): ScriptWorkbenchItem {
   return {
     id: `script-${index}`,
     name: `Script ${index}`,
-    handler: `script${index}`,
+    handler: "handler",
     code: "export async function handler(input) {\n  return { ok: true, input }\n}\n",
   }
 }
@@ -41,11 +57,13 @@ function parseSchemaFields(schemaText: string): SchemaField[] {
     const parsed = JSON.parse(schemaText || "{}") as {
       properties?: Record<string, { type?: string; description?: string }>
     }
-    return Object.entries(parsed.properties ?? {}).map(([key, value]) => ({
-      key,
-      type: value.type ?? "string",
-      description: value.description ?? "",
-    }))
+    return Object.entries(parsed.properties ?? {}).map(([key, value]) =>
+      createSchemaField({
+        key,
+        type: value.type ?? "string",
+        description: value.description ?? "",
+      }),
+    )
   } catch {
     return []
   }
@@ -69,9 +87,11 @@ function toSchemaJson(fields: SchemaField[]) {
 export function IntegrationScriptWorkbench({
   config,
   canTryRun = true,
+  isSaving = false,
   onChange,
   onTryRun,
 }: IntegrationScriptWorkbenchProps) {
+  const { t } = useAppIntl()
   const [editingScript, setEditingScript] = useState<ScriptWorkbenchItem | null>(null)
 
   const saveScript = (
@@ -81,27 +101,33 @@ export function IntegrationScriptWorkbench({
     timeoutMs: number,
   ) => {
     const exists = config.scripts.some((item) => item.id === script.id)
-    onChange({
-      ...config,
-      inputSchemaJson,
-      outputSchemaJson,
-      timeoutMs,
-      selectedScriptId: script.id,
-      scripts: exists
-        ? config.scripts.map((item) => (item.id === script.id ? script : item))
-        : [...config.scripts, script],
-    })
+    onChange(
+      {
+        ...config,
+        inputSchemaJson,
+        outputSchemaJson,
+        timeoutMs,
+        selectedScriptId: script.id,
+        scripts: exists
+          ? config.scripts.map((item) => (item.id === script.id ? script : item))
+          : [...config.scripts, script],
+      },
+      { persist: true },
+    )
     setEditingScript(null)
   }
 
   const removeScript = (scriptId: string) => {
     if (config.scripts.length === 1) return
     const scripts = config.scripts.filter((script) => script.id !== scriptId)
-    onChange({
-      ...config,
-      scripts,
-      selectedScriptId: config.selectedScriptId === scriptId ? scripts[0].id : config.selectedScriptId,
-    })
+    onChange(
+      {
+        ...config,
+        scripts,
+        selectedScriptId: config.selectedScriptId === scriptId ? scripts[0].id : config.selectedScriptId,
+      },
+      { persist: true },
+    )
   }
 
   return (
@@ -110,16 +136,19 @@ export function IntegrationScriptWorkbench({
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle>Scripts</CardTitle>
-              <CardDescription>Manage the runnable entries available in this toolset.</CardDescription>
+              <CardTitle>{t("integrations.scripts.title", "Scripts")}</CardTitle>
+              <CardDescription>
+                {t("integrations.scripts.description", "Manage the runnable entries available in this toolset.")}
+              </CardDescription>
             </div>
             <Button
               size="sm"
               variant="outline"
+              disabled={isSaving}
               onClick={() => setEditingScript(createScript(config.scripts.length + 1))}
             >
               <PlusIcon />
-              Add script
+              {t("integrations.scripts.add", "Add script")}
             </Button>
           </div>
         </CardHeader>
@@ -135,8 +164,9 @@ export function IntegrationScriptWorkbench({
                   <Button
                     size="icon-sm"
                     variant="outline"
-                    aria-label={`Edit ${script.name}`}
-                    title="Edit script"
+                    disabled={isSaving}
+                    aria-label={t("integrations.scripts.editAria", "Edit {name}", { name: script.name })}
+                    title={t("integrations.scripts.edit", "Edit script")}
                     onClick={() => setEditingScript(script)}
                   >
                     <PencilIcon />
@@ -144,13 +174,10 @@ export function IntegrationScriptWorkbench({
                   <Button
                     size="icon-sm"
                     variant="outline"
-                    aria-label={`Try run ${script.name}`}
-                    title="Try run"
-                    disabled={!canTryRun}
-                    onClick={() => {
-                      onChange({ ...config, selectedScriptId: script.id })
-                      onTryRun?.(script.id)
-                    }}
+                    aria-label={t("integrations.scripts.tryRunAria", "Try run {name}", { name: script.name })}
+                    title={t("integrations.scripts.tryRun", "Try run")}
+                    disabled={!canTryRun || isSaving}
+                    onClick={() => onTryRun?.(script.id)}
                   >
                     <PlayIcon />
                   </Button>
@@ -161,8 +188,9 @@ export function IntegrationScriptWorkbench({
                   <Button
                     size="icon-sm"
                     variant="destructive"
-                    aria-label={`Delete ${script.name}`}
-                    title="Delete script"
+                    disabled={isSaving}
+                    aria-label={t("integrations.scripts.deleteAria", "Delete {name}", { name: script.name })}
+                    title={t("integrations.scripts.delete", "Delete script")}
                     onClick={() => removeScript(script.id)}
                   >
                     <Trash2Icon />
@@ -177,6 +205,7 @@ export function IntegrationScriptWorkbench({
       <ScriptEditorDialog
         script={editingScript}
         config={config}
+        isSaving={isSaving}
         onClose={() => setEditingScript(null)}
         onSave={saveScript}
       />
@@ -187,14 +216,17 @@ export function IntegrationScriptWorkbench({
 function ScriptEditorDialog({
   script,
   config,
+  isSaving,
   onClose,
   onSave,
 }: {
   script: ScriptWorkbenchItem | null
   config: ScriptIntegrationConfig
+  isSaving: boolean
   onClose: () => void
   onSave: (script: ScriptWorkbenchItem, inputSchemaJson: string, outputSchemaJson: string, timeoutMs: number) => void
 }) {
+  const { t } = useAppIntl()
   const [draft, setDraft] = useState<ScriptWorkbenchItem | null>(null)
   const [inputDraft, setInputDraft] = useState("")
   const [outputDraft, setOutputDraft] = useState("")
@@ -216,34 +248,43 @@ function ScriptEditorDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent className="flex h-[min(88vh,54rem)] flex-col w-[calc(100vw-2rem)]! max-w-none!">
+      <DialogContent className="flex h-[min(88vh,54rem)] w-[calc(100vw-2rem)]! max-w-none! flex-col">
         <DialogHeader>
-          <DialogTitle>Edit script</DialogTitle>
+          <DialogTitle>{t("integrations.scripts.dialog.title", "Edit script")}</DialogTitle>
           <DialogDescription>
-            Keep the executable implementation and its tool contract together in one draft.
+            {t(
+              "integrations.scripts.dialog.description",
+              "Keep the executable implementation and its tool contract together in one draft.",
+            )}
           </DialogDescription>
         </DialogHeader>
         <Tabs defaultValue="script" className="flex min-h-0 flex-1 flex-col">
           <TabsList>
-            <TabsTrigger value="script">Script</TabsTrigger>
-            <TabsTrigger value="parameters">Parameters</TabsTrigger>
+            <TabsTrigger value="script">{t("integrations.scripts.dialog.tab.script", "Script")}</TabsTrigger>
+            <TabsTrigger value="parameters">
+              {t("integrations.scripts.dialog.tab.parameters", "Parameters")}
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="script" className="min-h-0 pt-4">
             <div className="flex h-full min-h-0 flex-col gap-4">
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Name</div>
+                  <div className="text-sm text-muted-foreground">{t("integrations.scripts.dialog.name", "Name")}</div>
                   <Input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} />
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Handler</div>
+                  <div className="text-sm text-muted-foreground">
+                    {t("integrations.scripts.dialog.handler", "Handler")}
+                  </div>
                   <Input
                     value={draft.handler}
                     onChange={(event) => setDraft({ ...draft, handler: event.target.value })}
                   />
                 </div>
                 <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Timeout ms</div>
+                  <div className="text-sm text-muted-foreground">
+                    {t("integrations.scripts.dialog.timeoutMs", "Timeout ms")}
+                  </div>
                   <Input
                     type="number"
                     value={String(timeoutDraft)}
@@ -252,7 +293,7 @@ function ScriptEditorDialog({
                 </div>
               </div>
               <div className="flex min-h-0 flex-1 flex-col gap-2">
-                <div className="text-sm text-muted-foreground">Code</div>
+                <div className="text-sm text-muted-foreground">{t("integrations.scripts.dialog.code", "Code")}</div>
                 <div className="min-h-80 flex-1 overflow-hidden rounded-xl border">
                   <MonacoEditor
                     height="100%"
@@ -273,16 +314,26 @@ function ScriptEditorDialog({
           </TabsContent>
           <TabsContent value="parameters" className="min-h-0 overflow-y-auto pt-4">
             <div className="flex flex-col gap-4 pr-2">
-              <SchemaEditor label="Input contract" schemaText={inputDraft} onChange={setInputDraft} />
-              <SchemaEditor label="Output contract" schemaText={outputDraft} onChange={setOutputDraft} />
+              <SchemaEditor
+                label={t("integrations.scripts.dialog.inputContract", "Input contract")}
+                schemaText={inputDraft}
+                onChange={setInputDraft}
+              />
+              <SchemaEditor
+                label={t("integrations.scripts.dialog.outputContract", "Output contract")}
+                schemaText={outputDraft}
+                onChange={setOutputDraft}
+              />
             </div>
           </TabsContent>
         </Tabs>
         <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Cancel
+          <Button variant="outline" disabled={isSaving} onClick={onClose}>
+            {t("integrations.common.cancel", "Cancel")}
           </Button>
-          <Button onClick={() => onSave({ ...draft }, inputDraft, outputDraft, timeoutDraft)}>Save script</Button>
+          <Button disabled={isSaving} onClick={() => onSave({ ...draft }, inputDraft, outputDraft, timeoutDraft)}>
+            {t("integrations.scripts.dialog.save", "Save script")}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -298,45 +349,47 @@ function SchemaEditor({
   schemaText: string
   onChange: (value: string) => void
 }) {
+  const { t } = useAppIntl()
   const [fields, setFields] = useState<SchemaField[]>(() => parseSchemaFields(schemaText))
+  const lastSchemaTextRef = useRef(schemaText)
+
+  useEffect(() => {
+    if (schemaText === lastSchemaTextRef.current) {
+      return
+    }
+
+    lastSchemaTextRef.current = schemaText
+    setFields(parseSchemaFields(schemaText))
+  }, [schemaText])
 
   const updateFields = (next: SchemaField[]) => {
+    const nextSchemaText = toSchemaJson(next)
+    lastSchemaTextRef.current = nextSchemaText
     setFields(next)
-    onChange(toSchemaJson(next))
+    onChange(nextSchemaText)
   }
 
   return (
     <div className="flex flex-col gap-3 rounded-xl border p-3">
       <div className="flex items-center justify-between gap-2">
         <div className="text-sm font-medium">{label}</div>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => updateFields([...fields, { key: "", type: "string", description: "" }])}
-        >
-          Add field
+        <Button size="sm" variant="outline" onClick={() => updateFields([...fields, createSchemaField()])}>
+          {t("integrations.schema.addField", "Add field")}
         </Button>
       </div>
-      {fields.map((field, index) => (
-        <div
-          key={`${field.key}-${index}`}
-          className="grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1.2fr)_auto]"
-        >
+      {fields.map((field) => (
+        <div key={field.id} className="grid gap-2 md:grid-cols-[minmax(0,1fr)_8rem_minmax(0,1.2fr)_auto]">
           <Input
             value={field.key}
             onChange={(event) =>
-              updateFields(
-                fields.map((item, itemIndex) => (itemIndex === index ? { ...item, key: event.target.value } : item)),
-              )
+              updateFields(fields.map((item) => (item.id === field.id ? { ...item, key: event.target.value } : item)))
             }
-            placeholder="name"
+            placeholder={t("integrations.schema.namePlaceholder", "name")}
           />
           <NativeSelect
             value={field.type}
             onChange={(event) =>
-              updateFields(
-                fields.map((item, itemIndex) => (itemIndex === index ? { ...item, type: event.target.value } : item)),
-              )
+              updateFields(fields.map((item) => (item.id === field.id ? { ...item, type: event.target.value } : item)))
             }
           >
             <NativeSelectOption value="string">string</NativeSelectOption>
@@ -349,19 +402,19 @@ function SchemaEditor({
             value={field.description}
             onChange={(event) =>
               updateFields(
-                fields.map((item, itemIndex) =>
-                  itemIndex === index ? { ...item, description: event.target.value } : item,
-                ),
+                fields.map((item) => (item.id === field.id ? { ...item, description: event.target.value } : item)),
               )
             }
-            placeholder="description"
+            placeholder={t("integrations.schema.descriptionPlaceholder", "description")}
           />
           <Button
             size="icon-sm"
             variant="destructive"
-            aria-label={`Delete field ${field.key || index + 1}`}
-            title="Delete field"
-            onClick={() => updateFields(fields.filter((_, itemIndex) => itemIndex !== index))}
+            aria-label={t("integrations.schema.deleteFieldAria", "Delete field {name}", {
+              name: field.key || label,
+            })}
+            title={t("integrations.schema.deleteField", "Delete field")}
+            onClick={() => updateFields(fields.filter((item) => item.id !== field.id))}
           >
             <Trash2Icon />
           </Button>

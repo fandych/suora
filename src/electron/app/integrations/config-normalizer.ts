@@ -5,9 +5,12 @@ import type {
   HttpIntegrationAuthType,
   HttpIntegrationConfig,
   IntegrationConfig,
+  McpIntegrationConfig,
+  ScriptIntegrationConfig,
 } from "@/types/integration"
 
 const defaultParameterSchemaJson = '{\n  "type": "object",\n  "properties": {}\n}'
+const defaultScriptOutputSchemaJson = "{}"
 
 function createEndpointParameter(partial?: Partial<HttpEndpointParameter>): HttpEndpointParameter {
   return {
@@ -56,10 +59,72 @@ function toPrettyJson(value: unknown, fallback = "{}") {
   }
 }
 
+function createDefaultScriptConfig(source: Partial<ScriptIntegrationConfig> = {}): ScriptIntegrationConfig {
+  const scripts =
+    Array.isArray(source.scripts) && source.scripts.length > 0
+      ? source.scripts.map((script, index) => ({
+          id: script.id?.trim() || `script-${index + 1}-${crypto.randomUUID()}`,
+          name: script.name?.trim() || `Script ${index + 1}`,
+          handler: script.handler?.trim() || "handler",
+          code: script.code?.trim()
+            ? script.code
+            : "export async function handler(input) {\n  return { ok: true, input }\n}\n",
+        }))
+      : [
+          {
+            id: "script-main",
+            name: "Main Script",
+            handler: "handler",
+            code: "export async function handler(input) {\n  return { ok: true, input }\n}\n",
+          },
+        ]
+  const selectedScript = scripts.find((script) => script.id === source.selectedScriptId) ?? scripts[0]
+
+  return {
+    kind: "scripts",
+    description: typeof source.description === "string" ? source.description : "",
+    runtime: typeof source.runtime === "string" ? source.runtime : "node",
+    timeoutMs: typeof source.timeoutMs === "number" ? source.timeoutMs : 30_000,
+    inputSchemaJson: typeof source.inputSchemaJson === "string" ? source.inputSchemaJson : defaultParameterSchemaJson,
+    outputSchemaJson:
+      typeof source.outputSchemaJson === "string" ? source.outputSchemaJson : defaultScriptOutputSchemaJson,
+    selectedScriptId: selectedScript?.id ?? "",
+    scripts,
+  }
+}
+
+function createDefaultMcpConfig(source: Partial<McpIntegrationConfig> = {}): McpIntegrationConfig {
+  return {
+    kind: "mcp",
+    description: typeof source.description === "string" ? source.description : "",
+    endpoint: typeof source.endpoint === "string" ? source.endpoint : "",
+    launchCommand: typeof source.launchCommand === "string" ? source.launchCommand : "",
+    protocols:
+      Array.isArray(source.protocols) && source.protocols.length > 0
+        ? source.protocols.map((value) => String(value).trim()).filter(Boolean)
+        : ["stdio"],
+    authModes:
+      Array.isArray(source.authModes) && source.authModes.length > 0
+        ? source.authModes.map((value) => String(value).trim()).filter(Boolean)
+        : ["none"],
+    authConfigJson: typeof source.authConfigJson === "string" ? source.authConfigJson : "{}",
+    toolCatalogJson: typeof source.toolCatalogJson === "string" ? source.toolCatalogJson : "[]",
+    tools: Array.isArray(source.tools) ? source.tools : [],
+  }
+}
+
 export function normalizeIntegrationConfig(
   kind: string,
   config: Record<string, unknown>,
 ): IntegrationConfig | Record<string, unknown> {
+  if (kind === "scripts") {
+    return createDefaultScriptConfig(config as Partial<ScriptIntegrationConfig>)
+  }
+
+  if (kind === "mcp") {
+    return createDefaultMcpConfig(config as Partial<McpIntegrationConfig>)
+  }
+
   if (kind !== "http") return config
   const source = config as Partial<HttpIntegrationConfig> & {
     url?: string
@@ -115,7 +180,8 @@ export function normalizeIntegrationConfig(
           }),
         ]
   const selectedEndpoint =
-    existingEndpoints.find((endpoint: HttpEndpointConfig) => endpoint.id === source.selectedEndpointId) ?? existingEndpoints[0]
+    existingEndpoints.find((endpoint: HttpEndpointConfig) => endpoint.id === source.selectedEndpointId) ??
+    existingEndpoints[0]
   return {
     ...fallback,
     ...source,

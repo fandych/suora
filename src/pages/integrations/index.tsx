@@ -1,19 +1,33 @@
 import { useEffect } from "react"
 import { useNavigate } from "react-router"
 
+import { Button } from "@/components/ui/button"
 import PageHeader from "@/pages/components/page-header"
-import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
+import { EmptyCard, LoadingCard } from "@/pages/components/resource-state"
 import { SummaryCardGrid } from "@/pages/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
 import { useAppIntl } from "@/lib/i18n"
 import { IntegrationApi } from "@/services/integration-service"
 import { subscribeToDataChanges } from "@/services/data-events"
+import { showToast } from "@/services/toast-service"
 import { IntegrationCard } from "@/pages/integrations/components/integration-card"
 
 const IntegrationsPage = () => {
   const { t } = useAppIntl()
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => IntegrationApi.listAll(), [])
+
+  useEffect(() => {
+    if (!(error instanceof Error)) {
+      return
+    }
+
+    showToast({
+      title: t("integrations.toast.loadFailed", "Failed to load integration"),
+      description: error.message,
+      type: "error",
+    })
+  }, [error, t])
 
   useEffect(
     () =>
@@ -34,9 +48,17 @@ const IntegrationsPage = () => {
 
       <div className="flex-1 p-6">
         <div className="mx-auto flex max-w-7xl flex-col gap-4">
-          {isLoading ? <LoadingCard title={t("integrations.page.loading", "Loading integrations...")} /> : null}
-          {error ? <ErrorCard error={error} onRetry={reload} /> : null}
-          {!isLoading && !error && data?.length ? (
+          {isLoading || (!data && error) ? (
+            <LoadingCard title={t("integrations.page.loading", "Loading integrations...")} />
+          ) : null}
+          {!isLoading && !data && error ? (
+            <div className="flex justify-end">
+              <Button variant="outline" onClick={reload}>
+                {t("resource.error.retry", "Retry")}
+              </Button>
+            </div>
+          ) : null}
+          {!isLoading && data?.length ? (
             <SummaryCardGrid
               emptyTitle={t("integrations.page.empty.title", "No integrations yet")}
               emptyDescription={t(
@@ -53,7 +75,7 @@ const IntegrationsPage = () => {
               )}
             />
           ) : null}
-          {!isLoading && !error && data?.length === 0 ? (
+          {!isLoading && data?.length === 0 ? (
             <EmptyCard
               title={t("integrations.page.empty.title", "No integrations yet")}
               description={t(

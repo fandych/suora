@@ -4,6 +4,7 @@ import { CopyIcon, FileUpIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { useAppIntl } from "@/lib/i18n"
 import type { HttpEndpointParameter, HttpIntegrationConfig } from "@/types/integration"
 import { buildHttpEndpointUrl, getSelectedHttpEndpoint } from "@/lib/integration"
 
@@ -129,6 +130,7 @@ function buildCurlPreview(config: HttpIntegrationConfig, values: InputValues) {
 }
 
 export function IntegrationHttpTryRunForm({ config, input, onChangeInput }: HttpTryRunFormProps) {
+  const { t } = useAppIntl()
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
   const endpoint = getSelectedHttpEndpoint(config)
   const values = readInputValues(input)
@@ -156,7 +158,10 @@ export function IntegrationHttpTryRunForm({ config, input, onChangeInput }: Http
           {endpoint.method} {endpoint.path}
         </div>
         <div className="mt-1 text-xs text-muted-foreground">
-          Fill values for the selected REST operation. Required fields are marked in the endpoint definition.
+          {t(
+            "integrations.tryRun.http.help",
+            "Fill values for the selected REST operation. Required fields are marked in the endpoint definition.",
+          )}
         </div>
       </div>
       {endpoint.parameters.length ? (
@@ -186,10 +191,10 @@ export function IntegrationHttpTryRunForm({ config, input, onChangeInput }: Http
                   />
                   <Button size="sm" variant="outline" onClick={() => fileInputRefs.current[parameter.id]?.click()}>
                     <FileUpIcon />
-                    Choose file
+                    {t("integrations.tryRun.http.chooseFile", "Choose file")}
                   </Button>
                   <span className="truncate text-xs text-muted-foreground">
-                    {fileValue?.name ?? "No file selected (10 MB limit)"}
+                    {fileValue?.name ?? t("integrations.tryRun.http.noFile", "No file selected (10 MB limit)")}
                   </span>
                 </div>
               ) : parameter.type === "boolean" ? (
@@ -206,7 +211,7 @@ export function IntegrationHttpTryRunForm({ config, input, onChangeInput }: Http
                   value={displayValue(values[parameter.name] ?? parameter.defaultValue)}
                   placeholder={
                     parameter.type === "array" || parameter.type === "object"
-                      ? `Valid JSON ${parameter.type}`
+                      ? t("integrations.tryRun.http.validJson", "Valid JSON {type}", { type: parameter.type })
                       : parameter.type
                   }
                   onChange={(event) => updateValue(parameter, coerceValue(event.target.value, parameter.type))}
@@ -217,17 +222,17 @@ export function IntegrationHttpTryRunForm({ config, input, onChangeInput }: Http
         })
       ) : (
         <div className="rounded-xl border border-dashed px-3 py-4 text-sm text-muted-foreground">
-          This endpoint has no dynamic parameters.
+          {t("integrations.tryRun.http.noParameters", "This endpoint has no dynamic parameters.")}
         </div>
       )}
       <div className="flex flex-col gap-2 rounded-xl border p-3">
         <div className="flex items-center justify-between gap-2">
-          <div className="text-sm font-medium">cURL preview</div>
+          <div className="text-sm font-medium">{t("integrations.tryRun.http.curlPreview", "cURL preview")}</div>
           <Button
             size="icon-sm"
             variant="outline"
-            aria-label="Copy cURL command"
-            title="Copy cURL command"
+            aria-label={t("integrations.tryRun.http.copyCurlAria", "Copy cURL command")}
+            title={t("integrations.tryRun.http.copyCurl", "Copy cURL command")}
             onClick={() => void navigator.clipboard.writeText(curlPreview)}
           >
             <CopyIcon />

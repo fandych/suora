@@ -1,5 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useAppIntl } from "@/lib/i18n"
 import type { IntegrationSummary } from "@/types/integration"
 
 type IntegrationCardProps = {
@@ -8,6 +9,8 @@ type IntegrationCardProps = {
 }
 
 export function IntegrationCard({ integration, onOpen }: IntegrationCardProps) {
+  const { t } = useAppIntl()
+
   return (
     <Card
       className="min-w-0 cursor-pointer transition-all duration-150 hover:-translate-y-0.5 hover:border-primary/30 hover:bg-muted/20 hover:shadow-sm"
@@ -29,7 +32,7 @@ export function IntegrationCard({ integration, onOpen }: IntegrationCardProps) {
       </CardHeader>
       <CardContent>
         <div className="text-sm leading-6 text-muted-foreground [display:-webkit-box] [-webkit-box-orient:vertical] [-webkit-line-clamp:3] overflow-hidden">
-          {integration.endpoint || "No endpoint configured yet."}
+          {integration.endpoint || t("integrations.card.noEndpoint", "No endpoint configured yet.")}
         </div>
       </CardContent>
     </Card>
