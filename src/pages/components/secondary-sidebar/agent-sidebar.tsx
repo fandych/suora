@@ -12,11 +12,14 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
+import { getLocalizedAgentSummary, getLocalizedAgentTitle } from "@/lib/agent-localization"
+import { useAppIntl } from "@/lib/i18n"
 import { listAgents } from "@/services/agent-service"
 import { subscribeToDataChanges } from "@/services/data-events"
 import type { AgentSummary } from "@/types/agent"
 import type { PrimaryNavItem } from "@/pages/nav-config"
 export default function AgentSidebar({ item, headerAction }: { item: PrimaryNavItem; headerAction?: React.ReactNode }) {
+  const { t } = useAppIntl()
   const [items, setItems] = useState<AgentSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState("")
@@ -34,11 +37,11 @@ export default function AgentSidebar({ item, headerAction }: { item: PrimaryNavI
     })
   }, [])
   const filteredItems = items.filter((x) =>
-    `${x.title} ${x.summary}`.toLowerCase().includes(query.toLowerCase()),
+    `${getLocalizedAgentTitle(x, t)} ${getLocalizedAgentSummary(x, t)}`.toLowerCase().includes(query.toLowerCase()),
   )
   const groups = [
-    { id: "custom", title: "Custom", items: filteredItems.filter((x) => x.source !== "system") },
-    { id: "builtin", title: "Builtin", items: filteredItems.filter((x) => x.source === "system") },
+    { id: "custom", title: t("agents.sidebar.group.custom", "Custom"), items: filteredItems.filter((x) => x.source !== "system") },
+    { id: "builtin", title: t("agents.sidebar.group.builtin", "Builtin"), items: filteredItems.filter((x) => x.source === "system") },
   ]
   return (
     <Sidebar collapsible="none" className="hidden min-h-0 flex-1 border-l md:flex">
@@ -69,7 +72,7 @@ export default function AgentSidebar({ item, headerAction }: { item: PrimaryNavI
                         isActive={location.pathname === `/agents/${x.id}`}
                         onClick={() => navigate(`/agents/${x.id}`)}
                       >
-                        {x.title}
+                        {getLocalizedAgentTitle(x, t)}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}

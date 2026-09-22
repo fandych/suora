@@ -5,11 +5,13 @@ import PageHeader from "@/pages/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { SummaryCardGrid } from "@/pages/components/summary-card-grid"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { useAppIntl } from "@/lib/i18n"
 import { IntegrationApi } from "@/services/integration-service"
 import { subscribeToDataChanges } from "@/services/data-events"
 import { IntegrationCard } from "@/pages/integrations/components/integration-card"
 
 const IntegrationsPage = () => {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => IntegrationApi.listAll(), [])
 
@@ -25,16 +27,22 @@ const IntegrationsPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title="Integrations" description="Manage versioned HTTP, script, and MCP integrations." />
+      <PageHeader
+        title={t("integrations.page.title", "Integrations")}
+        description={t("integrations.page.description", "Manage versioned HTTP, script, and MCP integrations.")}
+      />
 
       <div className="flex-1 p-6">
         <div className="mx-auto flex max-w-7xl flex-col gap-4">
-          {isLoading ? <LoadingCard title="Loading integrations..." /> : null}
+          {isLoading ? <LoadingCard title={t("integrations.page.loading", "Loading integrations...")} /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error && data?.length ? (
             <SummaryCardGrid
-              emptyTitle="No integrations yet"
-              emptyDescription="Create an HTTP, script, or MCP integration and version it like the other runtime modules."
+              emptyTitle={t("integrations.page.empty.title", "No integrations yet")}
+              emptyDescription={t(
+                "integrations.page.empty.description",
+                "Create an HTTP, script, or MCP integration and version it like the other runtime modules.",
+              )}
               items={data}
               renderItem={(integration) => (
                 <IntegrationCard
@@ -47,8 +55,11 @@ const IntegrationsPage = () => {
           ) : null}
           {!isLoading && !error && data?.length === 0 ? (
             <EmptyCard
-              title="No integrations yet"
-              description="Create an HTTP, script, or MCP integration and version it like the other runtime modules."
+              title={t("integrations.page.empty.title", "No integrations yet")}
+              description={t(
+                "integrations.page.empty.description",
+                "Create an HTTP, script, or MCP integration and version it like the other runtime modules.",
+              )}
             />
           ) : null}
         </div>

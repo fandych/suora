@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router"
 import { ChevronRightIcon } from "lucide-react"
 import {
@@ -16,6 +16,7 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
+import { useAppIntl } from "@/lib/i18n"
 import { SkillApi } from "@/services/skill-service"
 import { subscribeToDataChanges } from "@/services/data-events"
 import type { PrimaryNavItem } from "@/pages/nav-config"
@@ -23,20 +24,32 @@ import type { PrimaryNavItem } from "@/pages/nav-config"
 type SkillSidebarItem = { id: string; title: string; source: string; summary: string }
 
 const skillGroups = [
-  { id: "custom", title: "Custom", sources: ["custom"] as string[] },
-  { id: "builtin", title: "Builtin", sources: ["system", "builtin"] as string[] },
-  { id: "claude", title: "ClaudeCode (~/.claude/skills)", sources: ["claude"] as string[] },
-  { id: "codex", title: "Codex (~/.codex/skills)", sources: ["codex"] as string[] },
-  { id: "agents", title: "Other (~/.agents/skills)", sources: ["agents"] as string[] },
+  { id: "custom", sources: ["custom"] as string[] },
+  { id: "builtin", sources: ["system", "builtin"] as string[] },
+  { id: "claude", sources: ["claude"] as string[] },
+  { id: "codex", sources: ["codex"] as string[] },
+  { id: "agents", sources: ["agents"] as string[] },
 ]
 
 export default function SkillSidebar({ item, headerAction }: { item: PrimaryNavItem; headerAction?: React.ReactNode }) {
+  const { language, t } = useAppIntl()
   const [items, setItems] = useState<SkillSidebarItem[]>([])
   const [loading, setLoading] = useState(true)
   const [query, setQuery] = useState("")
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({})
   const location = useLocation()
   const navigate = useNavigate()
+  const groupTitles = new Map(item.secondarySidebar.groups.map((group) => [group.id, group.title ?? group.id]))
+  const getLocalizedSkillTitle = useCallback(
+    (skill: SkillSidebarItem) => {
+      if (skill.title === "find-skills" || skill.id === "find-skills") {
+        return language === "en" ? "Find Skills" : t("skills.item.findSkills", "Find Skills")
+      }
+
+      return skill.title
+    },
+    [language, t],
+  )
   useEffect(() => {
     const loadItems = () =>
       Promise.all([SkillApi.listAll(), SkillApi.listExternal()])
@@ -52,8 +65,8 @@ export default function SkillSidebar({ item, headerAction }: { item: PrimaryNavI
 
   const filteredItems = useMemo(() => {
     const normalizedQuery = query.toLowerCase()
-    return items.filter((skill) => `${skill.title} ${skill.summary}`.toLowerCase().includes(normalizedQuery))
-  }, [items, query])
+    return items.filter((skill) => `${getLocalizedSkillTitle(skill)} ${skill.summary}`.toLowerCase().includes(normalizedQuery))
+  }, [getLocalizedSkillTitle, items, query])
 
   return (
     <Sidebar collapsible="none" className="hidden min-h-0 flex-1 border-l md:flex">
@@ -84,7 +97,7 @@ export default function SkillSidebar({ item, headerAction }: { item: PrimaryNavI
                 >
                   <CollapsibleTrigger className="group flex h-8 w-full items-center gap-1 rounded-md px-2 text-xs font-medium text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground">
                     <ChevronRightIcon className="size-3 transition-transform group-aria-expanded:rotate-90" />
-                    {group.title}
+                    {groupTitles.get(group.id) ?? group.id}
                     <span className="ml-auto text-[11px] text-muted-foreground">{groupItems.length}</span>
                   </CollapsibleTrigger>
                   <CollapsibleContent>
@@ -95,7 +108,7 @@ export default function SkillSidebar({ item, headerAction }: { item: PrimaryNavI
                             isActive={location.pathname === `/skills/${skill.id}`}
                             onClick={() => navigate(`/skills/${skill.id}`)}
                           >
-                            {skill.title}
+                            {getLocalizedSkillTitle(skill)}
                           </SidebarMenuButton>
                         </SidebarMenuItem>
                       ))}

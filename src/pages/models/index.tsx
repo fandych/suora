@@ -4,11 +4,13 @@ import { useNavigate } from "react-router"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import PageHeader from "@/pages/components/page-header"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { useAppIntl } from "@/lib/i18n"
 import { ModelApi } from "@/services/model-service"
 import { subscribeToDataChanges } from "@/services/data-events"
 import { ProviderCard } from "@/pages/models/components/provider-card"
 
 const ModelsPage = () => {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => ModelApi.listConfigured(), [])
   const providers = data ?? []
@@ -25,16 +27,19 @@ const ModelsPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title="Models" />
+      <PageHeader title={t("models.page.title", "Models")} />
 
       <div className="flex-1 overflow-x-hidden p-6">
         <div className="flex w-full min-w-0 flex-col gap-4">
-          {isLoading ? <LoadingCard title="Loading provider configs..." /> : null}
+          {isLoading ? <LoadingCard title={t("models.page.loading", "Loading provider configs...")} /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error && providers.length === 0 ? (
             <EmptyCard
-              title="No configured providers"
-              description="Configure and enable a provider with at least one model to see it here."
+              title={t("models.page.empty.title", "No configured providers")}
+              description={t(
+                "models.page.empty.description",
+                "Configure and enable a provider with at least one model to see it here.",
+              )}
             />
           ) : null}
           {!isLoading && !error && providers.length ? (

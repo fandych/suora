@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Card, CardContent } from "@/components/ui/card"
 import { CircleAlertIcon, Loader2Icon } from "lucide-react"
+import { useIntl } from "react-intl"
 
 export const LoadingCard = ({ title }: { title: string }) => {
   return (
@@ -18,15 +19,17 @@ export const LoadingCard = ({ title }: { title: string }) => {
 }
 
 export const ErrorCard = ({ error, onRetry }: { error: Error; onRetry?: () => void }) => {
+  const intl = useIntl()
+
   return (
     <Alert variant="destructive">
       <CircleAlertIcon className="size-4" />
-      <AlertTitle>Something went wrong</AlertTitle>
+      <AlertTitle>{intl.formatMessage({ id: "resource.error.title", defaultMessage: "Something went wrong" })}</AlertTitle>
       <AlertDescription>{error.message}</AlertDescription>
       {onRetry ? (
         <div className="pt-3">
           <Button variant="outline" onClick={onRetry}>
-            Retry
+            {intl.formatMessage({ id: "resource.error.retry", defaultMessage: "Retry" })}
           </Button>
         </div>
       ) : null}

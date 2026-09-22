@@ -3,6 +3,7 @@ import { useNavigate } from "react-router"
 import { PlusIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { useAppIntl } from "@/lib/i18n"
 import { emitDataChanged } from "@/services/data-events"
 import { ModelApi } from "@/services/model-service"
 
@@ -19,6 +20,7 @@ export function CreateProviderButton({
   size = "sm",
   variant = "outline",
 }: CreateProviderButtonProps) {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
 
@@ -40,11 +42,13 @@ export function CreateProviderButton({
       variant={variant}
       onClick={handleCreateProvider}
       disabled={isCreating}
-      aria-label="Add provider"
-      title="Add provider"
+      aria-label={t("newProvider.button", "Add provider")}
+      title={t("newProvider.button", "Add provider")}
     >
       <PlusIcon className="size-4" />
-      {iconOnly ? null : <span>{isCreating ? "Creating..." : "Add provider"}</span>}
+      {iconOnly ? null : (
+        <span>{isCreating ? t("newProvider.creating", "Creating...") : t("newProvider.button", "Add provider")}</span>
+      )}
     </Button>
   )
 }

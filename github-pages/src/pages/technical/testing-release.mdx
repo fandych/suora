@@ -90,6 +90,30 @@ npm run test:e2e:full-chain
 
 部分脚本会在页面上下文中手动遍历节点并构造 trace，不等同于完整 workflow engine 的黑盒 E2E。运行结果应结合 engine 单元测试解释。
 
+## Agent Browser Electron 冒烟
+
+针对桌面 UI 的中英文界面回归，当前推荐使用 Agent Browser 的 Electron 工作流，而不是直接依赖 Playwright：
+
+1. 以隔离数据目录启动 Electron：
+
+   ```bash
+   SUORA_USER_DATA_PATH=/absolute/path/to/test-userdata \
+   SUORA_REMOTE_DEBUG_PORT=9333 \
+   npm run dev
+   ```
+
+2. 连接到 Electron 主窗口：
+
+   ```bash
+   agent-browser --session suora connect 9333
+   agent-browser --session suora snapshot -i
+   ```
+
+3. 通过 `open http://127.0.0.1:5173/#/...` 或导航点击切换主页面，分别截图中文与 English 状态。
+4. 验证 Primary navigation、Chats、Preference、空状态、系统 Agent 名称和共享按钮文案已随 Language 切换；同时允许 Provider、模型、渠道品牌和外部 Skill 名称保留原文。
+
+`SUORA_USER_DATA_PATH` 会覆盖 Electron `userData` 目录，便于在不污染个人数据的前提下生成干净 SQLite 与缓存；`SUORA_REMOTE_DEBUG_PORT` 则只在开发模式下启用 Chromium DevTools Protocol 端口。
+
 ## CI 流程
 
 主应用测试 workflow 在 push 到 `main`/`develop` 和对应 pull request 时运行：

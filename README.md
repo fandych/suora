@@ -4,6 +4,8 @@ SUORA 是一个基于 Electron、React 和 TypeScript 的本地优先 AI 工作�
 
 应用数据默认保存在本机 SQLite 数据库中。API Key、渠道凭据、SMTP 密码和 Webhook Secret 都应按敏感信息处理。
 
+Renderer 当前通过 `react-intl` 提供中文 / English 双语界面。Primary navigation、Chats、Preference、常见空状态、共享按钮与多数组件文案都会跟随 Preferences > General > Language 立即切换；Provider/渠道品牌名、模型名和外部 Skill 名称等专有名词保持原文。
+
 ## 功能模块
 
 - **Chats**：持久化对话、流式响应、附件、工具调用、Agent 执行和消息导出。
@@ -112,6 +114,11 @@ Workflow 当前限制包括最多 200 个节点、400 条边，`maxSteps` 为 1�
 - `npm run test:coverage` / `npm run test:ui`：覆盖率测试或 Vitest UI。
 - `npm run ci`：类型检查、lint、测试、覆盖率和构建。
 - `npm run test:e2e*`、`npm run smoke:electron`：条件式 E2E、工作流和启动 smoke 检查。
+
+如需在开发或冒烟测试时隔离本地数据库和应用数据，可在启动前设置：
+
+- `SUORA_REMOTE_DEBUG_PORT=<port>`：为 Electron 主窗口打开 Chromium DevTools Protocol 端口，便于 Agent Browser / CDP 调试。
+- `SUORA_USER_DATA_PATH=<absolute-path>`：覆盖 Electron `userData` 目录，让 SQLite、缓存和本地状态写入指定测试目录。式 E2E、工作流和启动 smoke 检查。
 - `npm run verify:architecture`：验证架构约束。
 
 常规修改至少应执行：

@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarMenuSkeleton,
 } from "@/components/ui/sidebar"
+import { useAppIntl } from "@/lib/i18n"
 import { ChannelApi } from "@/services/channel-service"
 import { subscribeToDataChanges } from "@/services/data-events"
 import type { PrimaryNavItem } from "@/pages/nav-config"
@@ -24,6 +25,7 @@ export default function ChannelSidebar({
   item: PrimaryNavItem
   headerAction?: React.ReactNode
 }) {
+  const { t } = useAppIntl()
   const [items, setItems] = useState<
     Array<{
       id: string
@@ -63,10 +65,42 @@ export default function ChannelSidebar({
   const filteredItems = items.filter((x) =>
     `${x.title} ${x.platform}`.toLowerCase().includes(query.toLowerCase()),
   )
+  const groupTitles = new Map(item.secondarySidebar.groups.map((group) => [group.id, group.title ?? group.id]))
   const groups = [
-    { id: "connected", title: "Connected", items: filteredItems.filter((x) => x.bindingState === "connected") },
-    { id: "catalog", title: "Catalog", items: filteredItems.filter((x) => x.bindingState !== "connected") },
+    { id: "connected", title: groupTitles.get("connected") ?? "Connected", items: filteredItems.filter((x) => x.bindingState === "connected") },
+    { id: "catalog", title: groupTitles.get("catalog") ?? "Catalog", items: filteredItems.filter((x) => x.bindingState !== "connected") },
   ]
+
+  const getLocalizedChannelTitle = (channel: (typeof items)[number]) => {
+    switch (channel.catalogId) {
+      case "catalog-custom-webhook":
+        return t("channels.catalog.customWebhook", "Custom Webhook")
+      case "catalog-custom-websocket":
+        return t("channels.catalog.customWebsocket", "Custom WebSocket")
+      case "catalog-email-inbox":
+        return t("channels.catalog.emailInbox", "Email Inbox")
+      case "catalog-telegram":
+        return t("channels.catalog.telegram", "Telegram")
+      case "catalog-teams":
+        return t("channels.catalog.teams", "Microsoft Teams")
+      case "catalog-qq":
+        return t("channels.catalog.qq", "QQ")
+      case "catalog-dingtalk":
+        return t("channels.catalog.dingtalk", "DingTalk")
+      case "catalog-feishu":
+        return t("channels.catalog.feishu", "Feishu")
+      case "catalog-wechat-miniprogram":
+        return t("channels.catalog.wechatMiniProgram", "WeChat Mini Program")
+      case "catalog-wechat-official":
+        return t("channels.catalog.wechatOfficial", "WeChat Official Account")
+      case "catalog-wechat":
+        return t("channels.catalog.wechatEnterprise", "WeChat Enterprise")
+      case "catalog-wechat-personal":
+        return t("channels.catalog.wechatPersonal", "WeChat Personal")
+      default:
+        return channel.title
+    }
+  }
   return (
     <Sidebar collapsible="none" className="hidden min-h-0 flex-1 border-l md:flex">
       <SidebarHeader className="gap-2.5 border-b p-3">
@@ -97,7 +131,7 @@ export default function ChannelSidebar({
                         onClick={() => navigate(`/channels/${x.id}`)}
                       >
                         <Logo className="size-4 shrink-0" />
-                        {x.title}
+                        {getLocalizedChannelTitle(x)}
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   )

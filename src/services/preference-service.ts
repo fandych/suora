@@ -8,10 +8,13 @@ import {
 } from "@/services/preference-system-status"
 import { requireAppBridge } from "@/services/bridge"
 
+const LANGUAGE_EVENT_NAME = "suora:language-changed"
+
 function applyToDocument(settings: Pick<PreferenceSettings, "themeMode" | "themeAccent" | "fontScale" | "language">) {
   if (typeof document === "undefined") return
 
   const root = document.documentElement
+  const nextLanguage = settings.language === "en" ? "en" : "zh"
   const prefersDark =
     typeof window !== "undefined" && typeof window.matchMedia === "function"
       ? window.matchMedia("(prefers-color-scheme: dark)").matches
@@ -21,7 +24,13 @@ function applyToDocument(settings: Pick<PreferenceSettings, "themeMode" | "theme
   const fontScale = FONT_SCALE_MAP[settings.fontScale] ?? FONT_SCALE_MAP.md
 
   root.classList.toggle("dark", useDarkMode)
-  root.lang = settings.language === "zh" ? "zh-CN" : "en"
+  root.lang = nextLanguage === "zh" ? "zh-CN" : "en"
+  if (root.dataset.language !== nextLanguage && typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent<PreferenceSettings["language"]>(LANGUAGE_EVENT_NAME, { detail: nextLanguage as PreferenceSettings["language"] }),
+    )
+  }
+  root.dataset.language = nextLanguage
   root.dataset.themeAccent = settings.themeAccent
   root.style.setProperty("--app-font-scale", fontScale)
   root.style.setProperty("--primary", accent.primary)
@@ -57,13 +66,19 @@ export const PreferenceApi = {
   checkUpdates: () => requireAppBridge().updater.check(),
 }
 
+export function subscribeToLanguageChanges(handler: (language: PreferenceSettings["language"]) => void) {
+  const listener = (event: Event) => handler((event as CustomEvent<PreferenceSettings["language"]>).detail)
+  window.addEventListener(LANGUAGE_EVENT_NAME, listener)
+  return () => window.removeEventListener(LANGUAGE_EVENT_NAME, listener)
+}
+
 function createRendererPreferenceDefaults(): PreferenceSettings {
   return {
     themeMode: "system",
     themeAccent: "ocean",
     fontScale: "md",
     language: "zh",
-    workspaceName: "SUORA Workspace",
+    workspaceName: "SUORA",
     workspacePath: "",
     autoSaveConversations: true,
     autoStartEnabled: false,

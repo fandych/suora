@@ -3,9 +3,11 @@ import path from "node:path"
 import { BrowserWindow, Menu, nativeImage } from "electron"
 
 import { appState, setMainWindow } from "@/electron/infrastructure/app-state"
+import { getMainWindowIconPath } from "@/electron/infrastructure/runtime-resource-paths"
 
 export async function createWindow() {
-  const icon = nativeImage.createFromPath(path.join(process.cwd(), "resources", "icons", "icon-256x256.png"))
+  const iconPath = getMainWindowIconPath(__dirname)
+  const icon = iconPath ? nativeImage.createFromPath(iconPath) : undefined
 
   const mainWindow = new BrowserWindow({
     width: 1440,

@@ -54,19 +54,20 @@ export default function ChatSidebar({ item, headerAction }: { item: PrimaryNavIt
   startOfToday.setHours(0, 0, 0, 0)
   const todayStartMs = startOfToday.getTime()
   const weekStartMs = todayStartMs - 6 * 86400000
-  const groups = [
-    {
-      id: "today",
-      title: "今天",
-      records: records.filter((record) => record.updatedAt >= todayStartMs),
-    },
-    {
-      id: "week",
-      title: "本周",
-      records: records.filter((record) => record.updatedAt < todayStartMs && record.updatedAt >= weekStartMs),
-    },
-    { id: "older", title: "更早", records: records.filter((record) => record.updatedAt < weekStartMs) },
-  ].filter((group) => loading || group.records.length > 0)
+  const groups = item.secondarySidebar.groups
+    .map((group) => ({
+      id: group.id,
+      title: group.title ?? "",
+      records:
+        group.id === "today"
+          ? records.filter((record) => record.updatedAt >= todayStartMs)
+          : group.id === "week"
+            ? records.filter((record) => record.updatedAt < todayStartMs && record.updatedAt >= weekStartMs)
+            : group.id === "older"
+              ? records.filter((record) => record.updatedAt < weekStartMs)
+              : records,
+    }))
+    .filter((group) => loading || group.records.length > 0)
   return (
     <Sidebar collapsible="none" className="hidden min-h-0 flex-1 border-l md:flex">
       <SidebarHeader className="gap-2.5 border-b p-3">

@@ -11,8 +11,10 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import { cn } from "@/lib/utils"
-import { preferenceRoute, getPrimaryNavItem, isPreferencePath, primaryNavItems } from "@/pages/nav-config"
+import { getPreferenceRoute, getPrimaryNavItem, getPrimaryNavItems, isPreferencePath } from "@/pages/nav-config"
 import { SettingsIcon } from "lucide-react"
+import { useMemo } from "react"
+import { useIntl } from "react-intl"
 import { useLocation, useNavigate } from "react-router"
 import PreferenceSidebar from "@/pages/components/secondary-sidebar/preference-sidebar"
 import ChatSidebar from "@/pages/components/secondary-sidebar/chat-sidebar"
@@ -36,11 +38,14 @@ import { NewSchedulerButton } from "@/pages/schedulers/components/new-scheduler-
 import { SuoraLogo } from "@/pages/components/suora-logo"
 
 const AppSidebar = (props: React.ComponentProps<typeof Sidebar>) => {
+  const intl = useIntl()
   const { setOpen } = useSidebar()
   const navigate = useNavigate()
   const location = useLocation()
+  const primaryNavItems = useMemo(() => getPrimaryNavItems(intl), [intl])
+  const preferenceRoute = useMemo(() => getPreferenceRoute(intl), [intl])
 
-  const activeItem = getPrimaryNavItem(location.pathname)
+  const activeItem = getPrimaryNavItem(location.pathname, intl)
   const showPreferenceSidebar = isPreferencePath(location.pathname)
   const sidebarProps = activeItem
     ? {

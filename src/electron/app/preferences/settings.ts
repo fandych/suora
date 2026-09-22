@@ -17,7 +17,7 @@ export const DEFAULT_PREFERENCES: PreferenceSettings = {
   themeAccent: "ocean",
   fontScale: "md",
   language: "zh",
-  workspaceName: "SUORA Workspace",
+  workspaceName: "SUORA",
   workspacePath: "",
   autoSaveConversations: true,
   autoStartEnabled: false,

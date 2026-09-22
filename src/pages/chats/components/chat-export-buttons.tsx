@@ -2,6 +2,7 @@ import { DownloadIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { useAppIntl } from "@/lib/i18n"
 
 type ChatExportButtonsProps = {
   disabled?: boolean
@@ -9,11 +10,13 @@ type ChatExportButtonsProps = {
 }
 
 export function ChatExportButtons({ disabled = false, onExport }: ChatExportButtonsProps) {
+  const { t } = useAppIntl()
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger render={<Button size="sm" variant="outline" type="button" disabled={disabled} />}>
         <DownloadIcon data-icon="inline-start" />
-        Export
+        {t("chat.export.button", "Export")}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-36 min-w-36">
         <DropdownMenuItem data-chat-export="markdown" onClick={() => void onExport("markdown")}>

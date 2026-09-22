@@ -3,6 +3,7 @@ import { Navigate, useParams } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { useAppIntl } from "@/lib/i18n"
 import { showToast } from "@/services/toast-service"
 import { PreferenceApi, type PreferenceSettings } from "@/services/preference-service"
 import { hasAppBridge } from "@/services/bridge"
@@ -19,6 +20,7 @@ import PreferenceSecurityPanel from "@/pages/preference/components/preference-se
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const PreferencePage = () => {
+  const { t } = useAppIntl()
   const { section } = useParams()
   const { data, error, isLoading, reload, setData } = useAsyncResource(() => PreferenceApi.get(), [])
   const { data: systemInfo } = useAsyncResource(() => PreferenceApi.getSystemInfo(), [])
@@ -74,14 +76,14 @@ const PreferencePage = () => {
       setData(next)
       setDraft(next)
       showToast({
-        title: "Preferences saved",
-        description: "The desktop preference profile was updated.",
+        title: t("preference.page.toast.saved.title", "Preferences saved"),
+        description: t("preference.page.toast.saved.description", "The desktop preference profile was updated."),
         type: "success",
         timeout: 2000,
       })
     } catch (nextError) {
       showToast({
-        title: "Save failed",
+        title: t("preference.page.toast.saveFailed.title", "Save failed"),
         description: nextError instanceof Error ? nextError.message : String(nextError),
         type: "error",
       })
@@ -97,15 +99,18 @@ const PreferencePage = () => {
       setUpdateResult(result)
       void reloadUpdaterState()
       showToast({
-        title: "Update check complete",
-        description: "Desktop updater finished the latest check cycle.",
+        title: t("preference.page.toast.updateCheckComplete.title", "Update check complete"),
+        description: t(
+          "preference.page.toast.updateCheckComplete.description",
+          "Desktop updater finished the latest check cycle.",
+        ),
         type: "success",
         timeout: 2000,
       })
     } catch (nextError) {
       setUpdateResult({ error: nextError instanceof Error ? nextError.message : String(nextError) })
       showToast({
-        title: "Update check failed",
+        title: t("preference.page.toast.updateCheckFailed.title", "Update check failed"),
         description: nextError instanceof Error ? nextError.message : String(nextError),
         type: "error",
       })
@@ -118,16 +123,22 @@ const PreferencePage = () => {
     const recipient = testMailRecipient.trim()
     if (!recipient) {
       showToast({
-        title: "Recipient required",
-        description: "Provide a test recipient email address before sending.",
+        title: t("preference.page.toast.recipientRequired.title", "Recipient required"),
+        description: t(
+          "preference.page.toast.recipientRequired.description",
+          "Provide a test recipient email address before sending.",
+        ),
         type: "warning",
       })
       return
     }
     if (!EMAIL_PATTERN.test(recipient)) {
       showToast({
-        title: "Invalid recipient",
-        description: "Provide a valid recipient email address before sending.",
+        title: t("preference.page.toast.invalidRecipient.title", "Invalid recipient"),
+        description: t(
+          "preference.page.toast.invalidRecipient.description",
+          "Provide a valid recipient email address before sending.",
+        ),
         type: "warning",
       })
       return
@@ -140,11 +151,13 @@ const PreferencePage = () => {
       setDraft(persisted)
       const result = await ToolApi.sendMail({
         to: recipient,
-        subject: "SUORA mail service test",
+        subject: t("preference.page.mailTest.subject", "SUORA mail service test"),
         content: [
-          "This is a test message from the SUORA global mail service.",
-          `Workspace: ${persisted.workspaceName || "SUORA Workspace"}`,
-          `Sent at: ${new Date().toISOString()}`,
+          t("preference.page.mailTest.body.line1", "This is a test message from the SUORA global mail service."),
+          t("preference.page.mailTest.body.workspace", "Workspace: {name}", {
+            name: persisted.workspaceName || t("preference.general.workspaceName.placeholder", "SUORA Workspace"),
+          }),
+          t("preference.page.mailTest.body.sentAt", "Sent at: {value}", { value: new Date().toISOString() }),
         ].join("\n"),
       })
 
@@ -153,14 +166,14 @@ const PreferencePage = () => {
       }
 
       showToast({
-        title: "Test mail sent",
-        description: `Message delivered to ${recipient}.`,
+        title: t("preference.page.toast.mailSent.title", "Test mail sent"),
+        description: t("preference.page.toast.mailSent.description", "Message delivered to {recipient}.", { recipient }),
         type: "success",
         timeout: 2500,
       })
     } catch (nextError) {
       showToast({
-        title: "Test mail failed",
+        title: t("preference.page.toast.mailFailed.title", "Test mail failed"),
         description: nextError instanceof Error ? nextError.message : String(nextError),
         type: "error",
       })
@@ -217,18 +230,18 @@ const PreferencePage = () => {
   return (
     <div className="flex min-h-full flex-col bg-background">
       <PageHeader
-        title="Preference"
+        title={t("preference.page.title", "Preference")}
         actions={
           data ? (
             <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save preferences"}
+              {isSaving ? t("preference.page.action.saving", "Saving...") : t("preference.page.action.save", "Save preferences")}
             </Button>
           ) : null
         }
       />
       <div className="flex-1 p-6">
         <div className="mx-auto max-w-6xl">
-          {isLoading ? <LoadingCard title="Loading preferences..." /> : null}
+          {isLoading ? <LoadingCard title={t("preference.page.loading", "Loading preferences...")} /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error ? <div className="flex flex-col gap-6">{renderActiveSection()}</div> : null}
         </div>

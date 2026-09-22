@@ -3,6 +3,7 @@ import { useNavigate } from "react-router"
 
 import { SchedulerApi } from "@/services/scheduler-service"
 import { useAsyncResource } from "@/hooks/use-async-resource"
+import { useAppIntl } from "@/lib/i18n"
 import PageHeader from "@/pages/components/page-header"
 import { EmptyCard, ErrorCard, LoadingCard } from "@/pages/components/resource-state"
 import { SummaryCardGrid } from "@/pages/components/summary-card-grid"
@@ -10,6 +11,7 @@ import { subscribeToDataChanges } from "@/services/data-events"
 import { SchedulerCard } from "@/pages/schedulers/components/scheduler-card"
 
 const SchedulersPage = () => {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
   const { data, error, isLoading, reload } = useAsyncResource(() => SchedulerApi.listAll(), [])
 
@@ -25,15 +27,15 @@ const SchedulersPage = () => {
 
   return (
     <div className="flex min-h-full flex-col bg-background">
-      <PageHeader title="Schedulers" />
+      <PageHeader title={t("schedulers.page.title", "Schedulers")} />
       <div className="flex-1 overflow-x-hidden p-6">
         <div className="flex w-full min-w-0 flex-col gap-4">
-          {isLoading ? <LoadingCard title="Loading schedulers..." /> : null}
+          {isLoading ? <LoadingCard title={t("schedulers.page.loading", "Loading schedulers...")} /> : null}
           {error ? <ErrorCard error={error} onRetry={reload} /> : null}
           {!isLoading && !error && data?.length ? (
             <SummaryCardGrid
-              emptyTitle="No schedulers yet"
-              emptyDescription="Create the first scheduler configuration."
+              emptyTitle={t("schedulers.page.empty.title", "No schedulers yet")}
+              emptyDescription={t("schedulers.page.empty.description", "Create the first scheduler configuration.")}
               items={data}
               renderItem={(scheduler) => (
                 <SchedulerCard
@@ -45,7 +47,10 @@ const SchedulersPage = () => {
             />
           ) : null}
           {!isLoading && !error && data?.length === 0 ? (
-            <EmptyCard title="No schedulers yet" description="Create the first scheduler configuration." />
+            <EmptyCard
+              title={t("schedulers.page.empty.title", "No schedulers yet")}
+              description={t("schedulers.page.empty.description", "Create the first scheduler configuration.")}
+            />
           ) : null}
         </div>
       </div>

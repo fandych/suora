@@ -5,6 +5,7 @@ import { emitDataChanged } from "@/services/data-events"
 import { DocumentApi } from "@/services/document-service"
 import { PlusIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useAppIntl } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 import { DocumentCreateDialog } from "@/pages/documents/components/document-create-dialog"
 
@@ -14,6 +15,7 @@ type DocumentCreateButtonProps = {
 }
 
 export function DocumentCreateButton({ className, iconOnly = false }: DocumentCreateButtonProps) {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
   const [description, setDescription] = useState("")
   const [isOpen, setIsOpen] = useState(false)
@@ -47,11 +49,11 @@ export function DocumentCreateButton({ className, iconOnly = false }: DocumentCr
         type="button"
         onClick={() => setIsOpen(true)}
         disabled={isWorking}
-        aria-label="Create document"
-        title="Create document"
+        aria-label={t("newDocument.button", "Create document")}
+        title={t("newDocument.button", "Create document")}
       >
         <PlusIcon />
-        {iconOnly ? null : "Create document"}
+        {iconOnly ? null : t("newDocument.button", "Create document")}
       </Button>
       <DocumentCreateDialog
         description={description}

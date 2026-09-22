@@ -1,4 +1,5 @@
 import { AlertTriangleIcon, Clock3Icon, Loader2Icon, ShieldAlertIcon, WrenchIcon } from "lucide-react"
+import { useAppIntl } from "@/lib/i18n"
 
 import { Spinner } from "@/components/ui/spinner"
 import { getChatErrorPresentation } from "@/lib/chat/error-presentation"
@@ -9,20 +10,20 @@ type ChatStatusLineProps = {
   toolEvents: ChatAgentEvent[]
 }
 
-function getStatusCopy(toolEvents: ChatAgentEvent[]) {
+function getStatusCopy(toolEvents: ChatAgentEvent[], t: (id: string, defaultMessage: string, values?: Record<string, string>) => string) {
   const lastEvent = toolEvents[toolEvents.length - 1]
 
   if (!lastEvent) {
     return {
       icon: <Spinner className="size-3.5" />,
-      label: "Thinking...",
+      label: t("chat.status.thinking", "Thinking..."),
     }
   }
 
   if (lastEvent.type === "tool-call") {
     return {
       icon: <WrenchIcon className="size-3.5" />,
-      label: `Executing ${lastEvent.toolName}...`,
+      label: t("chat.status.executing", "Executing {tool}...", { tool: lastEvent.toolName }),
     }
   }
 
@@ -30,12 +31,12 @@ function getStatusCopy(toolEvents: ChatAgentEvent[]) {
     return lastEvent.toolName === "browser_navigate"
       ? {
           icon: <Spinner className="size-3.5" />,
-          label: "浏览器操作已完成，正在继续分析...",
+          label: t("chat.status.browserContinue", "Browser action completed. Continuing analysis..."),
           tone: "neutral",
         }
       : {
           icon: <Loader2Icon className="size-3.5 animate-spin" />,
-          label: `Processing ${lastEvent.toolName} result...`,
+          label: t("chat.status.processing", "Processing {tool} result...", { tool: lastEvent.toolName }),
           tone: "neutral",
         }
   }
@@ -43,7 +44,7 @@ function getStatusCopy(toolEvents: ChatAgentEvent[]) {
   if (lastEvent.type !== "error") {
     return {
       icon: <Spinner className="size-3.5" />,
-      label: "Thinking...",
+      label: t("chat.status.thinking", "Thinking..."),
       tone: "neutral",
     }
   }
@@ -65,11 +66,13 @@ function getStatusCopy(toolEvents: ChatAgentEvent[]) {
 }
 
 export function ChatStatusLine({ isResponding, toolEvents }: ChatStatusLineProps) {
+  const { t } = useAppIntl()
+
   if (!isResponding && toolEvents[toolEvents.length - 1]?.type !== "error") {
     return null
   }
 
-  const status = getStatusCopy(toolEvents)
+  const status = getStatusCopy(toolEvents, t)
 
   return (
     <div

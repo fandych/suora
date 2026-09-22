@@ -46,9 +46,18 @@ export default function ModelSidebar({ item, headerAction }: { item: PrimaryNavI
   const filteredItems = items.filter((item) =>
     `${item.title} ${item.providerType}`.toLowerCase().includes(query.toLowerCase()),
   )
+  const groupTitles = new Map(item.secondarySidebar.groups.map((group) => [group.id, group.title ?? group.id]))
   const groups = [
-    { id: "connected", title: "Connected", items: filteredItems.filter((item) => item.connected) },
-    { id: "catalog", title: "Catalog", items: filteredItems.filter((item) => !item.connected) },
+    {
+      id: "connected",
+      title: groupTitles.get("connected") ?? "Connected",
+      items: filteredItems.filter((item) => item.connected),
+    },
+    {
+      id: "catalog",
+      title: groupTitles.get("catalog") ?? "Catalog",
+      items: filteredItems.filter((item) => !item.connected),
+    },
   ]
   return (
     <Sidebar collapsible="none" className="hidden min-h-0 flex-1 border-l md:flex">

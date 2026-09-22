@@ -22,6 +22,11 @@ npm run verify:architecture
 - `npm run package`：使用 electron-builder 打包当前平台。
 - `npm run package:win`：生成 Windows NSIS 与 portable 安装包。
 
+开发态可选环境变量：
+
+- `SUORA_REMOTE_DEBUG_PORT=<port>`：为主窗口打开 CDP 端口，便于 Agent Browser 或自定义调试工具连接 Electron。
+- `SUORA_USER_DATA_PATH=<absolute-path>`：覆盖 Electron `userData` 目录，适合隔离数据库、缓存和偏好设置做本地冒烟或回归测试。
+
 ## 文档站开发
 
 文档站位于 `github-pages/`，使用 Vite、React、MDX 与 shadcn/ui。开发与构建命令如下：
@@ -36,6 +41,8 @@ npm run build
 内容按 `src/pages/user/` 与 `src/pages/technical/` 分类；新增页面时同步更新 `@/lib/docs-navigation.ts` 和 `src/App.tsx` 的页面映射。
 
 修改主应用代码时，如涉及用户可见行为、配置、运行限制、安全边界、路由或命令，必须在同一变更中同步更新相关用户文档与技术文档。用户文档位于 `github-pages/src/pages/user/`，技术文档位于 `github-pages/src/pages/technical/`；没有合适页面时，应新增或扩展页面并同步导航和路由。
+
+涉及界面国际化时，除单元测试与构建外，建议至少执行一次基于 Agent Browser Electron 的双语冒烟：在隔离 `userData` 下启动桌面应用，切换中文 / English，并覆盖主页面导航、共享按钮和空状态。
 
 <Callout>
   文档站使用 BrowserRouter；GitHub Pages 构建产物包含深链回退页，因此可直接访问或刷新 `/doc/...` 地址。

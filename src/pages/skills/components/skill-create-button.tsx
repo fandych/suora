@@ -4,6 +4,7 @@ import { PlusIcon } from "lucide-react"
 import { emitDataChanged } from "@/services/data-events"
 import { SkillApi } from "@/services/skill-service"
 import { Button } from "@/components/ui/button"
+import { useAppIntl } from "@/lib/i18n"
 
 type SkillCreateButtonProps = {
   className?: string
@@ -11,6 +12,7 @@ type SkillCreateButtonProps = {
 }
 
 export function SkillCreateButton({ className, iconOnly = false }: SkillCreateButtonProps) {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
 
   const handleCreate = async () => {
@@ -24,11 +26,11 @@ export function SkillCreateButton({ className, iconOnly = false }: SkillCreateBu
       className={className}
       size={iconOnly ? "icon-sm" : "sm"}
       onClick={() => void handleCreate()}
-      aria-label="Create skill"
-      title="Create skill"
+      aria-label={t("newSkill.button", "Create skill")}
+      title={t("newSkill.button", "Create skill")}
     >
       <PlusIcon data-icon={iconOnly ? undefined : "inline-start"} />
-      {iconOnly ? <span className="sr-only">Create skill</span> : "Create skill"}
+      {iconOnly ? <span className="sr-only">{t("newSkill.button", "Create skill")}</span> : t("newSkill.button", "Create skill")}
     </Button>
   )
 }

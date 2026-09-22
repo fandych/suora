@@ -4,11 +4,13 @@ import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { useAppIntl } from "@/lib/i18n"
 import { AgentApi } from "@/services/agent-service"
 import { emitDataChanged } from "@/services/data-events"
 import { cn } from "@/lib/utils"
 
 export function NewAgentButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
 
@@ -31,11 +33,11 @@ export function NewAgentButton({ className, iconOnly = false }: { className?: st
       type="button"
       onClick={() => void handleCreate()}
       disabled={isCreating}
-      aria-label="New agent"
-      title="New agent"
+      aria-label={t("newAgent.button", "New agent")}
+      title={t("newAgent.button", "New agent")}
     >
       {isCreating ? <Spinner /> : <PlusIcon />}
-      {iconOnly ? null : isCreating ? "Creating..." : "New agent"}
+      {iconOnly ? null : isCreating ? t("newAgent.creating", "Creating...") : t("newAgent.button", "New agent")}
     </Button>
   )
 }

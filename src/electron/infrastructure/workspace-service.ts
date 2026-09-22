@@ -1,4 +1,5 @@
 import fs from "node:fs/promises"
+import path from "node:path"
 
 import { app } from "electron"
 
@@ -9,6 +10,11 @@ export async function ensureWorkspace() {
 }
 
 export function configureAppStoragePaths() {
+  const customUserDataPath = process.env.SUORA_USER_DATA_PATH?.trim()
+  if (customUserDataPath) {
+    app.setPath("userData", path.resolve(customUserDataPath))
+  }
+
   if (!app.isPackaged) {
     app.commandLine.appendSwitch("disable-http-cache")
     if (process.env.SUORA_REMOTE_DEBUG_PORT) {

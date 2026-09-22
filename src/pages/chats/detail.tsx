@@ -4,6 +4,7 @@ import { RotateCcwIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter } from "@/components/ui/card"
+import { useAppIntl } from "@/lib/i18n"
 import { ChatComposer } from "@/pages/chats/components/chat-composer"
 import { ChatTranscript } from "@/pages/chats/components/chat-transcript"
 import PageHeader from "@/pages/components/page-header"
@@ -13,6 +14,7 @@ import { useChatDetailController } from "@/hooks/use-chat-detail-controller"
 import { emitDataChanged } from "@/services/data-events"
 
 const ChatDetailPage = () => {
+  const { t } = useAppIntl()
   const controller = useChatDetailController()
   const navigate = useNavigate()
   const [isRecentlyDeletedOpen, setIsRecentlyDeletedOpen] = useState(false)
@@ -20,20 +22,20 @@ const ChatDetailPage = () => {
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-background">
       <PageHeader
-        title={controller.selectedChat?.chat.title ?? "New chat"}
+        title={controller.selectedChat?.chat.title ?? t("chat.detail.newChat", "New chat")}
         actions={
           <Button type="button" variant="outline" size="sm" onClick={() => setIsRecentlyDeletedOpen(true)}>
             <RotateCcwIcon className="size-4" />
-            Recently deleted
+            {t("chat.detail.recentlyDeleted", "Recently deleted")}
           </Button>
         }
       />
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {controller.activeChatId && controller.isLoading && !controller.selectedChat ? (
-          <LoadingCard title="Loading chat session..." />
+          <LoadingCard title={t("chat.detail.loadingSession", "Loading chat session...")} />
         ) : null}
         {controller.settingsLoading && !controller.settingsDraft ? (
-          <LoadingCard title="Loading chat runtime settings..." />
+          <LoadingCard title={t("chat.detail.loadingSettings", "Loading chat runtime settings...")} />
         ) : null}
         {controller.combinedError ? (
           <ErrorCard
@@ -109,7 +111,7 @@ const ChatDetailPage = () => {
           emitDataChanged("/chats")
           navigate(`/chats/${result.resourceId}`)
         }}
-        title="Restore deleted chats"
+        title={t("chat.detail.restoreDeleted", "Restore deleted chats")}
       />
     </div>
   )

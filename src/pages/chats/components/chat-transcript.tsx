@@ -3,6 +3,7 @@ import { BotIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { useAppIntl } from "@/lib/i18n"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -41,6 +42,7 @@ export function ChatTranscript({
   onRetryTool,
   selectedChat,
 }: ChatTranscriptProps) {
+  const { t } = useAppIntl()
   const hasMessages = (selectedChat?.messages.length ?? 0) > 0 || assistantResponseParts.length > 0
   const hasPersistedAssistantResponse = Boolean(
     assistantResponseMessageId && selectedChat?.messages.some((message) => message.id === assistantResponseMessageId),
@@ -57,7 +59,7 @@ export function ChatTranscript({
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
       <MessageScrollerProvider autoScroll={autoScroll} defaultScrollPosition="end" scrollPreviousItemPeek={12}>
         <MessageScroller className="flex-1 min-h-0">
-          <MessageScrollerViewport aria-label="Chat transcript" className="border-t bg-muted/20">
+          <MessageScrollerViewport aria-label={t("chat.transcript.label", "Chat transcript")} className="border-t bg-muted/20">
             <MessageScrollerContent className="min-h-0 gap-3 px-(--card-spacing) py-4">
               {hasOlderMessages ? (
                 <MessageScrollerItem messageId="conversation-load-earlier" className="flex justify-center">
@@ -68,7 +70,9 @@ export function ChatTranscript({
                     disabled={isLoadingOlderMessages}
                     onClick={() => void onLoadEarlierMessages?.()}
                   >
-                    {isLoadingOlderMessages ? "Loading…" : "Load earlier messages"}
+                    {isLoadingOlderMessages
+                      ? t("chat.transcript.loadingEarlier", "Loading…")
+                      : t("chat.transcript.loadEarlier", "Load earlier messages")}
                   </Button>
                 </MessageScrollerItem>
               ) : null}
@@ -94,7 +98,13 @@ export function ChatTranscript({
                     <ChatMessageItem
                       content={message.content}
                       createdAt={message.createdAt}
-                      label={message.role === "user" ? "You" : message.role === "assistant" ? "Assistant" : "System"}
+                      label={
+                        message.role === "user"
+                          ? t("chat.transcript.user", "You")
+                          : message.role === "assistant"
+                            ? t("chat.transcript.assistant", "Assistant")
+                            : t("chat.transcript.system", "System")
+                      }
                       parts={message.parts}
                       providerType={activeProviderType}
                       role={message.role}
@@ -124,9 +134,12 @@ export function ChatTranscript({
               <EmptyMedia variant="icon">
                 <BotIcon />
               </EmptyMedia>
-              <EmptyTitle>Ready for a new chat</EmptyTitle>
+              <EmptyTitle>{t("chat.transcript.empty.title", "Ready for a new chat")}</EmptyTitle>
               <EmptyDescription>
-                Start typing below to create a new chat. Existing sessions stay available in the sidebar.
+                {t(
+                  "chat.transcript.empty.description",
+                  "Start typing below to create a new chat. Existing sessions stay available in the sidebar.",
+                )}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>

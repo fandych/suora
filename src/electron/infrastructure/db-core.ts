@@ -1,11 +1,10 @@
 import { Buffer } from "node:buffer"
 import { DatabaseSync, type SQLInputValue } from "node:sqlite"
-import { existsSync } from "node:fs"
-import { resolve } from "node:path"
 
 import { readMigrationFiles } from "drizzle-orm/migrator"
 import { appState } from "@/electron/infrastructure/app-state"
 import { getDatabasePath } from "@/electron/infrastructure/workspace-paths"
+import { getDrizzleMigrationsFolder } from "@/electron/infrastructure/runtime-resource-paths"
 import { validateQueryPayload } from "@/electron/infrastructure/db-query-policy"
 import type { QueryPayload, SqliteDatabase } from "@/types/electron"
 
@@ -135,11 +134,7 @@ export function applyMigrations(database: SqliteDatabase) {
     );
   `)
 
-  const migrationsFolder = [
-    resolve(__dirname, "src/drizzle/migrations"),
-    resolve(process.cwd(), "src/drizzle/migrations"),
-    resolve(__dirname, "../../drizzle/migrations"),
-  ].find((folder) => existsSync(folder))
+  const migrationsFolder = getDrizzleMigrationsFolder(__dirname)
   if (!migrationsFolder) {
     throw new Error("Drizzle migrations folder was not found.")
   }

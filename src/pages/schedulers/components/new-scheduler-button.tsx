@@ -4,11 +4,13 @@ import { useNavigate } from "react-router"
 
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
+import { useAppIntl } from "@/lib/i18n"
 import { SchedulerApi } from "@/services/scheduler-service"
 import { emitDataChanged } from "@/services/data-events"
 import { cn } from "@/lib/utils"
 
 export function NewSchedulerButton({ className, iconOnly = false }: { className?: string; iconOnly?: boolean }) {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
 
@@ -31,11 +33,11 @@ export function NewSchedulerButton({ className, iconOnly = false }: { className?
       type="button"
       onClick={() => void handleCreate()}
       disabled={isCreating}
-      aria-label="New scheduler"
-      title="New scheduler"
+      aria-label={t("newScheduler.button", "New scheduler")}
+      title={t("newScheduler.button", "New scheduler")}
     >
       {isCreating ? <Spinner /> : <PlusIcon />}
-      {iconOnly ? null : isCreating ? "Creating..." : "New scheduler"}
+      {iconOnly ? null : isCreating ? t("newScheduler.creating", "Creating...") : t("newScheduler.button", "New scheduler")}
     </Button>
   )
 }

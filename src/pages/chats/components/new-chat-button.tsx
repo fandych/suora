@@ -5,6 +5,7 @@ import { useNavigate } from "react-router"
 import { Button } from "@/components/ui/button"
 import { Spinner } from "@/components/ui/spinner"
 import { toast } from "@/components/ui/toast"
+import { useAppIntl } from "@/lib/i18n"
 import { cn } from "@/lib/utils"
 
 export function NewChatButton({
@@ -16,6 +17,7 @@ export function NewChatButton({
   iconOnly?: boolean
   variant?: "default" | "outline" | "secondary" | "ghost" | "destructive" | "link"
 }) {
+  const { t } = useAppIntl()
   const navigate = useNavigate()
   const [isCreating, setIsCreating] = useState(false)
 
@@ -23,7 +25,12 @@ export function NewChatButton({
     setIsCreating(true)
     try {
       navigate("/chats")
-      toast.add({ title: "New draft", description: "Start typing to create a real chat.", type: "info", timeout: 2500 })
+      toast.add({
+        title: t("newChat.toast.title", "New draft"),
+        description: t("newChat.toast.description", "Start typing to create a real chat."),
+        type: "info",
+        timeout: 2500,
+      })
     } finally {
       setIsCreating(false)
     }
@@ -38,11 +45,11 @@ export function NewChatButton({
       data-chat-new-button
       onClick={() => void handleCreate()}
       disabled={isCreating}
-      aria-label="New chat"
-      title="New chat"
+      aria-label={t("newChat.button", "New chat")}
+      title={t("newChat.button", "New chat")}
     >
       {isCreating ? <Spinner /> : <PlusIcon />}
-      {iconOnly ? null : isCreating ? "Creating..." : "New chat"}
+      {iconOnly ? null : isCreating ? t("newChat.creating", "Creating...") : t("newChat.button", "New chat")}
     </Button>
   )
 }

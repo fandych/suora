@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { useAppIntl } from "@/lib/i18n"
 import { Textarea } from "@/components/ui/textarea"
 
 type DocumentCreateDialogProps = {
@@ -35,6 +36,8 @@ export function DocumentCreateDialog({
   submitLabel = "Create document",
   title,
 }: DocumentCreateDialogProps) {
+  const { t } = useAppIntl()
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
@@ -50,21 +53,25 @@ export function DocumentCreateDialog({
           }}
         >
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Name</div>
-            <Input value={title} onChange={(event) => onTitleChange(event.target.value)} placeholder="Document name" />
+            <div className="text-sm text-muted-foreground">{t("documentCreateDialog.name", "Name")}</div>
+            <Input
+              value={title}
+              onChange={(event) => onTitleChange(event.target.value)}
+              placeholder={t("documentCreateDialog.namePlaceholder", "Document name")}
+            />
           </div>
           <div className="space-y-2">
-            <div className="text-sm text-muted-foreground">Description</div>
+            <div className="text-sm text-muted-foreground">{t("documentCreateDialog.description", "Description")}</div>
             <Textarea
               value={description}
               onChange={(event) => onDescriptionChange(event.target.value)}
               rows={5}
-              placeholder="Describe the document space."
+              placeholder={t("documentCreateDialog.descriptionPlaceholder", "Describe the document space.")}
             />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("confirmDelete.cancel", "Cancel")}
             </Button>
             <Button type="submit">{submitLabel}</Button>
           </DialogFooter>

@@ -10,7 +10,29 @@ import {
   WorkflowIcon,
   type LucideIcon,
 } from "lucide-react"
+import type { IntlShape } from "react-intl"
 export type { ResolvedSecondarySidebarGroup, ResolvedSecondarySidebarItem } from "@/types/navigation"
+
+type LocalizedText = {
+  id: string
+  defaultMessage: string
+}
+
+type PrimaryNavItemDefinition = {
+  title: LocalizedText
+  url: string
+  icon: LucideIcon
+  iconClassName: string
+  description: LocalizedText
+  secondarySidebar: {
+    searchPlaceholder: LocalizedText
+    collapsibleGroups?: boolean
+    groups: {
+      id: string
+      title?: LocalizedText
+    }[]
+  }
+}
 
 export type PrimaryNavItem = {
   title: string
@@ -28,60 +50,60 @@ export type PrimaryNavItem = {
   }
 }
 
-export const primaryNavItems: PrimaryNavItem[] = [
+const primaryNavDefinitions: PrimaryNavItemDefinition[] = [
   {
-    title: "Chats",
+    title: { id: "nav.chats.title", defaultMessage: "Chats" },
     url: "/chats",
     icon: MessageCircleIcon,
     iconClassName: "text-sky-500",
-    description: "Review conversations, drafts, and active discussion threads.",
+    description: { id: "nav.chats.description", defaultMessage: "Review conversations, drafts, and active discussion threads." },
     secondarySidebar: {
-      searchPlaceholder: "搜索聊天记录...",
+      searchPlaceholder: { id: "nav.chats.search", defaultMessage: "Search chats..." },
       groups: [
         {
           id: "today",
-          title: "今天",
+          title: { id: "nav.chats.group.today", defaultMessage: "Today" },
         },
         {
           id: "week",
-          title: "本周",
+          title: { id: "nav.chats.group.week", defaultMessage: "This week" },
         },
         {
           id: "older",
-          title: "更早",
+          title: { id: "nav.chats.group.older", defaultMessage: "Earlier" },
         },
       ],
     },
   },
   {
-    title: "Agents",
+    title: { id: "nav.agents.title", defaultMessage: "Agents" },
     url: "/agents",
     icon: BotIcon,
     iconClassName: "text-indigo-500",
-    description: "Manage agent definitions, responsibilities, and execution status.",
+    description: { id: "nav.agents.description", defaultMessage: "Manage agent definitions, responsibilities, and execution status." },
     secondarySidebar: {
-      searchPlaceholder: "搜索 agents...",
+      searchPlaceholder: { id: "nav.agents.search", defaultMessage: "Search agents..." },
       collapsibleGroups: true,
       groups: [
         {
           id: "custom",
-          title: "自定义",
+          title: { id: "nav.agents.group.custom", defaultMessage: "Custom" },
         },
         {
           id: "builtin",
-          title: "System",
+          title: { id: "nav.agents.group.builtin", defaultMessage: "System" },
         },
       ],
     },
   },
   {
-    title: "Workflows",
+    title: { id: "nav.workflows.title", defaultMessage: "Workflows" },
     url: "/workflows",
     icon: WorkflowIcon,
     iconClassName: "text-emerald-600",
-    description: "Compose repeatable flows for multi-step operational work.",
+    description: { id: "nav.workflows.description", defaultMessage: "Compose repeatable flows for multi-step operational work." },
     secondarySidebar: {
-      searchPlaceholder: "搜索 workflows...",
+      searchPlaceholder: { id: "nav.workflows.search", defaultMessage: "Search workflows..." },
       groups: [
         {
           id: "workflows",
@@ -90,13 +112,13 @@ export const primaryNavItems: PrimaryNavItem[] = [
     },
   },
   {
-    title: "Schedulers",
+    title: { id: "nav.schedulers.title", defaultMessage: "Schedulers" },
     url: "/schedulers",
     icon: CalendarClockIcon,
     iconClassName: "text-amber-500",
-    description: "Schedule recurring tasks and inspect upcoming automation windows.",
+    description: { id: "nav.schedulers.description", defaultMessage: "Schedule recurring tasks and inspect upcoming automation windows." },
     secondarySidebar: {
-      searchPlaceholder: "搜索 schedulers...",
+      searchPlaceholder: { id: "nav.schedulers.search", defaultMessage: "Search schedulers..." },
       groups: [
         {
           id: "schedulers",
@@ -105,141 +127,189 @@ export const primaryNavItems: PrimaryNavItem[] = [
     },
   },
   {
-    title: "Integrations",
+    title: { id: "nav.integrations.title", defaultMessage: "Integrations" },
     url: "/integrations",
     icon: PlugZapIcon,
     iconClassName: "text-orange-500",
-    description: "Configure external services, API links, and delivery endpoints.",
+    description: { id: "nav.integrations.description", defaultMessage: "Configure external services, API links, and delivery endpoints." },
     secondarySidebar: {
-      searchPlaceholder: "搜索 integrations...",
+      searchPlaceholder: { id: "nav.integrations.search", defaultMessage: "Search integrations..." },
       collapsibleGroups: true,
       groups: [
         {
           id: "http",
-          title: "HTTP",
+          title: { id: "nav.integrations.group.http", defaultMessage: "HTTP" },
         },
         {
           id: "mcp",
-          title: "MCP",
+          title: { id: "nav.integrations.group.mcp", defaultMessage: "MCP" },
         },
         {
           id: "scripts",
-          title: "Scripts",
+          title: { id: "nav.integrations.group.scripts", defaultMessage: "Scripts" },
         },
       ],
     },
   },
   {
-    title: "Documents",
+    title: { id: "nav.documents.title", defaultMessage: "Documents" },
     url: "/documents",
     icon: BookOpenTextIcon,
     iconClassName: "text-blue-500",
-    description: "Browse product knowledge, uploaded files, and generated references.",
+    description: { id: "nav.documents.description", defaultMessage: "Browse product knowledge, uploaded files, and generated references." },
     secondarySidebar: {
-      searchPlaceholder: "搜索 documents...",
+      searchPlaceholder: { id: "nav.documents.search", defaultMessage: "Search documents..." },
       groups: [
         {
           id: "documents",
-          title: "Documents",
+          title: { id: "nav.documents.group.documents", defaultMessage: "Documents" },
         },
       ],
     },
   },
   {
-    title: "Channels",
+    title: { id: "nav.channels.title", defaultMessage: "Channels" },
     url: "/channels",
     icon: RadioTowerIcon,
     iconClassName: "text-teal-500",
-    description: "Organize communication surfaces, routing rules, and message sources.",
+    description: { id: "nav.channels.description", defaultMessage: "Organize communication surfaces, routing rules, and message sources." },
     secondarySidebar: {
-      searchPlaceholder: "搜索 channels...",
+      searchPlaceholder: { id: "nav.channels.search", defaultMessage: "Search channels..." },
       groups: [
         {
           id: "connected",
-          title: "Connected",
+          title: { id: "nav.channels.group.connected", defaultMessage: "Connected" },
         },
         {
           id: "catalog",
-          title: "Catalog",
+          title: { id: "nav.channels.group.catalog", defaultMessage: "Catalog" },
         },
       ],
     },
   },
   {
-    title: "Skills",
+    title: { id: "nav.skills.title", defaultMessage: "Skills" },
     url: "/skills",
     icon: SparklesIcon,
     iconClassName: "text-fuchsia-500",
-    description: "Register reusable capabilities and inspect versioned skill bundles.",
+    description: { id: "nav.skills.description", defaultMessage: "Register reusable capabilities and inspect versioned skill bundles." },
     secondarySidebar: {
-      searchPlaceholder: "搜索 skills...",
+      searchPlaceholder: { id: "nav.skills.search", defaultMessage: "Search skills..." },
       collapsibleGroups: true,
       groups: [
         {
           id: "custom",
-          title: "Custom",
+          title: { id: "nav.skills.group.custom", defaultMessage: "Custom" },
         },
         {
           id: "builtin",
-          title: "Builtin",
+          title: { id: "nav.skills.group.builtin", defaultMessage: "Builtin" },
         },
         {
           id: "codex",
-          title: "Codex (~/.codex/skills)",
+          title: { id: "nav.skills.group.codex", defaultMessage: "Codex (~/.codex/skills)" },
         },
         {
           id: "claude",
-          title: "ClaudeCode (~/.claude/skills)",
+          title: { id: "nav.skills.group.claude", defaultMessage: "ClaudeCode (~/.claude/skills)" },
         },
         {
           id: "agents",
-          title: "Other (~/.agents/skills)",
+          title: { id: "nav.skills.group.agents", defaultMessage: "Other (~/.agents/skills)" },
         },
       ],
     },
   },
   {
-    title: "Models",
+    title: { id: "nav.models.title", defaultMessage: "Models" },
     url: "/models",
     icon: BrainCircuitIcon,
     iconClassName: "text-rose-500",
-    description: "Compare model configurations, defaults, and environment policies.",
+    description: { id: "nav.models.description", defaultMessage: "Compare model configurations, defaults, and environment policies." },
     secondarySidebar: {
-      searchPlaceholder: "搜索 providers...",
+      searchPlaceholder: { id: "nav.models.search", defaultMessage: "Search providers..." },
       groups: [
         {
           id: "connected",
-          title: "Connected",
+          title: { id: "nav.channels.group.connected", defaultMessage: "Connected" },
         },
         {
           id: "catalog",
-          title: "Catalog",
+          title: { id: "nav.channels.group.catalog", defaultMessage: "Catalog" },
         },
       ],
     },
   },
 ]
 
-export const preferenceRoute = {
-  title: "Preference",
-  url: "/preference",
+const preferenceRouteDefinition = {
+  title: { id: "nav.preference.title", defaultMessage: "Preference" },
   iconClassName: "text-amber-500",
-  description: "Tune product behavior, defaults, and operator-level settings.",
+  description: { id: "nav.preference.description", defaultMessage: "Tune product behavior, defaults, and operator-level settings." },
 }
 
-export const preferenceSections = [
-  { id: "general", label: "General", href: "/preference/general" },
-  { id: "security", label: "Security", href: "/preference/security" },
-  { id: "mail-service", label: "Mail Service", href: "/preference/mail-service" },
-  { id: "environment-monitor", label: "Environment Monitor", href: "/preference/environment-monitor" },
-  { id: "global-environment", label: "Global Environment", href: "/preference/global-environment" },
-  { id: "about", label: "About", href: "/preference/about" },
+const preferenceSectionDefinitions = [
+  { id: "general", label: { id: "nav.preference.section.general", defaultMessage: "General" }, href: "/preference/general" },
+  { id: "security", label: { id: "nav.preference.section.security", defaultMessage: "Security" }, href: "/preference/security" },
+  { id: "mail-service", label: { id: "nav.preference.section.mailService", defaultMessage: "Mail Service" }, href: "/preference/mail-service" },
+  {
+    id: "environment-monitor",
+    label: { id: "nav.preference.section.environmentMonitor", defaultMessage: "Environment Monitor" },
+    href: "/preference/environment-monitor",
+  },
+  {
+    id: "global-environment",
+    label: { id: "nav.preference.section.globalEnvironment", defaultMessage: "Global Environment" },
+    href: "/preference/global-environment",
+  },
+  { id: "about", label: { id: "nav.preference.section.about", defaultMessage: "About" }, href: "/preference/about" },
 ] as const
 
-export function getPrimaryNavItem(pathname: string) {
-  return primaryNavItems.find((item) => pathname === item.url || pathname.startsWith(`${item.url}/`))
+function resolveText(intl: IntlShape, text: LocalizedText) {
+  return intl.formatMessage(text)
+}
+
+export function getPrimaryNavItems(intl: IntlShape): PrimaryNavItem[] {
+  return primaryNavDefinitions.map((item) => ({
+    title: resolveText(intl, item.title),
+    url: item.url,
+    icon: item.icon,
+    iconClassName: item.iconClassName,
+    description: resolveText(intl, item.description),
+    secondarySidebar: {
+      searchPlaceholder: resolveText(intl, item.secondarySidebar.searchPlaceholder),
+      collapsibleGroups: item.secondarySidebar.collapsibleGroups,
+      groups: item.secondarySidebar.groups.map((group) => ({
+        id: group.id,
+        title: group.title ? resolveText(intl, group.title) : undefined,
+      })),
+    },
+  }))
+}
+
+export const preferenceRoutePath = "/preference"
+
+export function getPreferenceRoute(intl: IntlShape) {
+  return {
+    title: resolveText(intl, preferenceRouteDefinition.title),
+    url: preferenceRoutePath,
+    iconClassName: preferenceRouteDefinition.iconClassName,
+    description: resolveText(intl, preferenceRouteDefinition.description),
+  }
+}
+
+export function getPreferenceSections(intl: IntlShape) {
+  return preferenceSectionDefinitions.map((section) => ({
+    id: section.id,
+    label: resolveText(intl, section.label),
+    href: section.href,
+  }))
+}
+
+export function getPrimaryNavItem(pathname: string, intl: IntlShape) {
+  return getPrimaryNavItems(intl).find((item) => pathname === item.url || pathname.startsWith(`${item.url}/`))
 }
 
 export function isPreferencePath(pathname: string) {
-  return pathname === preferenceRoute.url || pathname.startsWith(`${preferenceRoute.url}/`)
+  return pathname === preferenceRoutePath || pathname.startsWith(`${preferenceRoutePath}/`)
 }

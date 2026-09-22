@@ -25,6 +25,8 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { toast } from "@/components/ui/toast"
+import { useAppIntl } from "@/lib/i18n"
+import { getLocalizedAgentTitle } from "@/lib/agent-localization"
 import type { AgentSummary, ProviderConfigRecord } from "@/types/agent"
 import type { ChatAgentEvent, ChatAttachment, ChatRuntimeSettings } from "@/types/chat"
 import type { ChatBrowserInteractionState } from "@/lib/chat/browser-status"
@@ -135,6 +137,7 @@ export function ChatComposer({
   settingsDraft,
   supportsAttachments,
 }: ChatComposerProps) {
+  const { t } = useAppIntl()
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
@@ -182,8 +185,8 @@ export function ChatComposer({
       }
     }
 
-    return "Model"
-  }, [modelValue, selectedModelFallback])
+    return t("chat.composer.model", "Model")
+  }, [modelValue, selectedModelFallback, t])
 
   useEffect(() => {
     draftRef.current = draft
@@ -218,8 +221,8 @@ export function ChatComposer({
       await navigator.mediaDevices.getUserMedia({ audio: true })
     } catch {
       toast.add({
-        title: "Microphone access was denied",
-        description: "Allow microphone permission to use voice input.",
+        title: t("chat.composer.voiceDenied.title", "Microphone access was denied"),
+        description: t("chat.composer.voiceDenied.description", "Allow microphone permission to use voice input."),
         type: "error",
       })
       return
@@ -228,8 +231,8 @@ export function ChatComposer({
     const Recognition = getRecognitionConstructor()
     if (!Recognition) {
       toast.add({
-        title: "Voice input unavailable",
-        description: "Speech recognition is not available in this runtime.",
+        title: t("chat.composer.voiceUnavailable.title", "Voice input unavailable"),
+        description: t("chat.composer.voiceUnavailable.description", "Speech recognition is not available in this runtime."),
         type: "error",
       })
       return
@@ -251,9 +254,9 @@ export function ChatComposer({
       setIsListening(false)
       const description =
         event.error === "not-allowed"
-          ? "Allow microphone permission to use voice input."
-          : `Voice input failed: ${event.error}`
-      toast.add({ title: "Voice input error", description, type: "error" })
+          ? t("chat.composer.voiceError.notAllowed", "Allow microphone permission to use voice input.")
+          : t("chat.composer.voiceError.generic", "Voice input failed: {error}", { error: event.error || "unknown" })
+      toast.add({ title: t("chat.composer.voiceError.title", "Voice input error"), description, type: "error" })
     }
     recognition.onresult = (event: SpeechRecognitionEventLike) => {
       const transcript = Array.from(event.results)
@@ -311,7 +314,11 @@ export function ChatComposer({
           value={draft}
           onChange={(event) => onDraftChange(event.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={isListening ? "Listening... speak now" : "Ask about documents, workflows, or skills..."}
+          placeholder={
+            isListening
+              ? t("chat.composer.listening", "Listening... speak now")
+              : t("chat.composer.placeholder", "Ask about documents, workflows, or skills...")
+          }
         />
       </div>
       {attachments.length ? (
@@ -344,8 +351,12 @@ export function ChatComposer({
             className="min-w-0 w-full sm:w-32"
             size="sm"
             value={selectedAgentId}
-            emptyLabel="Agent"
-            options={agents.map((agent) => ({ id: agent.id, label: agent.title, enabled: !agent.isDisabled }))}
+            emptyLabel={t("chat.composer.agent", "Agent")}
+            options={agents.map((agent) => ({
+              id: agent.id,
+              label: getLocalizedAgentTitle(agent, t),
+              enabled: !agent.isDisabled,
+            }))}
             onChange={(event) => onSelectedAgentChange(event.target.value)}
           />
           <Select
@@ -355,7 +366,7 @@ export function ChatComposer({
             }}
           >
             <SelectTrigger className="min-w-0 w-full sm:w-44" size="sm">
-              <SelectValue placeholder="Model">{selectedModelLabel}</SelectValue>
+              <SelectValue placeholder={t("chat.composer.model", "Model")}>{selectedModelLabel}</SelectValue>
             </SelectTrigger>
             <SelectContent side="top" sideOffset={4} align="start">
               {selectedModelFallback.filter((provider) => provider.enabled).map((provider) => (
@@ -371,7 +382,7 @@ export function ChatComposer({
             </SelectContent>
           </Select>
           <label className="flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-1.5 text-xs text-muted-foreground">
-            <span>Auto scroll</span>
+            <span>{t("chat.composer.autoScroll", "Auto scroll")}</span>
             <Switch checked={autoScroll} onCheckedChange={onAutoScrollChange} />
           </label>
           <ChatExportButtons disabled={exportDisabled} onExport={onExportChat} />
@@ -403,12 +414,12 @@ export function ChatComposer({
           {isResponding ? (
             <Button size="sm" variant="outline" type="button" onClick={onStop} disabled={isStopping}>
               <SquareIcon />
-              {isStopping ? "Stopping..." : "Stop"}
+              {isStopping ? t("chat.composer.stopping", "Stopping...") : t("chat.composer.stop", "Stop")}
             </Button>
           ) : (
             <Button size="sm" type="button" onClick={() => void onSend()} disabled={!canSend}>
               <SendHorizonalIcon />
-              Send
+              {t("chat.composer.send", "Send")}
             </Button>
           )}
         </div>
