@@ -1,0 +1,113 @@
+import preferencesGeneralScreenshot from "../../../assets/docs/user/preferences-general.png"
+
+export const meta = { title: "Preferences", description: "Configure appearance, workspace defaults, safety policy, SMTP, environment variables, and updates." }
+
+# Preferences
+
+Preferences centralize desktop workspace settings for appearance, default model preferences, security policy, SMTP, environment variables, diagnostics, and updates. After editing, click **Save preferences**. Visual settings such as theme, font scale, and language apply immediately.
+
+## UI example
+
+<DocScreenshot
+  src={preferencesGeneralScreenshot}
+  alt="General settings page inside SUORA Preferences"
+  caption="Preferences are grouped by section in the left sidebar, with the active section form on the right. The General section is where teams most often adjust theme, language, workspace naming, and timeout defaults."
+/>
+
+## General
+
+The General section includes:
+
+- theme mode
+- theme accent
+- font size
+- language
+- workspace name, workspace path, and operator notes
+- default model provider
+- chat request timeout
+- auto-save and auto-start preferences
+
+Visual changes affect the current renderer immediately. `Default model provider` is currently a persisted preference, but it does not fully drive Chats, Agents, or Channels by itself unless matching providers and models are configured and enabled.
+
+<Callout type="warning">
+  `Auto-save conversations` and `Launch on startup` are currently stored in Preferences, but they are not yet consumed as a complete runtime behavior guarantee. The same applies to `Default model provider`, which is still only part of the preference layer.
+</Callout>
+
+<Callout>
+  `Workspace path` is a saved preference field, not a complete data-migration or workspace-isolation mechanism. Actual app data still lives under the Electron userData workspace database.
+</Callout>
+
+## Security
+
+Security settings constrain desktop agent tools for files, commands, and TLS.
+
+### Command confirmation
+
+- **Daily**
+- **Always**
+- **Never**
+
+This affects confirmation prompts for allowed commands. It does not turn arbitrary shells into allowed commands.
+
+### File access rules
+
+Use either allowlist or denylist rules with workspace-relative directories.
+
+- **Allowlist**: only matching paths are allowed
+- **Denylist**: matching paths are blocked
+- empty rules mean no additional restriction from that list
+
+Workspace file tools still cannot escape the workspace root, and per-file read/write limits still apply.
+
+### Command allowlist / blacklist
+
+The default executable allowlist includes `git`, `node`, `npm`, `npx`, `pnpm`, `yarn`, `python`, `python3`, `rg`, `tsc`, `tsx`, `vite`, `vitest`, `eslint`, and `bun`.
+
+Interactive shells such as `bash`, `sh`, `zsh`, `cmd`, and PowerShell are blocked.
+
+<Callout type="warning">
+  Allowlists, blacklists, and confirmation prompts are guardrails, not a full sandbox for untrusted agents or scripts.
+</Callout>
+
+### TLS validation
+
+**Ignore SSL / CA certificate validation** is off by default. When enabled, some network paths can skip certificate validation for that request scope. Use it only for controlled debugging.
+
+## SMTP Mail Service
+
+Global SMTP config can be reused by channel and workflow mail features. To become usable, it must include host, port, username, password, and from-address fields.
+
+The page can also send a test email to verify the current config.
+
+<Callout type="warning">
+  SMTP credentials are stored locally, just like API keys. There is no separate app-level encryption or keychain integration for this screen yet.
+</Callout>
+
+## Global Environment Variables
+
+Global key-value pairs are injected into workspace command execution. Use this for non-sensitive environment flags only.
+
+Do not put passwords, tokens, or long-lived secrets here, because they are stored locally in plain preference data and may surface in process output.
+
+## Environment Monitor
+
+Environment Monitor shows desktop runtime and tool diagnostics. It is useful for checking Node, CLI tools, and local runtime health, but it does not replace end-to-end testing for models, integrations, or channels.
+
+## Updates
+
+The About section exposes update state and **Check for updates**. Packaged desktop builds use `electron-updater`; development mode returns `not-packaged` instead of performing real update checks.
+
+## Persistence and reset behavior
+
+In desktop runtime, Preferences are stored in local SQLite app metadata. Save flows normalize common fields, but they do not guarantee that the workspace path exists, that the default provider is valid, or that SMTP connectivity is healthy.
+
+There is currently no one-click “reset to defaults” button. Reset must be performed manually or by clearing local app data in a controlled environment.
+
+## Recommended baseline
+
+1. Keep model defaults aligned with tested providers.
+2. Start file rules conservatively.
+3. Keep command confirmation on Daily or Always.
+4. Leave TLS verification on unless you are debugging a trusted test system.
+5. Use SMTP app passwords instead of primary account passwords.
+6. Avoid storing long-lived secrets in notes, environment variables, scheduler input, or preferences.

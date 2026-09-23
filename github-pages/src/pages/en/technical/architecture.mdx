@@ -1,0 +1,144 @@
+export const meta = { title: "Architecture", description: "Current boundaries across Renderer, preload, main-process domains, and local infrastructure." }
+
+# Architecture
+
+SUORA is an Electron desktop AI workbench. The current architecture is organized around the **Renderer / Preload / Main process** boundary: React handles UI, preload exposes a narrow bridge, and the Electron main process owns database, network, file, command, browser, and runtime side effects.
+
+## Current directory layout
+
+```text
+src/
+├── App.tsx
+├── main.tsx
+├── components/
+│   └── ui/
+├── pages/
+├── services/
+├── stores/
+├── hooks/
+├── lib/
+├── types/
+├── drizzle/
+└── electron/
+    ├── main.ts
+    ├── preload.ts
+    ├── app/
+    ├── infrastructure/
+    └── preload/
+```
+
+The repo no longer uses older layers such as `src/views/`, `src/application/`, `src/domain/`, `src/data/domain/`, `src/data/repositories/`, or `electron/application/`.
+
+## Process layers
+
+## Renderer
+
+Renderer code lives mostly in:
+
+- `src/pages/`
+- `src/components/`
+- `src/services/`
+- `src/stores/`
+- `src/lib/`
+
+Renderer does not directly access SQLite, filesystem, subprocesses, or Electron-native APIs. Pages normally call `window.app` through renderer services.
+
+## Preload
+
+`src/electron/preload.ts` exposes two controlled surfaces:
+
+- `window.app` for domain-facing business methods
+- `window.electron` for a small allowlisted set of low-level invoke and event channels
+
+Domain IPC handlers live in `src/electron/preload/` and should focus on validation, permission checks, service calls, and serializable results.
+
+## Main process
+
+`src/electron/main.ts` is responsible for:
+
+1. storage-path configuration
+2. workspace initialization
+3. SQLite open and migration
+4. app-service initialization
+5. IPC registration
+6. updater, protocol, and window bootstrap
+
+Main-process business logic lives in `src/electron/app/`, while shared platform infrastructure lives in `src/electron/infrastructure/`.
+
+## Main-process business domains
+
+`src/electron/app/` is organized by domain, including:
+
+- agents
+- channels
+- chats
+- documents
+- integrations
+- models
+- preferences
+- schedulers
+- skills
+- system
+- tools
+- workflows
+
+## Data flow
+
+```text
+React page / store
+  → src/services/<module>-service.ts
+  → window.app.<domain>.<method>
+  → electron/preload/<domain>/*-ipc.ts
+  → electron/app/<domain>/service.ts
+  → repository / runtime / infrastructure
+  → serialized result or event
+```
+
+Streaming updates can additionally flow through allowlisted `window.electron` event channels such as:
+
+- `ai:fetch:event`
+- `workflow:run:event`
+- `channel:message`
+- `tools:browserStateChanged`
+
+## Persistence
+
+SUORA uses Node `node:sqlite` `DatabaseSync` plus Drizzle schema and migrations. Relevant code lives in:
+
+- `src/drizzle/schema/`
+- `src/drizzle/migrations/`
+- `src/electron/infrastructure/db-core.ts`
+
+The local database is stored at `<Electron userData>/workspace/suora.sqlite`.
+
+## Routes and modules
+
+Primary app routes are:
+
+- `/chats`
+- `/agents`
+- `/workflows`
+- `/schedulers`
+- `/integrations`
+- `/documents`
+- `/channels`
+- `/skills`
+- `/models`
+- `/preference/:section`
+
+The root path redirects to `/chats`. New UI and new docs should use `workflow` / `workflows`, not `pipeline`, unless you are explicitly documenting legacy behavior.
+
+## Security boundaries
+
+- main window: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: false`
+- browser tool window: `contextIsolation: true`, `nodeIntegration: false`, `sandbox: true`
+- sensitive operations are revalidated in the main process
+- credentials, commands, URLs, files, and integrations all rely on the main process as the final safety boundary
+
+## Maintenance principles
+
+1. Keep data and side effects near the main process.
+2. Keep presentation and interaction in the renderer.
+3. Centralize cross-process contracts in `src/types/`.
+4. Extend existing domains before inventing new architectural layers.
+5. Update architecture docs when code boundaries change.

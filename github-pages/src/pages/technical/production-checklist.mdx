@@ -1,53 +1,99 @@
-export const meta = { title: "生产发布检查清单", description: "SUORA 的架构、数据库、Smoke 和发布验证清单。" }
+export const meta = { title: "生产发布检查清单", description: "面向桌面应用与文档站的上线前核对项。" }
 
 # 生产发布检查清单
 
-## 架构
+本页汇总 SUORA 在发布桌面应用或更新文档站前，建议人工确认的关键事项。它不是自动化流水线的替代品，而是帮助你在真正发布前再次核对高风险边界。
 
-- View 只依赖 ViewModel/Application Service。
-- `src/data`、`src/services` 不得依赖 `src/views`。
-- Renderer 不直接访问 Electron 主进程模块。
-- `electron/preload` 不包含业务原生 SQL。
-- 持久化通过 Drizzle Repository 完成。
+## 架构与代码边界
 
-执行：
+- Renderer 不直接访问 Node.js、Electron API、SQLite、文件系统或主进程 repository
+- 新业务代码归属到现有 `src/electron/app/<module>/` 领域，而不是旧的 `src/views/`、`src/domain/`、`src/data/repositories/` 等目录
+- 共享类型集中放在 `src/types/`
+- preload handler 只做校验、桥接和事件转发，不承载大块业务规则
+- 用户可见行为、运行限制、安全边界或路由变化已同步更新对应文档
+
+建议执行：
 
 ```text
 npm run verify:architecture
+npm run type-check
+npm run lint
 ```
 
-## 数据库
+## 数据库与本地数据
 
-- Schema 变化必须追加 migration。
-- migration 在事务中执行，失败回滚。
-- 发布前备份 `userData/workspace/suora.sqlite` 及 WAL 文件。
-- 恢复时同时恢复 `suora.sqlite`、`suora.sqlite-wal` 和 `suora.sqlite-shm`（如存在）。
-- 首次启动必须验证数据库初始化和 seed 流程。
+- Schema 变化通过新的 migration 追加，而不是修改已发布 migration
+- 迁移在事务中执行，失败会回滚
+- 新增 JSON 字段已考虑旧数据库兼容和默认值
+- 删除逻辑已明确版本、历史和引用资源的生命周期
+- 发布前如需备份，已同时考虑 `suora.sqlite`、WAL 和 SHM 文件
 
-## 自动验证
+如改动数据库、IPC 或运行时持久化，发布前还应验证：
+
+- 首次启动能正常创建数据库
+- 升级已有工作区时 migration 能平滑执行
+- Recently deleted、版本读取和运行历史不会因 schema 变化异常
+
+## 主应用验证
+
+至少确认：
 
 ```text
 npm run type-check
 npm run lint
 npm run test:run
 npm run build
-npm run smoke:electron
 ```
 
-## 发布包
+视改动范围再补充：
 
-分别在目标平台执行：
+- `npm run test:coverage`
+- `npm run smoke:electron`
+- `npm run test:e2e:workflows`
+- `npm run test:e2e:full-chain`
+
+仅在具备隔离工作区、测试凭据和桌面环境时运行带副作用的冒烟脚本。
+
+## 文档站验证
+
+文档站位于 `github-pages/`。提交或发布前建议确认：
 
 ```text
-npm run package
-npm run verify:release-assets
+cd github-pages
+npm run type-check
+npm run lint
+npm run build
 ```
 
-验证安装后：
+同时检查：
 
-- 应用能启动；
-- 数据库能初始化；
-- IPC 能注册；
-- 主页面能加载；
-- 数据能读写；
-- 应用能正常退出。
+- 页面已加入 `src/App.tsx` 路由映射
+- 页面已加入 `src/lib/docs-navigation.ts`
+- BrowserRouter 路径使用 `/doc/...`
+- 构建产物已生成 `dist/404.html` 作为 GitHub Pages 深链回退
+- 新增截图、图片或资源在本地预览中可以正常显示
+
+## 安全与凭据
+
+- 不在源码、截图、示例配置或文档中暴露真实 API Key、SMTP 密码、Webhook Secret 或渠道凭据
+- Ignore SSL 仍默认关闭，除非有明确的受控测试需求
+- Agent、Workflow、Integration、Channel 的示例均使用测试账号、占位 URL 和最小权限配置
+- 新增命令、文件访问或浏览器能力时，已验证主进程护栏仍生效
+
+## 打包与发布产物
+
+建议在目标平台确认：
+
+- `npm run package` 或对应平台打包命令成功
+- 安装包可启动，窗口可创建
+- 数据库与 preload 注册正常
+- 主导航、关键页面和基础运行时可用
+- 自动更新 manifest 与平台产物齐全
+
+对于 GitHub Release，当前 workflow 还会在发布后执行：
+
+```text
+node scripts/verify-release-assets.mjs
+```
+
+它用于校验发布产物和 updater manifest 是否齐全，但不替代本地功能验证。

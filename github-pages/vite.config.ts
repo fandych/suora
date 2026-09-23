@@ -3,11 +3,12 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { copyFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
+import remarkGfm from 'remark-gfm'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? '/suora/' : '/',
-  plugins: [tailwindcss(), mdx(), react()],
+  plugins: [tailwindcss(), mdx({ providerImportSource: "@mdx-js/react", remarkPlugins: [remarkGfm] }), react()],
   build: {
     rollupOptions: {
       plugins: [

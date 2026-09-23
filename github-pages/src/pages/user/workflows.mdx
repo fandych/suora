@@ -1,3 +1,5 @@
+import workflowsEditorScreenshot from "../../assets/docs/user/workflows-editor.png"
+
 export const meta = { title: "Workflows", description: "设计、验证、发布并运行可追踪的 workflow。" }
 
 # Workflows
@@ -13,6 +15,14 @@ Workflows 使用可视化画布把 AI、文档检索、条件分支、变量、H
 5. 先使用 **Try run** 验证，再保存并发布；发布后用 **Run release** 执行正式版本。
 
 草稿版本可修改画布、标题、说明、dry-run 输入、资源绑定和通知。发布版本为只读；要继续修改时，保存会创建新的草稿版本。
+
+## 界面示例
+
+<DocScreenshot
+  src={workflowsEditorScreenshot}
+  alt="SUORA Workflows 页面中的画布、节点库和属性面板"
+  caption="Workflow 工作台由三部分组成：中央画布、左/右侧资源与属性面板，以及顶部的保存 / Try run / 运行历史入口。建议先从 Start + End 的最小流程开始，再逐步接入 Agent、文档检索和 Integration。"
+/>
 
 ## 节点类型
 

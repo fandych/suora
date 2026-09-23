@@ -1,3 +1,5 @@
+import agentsConfigScreenshot from "../../assets/docs/user/agents-config.png"
+
 export const meta = { title: "Agents", description: "创建任务专用 Agent，配置模型、指令、资源范围与工具边界。" }
 
 # Agents
@@ -13,6 +15,14 @@ Agent 将任务目标、instructions、模型、工具调用步骤预算和可�
 5. 打开 **Chats**，在 Agent 菜单中选择它并用真实任务验证。
 
 Agent 列表会优先显示自定义 Agent，再显示系统 Agent。侧边栏和每个资源绑定区均可搜索。删除自定义 Agent 前需要确认；删除会永久移除该 Agent 及其所有版本，且无法撤销。
+
+## 界面示例
+
+<DocScreenshot
+  src={agentsConfigScreenshot}
+  alt="SUORA Agents 页面中的自定义 Agent 配置界面"
+  caption="典型的 Agent 编辑页会把通用配置放在左侧，把 Documents、Skills、Workflows、Integrations 的授权范围放在右侧，便于按任务最小化授权。"
+/>
 
 ## 内置编辑器 Agent
 

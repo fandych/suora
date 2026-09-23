@@ -1,0 +1,112 @@
+export const meta = { title: "IPC", description: "Current boundaries across Renderer, window.app, window.electron, and main-process IPC." }
+
+# IPC
+
+SUORA uses Electron IPC to connect the React renderer to privileged main-process services. Renderer code does not directly access Node.js, filesystem APIs, networking primitives, or SQLite.
+
+## Call chain
+
+```text
+React page / store
+  → src/services/<module>-service.ts
+  → window.app.<domain>.<method>
+  → ipcRenderer.invoke(channel, payload)
+  → ipcMain.handle(channel, handler)
+  → electron/app/<domain>/service.ts
+  → repository / runtime / infrastructure
+  → serialized result
+```
+
+The usual pattern is:
+
+1. pages handle interaction and rendering
+2. renderer services wrap bridge calls and subscriptions
+3. preload exposes minimal domain APIs
+4. main-process handlers enforce validation and boundaries
+
+## `window.app` and `window.electron`
+
+### `window.app`
+
+This is the main business API surface. It exposes domain groups such as:
+
+- system
+- workspace
+- chats
+- documents
+- models
+- skills
+- agents
+- integrations
+- workflows
+- channels
+- schedulers
+- preferences
+- updater
+- mail
+- tools
+
+### `window.electron`
+
+This is a narrow low-level allowlist, mainly for streaming events and a few direct invokes.
+
+- invoke: `ai:fetch:start`, `ai:fetch:abort`, `integration:execute`, `channel:wechatPersonalQrPreview`
+- event: `ai:fetch:event`, `channel:message`, `workflow:run:event`, `tools:browserStateChanged`
+
+It is not a generic arbitrary IPC proxy.
+
+## Registration
+
+IPC registration is assembled in `src/electron/preload/index.ts` via `setupIpc()`. Domain handlers live under `src/electron/preload/<domain>/`.
+
+When you add a new capability, update:
+
+1. the domain `*-ipc.ts` handler
+2. the exported bridge method in `preload.ts`
+3. any needed `src/types/` contract
+4. the renderer `src/services/` wrapper
+
+## Input and output rules
+
+All renderer payloads are untrusted input. Main-process handlers should validate:
+
+- IDs, URLs, paths, emails, and JSON payloads
+- file sizes, message sizes, timeouts, and pagination inputs
+- resource visibility and authorization
+- serializable output shape
+
+TypeScript types alone are not a security boundary.
+
+## Events and streaming
+
+Some features emit events rather than a single Promise result:
+
+- AI streaming → `ai:fetch:event`
+- workflow background execution → `workflow:run:event`
+- inbound channel traffic → `channel:message`
+- hidden browser state → `tools:browserStateChanged`
+
+Subscribers in renderer code must unregister listeners correctly to avoid duplicated events and leaks.
+
+## Database boundary
+
+Renderer does not expose a generic `db:execute` SQL bridge. Database access should be added through main-process domain services and repositories, then surfaced via controlled preload methods.
+
+## Safety boundary
+
+- `contextIsolation` stays enabled
+- `nodeIntegration` stays disabled in the main window
+- preload does not expose the full `ipcRenderer`
+- main process revalidates paths, commands, credentials, URLs, and permissions
+- user prompts, web content, or skill content cannot expand IPC privileges
+
+## Error handling
+
+Differentiate between:
+
+- validation failures
+- authorization or policy rejections
+- external dependency failures
+- persistence failures
+
+Do not leak secrets in error text, logs, or IPC payloads.

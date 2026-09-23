@@ -113,7 +113,7 @@ Channel Agent 的自动回复当前调用同步的 `channel:sendMessage` 路径�
 
 - 同一渠道至少间隔 1 秒发送。
 - 默认最多重试 3 次。
-- 失败后按 $2^{retryCount}$ 秒退避。
+- 失败后按 `2^retryCount` 秒退避。
 - 达到最大次数后丢弃。
 - 没有数据库持久化、取消、查询状态或失败事件 API。
 - Electron 重启后队列丢失，`queueId` 只有入队时有效。

@@ -1,3 +1,6 @@
+import modelsProviderScreenshot from "../../assets/docs/user/models-provider.png"
+import chatsComposerScreenshot from "../../assets/docs/user/chats-composer.png"
+
 export const meta = { title: "安装与启动", description: "安装应用并配置第一个模型。" }
 
 # 安装与启动
@@ -21,6 +24,20 @@ npm run dev
 2. 选择预设提供商，或创建一个 Custom / OpenAI-compatible 提供商。
 3. 填写 Base URL、API Key，并启用至少一个模型。Ollama、Custom 和 OpenRouter 可按端点要求不填写 API Key。
 4. 打开 **Chats**，选择模型或 Agent 后开始对话。
+
+### 首次启动界面示例
+
+<DocScreenshot
+  src={modelsProviderScreenshot}
+  alt="SUORA Models 页面中的示例 Provider 配置"
+  caption="首次启动后，通常先在 Models 页面补齐 Provider、Base URL 与模型启用状态；截图中使用的是脱敏的示例 Provider。"
+/>
+
+<DocScreenshot
+  src={chatsComposerScreenshot}
+  alt="SUORA Chats 页面中的模型与 Agent 选择器"
+  caption="完成模型配置后，切回 Chats 验证模型是否出现在选择器中；如果同时配置了 Agent，也可以直接在此处选择 Agent + 模型组合开始测试。"
+/>
 
 Ollama 默认地址为 `http://localhost:11434/v1`，通常不需要 API Key。部分 OpenAI-compatible 服务可刷新 `{baseUrl}/models` 模型目录。
 

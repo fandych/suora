@@ -1,0 +1,81 @@
+export const meta = { title: "Workflow Engine", description: "Graph scheduling, node execution, expressions, dry-run behavior, and runtime limits." }
+
+# Workflow Engine
+
+Workflow Engine compiles a workflow definition into a node graph and executes it in batches. Main-process code under `src/electron/app/workflows/` is responsible for normalization, scheduling, execution, runtime context, trace recording, and invocation history.
+
+Renderer focuses on visual editing, Try run / Run release entry points, and trace display.
+
+## Scheduling model
+
+Execution builds node indexes plus incoming/outgoing edge maps, starts from the first `start` node, and executes the current ready batch with `Promise.all`. After each batch, the engine marks nodes as completed, failed, or skipped, then resolves the next ready set.
+
+Parallelism exists at the ready-batch level, but this is not a general-purpose independent scheduler.
+
+## Executable node categories
+
+Notable executable nodes include:
+
+- start / end
+- variable assigner / template
+- condition / if-else
+- document retrieval / wiki retrieval
+- agent / ai-response
+- http / webhook / toolset
+- script / smtp
+- loop
+
+Parallel / serial / fork / join still rely partly on shared graph logic rather than a completely isolated concurrency subsystem.
+
+## Expressions and runtime context
+
+Available context includes:
+
+| Name | Use |
+| --- | --- |
+| `$input` / `input` | workflow input |
+| `$vars` / `vars` | assigned variables and output aliases |
+| `$steps` / `steps` | outputs by node ID or label |
+| `$current` / `current` | current node output |
+
+Interpolation supports `{{ expression }}`, `${expression}`, and `$path`.
+
+## Validation
+
+The editor performs higher-level workflow checks such as:
+
+- one enabled Start node
+- at least one End node
+- reachability from Start
+- no invalid cycles outside Loop semantics
+- required node fields and valid JSON-backed config
+
+Main-process save validation is intentionally more basic than editor validation, so “saves successfully” does not automatically mean “safe to publish or run”.
+
+## Dry run and side effects
+
+Dry-run skips real side effects for nodes like:
+
+- agent / ai-response
+- http / webhook / toolset
+- script
+- smtp
+
+Other structural and data-transform nodes still execute.
+
+<Callout type="warning">
+  A successful dry run does not prove that a release run is safe. Published execution can still trigger real model calls, scripts, HTTP requests, and email.
+</Callout>
+
+## Limits and runtime notes
+
+- max **200 nodes**
+- max **400 edges**
+- `maxSteps`: **1–1000**
+- `maxDurationMs`: **1 second to 1 hour**
+
+Known limitations include shared mutable context across parallel branches, partial semantics for some control nodes, and editor-only guardrails that are not re-applied to every imported definition.
+
+## Trace and sensitive data
+
+Invocation history stores status, version, input, final output, node trace, and timing. Some redaction exists, but raw node input/output can still carry secrets if you place them there. Avoid sensitive values in templates, test payloads, and debug-heavy runs.

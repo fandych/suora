@@ -1,0 +1,84 @@
+export const meta = { title: "Security Guardrails", description: "Current safety boundaries across URL handling, files, commands, browser tools, scripts, MCP, and IPC." }
+
+# Security Guardrails
+
+SUORA’s security posture comes from main-process validation, preload boundaries, BrowserWindow isolation, URL checks, and conservative tool behavior. This page documents implementation reality rather than treating prompt wording as a full authorization system.
+
+## Electron and IPC boundaries
+
+Main window:
+
+```text
+contextIsolation: true
+nodeIntegration: false
+sandbox: false
+```
+
+Preload does not expose the full `ipcRenderer`. Low-level `window.electron.invoke/on/off` uses an allowlist, while regular business features go through `window.app`.
+
+All renderer payloads must still be treated as untrusted input and revalidated in the main process.
+
+## URL and SSRF protection
+
+HTTP-facing features reject:
+
+- localhost and local hostnames
+- private, loopback, link-local, or reserved IP ranges
+- cloud metadata addresses
+- public hosts that resolve to blocked private targets
+
+This is a strong guardrail, but not a perfect connection-level SSRF defense against every TOCTOU or representation edge case.
+
+## File tools
+
+Workspace file tools enforce:
+
+- workspace-root confinement
+- optional allowlist/denylist policy
+- per-file size limits for reads and writes
+
+System save dialogs can still write outside the workspace when explicitly chosen by the user.
+
+## Command execution
+
+Commands run with `shell: false` and a fixed executable allowlist. Interactive shells such as `bash`, `sh`, `zsh`, `cmd`, and PowerShell are blocked.
+
+Preferences can further narrow behavior with confirmation, allowlist, and blacklist settings.
+
+## Browser tools
+
+Browser tool windows use:
+
+```text
+contextIsolation: true
+nodeIntegration: false
+sandbox: true
+```
+
+Web content is treated as untrusted data. However, confirmation around sensitive actions is still partly behavioral and instruction-driven, not a universal server-side “understand intent” mechanism.
+
+## Script integrations
+
+Scripts run in a Node `vm`-based environment, not an OS-level sandbox. Some sensitive globals and dynamic code paths are blocked, but `fetch` remains available and reviewed code is still required.
+
+## MCP `launchCommand`
+
+Endpoint probing stays behind URL checks, but `launchCommand` is a higher-risk surface because it can bypass the normal workspace command guardrails. Treat it as reviewed operator input only.
+
+## AI and prompt-injection boundaries
+
+Documents, skills, web pages, emails, external API responses, and user input can all contain prompt injection attempts. Tool instructions and model behavior are not a replacement for main-process validation.
+
+Practical guidance:
+
+1. bind the smallest useful resource set
+2. keep command confirmation conservative
+3. keep file access narrow
+4. treat external content as untrusted
+5. avoid storing secrets in chats, traces, configs, or exports
+
+## TLS, proxies, and credentials
+
+HTTP/HTTPS proxy is supported, while SOCKS5 remains limited. `ignoreSslErrors` lowers request safety and should stay off outside controlled debugging.
+
+API keys, SMTP passwords, and channel credentials are stored locally and are not yet backed by a full system keychain flow.

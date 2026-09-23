@@ -1,8 +1,8 @@
-export const meta = { title: "SQLite 数据层", description: "数据库生命周期、migration、Schema、IPC 查询路径与本地数据安全。" }
+export const meta = { title: "SQLite 数据层", description: "数据库生命周期、migration、业务 repository 与本地数据安全。" }
 
 # SQLite 数据层
 
-SUORA 使用 Electron 主进程管理本地 SQLite，Renderer 通过 Drizzle proxy 或领域 IPC 访问数据。数据库是本地工作区的主要持久化边界。
+SUORA 使用 Electron 主进程管理本地 SQLite。数据库是本地工作区的主要持久化边界；Renderer 不直接执行 SQL，而是通过主进程业务域 service/repository 间接访问数据。
 
 ## 数据库路径与生命周期
 
@@ -33,7 +33,7 @@ WAL 模式可能产生 `.sqlite-wal` 和 `.sqlite-shm` 文件。备份时应在�
 
 ## Migration 约定
 
-Migration 定义在 `drizzle/migrations/runtime-migrations.ts`，运行逻辑在 `electron/infrastructure/db-core.ts`。启动时创建：
+Migration 文件位于 `src/drizzle/migrations/`，运行逻辑位于 `src/electron/infrastructure/db-core.ts`。启动时创建：
 
 ```sql
 CREATE TABLE IF NOT EXISTS __app_migrations (
@@ -74,25 +74,21 @@ CREATE TABLE IF NOT EXISTS __app_migrations (
 
 ## Renderer 查询路径
 
-### Drizzle proxy
+## 领域 API，而不是通用 SQL bridge
 
-部分 repository 使用 `src/data/db/client.ts` 创建 Drizzle SQLite proxy：
+当前推荐的查询路径是：
 
 ```text
-Repository
-  → getDatabaseContext()
-  → bridge.invoke("db:execute", payload)
-  → preload whitelist
-  → electron/preload/system/database-ipc.ts
-  → executeQuery()
+React page / store
+  → src/services/<module>-service.ts
+  → window.app.<domain>.<method>
+  → electron/preload/<domain>/*-ipc.ts
+  → electron/app/<domain>/service.ts
+  → repository
   → node:sqlite
 ```
 
-查询 payload 包括 SQL、参数和 `run`、`get`、`values`、`all` 方法。参数会规范化：`undefined` 转为 `NULL`，基础类型直接传入，复杂对象转为 JSON 文本；查询结果中的 `Uint8Array` 转为 UTF-8 字符串。
-
-### 领域 IPC
-
-新旧模块也会使用 preload 中的领域 API，例如：
+常见的 preload 领域 API 例如：
 
 - `chats:list`、`chats:get`
 - `documents:get`
@@ -100,7 +96,7 @@ Repository
 - `workflows:save`
 - `channels:save`
 
-领域 handler 通常会集中处理默认值、版本选择、运行时服务和业务校验。新功能应优先通过 repository 和领域 IPC 组织，而不是让页面直接拼接 SQL。
+领域 handler 会集中处理默认值、版本选择、运行时服务与业务校验。新功能应优先扩展对应业务域的 repository 和 IPC，而不是新增任意 SQL 执行入口。
 
 ## JSON 字段与版本
 
@@ -126,11 +122,11 @@ major + minor + is_release + created_at
 
 Workflow、Agent、Skill、Integration 和 Document 的草稿可以更新；发布版本通常创建新的版本记录。查询最新版本时按主版本、次版本和创建时间排序。
 
-聊天消息 parts 与聊天设置另有应用层 envelope 版本，目前为版本 2，迁移逻辑位于 `src/domain/chat/persistence.ts`。
+聊天消息 parts、会话设置和部分 runtime 配置还带有各自的应用层 envelope / schema 兼容逻辑。这类兼容通常由对应业务域的 main-process persistence 辅助函数处理，而不是交给页面组件。
 
 ## Seed 数据
 
-部分页面首次读取时会调用 `ensureSeeded()`，为工作区写入演示资源或系统默认内容。空数据库不一定保持完全空白，开发环境和文档截图应明确区分 seed 数据与用户创建数据。
+部分业务域会在首次读取或初始化时补齐系统默认内容，例如内置 Agent、默认 Provider 或目录元数据。空数据库不一定长期保持完全空白，开发环境和文档截图应明确区分系统默认数据与用户创建数据。
 
 Seed 逻辑应保持幂等：重复启动不能重复创建相同系统资源。新增 seed 版本时，应更新对应的 metadata，并验证已有用户数据不会被覆盖。
 

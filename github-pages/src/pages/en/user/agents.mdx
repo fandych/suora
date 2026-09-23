@@ -1,0 +1,118 @@
+import agentsConfigScreenshot from "../../../assets/docs/user/agents-config.png"
+
+export const meta = { title: "Agents", description: "Create task-specific agents with model, instruction, scope, and tool boundaries." }
+
+# Agents
+
+Agents combine a task goal, instructions, preferred model, step budget, and accessible resources into a reusable execution profile. Once configured, the same agent can be selected in **Chats** for repeatable behavior.
+
+## Create and manage an agent
+
+1. Open **Agents** and choose **New agent**.
+2. SUORA creates a custom agent named `New agent` and opens its detail page.
+3. Fill in the title, summary, model, max steps, and prompt, then click **Save**.
+4. Bind the required Documents, Skills, Workflows, and Integrations. Each checkbox change is saved immediately.
+5. Open **Chats**, choose the agent, and test it with a real task.
+
+Agent lists show custom agents before system agents. Search is available in the sidebar and inside each binding panel. Deleting a custom agent permanently removes the agent and all its versions.
+
+## UI example
+
+<DocScreenshot
+  src={agentsConfigScreenshot}
+  alt="Custom agent configuration in the SUORA Agents page"
+  caption="The left side focuses on general settings, while the right side scopes Documents, Skills, Workflows, and Integrations so you can keep permissions minimal."
+/>
+
+## Built-in editor agents
+
+The system provides `Document Editor`, `Workflow Editor`, `Agent Editor`, and `Skill Editor`. Each one only exposes private CRUD tools for its own resource family. These tools are not registered for the general assistant or typical custom agents.
+
+New workspaces no longer seed demo skills, custom agents, workflows, or integrations. Upgrades can remove old sample resources without deleting items created by the user.
+
+## Configuration fields
+
+| Field | Purpose | Recommendation |
+| --- | --- | --- |
+| Name and summary | Explain what the agent is for | Use explicit names such as “Release Notes Writer” or “Customer Email Drafter”. |
+| Provider / Model | Preferred model for the agent | Only choose configured and enabled models. |
+| Max steps | Tool-call budget | Start small and increase only if the workflow really needs it. |
+| Prompt / instructions | Goal, boundary, format, and decision rules | Define inputs, expected output, forbidden actions, and when to ask clarifying questions. |
+
+The default agent starts with `New agent`, `You are a helpful agent.`, and 100 max steps. The editor allows `1–500` steps, and runtime clamps the value to the same range.
+
+If the configured provider or model becomes unavailable, Chats falls back to the active chat model. Always run a real test message after saving.
+
+## Writing useful instructions
+
+Reliable prompts usually contain:
+
+1. **Goal**: what the agent should accomplish.
+2. **Inputs**: which docs, files, workflows, or integrations it may rely on.
+3. **Output**: structure, language, and acceptance criteria.
+4. **Boundaries**: which actions require confirmation and which facts must not be invented.
+5. **Failure behavior**: ask questions when key information is missing.
+
+Agent instructions are appended after system-level guidance and cannot override security boundaries. Web content is also treated as untrusted data, not a privileged instruction source.
+
+## Resource scope
+
+Bindings define the agent’s searchable context and callable integrations. Prefer the smallest useful set.
+
+### Documents
+
+Agents can search document titles and receive title, summary, and truncated page content for matches.
+
+### Skills
+
+Agents can search skill titles, summaries, selected versions, and file-path lists. Skill files are not injected wholesale into the model context.
+
+### Workflows
+
+Agents can inspect workflow titles, summaries, versions, and node labels. Binding a workflow does not mean the workflow runs automatically.
+
+### Integrations
+
+Agents can call bound integrations. Once at least one integration is bound, the agent cannot call unbound IDs.
+
+<Callout type="warning">
+  An empty Integration scope is not a deny-all rule in the current implementation. For sensitive systems, explicitly bind the smallest required set and verify behavior in a test environment.
+</Callout>
+
+## Using agents in Chats
+
+The chat composer includes an Agent selector. The system defaults to the general assistant and can fall back to it if the current choice becomes invalid.
+
+Each chat keeps its own agent, model, proxy, timeout, and max-step settings, so different sessions can use different execution profiles without touching global preferences.
+
+System-agent release versions are read-only, but system agents can still be disabled or re-enabled from the sidebar. Disabled system agents stay visible in Agents but are removed from the Chats picker.
+
+## Desktop tool boundaries
+
+Agents can use guarded workspace, command, and browser tools, but the permissions are limited.
+
+- **Files** stay inside the workspace root and still obey Preferences allowlist/denylist rules.
+- **Commands** use `shell: false`, block interactive shells, and only allow a fixed executable set.
+- **Browser** actions only allow HTTP/HTTPS URLs and require confirmation before destructive or sensitive actions.
+
+<Callout>
+  Access to a resource does not automatically mean unrestricted write access. For production systems, secrets, payments, and account changes, require the agent to show intent and scope before approval.
+</Callout>
+
+## Troubleshooting
+
+### Step limit reached
+
+The agent exhausted its tool-call budget before finishing. Reduce scope or carefully raise the max step limit.
+
+### Operation blocked
+
+A file rule, command policy, URL safety check, or integration authorization rejected the action.
+
+### Request timed out / Request failed
+
+Check provider credentials, Base URL, proxy configuration, timeout settings, and model availability.
+
+### Tool execution failed
+
+Inspect the tool activity inside Chats and verify the bound integrations, credentials, target system state, and resource scope.

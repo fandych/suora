@@ -18,7 +18,7 @@ npm run verify:architecture
 - `npm run test`：以 watch 模式运行 Vitest。
 - `npm run test:coverage`：运行测试并产出覆盖率。
 - `npm run build`：构建 `out/main`、`out/preload` 与 `out/renderer`。
-- `npm run verify:architecture`：检查 View、ViewModel、Application、Repository、Domain 的依赖方向及 IPC SQL 边界。
+- `npm run verify:architecture`：检查仓库的目录与依赖边界约束，重点覆盖 renderer / preload / main-process 分层、禁止的旧目录模式，以及 IPC / 数据边界规则。
 - `npm run package`：使用 electron-builder 打包当前平台。
 - `npm run package:win`：生成 Windows NSIS 与 portable 安装包。
 
@@ -42,7 +42,7 @@ npm run build
 
 修改主应用代码时，如涉及用户可见行为、配置、运行限制、安全边界、路由或命令，必须在同一变更中同步更新相关用户文档与技术文档。用户文档位于 `github-pages/src/pages/user/`，技术文档位于 `github-pages/src/pages/technical/`；没有合适页面时，应新增或扩展页面并同步导航和路由。
 
-涉及界面国际化时，除单元测试与构建外，建议至少执行一次基于 Agent Browser Electron 的双语冒烟：在隔离 `userData` 下启动桌面应用，切换中文 / English，并覆盖主页面导航、共享按钮和空状态。
+涉及界面国际化时，除单元测试与构建外，建议至少执行一次基于 Agent Browser Electron 的双语冒烟：在隔离 `userData` 下启动桌面应用，切换中文 / English，并覆盖主页面导航、共享按钮和空状态。若本机未安装 Chrome，可显式传入 Edge/Chrome 可执行路径，或先运行 `agent-browser install`。
 
 <Callout>
   文档站使用 BrowserRouter；GitHub Pages 构建产物包含深链回退页，因此可直接访问或刷新 `/doc/...` 地址。

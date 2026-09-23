@@ -1,0 +1,129 @@
+import integrationsHttpScreenshot from "../../../assets/docs/user/integrations-http.png"
+import integrationsScriptScreenshot from "../../../assets/docs/user/integrations-script.png"
+import integrationsMcpScreenshot from "../../../assets/docs/user/integrations-mcp.png"
+
+export const meta = { title: "Integrations", description: "Connect HTTP services, sandboxed scripts, and MCP endpoints for agents and workflows." }
+
+# Integrations
+
+Integrations connect external HTTP services, local scripts, or MCP endpoints to SUORA. They can be bound to agents and referenced by workflow HTTP, Webhook, or Toolset nodes.
+
+SUORA currently supports three integration kinds: **HTTP**, **Scripts**, and **MCP**. New integrations start as HTTP by default.
+
+## UI examples
+
+### HTTP Integration
+
+<DocScreenshot
+  src={integrationsHttpScreenshot}
+  alt="HTTP integration configuration in SUORA"
+  caption="Start with the smallest workable HTTP endpoint: name, description, base URL, and auth. Then add endpoints, request fields, and Try run inputs incrementally."
+/>
+
+### Script Integration
+
+<DocScreenshot
+  src={integrationsScriptScreenshot}
+  alt="Script integration editor in SUORA"
+  caption="Script integrations keep name, handler, timeout, and code together in one workbench. Decide whether a script is truly needed before using it in place of a simpler HTTP integration."
+/>
+
+### MCP Integration
+
+<DocScreenshot
+  src={integrationsMcpScreenshot}
+  alt="MCP integration configuration in SUORA"
+  caption="MCP configuration currently acts more as a catalog and configuration surface than a full interactive MCP client."
+/>
+
+## HTTP integrations
+
+1. Create a new integration.
+2. Fill in the shared base URL and authentication mode.
+3. Add one or more endpoints with method, path, parameters, default body, and schema.
+4. Save the integration and run **Try run**.
+5. Bind it to an agent or reference it from a workflow node.
+
+HTTP supports GET, POST, PUT, PATCH, DELETE, HEAD, and OPTIONS. Path placeholders such as `{id}` or `:id` are synchronized into path parameters automatically.
+
+Supported body styles include JSON, `application/x-www-form-urlencoded`, and `multipart/form-data`. GET and HEAD do not send a request body.
+
+## Authentication and request data
+
+Supported auth modes:
+
+- none
+- bearer-style token
+- basic auth
+- API key in header or query
+- custom/shared headers
+
+Integration config is stored in local JSON-backed persistence. There is no separate credential vault or keychain integration at the moment.
+
+## Try run and execution history
+
+HTTP endpoints and scripts must be saved and pass blocking validation before **Try run** is available. Try run stores inputs, outputs, and status even when execution fails.
+
+<Callout type="warning">
+  Execution history keeps full input and output bodies. Common auth headers and `set-cookie` values are masked, but body fields are not comprehensively redacted for you.
+</Callout>
+
+## HTTP limits
+
+- max multipart file size: **10 MiB**
+- max request time: **60 seconds**
+- max response body: **2 MiB**
+- only `http:` and `https:` URLs are allowed
+- localhost, private IPs, and cloud metadata addresses are blocked
+
+## Script integrations
+
+Script integrations can maintain multiple runnable entries. Each entry stores a name, handler, JavaScript code, input/output JSON schema, and timeout.
+
+Scripts run in a Node `vm`-based environment with:
+
+- parsed `input`
+- `fetch`, `AbortController`, `URL`, encoders, and `structuredClone`
+- captured `console.log`, `console.warn`, and `console.error`
+
+Blocked features include `require`, `process`, `child_process`, `fs`, dynamic `import()`, `new Function`, and `eval()`.
+
+<Callout type="warning">
+  Script integrations are not an OS-level sandbox. They can still reach the network via `fetch`, so only run reviewed code.
+</Callout>
+
+## MCP integrations
+
+MCP config can store endpoint, launch command, protocol, auth mode, auth config JSON, and a tool catalog. Today it is **not** a complete MCP client:
+
+- no `tools/list` or `tools/call`
+- no transport negotiation
+- endpoint execution is limited to a connectivity probe
+- launch command execution only starts the command and samples stdout/stderr briefly
+- there is no dedicated Try run button for MCP in the current UI
+
+<Callout type="warning">
+  `launchCommand` is started through a shell path that does not inherit the normal command allowlist protections. Only use reviewed commands.
+</Callout>
+
+## Binding integrations to agents and workflows
+
+- **Agents**: once an agent has at least one bound integration, it cannot call unbound IDs.
+- **Workflows**: HTTP, Webhook, and Toolset nodes can bind an integration or use a direct URL.
+
+Try run from workflow editors still skips HTTP, AI, script, integration, and mail side effects.
+
+## Current UI limits
+
+- no full integration delete action at the top level
+- no publish or version-history workflow in the page UI
+- no MCP-specific Try run
+- no rich filtering or export over execution history
+
+## Recommended workflow
+
+1. Validate connectivity with the smallest possible endpoint or script.
+2. Use test accounts, test services, and short-lived credentials.
+3. Inspect results before binding the integration to an agent or workflow.
+4. Scope agent integrations explicitly.
+5. Put destructive operations behind explicit confirmation.

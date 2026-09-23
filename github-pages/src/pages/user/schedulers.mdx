@@ -1,3 +1,5 @@
+import schedulersEditorScreenshot from "../../assets/docs/user/schedulers-editor.png"
+
 export const meta = { title: "Schedulers", description: "维护 workflow 和 Agent 的本地调度配置，并了解当前运行时边界。" }
 
 # Schedulers
@@ -33,6 +35,14 @@ Schedulers 用于保存面向 workflow 或 Agent 的 cron、时区、输入和�
 - **Run history**：在弹层中查看本地记录的 scheduler 运行；当前未接入的运行时会显示为空。
 - **Enable / Disable**：立即保存调度配置的启用状态。
 - **Delete**：删除调度配置及其本地运行历史，删除前需要确认。
+
+## 界面示例
+
+<DocScreenshot
+  src={schedulersEditorScreenshot}
+  alt="SUORA Schedulers 页面中的调度器编辑界面"
+  caption="Scheduler 详情页把 cron、时区、重试策略放在左侧，把目标类型与目标资源绑定放在右侧。当前更适合把它当作自动化运行计划的配置中心，而不是已经上线的后台调度器。"
+/>
 
 ## 配置字段
 

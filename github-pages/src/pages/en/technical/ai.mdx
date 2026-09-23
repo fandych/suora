@@ -1,0 +1,113 @@
+export const meta = { title: "AI Services & Tools", description: "Provider factories, streaming events, ToolLoopAgent, scope handling, and tool guardrails." }
+
+# AI Services & Tools
+
+SUORA uses the Vercel AI SDK `ToolLoopAgent` model to handle streaming text, tool calls, and multi-step agent work. Agent execution runs in the Electron main process; the renderer submits chat commands and listens for runtime events.
+
+## Main runtime pieces
+
+Current main-process implementation is centered around chat runtime, agent execution, and tool retry helpers in `src/electron/app/chats/`.
+
+Renderer `src/services/chat-service.ts` is only the IPC-facing facade. UI-only formatting and display helpers stay in `src/lib/`.
+
+## Provider factory
+
+Runtime `createModel(settings)` chooses an AI SDK adapter from provider type:
+
+| Provider type | Runtime adapter |
+| --- | --- |
+| `anthropic` | Anthropic SDK |
+| `openai` | OpenAI SDK |
+| `azure` | OpenAI Responses-compatible path with `api-key` |
+| `google` | Google OpenAI-compatible endpoint |
+| `ollama` | OpenAI-compatible path with default localhost base URL |
+| other / custom | OpenAI-compatible SDK |
+
+Provider runtime behavior is driven mainly by provider type, Base URL, API key, and model ID. Capability metadata in the model inventory does not fully force SDK behavior by itself.
+
+## Command and event boundary
+
+```text
+Renderer ChatApi.sendMessage(...)
+  → chats:sendMessage IPC
+  → Electron chat runtime / ToolLoopAgent
+  → chat runtime events
+  → renderer runtime store
+```
+
+Renderer sends the prompt and optional attachments. Main process resolves the effective provider, model, agent, and request ID from persisted session settings.
+
+## Proxy, TLS, and timeout
+
+- HTTP and HTTPS proxy are supported
+- SOCKS5 is not fully wired through the desktop shell
+- TLS validation is on by default
+- `ignoreSslErrors` only weakens request-level certificate checks in controlled cases
+- `requestTimeoutMs = 0` means no app-level timeout is attached
+
+## Streaming event model
+
+Streaming output is normalized into SUORA runtime events such as:
+
+- text delta
+- tool call
+- tool result
+- error
+
+Renderer accumulates these into display state and persisted `ChatMessagePart` records.
+
+## Step budget
+
+The main agent uses a configurable step budget, with defaults and validation limits enforced by the chat and agent settings layer.
+
+Research delegation uses a smaller derived step budget and restricted retrieval scope.
+
+## Agent scope
+
+Agent config can scope:
+
+- documents
+- skills
+- workflows
+- integrations
+- private resource CRUD tools for system editor agents
+
+Search tools honor explicit bindings when present. File, command, and browser tools are controlled by global Preferences and main-process guardrails rather than per-agent bindings.
+
+## Tool groups
+
+### Workspace tools
+
+- list workspace files
+- read workspace file
+- write workspace file
+- run workspace command
+
+These stay inside the workspace root and use guarded command execution.
+
+### Browser tools
+
+- navigate
+- read page
+- click
+- fill
+
+These use a hidden Electron browser window and URL safety checks.
+
+### External and domain tools
+
+- open external URL
+- HTTP request
+- run integration
+- search documents, workflows, skills
+- delegate research
+
+### Private CRUD tools
+
+Resource CRUD tools for documents, workflows, agents, and skills are only registered for editor-style agents that are explicitly granted those private tool IDs.
+
+## Errors and persistence
+
+Typical user-visible failures include step-limit, timeout, blocked operation, tool execution failure, request failure, and response failure.
+
+Runtime tool activity first lives in memory, then is summarized into persisted chat message parts when the run completes. Sensitive values can still appear in tool input/output, so avoid placing secrets in prompts, templates, or debug-heavy test flows.

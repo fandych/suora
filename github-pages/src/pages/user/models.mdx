@@ -1,3 +1,5 @@
+import modelsProviderScreenshot from "../../assets/docs/user/models-provider.png"
+
 export const meta = { title: "Models", description: "配置模型提供商、启用可用模型，并将它们用于 Chats、Agents 和 workflows。" }
 
 # Models
@@ -13,6 +15,14 @@ Models 页面管理 Provider（模型提供商）及其模型清单。只有已�
 5. 在 Chats 中选择该模型发送测试消息。
 
 初次加载时，应用会创建缺失的预置 Provider，但它们默认关闭且没有 API Key。Add provider 创建的是 Custom Provider，带一个未启用的 `custom-model`；之后可在详情页改为任意预置类型。
+
+## 界面示例
+
+<DocScreenshot
+  src={modelsProviderScreenshot}
+  alt="SUORA Models 页面中的示例 Provider 表单"
+  caption="Provider 详情页会把名称、类型、Base URL、API Key、启用状态和模型开关集中在一处。建议先保存 Provider，再确认至少有一个模型已启用，最后回到 Chats 或 Agents 验证选择器是否刷新。"
+/>
 
 ## 预置 Provider
 

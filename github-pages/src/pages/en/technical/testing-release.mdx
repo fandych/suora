@@ -1,0 +1,101 @@
+export const meta = { title: "Testing & Release", description: "Unit tests, CDP smoke flows, CI, Electron packaging, and GitHub Pages deployment." }
+
+# Testing & Release
+
+This page explains the quality gates and release boundaries for both the main SUORA desktop app and the `github-pages` documentation site.
+
+## Environment requirements
+
+- Node.js `>= 22.12.0`
+- npm plus the committed lockfile
+- downloadable Electron dependencies
+
+Install:
+
+```bash
+npm ci
+```
+
+If Electron downloads are blocked by proxy or TLS issues, configure proxy-related environment variables or run:
+
+```bash
+npm run electron:download
+```
+
+## Core quality checks
+
+At a minimum:
+
+```bash
+npm run lint
+npm run type-check
+npm run build
+```
+
+## Vitest
+
+Useful commands:
+
+```bash
+npm run test
+npm run test:run
+npm run test:coverage
+npm run test:ui
+```
+
+Unit tests are primarily organized under `tests/unit/`.
+
+## E2E and CDP smoke flows
+
+The repo includes Playwright dependencies and CDP-oriented smoke scripts, but not every command should be treated as a guaranteed always-on CI check.
+
+For CDP-oriented Electron smoke validation, you typically need:
+
+1. an Electron instance with CDP enabled
+2. an available Electron page in `/json/list`
+3. `window.app` or `window.electron` loaded in the page
+4. isolated workspace data and test credentials
+
+<Callout type="warning">
+  Some smoke flows can create real local data, spend model budget, or call external services. Run them only in isolated environments.
+</Callout>
+
+## Agent Browser Electron smoke testing
+
+For desktop UI validation, Agent Browser is the recommended path:
+
+1. launch Electron with isolated `SUORA_USER_DATA_PATH` and a `SUORA_REMOTE_DEBUG_PORT`
+2. connect Agent Browser to that port
+3. navigate through the UI and verify localized text, empty states, and shared controls
+
+## CI
+
+The main app CI currently runs lint, type-check, unit tests, coverage, and build on push or PR flows. It does not automatically prove desktop install, Playwright coverage, or full smoke-test execution on every target OS.
+
+## Packaging
+
+```bash
+npm run build
+npm run package
+npm run package:win
+```
+
+electron-builder is configured for Windows, macOS, and Linux target families, but signing and notarization are not fully configured by default.
+
+## Release workflow
+
+GitHub Release triggers packaging across platform matrices and then runs `scripts/verify-release-assets.mjs` in a separate verification job to confirm release assets and updater manifests.
+
+## Documentation site deployment
+
+The docs site under `github-pages/` uses Vite, React, MDX, Tailwind, and shadcn/base UI components:
+
+```bash
+cd github-pages
+npm ci
+npm run lint
+npm run type-check
+npm run build
+```
+
+GitHub Pages deployment is driven by the dedicated docs workflow and relies on a generated `dist/404.html` file for SPA deep-link fallback.

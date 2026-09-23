@@ -1,0 +1,77 @@
+import modelsProviderScreenshot from "../../../assets/docs/user/models-provider.png"
+
+export const meta = { title: "Models", description: "Configure model providers, enable models, and make them available to chats, agents, and workflows." }
+
+# Models
+
+The Models page manages providers and their model catalogs. Only enabled providers with at least one enabled model appear in Chats, Agents, and workflow model pickers.
+
+## Configure the first provider
+
+1. Open **Models** and pick a preset provider, or choose **Add provider** for a custom provider.
+2. Fill in the provider name, type, Base URL, and API key.
+3. Save the provider settings.
+4. Enable the provider and enable at least one model.
+5. Verify the model in **Chats** with a real test message.
+
+Preset providers are created automatically when missing, but they start disabled and without an API key. A newly added custom provider starts with a disabled `custom-model`.
+
+## UI example
+
+<DocScreenshot
+  src={modelsProviderScreenshot}
+  alt="Provider form in the SUORA Models page"
+  caption="The provider detail page groups the name, provider type, Base URL, API key, enable flag, and model toggles in one place. Save the provider, enable a model, then return to Chats or Agents to confirm the picker updates."
+/>
+
+## Built-in providers
+
+Built-in presets include OpenAI, Azure, Google Gemini, Anthropic, Ollama, and a range of OpenAI-compatible providers such as DeepSeek, OpenRouter, Groq, xAI, Mistral, Perplexity, Together, Fireworks, and others.
+
+Switching provider type can replace the default name, Base URL, and built-in model list when the current values still match the old preset defaults.
+
+## Enablement rules
+
+For most cloud providers, a missing API key makes the provider and all models unavailable. Typical activation requires:
+
+1. valid credentials
+2. provider enabled
+3. at least one enabled model
+
+<Callout>
+  Ollama, Custom, and OpenRouter can be enabled without an API key when the target endpoint truly supports anonymous access.
+</Callout>
+
+## Base URL and API key
+
+- use the provider’s actual API root
+- API keys are masked in the UI but still stored locally
+- never place real secrets in screenshots, logs, exports, documents, or skills
+
+## Refreshing remote models
+
+**Refresh models** pulls a provider catalog; it is not a generic “test connection” button.
+
+- Ollama uses `GET {baseUrl without /v1}/api/tags`
+- OpenAI-compatible providers use `GET {baseUrl}/models`
+- some providers are not supported for refresh at all
+
+Discovered models are merged into the local list: existing local enablement is preserved, removed remote entries are not auto-deleted, and new models start disabled.
+
+## Runtime behavior
+
+SUORA chooses the runtime adapter from provider type:
+
+- Anthropic → Anthropic SDK
+- Azure → OpenAI Responses path with `api-key`
+- OpenAI → OpenAI SDK
+- Google Gemini / Ollama → currently through OpenAI-compatible paths
+- most other presets and Custom → OpenAI-compatible SDK
+
+If an agent’s configured model is unavailable, Chats can fall back to the current session model.
+
+## Proxy, TLS, and storage safety
+
+Model requests go through the Electron main process and can use HTTP/HTTPS proxy settings. `ignoreSslErrors` lowers TLS safety and should only be used in controlled debugging environments.
+
+Provider API keys are stored in the local SQLite workspace. Protect device access and revoke secrets when moving or retiring machines.

@@ -33,7 +33,7 @@ npm run build
 ```
 
 - `lint`：执行根目录 ESLint。
-- `type-check`：执行 TypeScript `tsc --noEmit`。
+- `type-check`：执行仓库的 `scripts/type-check.mjs`，覆盖 renderer、main、preload 与相关类型配置。
 - `build`：使用 electron-vite 构建 main、preload 和 renderer。
 
 ## Vitest 单元测试
@@ -70,7 +70,7 @@ npm run test:e2e:ui
 
 1. 启动带 `127.0.0.1:9222` CDP 的 Electron 实例。
 2. `/json/list` 中存在 Electron page。
-3. 页面已经加载 `window.project` 或 `window.electron` bridge。
+3. 页面已经加载 `window.app` 或 `window.electron` bridge。
 4. 使用专用测试工作区和测试凭据。
 
 典型脚本包括 workflow、非 AI workflow、完整链路、行业场景和已配置模型测试。它们可能创建大量 Skills、Documents、Integrations、Workflows、Agents 和 Chats，并调用真实模型、HTTP、SMTP 或公共 API。
@@ -185,7 +185,7 @@ npx electron-builder --publish never
 
 之后由 `softprops/action-gh-release` 上传 `dist` 文件。Release workflow 当前只执行 build/package，不执行 lint、type-check、unit test、coverage 或安装包启动验证。
 
-发布前建议手动运行完整检查，并确认版本、图标、更新 manifest、安装包和目标平台启动行为。`verify-release-assets.mjs` 存在但当前没有被 package script 或 release workflow 自动调用。
+发布前建议手动运行完整检查，并确认版本、图标、更新 manifest、安装包和目标平台启动行为。`verify-release-assets.mjs` 目前已在 release workflow 的独立 `verify-release-assets` job 中执行，但它只校验已发布 release 的产物完整性，不替代本地 lint / type-check / test / build。
 
 ## 文档站构建与部署
 

@@ -1,3 +1,5 @@
+import channelsWebhookScreenshot from "../../assets/docs/user/channels-webhook.png"
+
 export const meta = { title: "Channels", description: "把外部消息平台接入 SUORA，并由指定 Agent 处理入站消息与自动回复。" }
 
 # Channels
@@ -26,6 +28,14 @@ Channels 将外部消息来源接入 SUORA。入站消息会创建或续写独�
 6. 使用健康检查和模拟入站消息验证路由与自动回复。
 
 渠道默认关闭；启用前必须完成对应平台的凭据要求。已配置渠道会显示草稿、就绪、已连接或错误等绑定状态。
+
+## 界面示例
+
+<DocScreenshot
+  src={channelsWebhookScreenshot}
+  alt="SUORA Channels 页面中的 Custom Webhook 配置界面"
+  caption="Custom Webhook 是最容易验证的模板之一：先完成常规设置中的回复 Agent / 模型，再补齐发送 URL、验证密钥和消息模板，最后用保存与调试面板确认配置是否成型。"
+/>
 
 ## 回复 Agent 与自动回复
 

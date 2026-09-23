@@ -1,0 +1,98 @@
+import channelsWebhookScreenshot from "../../../assets/docs/user/channels-webhook.png"
+
+export const meta = { title: "Channels", description: "Connect external messaging platforms and let agents handle inbound messages and replies." }
+
+# Channels
+
+Channels connect external message sources to SUORA. Incoming messages create or continue dedicated channel sessions, and a chosen agent can generate replies that are sent back to the original platform.
+
+## Supported platforms
+
+Templates currently include:
+
+- WeCom, Personal WeChat, WeChat Official Account, WeChat Mini Program
+- Feishu, DingTalk, QQ-style custom webhook templates
+- Microsoft Teams, Telegram
+- Email Inbox
+- Custom Webhook, Custom WebSocket
+
+## Basic setup flow
+
+1. Choose a channel template from the **Channels** sidebar.
+2. Fill in the name, summary, reply agent, and model, then save general settings.
+3. Configure the platform-specific connection details and required credentials.
+4. Save the configuration and complete **Bind channel** or QR-based WeChat binding when required.
+5. Enable the channel and confirm runtime status.
+6. Validate routing and auto reply with health checks and test inbound messages.
+
+## UI example
+
+<DocScreenshot
+  src={channelsWebhookScreenshot}
+  alt="Custom Webhook channel configuration in SUORA"
+  caption="Custom Webhook is often the easiest template to validate. Configure the reply agent and model first, then complete the send URL, verification secret, and payload template."
+/>
+
+## Reply agent and auto reply
+
+Each channel can specify a reply agent and model.
+
+- inbound messages are written into channel-specific local chats
+- channel model settings take priority, then the chosen agent’s model, then session defaults
+- **Auto reply** sends generated assistant text back to the source platform
+- if Auto reply is disabled, the local chat still records the inbound message but no outbound reply is sent automatically
+
+<Callout type="warning">
+  Auto reply allows an agent to act toward real external users. Always validate with test accounts and tightly scoped agents before enabling production channels.
+</Callout>
+
+## Webhook and stream modes
+
+The webhook runtime listens on `127.0.0.1:3000` by default:
+
+```text
+GET  /health
+GET  /webhook/:platform/:channelId
+POST /webhook/:platform/:channelId
+```
+
+For public use, you still need a reverse proxy, port mapping, or another secure forwarding layer because the runtime itself stays bound to loopback.
+
+## Credential overview
+
+| Platform | Main fields |
+| --- | --- |
+| WeCom | Corp ID, Agent ID, App secret, verification token |
+| Personal WeChat | QR binding token/Base URL or bridge webhook URL |
+| WeChat Official Account | App ID, App secret, verification token |
+| WeChat Mini Program | App ID, App secret, verification token |
+| Feishu | App ID, App secret, verification token |
+| DingTalk Stream | Client ID, Client secret |
+| DingTalk Webhook | Webhook URL, signing secret |
+| Telegram | Bot token |
+| Teams | App ID, App password |
+| Email | IMAP host/user plus SMTP config or global mail service |
+| Custom | Webhook URL or WebSocket URL |
+
+Saving config does not guarantee connectivity. Use bind flows, health checks, and real test traffic.
+
+## Personal WeChat QR binding
+
+Personal WeChat uses stream mode. The bind flow creates a QR login session and may request an on-device verification code before the status becomes connected.
+
+## Email Inbox
+
+Email channels can receive via IMAP polling and send via global SMTP or channel-specific SMTP settings. Rules can filter mail and then reply, forward, or call webhooks.
+
+Treat email content as untrusted. Keep the agent instruction set explicit and conservative.
+
+## Runtime and debugging
+
+The runtime panel provides overview, messages, users, health, and debug surfaces. In-memory deduplication prevents duplicate message processing for a short window, and queued channel sends can retry with exponential backoff.
+
+## Security and limitations
+
+- webhooks only accept existing enabled channels
+- channel credentials are stored locally
+- public exposure should be protected by TLS, access control, and rate limiting at the proxy layer
+- current runtime is single-machine, not multi-node high availability

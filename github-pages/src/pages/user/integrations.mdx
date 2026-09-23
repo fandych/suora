@@ -1,3 +1,7 @@
+import integrationsHttpScreenshot from "../../assets/docs/user/integrations-http.png"
+import integrationsScriptScreenshot from "../../assets/docs/user/integrations-script.png"
+import integrationsMcpScreenshot from "../../assets/docs/user/integrations-mcp.png"
+
 export const meta = { title: "Integrations", description: "连接 HTTP 服务、沙箱脚本和 MCP 端点，并将它们授权给 Agent 或 workflow。" }
 
 # Integrations
@@ -5,6 +9,32 @@ export const meta = { title: "Integrations", description: "连接 HTTP 服务、
 Integrations 用于把外部 HTTP 服务、本地脚本或 MCP 端点接入 SUORA。集成可绑定给 Agent，也可被 workflow 的 HTTP、Webhook 或 Toolset 节点引用。
 
 当前支持三种类型：**HTTP**、**Scripts** 和 **MCP**。新建操作默认创建 HTTP 集成；需要脚本或 MCP 时，在详情编辑器中切换类型。
+
+## 界面示例
+
+### HTTP Integration
+
+<DocScreenshot
+  src={integrationsHttpScreenshot}
+  alt="SUORA Integrations 页面中的 HTTP 集成配置"
+  caption="HTTP 集成适合先从一个最小 endpoint 开始：填写名称、描述、Base URL 与认证方式，再逐步补 endpoint、请求体和 Try run 输入。"
+/>
+
+### Script Integration
+
+<DocScreenshot
+  src={integrationsScriptScreenshot}
+  alt="SUORA Integrations 页面中的 Script 集成编辑器"
+  caption="Script 集成会把脚本名称、handler、超时和代码编辑器放在同一个工作台中。编写脚本前，先明确输入/输出结构，再决定是否真的需要脚本而不是 HTTP Integration。"
+/>
+
+### MCP Integration
+
+<DocScreenshot
+  src={integrationsMcpScreenshot}
+  alt="SUORA Integrations 页面中的 MCP 集成配置"
+  caption="MCP 配置页主要用于记录 endpoint、launch command、protocol 和 tool catalog。当前实现更偏向配置与可视化清单，而不是完整的 MCP client 调试台。"
+/>
 
 ## 创建 HTTP Integration
 

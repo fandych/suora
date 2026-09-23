@@ -1,3 +1,5 @@
+import documentsWorkspaceScreenshot from "../../assets/docs/user/documents-workspace.png"
+
 export const meta = { title: "Documents", description: "在本地工作区组织页面、资源与可供 Agent 和 workflow 检索的知识。" }
 
 # Documents
@@ -12,6 +14,14 @@ Documents 是 SUORA 的本地文档工作区。每个文档包含名称、简介
 4. 选择文本页后开始编辑；更改会自动保存。
 
 文档列表按最近更新时间排序。新建文档会创建草稿版本和默认页面树。自动保存会将名称、简介、页面内容、树结构和设置一起写入本地快照，通常在最后一次修改约 900 ms 后执行。
+
+## 界面示例
+
+<DocScreenshot
+  src={documentsWorkspaceScreenshot}
+  alt="SUORA Documents 页面中的文档树和编辑器"
+  caption="创建文档后，左侧是文档树与节点操作，右侧是富文本/源码编辑区。录入知识时，优先把页面标题和关键结论放在顶部，方便 Agent 和 workflow 检索。"
+/>
 
 ## 管理页面与文件夹
 

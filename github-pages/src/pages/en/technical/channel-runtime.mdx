@@ -1,0 +1,66 @@
+export const meta = { title: "Channel Runtime", description: "Lifecycle, webhook handling, streams, message routing, queues, and health checks." }
+
+# Channel Runtime
+
+Channel Runtime runs in the Electron main process. It listens for webhooks, maintains stream/WebSocket/IMAP clients, normalizes inbound messages, and sends outbound replies.
+
+## Lifecycle
+
+At startup, the runtime restores enabled channels, rebuilds in-memory maps, reconnects supported stream-style transports, and starts the webhook HTTP server when needed.
+
+The runtime can stay “running” even when the HTTP server is not active, because stream, polling, or WebSocket clients may still be alive.
+
+## Webhook routes
+
+```text
+GET  /health
+GET  /webhook/:platform/:channelId
+POST /webhook/:platform/:channelId
+```
+
+URLs are generated from protocol, host, port, platform, and channel ID. The actual server still binds to `127.0.0.1`, so public traffic requires a reverse proxy, tunnel, or another forwarding layer.
+
+## Stream, WebSocket, and email
+
+Runtime supports several non-webhook transport styles:
+
+- DingTalk Stream
+- Custom WebSocket
+- Personal WeChat polling
+- IMAP-based email polling
+
+Each transport has its own reconnect and deduplication behavior.
+
+## Inbound flow
+
+Inbound traffic is normalized into channel runtime messages, deduplicated in memory, persisted for runtime history/debugging, emitted to the renderer, and then routed into channel-backed chat sessions where agent replies can be generated.
+
+## Outbound flow
+
+Outbound messages can be sent either synchronously or through an in-memory queue. Auto replies currently use the synchronous path by default, which means queue-level retry and rate-limiting behavior does not automatically apply to every reply.
+
+## Queue, retry, and deduplication
+
+Current queue behavior is in-memory only:
+
+- roughly one-second spacing per channel
+- up to three retries
+- exponential backoff
+- no durable queue persistence
+- queue state is lost on restart
+
+Message-ID deduplication also relies on in-memory state with short TTL windows.
+
+## Health checks
+
+The runtime exposes status, stream status, and health-check IPC calls. Some platforms receive real token or binding checks; others only get lighter configuration-level validation.
+
+Health passing does not guarantee that public webhooks, event subscriptions, or end-to-end auto replies are fully correct.
+
+## Security and limitations
+
+- runtime listens only on loopback by default
+- credentials are stored locally
+- public exposure should be protected by a proxy with TLS, access control, and rate limiting
+- runtime is not designed as a multi-node highly available system
+- some state such as dedup caches and cursors is not durable across restarts

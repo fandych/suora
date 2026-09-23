@@ -1,3 +1,5 @@
+import skillsWorkspaceScreenshot from "../../assets/docs/user/skills-workspace.png"
+
 export const meta = { title: "Skills", description: "创建、组织和复用本地 Skill 包，为 Agent 提供可检索的任务知识。" }
 
 # Skills
@@ -23,6 +25,14 @@ other/notes.md
 ```
 
 默认脚本提供异步 `main(input)` 示例，但不会自动执行。
+
+## 界面示例
+
+<DocScreenshot
+  src={skillsWorkspaceScreenshot}
+  alt="SUORA Skills 页面中的 Skill 树和编辑器"
+  caption="Skill 详情页会固定展示 `SKILL.md`、`scripts/`、`references/`、`assets/` 等标准结构。通常先完善 `SKILL.md` 的名称、说明和触发条件，再补充参考资料与脚本。"
+/>
 
 ## 编写 SKILL.md
 

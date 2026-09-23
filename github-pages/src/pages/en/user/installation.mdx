@@ -1,0 +1,46 @@
+import modelsProviderScreenshot from "../../../assets/docs/user/models-provider.png"
+import chatsComposerScreenshot from "../../../assets/docs/user/chats-composer.png"
+
+export const meta = { title: "Installation & Startup", description: "Install the app and configure the first model." }
+
+# Installation & Startup
+
+SUORA is an Electron desktop app. The development environment requires Node.js `>= 22.12.0` and npm.
+
+## Install dependencies
+
+```bash
+git clone https://github.com/fandych/suora.git
+cd suora
+npm ci
+npm run dev
+```
+
+If you must disable Chromium sandboxing, use `npm run dev:root`. If Electron binaries fail to download, run `npm run electron:download`.
+
+## Configure the first model
+
+1. Open **Models** after the app starts.
+2. Pick a preset provider, or create a Custom / OpenAI-compatible provider.
+3. Fill in the Base URL, API key, and enable at least one model. Ollama, Custom, and OpenRouter can work without an API key when the endpoint allows it.
+4. Open **Chats** and start a test conversation with the selected model or agent.
+
+### First-run examples
+
+<DocScreenshot
+  src={modelsProviderScreenshot}
+  alt="A sample provider configuration in the SUORA Models page"
+  caption="A common first step is to finish the provider form in Models and enable at least one model. The screenshot uses sanitized demo data."
+/>
+
+<DocScreenshot
+  src={chatsComposerScreenshot}
+  alt="Model and agent pickers in the SUORA Chats page"
+  caption="After saving the provider, go back to Chats and confirm the new model appears in the selector before continuing."
+/>
+
+Ollama defaults to `http://localhost:11434/v1` and usually does not require an API key. Some OpenAI-compatible services also support refreshing the remote model catalog from `{baseUrl}/models`.
+
+<Callout>
+  Model API keys are stored in the local workspace database. Do not share screenshots, logs, or backups that contain real credentials.
+</Callout>

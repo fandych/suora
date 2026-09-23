@@ -13,15 +13,18 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
-import { documentationSections } from "@/lib/docs-navigation"
+import { docsUiMessages, getLocalizedSections, localizeDocPath, type DocLocale } from "@/lib/docs-navigation"
 
-export function DocsSidebar({ currentPath }: { currentPath: string }) {
+export function DocsSidebar({ currentPath, locale }: { currentPath: string; locale: DocLocale }) {
+  const documentationSections = getLocalizedSections(locale)
+  const messages = docsUiMessages[locale]
+
   return (
     <Sidebar collapsible="offcanvas" className="border-r border-sidebar-border">
       <SidebarHeader className="p-4">
-        <Link to="/doc" className="flex items-center gap-3 font-semibold tracking-tight">
+        <Link to={localizeDocPath(locale, "/doc")} className="flex items-center gap-3 font-semibold tracking-tight">
           <span className="grid size-8 place-items-center rounded-lg bg-primary text-primary-foreground">S</span>
-          <span>SUORA Docs</span>
+          <span>{messages.siteTitle}</span>
         </Link>
       </SidebarHeader>
       <SidebarContent>
@@ -48,7 +51,7 @@ export function DocsSidebar({ currentPath }: { currentPath: string }) {
       </SidebarContent>
       <SidebarFooter className="p-4">
         <a className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground" href="https://github.com/fandych/suora" target="_blank" rel="noreferrer">
-          <GitBranchIcon /> 在 GitHub 查看项目
+          <GitBranchIcon /> {messages.githubProject}
         </a>
       </SidebarFooter>
     </Sidebar>

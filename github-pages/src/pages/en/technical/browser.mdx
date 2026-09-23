@@ -1,0 +1,67 @@
+export const meta = { title: "Browser Tools", description: "Hidden browser sessions, URL safety, page reads, click/fill actions, and permission boundaries." }
+
+# Browser Tools
+
+SUORA provides agents with a hidden Electron browser window for approved web navigation, page reading, clicking, and form filling. The browser implementation lives in `src/electron/infrastructure/browser-window.ts`.
+
+## Session lifecycle
+
+Browser windows are stored in main-process memory by `sessionId`. Without a session ID, a global default session is used. Chat runtime usually binds browser state to the current chat ID.
+
+Each browser session owns a hidden `BrowserWindow`:
+
+- roughly 1280×880
+- `show: false` by default
+- can be shown for explicit user-driven web flows
+- removed from memory when closed
+- destroyed on Electron shutdown
+
+## URL safety
+
+Navigation only allows HTTP/HTTPS URLs and rejects:
+
+- localhost and local hostnames
+- private, loopback, link-local, or reserved IP ranges
+- cloud metadata addresses
+- public names that resolve to private targets
+
+Redirects are revalidated before loading.
+
+## Page reads
+
+`browser_page` reads:
+
+- page title
+- current URL
+- `document.body.innerText`
+- visible links
+
+Current limits include:
+
+- page text: up to 50,000 characters
+- links: up to 200
+- link text: up to 300 characters per link
+
+This is not a full DOM dump or accessibility tree.
+
+## Clicking and filling
+
+`browser_click` uses a CSS selector and calls `element.click()` on the first matched element. `browser_fill` supports `input`, `textarea`, and `select`, updates `.value`, and dispatches `input` and `change` events.
+
+Because some frameworks keep their own internal state, callers should re-read or re-check the page after filling.
+
+<Callout type="warning">
+  Always confirm the target site, account, fields, and resulting action before clicking or filling anything sensitive. Browser-tool guidance is not a replacement for careful human approval.
+</Callout>
+
+## Permission model
+
+Browser windows do not currently use dedicated Electron partitions per chat, so cookie and cache isolation is limited. They also inherit the broader main-process permission strategy instead of a dedicated browser-specific permission controller.
+
+## Status and errors
+
+Browser status flows back to the renderer through `tools:browserStateChanged`. Common failures include invalid URLs, DNS failures, missing browser windows, missing elements, and page-script evaluation errors.
+
+## Relationship to agent security
+
+Web content is treated as untrusted input. Browser tools cannot directly bypass file, command, or IPC restrictions; any privileged side effect still has to go through the corresponding guarded tool path.

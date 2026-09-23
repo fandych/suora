@@ -1,0 +1,102 @@
+import chatsComposerScreenshot from "../../../assets/docs/user/chats-composer.png"
+
+export const meta = { title: "Chats", description: "Create conversations, choose models or agents, and manage attachments and exports." }
+
+# Chats
+
+Chats is the main day-to-day conversation surface in SUORA. You can pick a model or agent, attach files, observe streaming replies and tool calls, and export the full transcript.
+
+## Start a session
+
+1. Open **Chats** and choose **New chat**.
+2. Pick a model above the composer. If you also want scoped instructions and resources, pick an agent.
+3. Enter a prompt, optionally add attachments, then send it.
+
+A new chat remains a draft until the first message or attachment is actually sent. After that, SUORA creates a persistent session. Titles usually come from the first user message; attachments-only sessions default to `Untitled chat`.
+
+Long conversations load recent history first. Use **Load earlier messages** to page older history into the transcript instead of fetching everything at once.
+
+<Callout>
+  Chats currently do not support manual rename. If you want a good title, make the first prompt short and descriptive.
+</Callout>
+
+## UI example
+
+<DocScreenshot
+  src={chatsComposerScreenshot}
+  alt="The SUORA chat composer with model and agent selectors"
+  caption="The composer brings together the message box, agent picker, model picker, export entry point, and send controls. It is the best place to validate a newly configured model or agent."
+/>
+
+## Model and agent selection
+
+The model menu groups enabled models by provider. If the current model becomes unavailable, the app falls back to the first available model and surfaces a **Model unavailable** warning.
+
+When an agent is selected, runtime prefers the agent’s own provider, model, and step budget. If the agent does not have a valid model, the current chat model is used instead. Agent instructions and authorized resources are applied together.
+
+## Streaming, stop, and tool activity
+
+Responses stream into the transcript. Tool calls show in-progress, success, failure, and stopped states, and you can expand their JSON input, output, or error data.
+
+While generation is active, **Stop** cancels the active model request. Already visible text and tool state are preserved when possible, and queued attachments for the current send are cleared.
+
+The UI does not currently offer a full “regenerate response” action, but individual tool activities can be retried.
+
+## Attachments
+
+The attachment button only appears when the selected model supports `vision`. Supported file categories are:
+
+- images: `image/*`
+- text: `text/*`
+- PDF: `application/pdf`
+- JSON: `application/json`
+
+| Item | Limit |
+| --- | --- |
+| Single file | 10 MiB |
+| Max files per send | 5 |
+| Total per send | 25 MiB |
+
+The desktop bridge re-validates file count, size, MIME type, and data URL shape before sending.
+
+<Callout type="warning">
+  Attachments become part of the chat payload and are sent to the active model service. Do not upload API keys, passwords, private keys, or any data that must stay on the device.
+</Callout>
+
+## Voice input
+
+The microphone button appends speech-recognition results to the current draft. The environment must provide Web Speech Recognition; if the button is unavailable, use keyboard input instead.
+
+## Export
+
+Chats can be exported as:
+
+- Markdown
+- PDF
+- DOCX
+
+Exports include user and assistant text, attachment summaries, and tool activity. Individual completed messages with text can also be exported on their own.
+
+## Storage and memory
+
+Chats, messages, attachment summaries, and tool activity are stored in the local SQLite workspace. Session-level runtime settings are persisted too, but unsent draft text is not.
+
+To limit context size, the model directly receives the most recent 16 messages. Older history is compressed into session memory, so precise details can be summarized away in very long sessions.
+
+## FAQ
+
+### Desktop runtime required
+
+Chat sending depends on the Electron IPC bridge. Use the desktop app instead of opening the renderer in a plain browser tab.
+
+### Restoring a deleted chat
+
+Use **Recently deleted** from the chat detail header to restore recent chat snapshots.
+
+### Step limit reached
+
+The agent exceeded its tool-call budget before it could finish. Narrow the task or raise the max-step setting with care.
+
+### Operation blocked / Tool execution failed
+
+Check resource scope, file/command policy, and integration authorization before retrying.

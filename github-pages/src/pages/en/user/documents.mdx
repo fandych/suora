@@ -1,0 +1,99 @@
+import documentsWorkspaceScreenshot from "../../../assets/docs/user/documents-workspace.png"
+
+export const meta = { title: "Documents", description: "Organize pages, assets, and local knowledge for agents and workflows." }
+
+# Documents
+
+Documents is SUORA’s local documentation workspace. Each document contains a title, summary, and a page or asset tree that can serve as editable notes, references, or knowledge sources for agents and workflows.
+
+## Create a document
+
+1. Open **Documents** and create a new document.
+2. Fill in the name and summary.
+3. Add files, folders, or uploaded assets from the left tree.
+4. Select a text page and begin editing. Changes are autosaved.
+
+New documents create a draft version and a default page tree. Autosave writes metadata, page content, tree structure, and settings back to the local snapshot.
+
+## UI example
+
+<DocScreenshot
+  src={documentsWorkspaceScreenshot}
+  alt="Document tree and editor panel in the SUORA Documents page"
+  caption="After a document is created, the left side manages the tree while the right side is used for rich-text or source editing. Put searchable conclusions near the top of pages when they are meant for agents or workflows."
+/>
+
+## Page and folder management
+
+- New text pages start with `# New Document`.
+- Plain files without an extension are normalized to `.md`.
+- Duplicate names receive suffixes such as `-2` or `-3`.
+- Deleting a folder recursively deletes its descendants.
+- The tree must keep at least one node.
+- Deleting the whole document removes all versions, but recent snapshots can be restored from **Recently deleted**.
+
+<Callout>
+  The current UI does not support drag-and-drop or move operations. Reorganize content by creating the target page, copying content, and then deleting the old page.
+</Callout>
+
+## Text editing
+
+Markdown, MDX, TXT, and extensionless pages can switch between **Rich** and **Source** mode. JSON, YAML, TypeScript, JavaScript, and HTML use Monaco in source mode.
+
+The rich-text editor supports:
+
+- headings, emphasis, inline code, quotes, rules, and code blocks
+- unordered, ordered, and task lists
+- tables with row and column insertion
+- KaTeX inline and block math
+- Mermaid charts
+- Markdown links, image syntax, and `[[Page Name]]` internal-link syntax
+
+## Editor limitations
+
+- No dedicated image-upload button in the toolbar
+- No dedicated link-insert, undo/redo, or table-delete-row controls
+- Round-tripping complex nested Markdown or raw HTML is not guaranteed
+- `[[Page Name]]` renders as an internal anchor, but does not yet switch the selected page automatically
+- No real-time collaboration, comments, revision review, or merge tools
+
+## Uploads and previews
+
+Text formats are stored as text. Unknown binary formats are stored as base64 `data:` URLs inside the document tree.
+
+- images, videos, and audio can be previewed
+- PDF and many other binary files show a non-editable warning
+- uploaded assets are first-class document-tree nodes, not a separate attachment store
+
+<Callout type="warning">
+  Documents do not currently enforce a dedicated per-file or total-size quota in the UI. Large binaries can slow saves and grow the local SQLite database quickly.
+</Callout>
+
+## Export and import
+
+- Single-file export downloads the raw content.
+- Folder export creates a JSON array, not a ZIP archive.
+- ZIP import is not currently supported.
+
+## Document search for agents and workflows
+
+Bound agents can search document titles and receive summaries plus truncated content. Workflow **Document Retrieval** and **Wiki retrieval** nodes perform case-insensitive containment matching against document titles and content.
+
+Practical guidance:
+
+- use clear, searchable titles
+- put key facts near the beginning of the page
+- split large topics into smaller, explicit pages
+- bind the smallest useful document set for sensitive agents
+
+## Versions and publishing
+
+The persistence layer tracks versions, graph edges, and settings, but the current UI does not expose version history, publishing, rollback, or public-site controls.
+
+## Local storage and safety
+
+All document content, versions, and assets live in the local SQLite workspace database under `<userData>/workspace/suora.sqlite`.
+
+<Callout type="warning">
+  Documents may be read by agents, workflows, and export flows. Do not store secrets or personal data that should never leave the device or should not be sent to models or external integrations.
+</Callout>

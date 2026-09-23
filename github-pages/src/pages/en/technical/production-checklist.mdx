@@ -1,0 +1,78 @@
+export const meta = { title: "Production Release Checklist", description: "Manual pre-release checks for the desktop app and the docs site." }
+
+# Production Release Checklist
+
+This page summarizes the manual checks worth doing before shipping a desktop release or publishing a docs-site update.
+
+## Architecture and code boundaries
+
+- renderer code does not access Node.js, Electron APIs, SQLite, or main-process repositories directly
+- new business logic lands in `src/electron/app/<module>/`
+- shared contracts stay in `src/types/`
+- preload handlers stay focused on validation and bridging
+- user-visible behavior changes are reflected in docs
+
+Recommended commands:
+
+```text
+npm run verify:architecture
+npm run type-check
+npm run lint
+```
+
+## Database and local data
+
+- schema changes are added with new migrations
+- migrations remain transactional
+- JSON-backed fields consider compatibility and defaulting
+- delete flows clean up versions, history, and references correctly
+- backups include SQLite sidecar files when needed
+
+## Main app validation
+
+At minimum:
+
+```text
+npm run type-check
+npm run lint
+npm run test:run
+npm run build
+```
+
+Consider adding coverage or smoke flows when the change affects runtime behavior, Electron bootstrap, or external services.
+
+## Docs-site validation
+
+For `github-pages/`:
+
+```text
+cd github-pages
+npm run type-check
+npm run lint
+npm run build
+```
+
+Also check:
+
+- routes are registered in `src/App.tsx`
+- nav items are registered in `src/lib/docs-navigation.ts`
+- localized `/zh/doc/...` and `/en/doc/...` paths resolve correctly
+- the build generates `dist/404.html`
+- screenshots and rich MDX elements render correctly
+
+## Security and credentials
+
+- no real secrets in docs, screenshots, or sample configs
+- TLS bypass remains off unless a controlled test requires it
+- examples use placeholder URLs and least-privilege demo values
+- new command/file/browser flows still respect guardrails
+
+## Packaging and published assets
+
+Confirm on the target platform:
+
+- packages build successfully
+- the app launches
+- database and preload initialize correctly
+- primary navigation and key runtime surfaces still work
+- updater manifests and release artifacts are complete

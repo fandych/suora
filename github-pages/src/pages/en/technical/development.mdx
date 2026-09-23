@@ -1,0 +1,52 @@
+export const meta = { title: "Development & Delivery", description: "Quality checks, local builds, docs maintenance, and release-oriented developer workflow." }
+
+# Development & Delivery
+
+After modifying the app, run the relevant checks locally before sharing the change.
+
+```bash
+npm run lint
+npm run type-check
+npm run test:run
+npm run build
+npm run verify:architecture
+```
+
+## Useful commands
+
+- `npm run dev`: start the Electron development environment
+- `npm run test`: run Vitest in watch mode
+- `npm run test:coverage`: generate coverage output
+- `npm run build`: build main, preload, and renderer
+- `npm run verify:architecture`: validate current architecture and dependency-boundary rules
+- `npm run package`: package the current platform
+- `npm run package:win`: build Windows installers
+
+## Helpful environment variables
+
+- `SUORA_REMOTE_DEBUG_PORT=<port>`: expose a CDP port for Electron
+- `SUORA_USER_DATA_PATH=<absolute-path>`: isolate Electron userData for smoke tests and demos
+
+## Working on the docs site
+
+The documentation site lives in `github-pages/` and uses Vite + React + MDX.
+
+```bash
+cd github-pages
+npm ci
+npm run dev
+npm run build
+```
+
+When you add or move pages, update both:
+
+- `src/lib/docs-navigation.ts`
+- `src/App.tsx`
+
+If the change affects user-visible behavior, routes, config, runtime constraints, or safety boundaries, update the matching user and technical docs in the same change.
+
+<Callout>
+  The docs site uses BrowserRouter. The build copies `dist/index.html` to `dist/404.html` so GitHub Pages can recover deep links.
+</Callout>
+
+For bilingual UI validation in the desktop app, Agent Browser Electron smoke flows are a practical final check. If Chrome is not installed locally, pass an Edge/Chrome executable path explicitly or install Agent Browser’s bundled browser first.

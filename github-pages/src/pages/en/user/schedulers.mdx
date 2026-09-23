@@ -1,0 +1,71 @@
+import schedulersEditorScreenshot from "../../../assets/docs/user/schedulers-editor.png"
+
+export const meta = { title: "Schedulers", description: "Maintain workflow and agent scheduling configs while understanding the current runtime boundary." }
+
+# Schedulers
+
+Schedulers store cron, timezone, input, and retry policy settings for workflows or agents. In the current product, this is primarily a **local scheduling configuration editor**, not a full autonomous scheduler runtime.
+
+## Create a scheduler
+
+1. Open **Schedulers** and choose **New scheduler**.
+2. Fill in the name, description, cron expression, timezone, and retry policy.
+3. Bind the scheduler to a workflow or agent.
+4. Fill in workflow input values or an agent invocation prompt.
+5. Save it as enabled or paused.
+
+Default values include `New scheduler`, `0 9 * * *`, `Asia/Shanghai`, workflow target type, `skip` missed-run policy, retry limit `0`, retry backoff `300`, and input `{}`.
+
+## UI example
+
+<DocScreenshot
+  src={schedulersEditorScreenshot}
+  alt="Scheduler editor in SUORA"
+  caption="The scheduler detail page places timing and retry settings on the left and target binding on the right. Treat it as a planning and configuration surface unless you have separately validated the runtime behavior."
+/>
+
+## Key fields
+
+### Cron and timezone
+
+Both are currently treated as text fields. Save validation only requires them to be non-empty. The UI does not fully validate cron syntax or IANA timezone names.
+
+### Target type
+
+Schedulers can target:
+
+- a **workflow**
+- an **agent**
+
+The UI will auto-select the first available target of that type, but does not guarantee that the saved target still exists later.
+
+### Workflow input and agent prompt
+
+Workflow targets can expose input schema-derived fields. Agent targets store an invocation prompt in a `{ "prompt": "..." }` style payload.
+
+### Missed runs and retries
+
+The UI stores missed-run policy, retry limit, and retry backoff, but current runtime support is limited and should not be treated as a production-grade queueing system.
+
+<Callout type="warning">
+  Enabled is only persisted state. It does not, by itself, guarantee a production-ready background scheduler with durable retries, queueing, or recovery semantics.
+</Callout>
+
+## What the current runtime does not guarantee
+
+Do not assume the scheduler will:
+
+- parse cron at execution time exactly as a full cron service would
+- reliably trigger long-running automations in production
+- guarantee retry durability across crashes or restarts
+- provide multi-node coordination, queue persistence, or rich alerting
+
+## Recommended usage
+
+1. Validate the workflow manually, or validate the agent inside Chats.
+2. Use Scheduler as the canonical record of desired timing, input, and retry intent.
+3. Keep critical production automations on an external scheduler until the runtime is explicitly validated for that use case.
+
+## Storage and safety
+
+Scheduler config and run history are stored in local SQLite tables. Do not put secrets directly into scheduler input JSON because there is no scheduler-specific secret storage or redaction layer.

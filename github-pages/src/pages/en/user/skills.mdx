@@ -1,0 +1,108 @@
+import skillsWorkspaceScreenshot from "../../../assets/docs/user/skills-workspace.png"
+
+export const meta = { title: "Skills", description: "Create, organize, and reuse local skill bundles for agents." }
+
+# Skills
+
+Skills are reusable local task bundles. A skill can contain `SKILL.md`, references, assets, and helper scripts so you can preserve prompts, operating instructions, project conventions, and domain knowledge for later agent use.
+
+## Create a skill
+
+1. Open **Skills** and create a local skill.
+2. SUORA creates a draft version and the default file structure.
+3. Edit `SKILL.md` with the name, description, triggers, and instructions.
+4. Put reference material in `references/`, assets in `assets/`, and helper code in `scripts/`.
+5. Bind the skill to an agent and validate retrieval behavior in **Chats**.
+
+Default structure:
+
+```text
+SKILL.md
+references/README.md
+assets/.gitkeep
+scripts/main.ts
+other/notes.md
+```
+
+## UI example
+
+<DocScreenshot
+  src={skillsWorkspaceScreenshot}
+  alt="Skill tree and editor in the SUORA Skills page"
+  caption="The skill editor keeps `SKILL.md`, `scripts/`, `references/`, and `assets/` visible as the standard top-level structure. Most workflows begin by refining `SKILL.md` before adding references or helper scripts."
+/>
+
+## Writing `SKILL.md`
+
+`SKILL.md` is the root file of the skill. The top frontmatter is used to populate the visible name and summary.
+
+```md
+---
+name: "release-notes"
+description: "Draft release notes in Chinese from a changelog"
+---
+```
+
+The current parser reliably handles top-level single-line `name:` and `description:` fields. Avoid advanced YAML features if you need the list view to stay correct.
+
+## File structure and editing rules
+
+- `SKILL.md` and the standard directories are fixed top-level entries
+- new files and subfolders can be added under the standard directories
+- duplicate names are suffixed automatically
+- common text and code formats are editable
+- images and unknown binaries are preview-only
+- deleting a folder removes its descendants
+- deleting a skill permanently removes all versions
+
+## Import, upload, and export
+
+The current UI does not import complete zipped skill bundles. Create a skill first, then upload files into the correct directory.
+
+- uploading files does not preserve the original local folder tree recursively
+- exporting a directory downloads a JSON array, not a ZIP archive
+- exporting a single file preserves the original text or data URL content
+
+## Using skills in agents
+
+Agents can bind local skills. During chats:
+
+- if the agent has bound skills, search is limited to that set
+- if the agent has no bound skills, current behavior can search all local skills
+- results return title, summary, version label, and file paths
+
+Skill files are not fully injected into the model context automatically. Instructions should tell the agent when to search for a skill and when to ask for more context.
+
+<Callout type="warning">
+  An empty Skills binding is not a deny-all rule. If you need a strict scope, explicitly bind the smallest allowed set and verify behavior in real chats.
+</Callout>
+
+## External skill discovery
+
+The sidebar can also discover first-level skill folders under:
+
+```text
+~/.codex/skills/<skill-directory>
+~/.claude/skills/<skill-directory>
+~/.agents/skills/<skill-directory>
+```
+
+These entries are grouped by source, but they are discovery-only in the current UI:
+
+- the app does not parse their `SKILL.md` content
+- they cannot be opened or edited from this screen
+- they are not automatically available to local agent search
+
+## Versions and publishing
+
+The data model supports draft and published versions, but the Skills page does not currently expose a publish button, version picker, or version history UI.
+
+## Security notes
+
+- front-end path checks reduce traversal mistakes, but renderer input must still be treated as untrusted
+- script `executable` flags are metadata only and do not auto-run
+- skill content is stored in local SQLite, so avoid storing secrets in `SKILL.md`, references, or scripts
+
+<Callout type="warning">
+  Review skills from untrusted sources carefully, especially when they suggest reading files, executing commands, or sending network requests.
+</Callout>

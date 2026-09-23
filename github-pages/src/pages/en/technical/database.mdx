@@ -1,0 +1,112 @@
+export const meta = { title: "SQLite Data Layer", description: "Database lifecycle, migrations, domain repositories, and local data safety." }
+
+# SQLite Data Layer
+
+SUORA manages SQLite from the Electron main process. The database is the main persistence boundary of the local workspace, and renderer code reaches it through main-process services and repositories instead of direct SQL.
+
+## Database path and lifecycle
+
+Database path:
+
+```text
+<Electron userData>/workspace/suora.sqlite
+```
+
+Startup sequence:
+
+1. configure storage paths
+2. create the workspace directory
+3. open the database singleton
+4. run pending migrations
+5. register IPC and create the window
+
+The implementation uses Node `node:sqlite` `DatabaseSync`.
+
+## Migration rules
+
+Migrations live under `src/drizzle/migrations/`, and the runtime logic lives in `src/electron/infrastructure/db-core.ts`.
+
+Guidelines:
+
+- never edit published migrations in place
+- add new schema changes with a larger migration ID
+- avoid reusing IDs
+- prefer idempotent SQL where possible
+- validate changes with type-check, tests, and build
+
+## Main schema domains
+
+| Domain | Tables |
+| --- | --- |
+| Chats | `chats`, `chat_messages` |
+| Workflows | `workflows`, `workflow_versions`, `workflow_invocations` |
+| Agents | `agents`, `agent_versions` |
+| Skills | `skills`, `skill_versions` |
+| Models | `providers` |
+| Documents | `documents`, `document_versions` |
+| Integrations | `integrations`, `integration_versions`, `integration_executions` |
+| Channels | `channels` |
+| Schedulers | `schedulers`, `scheduler_runs` |
+| Metadata | `app_meta`, `__app_migrations` |
+
+## Renderer query path
+
+Recommended access path:
+
+```text
+React page / store
+  → src/services/<module>-service.ts
+  → window.app.<domain>.<method>
+  → electron/preload/<domain>/*-ipc.ts
+  → electron/app/<domain>/service.ts
+  → repository
+  → node:sqlite
+```
+
+Prefer adding a query to the matching domain repository and IPC surface, rather than creating an unrestricted SQL entry point.
+
+## JSON fields and versioning
+
+Complex values are largely stored as JSON text:
+
+- workflow definitions and traces
+- agent config
+- skill files
+- provider models
+- document structure and settings
+- integration config and executions
+- channel config and runtime state
+- scheduler payloads
+- chat message parts
+
+Repositories and persistence helpers are responsible for compatibility and defaulting.
+
+## Seed and default data
+
+Some domains populate system defaults during initialization or first access, such as built-in agents or default provider metadata. A brand-new database should not be assumed to stay empty forever.
+
+## Delete and consistency checks
+
+Version rows and history often require explicit main-process cascade handling instead of relying entirely on SQLite cascade behavior. When implementing delete flows, confirm version cleanup, history cleanup, and any cross-resource references.
+
+## Backup, reset, and privacy
+
+The database can contain:
+
+- provider API keys
+- SMTP and channel credentials
+- chat text and tool results
+- documents, skills, and workflow content
+- integration inputs, outputs, and execution history
+
+Back up only after the app is closed, and include WAL/SHM files when required. Redact or revoke secrets before sharing or migrating a database.
+
+## Data-layer checklist
+
+1. schema changes go through new migrations
+2. migrations remain transactional
+3. JSON structures stay version-aware
+4. repositories handle old data and parse failures
+5. delete flows clean up versions and history explicitly
+6. main process revalidates renderer payloads
+7. secrets never leak through logs or traces

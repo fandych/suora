@@ -1,0 +1,104 @@
+import workflowsEditorScreenshot from "../../../assets/docs/user/workflows-editor.png"
+
+export const meta = { title: "Workflows", description: "Design, validate, publish, and run traceable workflows." }
+
+# Workflows
+
+Workflows let you connect AI, document retrieval, conditions, variables, HTTP calls, integrations, scripts, and email into a traceable automation graph. Every run stores inputs, outputs, and node trace data for debugging.
+
+## Create the first workflow
+
+1. Open **Workflows** and create a new workflow.
+2. The draft starts as `New workflow` with a `Start` node and `v1.0` draft version.
+3. Add nodes from the library and connect them.
+4. Configure node inputs, bindings, conditions, templates, and retry settings.
+5. Use **Try run** first, then save and publish. Use **Run release** for the published version.
+
+Draft versions remain editable. Published versions are read-only, and a new draft is created when you continue editing after a release.
+
+## UI example
+
+<DocScreenshot
+  src={workflowsEditorScreenshot}
+  alt="Workflow editor with canvas, node library, and property panel in SUORA"
+  caption="The workflow workbench is built around a central graph canvas, surrounding panels, and top-level save / try-run / history actions. Start with the smallest viable graph before adding AI or external side effects."
+/>
+
+## Node types
+
+Current node categories include:
+
+- Start / End
+- Condition / If / Else
+- Fork / Join / Parallel / Loop / Serial
+- Set variable / Template
+- Document Retrieval / Wiki retrieval
+- Agent / AI response
+- HTTP / Webhook / Toolset
+- Script / Send email (SMTP)
+
+## Graph validation
+
+A runnable workflow must satisfy baseline structure rules, such as:
+
+- exactly one enabled Start node
+- at least one enabled End node
+- non-Start nodes have upstream input
+- non-End nodes have downstream paths
+- enabled nodes are reachable from Start
+- non-Loop cycles are rejected
+
+Node config also needs valid required fields. JSON-backed settings must parse successfully.
+
+## Expressions and context
+
+Runtime expressions can use:
+
+| Name | Purpose |
+| --- | --- |
+| `$input` / `input` | workflow input JSON |
+| `$vars` / `vars` | assigned variables and output aliases |
+| `$steps` / `steps` | outputs keyed by node ID or label |
+| `$current` / `current` | current node output |
+
+Interpolation supports patterns like `{{ expression }}`, `${expression}`, and `$path`.
+
+## Try run vs. Run release
+
+**Try run** is intended for safe validation and skips side-effect nodes such as:
+
+- Agent / AI response
+- HTTP / Webhook / Toolset
+- Script
+- Send email
+
+**Run release** executes the published version and performs real side effects.
+
+<Callout type="warning">
+  A successful Try run does not prove that production execution is safe. Release runs can trigger external calls, writes, webhooks, scripts, and email.
+</Callout>
+
+## Versions, history, and limits
+
+- drafts update in place
+- publish creates a release version
+- release versions are read-only
+- deleting a workflow also removes versions and invocation history
+
+Important runtime limits include:
+
+- max **200 nodes**
+- max **400 edges**
+- `maxSteps`: **1–1000**
+- `maxDurationMs`: **1 second to 1 hour**
+
+## Notes and current limitations
+
+- loop nodes do not yet execute a fully isolated downstream subgraph per item
+- parallel/fork/join semantics are partly structural and partly trace-oriented
+- imported or externally saved definitions can still exceed some editor-only conveniences
+- current docs and UI should always use `workflow` / `workflows`, not `pipeline`
+
+## Storage and safety
+
+Workflow definitions, versions, and invocation traces are stored in local SQLite. Trace redaction helps with common secret-like field names, but raw node inputs and outputs can still carry sensitive values. Avoid putting real secrets into templates, test payloads, or traces whenever possible.

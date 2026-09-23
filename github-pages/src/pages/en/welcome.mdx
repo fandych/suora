@@ -1,0 +1,47 @@
+export const meta = {
+  title: "SUORA Docs",
+  description: "User and technical documentation for the local-first AI workbench.",
+}
+
+# SUORA Docs
+
+SUORA brings models, chats, agents, documents, skills, workflows, integrations, and external channels into one local-first desktop workspace.
+
+## Start here
+
+<div className="mt-8 grid gap-4 sm:grid-cols-2">
+  <DocLink className="rounded-xl border bg-card p-5 transition-colors hover:bg-muted" to="/en/doc/getting-started/installation">
+    <p className="font-semibold text-foreground">Installation & Startup</p>
+    <p className="mt-2 text-sm leading-6 text-muted-foreground">Prepare the runtime, configure your first model, and start chatting.</p>
+  </DocLink>
+  <DocLink className="rounded-xl border bg-card p-5 transition-colors hover:bg-muted" to="/en/doc/technical/architecture">
+    <p className="font-semibold text-foreground">Architecture</p>
+    <p className="mt-2 text-sm leading-6 text-muted-foreground">Understand how React, Electron IPC, SQLite, and desktop services fit together.</p>
+  </DocLink>
+</div>
+
+## Documentation scope
+
+- **User docs** focus on product usage, including models, agents, workflows, integrations, and channels.
+- **Technical docs** focus on implementation structure, runtime boundaries, quality checks, and release workflows.
+
+## Suggested reading path
+
+If this is your first time using SUORA, read in this order:
+
+1. **Installation & Startup**: get the environment ready and configure your first model.
+2. **Chats / Models / Agents**: learn the core conversation, model selection, and agent workflow.
+3. **Documents / Skills / Integrations**: add knowledge sources, reusable guidance, and external capabilities.
+4. **Workflows / Schedulers / Channels**: move on to automation, scheduled execution, and external message entry points.
+
+If you are maintaining the app or planning implementation changes, start with:
+
+- **Architecture**
+- **IPC**
+- **SQLite Data Layer**
+- **Testing & Release**
+- **Security Guardrails**
+
+<Callout type="warning">
+  API keys, channel credentials, and SMTP passwords are sensitive data. Only enable agent tools, workflow scripts, or public webhooks in trusted workspaces and on trusted devices.
+</Callout>

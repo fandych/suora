@@ -1,125 +1,153 @@
-export const meta = { title: "IPC 通信", description: "了解 Renderer、Preload 与 Electron 主进程之间的 IPC 调用边界。" }
+export const meta = { title: "IPC 通信", description: "Renderer、window.app、window.electron 与主进程 IPC 的当前边界。" }
 
 # IPC 通信
 
-SUORA 使用 Electron IPC 连接 React Renderer 与主进程服务。Renderer 不直接访问 Node.js、文件系统、网络或 SQLite；业务请求通过 preload 暴露的领域 API 转发到主进程。
+SUORA 使用 Electron IPC 连接 React Renderer 与主进程。Renderer 不直接访问 Node.js、文件系统、网络或 SQLite；它通过 preload 暴露的受控 bridge 请求主进程能力。
 
 ## 调用链
 
+典型调用链如下：
+
 ```text
-React page
-  → repository / service
-  → window.project.<domain>.<method>
+React page / store
+  → src/services/<module>-service.ts
+  → window.app.<domain>.<method>
   → ipcRenderer.invoke(channel, payload)
   → ipcMain.handle(channel, handler)
-  → database or desktop service
+  → electron/app/<domain>/service.ts
+  → repository / runtime / infrastructure
   → serialized result
 ```
 
-Renderer 页面通常不直接调用 `ipcRenderer`。推荐的调用层次是：
+页面通常不直接调用 `ipcRenderer`。更推荐的层次是：
 
-1. 页面组件只处理交互、加载和展示。
-2. Repository 负责调用 `appIPC` 或 `window.project`、转换领域数据和处理浏览器降级。
-3. Preload 暴露稳定、按领域组织的 API。
-4. Electron IPC handler 执行特权操作并返回可序列化结果。
+1. 页面只处理交互、加载与展示
+2. `src/services/` 封装 bridge 调用、事件订阅与 renderer 侧数据转换
+3. preload 提供最小化、按业务域组织的方法
+4. 主进程 handler 负责权限、边界与输入校验
 
-Renderer IPC 客户端位于 `src/lib/ipc/`：`src/lib/ipc.ts` 负责组合各领域客户端，`ipc/domains/` 存放按业务域划分的 IPC client，`ipc/bridge.ts` 只负责 bridge 访问，JSON 兼容解析统一位于 `src/lib/serialization/json.ts`。页面和 repository 不应直接引用 `domains/` 内部实现，统一从 `@/lib/ipc` 使用 `appIPC`。
+## `window.app` 与 `window.electron`
 
-## Preload API 分组
+当前 preload 暴露两类入口：
 
-`electron/preload.ts` 暴露的主要领域包括：
+### `window.app`
 
-| API | 责任 |
-| --- | --- |
-| `system` / `workspace` | 系统诊断、工作区路径和代理。 |
-| `chats` | 会话、消息和会话设置。 |
-| `documents` | 文档列表、读取、保存和删除。 |
-| `models` | Provider、模型保存和远程模型发现。 |
-| `skills` / `agents` | Skill 包和 Agent 配置。 |
-| `integrations` / `workflows` | 集成、workflow 定义与执行记录。 |
-| `channels` | 渠道配置、runtime、Webhook、健康检查和消息发送。 |
-| `schedulers` | 调度配置 CRUD、启用状态切换、运行历史读取；当前没有实际调度 runtime。 |
-| `preferences` / `updater` / `mail` | 偏好、更新和邮件服务。 |
-| `tools` | 文件、命令、浏览器和文件保存工具。 |
+这是日常业务调用的主入口，按业务域提供方法，例如：
 
-领域 API 使用 `unknown` payload 的地方，应在主进程 handler 中重新验证，而不是信任 TypeScript 类型或 Renderer 表单。
+- `system`
+- `workspace`
+- `chats`
+- `documents`
+- `models`
+- `skills`
+- `agents`
+- `integrations`
+- `workflows`
+- `channels`
+- `schedulers`
+- `preferences`
+- `updater`
+- `mail`
+- `tools`
+
+Renderer 中的大多数业务代码都应先经 `src/services/` 调用 `window.app`。
+
+### `window.electron`
+
+这是一个白名单化的低层入口，只允许少数显式通道：
+
+- invoke：`ai:fetch:start`、`ai:fetch:abort`、`integration:execute`、`channel:wechatPersonalQrPreview`
+- event：`ai:fetch:event`、`channel:message`、`workflow:run:event`、`tools:browserStateChanged`
+
+它不是任意 IPC 代理。除非能力天然是流式事件或受控低层调用，否则优先使用 `window.app`。
 
 ## IPC 注册
 
-主进程启动时调用 `setupIpc()`，按领域注册 handler：
+IPC 注册入口位于 [src/electron/preload/index.ts](C:/Users/fandych/Documents/Codespace/suora/src/electron/preload/index.ts)。主进程启动时调用 `setupIpc()`，按业务域注册 handler：
 
-- `electron/preload/system/`：系统、工作区、数据库、AI、邮件和更新能力。
-- `electron/preload/chats/`、`documents/`、`channels/`：Chats、Documents、Channels 等内容数据。
-- `electron/preload/models/`、`skills/`、`agents/`、`integrations/`：目录和配置数据。
-- `electron/preload/workflows/`、`schedulers/`：Workflows、Schedulers 和调用记录。
-- `electron/preload/tools/`：文件、命令、浏览器和保存文件工具。
+- `electron/preload/system/`
+- `electron/preload/chats/`
+- `electron/preload/documents/`
+- `electron/preload/models/`
+- `electron/preload/skills/`
+- `electron/preload/agents/`
+- `electron/preload/integrations/`
+- `electron/preload/workflows/`
+- `electron/preload/channels/`
+- `electron/preload/schedulers/`
+- `electron/preload/preferences/`
+- `electron/preload/tools/`
 
-新增 IPC 功能时，应同时修改 handler、preload API、Electron 类型声明和 Renderer repository。不要只新增一个裸 `ipcRenderer.invoke` 调用。
+新增 IPC 能力时，应同时修改：
 
-## 通用通道白名单
+1. 对应领域的 `*-ipc.ts`
+2. `preload.ts` 中暴露的 bridge 方法
+3. 相关 `src/types/` 契约
+4. renderer 侧 `src/services/` 封装
 
-Preload 还提供 `window.electron.invoke/on/off`，但它不是任意 IPC 代理。调用通道必须出现在白名单中：
+不要只在页面里新增一个裸 `ipcRenderer.invoke(...)` 调用。
 
-- Invoke：AI fetch、数据库查询、Integration 执行和个人微信二维码预览。
-- Event：AI 流式事件、渠道消息和浏览器状态变化。
+## 输入与输出约束
 
-其他业务功能应使用 `window.project` 的明确领域方法。Renderer 内部优先通过 `appIPC` 访问 bridge。白名单可以减少网页或被注入脚本直接访问任意主进程 handler 的风险。
+IPC handler 接收到的所有 payload 都应视为不可信输入。典型约束包括：
 
-## 数据库 IPC
+- ID、路径、URL、邮箱、JSON payload 的运行时校验
+- 文件大小、消息大小、分页数量和超时边界
+- 资源可见性与权限范围检查
+- 仅返回可序列化数据，不返回主进程对象引用
 
-数据库查询通过 `db:execute` 进入主进程数据库核心。参数会被规范化为 SQLite 可接受的类型；对象和数组会序列化为 JSON，`undefined` 转为 `null`。
-
-数据库启动时：
-
-- 使用 Electron `userData/workspace/suora.sqlite`。
-- 开启 WAL 和 SQLite foreign keys。
-- 先创建 migration 表，再按顺序执行未应用 migration。
-- 每个 migration 使用事务；失败时回滚。
-
-业务模块应优先使用 repository，不应从页面直接拼接 SQL。通用数据库 IPC 需要特别谨慎，因为它拥有比普通领域 API 更宽的查询能力。
+TypeScript 类型只解决编译期契约，不能替代主进程运行时验证。
 
 ## 事件与流式数据
 
-IPC 不只返回一次性 Promise 结果。AI 请求和渠道 runtime 使用事件：
+部分能力通过事件而不是一次性 Promise 返回：
 
-- AI fetch 事件携带文本增量、工具调用、结果、完成和错误状态。
-- `channel:message` 将入站消息从主进程渠道服务发送到 Renderer。
-- 浏览器状态事件同步隐藏浏览器 session 的状态变化。
+- AI 流式生成与工具事件：`ai:fetch:event`
+- workflow 后台运行事件：`workflow:run:event`
+- 渠道入站消息：`channel:message`
+- 隐藏浏览器状态更新：`tools:browserStateChanged`
 
-订阅事件的组件必须在卸载时调用 `off`，避免重复监听、重复写入消息或内存泄漏。流式状态应由 service/store 聚合后再交给页面渲染。
+订阅事件的 renderer 代码必须在组件卸载或作用域结束时取消订阅，避免重复监听和内存泄漏。
+
+## 数据库边界
+
+当前 Renderer 不提供通用 `db:execute` SQL bridge，也不应从页面直接拼接 SQL。数据库访问应通过主进程领域 service 和 repository 完成，例如：
+
+- `window.app.chats.*`
+- `window.app.documents.*`
+- `window.app.models.*`
+- `window.app.workflows.*`
+
+如果某个功能需要新查询，优先在对应业务域的 main-process service/repository 中新增能力，再通过 preload 暴露受控接口。
 
 ## 安全边界
 
-- BrowserWindow 开启 `contextIsolation`，关闭 `nodeIntegration`。
-- Preload 只暴露明确的方法，不暴露完整 `ipcRenderer`。
-- 主进程负责重新校验路径、命令、URL、凭据和资源权限。
-- 文件读写受工作区边界和大小限制。
-- 命令执行受 allowlist，交互式 shell 会被阻止。
-- 浏览器 URL 会阻止 localhost、私有 IP 和云 metadata 地址。
-- Agent instructions、网页内容和 Skill 文件不能改变 IPC 权限。
+- BrowserWindow 使用 `contextIsolation: true`
+- 主窗口关闭 `nodeIntegration`
+- preload 不暴露完整 `ipcRenderer`
+- 主进程重新校验路径、命令、URL、凭据与资源权限
+- Renderer 不能借由 prompt、网页内容或 Skill 内容提升 IPC 权限
 
-IPC 隔离不等于多用户权限系统。SUORA 当前是本地桌面应用，数据库和 API Key 仍受当前操作系统用户权限保护。
+IPC 隔离并不等于多租户权限系统；当前仍是本地桌面应用，最终安全性依赖当前操作系统用户与本地数据保护。
 
-## 错误处理约定
-
-IPC handler 应返回可区分的成功/失败结果，或抛出带有用户可理解信息的错误。Renderer repository 负责将错误转换为页面状态、toast 或可重试错误。
+## 错误处理建议
 
 调用方应区分：
 
-- 参数校验失败：修正配置后重试。
-- 权限/安全策略拒绝：检查 Agent、Preferences 或 URL 范围。
-- 外部网络失败：检查 Provider、代理、TLS 和服务状态。
-- 持久化失败：检查数据库迁移、磁盘和工作区权限。
+- **参数校验失败**：修正表单、payload 或资源选择后重试
+- **权限/策略拒绝**：检查 Agent 绑定、Preferences 或 URL 范围
+- **外部依赖失败**：检查 Provider、网络、代理、TLS 与目标服务状态
+- **持久化失败**：检查 migration、磁盘可写性和工作区权限
 
-不要在错误消息、debug log 或 IPC payload 中输出 API Key、密码、Cookie 或完整授权 header。
+错误信息应可被 UI 呈现，但不要包含 API Key、密码、Cookie、完整授权 header 或其他敏感字段。
 
 ## 修改 IPC 的检查清单
 
-1. 定义 payload 和返回值的运行时校验。
-2. 将 handler 放在正确的 `electron/preload/<module>/` 领域文件。
-3. 在 `preload.ts` 暴露最小化的方法。
-4. 同步 `electron/types/` 和 Renderer 类型。
-5. 在 repository 中集中处理调用和降级。
-6. 对拒绝路径、无权限资源、超时和外部错误添加测试。
-7. 验证 context isolation 下的实际桌面运行。
-8. 运行 `npm run type-check`、`npm run lint`、`npm run test:run` 和 `npm run build`。
+1. 确定能力属于哪个业务域
+2. 在主进程 handler 中加入运行时校验
+3. 在 `preload.ts` 暴露最小化 bridge 方法
+4. 将跨进程契约写入 `src/types/`
+5. 在 `src/services/` 中集中封装 renderer 调用
+6. 覆盖拒绝路径、无权限资源、超时和外部失败
+7. 在实际 Electron 运行时验证 bridge 是否可用
+8. 运行 `npm run type-check`、`npm run lint`、`npm run test:run`、`npm run build`

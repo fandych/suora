@@ -1,130 +1,163 @@
-export const meta = { title: "应用架构", description: "React、Electron IPC、本地 SQLite 与桌面服务的边界和生命周期。" }
+export const meta = { title: "应用架构", description: "Renderer、preload、主进程业务域与本地基础设施的当前边界。" }
 
 # 应用架构
 
-SUORA 采用 Electron 主进程和 React 渲染进程分离的桌面架构。渲染器负责页面和交互，preload 负责暴露窄化 API，主进程负责数据库、网络、文件、命令和渠道等特权操作。
+SUORA 是一个 Electron 桌面端 AI 工作台。当前架构以 **Renderer / Preload / Main process** 的进程边界为核心：React 渲染进程负责界面与交互，preload 负责暴露受控 bridge，Electron 主进程负责数据库、网络、文件、命令、浏览器工具和各类运行时。
 
-Electron 主进程正在进行模块化迁移。迁移目标为 `Renderer → preload.ts → preload/ → app/<module>/ → infrastructure/`：IPC 只处理进程边界，模块 Service 编排业务，模块 Repository 处理持久化，Provider 和 Execution 分别隔离平台差异与执行引擎。迁移期间保持所有 IPC channel、`window.electron` 和 `window.app` bridge API 兼容。
+## 当前目录结构
 
 ```text
-React Renderer → Preload Bridge → Electron IPC → Desktop Services
-  │                                  ├── Local SQLite
-  │                                  └── AI / tools / channels / integrations
-  └── repositories & domain          └── LLM / HTTP / SMTP / external channels
+src/
+├── App.tsx
+├── main.tsx
+├── components/
+│   └── ui/
+├── pages/
+├── services/
+├── stores/
+├── hooks/
+├── lib/
+├── types/
+├── drizzle/
+└── electron/
+    ├── main.ts
+    ├── preload.ts
+    ├── app/
+    ├── infrastructure/
+    └── preload/
 ```
 
-## 分层职责
+与旧版结构相比，当前仓库**不再使用** `src/views/`、`src/application/`、`src/domain/`、`src/data/domain/`、`src/data/repositories/` 或 `electron/application/` 这类层。新增代码应落在现有目录中，而不是继续扩展这些旧抽象。
 
-- `src/`：React 页面、领域模型、repositories、前端服务与渲染器状态。页面和源码模块通过 `@/` 别名引用本地模块。
-- `src/views/`：路由页面和页面级 UI contract；不向 service 层提供共享领域类型。
-- `src/data/repositories/`：不属于单一业务模块的共享数据库/IPC 访问、缓存/降级及持久化适配；模块专属读写代码位于对应的 `src/domain/<module>/<module>-repository.ts`。
-- `src/lib/security/`：与运行环境相关的安全策略，例如命令执行确认和环境变量构造。
-- `src/lib/browser/`：浏览器剪贴板和文件导出能力；Electron 保存文件通过 IPC facade 访问主进程。
-- `src/lib/browser/`：浏览器剪贴板、资源预览和文件导出能力；Electron 保存文件通过 IPC facade 访问主进程。
-- `src/services/data-events.ts`、`src/services/toast-service.ts`：Renderer 内数据刷新与 toast 通知服务。
-- `src/pages/integrations/`：HTTP Integration 配置、cURL/OpenAPI 导入和 MCP 工具的编辑器辅助。
-- `electron/application/skill/skill-file-service.ts` 和 `electron/application/document/document-file-service.ts`：Skill/Document 文件路径验证、树和单文件查询；Renderer 通过 `src/services` 请求受控 IPC API。
-- `src/data/mappers/`：数据库/IPC 原始行到领域模型的映射，例如 `channel-mappers.ts`。
-- `src/lib/serialization/json.ts`：JSON 兼容解析和默认值回退。
-- **Renderer 分层**：页面专属 helper 位于 `src/pages/<module>/`；`src/services/` 负责无 UI 状态的 IPC facade、bridge adapter 和 renderer 应用服务；`src/stores/` 集中存放 Zustand Store；`src/views/` 和 `src/views/*/components/` 负责 View 与页面组合。Renderer 不创建 `src/domain/`。
-- **Workflow 分层**：所有 workflow 执行均在 `electron/application/workflow/`。该目录负责节点执行、运行上下文、表达式、分支、预算、取消和脱敏 trace；Renderer 仅编辑 definition、通过 `workflows:run:start` 发起后台运行，并订阅 `workflow:run:event` 显示进度。跨 preload 的 workflow DTO 与事件类型放在 `src/types/workflow.d.ts`，不得新增 `shared/` 目录。
-- **Channel 分层**：`channel-repository.ts` 负责持久化 facade，`src/services/channels/` 按 runtime、diagnostics、binding、messaging 拆分用例；Channel mapper 只负责 Raw row 到 Model 的转换。
-- **Ports/Adapters**：Workflow、Chat、Integration、Skill 和 Document 的执行、验证及持久化适配都在 Electron application/services 中。Renderer 只经 preload/IPC 发出命令、接收 DTO 和展示状态；跨进程契约统一位于 `src/types/`。
-- **Main process 数据分层**：`electron/infrastructure/db-core.ts` 负责数据库生命周期和查询执行，`drizzle/migrations/` 负责运行时迁移，`drizzle/system-repository.ts` 负责共享 app metadata；业务 Repository 位于对应的 `electron/app/<module>/`。
-- `src/services/chat-service.ts`：Renderer Chat IPC facade；`src/services/chat-runtime-listener.ts`：Chat runtime 事件订阅 adapter。
-- `src/lib/chat/`：Renderer 的 Chat 展示、错误文案与流式 response-parts 转换 helper；跨 IPC 的 Chat 类型位于 `src/types/`。
-- `electron/app/chats/`：Chat 命令处理、Agent/ToolLoop 执行、工具重试和主进程持久化编排。
-- `electron/main.ts`：应用生命周期入口，准备工作区、迁移数据库、注册 IPC、配置更新器并创建窗口。
-- `electron/preload.ts`：在 context isolation 下暴露 `window.project` 和少量事件/通用 invoke API。
-- `electron/preload/`：按领域注册 IPC handlers，只执行输入校验、边界授权、应用服务调用和事件转发，不直接执行 SQL 或领域执行逻辑。
-- `electron/app/<module>/`：迁移目标中的业务模块边界。模块将聚合 `service.ts`、`repository.ts`，以及需要时的 `providers/` 或 `execution/`；应用层不得反向依赖 IPC，Repository 不得依赖 Service。
-- `electron/app/index.ts`：当前阶段的主进程应用装配入口，负责初始化应用级服务；业务模块迁移完成后继续作为唯一模块组合根。
-- `electron/preload/index.ts`：IPC 装配入口，按领域注册 `electron/preload/<module>/` 中的 handlers，包括系统和工具能力。
-- 已迁移的简单 CRUD 模块包括 `electron/app/agents/`、`documents/`、`skills/`、`preferences/` 和 `schedulers/`。每个模块通过 `service.ts` 编排业务、通过 `repository.ts` 访问持久化，并由对应 `electron/preload/<module>/` 注册 IPC。
-- `electron/app/`、`electron/channels/`、`electron/infrastructure/`、`electron/integrations/`：分别存放按领域组织的应用模块、渠道运行时、平台基础设施和集成执行；通用主进程 service 目录已清理。
-- `tests/unit/`：集中存放单元测试，并按 `domain/`、`data/`、`services/`、`views/` 保留被测模块的功能结构。
+## 进程分层
 
-## Electron 启动生命周期
+## Renderer
 
-应用启动时依次执行：
+Renderer 由 React、React Router、Zustand 和页面级组件组成，主要位于：
 
-1. 配置应用存储路径并确保 workspace 目录存在。
-2. 打开 SQLite，启用 WAL 与 foreign keys，并执行未应用的 migrations。
-3. 注册 IPC handlers。
-4. 配置 `electron-updater`。
-5. 创建 BrowserWindow，加载开发服务器或构建后的 renderer。
+- `src/pages/`：路由页面与页面级组件
+- `src/components/`：全局业务组件和 `ui/` primitives
+- `src/services/`：封装 `window.app` 的 renderer facade
+- `src/stores/`：UI 状态、缓存与运行时协同
+- `src/lib/`：浏览器端工具、导出、聊天展示与序列化辅助
 
-退出前关闭内置浏览器窗口和数据库连接。macOS 保留应用进程，其他平台在所有窗口关闭后退出。
+Renderer 不直接访问 SQLite、文件系统、命令执行、Electron 原生 API 或主进程 repository。页面通常经 `src/services/` 调用 `window.app` 暴露的 bridge，再由 store 或页面消费结果。
 
-## Renderer、Preload 与 IPC
+## Preload
 
-渲染器不能直接访问 Node.js、文件系统或 Electron API。BrowserWindow 使用：
+`src/electron/preload.ts` 在 `contextIsolation: true` 下暴露两类入口：
 
-- `contextIsolation: true`
-- `nodeIntegration: false`
-- 受控的 preload bridge
+- `window.app`：面向业务域的稳定方法，例如 `chats`、`documents`、`models`、`workflows`、`preferences`
+- `window.electron`：少量受白名单限制的低层 `invoke/on/off` 能力，主要用于流式 AI、workflow runtime、渠道消息和浏览器状态等事件
 
-preload 按领域暴露 `project.chats`、`documents`、`models`、`skills`、`agents`、`integrations`、`workflows`、`channels`、`schedulers`、`preferences`、`updater`、`mail` 和 `tools` 等 API。Renderer 侧通过 `appIPC`、`getAppBridge` 和 `hasAppBridge` 使用这些能力。新增业务调用应优先添加明确命名的 bridge 方法和对应 IPC handler，不要扩大通用通道权限。
+按业务域注册 `ipcMain.handle` 的代码位于 `src/electron/preload/`。这一层只做：
 
-通用 `electron.invoke` 与事件订阅还有白名单：只有列入允许集合的 AI fetch、数据库、Integration 执行和渠道预览事件可以直接访问。业务资源通常通过 `window.project` 的领域 API 调用。
+1. 输入校验
+2. 边界授权
+3. 调用主进程应用服务
+4. 返回可序列化 DTO 或转发事件
 
-## 数据库与迁移
+它不应承载页面逻辑，也不应在这里堆放大块业务规则。
 
-## 本地数据
+## Main process
 
-数据库位于 Electron `userData/workspace/suora.sqlite`。数据库开启 WAL 和外键，并在运行时执行 migrations。迁移记录保存在 `__app_migrations`，每个 migration 在事务中执行；失败会回滚当前 migration。
+主进程入口是 `src/electron/main.ts`。当前启动流程包括：
 
-主要数据域包括：
+1. 配置应用存储路径
+2. 确保 workspace 目录存在
+3. 打开 SQLite 并执行 migration
+4. 初始化主进程应用服务
+5. 注册 IPC
+6. 注册 renderer protocol、自动更新和窗口
 
-- Chats 与 `chat_messages`
-- Documents、页面树和版本
-- Skills、Agents、Integrations 与各自版本
-- Workflows、版本与 invocation history
-- Channels、消息和运行状态
-- Models/Providers、Schedulers 与 `app_meta`
+业务逻辑位于 `src/electron/app/`，平台与运行时基础设施位于 `src/electron/infrastructure/`。
 
-渲染器 repository 负责领域数据映射；Electron IPC 负责将请求转发到数据库或桌面服务。Preferences 在桌面运行时统一存于 SQLite 的 `app_meta`，IPC 不可用或数据库操作失败时直接报告错误，不再静默写入浏览器存储。
+## 主进程业务域
 
-## 服务边界
+`src/electron/app/` 按业务域组织，当前重点包括：
 
-Domain 和 Repository 层不得反向依赖 Service 或 `src/views/`。Views 通过 `src/application/`、`src/stores/` 和页面 Controller 访问数据；需要被 runtime、application 和 view 共同使用的 Chat 类型、事件转换和持久化工具，应通过 Application adapter 暴露。
+- `agents`
+- `channels`
+- `chats`
+- `documents`
+- `integrations`
+- `models`
+- `preferences`
+- `schedulers`
+- `skills`
+- `system`
+- `tools`
+- `workflows`
 
-- **AI**：主进程代理模型请求、代理/TLS、超时和连接重试；renderer 通过流式事件接收增量文本、工具调用和错误。
-- **Tools**：文件读写、命令和浏览器操作受工作区策略、命令 allowlist、大小限制与 URL 安全规则约束。
-- **Integrations**：HTTP、Script VM 与当前有限的 MCP 探测由主进程执行，避免 renderer 直接持有网络和进程权限。
-- **Channels**：Webhook server 和 stream/email clients 运行在主进程；Channel 凭据完整性、绑定状态和运行状态也由 `electron/application/channels/` 推导，Renderer 只显示 Electron 返回的状态。入站消息通过 `channel:message` 事件发送到 renderer，再由 channel listener 路由到 Chat/Agent。
-- **Preferences**：Renderer 只处理主题应用和表单提示；Electron 在 `preferences:save` 时清洗并规范化配置，文件/命令访问策略和邮件配置的最终判定始终在主进程执行。Preference DTO 位于 `src/types/preference.d.ts`。
-- **Updater**：仅打包应用检查更新，开发环境跳过。
+每个业务域负责自己的 service、repository、runtime 或执行器，而不是把逻辑堆到全局 service 目录。
 
-依赖方向约定为：`views → stores/application → services/repositories → domain/lib`；Domain 不得依赖 Repository、Service 或 View，Repository 和 Service 不得反向依赖 View，IPC domain client 不得通过 `appIPC` facade 反向调用自身。
+## 数据流
 
-## 命名与目录规则
+典型的数据流如下：
 
-- 不创建 `src/domain/` 或 `src/data/domain/`。跨进程序列化类型使用 `src/types/*.d.ts`；Renderer 页面辅助使用 `src/pages/<module>/`；Electron 业务逻辑按 `electron/app/<module>/` 和 `electron/preload/` 归属，Drizzle 数据库入口与迁移位于 `drizzle/`。
-- 数据库或 IPC 原始结果转换放在 `src/data/mappers/`，使用 `*-mappers.ts` 命名。
-- Renderer 基础能力按 `browser/`、`ipc/`、`resources/`、`security/`、`serialization/` 分组，不再把无关功能新增到根级 `src/lib/`。
-- AI 和 Chat runtime 能力按 `electron/app/ai/` 与 `electron/app/chats/` 分组；Renderer 只保留 `chat-service.ts` facade、`chat-runtime-listener.ts` 事件 adapter 与 `src/lib` 纯 UI helper。
-- 新代码中的 IPC bridge 使用 `appIPC`、`getAppBridge`、`hasAppBridge` 和 `window.project`，不使用产品名作为变量或函数名。
-- `src/lib/utils.ts` 是 shadcn/UI 高复用基础工具，保持原位置，避免为目录整洁而破坏大量 UI import。
+```text
+React page / store
+  → src/services/<module>-service.ts
+  → window.app.<domain>.<method>
+  → electron/preload/<domain>/*-ipc.ts
+  → electron/app/<domain>/service.ts
+  → repository / runtime / infrastructure
+  → serialized result or event
+```
 
-## 安全模型与已知边界
+当能力需要流式事件时，会额外经过 `window.electron.on/off` 的白名单事件通道，例如：
 
-context isolation 保护了 renderer 与 Node 环境的边界，但本地桌面应用仍然信任当前操作系统用户。当前未提供登录、多用户权限或云端租户隔离。
+- `ai:fetch:event`
+- `workflow:run:event`
+- `channel:message`
+- `tools:browserStateChanged`
 
-API Key、SMTP 密码、渠道凭据和部分集成配置保存在本地 SQLite 普通字段中，未接入系统钥匙串或应用级加密。`ignoreSslErrors` 及命令/文件工具策略应仅在受控环境中使用。
+## 数据与持久化
 
-Agent instructions、外部网页和 Skill 内容都属于不可信输入；它们不能改变 IPC 白名单或绕过主进程安全检查。新增工具时必须在主进程重新校验参数，不能只依赖 renderer 表单校验。
+SUORA 使用 Node `node:sqlite` 的 `DatabaseSync` 与 Drizzle schema。相关代码位于：
 
-## 开发约定
+- `src/drizzle/schema/`
+- `src/drizzle/migrations/`
+- `src/electron/infrastructure/db-core.ts`
 
-- 新 UI 使用 `workflow` 命名，不新增 `pipeline` 术语。
-- Electron 正在从按技术类别分散的旧目录迁移到按业务模块聚合的 `electron/app/<module>/`。新代码遵循 `preload → app → infrastructure` 的方向；`infrastructure/` 不得依赖 `app/`。完整阶段与验收记录见仓库根目录的 `electron-migration.md`。
-- `npm run type-check` 通过 `scripts/type-check.mjs` 检查 TypeScript；上游 `src/components/ui/scroll-area.tsx` 的已知 TS6133 未使用导入被明确忽略，其他诊断不得忽略。
-- 业务数据访问通过 repository/domain 层组织，避免页面直接拼接 IPC 细节。
-- 修改 IPC 合约时同步更新 preload、Electron 类型和 renderer repository。
-- 修改数据库结构时新增 migration，不直接改写已有 migration。
-- 每次改动至少运行 `npm run type-check`、`npm run lint` 和 `npm run build`。
+数据库文件默认位于：
 
-<Callout type="warning">
-  当前架构未提供应用级密钥加密或系统钥匙串集成。设备用户目录、工作区数据库和备份必须由操作系统权限保护。
-</Callout>
+```text
+<Electron userData>/workspace/suora.sqlite
+```
+
+Renderer 不暴露任意 SQL bridge。跨进程使用的请求/响应契约集中放在 `src/types/`。
+
+## 路由与模块
+
+主应用的一级路由当前为：
+
+- `/chats`
+- `/agents`
+- `/workflows`
+- `/schedulers`
+- `/integrations`
+- `/documents`
+- `/channels`
+- `/skills`
+- `/models`
+- `/preference/:section`
+
+根路径重定向到 `/chats`。新 UI 和新文档统一使用 `workflow` / `workflows` 命名；只有在兼容旧实现或迁移说明中才提及 `pipeline`。
+
+## 安全边界
+
+- 主窗口：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: false`
+- Browser 工具窗口：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`
+- 所有敏感操作都应由主进程重新校验，而不是信任 Renderer 状态
+- 凭据、命令、文件访问、URL 与集成执行均由主进程作为最终安全边界
+
+当前没有多用户权限模型；本地安全最终仍依赖操作系统账户、设备权限和数据库/凭据文件保护。
+
+## 架构维护原则
+
+1. **数据和副作用靠近主进程**：数据库、网络、文件、命令、浏览器与凭据处理留在 `src/electron/`。
+2. **展示和交互靠近 Renderer**：页面、组件、store 与 renderer service 不直接越权。
+3. **跨边界契约集中管理**：复用类型放在 `src/types/`，不要散落在页面或 handler 中。
+4. **优先扩展现有业务域**：新能力先放入现有 `electron/app/<module>/`，避免创建模糊层。
+5. **文档跟随实际代码**：架构变化后，同时更新本页以及相关技术/用户文档。
