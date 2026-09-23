@@ -1,0 +1,232 @@
+{
+  "channel-wechat": {
+    "color": "#07C160",
+    "size": 24,
+    "iconify": "cib:wechat"
+  },
+  "channel-slack": {
+    "color": "#4A154B",
+    "size": 24,
+    "iconify": "cib:slack"
+  },
+  "channel-telegram": {
+    "color": "#26A5E4",
+    "size": 24,
+    "iconify": "cib:telegram-plane"
+  },
+  "channel-discord": {
+    "color": "#5865F2",
+    "size": 24,
+    "iconify": "cib:discord"
+  },
+  "channel-microsoft": {
+    "color": "#5059C9",
+    "size": 24,
+    "iconify": "fa6-brands:microsoft"
+  },
+  "channel-feishu": {
+    "color": "#3370FF",
+    "size": 24,
+    "iconify": "mdi:bird"
+  },
+  "channel-dingtalk": {
+    "color": "#0089FF",
+    "size": 24,
+    "iconify": "mdi:bell-ring-outline"
+  },
+  "channel-custom": {
+    "color": "#6B7280",
+    "size": 24,
+    "iconify": "mdi:puzzle-outline"
+  },
+  "agent-robot": {
+    "color": "#6366F1",
+    "size": 24,
+    "iconify": "mdi:robot"
+  },
+  "agent-developer": {
+    "color": "#3B82F6",
+    "size": 24,
+    "iconify": "mdi:code-braces"
+  },
+  "agent-api": {
+    "color": "#8B5CF6",
+    "size": 24,
+    "iconify": "mdi:api"
+  },
+  "agent-content": {
+    "color": "#F59E0B",
+    "size": 24,
+    "iconify": "mdi:pencil-outline"
+  },
+  "agent-database": {
+    "color": "#10B981",
+    "size": 24,
+    "iconify": "mdi:database-outline"
+  },
+  "agent-designer": {
+    "color": "#EC4899",
+    "size": 24,
+    "iconify": "mdi:palette-outline"
+  },
+  "agent-devops": {
+    "color": "#06B6D4",
+    "size": 24,
+    "iconify": "mdi:infinity"
+  },
+  "agent-writer": {
+    "color": "#F97316",
+    "size": 24,
+    "iconify": "mdi:book-open-variant"
+  },
+  "agent-math": {
+    "color": "#8B5CF6",
+    "size": 24,
+    "iconify": "mdi:calculator-variant-outline"
+  },
+  "agent-assistant": {
+    "color": "#6366F1",
+    "size": 24,
+    "iconify": "mdi:face-agent"
+  },
+  "agent-research": {
+    "color": "#14B8A6",
+    "size": 24,
+    "iconify": "mdi:flask-outline"
+  },
+  "agent-security": {
+    "color": "#EF4444",
+    "size": 24,
+    "iconify": "mdi:shield-check-outline"
+  },
+  "agent-analyst": {
+    "color": "#3B82F6",
+    "size": 24,
+    "iconify": "mdi:chart-line"
+  },
+  "agent-creative": {
+    "color": "#F59E0B",
+    "size": 24,
+    "iconify": "mdi:lightbulb-outline"
+  },
+  "agent-educator": {
+    "color": "#10B981",
+    "size": 24,
+    "iconify": "mdi:school-outline"
+  },
+  "skill-filesystem": {
+    "color": "#6366F1",
+    "size": 24,
+    "iconify": "mdi:folder-outline"
+  },
+  "skill-shell": {
+    "color": "#1F2937",
+    "size": 24,
+    "iconify": "mdi:console-line"
+  },
+  "skill-web": {
+    "color": "#3B82F6",
+    "size": 24,
+    "iconify": "mdi:web"
+  },
+  "skill-utilities": {
+    "color": "#6B7280",
+    "size": 24,
+    "iconify": "mdi:wrench-outline"
+  },
+  "skill-todo": {
+    "color": "#F59E0B",
+    "size": 24,
+    "iconify": "mdi:clipboard-text-outline"
+  },
+  "skill-timer": {
+    "color": "#EF4444",
+    "size": 24,
+    "iconify": "mdi:timer-outline"
+  },
+  "skill-memory": {
+    "color": "#EC4899",
+    "size": 24,
+    "iconify": "mdi:brain"
+  },
+  "skill-browser": {
+    "color": "#06B6D4",
+    "size": 24,
+    "iconify": "mdi:earth"
+  },
+  "skill-agent-comm": {
+    "color": "#8B5CF6",
+    "size": 24,
+    "iconify": "mdi:account-multiple-outline"
+  },
+  "skill-event-automation": {
+    "color": "#F59E0B",
+    "size": 24,
+    "iconify": "mdi:lightning-bolt"
+  },
+  "skill-self-evolution": {
+    "color": "#10B981",
+    "size": 24,
+    "iconify": "mdi:dna"
+  },
+  "skill-file-attachment": {
+    "color": "#6B7280",
+    "size": 24,
+    "iconify": "mdi:attachment"
+  },
+  "skill-git": {
+    "color": "#F05032",
+    "size": 24,
+    "iconify": "mdi:git"
+  },
+  "skill-code-analysis": {
+    "color": "#3B82F6",
+    "size": 24,
+    "iconify": "mdi:magnify"
+  },
+  "skill-advanced-interaction": {
+    "color": "#EF4444",
+    "size": 24,
+    "iconify": "mdi:target"
+  },
+  "skill-channels": {
+    "color": "#10B981",
+    "size": 24,
+    "iconify": "mdi:cellphone"
+  },
+  "skill-email": {
+    "color": "#6366F1",
+    "size": 24,
+    "iconify": "mdi:email-outline"
+  },
+  "skill-system-management": {
+    "color": "#6B7280",
+    "size": 24,
+    "iconify": "mdi:cog-outline"
+  },
+  "skill-code-review": {
+    "color": "#8B5CF6",
+    "size": 24,
+    "iconify": "mdi:file-search-outline"
+  },
+  "skill-devops": {
+    "color": "#F97316",
+    "size": 24,
+    "iconify": "mdi:rocket-launch-outline"
+  },
+  "skill-research": {
+    "color": "#14B8A6",
+    "size": 24,
+    "iconify": "mdi:book-search-outline"
+  },
+  "skill-file-manager": {
+    "color": "#3B82F6",
+    "size": 24,
+    "iconify": "mdi:folder-open-outline"
+  },
+  "skill-sysadmin": {
+    "color": "#EF4444",
+    "size": 24,
+    "iconify": "mdi:shield-lock-outline"
+  }
+}

@@ -71,7 +71,7 @@ src/
     └── preload/            # 按业务域注册 IPC handlers
 tests/                      # Vitest 单元和集成测试
 scripts/                    # 类型检查、架构验证和 smoke tests
-github-pages/               # 独立的文档网站项目
+docs/                       # 独立的文档网站项目
 ```
 
 Renderer 不直接使用 Node API 或 SQLite。`src/electron/preload.ts` 在 context isolation 下通过 `window.app` 暴露受控业务 API，`src/services/` 负责消费这些 API。数据库、外部网络、文件/命令工具、AI 请求、渠道运行时和凭据处理都在主进程完成。主窗口使用 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: false`；内置 Browser 工具窗口使用 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`。

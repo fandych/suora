@@ -1,14 +1,14 @@
-import js from '@eslint/js'
-import globals from 'globals'
-import reactHooks from 'eslint-plugin-react-hooks'
-import reactRefresh from 'eslint-plugin-react-refresh'
-import tseslint from 'typescript-eslint'
-import { defineConfig, globalIgnores } from 'eslint/config'
+import js from "@eslint/js"
+import globals from "globals"
+import reactHooks from "eslint-plugin-react-hooks"
+import reactRefresh from "eslint-plugin-react-refresh"
+import tseslint from "typescript-eslint"
+import { defineConfig, globalIgnores } from "eslint/config"
 
 export default defineConfig([
-  globalIgnores(['dist', 'out', 'coverage', 'node_modules', 'github-pages/**']),
+  globalIgnores(["dist", "out", "coverage", "node_modules", "docs/**"]),
   {
-    files: ['src/**/*.{ts,tsx}', 'src/electron/**/*.{ts,tsx}', 'tests/**/*.{ts,tsx}'],
+    files: ["src/**/*.{ts,tsx}", "src/electron/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}"],
     extends: [
       js.configs.recommended,
       tseslint.configs.recommended,
@@ -19,18 +19,18 @@ export default defineConfig([
       globals: globals.browser,
     },
     rules: {
-      'react-hooks/set-state-in-effect': 'off',
-      'react-hooks/static-components': 'off',
-      'react-refresh/only-export-components': 'off',
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/static-components": "off",
+      "react-refresh/only-export-components": "off",
     },
   },
   {
     files: [
-      'scripts/**/*.{js,mjs,ts}',
-      'drizzle.config.ts',
-      'electron.vite.config.ts',
-      'eslint.config.js',
-      'vitest.config.ts',
+      "scripts/**/*.{js,mjs,ts}",
+      "drizzle.config.ts",
+      "electron.vite.config.ts",
+      "eslint.config.js",
+      "vitest.config.ts",
     ],
     extends: [js.configs.recommended, tseslint.configs.recommended],
     languageOptions: {
@@ -40,11 +40,24 @@ export default defineConfig([
     },
   },
   {
-    files: ['src/data/**/*.{ts,tsx}', 'src/domain/**/*.{ts,tsx}', 'src/application/**/*.{ts,tsx}', 'src/services/**/*.{ts,tsx}'],
+    files: [
+      "src/data/**/*.{ts,tsx}",
+      "src/domain/**/*.{ts,tsx}",
+      "src/application/**/*.{ts,tsx}",
+      "src/services/**/*.{ts,tsx}",
+    ],
     rules: {
-      'no-restricted-imports': ['error', {
-        patterns: [{ group: ['@/views/*', '@/views/**'], message: 'Data, domain, application, and service layers must not depend on views.' }],
-      }],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["@/views/*", "@/views/**"],
+              message: "Data, domain, application, and service layers must not depend on views.",
+            },
+          ],
+        },
+      ],
     },
   },
 ])

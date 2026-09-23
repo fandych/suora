@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
     paths:
-      - github-pages/**
+      - docs/**
       - .github/workflows/deploy-docs.yml
   workflow_dispatch:
 
@@ -29,15 +29,15 @@ jobs:
         with:
           node-version: 22.x
           cache: npm
-          cache-dependency-path: github-pages/package-lock.json
+          cache-dependency-path: docs/package-lock.json
       - name: Install dependencies
-        working-directory: github-pages
+        working-directory: docs
         run: npm ci
       - name: Verify documentation site
-        working-directory: github-pages
+        working-directory: docs
         run: npm run lint && npm run type-check && npm run build
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: github-pages/dist
+          path: docs/dist
       - id: deployment
         uses: actions/deploy-pages@v4

@@ -1,7 +1,7 @@
 {
   "name": "suora",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.1",
   "type": "module",
   "main": "./out/main/main.js",
   "engines": {
@@ -143,6 +143,7 @@
       "repo": "suora"
     },
     "win": {
+      "icon": "resources/icons/icon.ico",
       "target": [
         "nsis",
         "portable"
@@ -154,6 +155,7 @@
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "mac": {
+      "icon": "resources/icons/icon-1024x1024.png",
       "target": [
         "dmg",
         "zip"
@@ -161,6 +163,7 @@
       "category": "public.app-category.productivity"
     },
     "linux": {
+      "icon": "resources/icons",
       "target": [
         "AppImage",
         "deb",

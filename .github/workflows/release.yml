@@ -27,7 +27,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          cache: npm
+          cache: "npm"
 
       - name: Install dependencies
         run: npm ci
@@ -40,7 +40,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Linux assets
+      - name: Upload release assets (Linux)
         if: matrix.platform == 'linux'
         uses: softprops/action-gh-release@v2
         with:
@@ -48,21 +48,24 @@ jobs:
             dist/*.AppImage
             dist/*.deb
             dist/*.rpm
+            dist/*.tar.gz
+            dist/*.snap
             dist/latest-linux.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload Windows assets
+      - name: Upload release assets (Windows)
         if: matrix.platform == 'win'
         uses: softprops/action-gh-release@v2
         with:
           files: |
             dist/*.exe
+            dist/*.msi
             dist/latest.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload macOS assets
+      - name: Upload release assets (macOS)
         if: matrix.platform == 'mac'
         uses: softprops/action-gh-release@v2
         with:
@@ -83,11 +86,10 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          cache: npm
 
-      - name: Verify updater manifests on published release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_REF_NAME: ${{ github.ref_name }}
+      - name: Verify updater manifests match uploaded assets
         run: node scripts/verify-release-assets.mjs
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}

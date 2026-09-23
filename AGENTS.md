@@ -32,7 +32,7 @@ src/
 
 tests/                      # Vitest 单元和集成测试
 scripts/                    # 类型检查、架构验证和条件式 smoke tests
-github-pages/               # 独立文档网站，不属于主应用 renderer
+docs/                       # 独立文档网站，不属于主应用 renderer
 ```
 
 `src/electron/app/` 的业务域包括 `agents`、`channels`、`chats`、`documents`、`integrations`、`models`、`preferences`、`schedulers`、`skills`、`system`、`tools` 和 `workflows`。新增主进程业务代码应放入对应域，而不是创建根级杂项目录。
@@ -148,7 +148,7 @@ Renderer 通过 `src/electron/preload.ts` 暴露的 `window.app` 访问主进程
 - 不要在 Renderer 复制主进程的校验、权限、凭据、路径或副作用逻辑；这些规则必须由主进程作为安全边界执行。
 - 优先组合 `src/components/ui/` 中已有的 shadcn/base primitives。该目录是上游 UI 源文件，业务重构不要直接重写、拆分、格式化或改主题。
 - 不使用脚本或批量替换改写业务源码；采用可审查的定点修改。
-- 每次行为、路由、运行时限制、安全边界、命令或用户可见配置变更，都同步更新适用的 `README.md` 或 `github-pages/src/pages/` 文档。
+- 每次行为、路由、运行时限制、安全边界、命令或用户可见配置变更，都同步更新适用的 `README.md` 或 `docs/src/pages/` 文档。
 - 路由、模块覆盖或架构规则改变时，同步更新本文件。
 
 ## 验证流程
