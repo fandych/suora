@@ -1,20 +1,20 @@
 import preferencesGeneralScreenshot from "../../assets/docs/user/preferences-general.png"
 
-export const meta = { title: "Preferences", description: "设置外观、工作区、模型默认值、安全策略、SMTP、环境变量与更新行为。" }
+export const meta = { title: "偏好设置", description: "设置外观、工作区、模型默认值、安全策略、SMTP、环境变量与更新行为。" }
 
-# Preferences
+# 偏好设置
 
-Preferences 集中管理本地桌面工作区的外观、默认模型、安全策略、SMTP、运行环境和更新行为。修改后点击 **Save preferences** 保存；主题、字体缩放和 Language 等界面设置会立即应用到当前界面。
+偏好设置集中管理本地桌面工作区的外观、默认模型、安全策略、SMTP、运行环境和更新行为。修改后点击 **Save preferences** 保存；主题、字体缩放和 Language 等界面设置会立即应用到当前界面。
 
 ## 界面示例
 
 <DocScreenshot
   src={preferencesGeneralScreenshot}
-  alt="SUORA Preferences 页面中的 General 配置界面"
-  caption="Preferences 左侧按 section 分组，右侧显示当前 section 的表单。General 页最常用来调整主题、语言、工作区名称和默认超时；保存前建议先确认这些变更是否会影响当前团队约定。"
+  alt="SUORA 偏好设置页面中的通用配置界面"
+  caption="偏好设置左侧按 section 分组，右侧显示当前 section 的表单。General 页最常用来调整主题、语言、工作区名称和默认超时；保存前建议先确认这些变更是否会影响当前团队约定。"
 />
 
-## General
+## 通用
 
 General 区域提供：
 
@@ -27,10 +27,10 @@ General 区域提供：
 - Chat request timeout（毫秒）。
 - 自动保存会话与自动启动偏好。
 
-主题会修改当前渲染器的颜色、字体缩放和页面语言。Language 会立即切换 Primary navigation、Chats、Preference、自带系统 Agent 名称、共享按钮与常见空状态文案；Provider 名称、模型名称、渠道品牌名和外部 Skill 名称等专有名词保持原文。`Default model provider` 当前仅是已持久化的偏好字段，尚未驱动 Chats、Agents 或 Channels 的默认模型选择；实际使用仍要求相应 Provider 与模型已配置且启用。
+主题会修改当前渲染器的颜色、字体缩放和页面语言。Language 会立即切换主导航、聊天、偏好设置、自带系统智能体名称、共享按钮与常见空状态文案；Provider 名称、模型名称、渠道品牌名和外部技能名称等专有名词保持原文。`Default model provider` 当前仅是已持久化的偏好字段，尚未驱动聊天、智能体或渠道的默认模型选择；实际使用仍要求相应 Provider 与模型已配置且启用。
 
 <Callout type="warning">
-  `Auto-save conversations` 和 `Launch on startup` 目前会保存到 Preferences，但尚未被聊天持久化或系统登录启动运行时消费。`Default model provider` 也尚未驱动 Chats 或 Agents 的默认选择；新建 Channel 会优先寻找与该偏好 ID 相同的已配置 Provider，未找到时再回退到第一个已配置 Provider 或内置 `provider-openai`。
+  `Auto-save conversations` 和 `Launch on startup` 目前会保存到偏好设置，但尚未被聊天持久化或系统登录启动运行时消费。`Default model provider` 也尚未驱动聊天或智能体的默认选择；新建渠道会优先寻找与该偏好 ID 相同的已配置 Provider，未找到时再回退到第一个已配置 Provider 或内置 `provider-openai`。
 </Callout>
 
 Chat request timeout 为 `0` 时，不会向 AI 请求桥传递应用层超时值。设置正数前，请考虑模型、工具调用和网络代理的实际响应时间。

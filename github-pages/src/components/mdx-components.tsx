@@ -1,17 +1,21 @@
 import type { ComponentProps, ReactNode } from "react"
 import { AlertCircleIcon, InfoIcon } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useLocation } from "react-router-dom"
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { stripDocLocale } from "@/lib/docs-navigation"
 
 export function Callout({ type = "info", children }: { type?: "info" | "warning"; children: ReactNode }) {
   const isWarning = type === "warning"
   const Icon = isWarning ? AlertCircleIcon : InfoIcon
+  const { pathname } = useLocation()
+  const { locale } = stripDocLocale(pathname)
+  const title = locale === "zh" ? (isWarning ? "注意" : "提示") : (isWarning ? "Warning" : "Note")
 
   return (
     <Alert className={isWarning ? "border-amber-400/50 bg-amber-50" : "border-primary/20 bg-primary/5"}>
       <Icon />
-      <AlertTitle>{isWarning ? "注意" : "提示"}</AlertTitle>
+      <AlertTitle>{title}</AlertTitle>
       <AlertDescription>{children}</AlertDescription>
     </Alert>
   )

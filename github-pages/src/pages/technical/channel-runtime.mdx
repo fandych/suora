@@ -1,8 +1,8 @@
-export const meta = { title: "Channel Runtime", description: "渠道 runtime 生命周期、Webhook、Stream、消息路由、队列和健康检查。" }
+export const meta = { title: "渠道运行时", description: "渠道 runtime 生命周期、Webhook、Stream、消息路由、队列和健康检查。" }
 
-# Channel Runtime
+# 渠道运行时
 
-Channel Runtime 运行在 Electron 主进程，负责监听 Webhook、维护 Stream/ WebSocket/IMAP 客户端、归一化入站消息和发送出站回复。核心实现位于 `electron/channels/channel-service.ts`。
+渠道运行时运行在 Electron 主进程，负责监听 Webhook、维护 Stream/ WebSocket/IMAP 客户端、归一化入站消息和发送出站回复。核心实现位于 `electron/channels/channel-service.ts`。
 
 ## 生命周期
 

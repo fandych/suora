@@ -1,17 +1,17 @@
 import schedulersEditorScreenshot from "../../assets/docs/user/schedulers-editor.png"
 
-export const meta = { title: "Schedulers", description: "维护 workflow 和 Agent 的本地调度配置，并了解当前运行时边界。" }
+export const meta = { title: "调度器", description: "维护工作流和智能体的本地调度配置，并了解当前运行时边界。" }
 
-# Schedulers
+# 调度器
 
-Schedulers 用于保存面向 workflow 或 Agent 的 cron、时区、输入和重试策略配置。它适合先定义和维护自动化计划，但当前版本仍是**本地持久化的调度配置编辑器**，不是已经运行的定时执行引擎。
+调度器用于保存面向工作流或智能体的 cron、时区、输入和重试策略配置。它适合先定义和维护自动化计划，但当前版本仍是**本地持久化的调度配置编辑器**，不是已经运行的定时执行引擎。
 
 ## 创建调度配置
 
-1. 在 **Schedulers** 模块的二级侧边栏选择 **New scheduler**。
+1. 在 **调度器** 模块的二级侧边栏选择 **New scheduler**。
 2. 在左侧 **General** 面板填写名称、描述、cron 表达式、时区及重试策略。
 3. 在右侧 **Binding** 面板选择目标类型：workflow 或 Agent，再选择目标。
-4. 若绑定 workflow，按 workflow 起始节点声明的输入字段填写参数；若绑定 Agent，填写每次触发时发送给 Agent 的任务提示词与上下文。
+4. 若绑定工作流，按起始节点声明的输入字段填写参数；若绑定智能体，填写每次触发时发送给智能体的任务提示词与上下文。
 5. 使用 Enabled 开关保存为启用或暂停状态。
 
 新建 Scheduler 默认值：
@@ -40,8 +40,8 @@ Schedulers 用于保存面向 workflow 或 Agent 的 cron、时区、输入和�
 
 <DocScreenshot
   src={schedulersEditorScreenshot}
-  alt="SUORA Schedulers 页面中的调度器编辑界面"
-  caption="Scheduler 详情页把 cron、时区、重试策略放在左侧，把目标类型与目标资源绑定放在右侧。当前更适合把它当作自动化运行计划的配置中心，而不是已经上线的后台调度器。"
+  alt="SUORA 调度器页面中的调度器编辑界面"
+  caption="调度器详情页把 cron、时区、重试策略放在左侧，把目标类型与目标资源绑定放在右侧。当前更适合把它当作自动化运行计划的配置中心，而不是已经上线的后台调度器。"
 />
 
 ## 配置字段
@@ -107,8 +107,8 @@ cron 和时区均为文本字段。保存时只要求非空：当前不会解析
 
 ## 推荐工作方式
 
-1. 先在 **Workflows** 中手动验证 workflow，或在 **Chats** 中验证 Agent。
-2. 再创建 Scheduler，记录期望的 cron、时区、输入与失败策略。
+1. 先在 **工作流** 中手动验证工作流，或在 **聊天** 中验证智能体。
+2. 再创建调度器，记录期望的 cron、时区、输入与失败策略。
 3. 将 Scheduler 作为未来自动化运行时的配置来源或团队约定。
 4. 在真正的 cron runtime 上线前，使用外部调度器、CI、系统 cron 或受控工作流平台执行关键任务。
 

@@ -1,18 +1,18 @@
 import modelsProviderScreenshot from "../../assets/docs/user/models-provider.png"
 
-export const meta = { title: "Models", description: "配置模型提供商、启用可用模型，并将它们用于 Chats、Agents 和 workflows。" }
+export const meta = { title: "模型", description: "配置模型提供商、启用可用模型，并将它们用于聊天、智能体和工作流。" }
 
-# Models
+# 模型
 
-Models 页面管理 Provider（模型提供商）及其模型清单。只有已启用的 Provider 与至少一个已启用模型，才会出现在 Chats、Agents 和 workflow 的模型选择中。
+模型页面管理 Provider（模型提供商）及其模型清单。只有已启用的 Provider 与至少一个已启用模型，才会出现在聊天、智能体和工作流的模型选择中。
 
 ## 配置第一个 Provider
 
-1. 进入 **Models**，选择一个预置 Provider，或使用 **Add provider** 创建 Custom Provider。
+1. 进入 **模型**，选择一个预置 Provider，或使用 **Add provider** 创建 Custom Provider。
 2. 填写名称、Provider type、Base URL 和 API Key。
 3. 保存 Provider 一般设置。
 4. 启用 Provider，并启用至少一个模型。
-5. 在 Chats 中选择该模型发送测试消息。
+5. 在聊天中选择该模型发送测试消息。
 
 初次加载时，应用会创建缺失的预置 Provider，但它们默认关闭且没有 API Key。Add provider 创建的是 Custom Provider，带一个未启用的 `custom-model`；之后可在详情页改为任意预置类型。
 
@@ -20,8 +20,8 @@ Models 页面管理 Provider（模型提供商）及其模型清单。只有已�
 
 <DocScreenshot
   src={modelsProviderScreenshot}
-  alt="SUORA Models 页面中的示例 Provider 表单"
-  caption="Provider 详情页会把名称、类型、Base URL、API Key、启用状态和模型开关集中在一处。建议先保存 Provider，再确认至少有一个模型已启用，最后回到 Chats 或 Agents 验证选择器是否刷新。"
+  alt="SUORA 模型页面中的示例 Provider 表单"
+  caption="Provider 详情页会把名称、类型、Base URL、API Key、启用状态和模型开关集中在一处。建议先保存 Provider，再确认至少有一个模型已启用，最后回到聊天页或智能体验证选择器是否刷新。"
 />
 
 ## 预置 Provider
@@ -45,7 +45,7 @@ Models 页面管理 Provider（模型提供商）及其模型清单。只有已�
 2. 启用 Provider。
 3. 启用至少一个模型。
 
-全局默认 Provider ID 为 OpenAI，但这只是偏好默认值。实际 Chats/Agent 运行仍取决于所选 Provider 与模型是否可用。
+全局默认 Provider ID 为 OpenAI，但这只是偏好默认值。实际聊天/智能体运行仍取决于所选 Provider 与模型是否可用。
 
 <Callout>
   Ollama、Custom 和 OpenRouter 可在不填写 API Key 时启用。请确保 Base URL 指向可访问且确实允许匿名请求的端点；其他 Provider 仍需要有效 API Key。
@@ -109,7 +109,7 @@ SUORA 会按 Provider type 选择请求适配器：
 - Google Gemini 和 Ollama 当前走 OpenAI SDK 兼容路径。
 - 其他多数预置和 Custom 走 OpenAI-compatible SDK。
 
-如果 Agent 配置的 Provider/Model 不可用，Chats 会尝试回退到当前会话模型。仍建议为每个 Agent 显式选择并测试一个可用模型。
+如果 Agent 配置的 Provider/Model 不可用，Chats 会尝试回退到当前会话模型。仍建议为每个智能体显式选择并测试一个可用模型。
 
 ## 代理、TLS 与安全
 
@@ -121,7 +121,7 @@ Provider API Key 以普通文本存于本机 SQLite，当前没有系统钥匙�
 
 ## 常见问题
 
-### 模型不出现在 Chats 或 Agents
+### 模型不出现在聊天或智能体中
 
 确认 Provider 已保存、已启用，并且至少一个模型已启用。云 Provider 还需确认已填写 API Key。
 

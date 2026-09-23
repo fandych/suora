@@ -1,10 +1,10 @@
 import channelsWebhookScreenshot from "../../assets/docs/user/channels-webhook.png"
 
-export const meta = { title: "Channels", description: "把外部消息平台接入 SUORA，并由指定 Agent 处理入站消息与自动回复。" }
+export const meta = { title: "渠道", description: "把外部消息平台接入 SUORA，并由指定智能体处理入站消息与自动回复。" }
 
-# Channels
+# 渠道
 
-Channels 将外部消息来源接入 SUORA。入站消息会创建或续写独立的渠道会话，可由指定 Agent 生成回复，并将结果发送回原平台。
+渠道将外部消息来源接入 SUORA。入站消息会创建或续写独立的渠道会话，可由指定智能体生成回复，并将结果发送回原平台。
 
 ## 支持的平台
 
@@ -20,8 +20,8 @@ Channels 将外部消息来源接入 SUORA。入站消息会创建或续写独�
 
 ## 基本配置流程
 
-1. 在 **Channels** 的二级侧边栏选择一个渠道模板。
-2. 填写名称、描述、回复 Agent 和模型，保存 General 设置。
+1. 在 **渠道** 的二级侧边栏选择一个渠道模板。
+2. 填写名称、描述、回复智能体和模型，保存 General 设置。
 3. 在 Channel Configuration 中选择平台、连接方式并填写必填凭据。
 4. 保存配置，再执行 **Bind channel** 或个人微信 QR 绑定。
 5. 启用渠道并确认 runtime 已启动。
@@ -33,13 +33,13 @@ Channels 将外部消息来源接入 SUORA。入站消息会创建或续写独�
 
 <DocScreenshot
   src={channelsWebhookScreenshot}
-  alt="SUORA Channels 页面中的 Custom Webhook 配置界面"
-  caption="Custom Webhook 是最容易验证的模板之一：先完成常规设置中的回复 Agent / 模型，再补齐发送 URL、验证密钥和消息模板，最后用保存与调试面板确认配置是否成型。"
+  alt="SUORA 渠道页面中的 Custom Webhook 配置界面"
+  caption="Custom Webhook 是最容易验证的模板之一：先完成常规设置中的回复智能体 / 模型，再补齐发送 URL、验证密钥和消息模板，最后用保存与调试面板确认配置是否成型。"
 />
 
-## 回复 Agent 与自动回复
+## 回复智能体与自动回复
 
-每个 Channel 可指定一个回复 Agent 和模型：
+每个渠道可指定一个回复智能体和模型：
 
 - 入站消息会写入以渠道和发送者为单位的本地 Chat。
 - 应用优先使用 Channel 配置的 Provider/Model；否则使用所选 Agent 的模型；再不满足时使用会话设置。

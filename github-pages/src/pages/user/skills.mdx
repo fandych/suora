@@ -1,18 +1,18 @@
 import skillsWorkspaceScreenshot from "../../assets/docs/user/skills-workspace.png"
 
-export const meta = { title: "Skills", description: "创建、组织和复用本地 Skill 包，为 Agent 提供可检索的任务知识。" }
+export const meta = { title: "技能", description: "创建、组织和复用本地技能包，为智能体提供可检索的任务知识。" }
 
-# Skills
+# 技能
 
-Skills 是可复用的本地任务包。一个 Skill 由 `SKILL.md`、参考资料、资源和脚本文件组成，可用于沉淀提示词约定、操作步骤、项目规范和工具说明，并按需绑定给 Agent。
+技能是可复用的本地任务包。一个技能由 `SKILL.md`、参考资料、资源和脚本文件组成，可用于沉淀提示词约定、操作步骤、项目规范和工具说明，并按需绑定给智能体。
 
 ## 创建 Skill
 
-1. 进入 **Skills**，选择创建本地 Skill。
-2. 应用会创建 Skill、`1.0` 草稿版本和默认文件结构。
+1. 进入 **技能**，选择创建本地技能。
+2. 应用会创建技能、`1.0` 草稿版本和默认文件结构。
 3. 打开 `SKILL.md`，填写名称、描述、适用触发条件和操作说明。
 4. 在 `references/` 放参考资料，在 `assets/` 放资源，在 `scripts/` 放辅助脚本。
-5. 在 **Agents** 中绑定该 Skill，并在 Chats 中测试 Agent 是否能检索到它。
+5. 在 **智能体** 中绑定该技能，并在聊天中测试智能体是否能检索到它。
 
 新建 Skill 默认包含：
 
@@ -30,13 +30,13 @@ other/notes.md
 
 <DocScreenshot
   src={skillsWorkspaceScreenshot}
-  alt="SUORA Skills 页面中的 Skill 树和编辑器"
-  caption="Skill 详情页会固定展示 `SKILL.md`、`scripts/`、`references/`、`assets/` 等标准结构。通常先完善 `SKILL.md` 的名称、说明和触发条件，再补充参考资料与脚本。"
+  alt="SUORA 技能页面中的技能树和编辑器"
+  caption="技能详情页会固定展示 `SKILL.md`、`scripts/`、`references/`、`assets/` 等标准结构。通常先完善 `SKILL.md` 的名称、说明和触发条件，再补充参考资料与脚本。"
 />
 
 ## 编写 SKILL.md
 
-`SKILL.md` 是 Skill 的根文件。标题和摘要从顶部 frontmatter 的 `name`、`description` 读取，保存后会覆盖列表中的显示名称和简介。
+`SKILL.md` 是技能的根文件。标题和摘要从顶部 frontmatter 的 `name`、`description` 读取，保存后会覆盖列表中的显示名称和简介。
 
 ```md
 ---

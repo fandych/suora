@@ -1,4 +1,4 @@
-# SUORA 文档站
+# SUORA / 朔枢 文档站
 
 独立的 GitHub Pages 文档站，使用 Vite、React、MDX、Tailwind CSS 与 shadcn/ui 构建。
 

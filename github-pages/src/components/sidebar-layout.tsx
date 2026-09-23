@@ -1,16 +1,41 @@
 import type { CSSProperties, ReactNode } from "react"
+import { useEffect } from "react"
 import { MenuIcon } from "lucide-react"
 import { Link } from "react-router-dom"
 
 import { Button, buttonVariants } from "@/components/ui/button"
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 import { DocsSidebar } from "@/components/docs-sidebar"
+import { docsSiteMetadata } from "@/lib/docs-site"
 import { cn } from "@/lib/utils"
-import { docsUiMessages, getDocumentTitle, getLocaleSwitchPath, localizeDocPath, type DocLocale } from "@/lib/docs-navigation"
+import {
+  docsUiMessages,
+  getDocumentDescription,
+  getDocumentPageTitle,
+  getDocumentTitle,
+  getLocaleSwitchPath,
+  localizeDocPath,
+  type DocLocale,
+} from "@/lib/docs-navigation"
 
 export function SidebarLayout({ path, locale, children }: { path: string; locale: DocLocale; children: ReactNode }) {
   const title = getDocumentTitle(path, locale)
   const messages = docsUiMessages[locale]
+  const pageTitle = title ? getDocumentPageTitle(path, locale) : `${messages.notFoundTitle} · ${messages.siteTitle}`
+  const pageDescription = title ? getDocumentDescription(path, locale) ?? messages.homeDescription : messages.notFoundDescription
+
+  useEffect(() => {
+    document.title = pageTitle
+
+    let descriptionTag = document.querySelector('meta[name="description"]')
+    if (!descriptionTag) {
+      descriptionTag = document.createElement("meta")
+      descriptionTag.setAttribute("name", "description")
+      document.head.appendChild(descriptionTag)
+    }
+
+    descriptionTag.setAttribute("content", pageDescription)
+  }, [pageDescription, pageTitle])
 
   return (
     <SidebarProvider style={{ "--sidebar-width": "17rem" } as CSSProperties}>
@@ -35,8 +60,11 @@ export function SidebarLayout({ path, locale, children }: { path: string; locale
             >
               {messages.enLabel}
             </Link>
-            <a href="https://github.com/fandych/suora" target="_blank" rel="noreferrer">
+            <a href={docsSiteMetadata.repository.url} target="_blank" rel="noreferrer">
               <Button variant="outline" size="sm">{messages.githubButton}</Button>
+            </a>
+            <a href={docsSiteMetadata.latestRelease.url} target="_blank" rel="noreferrer">
+              <Button variant="outline" size="sm">{messages.releaseButton}</Button>
             </a>
           </div>
         </header>

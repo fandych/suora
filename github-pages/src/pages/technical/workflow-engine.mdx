@@ -1,8 +1,8 @@
-export const meta = { title: "Workflow Engine", description: "图调度、节点执行、变量表达式、dry-run 和运行时限制。" }
+export const meta = { title: "工作流引擎", description: "图调度、节点执行、变量表达式、dry-run 和运行时限制。" }
 
-# Workflow Engine
+# 工作流引擎
 
-Workflow Engine 将 workflow definition 编译为节点图并分批执行。主进程的 `src/electron/app/workflows/` 负责定义归一化、图调度、节点执行、运行上下文、trace 记录、调用历史和 runtime 事件；Renderer 负责可视化编辑、Try run/Run release 入口和 trace 展示。
+工作流引擎将 workflow definition 编译为节点图并分批执行。主进程的 `src/electron/app/workflows/` 负责定义归一化、图调度、节点执行、运行上下文、trace 记录、调用历史和 runtime 事件；Renderer 负责可视化编辑、Try run/Run release 入口和 trace 展示。
 
 执行器、运行上下文、表达式、分支策略和 trace 脱敏均位于 `src/electron/app/workflows/`，由 Electron 主进程执行。Renderer 只保存/编辑 definition，调用 `workflows:run:start` 启动后台任务，并监听 `workflow:run:event` 接收开始、节点 trace、完成、失败和取消状态。跨进程序列化 DTO 位于 `src/types/workflow.d.ts`。
 

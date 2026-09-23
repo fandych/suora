@@ -1,11 +1,20 @@
 import modelsProviderScreenshot from "../../../assets/docs/user/models-provider.png"
 import chatsComposerScreenshot from "../../../assets/docs/user/chats-composer.png"
+import { docsSiteMetadata, formatReleasePublishedAt } from "../../../lib/docs-site"
 
 export const meta = { title: "Installation & Startup", description: "Install the app and configure the first model." }
 
 # Installation & Startup
 
 SUORA is an Electron desktop app. The development environment requires Node.js `>= 22.12.0` and npm.
+
+## Get the latest packaged release
+
+If you want to install the desktop app directly instead of running the development environment from source, download the packaged assets from GitHub Release.
+
+- The latest public release checked for this docs update is <a href={docsSiteMetadata.latestRelease.url} target="_blank" rel="noreferrer">{docsSiteMetadata.latestRelease.tagName}</a> (published {formatReleasePublishedAt("en")}).
+- The release page contains the Windows, macOS, and Linux artifacts uploaded for that version.
+- The repository and docs home are available at <a href={docsSiteMetadata.repository.url} target="_blank" rel="noreferrer">{docsSiteMetadata.repository.url}</a> and <a href={docsSiteMetadata.repository.homepageUrl} target="_blank" rel="noreferrer">{docsSiteMetadata.repository.homepageUrl}</a>.
 
 ## Install dependencies
 

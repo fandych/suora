@@ -1,11 +1,20 @@
 import modelsProviderScreenshot from "../../assets/docs/user/models-provider.png"
 import chatsComposerScreenshot from "../../assets/docs/user/chats-composer.png"
+import { docsSiteMetadata, formatReleasePublishedAt } from "../../lib/docs-site"
 
 export const meta = { title: "安装与启动", description: "安装应用并配置第一个模型。" }
 
 # 安装与启动
 
-SUORA 是 Electron 桌面应用。开发环境需使用 Node.js `>= 22.12.0` 和 npm。
+SUORA / 朔枢 是 Electron 桌面应用。开发环境需使用 Node.js `>= 22.12.0` 和 npm。
+
+## 获取最新发布包
+
+如果你想直接安装桌面应用，而不是从源码启动开发环境，请前往 GitHub Release 下载打包产物。
+
+- 当前文档核对的最新公开版本是 <a href={docsSiteMetadata.latestRelease.url} target="_blank" rel="noreferrer">{docsSiteMetadata.latestRelease.tagName}</a>（发布于 {formatReleasePublishedAt("zh")}）。
+- 发布页会提供该版本实际上传的 Windows、macOS 与 Linux 安装包或便携产物。
+- 仓库主页与文档入口分别位于 <a href={docsSiteMetadata.repository.url} target="_blank" rel="noreferrer">{docsSiteMetadata.repository.url}</a> 和 <a href={docsSiteMetadata.repository.homepageUrl} target="_blank" rel="noreferrer">{docsSiteMetadata.repository.homepageUrl}</a>。
 
 ## 安装依赖
 
@@ -20,23 +29,23 @@ npm run dev
 
 ## 配置第一个模型
 
-1. 启动应用后进入 **Models**。
+1. 启动应用后进入 **模型**。
 2. 选择预设提供商，或创建一个 Custom / OpenAI-compatible 提供商。
 3. 填写 Base URL、API Key，并启用至少一个模型。Ollama、Custom 和 OpenRouter 可按端点要求不填写 API Key。
-4. 打开 **Chats**，选择模型或 Agent 后开始对话。
+4. 打开 **聊天**，选择模型或智能体后开始对话。
 
 ### 首次启动界面示例
 
 <DocScreenshot
   src={modelsProviderScreenshot}
-  alt="SUORA Models 页面中的示例 Provider 配置"
-  caption="首次启动后，通常先在 Models 页面补齐 Provider、Base URL 与模型启用状态；截图中使用的是脱敏的示例 Provider。"
+  alt="SUORA 模型页面中的示例 Provider 配置"
+  caption="首次启动后，通常先在模型页面补齐 Provider、Base URL 与模型启用状态；截图中使用的是脱敏的示例 Provider。"
 />
 
 <DocScreenshot
   src={chatsComposerScreenshot}
-  alt="SUORA Chats 页面中的模型与 Agent 选择器"
-  caption="完成模型配置后，切回 Chats 验证模型是否出现在选择器中；如果同时配置了 Agent，也可以直接在此处选择 Agent + 模型组合开始测试。"
+  alt="SUORA 聊天页面中的模型与智能体选择器"
+  caption="完成模型配置后，切回聊天页验证模型是否出现在选择器中；如果同时配置了智能体，也可以直接在此处选择智能体 + 模型组合开始测试。"
 />
 
 Ollama 默认地址为 `http://localhost:11434/v1`，通常不需要 API Key。部分 OpenAI-compatible 服务可刷新 `{baseUrl}/models` 模型目录。

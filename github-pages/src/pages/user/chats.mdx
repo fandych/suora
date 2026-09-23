@@ -1,15 +1,15 @@
 import chatsComposerScreenshot from "../../assets/docs/user/chats-composer.png"
 
-export const meta = { title: "Chats", description: "创建对话、选择模型和 Agent，并管理附件与导出。" }
+export const meta = { title: "聊天", description: "创建对话、选择模型和智能体，并管理附件与导出。" }
 
-# Chats
+# 聊天
 
-Chats 是 SUORA 的日常对话入口。可在此选择模型或 Agent、添加附件、观察流式回复与工具调用，并将完整转录导出为文件。
+聊天是 SUORA 的日常对话入口。可在此选择模型或智能体、添加附件、观察流式回复与工具调用，并将完整转录导出为文件。
 
 ## 开始一个会话
 
-1. 进入 **Chats** 并选择 **New chat**。
-2. 在输入框上方选择模型；如需使用预设 instructions 和授权资源，再选择 Agent。
+1. 进入 **聊天** 并选择 **New chat**。
+2. 在输入框上方选择模型；如需使用预设 instructions 和授权资源，再选择智能体。
 3. 输入问题，必要时添加附件，然后发送。
 
 新建会话在发送第一段内容或附件前只是草稿，不会写入本地记录。首次发送后，SUORA 会创建真实会话；标题通常取首条用户消息的前 18 个字符。只有附件时，标题为 `Untitled chat`。
@@ -26,17 +26,17 @@ Chats 是 SUORA 的日常对话入口。可在此选择模型或 Agent、添加�
 
 <DocScreenshot
   src={chatsComposerScreenshot}
-  alt="SUORA Chats 页面中的会话编辑器和模型选择器"
-  caption="聊天输入区把消息输入框、Agent 选择器、模型选择器、导出入口和发送按钮集中在同一处。第一次验证新模型或新 Agent 时，建议先在这里完成一次最小可用测试。"
+  alt="SUORA 聊天页面中的会话编辑器和模型选择器"
+  caption="聊天输入区把消息输入框、智能体选择器、模型选择器、导出入口和发送按钮集中在同一处。第一次验证新模型或新智能体时，建议先在这里完成一次最小可用测试。"
 />
 
-## 选择模型与 Agent
+## 选择模型与智能体
 
 模型菜单按 Provider 分组显示已启用模型。若当前模型失效，应用会回退至第一个可用模型并提示 **Model unavailable**。
 
-选择 Agent 后，实际生成优先使用 Agent 自己配置的 Provider、模型与最大步骤数；如果 Agent 未设置有效模型，则使用当前 Composer 的模型。Agent 同时会带入其 instructions，以及已经授权的 Documents、Skills、Workflows 和 Integrations。
+选择智能体后，实际生成优先使用智能体自己配置的 Provider、模型与最大步骤数；如果智能体未设置有效模型，则使用当前编辑区当前选择的模型。智能体同时会带入其 instructions，以及已经授权的文档、技能、工作流和集成。
 
-建议先在 **Models** 中确认 Provider、Base URL、API Key 和模型已启用，再开始 Chats。遇到复杂任务时，使用目标明确、权限最小化的 Agent。
+建议先在 **模型** 中确认 Provider、Base URL、API Key 和模型已启用，再开始聊天。遇到复杂任务时，使用目标明确、权限最小化的智能体。
 
 ## 流式回复与停止
 

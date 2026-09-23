@@ -2,47 +2,47 @@ import integrationsHttpScreenshot from "../../assets/docs/user/integrations-http
 import integrationsScriptScreenshot from "../../assets/docs/user/integrations-script.png"
 import integrationsMcpScreenshot from "../../assets/docs/user/integrations-mcp.png"
 
-export const meta = { title: "Integrations", description: "连接 HTTP 服务、沙箱脚本和 MCP 端点，并将它们授权给 Agent 或 workflow。" }
+export const meta = { title: "集成", description: "连接 HTTP 服务、沙箱脚本和 MCP 端点，并将它们授权给智能体或工作流。" }
 
-# Integrations
+# 集成
 
-Integrations 用于把外部 HTTP 服务、本地脚本或 MCP 端点接入 SUORA。集成可绑定给 Agent，也可被 workflow 的 HTTP、Webhook 或 Toolset 节点引用。
+集成用于把外部 HTTP 服务、本地脚本或 MCP 端点接入 SUORA。集成可绑定给智能体，也可被工作流的 HTTP、Webhook 或 Toolset 节点引用。
 
-当前支持三种类型：**HTTP**、**Scripts** 和 **MCP**。新建操作默认创建 HTTP 集成；需要脚本或 MCP 时，在详情编辑器中切换类型。
+当前支持三种类型：**HTTP**、**脚本** 和 **MCP**。新建操作默认创建 HTTP 集成；需要脚本或 MCP 时，在详情编辑器中切换类型。
 
 ## 界面示例
 
-### HTTP Integration
+### HTTP 集成
 
 <DocScreenshot
   src={integrationsHttpScreenshot}
-  alt="SUORA Integrations 页面中的 HTTP 集成配置"
+  alt="SUORA 集成页面中的 HTTP 集成配置"
   caption="HTTP 集成适合先从一个最小 endpoint 开始：填写名称、描述、Base URL 与认证方式，再逐步补 endpoint、请求体和 Try run 输入。"
 />
 
-### Script Integration
+### 脚本集成
 
 <DocScreenshot
   src={integrationsScriptScreenshot}
-  alt="SUORA Integrations 页面中的 Script 集成编辑器"
+  alt="SUORA 集成页面中的脚本集成编辑器"
   caption="Script 集成会把脚本名称、handler、超时和代码编辑器放在同一个工作台中。编写脚本前，先明确输入/输出结构，再决定是否真的需要脚本而不是 HTTP Integration。"
 />
 
-### MCP Integration
+### MCP 集成
 
 <DocScreenshot
   src={integrationsMcpScreenshot}
-  alt="SUORA Integrations 页面中的 MCP 集成配置"
+  alt="SUORA 集成页面中的 MCP 集成配置"
   caption="MCP 配置页主要用于记录 endpoint、launch command、protocol 和 tool catalog。当前实现更偏向配置与可视化清单，而不是完整的 MCP client 调试台。"
 />
 
-## 创建 HTTP Integration
+## 创建 HTTP 集成
 
-1. 进入 **Integrations**，新建集成。
+1. 进入 **集成**，新建集成。
 2. 填写共享 Base URL，并配置认证方式。
 3. 新建一个或多个 endpoint，设置方法、路径、参数、默认 body 和 schema。
 4. 保存后使用 **Try run** 发送测试请求。
-5. 将集成绑定到 Agent，或在 workflow 节点中选择它。
+5. 将集成绑定到智能体，或在工作流节点中选择它。
 
 HTTP 支持 GET、POST、PUT、PATCH、DELETE、HEAD 和 OPTIONS。一个集成可拥有多个 endpoint；最后一个 endpoint 不能删除。路径中的 `{id}` 或 `:id` 会自动同步为 path 参数。
 

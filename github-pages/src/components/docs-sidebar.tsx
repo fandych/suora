@@ -13,6 +13,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { docsSiteMetadata } from "@/lib/docs-site"
 import { docsUiMessages, getLocalizedSections, localizeDocPath, type DocLocale } from "@/lib/docs-navigation"
 
 export function DocsSidebar({ currentPath, locale }: { currentPath: string; locale: DocLocale }) {
@@ -50,9 +51,24 @@ export function DocsSidebar({ currentPath, locale }: { currentPath: string; loca
         })}
       </SidebarContent>
       <SidebarFooter className="p-4">
-        <a className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground" href="https://github.com/fandych/suora" target="_blank" rel="noreferrer">
-          <GitBranchIcon /> {messages.githubProject}
-        </a>
+        <div className="space-y-2">
+          <a
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            href={docsSiteMetadata.repository.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            <GitBranchIcon /> {messages.githubProject}
+          </a>
+          <a
+            className="block text-xs text-muted-foreground hover:text-foreground"
+            href={docsSiteMetadata.latestRelease.url}
+            target="_blank"
+            rel="noreferrer"
+          >
+            {messages.latestReleaseLabel}: {docsSiteMetadata.latestRelease.tagName}
+          </a>
+        </div>
       </SidebarFooter>
     </Sidebar>
   )
