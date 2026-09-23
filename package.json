@@ -2,6 +2,11 @@
   "name": "suora",
   "private": true,
   "version": "0.2.1",
+  "description": "SUORA - local-first AI desktop workbench with chats, agents, workflows, documents, skills, integrations, and channels",
+  "author": {
+    "name": "fandych",
+    "email": "fandych@users.noreply.github.com"
+  },
   "type": "module",
   "main": "./out/main/main.js",
   "engines": {
