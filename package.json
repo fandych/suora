@@ -155,7 +155,6 @@
       "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "mac": {
-      "icon": "resources/icons/icon-1024x1024.png",
       "target": [
         "dmg",
         "zip"
@@ -163,7 +162,6 @@
       "category": "public.app-category.productivity"
     },
     "linux": {
-      "icon": "resources/icons",
       "target": [
         "AppImage",
         "deb",
