@@ -18,7 +18,15 @@ function normalizeWeChatQrImageSource(value?: string) {
     return trimmed
   }
 
-  return `data:image/png;base64,${trimmed}`
+  if (trimmed.startsWith("//")) {
+    return `https:${trimmed}`
+  }
+
+  if (/^(?:<\?xml[\s\S]*<svg|<svg\b)/i.test(trimmed)) {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(trimmed)}`
+  }
+
+  return `data:image/png;base64,${trimmed.replace(/\s+/g, "")}`
 }
 
 function toDataUrl(base64: string, format?: string) {
@@ -168,12 +176,18 @@ export function ChannelPlatformWeChatPersonalForm({
       ? qrPreviewFallback.dataUrl
       : normalizeWeChatQrImageSource(channel.wechatPersonalQrCodeUrl)
   const isQrDialogVisible = isQrDialogOpen && !isWeChatConnected
-  const shouldWaitForFreshQr = requestedQrFlow && (isBinding || sourceSnapshotOnOpen === normalizedWeChatQrSource)
+  const hasQrGenerationError =
+    requestedQrFlow && !isBinding && !normalizedWeChatQrSource && channel.wechatPersonalBindingStatus === "error"
+  const shouldWaitForFreshQr =
+    !hasQrGenerationError && requestedQrFlow && (isBinding || sourceSnapshotOnOpen === normalizedWeChatQrSource)
   const qrStatusMessage =
     channel.wechatPersonalQrStatus === "scaned"
       ? t("channels.wechatPersonal.status.scanned", "QR code scanned. Waiting for confirmation in WeChat.")
       : channel.wechatPersonalQrStatus === "need_verifycode"
-        ? t("channels.wechatPersonal.status.needCode", "WeChat requested a verification code. Enter the digits shown on the device below.")
+        ? t(
+            "channels.wechatPersonal.status.needCode",
+            "WeChat requested a verification code. Enter the digits shown on the device below.",
+          )
         : t(
             "channels.wechatPersonal.status.idle",
             "Enter a verification code only if the WeChat runtime explicitly asks for one.",
@@ -271,7 +285,9 @@ export function ChannelPlatformWeChatPersonalForm({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-primary/15 bg-primary/5 p-3">
         <div>
-          <div className="text-sm font-medium text-foreground">{t("channels.wechatPersonal.directBinding", "Direct QR binding")}</div>
+          <div className="text-sm font-medium text-foreground">
+            {t("channels.wechatPersonal.directBinding", "Direct QR binding")}
+          </div>
           <Hint>
             {t(
               "channels.wechatPersonal.directBindingDescription",
@@ -318,7 +334,9 @@ export function ChannelPlatformWeChatPersonalForm({
           </Field>
           <div className="flex items-end">
             <Button size="sm" onClick={onConfirmBinding} disabled={isBinding || verificationCode.trim().length < 4}>
-              {isBinding ? t("channels.wechatPersonal.verifying", "Verifying...") : t("channels.wechatPersonal.confirmBinding", "Confirm binding")}
+              {isBinding
+                ? t("channels.wechatPersonal.verifying", "Verifying...")
+                : t("channels.wechatPersonal.confirmBinding", "Confirm binding")}
             </Button>
           </div>
         </div>
@@ -332,6 +350,18 @@ export function ChannelPlatformWeChatPersonalForm({
           {shouldWaitForFreshQr ? (
             <div className="flex min-h-80 items-center justify-center rounded-xl border bg-muted/10 text-sm text-muted-foreground">
               {t("channels.wechatPersonal.generatingQr", "Generating a fresh QR code...")}
+            </div>
+          ) : hasQrGenerationError ? (
+            <div className="flex min-h-80 flex-col items-center justify-center gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-6 text-center">
+              <div className="text-sm font-medium text-destructive">
+                {t("channels.wechatPersonal.qrFailed", "Could not generate the WeChat QR code.")}
+              </div>
+              <div className="text-xs text-muted-foreground">
+                {t(
+                  "channels.wechatPersonal.qrFailedHint",
+                  "Retry the QR binding flow. If the issue persists, inspect the channel debug log for the upstream error.",
+                )}
+              </div>
             </div>
           ) : qrImageSource ? (
             <div className="space-y-2">

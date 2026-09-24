@@ -28,7 +28,7 @@ describe("chat tool event item", () => {
     expect(screen.getByText("searchDocuments")).toBeTruthy()
     expect(screen.queryByText("Input")).toBeNull()
 
-    fireEvent.click(screen.getByRole("button", { name: "Input & output" }))
+    fireEvent.click(screen.getByRole("button", { name: "Details" }))
 
     expect(screen.getByText("Input")).toBeTruthy()
     expect(screen.getByText("Output")).toBeTruthy()

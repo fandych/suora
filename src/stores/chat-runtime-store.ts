@@ -10,7 +10,10 @@ import {
   type AssistantResponsePart,
 } from "@/lib/chat/response-parts"
 import { ChatApi } from "@/services/chat-service"
-import { subscribeToChatRuntime as subscribeToElectronChatRuntime, type ChatRuntimePayload } from "@/services/chat-runtime-listener"
+import {
+  subscribeToChatRuntime as subscribeToElectronChatRuntime,
+  type ChatRuntimePayload,
+} from "@/services/chat-runtime-listener"
 import { createChat, getChatDetail, saveChatSessionSettings } from "@/services/chat-service"
 import { hasAppBridge } from "@/services/bridge"
 
@@ -181,7 +184,7 @@ function beginChatRun(chatId: string, runId: string | null) {
     toolEvents: [],
     streamingText: "",
     assistantResponseMessageId: null,
-    assistantResponseParts: [{ id: "assistant-stream", type: "text", content: "", isPending: true }],
+    assistantResponseParts: [],
   })
 }
 

@@ -62,6 +62,10 @@ function buildSections(parts: AssistantResponsePart[]): AssistantRenderSection[]
       .map((part) => part.content.trim())
       .filter(Boolean)
       .join("\n\n---\n\n")
+    if (!content) {
+      bufferedTextParts = []
+      return
+    }
     const isPending = bufferedTextParts.some((part) => part.isPending)
     sections.push({
       id: bufferedTextParts.map((part) => part.id).join(":"),

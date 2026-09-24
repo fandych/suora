@@ -1,5 +1,5 @@
 import katex from "katex"
-import { useEffect, useId, useMemo, useRef, useState } from "react"
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react"
 
 import { showToast } from "@/services/toast-service"
 import { copyTextToClipboard } from "@/lib/browser/clipboard"
@@ -14,6 +14,20 @@ async function renderMermaid(target: HTMLElement, id: string, code: string) {
   } catch (error) {
     target.textContent = String(error)
   }
+}
+
+async function highlightCodeElement(codeElement: HTMLElement, codeText: string, language?: string) {
+  const highlightModule = await import("highlight.js/lib/common")
+  const highlighter = highlightModule.default
+  const normalizedLanguage = language?.trim().toLowerCase() ?? ""
+  const highlighted =
+    normalizedLanguage && highlighter.getLanguage(normalizedLanguage)
+      ? highlighter.highlight(codeText, { language: normalizedLanguage, ignoreIllegals: true })
+      : highlighter.highlightAuto(codeText)
+
+  codeElement.innerHTML = highlighted.value
+  codeElement.classList.add("hljs")
+  codeElement.dataset.language = highlighted.language ?? normalizedLanguage
 }
 
 type ChatRichContentProps = {
@@ -43,7 +57,7 @@ export function ChatRichContent({ content, isStreaming = false }: ChatRichConten
 
   const html = useMemo(() => markdownToTiptapHtml(renderContent || ""), [renderContent])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) {
       return
@@ -127,11 +141,28 @@ export function ChatRichContent({ content, isStreaming = false }: ChatRichConten
       const codeElement = pre.querySelector("code")
       if (codeElement) {
         const languageMatch = Array.from(codeElement.classList).find((item) => item.startsWith("language-"))
+        const normalizedLanguage = languageMatch?.replace("language-", "").trim().toLowerCase() ?? ""
+
         if (languageMatch) {
           const labelNode = document.createElement("span")
           labelNode.className = "chat-code-language"
-          labelNode.textContent = languageMatch.replace("language-", "")
+          labelNode.textContent = normalizedLanguage
           toolbar.insertBefore(labelNode, copyButton)
+
+          void highlightCodeElement(codeElement as HTMLElement, codeText, normalizedLanguage)
+            .then(() => {
+              const resolvedLanguage = (codeElement as HTMLElement).dataset.language?.trim().toLowerCase() ?? ""
+              if (resolvedLanguage) {
+                labelNode.textContent = resolvedLanguage
+              }
+            })
+            .catch(() => {
+              codeElement.textContent = codeText
+            })
+        } else {
+          void highlightCodeElement(codeElement as HTMLElement, codeText).catch(() => {
+            codeElement.textContent = codeText
+          })
         }
       }
 

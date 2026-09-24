@@ -1,6 +1,9 @@
 import channelsWebhookScreenshot from "../../../assets/docs/user/channels-webhook.png"
 
-export const meta = { title: "Channels", description: "Connect external messaging platforms and let agents handle inbound messages and replies." }
+export const meta = {
+  title: "Channels",
+  description: "Connect external messaging platforms and let agents handle inbound messages and replies.",
+}
 
 # Channels
 
@@ -43,7 +46,8 @@ Each channel can specify a reply agent and model.
 - if Auto reply is disabled, the local chat still records the inbound message but no outbound reply is sent automatically
 
 <Callout type="warning">
-  Auto reply allows an agent to act toward real external users. Always validate with test accounts and tightly scoped agents before enabling production channels.
+  Auto reply allows an agent to act toward real external users. Always validate with test accounts and tightly scoped
+  agents before enabling production channels.
 </Callout>
 
 ## Webhook and stream modes
@@ -60,25 +64,25 @@ For public use, you still need a reverse proxy, port mapping, or another secure 
 
 ## Credential overview
 
-| Platform | Main fields |
-| --- | --- |
-| WeCom | Corp ID, Agent ID, App secret, verification token |
-| Personal WeChat | QR binding token/Base URL or bridge webhook URL |
-| WeChat Official Account | App ID, App secret, verification token |
-| WeChat Mini Program | App ID, App secret, verification token |
-| Feishu | App ID, App secret, verification token |
-| DingTalk Stream | Client ID, Client secret |
-| DingTalk Webhook | Webhook URL, signing secret |
-| Telegram | Bot token |
-| Teams | App ID, App password |
-| Email | IMAP host/user plus SMTP config or global mail service |
-| Custom | Webhook URL or WebSocket URL |
+| Platform                | Main fields                                            |
+| ----------------------- | ------------------------------------------------------ |
+| WeCom                   | Corp ID, Agent ID, App secret, verification token      |
+| Personal WeChat         | QR binding token/Base URL or bridge webhook URL        |
+| WeChat Official Account | App ID, App secret, verification token                 |
+| WeChat Mini Program     | App ID, App secret, verification token                 |
+| Feishu                  | App ID, App secret, verification token                 |
+| DingTalk Stream         | Client ID, Client secret                               |
+| DingTalk Webhook        | Webhook URL, signing secret                            |
+| Telegram                | Bot token                                              |
+| Teams                   | App ID, App password                                   |
+| Email                   | IMAP host/user plus SMTP config or global mail service |
+| Custom                  | Webhook URL or WebSocket URL                           |
 
 Saving config does not guarantee connectivity. Use bind flows, health checks, and real test traffic.
 
 ## Personal WeChat QR binding
 
-Personal WeChat uses stream mode. The bind flow creates a QR login session and may request an on-device verification code before the status becomes connected.
+Personal WeChat uses stream mode. The bind flow creates a QR login session and may request an on-device verification code before the status becomes connected. The QR preview accepts remote images as well as embedded base64 / SVG payloads, and the app can fall back to a captured preview when the upstream image cannot be rendered directly.
 
 ## Email Inbox
 

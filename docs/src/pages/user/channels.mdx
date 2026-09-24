@@ -49,7 +49,8 @@ export const meta = { title: "渠道", description: "把外部消息平台接入
 渠道会话与普通 Chats 列表隔离，便于将外部对话和手动对话分开管理。可通过 Channel 的 Messages、Users 和 Debug 面板查看渠道专属运行记录。
 
 <Callout type="warning">
-  自动回复会让 Agent 对真实外部用户采取行动。先使用测试账号、最小权限的 Agent 与模拟消息验证，再启用生产渠道。涉及付款、账号变更、文件操作或敏感数据时，应明确限制 Agent 的工具和 Integration 范围。
+  自动回复会让 Agent 对真实外部用户采取行动。先使用测试账号、最小权限的 Agent
+  与模拟消息验证，再启用生产渠道。涉及付款、账号变更、文件操作或敏感数据时，应明确限制 Agent 的工具和 Integration 范围。
 </Callout>
 
 ## Webhook 与 Stream
@@ -84,19 +85,19 @@ Stream 连接用于钉钉 Stream、Custom WebSocket、个人微信及 Email 轮�
 
 以下是应用检查的核心字段；实际平台还可能要求在其管理后台配置回调、事件订阅或权限。
 
-| 平台 | 主要配置 |
-| --- | --- |
-| 企业微信 | Corp ID、Agent ID、App secret、验证 token。 |
-| 个人微信 | QR 绑定产生的 Bot token/Base URL，或 Bridge webhook URL。 |
-| 微信公众号 | App ID、App secret、验证 token。 |
-| 微信小程序 | App ID、App secret、验证 token。 |
-| 飞书 | App ID、App secret、Verification token。 |
-| 钉钉 Stream | Client ID、Client secret。 |
-| 钉钉 Webhook | Webhook URL、Signing secret。 |
-| Telegram | Bot token。 |
-| Teams | App ID、App password。 |
-| Email | IMAP host/user，以及 SMTP host/from address，或全局邮件服务。 |
-| Custom | Webhook URL 或 WebSocket URL。 |
+| 平台         | 主要配置                                                      |
+| ------------ | ------------------------------------------------------------- |
+| 企业微信     | Corp ID、Agent ID、App secret、验证 token。                   |
+| 个人微信     | QR 绑定产生的 Bot token/Base URL，或 Bridge webhook URL。     |
+| 微信公众号   | App ID、App secret、验证 token。                              |
+| 微信小程序   | App ID、App secret、验证 token。                              |
+| 飞书         | App ID、App secret、Verification token。                      |
+| 钉钉 Stream  | Client ID、Client secret。                                    |
+| 钉钉 Webhook | Webhook URL、Signing secret。                                 |
+| Telegram     | Bot token。                                                   |
+| Teams        | App ID、App password。                                        |
+| Email        | IMAP host/user，以及 SMTP host/from address，或全局邮件服务。 |
+| Custom       | Webhook URL 或 WebSocket URL。                                |
 
 保存配置不代表平台已连接。完成必填项后使用 Bind 或健康检查确认连接状态。
 
@@ -108,7 +109,7 @@ Stream 连接用于钉钉 Stream、Custom WebSocket、个人微信及 Email 轮�
 2. 如微信要求验证，输入设备上显示的验证码。
 3. 等待状态变为已连接；二维码超时时应用会刷新会话。
 
-绑定完成后会保存必要的本地连接信息。使用 **Unbind channel** 可移除当前绑定并关闭渠道配置。
+二维码既支持上游直接返回的远程图片，也支持嵌入式 base64 / SVG 内容；如果远程二维码图片无法直接显示，应用会自动尝试抓取可预览快照。绑定完成后会保存必要的本地连接信息。使用 **Unbind channel** 可移除当前绑定并关闭渠道配置。
 
 ## Email Inbox
 

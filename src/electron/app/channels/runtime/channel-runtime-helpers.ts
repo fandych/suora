@@ -56,7 +56,19 @@ export function normalizeWeChatPersonalQrCodeUrl(value?: string) {
   const trimmed = value?.trim()
   if (!trimmed) return undefined
   if (/^(?:data:|https?:\/\/|blob:|file:)/i.test(trimmed)) return trimmed
-  return `data:image/png;base64,${trimmed}`
+  if (trimmed.startsWith("//")) return `https:${trimmed}`
+  if (/^(?:<\?xml[\s\S]*<svg|<svg\b)/i.test(trimmed)) {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(trimmed)}`
+  }
+
+  const compactValue = trimmed.replace(/\s+/g, "")
+  if (/^[A-Za-z0-9+/=]+$/.test(compactValue)) return `data:image/png;base64,${compactValue}`
+
+  try {
+    return new URL(trimmed, WECHAT_PERSONAL_DEFAULT_BASE_URL).toString()
+  } catch {
+    return `data:image/png;base64,${compactValue}`
+  }
 }
 
 export async function postWeChatPersonalJson<T>(

@@ -18,7 +18,7 @@ type ChatToolEventItemProps = {
 }
 
 function buildStorageKey(activity: ChatToolActivity) {
-  return `suora:chat-tool-trace:${activity.id}`
+  return `suora:chat-tool-trace:v2:${activity.id}`
 }
 
 export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEventItemProps) {
@@ -43,7 +43,7 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
   useEffect(() => {
     const stored = window.localStorage.getItem(storageKey)
     if (stored == null) {
-      setIsOpen(status === "running" || status === "error")
+      setIsOpen(false)
       return
     }
 
@@ -91,7 +91,7 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
     <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
       <div
         className={cn(
-          "rounded-xl border px-3 py-2.5 shadow-xs transition-colors",
+          "rounded-xl border px-2.5 py-2 shadow-xs transition-colors",
           status === "error"
             ? "border-destructive/35 bg-destructive/8"
             : status === "stopped"
@@ -104,7 +104,7 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
         <div className="flex items-start gap-3">
           <div
             className={cn(
-              "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border bg-background/90",
+              "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border bg-background/90",
               status === "error"
                 ? "border-destructive/30 text-destructive"
                 : status === "stopped"
@@ -114,7 +114,7 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
                     : "border-border text-foreground",
             )}
           >
-            <Icon className={cn(status === "running" ? "animate-spin" : "", "size-4 shrink-0")} />
+            <Icon className={cn(status === "running" ? "animate-spin" : "", "size-3.5 shrink-0")} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -155,7 +155,7 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
             ) : null}
             {hasDetails ? (
               <CollapsibleTrigger className="rounded-md border border-border/80 bg-background/70 px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
-                {isOpen ? "Hide data" : "Input & output"}
+                {isOpen ? "Hide details" : "Details"}
               </CollapsibleTrigger>
             ) : null}
           </div>

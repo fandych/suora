@@ -1,3 +1,6 @@
+import highlightJs from "highlight.js/lib/common"
+import katex from "katex"
+
 type TiptapMark = {
   type: string
   attrs?: Record<string, string>
@@ -22,6 +25,42 @@ function escapeHtml(value: string) {
 
 function escapeAttr(value: string) {
   return value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+}
+
+function normalizeCodeLanguage(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_+-]/g, "")
+}
+
+function renderInlineMath(latex: string) {
+  try {
+    return `<span class="document-math-inline">${katex.renderToString(latex, { displayMode: false, throwOnError: false })}</span>`
+  } catch {
+    return escapeHtml(latex)
+  }
+}
+
+function renderBlockMath(latex: string) {
+  try {
+    return `<div class="document-math-block">${katex.renderToString(latex, { displayMode: true, throwOnError: false })}</div>`
+  } catch {
+    return `<div class="document-math-block">${escapeHtml(latex)}</div>`
+  }
+}
+
+function renderHighlightedCode(code: string, language: string) {
+  const normalizedLanguage = normalizeCodeLanguage(language)
+  const highlighted =
+    normalizedLanguage && highlightJs.getLanguage(normalizedLanguage)
+      ? highlightJs.highlight(code, { language: normalizedLanguage, ignoreIllegals: true })
+      : highlightJs.highlightAuto(code)
+  const resolvedLanguage = highlighted.language ?? normalizedLanguage
+  const languageClass = resolvedLanguage ? ` language-${escapeAttr(resolvedLanguage)}` : ""
+  const languageAttr = resolvedLanguage ? ` data-language="${escapeAttr(resolvedLanguage)}"` : ""
+
+  return `<pre><code class="hljs${languageClass}"${languageAttr}>${highlighted.value}</code></pre>`
 }
 
 function inlineMarkdown(value: string) {
@@ -49,10 +88,8 @@ function inlineMarkdown(value: string) {
       (_, label: string, href: string) => `<a href="${escapeAttr(href)}">${escapeHtml(label)}</a>`,
     )
 
-  result = result.replace(
-    /__MATH_TOKEN_(\d+)__/g,
-    (_, index: string) =>
-      `<span data-math-inline="${escapeAttr(mathTokens[Number.parseInt(index, 10)] ?? "")}"></span>`,
+  result = result.replace(/__MATH_TOKEN_(\d+)__/g, (_, index: string) =>
+    renderInlineMath(mathTokens[Number.parseInt(index, 10)] ?? ""),
   )
   return result
 }
@@ -114,14 +151,22 @@ export function markdownToTiptapHtml(markdown: string) {
     if (line.trim()) {
       blankRun = 0
     }
+
+    const singleLineBlockMath = /^\$\$([\s\S]+)\$\$$/.exec(line.trim())
+    if (singleLineBlockMath) {
+      closeList()
+      flushTable()
+      flushPendingTable()
+      html.push(renderBlockMath(singleLineBlockMath[1].trim()))
+      continue
+    }
+
     if (line.trim().startsWith("```")) {
       if (inCode) {
         if (codeLanguage === "mermaid") {
           html.push(`<div data-mermaid="${escapeAttr(codeLines.join("\n"))}"></div>`)
         } else {
-          html.push(
-            `<pre><code class="language-${escapeHtml(codeLanguage)}">${escapeHtml(codeLines.join("\n"))}</code></pre>`,
-          )
+          html.push(renderHighlightedCode(codeLines.join("\n"), codeLanguage))
         }
         codeLines = []
         codeLanguage = ""
@@ -130,7 +175,7 @@ export function markdownToTiptapHtml(markdown: string) {
         closeList()
         flushTable()
         flushPendingTable()
-        codeLanguage = line.trim().slice(3).trim()
+        codeLanguage = normalizeCodeLanguage(line.trim().slice(3))
         inCode = true
       }
       continue
@@ -143,7 +188,7 @@ export function markdownToTiptapHtml(markdown: string) {
 
     if (line.trim() === "$$") {
       if (inMath) {
-        html.push(`<div data-math-block="${escapeAttr(mathLines.join("\n"))}"></div>`)
+        html.push(renderBlockMath(mathLines.join("\n")))
         mathLines = []
         inMath = false
       } else {
@@ -267,17 +312,16 @@ export function markdownToTiptapHtml(markdown: string) {
   closeList()
   flushTable()
   flushPendingTable()
-
   if (inCode) {
     html.push(
       codeLanguage === "mermaid"
         ? `<div data-mermaid="${escapeAttr(codeLines.join("\n"))}"></div>`
-        : `<pre><code>${escapeHtml(codeLines.join("\n"))}</code></pre>`,
+        : renderHighlightedCode(codeLines.join("\n"), codeLanguage),
     )
   }
 
   if (inMath) {
-    html.push(`<div data-math-block="${escapeAttr(mathLines.join("\n"))}"></div>`)
+    html.push(renderBlockMath(mathLines.join("\n")))
   }
 
   return html.join("\n") || "<p></p>"

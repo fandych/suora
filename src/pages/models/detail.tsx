@@ -4,7 +4,13 @@ import { useNavigate } from "react-router"
 import { EllipsisIcon, SlashIcon, Trash2Icon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import type { ProviderConfigRecord } from "@/types/agent"
 import type { ProviderPreset } from "@/types/agent"
 import { emitDataChanged } from "@/services/data-events"
@@ -103,7 +109,10 @@ const ModelsDetailPage = () => {
 
   const handleOpenCreateModel = () => {
     setEditingModelIndex(null)
-    setModelForm(createModelFormState())
+    setModelForm({
+      ...createModelFormState(),
+      enabled: Boolean(draft?.enabled) && !draft?.models.some((model) => model.enabled),
+    })
     setIsModelDialogOpen(true)
   }
 
@@ -211,7 +220,10 @@ const ModelsDetailPage = () => {
         title: t("models.detail.discoveryUnavailable.title", "Model catalog refresh unavailable"),
         description:
           discoveryState.reason ??
-          t("models.detail.discoveryUnavailable.description", "Remote model discovery is not available for this provider."),
+          t(
+            "models.detail.discoveryUnavailable.description",
+            "Remote model discovery is not available for this provider.",
+          ),
         type: "warning",
       })
       return

@@ -37,7 +37,7 @@ export const bindChannel = async (detail: ChannelDetail) => {
         wechatPersonalBindingStatus: result.success ? "pending" : "error",
         wechatPersonalQrStatus: result.success ? "wait" : undefined,
         wechatPersonalSessionKey: result.sessionKey,
-        wechatPersonalQrCodeUrl: result.qrCodeUrl ?? detail.channel.wechatPersonalQrCodeUrl,
+        wechatPersonalQrCodeUrl: result.success ? result.qrCodeUrl : undefined,
         bindingState: result.success ? "draft" : "error",
       },
     })
@@ -48,7 +48,15 @@ export const bindChannel = async (detail: ChannelDetail) => {
 export const unbindChannel = (detail: ChannelDetail) =>
   ChannelApi.save({
     ...detail,
-    channel: { ...detail.channel, enabled: false, bindingState: "unconfigured", wechatPersonalSessionKey: undefined },
+    channel: {
+      ...detail.channel,
+      enabled: false,
+      bindingState: "unconfigured",
+      wechatPersonalBindingStatus: undefined,
+      wechatPersonalQrStatus: undefined,
+      wechatPersonalSessionKey: undefined,
+      wechatPersonalQrCodeUrl: undefined,
+    },
   })
 
 export const waitForWeChatPersonalBinding = async (
@@ -80,6 +88,8 @@ export const waitForWeChatPersonalBinding = async (
       ...detail.channel,
       enabled: connected,
       wechatPersonalBindingStatus: connected ? "bound" : "pending",
+      wechatPersonalQrStatus: connected ? undefined : detail.channel.wechatPersonalQrStatus,
+      wechatPersonalSessionKey: connected ? undefined : detail.channel.wechatPersonalSessionKey,
       wechatPersonalQrCodeUrl: connected ? undefined : (result.qrCodeUrl ?? detail.channel.wechatPersonalQrCodeUrl),
       bindingState: connected ? "connected" : "draft",
     },

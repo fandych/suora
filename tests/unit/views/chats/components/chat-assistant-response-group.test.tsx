@@ -59,4 +59,21 @@ describe("chat assistant response group", () => {
     expect(screen.getAllByTestId("rich-content")).toHaveLength(2)
     expect(screen.queryByText("Show tools")).toBeNull()
   })
+
+  it("does not render an empty pending text section before the first tool call", () => {
+    render(
+      <ChatAssistantResponseGroup
+        parts={[
+          { id: "text-pending", type: "text", content: "", isPending: true },
+          { id: "tool-1", type: "tool", activity: { id: "activity-1", toolName: "readWorkspaceFile" } },
+          { id: "text-2", type: "text", content: "Final answer" },
+        ]}
+        providerType="openai"
+      />,
+    )
+
+    expect(screen.getAllByTestId("tool-item")).toHaveLength(1)
+    expect(screen.getAllByTestId("rich-content")).toHaveLength(1)
+    expect(screen.getByText("Final answer")).toBeTruthy()
+  })
 })

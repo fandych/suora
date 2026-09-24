@@ -1,7 +1,7 @@
 {
   "name": "suora",
   "private": true,
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "SUORA - local-first AI desktop workbench with chats, agents, workflows, documents, skills, integrations, and channels",
   "author": {
     "name": "fandych",
@@ -72,6 +72,7 @@
     "electron-updater": "^6.8.3",
     "embla-carousel-react": "^8.6.0",
     "express": "^5.2.1",
+    "highlight.js": "^11.12.0",
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",
     "input-otp": "^1.5.0",

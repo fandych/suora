@@ -14,7 +14,7 @@ type ChatToolActivityGroupProps = {
 
 function buildGroupStorageKey(activities: ChatToolActivity[]) {
   const signature = activities.map((activity) => activity.toolName).join(":")
-  return `suora:chat-tool-group:${activities.length}:${signature}`
+  return `suora:chat-tool-group:v2:${activities.length}:${signature}`
 }
 
 function getGroupState(activities: ChatToolActivity[]) {
@@ -91,25 +91,25 @@ export function ChatToolActivityGroup({ activities, messageId = null, onRetryToo
   return (
     <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
       <div className={cn("rounded-xl border", groupState.className)}>
-        <div className="flex items-center gap-2.5 px-3 py-2.5">
+        <div className="flex items-center gap-2 px-2.5 py-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-background/85 text-foreground shadow-xs">
-              <WrenchIcon className="size-3.5" />
+            <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-background/85 text-foreground shadow-xs">
+              <WrenchIcon className="size-3" />
             </div>
             <div className="min-w-0">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
-                <Icon className={cn("size-3.5 shrink-0", groupState.iconClassName)} />
+                <Icon className={cn("size-3 shrink-0", groupState.iconClassName)} />
                 <span className="truncate text-xs font-medium text-foreground">{groupState.label}</span>
                 <Badge variant={groupState.badgeVariant}>{groupState.badge}</Badge>
               </div>
             </div>
           </div>
           <CollapsibleTrigger className="rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground">
-            {isOpen ? "Hide tools" : "Show tools"}
+            {isOpen ? "Hide details" : "Details"}
           </CollapsibleTrigger>
         </div>
         <CollapsibleContent>
-          <div className="flex flex-col gap-2 border-t px-3 py-3">
+          <div className="flex flex-col gap-2 border-t px-2.5 py-2.5">
             {activities.map((activity, index) => (
               <ChatToolEventItem
                 key={activity.id}

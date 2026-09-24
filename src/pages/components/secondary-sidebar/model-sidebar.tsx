@@ -24,15 +24,14 @@ export default function ModelSidebar({ item, headerAction }: { item: PrimaryNavI
   const navigate = useNavigate()
   useEffect(() => {
     const loadItems = () =>
-      Promise.all([ModelApi.listAll(), ModelApi.listConfigured()])
-        .then(([allProviders, configuredProviders]) => {
-          const configuredIds = new Set(configuredProviders.map((provider) => provider.id))
+      ModelApi.listAll()
+        .then((providers) => {
           setItems(
-            allProviders.map((provider) => ({
+            providers.map((provider) => ({
               id: provider.id,
               title: provider.title,
               providerType: provider.providerType,
-              connected: configuredIds.has(provider.id),
+              connected: provider.enabled && provider.models.some((model) => model.enabled),
             })),
           )
         })

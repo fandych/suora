@@ -138,10 +138,12 @@ export function registerChannelIpc() {
               enabled: true,
               bindingState: "connected",
               wechatPersonalBindingStatus: "bound",
+              wechatPersonalQrStatus: undefined,
               wechatPersonalBotToken: result.botToken ?? detail.channel.wechatPersonalBotToken,
               wechatPersonalBaseUrl: result.baseUrl ?? detail.channel.wechatPersonalBaseUrl,
               wechatPersonalAccountId: result.accountId ?? detail.channel.wechatPersonalAccountId,
               wechatPersonalUserId: result.userId ?? detail.channel.wechatPersonalUserId,
+              wechatPersonalSessionKey: undefined,
               wechatPersonalQrCodeUrl: undefined,
             },
           })
