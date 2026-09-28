@@ -1,7 +1,7 @@
 {
   "name": "suora",
   "private": true,
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "SUORA - local-first AI desktop workbench with chats, agents, workflows, documents, skills, integrations, and channels",
   "author": {
     "name": "fandych",
