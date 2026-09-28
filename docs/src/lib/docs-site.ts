@@ -12,10 +12,10 @@ export const docsSiteMetadata = {
       "Local-first AI desktop workbench with chats, agents, workflows, integrations, documents, channels, and skills.",
   },
   latestRelease: {
-    name: "v0.2.1",
-    tagName: "v0.2.1",
-    url: "https://github.com/fandych/suora/releases/tag/v0.2.1",
-    publishedAt: "2026-09-23T12:49:28.060Z",
+    name: "0.2.3",
+    tagName: "v0.2.3",
+    url: "https://github.com/fandych/suora/releases/tag/v0.2.3",
+    publishedAt: "2026-09-28T09:22:11Z",
   },
 } as const
 
