@@ -21,6 +21,25 @@ export type HttpResponse = {
   data: unknown
 }
 
+function hasHeader(headers: Record<string, string>, name: string) {
+  return Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase())
+}
+
+function getBodyLength(body: string | Buffer) {
+  return Buffer.isBuffer(body) ? body.length : Buffer.byteLength(body)
+}
+
+function withBodyHeaders(headers: Record<string, string>, body?: string | Buffer) {
+  if (!body || hasHeader(headers, "Content-Length") || hasHeader(headers, "Transfer-Encoding")) {
+    return headers
+  }
+
+  return {
+    ...headers,
+    "Content-Length": String(getBodyLength(body)),
+  }
+}
+
 export async function configuredFetch(input: string | URL | Request, init: RequestInit = {}): Promise<Response> {
   const request = input instanceof Request ? input : new Request(input, init)
   const parsedUrl = await assertSafeHttpUrl(request.url)
@@ -35,13 +54,14 @@ export async function configuredFetch(input: string | URL | Request, init: Reque
       : new http.Agent({ keepAlive: false }))
   const body =
     request.method === "GET" || request.method === "HEAD" ? undefined : Buffer.from(await request.arrayBuffer())
+  const requestHeaders = withBodyHeaders(Object.fromEntries(request.headers), body)
 
   return new Promise((resolve, reject) => {
     const nodeRequest = transport.request(
       parsedUrl,
       {
         method: request.method,
-        headers: Object.fromEntries(request.headers),
+        headers: requestHeaders,
         agent,
         rejectUnauthorized: ignoreSsl ? false : (proxySettings.rejectUnauthorized ?? true),
         ...(parsedUrl.protocol === "https:" && net.isIP(parsedUrl.hostname) === 0
@@ -86,12 +106,13 @@ export async function requestHttp(url: string, options: HttpRequestOptions = {})
     (parsedUrl.protocol === "https:"
       ? new https.Agent({ keepAlive: false, rejectUnauthorized: !ignoreSsl })
       : new http.Agent({ keepAlive: false }))
+  const requestHeaders = withBodyHeaders(options.headers || {}, options.body)
   return new Promise((resolve, reject) => {
     const request = transport.request(
       parsedUrl,
       {
         method: options.method || "GET",
-        headers: options.headers || {},
+        headers: requestHeaders,
         agent,
         rejectUnauthorized: ignoreSsl ? false : (proxySettings.rejectUnauthorized ?? true),
         signal: options.signal,

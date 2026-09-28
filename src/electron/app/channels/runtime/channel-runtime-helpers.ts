@@ -16,7 +16,10 @@ import {
   type WeChatPersonalQrStatusResponse,
   type WeChatPersonalUpdatesResponse,
 } from "@/electron/app/channels/providers/wechat-personal-types"
-import { getWeChatPersonalBaseUrl } from "@/electron/app/channels/providers/wechat-personal-client"
+import {
+  buildWeChatPersonalHttpErrorMessage,
+  getWeChatPersonalBaseUrl,
+} from "@/electron/app/channels/providers/wechat-personal-client"
 export * from "@/electron/app/channels/providers/wechat-personal-types"
 export * from "@/electron/app/channels/providers/wechat-personal-client"
 import type { RuntimeChannelMessage } from "@/electron/app/channels/runtime/channel-runtime-types"
@@ -90,7 +93,9 @@ export async function postWeChatPersonalJson<T>(
     timeoutMs,
     signal: options.signal,
   })
-  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}: ${response.text}`)
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(buildWeChatPersonalHttpErrorMessage(url, response))
+  }
   return response.data as T
 }
 
@@ -106,7 +111,9 @@ export async function getWeChatPersonalJson<T>(
     headers: buildWeChatPersonalHeaders(options.token),
     timeoutMs,
   })
-  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}: ${response.text}`)
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(buildWeChatPersonalHttpErrorMessage(url, response))
+  }
   return response.data as T
 }
 

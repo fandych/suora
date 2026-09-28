@@ -29,10 +29,11 @@ export const bindChannel = async (detail: ChannelDetail) => {
       sessionKey?: string
       qrCodeUrl?: string
     }
+    const latestDetail = (await ChannelApi.get(detail.channel.id)) ?? detail
     return ChannelApi.save({
-      ...detail,
+      ...latestDetail,
       channel: {
-        ...detail.channel,
+        ...latestDetail.channel,
         connectionMode: "stream",
         wechatPersonalBindingStatus: result.success ? "pending" : "error",
         wechatPersonalQrStatus: result.success ? "wait" : undefined,

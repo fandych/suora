@@ -13,6 +13,33 @@ import {
   type WeChatPersonalUpdatesResponse,
 } from "@/electron/app/channels/providers/wechat-personal-types"
 
+function serializeWeChatPersonalErrorPayload(payload: unknown) {
+  if (typeof payload === "string") {
+    return payload.trim()
+  }
+  if (payload == null) {
+    return ""
+  }
+
+  try {
+    return JSON.stringify(payload)
+  } catch {
+    return ""
+  }
+}
+
+export function buildWeChatPersonalHttpErrorMessage(
+  url: URL,
+  response: {
+    status: number
+    text: string
+    data: unknown
+  },
+) {
+  const responseSummary = response.text.trim() || serializeWeChatPersonalErrorPayload(response.data)
+  return `HTTP ${response.status} from ${url.pathname}${url.search}${responseSummary ? `: ${responseSummary}` : " (empty response body)"}`
+}
+
 export function isValidWeChatPersonalToken(token: string) {
   return token.length > 0 && token.length <= 4096 && !/[\r\n]/.test(token)
 }
@@ -83,7 +110,9 @@ async function requestJson<T>(
     timeoutMs: options.timeoutMs,
     signal: options.signal,
   })
-  if (response.status < 200 || response.status >= 300) throw new Error(`HTTP ${response.status}: ${response.text}`)
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error(buildWeChatPersonalHttpErrorMessage(url, response))
+  }
   return response.data as T
 }
 export function fetchWeChatPersonalQrCode(localTokenList: string[]) {
