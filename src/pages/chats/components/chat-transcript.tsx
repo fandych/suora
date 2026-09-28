@@ -25,6 +25,7 @@ type ChatTranscriptProps = {
   assistantResponseParts: AssistantResponsePart[]
   autoScroll: boolean
   hasOlderMessages?: boolean
+  isResponding?: boolean
   isLoadingOlderMessages?: boolean
   onLoadEarlierMessages?: () => Promise<void> | void
   onRetryTool?: (messageId: string | null, activity: ChatToolActivity) => Promise<void> | void
@@ -39,6 +40,7 @@ export function ChatTranscript({
   assistantResponseParts,
   autoScroll,
   hasOlderMessages = false,
+  isResponding = false,
   isLoadingOlderMessages = false,
   onLoadEarlierMessages,
   onRetryTool,
@@ -47,10 +49,14 @@ export function ChatTranscript({
   const { t } = useAppIntl()
   const transcriptKey = selectedChat?.chat.id ?? "draft"
   const viewportRef = useRef<HTMLDivElement | null>(null)
+  const restoredTranscriptKeyRef = useRef<string | null>(null)
   const hasMessages = (selectedChat?.messages.length ?? 0) > 0 || assistantResponseParts.length > 0
   const hasPersistedAssistantResponse = Boolean(
     assistantResponseMessageId && selectedChat?.messages.some((message) => message.id === assistantResponseMessageId),
   )
+  const hasStreamingAssistantGroup =
+    (!assistantResponseMessageId || !hasPersistedAssistantResponse) && assistantResponseParts.length > 0
+  const lastPersistedMessageId = selectedChat?.messages.at(-1)?.id ?? null
   const responseMessageCreatedAt = useMemo(() => {
     if (!assistantResponseMessageId) {
       return undefined
@@ -79,6 +85,15 @@ export function ChatTranscript({
   }, [transcriptKey])
 
   useEffect(() => {
+    if (restoredTranscriptKeyRef.current === transcriptKey) {
+      return
+    }
+
+    if (autoScroll) {
+      restoredTranscriptKeyRef.current = transcriptKey
+      return
+    }
+
     const viewport = viewportRef.current
     const savedScrollTop = transcriptScrollPositions.get(transcriptKey)
     if (!viewport || typeof savedScrollTop !== "number") {
@@ -87,17 +102,13 @@ export function ChatTranscript({
 
     const frameId = window.requestAnimationFrame(() => {
       viewport.scrollTop = savedScrollTop
+      restoredTranscriptKeyRef.current = transcriptKey
     })
 
     return () => {
       window.cancelAnimationFrame(frameId)
     }
-  }, [
-    transcriptKey,
-    selectedChat?.messages.length,
-    assistantResponseParts.length,
-    assistantResponseMessageId,
-  ])
+  }, [autoScroll, transcriptKey])
 
   return (
     <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -130,10 +141,15 @@ export function ChatTranscript({
                 </MessageScrollerItem>
               ) : null}
               {selectedChat?.messages.map((message) => (
-                <MessageScrollerItem key={message.id} messageId={message.id}>
+                <MessageScrollerItem
+                  key={message.id}
+                  messageId={message.id}
+                  scrollAnchor={!hasStreamingAssistantGroup && message.id === lastPersistedMessageId}
+                >
                   {message.id === assistantResponseMessageId && assistantResponseParts.length > 0 ? (
                     <ChatAssistantResponseGroup
                       createdAt={responseMessageCreatedAt}
+                      isActiveTurn={isResponding}
                       messageId={message.id}
                       onRetryTool={onRetryTool}
                       parts={assistantResponseParts}
@@ -165,16 +181,17 @@ export function ChatTranscript({
                   )}
                 </MessageScrollerItem>
               ))}
-              {(!assistantResponseMessageId || !hasPersistedAssistantResponse) && assistantResponseParts.length > 0 ? (
-                <MessageScrollerItem messageId="assistant-streaming-group">
+              {hasStreamingAssistantGroup ? (
+                <MessageScrollerItem messageId="assistant-streaming-group" scrollAnchor>
                   <ChatAssistantResponseGroup
+                    isActiveTurn={isResponding}
                     onRetryTool={onRetryTool}
                     parts={assistantResponseParts}
                     providerType={activeProviderType}
                   />
                 </MessageScrollerItem>
               ) : null}
-              <MessageScrollerItem messageId="conversation-end" scrollAnchor className="h-px" />
+              <MessageScrollerItem messageId="conversation-end" className="h-px" />
             </MessageScrollerContent>
           </MessageScrollerViewport>
           <MessageScrollerButton />

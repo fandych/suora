@@ -12,7 +12,7 @@ vi.mock("@/services/toast-service", () => ({
 }))
 
 describe("chat tool event item", () => {
-  it("shows a fixed tool title and reveals compact data panels on click", () => {
+  it("renders a compact status row and still reveals details on demand", () => {
     render(
       <ChatToolEventItem
         activity={{
@@ -24,8 +24,9 @@ describe("chat tool event item", () => {
       />,
     )
 
-    expect(screen.getByText("Tool")).toBeTruthy()
+    expect(screen.getByText("status:success")).toBeTruthy()
     expect(screen.getByText("searchDocuments")).toBeTruthy()
+    expect(screen.queryByText("Tool")).toBeNull()
     expect(screen.queryByText("Input")).toBeNull()
 
     fireEvent.click(screen.getByRole("button", { name: "Details" }))

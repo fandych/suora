@@ -190,6 +190,7 @@ export const zhMessages = {
   "chat.transcript.system": "系统",
   "chat.transcript.empty.title": "准备开始新聊天",
   "chat.transcript.empty.description": "在下方开始输入即可创建新聊天。已有会话会保留在侧边栏中。",
+  "chat.assistant.stillThinking": "思考中...",
   "chat.status.thinking": "思考中...",
   "chat.status.executing": "正在执行 {tool}...",
   "chat.status.browserContinue": "浏览器操作已完成，正在继续分析...",

@@ -28,17 +28,10 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
   const Icon =
     status === "error" || status === "stopped" ? CircleAlertIcon : status === "success" ? CircleCheckIcon : Loader2Icon
   const badgeVariant = status === "error" ? "destructive" : status === "success" ? "secondary" : "outline"
+  const statusLabel = status === "stopped" ? "status:stopped" : `status:${status}`
   const storageKey = useMemo(() => buildStorageKey(activity), [activity])
   const [isOpen, setIsOpen] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
-  const summary =
-    status === "error"
-      ? `Failed ${activity.toolName}`
-      : status === "stopped"
-        ? `Stopped ${activity.toolName}`
-        : status === "success"
-          ? `Completed ${activity.toolName}`
-          : `Executing ${activity.toolName}`
 
   useEffect(() => {
     const stored = window.localStorage.getItem(storageKey)
@@ -91,7 +84,7 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
     <Collapsible open={isOpen} onOpenChange={handleOpenChange}>
       <div
         className={cn(
-          "rounded-xl border px-2.5 py-2 shadow-xs transition-colors",
+          "rounded-lg border px-2 py-1.5 shadow-xs transition-colors",
           status === "error"
             ? "border-destructive/35 bg-destructive/8"
             : status === "stopped"
@@ -101,10 +94,10 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
                 : "border-border bg-background/70",
         )}
       >
-        <div className="flex items-start gap-3">
+        <div className="flex min-w-0 items-center gap-2 text-[11px]">
           <div
             className={cn(
-              "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border bg-background/90",
+              "flex size-5 shrink-0 items-center justify-center rounded-full border bg-background/90",
               status === "error"
                 ? "border-destructive/30 text-destructive"
                 : status === "stopped"
@@ -114,43 +107,27 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
                     : "border-border text-foreground",
             )}
           >
-            <Icon className={cn(status === "running" ? "animate-spin" : "", "size-3.5 shrink-0")} />
+            <Icon className={cn(status === "running" ? "animate-spin" : "", "size-3 shrink-0")} />
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="rounded-md bg-background/80 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Tool
-              </span>
-              <span className="truncate font-mono text-[12px] font-medium text-foreground">{activity.toolName}</span>
-              {stepLabel ? (
-                <span className="rounded-md bg-muted/80 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                  {stepLabel}
-                </span>
-              ) : null}
-            </div>
-            <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-              <span className="truncate text-[11px] text-muted-foreground">{summary}</span>
-              <Badge variant={badgeVariant}>
-                {status === "error"
-                  ? "Error"
-                  : status === "success"
-                    ? "Success"
-                    : status === "stopped"
-                      ? "Stopped"
-                      : "Running"}
-              </Badge>
-            </div>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <Badge variant={badgeVariant} className="h-5 px-1.5 font-mono text-[10px] lowercase">
+              {statusLabel}
+            </Badge>
+            <span className="truncate font-mono text-[11px] text-foreground">{activity.toolName}</span>
+            {stepLabel ? <span className="text-[10px] text-muted-foreground">{stepLabel}</span> : null}
           </div>
           <div className="flex shrink-0 items-center gap-1">
             {onRetry ? (
               <Button
-                size="icon-sm"
+                size="sm"
                 variant="ghost"
                 type="button"
+                className="h-6 px-2 text-[11px]"
                 onClick={() => void handleRetry()}
                 disabled={isRetrying}
               >
                 <RotateCcwIcon />
+                Retry
               </Button>
             ) : null}
             {hasDetails ? (
@@ -162,7 +139,7 @@ export function ChatToolEventItem({ activity, onRetry, stepLabel }: ChatToolEven
         </div>
         {hasDetails ? (
           <CollapsibleContent>
-            <div className="mt-3 flex flex-col gap-2.5 border-t pt-2.5">
+            <div className="mt-2 flex flex-col gap-2.5 border-t pt-2">
               {activity.input ? (
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">

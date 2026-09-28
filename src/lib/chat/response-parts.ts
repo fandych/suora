@@ -3,6 +3,10 @@ import { getChatErrorToolName } from "@/lib/chat/error-presentation"
 
 export type { AssistantResponsePart, ChatToolActivity } from "@/types/chat"
 
+function clearPendingTextState(parts: AssistantResponsePart[]): AssistantResponsePart[] {
+  return parts.map((part) => (part.type === "text" && part.isPending ? { ...part, isPending: false } : part))
+}
+
 export function toAssistantResponseParts(parts: ChatMessagePart[] | undefined): AssistantResponsePart[] {
   const normalizedParts: AssistantResponsePart[] = []
   for (const part of parts ?? []) {
@@ -32,7 +36,7 @@ export function applyEventToAssistantResponseParts(
   }
   if (event.type === "tool-call")
     return [
-      ...parts,
+      ...clearPendingTextState(parts),
       {
         id: event.toolCallId,
         type: "tool",

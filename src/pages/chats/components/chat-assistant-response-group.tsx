@@ -3,6 +3,8 @@ import { Fragment } from "react"
 import { Avatar } from "@/components/ui/avatar"
 import { Bubble, BubbleContent } from "@/components/ui/bubble"
 import { Message, MessageAvatar, MessageContent, MessageHeader } from "@/components/ui/message"
+import { Spinner } from "@/components/ui/spinner"
+import { useAppIntl } from "@/lib/i18n"
 import { ChatMessageActions } from "@/pages/chats/components/chat-message-actions"
 import { ChatRichContent } from "@/pages/chats/components/chat-rich-content"
 import { ChatToolEventItem, type ChatToolActivity } from "@/pages/chats/components/chat-tool-event-item"
@@ -13,6 +15,7 @@ export type { AssistantResponsePart }
 
 type ChatAssistantResponseGroupProps = {
   createdAt?: number
+  isActiveTurn?: boolean
   messageId?: string | null
   onRetryTool?: (messageId: string | null, activity: ChatToolActivity) => Promise<void> | void
   parts: AssistantResponsePart[]
@@ -91,21 +94,36 @@ function buildSections(parts: AssistantResponsePart[]): AssistantRenderSection[]
   return sections
 }
 
+function getActivePendingSectionId(sections: AssistantRenderSection[]) {
+  for (let index = sections.length - 1; index >= 0; index -= 1) {
+    const section = sections[index]
+    if (section?.type === "text" && section.isPending) {
+      return section.id
+    }
+  }
+
+  return null
+}
+
 export function ChatAssistantResponseGroup({
   createdAt,
+  isActiveTurn = false,
   messageId = null,
   onRetryTool,
   parts,
   providerType,
 }: ChatAssistantResponseGroupProps) {
+  const { t } = useAppIntl()
   const AssistantLogo = getProviderLogo(providerType)
   const hasPendingText = parts.some((part) => part.type === "text" && part.isPending)
   const hasRunningTools = parts.some(
     (part) =>
       part.type === "tool" && part.activity.output === undefined && !part.activity.error && !part.activity.stopped,
   )
+  const showsInlineThinkingHint = isActiveTurn && !hasPendingText && !hasRunningTools
   const actionContent = buildActionContent(parts)
   const sections = buildSections(parts)
+  const activePendingSectionId = getActivePendingSectionId(sections)
 
   return (
     <Message align="start">
@@ -130,8 +148,8 @@ export function ChatAssistantResponseGroup({
                 <Bubble variant="outline" align="start" className="max-w-full">
                   <BubbleContent>
                     <div className="relative">
-                      <ChatRichContent content={section.content} isStreaming={Boolean(section.isPending)} />
-                      {section.isPending ? (
+                      <ChatRichContent content={section.content} isStreaming={section.id === activePendingSectionId} />
+                      {section.id === activePendingSectionId ? (
                         <span
                           aria-hidden="true"
                           className="ml-1 inline-block h-4 w-0.5 animate-pulse rounded bg-current align-middle"
@@ -143,7 +161,16 @@ export function ChatAssistantResponseGroup({
               )}
             </Fragment>
           ))}
-          {!hasPendingText && !hasRunningTools && actionContent.trim() ? (
+          {showsInlineThinkingHint ? (
+            <div
+              className="flex items-center gap-2 px-1 text-xs text-muted-foreground"
+              data-testid="assistant-thinking-hint"
+            >
+              <Spinner className="size-3" />
+              <span>{t("chat.assistant.stillThinking", "Thinking...")}</span>
+            </div>
+          ) : null}
+          {!isActiveTurn && !hasPendingText && !hasRunningTools && actionContent.trim() ? (
             <ChatMessageActions
               baseName="assistant-message"
               className="w-full"

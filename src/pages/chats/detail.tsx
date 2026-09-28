@@ -40,6 +40,7 @@ const ChatDetailPage = () => {
                     assistantResponseParts={controller.assistantResponseParts}
                     autoScroll={controller.autoScroll}
                     hasOlderMessages={controller.hasOlderMessages}
+                    isResponding={controller.isResponding}
                     isLoadingOlderMessages={controller.isLoadingOlderMessages}
                     onLoadEarlierMessages={controller.handleLoadEarlierMessages}
                     onRetryTool={(messageId, activity) => void controller.handleRetryTool(messageId, activity)}
